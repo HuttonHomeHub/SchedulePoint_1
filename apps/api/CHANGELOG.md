@@ -1,5 +1,40 @@
 # @repo/api
 
+## 0.2.1
+
+### Patch Changes
+
+- [#8](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/8) [`cfe1d24`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cfe1d2485ff2d1b8deeaf4328c5691754c91da40) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix the API container crashing on boot with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`.
+  `@repo/types` shipped raw TypeScript (its `exports` pointed at `src/index.ts`),
+  which tools transpile but plain Node cannot load — so the production image
+  crashed when the compiled API `require`d it. `@repo/types` now builds to
+  `dist/` (ESM + declarations) and its `exports` resolve to the compiled output at
+  runtime, while the `development`/`types` conditions still point at source so
+  dev, tests, and typecheck are unchanged. The API and web Docker builds compile
+  `@repo/types` before the app, and `turbo dev` depends on it too.
+
+- [#4](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/4) [`d69e335`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d69e335041f51290b4acdfb107ac22d69de2e510) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix the API container build: `pnpm deploy` now passes `--legacy`. pnpm v10
+  changed `pnpm deploy` to require `inject-workspace-packages=true` (or `--legacy`)
+  and otherwise fails with `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`, which broke the
+  `api` image build. The `--legacy` flag restores the pre-v10 deploy behaviour the
+  multi-stage Dockerfile relies on.
+
+- [#9](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/9) [`cd4b43c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cd4b43cbc8746d886ebed89d2293746d28de8166) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix two production-image runtime crashes. The generated Prisma client was missing
+  from the deployed image (`pnpm deploy` rebuilds node_modules from the store and
+  drops it), so the API crashed with "@prisma/client did not initialize yet" — the
+  Dockerfile now regenerates the client inside the deployed tree. And the logger
+  no longer crashes in development mode when `pino-pretty` (a devDependency, absent
+  from the production image) can't be loaded: it falls back to JSON logging.
+
+- [#7](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/7) [`efbc61d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/efbc61d3fcc379826607fc289766d93ab9d141ce) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the API container self-migrating and publish GitHub Releases. The API image
+  now ships the Prisma CLI + schema/migrations and applies pending migrations on
+  startup (`prisma migrate deploy`) via its entrypoint, so a fresh database is
+  migrated automatically — no out-of-band step. The release workflow now also
+  creates a GitHub Release for each `vX.Y.Z` tag so the Releases tab reflects
+  published versions.
+- Updated dependencies [[`cfe1d24`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cfe1d2485ff2d1b8deeaf4328c5691754c91da40)]:
+  - @repo/types@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
