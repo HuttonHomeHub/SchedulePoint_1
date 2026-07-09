@@ -48,6 +48,10 @@ describe.skipIf(!hasDatabase)('Auth & Me (e2e)', () => {
   });
 
   beforeEach(async () => {
+    // FK-safe order (memberships RESTRICT-reference orgs + users); clears any
+    // rows left by other e2e specs sharing this database.
+    await prisma.orgMember.deleteMany();
+    await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany(); // cascades sessions + accounts
   });

@@ -62,4 +62,14 @@ export interface MeResponse {
   memberships: OrganizationMembershipSummary[];
 }
 
+/** An organisation as seen by a member, including the caller's role in it. */
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  /** The requesting user's role in this organisation. */
+  role: OrganizationRole;
+  createdAt: string;
+}
+
 export {};
