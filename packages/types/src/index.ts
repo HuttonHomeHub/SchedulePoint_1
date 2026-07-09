@@ -75,4 +75,19 @@ export interface OrganizationSummary {
   createdAt: string;
 }
 
+/** A member of an organisation, with their public profile and role. */
+export interface OrgMemberSummary {
+  /** The membership id (not the user id). */
+  id: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+  };
+  role: OrganizationRole;
+  joinedAt: string;
+  /** Optimistic-locking version — echo it back when changing the role. */
+  version: number;
+}
+
 export {};
