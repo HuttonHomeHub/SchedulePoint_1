@@ -21,6 +21,16 @@ import { MembersModule } from './modules/members/members.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { PrismaModule } from './prisma/prisma.module';
 
+/** Whether the optional `pino-pretty` dev logger transport can be loaded. */
+function isPrettyLoggingAvailable(): boolean {
+  try {
+    require.resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Root module. Wires global cross-cutting concerns once — structured logging
  * with correlation IDs, rate limiting, validation, the error filter, the
@@ -54,7 +64,11 @@ import { PrismaModule } from './prisma/prisma.module';
             ],
             remove: true,
           },
-          ...(config.isProduction
+          // Pretty logs only outside production, and only if pino-pretty is
+          // actually installed — the production image excludes devDependencies,
+          // so it must fall back to JSON logging rather than crash on a missing
+          // transport when run in development mode.
+          ...(config.isProduction || !isPrettyLoggingAvailable()
             ? {}
             : { transport: { target: 'pino-pretty', options: { singleLine: true } } }),
         },
