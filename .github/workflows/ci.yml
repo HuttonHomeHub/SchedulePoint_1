@@ -51,12 +51,8 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      # The web app has no entry point yet (foundation stage), so a full
-      # `pnpm build` is not run here. The API compiles today and is built to
-      # catch regressions early. When the web app's entry point lands (roadmap
-      # M1), replace this with `pnpm build`.
-      - name: Build (api)
-        run: pnpm --filter @repo/api build
+      - name: Build (api + web)
+        run: pnpm build
 
   template:
     name: Verify feature template
@@ -101,11 +97,6 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://app:app@localhost:5432/app_test?schema=public
-      # No web entry point / e2e specs exist yet, so the Playwright dev server
-      # is skipped and the suite passes with no tests. When web e2e specs land
-      # (roadmap M1): remove this, add a "Build" step and a
-      # "pnpm --filter @repo/web exec playwright install --with-deps" step.
-      PLAYWRIGHT_SKIP_WEBSERVER: '1'
     steps:
       - uses: actions/checkout@v7
 
@@ -127,8 +118,18 @@ jobs:
       - name: Apply database migrations
         run: pnpm --filter @repo/api prisma:deploy
 
-      - name: Run end-to-end tests
-        run: pnpm test:e2e
+      # API e2e (Supertest) and web e2e (Playwright) run sequentially — they
+      # share the test database, so running them in parallel could race.
+      - name: API end-to-end tests
+        run: pnpm --filter @repo/api test:e2e
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @repo/web exec playwright install --with-deps
+
+      # Playwright starts the API and web dev servers itself (see
+      # apps/web/playwright.config.ts) and drives the full stack in a browser.
+      - name: Web end-to-end tests
+        run: pnpm --filter @repo/web test:e2e
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
