@@ -147,3 +147,35 @@ jobs:
           path: apps/web/playwright-report/
           if-no-files-found: ignore
           retention-days: 7
+
+  image:
+    name: Build & smoke-boot images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Build the api + web images from source and boot the full stack
+      # (Postgres + API + web), then wait for every container to report healthy.
+      # This exercises the one artifact users actually run — the container —
+      # which the source-level jobs never do, so runtime-only regressions
+      # (module resolution, Prisma client generation, entrypoint migrations,
+      # missing prod dependencies) are caught here rather than in production.
+      # See ADR-0020.
+      - name: Build & boot the stack
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml
+          up -d --build --wait --wait-timeout 240
+
+      - name: Smoke-test the API health endpoint
+        run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:3000/api/v1/health
+
+      - name: Smoke-test the web app
+        run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null http://localhost:8080/
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
