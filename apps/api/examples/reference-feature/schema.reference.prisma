@@ -1,0 +1,28 @@
+// Reference model sketch (TEMPLATE — not part of the live schema).
+// Copy into apps/api/prisma/schema.prisma and adapt for your entity, then run
+// `prisma migrate dev`. Follows docs/DATABASE.md: snake_case columns, UUID v7,
+// timestamptz, soft delete, auditing, optimistic-locking version, scoped indexes.
+
+enum ReferenceItemStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model ReferenceItem {
+  id          String              @id @default(uuid(7)) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  name        String
+  description String?
+  status      ReferenceItemStatus @default(DRAFT)
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy   String?             @map("created_by") @db.Uuid
+  updatedBy   String?             @map("updated_by") @db.Uuid
+  deletedAt   DateTime?           @map("deleted_at") @db.Timestamptz(3)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("reference_items")
+}

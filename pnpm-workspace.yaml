@@ -1,0 +1,19 @@
+# pnpm workspace definition for the Blank App monorepo.
+# Docs: https://pnpm.io/workspaces
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Pin the catalog of shared dependency versions so every workspace
+# package resolves the same version of a given library. Reference these
+# from a package.json with e.g. "react": "catalog:".
+catalog:
+  # Frontend
+  react: ^19.0.0
+  react-dom: ^19.0.0
+  # Tooling / language
+  typescript: ^5.7.3
+  # Testing
+  vitest: ^4.1.10
+  '@playwright/test': ^1.49.1
+  supertest: ^7.0.0

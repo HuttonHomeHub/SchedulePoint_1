@@ -1,0 +1,58 @@
+name: ✨ Feature request
+description: Suggest an idea or enhancement.
+title: 'feat: <short description>'
+labels: ['enhancement', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thanks for the idea! Features follow the [delivery
+        process](../blob/main/docs/PROCESS.md): we turn the idea into a Feature
+        Spec + Implementation Plan and get approval **before** coding. This form
+        captures the starting point (Stage 1).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem does this solve? Who is it for?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behaviour you'd like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - web (frontend)
+        - api (backend)
+        - database / migrations
+        - infrastructure / CI / Docker
+        - documentation
+        - cross-cutting
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How will we know this is done? List testable outcomes.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmation
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true

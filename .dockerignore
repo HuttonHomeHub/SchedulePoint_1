@@ -1,0 +1,20 @@
+# Keep build context small and secret-free.
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.turbo
+**/coverage
+**/playwright-report
+**/test-results
+**/.git
+**/.github
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/.vscode
+**/.idea
+**/*.md
+!README.md
+docs/

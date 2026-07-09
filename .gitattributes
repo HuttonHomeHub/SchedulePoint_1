@@ -1,0 +1,32 @@
+# Normalise line endings across platforms.
+* text=auto eol=lf
+
+# Explicitly declare text files.
+*.ts     text
+*.tsx    text
+*.js     text
+*.jsx    text
+*.json   text
+*.md     text
+*.yml    text
+*.yaml   text
+*.css    text
+*.html   text
+*.sh     text eol=lf
+
+# Binary files — never diff or normalise.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.woff   binary
+*.woff2  binary
+*.pdf    binary
+
+# Lockfiles: keep as-is, mark generated so diffs are collapsed in review.
+pnpm-lock.yaml -diff linguist-generated=true
+
+# Exclude non-source paths from language statistics.
+docs/**        linguist-documentation
+*.md           linguist-documentation

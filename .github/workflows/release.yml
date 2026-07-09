@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Version & release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create tags/releases and push version commits
+      pull-requests: write # open/update the "Version Packages" PR
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Changesets either opens/updates a release PR that bumps versions and
+      # updates CHANGELOG.md, or — when such a PR is merged — publishes the
+      # release. See docs/DEPLOYMENT.md and .changeset/README.md.
+      - name: Create release pull request or publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
+          commit: 'chore(release): version packages'
+          title: 'chore(release): version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

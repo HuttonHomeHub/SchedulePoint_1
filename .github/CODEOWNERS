@@ -1,0 +1,12 @@
+# CODEOWNERS — automatically requests review from the listed owners when
+# matching files change. Later matches take precedence over earlier ones.
+# Docs: https://docs.github.com/articles/about-code-owners
+#
+# Single owner for now (solo maintainer). When collaborators or a review bot
+# join, either add them here or split ownership by path — e.g. move this to an
+# org and use team handles like `@your-org/frontend` for `/apps/web/`.
+# Note: enabling branch protection's "Require review from Code Owners" while
+# there is only one owner will block that owner's own PRs (GitHub forbids
+# self-approval) — leave it off until there is a second reviewer.
+
+* @HuttonHomeHub

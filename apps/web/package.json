@@ -1,0 +1,43 @@
+{
+  "name": "@repo/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Blank App web client — React + Vite + Tailwind CSS + shadcn/ui.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test --pass-with-no-tests",
+    "clean": "rimraf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@repo/types": "workspace:*",
+    "lucide-react": "^1.23.0",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@repo/config": "workspace:*",
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^9.18.0",
+    "jsdom": "^29.1.1",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "rimraf": "^6.0.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "catalog:",
+    "vite": "^8.1.4",
+    "vitest": "catalog:"
+  }
+}

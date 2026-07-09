@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  quality:
+    name: Format, lint, typecheck & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @repo/api prisma:generate
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      # The web app has no entry point yet (foundation stage), so a full
+      # `pnpm build` is not run here. The API compiles today and is built to
+      # catch regressions early. When the web app's entry point lands (roadmap
+      # M1), replace this with `pnpm build`.
+      - name: Build (api)
+        run: pnpm --filter @repo/api build
+
+  template:
+    name: Verify feature template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Materialise, type-check, and unit-test the canonical reference template
+      # so it can never silently rot (see docs/REFERENCE_FEATURE.md, ADR-0015).
+      - name: Verify reference template
+        run: bash scripts/verify-template.sh
+
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    # A disposable PostgreSQL for API end-to-end tests (Supertest).
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://app:app@localhost:5432/app_test?schema=public
+      # No web entry point / e2e specs exist yet, so the Playwright dev server
+      # is skipped and the suite passes with no tests. When web e2e specs land
+      # (roadmap M1): remove this, add a "Build" step and a
+      # "pnpm --filter @repo/web exec playwright install --with-deps" step.
+      PLAYWRIGHT_SKIP_WEBSERVER: '1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @repo/api prisma:generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @repo/api prisma:deploy
+
+      - name: Run end-to-end tests
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,30 @@
+{
+  "name": "@repo/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared build, lint, and TypeScript configuration for the monorepo.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./eslint/base": "./eslint/base.js",
+    "./eslint/react": "./eslint/react.js",
+    "./eslint/nest": "./eslint/nest.js",
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/react.json": "./tsconfig/react.json",
+    "./tsconfig/node.json": "./tsconfig/node.json"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "typescript-eslint": "^8.63.0"
+  },
+  "peerDependencies": {
+    "eslint": "^9.18.0",
+    "typescript": "^5.7.0"
+  }
+}

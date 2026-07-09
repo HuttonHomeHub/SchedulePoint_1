@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    // `nest build` deletes dist on each run; incremental build info that lived
+    // outside dist would make tsc skip re-emitting into the now-empty dist.
+    // Disable incremental for the build so it always emits (turbo caches the
+    // dist output anyway).
+    "incremental": false
+  },
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.e2e-spec.ts"]
+}

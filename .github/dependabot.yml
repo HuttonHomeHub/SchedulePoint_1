@@ -1,0 +1,87 @@
+version: 2
+updates:
+  # --- npm: one updater for the whole pnpm workspace ------------------------
+  # A single updater at the workspace root covers every manifest (apps/* and
+  # packages/*) and the shared pnpm-lock.yaml. Per-directory npm updaters were
+  # removed on purpose: because this is a pnpm workspace with one lockfile at
+  # the root, per-app updaters produced duplicate PRs and fought over the same
+  # lockfile. Group related packages so ecosystem-wide bumps arrive together.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/London
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    labels: ['dependencies']
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    groups:
+      nestjs:
+        patterns: ['@nestjs/*']
+      prisma:
+        patterns: ['prisma', '@prisma/*']
+      react:
+        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom']
+      # Keep the ESLint stack in lockstep — plugins and the core move together,
+      # so a major bump lands as one reviewable PR instead of a cascade.
+      eslint:
+        patterns: ['eslint', '@eslint/*', 'eslint-*', 'typescript-eslint', 'globals']
+      dev-dependencies:
+        dependency-type: development
+        update-types: ['minor', 'patch']
+    ignore:
+      # Runtime is pinned to Node 22 LTS (CLAUDE.md §3, .nvmrc, engines, CI).
+      # Move the major deliberately when changing LTS lines, not via Dependabot.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # ESLint held at 9 until eslint-plugin-import / jsx-a11y / react ship
+      # ESLint 10-compatible releases (their peer ranges currently cap at v9).
+      # Remove this ignore to adopt ESLint 10 once the plugins support it.
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      # @eslint/js must track the ESLint core major, which is held at 9 above.
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+      # Prisma held at 6: Prisma 7 removes `url` from the datasource block and
+      # requires a driver adapter + prisma.config.ts — a deliberate migration
+      # (worth an ADR), not a routine bump. Remove these when migrating.
+      - dependency-name: 'prisma'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@prisma/client'
+        update-types: ['version-update:semver-major']
+      # TypeScript held at 5: TypeScript 7 (the native compiler) removed
+      # `baseUrl` and `moduleResolution: node10` from tsconfig — a config
+      # migration across the presets + app tsconfigs, not a routine bump.
+      # Remove this ignore when doing the TypeScript 7 migration deliberately.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+
+  # --- GitHub Actions --------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: ['dependencies', 'ci']
+    commit-message:
+      prefix: 'ci(deps)'
+
+  # --- Docker base images ----------------------------------------------------
+  - package-ecosystem: docker
+    directories:
+      - /apps/api
+      - /apps/web
+    schedule:
+      interval: weekly
+      day: monday
+    labels: ['dependencies', 'docker']
+    commit-message:
+      prefix: 'chore(deps)'
+    ignore:
+      # Node base image pinned to 22 LTS (matches .nvmrc / engines / CI).
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
