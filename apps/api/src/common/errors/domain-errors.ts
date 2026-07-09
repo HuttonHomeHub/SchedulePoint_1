@@ -37,3 +37,8 @@ export class ForbiddenError extends DomainError {
 export class ValidationError extends DomainError {
   readonly code = 'VALIDATION_FAILED';
 }
+
+/** The target resource existed but is no longer available, e.g. expired (→ 410). */
+export class GoneError extends DomainError {
+  readonly code = 'GONE';
+}

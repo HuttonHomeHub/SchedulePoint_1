@@ -41,7 +41,8 @@ describe.skipIf(!hasDatabase)('Organizations API (e2e)', () => {
   });
 
   beforeEach(async () => {
-    // Order respects the RESTRICT foreign keys (members reference org + user).
+    // Order respects the RESTRICT foreign keys (invitations + members reference org/user).
+    await prisma.invitation.deleteMany();
     await prisma.orgMember.deleteMany();
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();

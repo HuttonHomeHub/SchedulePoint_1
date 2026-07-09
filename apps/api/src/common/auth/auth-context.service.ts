@@ -6,7 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 import { AUTH_INSTANCE, type AuthInstance } from './better-auth';
 import { permissionsForRole } from './org-permissions';
-import { OrganizationRole, Principal } from './principal';
+import { Principal } from './principal';
 
 /**
  * Resolves the {@link Principal} for a request. This is the **authentication
@@ -47,14 +47,11 @@ export class AuthContextService {
 
     return new Principal(
       session.user.id,
-      memberships.map((membership) => {
-        const role = membership.role as OrganizationRole;
-        return {
-          organizationId: membership.organizationId,
-          role,
-          permissions: permissionsForRole(role),
-        };
-      }),
+      memberships.map((membership) => ({
+        organizationId: membership.organizationId,
+        role: membership.role,
+        permissions: permissionsForRole(membership.role),
+      })),
     );
   }
 }

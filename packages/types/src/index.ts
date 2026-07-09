@@ -75,6 +75,33 @@ export interface OrganizationSummary {
   createdAt: string;
 }
 
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED';
+
+/** A pending (or historical) invitation to join an organisation. */
+export interface InvitationSummary {
+  id: string;
+  email: string;
+  role: OrganizationRole;
+  status: InvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** The create-invitation response: the summary plus the one-time accept URL. */
+export interface CreatedInvitation extends InvitationSummary {
+  /** Absolute accept URL — returned once so onboarding works without email. */
+  acceptUrl: string;
+}
+
+/** What an invitee sees before accepting (token-gated, minimal). */
+export interface InvitationPreview {
+  organizationName: string;
+  role: OrganizationRole;
+  email: string;
+  status: InvitationStatus;
+  expiresAt: string;
+}
+
 /** A member of an organisation, with their public profile and role. */
 export interface OrgMemberSummary {
   /** The membership id (not the user id). */

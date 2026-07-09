@@ -59,9 +59,7 @@ export class OrganizationsService {
             {
               organizationId: created.id,
               userId: principal.userId,
-              // Prisma's enum field is a string-literal union; the TS enum value
-              // matches but is a distinct nominal type, so use the literal here.
-              role: 'ORG_ADMIN',
+              role: OrganizationRole.ORG_ADMIN,
               createdBy: principal.userId,
               updatedBy: principal.userId,
             },

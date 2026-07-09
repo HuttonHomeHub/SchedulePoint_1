@@ -44,6 +44,14 @@ export class AppConfigService {
     return this.config.get('BETTER_AUTH_URL', { infer: true });
   }
 
+  /**
+   * Public base URL of the web app, used to build user-facing links (e.g. an
+   * invitation accept URL). Defaults to the first configured CORS origin.
+   */
+  get appUrl(): string {
+    return this.corsOrigins[0] ?? 'http://localhost:5173';
+  }
+
   /** Trusted proxy IPs/CIDRs used to resolve the real client IP for rate limiting. */
   get trustedProxyIps(): string[] {
     return this.config
