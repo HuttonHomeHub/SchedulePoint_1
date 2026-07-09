@@ -65,9 +65,9 @@ describe('ReferenceService', () => {
       role,
       permissions: referencePermissionsForRole(role),
     });
-    owner = new Principal(USER, [withPerms(ORGANIZATION, OrganizationRole.OWNER)]);
+    owner = new Principal(USER, [withPerms(ORGANIZATION, OrganizationRole.ORG_ADMIN)]);
     viewer = new Principal(USER, [withPerms(ORGANIZATION, OrganizationRole.VIEWER)]);
-    outsider = new Principal(USER, [withPerms(OTHER_ORGANIZATION, OrganizationRole.OWNER)]);
+    outsider = new Principal(USER, [withPerms(OTHER_ORGANIZATION, OrganizationRole.ORG_ADMIN)]);
   });
 
   describe('create', () => {

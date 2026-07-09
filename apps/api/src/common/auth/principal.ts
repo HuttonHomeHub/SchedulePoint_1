@@ -12,11 +12,18 @@
  * reference-feature template in `apps/api/examples/` for a worked mapping.
  */
 
-/** Organisation-scoped roles, least → most privileged. */
+/**
+ * Organisation-scoped roles, least → most privileged (ADR-0016).
+ *
+ * `EXTERNAL_GUEST` from the product brief is intentionally NOT a member role —
+ * a guest holds a revocable per-plan share grant, not an organisation
+ * membership, and is modelled separately (a future ADR). See ADR-0016.
+ */
 export enum OrganizationRole {
   VIEWER = 'VIEWER',
-  MEMBER = 'MEMBER',
-  OWNER = 'OWNER',
+  CONTRIBUTOR = 'CONTRIBUTOR',
+  PLANNER = 'PLANNER',
+  ORG_ADMIN = 'ORG_ADMIN',
 }
 
 /** A permission code, namespaced by resource, e.g. `'item:create'`. */

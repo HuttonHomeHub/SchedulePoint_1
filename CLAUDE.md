@@ -264,6 +264,8 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0013** — Observability with OpenTelemetry + Pino.
 - **ADR-0014** — Reference feature kept as a non-shipping template.
 - **ADR-0015** — Template-driven feature development (canonical standard).
+- **ADR-0016** — Core identity & tenancy model + organisation role set
+  (`ORG_ADMIN/PLANNER/CONTRIBUTOR/VIEWER`; External Guest modelled separately).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

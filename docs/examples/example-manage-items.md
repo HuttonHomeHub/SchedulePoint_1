@@ -22,8 +22,8 @@ including diagrams. Replace "Item" with your real entity when you build.
 "items" (a stand-in for whatever your first real entity is) — create them, see
 them in a list, and open one.
 
-**Users.** Members of an organisation (roles per ADR-0012): `OWNER`/`MEMBER` can
-create; `VIEWER` can only read.
+**Users.** Members of an organisation (roles per ADR-0012 / ADR-0016):
+`ORG_ADMIN`/`PLANNER`/`CONTRIBUTOR` can create; `VIEWER` can only read.
 
 **Primary use cases.** (1) Create an item; (2) list an organisation's items;
 (3) view a single item.
@@ -50,8 +50,8 @@ does a real "item" need? **Default:** name + description + status; extend later.
 **US-2** — As a member, I want to list my organisation's items (newest-first,
 paginated), with a designed empty state when there are none.
 
-**Permissions.** `item:create` (OWNER, MEMBER); `item:read` (all) — always checked
-**in the item's organisation** (anti-IDOR).
+**Permissions.** `item:create` (ORG_ADMIN, PLANNER, CONTRIBUTOR); `item:read`
+(all) — always checked **in the item's organisation** (anti-IDOR).
 
 **Validation.** `name` 1–120 chars; `description` ≤ 2000; `status` in an enum.
 Shared Zod (web) / class-validator (API).

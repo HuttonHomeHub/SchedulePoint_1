@@ -67,6 +67,7 @@ Planners who want the graphical experience currently have no browser-native opti
 ## 8. Core Features (MoSCoW)
 
 **Must have**
+
 - Multi-tenant organisations with RBAC (roles above).
 - Hierarchical navigation: Org → Client → Project → Plan → Activity.
 - **Graphical Time-Scaled Logic Diagram** as the primary editing surface (draw activity, drag to reposition, pull logic between activities).
@@ -84,6 +85,7 @@ Planners who want the graphical experience currently have no browser-native opti
 - Basic export: PDF of the graphical view, CSV of activities.
 
 **Should have**
+
 - Resources: labor / equipment / materials library, assignments, cost roll-up. No auto-levelling in v1.
 - Sharable read-only plan links for external guests.
 - Activity search / filter / trace-chain in the graphical view.
@@ -92,6 +94,7 @@ Planners who want the graphical experience currently have no browser-native opti
 - Import from XER / MPP (read-only, best-effort) to lower switching cost.
 
 **Could have**
+
 - Resource histogram view.
 - Version history beyond baselines (per-activity change log).
 - Real-time collaborative editing (multiple planners on one plan).
@@ -99,6 +102,7 @@ Planners who want the graphical experience currently have no browser-native opti
 - Public API / webhooks.
 
 **Won't have (for now)**
+
 - Cost / earned value beyond schedule variance.
 - Native mobile apps.
 - Full P6-compatible round-trip (XER export beyond a v1 read).
@@ -135,6 +139,7 @@ erDiagram
 ```
 
 Key entity notes:
+
 - **Activity** holds CPM outputs (early/late start/finish, total float, is_critical, is_near_critical), constraint fields, activity type, calendar override, status, percent_complete, and a **graphical layout position** (y-lane / vertical offset) used by the TSLD view — layout is part of the persisted model, not a runtime concern.
 - **ActivityDependency** carries dep_type (FS/SS/FF/SF), lag_days, lag_unit (working/calendar), and is_driving.
 - **Baseline** freezes plan + activity snapshots at a point in time; `is_active` marks the current comparison baseline.
@@ -224,14 +229,14 @@ Stack is inherited from the base — do not re-declare it here. App-specific req
 
 ## 17. Risks
 
-| Risk | Type | Likelihood / Impact | Mitigation |
-| ---- | ---- | ------------------- | ---------- |
-| TSLD rendering perf collapses at 2,000 activities | Technical | Med / High | Profile early, prototype at target scale in the design phase, be prepared to move to WebGL (ADR). |
-| CPM engine bugs erode trust with construction planners | Technical | Med / High | Golden-suite of ~20 canonical schedules validated against P6 outputs; block release on parity. |
-| Scope creeps as we try to match every P6 feature | Project | High / Med | Strict MoSCoW (§8); every "should-have" needs a use case from a design partner. |
-| XER / MPP import quality is poor, blocking migration from P6 | Technical | Med / Med | Explicit v1 scope of "best-effort read only"; publish the supported field list. |
-| Single-editor lock frustrates larger teams | Product | Med / Med | Track lock-conflict rate; graduate to real-time collab in v2 if signal warrants. |
-| Feedback pulls the product back toward Gantt-first | Product | Med / High | Vision is TSLD-first; capture pushback as backlog, don't drift. |
+| Risk                                                         | Type      | Likelihood / Impact | Mitigation                                                                                        |
+| ------------------------------------------------------------ | --------- | ------------------- | ------------------------------------------------------------------------------------------------- |
+| TSLD rendering perf collapses at 2,000 activities            | Technical | Med / High          | Profile early, prototype at target scale in the design phase, be prepared to move to WebGL (ADR). |
+| CPM engine bugs erode trust with construction planners       | Technical | Med / High          | Golden-suite of ~20 canonical schedules validated against P6 outputs; block release on parity.    |
+| Scope creeps as we try to match every P6 feature             | Project   | High / Med          | Strict MoSCoW (§8); every "should-have" needs a use case from a design partner.                   |
+| XER / MPP import quality is poor, blocking migration from P6 | Technical | Med / Med           | Explicit v1 scope of "best-effort read only"; publish the supported field list.                   |
+| Single-editor lock frustrates larger teams                   | Product   | Med / Med           | Track lock-conflict rate; graduate to real-time collab in v2 if signal warrants.                  |
+| Feedback pulls the product back toward Gantt-first           | Product   | Med / High          | Vision is TSLD-first; capture pushback as backlog, don't drift.                                   |
 
 ## 18. Constraints
 
@@ -258,11 +263,13 @@ Deliberately postponed — become backlog items when a real signal picks them up
 ## 20. Open Questions
 
 **Critical (block design):**
-- **How is a "user in multiple orgs" navigation modelled?** Impacts URL structure, session model, and the org-switcher UI. *Default assumption:* org lives in the URL path (`/orgs/{org}/…`) and the user has a switcher in the header.
+
+- **How is a "user in multiple orgs" navigation modelled?** Impacts URL structure, session model, and the org-switcher UI. _Default assumption:_ org lives in the URL path (`/orgs/{org}/…`) and the user has a switcher in the header.
 - **Is the graphical canvas Canvas 2D or WebGL?** Answered by prototyping at scale in the design phase.
-- **Retained-logic vs progress-override — plan-level toggle only, or per-activity too?** *Default assumption:* plan-level in v1.
+- **Retained-logic vs progress-override — plan-level toggle only, or per-activity too?** _Default assumption:_ plan-level in v1.
 
 **Non-blocking (state a default, revisit later):**
+
 - Do we allow "hammock" activities to span across projects? Default: no, hammocks are plan-scoped.
 - Should baselines be shareable across plans (e.g., master baseline for a program)? Default: no in v1.
 - Does the graphical view need a "swimlane by resource / WBS" mode? Default: no in v1; manual lane assignment only.

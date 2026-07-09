@@ -11,8 +11,14 @@ export type ReferencePermission =
 
 const ROLE_PERMISSIONS: Record<OrganizationRole, readonly ReferencePermission[]> = {
   [OrganizationRole.VIEWER]: ['reference:read'],
-  [OrganizationRole.MEMBER]: ['reference:read', 'reference:create', 'reference:update'],
-  [OrganizationRole.OWNER]: [
+  [OrganizationRole.CONTRIBUTOR]: ['reference:read', 'reference:create', 'reference:update'],
+  [OrganizationRole.PLANNER]: [
+    'reference:read',
+    'reference:create',
+    'reference:update',
+    'reference:delete',
+  ],
+  [OrganizationRole.ORG_ADMIN]: [
     'reference:read',
     'reference:create',
     'reference:update',

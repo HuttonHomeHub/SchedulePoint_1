@@ -97,7 +97,7 @@ releasable after every task.
 - **Risks:** flash-of-wrong-theme / unguarded routes → inline theme script + guard
   in `beforeLoad`; CI must now build web.
 - **Testing:** component tests (forms, guard redirect); Playwright sign-in journey
-  + axe a11y; enable web build in CI.
+  - axe a11y; enable web build in CI.
 - **Development steps:**
   1. Bootstrap entry, providers, router, root layout, tokens.
   2. `features/auth` (forms, hooks) via `Form` primitive + Zod.
@@ -260,15 +260,15 @@ accessibility-reviewer (A2/B3/C3), devops-reviewer (A2 CI web build).
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                              | Likelihood | Impact | Mitigation                                                                 |
-| -------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------- |
-| Better Auth ↔ NestJS/Prisma integration friction               | med        | high   | Spike behind the `AuthContextService` seam in A1; keep provider swappable. |
-| Role-enum change drifts from the reference template             | med        | med    | ADR-0016 + `scripts/verify-template.sh` in A0; update template in step.    |
-| IDOR / cross-tenant leak                                        | low        | high   | Permission + org-scope on every route; 404 for non-member; e2e IDOR tests. |
-| Last-admin invariant bypassed under concurrency                 | low        | high   | Enforce admin-count check **inside** the transaction; unit + e2e cover it. |
-| Invite token leakage                                            | low        | high   | Hash at rest; raw token only in create response + email; expiry + revoke.  |
-| Slug collision under concurrent creation                        | low        | med    | DB partial-unique + retry-with-suffix; test concurrent create.             |
-| No email provider in v1 (assumption)                            | high       | low    | `MailService` port + stub adapter; copyable link in UI; provider follow-up.|
-| Email verification not blocking in v1 (assumption)              | med        | med    | Verification sent, not enforced for alpha; revisit before GA.              |
-| Open self-service sign-up (assumption — **critical Q**)         | med        | med    | Confirm at approval; if closed alpha, gate sign-up + `organization:create`.|
-| CI now builds web (new surface)                                 | med        | low    | Land entry point + build in A2 with devops-reviewer.                        |
+| Risk / assumption                                       | Likelihood | Impact | Mitigation                                                                  |
+| ------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------- |
+| Better Auth ↔ NestJS/Prisma integration friction        | med        | high   | Spike behind the `AuthContextService` seam in A1; keep provider swappable.  |
+| Role-enum change drifts from the reference template     | med        | med    | ADR-0016 + `scripts/verify-template.sh` in A0; update template in step.     |
+| IDOR / cross-tenant leak                                | low        | high   | Permission + org-scope on every route; 404 for non-member; e2e IDOR tests.  |
+| Last-admin invariant bypassed under concurrency         | low        | high   | Enforce admin-count check **inside** the transaction; unit + e2e cover it.  |
+| Invite token leakage                                    | low        | high   | Hash at rest; raw token only in create response + email; expiry + revoke.   |
+| Slug collision under concurrent creation                | low        | med    | DB partial-unique + retry-with-suffix; test concurrent create.              |
+| No email provider in v1 (assumption)                    | high       | low    | `MailService` port + stub adapter; copyable link in UI; provider follow-up. |
+| Email verification not blocking in v1 (assumption)      | med        | med    | Verification sent, not enforced for alpha; revisit before GA.               |
+| Open self-service sign-up (assumption — **critical Q**) | med        | med    | Confirm at approval; if closed alpha, gate sign-up + `organization:create`. |
+| CI now builds web (new surface)                         | med        | low    | Land entry point + build in A2 with devops-reviewer.                        |

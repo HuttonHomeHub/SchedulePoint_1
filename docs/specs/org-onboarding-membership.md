@@ -93,7 +93,7 @@ This slice implements four roles; **External Guest** (per-plan share link) is
 - **CRITICAL — Is self-service sign-up open, or invitation-only (closed alpha)?**
   This decides whether the sign-up route and `organization:create` are available
   to any visitor, or whether the only way to get an account is via an
-  organisation invite. **Recommended default:** *open self-service sign-up*; any
+  organisation invite. **Recommended default:** _open self-service sign-up_; any
   authenticated user may create organisations (optionally capped, see below).
 - _Non-critical (defaults stated, proceed):_
   - **Email verification blocking?** Better Auth sends a verification email;
@@ -247,16 +247,16 @@ check** (membership in the org owning the resource) — the anti-IDOR control.
 
 **Role → permission matrix** (× action; blank = deny):
 
-| Action / permission                     | Org Admin | Planner | Contributor | Viewer | Non-member |
-| --------------------------------------- | :-------: | :-----: | :---------: | :----: | :--------: |
-| Create organisation (`organization:create`, non-scoped) | ✓* | ✓* | ✓* | ✓* | ✓* |
-| Read organisation (`organization:read`) |     ✓     |    ✓    |      ✓      |   ✓    |     —      |
-| List members (`member:read`)            |     ✓     |    ✓    |      ✓      |   ✓    |     —      |
-| Invite member (`member:invite`)         |     ✓     |    —    |      —      |   —    |     —      |
-| List/revoke invitations (`invitation:revoke`) | ✓   |    —    |      —      |   —    |     —      |
-| Change role (`member:update_role`)      |     ✓     |    —    |      —      |   —    |     —      |
-| Remove member (`member:remove`)         |     ✓     |    —    |      —      |   —    |     —      |
-| Accept invitation (token-gated, authenticated) | n/a | n/a | n/a | n/a | ✓ (by token) |
+| Action / permission                                     | Org Admin | Planner | Contributor | Viewer |  Non-member  |
+| ------------------------------------------------------- | :-------: | :-----: | :---------: | :----: | :----------: |
+| Create organisation (`organization:create`, non-scoped) |    ✓*     |   ✓*    |     ✓*      |   ✓*   |      ✓*      |
+| Read organisation (`organization:read`)                 |     ✓     |    ✓    |      ✓      |   ✓    |      —       |
+| List members (`member:read`)                            |     ✓     |    ✓    |      ✓      |   ✓    |      —       |
+| Invite member (`member:invite`)                         |     ✓     |    —    |      —      |   —    |      —       |
+| List/revoke invitations (`invitation:revoke`)           |     ✓     |    —    |      —      |   —    |      —       |
+| Change role (`member:update_role`)                      |     ✓     |    —    |      —      |   —    |      —       |
+| Remove member (`member:remove`)                         |     ✓     |    —    |      —      |   —    |      —       |
+| Accept invitation (token-gated, authenticated)          |    n/a    |   n/a   |     n/a     |  n/a   | ✓ (by token) |
 
 \* `organization:create` is a **global authenticated capability**, not
 org-scoped (you have no org yet). Accepting an invitation is authenticated and
@@ -286,35 +286,35 @@ DTOs in the API):
 
 ### Error scenarios
 
-| Scenario                                      | Detection                   | User-facing result                         | Status |
-| --------------------------------------------- | --------------------------- | ------------------------------------------ | ------ |
-| Not authenticated                             | auth guard                  | redirect to sign-in                        | 401    |
-| Not a member of the org in the URL            | scope check                 | org treated as non-existent                | 404    |
-| Member of org but insufficient role           | permission + scope check    | friendly forbidden message                 | 403    |
-| Invalid payload (name/email/role)             | DTO validation              | inline field errors                        | 422    |
-| Duplicate sign-up email                       | unique (Better Auth)        | uniform non-enumerating error              | 409    |
-| Invite an existing member                     | membership lookup           | "already a member"                         | 409    |
-| Invite when a pending invite exists           | partial-unique constraint   | "invitation already pending" + revoke CTA  | 409    |
-| Accept unknown token                          | token-hash lookup           | "invitation not found"                     | 404    |
-| Accept expired/revoked token                  | status/expiry check         | "invitation is no longer valid"            | 410    |
-| Accept token for a different email            | email match                 | "signed in as a different account"         | 403    |
-| Stale role change (optimistic lock)           | zero-row versioned update   | "changed elsewhere — refresh"              | 409    |
-| Demote/remove the last Org Admin              | invariant check in tx       | "org must keep at least one Org Admin"     | 409    |
-| Rate limit exceeded on auth/invite            | throttler                   | "too many attempts" + `Retry-After`        | 429    |
+| Scenario                            | Detection                 | User-facing result                        | Status |
+| ----------------------------------- | ------------------------- | ----------------------------------------- | ------ |
+| Not authenticated                   | auth guard                | redirect to sign-in                       | 401    |
+| Not a member of the org in the URL  | scope check               | org treated as non-existent               | 404    |
+| Member of org but insufficient role | permission + scope check  | friendly forbidden message                | 403    |
+| Invalid payload (name/email/role)   | DTO validation            | inline field errors                       | 422    |
+| Duplicate sign-up email             | unique (Better Auth)      | uniform non-enumerating error             | 409    |
+| Invite an existing member           | membership lookup         | "already a member"                        | 409    |
+| Invite when a pending invite exists | partial-unique constraint | "invitation already pending" + revoke CTA | 409    |
+| Accept unknown token                | token-hash lookup         | "invitation not found"                    | 404    |
+| Accept expired/revoked token        | status/expiry check       | "invitation is no longer valid"           | 410    |
+| Accept token for a different email  | email match               | "signed in as a different account"        | 403    |
+| Stale role change (optimistic lock) | zero-row versioned update | "changed elsewhere — refresh"             | 409    |
+| Demote/remove the last Org Admin    | invariant check in tx     | "org must keep at least one Org Admin"    | 409    |
+| Rate limit exceeded on auth/invite  | throttler                 | "too many attempts" + `Retry-After`       | 429    |
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes                                                                                                                     |
-| -------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | high   | First **web entry point** (`main.tsx`, providers, router). Public auth routes, `_authed` shell, org switcher, members UI. |
-| Backend        | high   | Wire Better Auth to the `AuthContextService` seam; new `organizations`, `members`, `invitations` modules; org-scope resolver by slug; `MailService` port. |
-| Database       | high   | First real migration. New models: `User` (Better Auth-backed) + `Organization`, `OrgMember`, `Invitation`; role/status enums; auth tables (Better Auth). |
-| API            | high   | New `/api/v1/organizations…`, `/api/v1/invitations…`, `/api/v1/me`; Better Auth handler mount. OpenAPI + `API.md` updates. |
+| Area           | Impact | Notes                                                                                                                                                                            |
+| -------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | high   | First **web entry point** (`main.tsx`, providers, router). Public auth routes, `_authed` shell, org switcher, members UI.                                                        |
+| Backend        | high   | Wire Better Auth to the `AuthContextService` seam; new `organizations`, `members`, `invitations` modules; org-scope resolver by slug; `MailService` port.                        |
+| Database       | high   | First real migration. New models: `User` (Better Auth-backed) + `Organization`, `OrgMember`, `Invitation`; role/status enums; auth tables (Better Auth).                         |
+| API            | high   | New `/api/v1/organizations…`, `/api/v1/invitations…`, `/api/v1/me`; Better Auth handler mount. OpenAPI + `API.md` updates.                                                       |
 | Security       | high   | Deny-by-default; permission + org-scope on every endpoint (IDOR); token **hashed** at rest; CSRF on mutations; auth/invite rate-limits; audit-log entries; non-enumerating auth. |
-| Performance    | low    | Small tables; index scoping keys; cursor-paginate member/invite lists. No caching/jobs needed (mail publish is fire-after-commit). |
-| Infrastructure | med    | Better Auth secret + config; `MailService` port (stub adapter v1); no new hard external dependency. CI must now build **web** (entry point lands). |
-| Observability  | med    | Structured/correlated logs for auth events, invite/accept, role change, remove; append-only **audit log** for membership/permission changes (SECURITY_STANDARDS). |
-| Testing        | high   | Unit (services, mocked repo), API e2e (Supertest, real Postgres, IDOR + optimistic-lock + last-admin), web component tests, Playwright journey with a11y checks. |
+| Performance    | low    | Small tables; index scoping keys; cursor-paginate member/invite lists. No caching/jobs needed (mail publish is fire-after-commit).                                               |
+| Infrastructure | med    | Better Auth secret + config; `MailService` port (stub adapter v1); no new hard external dependency. CI must now build **web** (entry point lands).                               |
+| Observability  | med    | Structured/correlated logs for auth events, invite/accept, role change, remove; append-only **audit log** for membership/permission changes (SECURITY_STANDARDS).                |
+| Testing        | high   | Unit (services, mocked repo), API e2e (Supertest, real Postgres, IDOR + optimistic-lock + last-admin), web component tests, Playwright journey with a11y checks.                 |
 
 ### Dependencies
 
@@ -439,7 +439,7 @@ with the **database-architect** agent before writing the migration.
   nullable, `version`, audit (`created_by` = inviter), `deleted_at`. Indexes:
   `idx_invitations_organization_id_status`, `idx_invitations_token_hash`, **partial
   unique** `uq_invitations_org_email_pending` `(organization_id, email) WHERE
-  status = 'PENDING' AND deleted_at IS NULL`. **Raw token never stored** — only a
+status = 'PENDING' AND deleted_at IS NULL`. **Raw token never stored** — only a
   hash; the raw token lives only in the emailed link and the create response.
 
 ```mermaid
@@ -457,21 +457,21 @@ All under `/api/v1`, cookie-authenticated (Better Auth), standard
 Org-scoped routes use **`:orgSlug`** in the path; members/invitations are
 addressed by UUID id.
 
-| Method | Path                                                | Auth / permission                  | Success            | Notes                                        |
-| ------ | --------------------------------------------------- | ---------------------------------- | ------------------ | -------------------------------------------- |
-| —      | `/api/auth/*`                                        | Better Auth (public sign-up/in)    | per Better Auth    | Provider-mounted handler (sign up/in/out).   |
-| GET    | `/api/v1/me`                                          | authenticated                      | 200 `{data}`       | Current user + memberships (drives switcher).|
-| POST   | `/api/v1/organizations`                               | `organization:create` (any authed) | 201 `{data:Org}`   | Creator → Org Admin (same tx). `Location`.   |
-| GET    | `/api/v1/organizations`                               | authenticated                      | 200 `{data:Org[]}` | Only the caller's orgs.                       |
-| GET    | `/api/v1/organizations/:orgSlug`                      | `organization:read` + scope        | 200 / 404          | 404 if not a member (anti-enumeration).       |
-| GET    | `/api/v1/organizations/:orgSlug/members`              | `member:read` + scope              | 200 `{data,meta}`  | Cursor-paginated, newest-first.               |
-| PATCH  | `/api/v1/organizations/:orgSlug/members/:memberId`    | `member:update_role` + scope       | 200 / 409          | Body `{role, version}`; last-admin guarded.   |
-| DELETE | `/api/v1/organizations/:orgSlug/members/:memberId`    | `member:remove` + scope            | 204 / 409          | Soft delete; last-admin guarded.              |
-| POST   | `/api/v1/organizations/:orgSlug/invitations`          | `member:invite` + scope            | 201 `{data:Inv}`   | Body `{email, role}`; returns copyable link.  |
-| GET    | `/api/v1/organizations/:orgSlug/invitations`          | `invitation:revoke` + scope        | 200 `{data,meta}`  | Pending invites list.                         |
-| DELETE | `/api/v1/organizations/:orgSlug/invitations/:id`      | `invitation:revoke` + scope        | 204                | Revoke (status → REVOKED).                     |
-| GET    | `/api/v1/invitations/:token`                          | authenticated                      | 200 / 404 / 410    | Preview (org name, role) for the accept card. |
-| POST   | `/api/v1/invitations/accept`                          | authenticated (token-gated)        | 200 `{data:member}`| 404/410/403/409 per error table.              |
+| Method | Path                                               | Auth / permission                  | Success             | Notes                                         |
+| ------ | -------------------------------------------------- | ---------------------------------- | ------------------- | --------------------------------------------- |
+| —      | `/api/auth/*`                                      | Better Auth (public sign-up/in)    | per Better Auth     | Provider-mounted handler (sign up/in/out).    |
+| GET    | `/api/v1/me`                                       | authenticated                      | 200 `{data}`        | Current user + memberships (drives switcher). |
+| POST   | `/api/v1/organizations`                            | `organization:create` (any authed) | 201 `{data:Org}`    | Creator → Org Admin (same tx). `Location`.    |
+| GET    | `/api/v1/organizations`                            | authenticated                      | 200 `{data:Org[]}`  | Only the caller's orgs.                       |
+| GET    | `/api/v1/organizations/:orgSlug`                   | `organization:read` + scope        | 200 / 404           | 404 if not a member (anti-enumeration).       |
+| GET    | `/api/v1/organizations/:orgSlug/members`           | `member:read` + scope              | 200 `{data,meta}`   | Cursor-paginated, newest-first.               |
+| PATCH  | `/api/v1/organizations/:orgSlug/members/:memberId` | `member:update_role` + scope       | 200 / 409           | Body `{role, version}`; last-admin guarded.   |
+| DELETE | `/api/v1/organizations/:orgSlug/members/:memberId` | `member:remove` + scope            | 204 / 409           | Soft delete; last-admin guarded.              |
+| POST   | `/api/v1/organizations/:orgSlug/invitations`       | `member:invite` + scope            | 201 `{data:Inv}`    | Body `{email, role}`; returns copyable link.  |
+| GET    | `/api/v1/organizations/:orgSlug/invitations`       | `invitation:revoke` + scope        | 200 `{data,meta}`   | Pending invites list.                         |
+| DELETE | `/api/v1/organizations/:orgSlug/invitations/:id`   | `invitation:revoke` + scope        | 204                 | Revoke (status → REVOKED).                    |
+| GET    | `/api/v1/invitations/:token`                       | authenticated                      | 200 / 404 / 410     | Preview (org name, role) for the accept card. |
+| POST   | `/api/v1/invitations/accept`                       | authenticated (token-gated)        | 200 `{data:member}` | 404/410/403/409 per error table.              |
 
 - **Request DTOs** (`class-validator`): `CreateOrganizationDto{name}`,
   `CreateInvitationDto{email, role}`, `UpdateMemberRoleDto{role, version}`,
@@ -516,6 +516,7 @@ lands the app shell + auth flow as the walking skeleton. This maximises reuse an
 keeps every cross-cutting pattern identical to the template.
 
 **Alternatives considered:**
+
 - _Use Better Auth's `organization` plugin for orgs/roles/invites._ Rejected for
   v1: it would own the tenancy model outside our Prisma schema and RBAC policy
   layer, weakening the single-source-of-truth scoping key that every future
@@ -524,7 +525,7 @@ keeps every cross-cutting pattern identical to the template.
 - _Store raw invite tokens._ Rejected — tokens are secrets; store a hash, compare
   by hash (defence in depth).
 - _Return 403 for non-member org access._ Rejected in favour of **404** to avoid
-  leaking which slugs exist (403 reserved for insufficient role *within* an org
+  leaking which slugs exist (403 reserved for insufficient role _within_ an org
   you belong to).
 
 **Is an ADR required?** The design stays within ADR-0003/0008/0012/0014/0015
