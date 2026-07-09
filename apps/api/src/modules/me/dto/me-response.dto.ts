@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { User } from '@prisma/client';
+import { ORGANIZATION_ROLES } from '@repo/types';
 import type {
   MeResponse,
   OrganizationMembershipSummary,
@@ -32,7 +33,7 @@ class OrganizationMembershipSummaryDto implements OrganizationMembershipSummary 
   @ApiProperty({ format: 'uuid' })
   organizationId!: string;
 
-  @ApiProperty({ enum: ['VIEWER', 'CONTRIBUTOR', 'PLANNER', 'ORG_ADMIN'] })
+  @ApiProperty({ enum: ORGANIZATION_ROLES })
   role!: OrganizationRole;
 
   @ApiProperty({ type: [String] })

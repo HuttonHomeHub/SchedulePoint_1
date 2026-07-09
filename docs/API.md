@@ -15,6 +15,9 @@
 - Use HTTP verbs correctly: `GET` (read, safe), `POST` (create), `PATCH`
   (partial update), `PUT` (full replace), `DELETE` (remove).
 - All routes are served under the `/api` prefix and a version segment (below).
+- **Path identifiers** are the resource UUID by default. A collection with a
+  natural, human-readable, immutable key **may** use that key instead (e.g.
+  `/organizations/{orgSlug}`); the UUID is still returned in the body.
 
 ## Versioning
 
@@ -77,6 +80,10 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
   include `meta.nextCursor` and `meta.hasMore`.
 - Filtering via explicit query params; sorting via `?sort=field&order=asc|desc`.
 - Always cap `limit` server-side to a sane maximum.
+- A list that is **inherently bounded and caller-owned** (e.g.
+  `GET /organizations` — only the caller's memberships, no filters) may return an
+  unpaginated array; note the exemption at the endpoint. Revisit if the set can
+  grow large.
 
 ## Validation & data types
 

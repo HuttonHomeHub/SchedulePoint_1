@@ -26,6 +26,8 @@ Keep this honest and current — undocumented debt is the expensive kind.
 
 | 14 | **Auth hardening follow-ups** | Deferred from the A1 security review: (a) authentication events (sign-up/in/out) are not yet written to an audit log (the audit-log framework doesn't exist); (b) Better Auth's rate-limit store is in-process memory — correct for one instance but per-replica once scaled; (c) the `accounts` OAuth token columns are unencrypted at rest (harmless today — only email+password is enabled). | Missing auth audit trail; rate limits weaken under horizontal scaling; token columns unencrypted before OAuth ships. | (a) Log auth events once the audit-log module lands; (b) back the rate-limit store with Redis (ADR-0010) before scaling out; (c) add field-level encryption for OAuth token columns before enabling social providers. |
 
+| 15 | **OpenAPI accuracy gaps** | Repo-wide, from the B2 API review: (a) `201 Create` responses don't set a `Location` header (`docs/API.md` asks for one) — present in the reference template too; (b) the `@Api*Response` decorators declare the bare DTO, not the `{ data }`/`{ data, meta }` envelope the `TransformInterceptor` actually returns. | Generated OpenAPI is slightly inaccurate about response shape and `Location`. | Add a shared `@ApiDataResponse()`/`@ApiPaginatedResponse()` swagger helper and a `Location` header on creates; backport to the reference template so the two stay in step (ADR-0015). |
+
 ## Principles for managing debt
 
 - Prefer paying debt down opportunistically while touching nearby code.

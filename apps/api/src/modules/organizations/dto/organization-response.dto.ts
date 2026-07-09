@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { Organization } from '@prisma/client';
+import { ORGANIZATION_ROLES } from '@repo/types';
 import type { OrganizationSummary } from '@repo/types';
 
 import type { OrganizationRole } from '../../../common/auth/principal';
@@ -20,7 +21,7 @@ export class OrganizationResponseDto implements OrganizationSummary {
   slug!: string;
 
   @ApiProperty({
-    enum: ['VIEWER', 'CONTRIBUTOR', 'PLANNER', 'ORG_ADMIN'],
+    enum: ORGANIZATION_ROLES,
     description: "The requesting user's role in this organisation.",
   })
   role!: OrganizationRole;

@@ -35,10 +35,13 @@ export interface PageMeta {
 /**
  * Organisation-scoped roles, least → most privileged (ADR-0016). The API's
  * runtime `OrganizationRole` enum (apps/api/src/common/auth/principal.ts) is the
- * source of truth for values; this union is the cross-boundary contract the web
- * agrees on. Keep the two in step.
+ * source of truth for values; this const is the cross-boundary contract the web
+ * and OpenAPI annotations agree on (avoids hardcoding the values in several
+ * places). Keep the two in step.
  */
-export type OrganizationRole = 'VIEWER' | 'CONTRIBUTOR' | 'PLANNER' | 'ORG_ADMIN';
+export const ORGANIZATION_ROLES = ['VIEWER', 'CONTRIBUTOR', 'PLANNER', 'ORG_ADMIN'] as const;
+
+export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
 /** The authenticated user's public profile (never includes credentials). */
 export interface SessionUser {

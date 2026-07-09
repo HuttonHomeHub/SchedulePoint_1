@@ -1,11 +1,13 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import {
+  ApiConflictResponse,
   ApiCookieAuth,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
@@ -22,6 +24,7 @@ import { OrganizationsService } from './organizations.service';
  */
 @ApiTags('organizations')
 @ApiCookieAuth('schedulepoint.session_token')
+@ApiUnauthorizedResponse({ description: 'No valid session.' })
 @Controller({ path: 'organizations', version: '1' })
 export class OrganizationsController {
   constructor(private readonly service: OrganizationsService) {}
@@ -30,6 +33,7 @@ export class OrganizationsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create an organisation (the creator becomes its Org Admin).' })
   @ApiCreatedResponse({ type: OrganizationResponseDto })
+  @ApiConflictResponse({ description: 'Could not allocate a unique slug for the organisation.' })
   async create(
     @CurrentUser() principal: Principal,
     @Body() dto: CreateOrganizationDto,
@@ -38,6 +42,8 @@ export class OrganizationsController {
     return OrganizationResponseDto.from(organization, role);
   }
 
+  // Unpaginated by design: the set is inherently bounded (the caller's own
+  // memberships) and unfiltered — see the pagination exemption in docs/API.md.
   @Get()
   @ApiOperation({ summary: "List the caller's organisations." })
   @ApiOkResponse({ type: OrganizationResponseDto, isArray: true })
