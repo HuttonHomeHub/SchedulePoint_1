@@ -29,7 +29,12 @@ COPY . .
 RUN pnpm --filter @repo/types build \
     && pnpm --filter @repo/api prisma:generate \
     && pnpm --filter @repo/api build \
-    && pnpm --filter @repo/api --prod --legacy deploy /out
+    && pnpm --filter @repo/api --prod --legacy deploy /out \
+    # Regenerate the Prisma client INSIDE the deployed tree: `pnpm deploy`
+    # rebuilds node_modules from the store and does not carry over the client
+    # generated during the build, so without this the runtime fails with
+    # "@prisma/client did not initialize yet".
+    && (cd /out && node_modules/.bin/prisma generate)
 
 # --- Runtime: minimal, non-root ----------------------------------------------
 FROM node:22-alpine AS runtime
