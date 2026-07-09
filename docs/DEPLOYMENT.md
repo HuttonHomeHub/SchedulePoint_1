@@ -52,6 +52,61 @@ flowchart TD
   database migrations on startup (`prisma migrate deploy`), so no manual
   migration step is needed.
 
+## Running behind a reverse proxy (e.g. Nginx Proxy Manager + Cloudflare)
+
+A common self-hosted topology fronts the stack with a reverse proxy and a CDN.
+The browser only ever talks to the **web** container's public origin; the web
+container's nginx proxies `/api/*` to the API on the internal network, so the
+SPA calls the API **same-origin** (relative `/api/v1` — see
+`apps/web/src/config/env.ts`). The API is **not** exposed publicly.
+
+```mermaid
+flowchart LR
+  U[Browser] -->|HTTPS schedulepoint.example| CF[Cloudflare]
+  CF -->|HTTPS origin| NPM[Nginx Proxy Manager]
+  NPM -->|:8080| WEB[web container - nginx + SPA]
+  WEB -->|/api proxy → :3000| API[api container]
+  API --> DB[(Postgres)]
+```
+
+Point the proxy at the **web** container (`:8080`) only. Because the SPA uses a
+relative API base, **you do not rebuild the web image per domain** — the same
+image serves any hostname (`VITE_API_URL` is not consumed by the app).
+
+### Required configuration
+
+Set these on the **api** container (via your secret manager, not the compose
+defaults). With `NODE_ENV=production` the API enforces its startup guards, so
+all three below are mandatory:
+
+| Variable             | Value for `https://schedulepoint.example`                                                                          | Why                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`           | `production`                                                                                                       | Enables secure (HTTPS-only) auth cookies and the config guards.                                                       |
+| `BETTER_AUTH_SECRET` | a strong random value (`openssl rand -base64 32`)                                                                  | Guard refuses to boot with a dev/insecure secret.                                                                     |
+| `CORS_ORIGINS`       | `https://schedulepoint.example`                                                                                    | This is Better Auth's `trustedOrigins`. Must equal the **browser** origin or sign-up/in returns `403 Invalid origin`. |
+| `BETTER_AUTH_URL`    | `https://schedulepoint.example`                                                                                    | The public base URL the auth handler builds links/callbacks against.                                                  |
+| `TRUSTED_PROXY_IPS`  | the proxy hop(s) in front of the API (e.g. the Docker bridge CIDR such as `172.16.0.0/12`, or the web/NPM host IP) | Lets the API trust `X-Forwarded-For`/`-Proto` for the real client IP; guard refuses an empty value in production.     |
+
+### Cloudflare & TLS
+
+- Use SSL/TLS mode **Full (strict)** so every leg is HTTPS: the browser→Cloudflare
+  leg (which makes the `Secure` auth cookie valid) **and** the Cloudflare→origin
+  leg (so `X-Forwarded-Proto: https` reaches the API and links resolve as HTTPS).
+  Give Nginx Proxy Manager a valid certificate (e.g. Let's Encrypt) for the origin.
+- Ensure the proxy forwards `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto`
+  (Nginx Proxy Manager's "Websockets support" + default forwarding is fine); the
+  web container already sets these when proxying to the API.
+
+### Common pitfall: `403 Invalid origin` on sign-up/sign-in
+
+Better Auth rejects any request whose `Origin` header is not in `trustedOrigins`
+(= `CORS_ORIGINS`). If you reach the app on a URL that is not listed — a raw
+`http://LAN-IP:8080`, a preview hostname, or the domain when `CORS_ORIGINS`
+still points at localhost — auth calls fail with `403 Invalid origin`. Set
+`CORS_ORIGINS` to the exact origin shown in the browser address bar. For a
+plain HTTP LAN test (no TLS), also set `NODE_ENV=development`, otherwise the
+`Secure` cookie is set but never sent back over HTTP and login silently fails.
+
 ## Environments (intended)
 
 | Environment | Purpose                     | Source                            |

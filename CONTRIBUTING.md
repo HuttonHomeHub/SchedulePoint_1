@@ -76,6 +76,28 @@ docs(repo): document the release process
   Conventional Commit title.
 - UI changes include before/after screenshots and note accessibility impact.
 
+## Branch protection (required checks)
+
+"CI green before merge" (CLAUDE.md §7) is only reliable when GitHub **enforces**
+it. Configure `main` under **Settings → Branches → Branch protection rules** (or
+a ruleset) so it cannot regress by convention alone:
+
+- **Require a pull request before merging** (no direct pushes to `main`).
+- **Require status checks to pass**, and mark these CI jobs as required:
+  - `Format, lint, typecheck & unit tests`
+  - `Verify feature template`
+  - `End-to-end tests`
+  - `Build & smoke-boot images`
+  - `Analyze (javascript-typescript)` (CodeQL)
+- **Require branches to be up to date before merging** (so checks run against
+  the post-merge tree).
+- **Require conversation resolution** and at least one approving review
+  (CODEOWNERS-satisfied).
+- Keep **Do not allow bypassing the above** on, including for admins.
+
+Without this, a job that is red (e.g. only one of several CI jobs failing) can
+still be merged — which is exactly how a broken build can reach `main`.
+
 ## Reporting bugs & requesting features
 
 Use the [issue templates](.github/ISSUE_TEMPLATE/). For security issues, do

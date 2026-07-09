@@ -18,6 +18,18 @@
 # NODE_ENV defaults to `development` here: the API's production config guards
 # (strong secret, trusted proxies, non-localhost CORS) intentionally refuse to
 # boot with local values, so a local test run uses the development profile.
+#
+# CORS_ORIGINS must equal the origin you open in the browser (it is Better
+# Auth's trustedOrigins). If it doesn't match, sign-up/sign-in fails with
+# `403 Invalid origin`. For a plain-HTTP LAN test on another host, set e.g.
+#   export CORS_ORIGINS=http://192.168.0.10:8080
+# and keep NODE_ENV=development (the production `Secure` cookie is never sent
+# back over HTTP, so login would silently fail otherwise).
+#
+# Serving a REAL domain behind a reverse proxy (Nginx Proxy Manager, Cloudflare)
+# with NODE_ENV=production requires CORS_ORIGINS/BETTER_AUTH_URL/TRUSTED_PROXY_IPS
+# and a strong BETTER_AUTH_SECRET — see docs/DEPLOYMENT.md → "Running behind a
+# reverse proxy".
 
 name: schedulepoint-release
 

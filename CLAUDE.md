@@ -266,6 +266,10 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0015** — Template-driven feature development (canonical standard).
 - **ADR-0016** — Core identity & tenancy model + organisation role set
   (`ORG_ADMIN/PLANNER/CONTRIBUTOR/VIEWER`; External Guest modelled separately).
+- **ADR-0017** — Release tagging & image publishing via GitHub Actions.
+- **ADR-0018** — Self-migrating container image (entrypoint runs migrations).
+- **ADR-0019** — Shared workspace packages ship compiled output (build contract).
+- **ADR-0020** — CI builds & smoke-boots the container images.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
