@@ -85,6 +85,16 @@ jobs:
           git tag -a "v${{ steps.meta.outputs.version }}" -m "Release v${{ steps.meta.outputs.version }}"
           git push origin "v${{ steps.meta.outputs.version }}"
 
+      # Publish a GitHub Release for the tag so it shows in the Releases tab.
+      - name: Create GitHub release
+        if: steps.meta.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.meta.outputs.version }}" \
+            --title "v${{ steps.meta.outputs.version }}" \
+            --generate-notes
+
   # Build + push the container images for the release. Invoked directly (rather
   # than via the tag push above, which the default GITHUB_TOKEN cannot use to
   # trigger another workflow) so publishing is fully automatic.

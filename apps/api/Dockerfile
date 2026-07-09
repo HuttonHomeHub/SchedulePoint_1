@@ -37,8 +37,14 @@ USER node
 COPY --chown=node:node --from=build /out/dist ./dist
 COPY --chown=node:node --from=build /out/node_modules ./node_modules
 COPY --chown=node:node --from=build /out/package.json ./package.json
+# Prisma schema + migrations and the entrypoint, so the container migrates the
+# database on startup (the image ships the Prisma CLI as a prod dependency).
+COPY --chown=node:node --from=build /out/prisma ./prisma
+COPY --chown=node:node --from=build /out/docker-entrypoint.sh ./docker-entrypoint.sh
 EXPOSE 3000
 # Health is served under the global /api prefix + URI versioning (/api/v1/health).
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# Longer start period to cover the migrate-then-boot entrypoint on first run.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "dist/main.js"]
+# Apply pending migrations, then start (see docker-entrypoint.sh).
+CMD ["sh", "docker-entrypoint.sh"]
