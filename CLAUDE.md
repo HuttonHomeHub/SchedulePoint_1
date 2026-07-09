@@ -1,6 +1,6 @@
 # CLAUDE.md — Project Operating Manual
 
-> This file is the permanent operating manual for the **Blank App** repository.
+> This file is the permanent operating manual for the **SchedulePoint** repository.
 > It is authored for both human engineers and AI assistants (Claude Code).
 > **Keep it current.** Any change that alters architecture, standards, tooling,
 > or process MUST update this file in the same pull request.
@@ -9,23 +9,28 @@
 
 ## 1. What this project is
 
-**Blank App** is a **production-grade starter/base repository** — a clean,
-domain-neutral monorepo foundation for building new applications. It is not a
-specific product: it ships the engineering foundation (tooling, structure,
-CI/CD, containers, documentation, standards, a delivery process, and a canonical
-feature template) so a real application can be built on top of it quickly and
-consistently.
+**SchedulePoint** is a browser-based **construction scheduling** application
+built around a **Time-Scaled Logic Diagram (TSLD)** as its primary editing
+surface: planners draw activities directly on a timeline and connect them with
+logic (in the tradition of the Graphical Path Method), rather than entering data
+into a Gantt grid. It delivers the CPM/GPM feature set construction planners
+actually use — four dependency types with lag, calendars, constraints, progress,
+floats, baselines, and resources — with a live critical path and collaborative,
+browser-native team use. See the full product context in
+[`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: base repository (no application features).** The foundation
-> exists; domain/business code does **not**. When you start a real app, replace
-> this section with the app's purpose, users, and goals, and build features from
-> the reference template (§12, ADR-0015). Do not assume domain code exists —
+> **Current stage: foundation in place, application features not yet built.** The
+> engineering foundation (tooling, structure, CI/CD, containers, docs, standards,
+> delivery process, reference template) exists; SchedulePoint's domain/business
+> code does **not** yet. Build features from the reference template (§12,
+> ADR-0015) via the delivery process (§21). Do not assume domain code exists —
 > check before referencing it.
 >
-> The base assumes a **multi-tenant** shape (users belong to **organisations**;
-> resources are organisation-scoped) as a sensible default demonstrated by the
-> reference template. If your app isn't multi-tenant, simplify the RBAC model to
-> owner-based access and record the change in an ADR.
+> SchedulePoint is **multi-tenant**: users belong to one or more
+> **organisations**; clients, projects, plans and their activities are
+> organisation-scoped. Roles are **Org Admin, Planner, Contributor, Viewer**, and
+> **External Guest** (per-plan share link) — see
+> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §5 and ADR-0012.
 
 ## 2. Project philosophy
 
