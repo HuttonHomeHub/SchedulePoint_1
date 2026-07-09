@@ -27,7 +27,10 @@ COPY . .
 # VITE_* build args are baked into the static bundle at build time.
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
-RUN pnpm --filter @repo/web build
+# Build @repo/types first so the production Vite build resolves its compiled
+# output (the `development` export condition only applies to the dev server).
+RUN pnpm --filter @repo/types build \
+    && pnpm --filter @repo/web build
 
 # --- Runtime: static files served by nginx -----------------------------------
 FROM nginx:1.31-alpine AS runtime
