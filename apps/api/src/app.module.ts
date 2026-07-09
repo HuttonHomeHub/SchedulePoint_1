@@ -15,10 +15,13 @@ import { MailModule } from './common/mail/mail.module';
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
+import { ClientsModule } from './modules/clients/clients.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MeModule } from './modules/me/me.module';
 import { MembersModule } from './modules/members/members.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { PlansModule } from './modules/plans/plans.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /** Whether the optional `pino-pretty` dev logger transport can be loaded. */
@@ -89,6 +92,9 @@ function isPrettyLoggingAvailable(): boolean {
     OrganizationsModule,
     MembersModule,
     InvitationsModule,
+    ClientsModule,
+    ProjectsModule,
+    PlansModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.

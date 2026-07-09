@@ -19,7 +19,44 @@ export type OrgPermission =
   | 'member:update_role'
   | 'member:remove'
   | 'invitation:read'
-  | 'invitation:revoke';
+  | 'invitation:revoke'
+  // Client → Project → Plan hierarchy (feature: hierarchy CRUD). Read is granted
+  // to every member; create/update/delete/restore ("write") to Planner + Org
+  // Admin, matching the brief's "Planner has full CRUD on clients/projects/plans".
+  | 'client:read'
+  | 'client:create'
+  | 'client:update'
+  | 'client:delete'
+  | 'client:restore'
+  | 'project:read'
+  | 'project:create'
+  | 'project:update'
+  | 'project:delete'
+  | 'project:restore'
+  | 'plan:read'
+  | 'plan:create'
+  | 'plan:update'
+  | 'plan:delete'
+  | 'plan:restore';
+
+/** Read the hierarchy — every member (Viewer upward) may browse the tree. */
+const HIERARCHY_READ: readonly OrgPermission[] = ['client:read', 'project:read', 'plan:read'];
+
+/** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
+const HIERARCHY_WRITE: readonly OrgPermission[] = [
+  'client:create',
+  'client:update',
+  'client:delete',
+  'client:restore',
+  'project:create',
+  'project:update',
+  'project:delete',
+  'project:restore',
+  'plan:create',
+  'plan:update',
+  'plan:delete',
+  'plan:restore',
+];
 
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
@@ -36,12 +73,12 @@ const ADMIN: readonly OrgPermission[] = [
 ];
 
 const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
-  // Viewer / Contributor / Planner differ in plan & activity permissions (added
-  // by later features); for org membership they are all read-only.
-  [OrganizationRole.VIEWER]: MEMBER_BASELINE,
-  [OrganizationRole.CONTRIBUTOR]: MEMBER_BASELINE,
-  [OrganizationRole.PLANNER]: MEMBER_BASELINE,
-  [OrganizationRole.ORG_ADMIN]: ADMIN,
+  // Every member can read the org, its roster, and browse the hierarchy. Planner
+  // adds hierarchy write; Org Admin adds member/invitation administration too.
+  [OrganizationRole.VIEWER]: [...MEMBER_BASELINE, ...HIERARCHY_READ],
+  [OrganizationRole.CONTRIBUTOR]: [...MEMBER_BASELINE, ...HIERARCHY_READ],
+  [OrganizationRole.PLANNER]: [...MEMBER_BASELINE, ...HIERARCHY_READ, ...HIERARCHY_WRITE],
+  [OrganizationRole.ORG_ADMIN]: [...ADMIN, ...HIERARCHY_READ, ...HIERARCHY_WRITE],
 };
 
 /** Resolve the permissions a role grants (used when building the principal). */

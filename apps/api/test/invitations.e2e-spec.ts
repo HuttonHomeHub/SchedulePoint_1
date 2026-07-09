@@ -46,6 +46,9 @@ describe.skipIf(!hasDatabase)('Invitations API (e2e)', () => {
 
   beforeEach(async () => {
     await prisma.invitation.deleteMany();
+    await prisma.plan.deleteMany();
+    await prisma.project.deleteMany();
+    await prisma.client.deleteMany();
     await prisma.orgMember.deleteMany();
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();

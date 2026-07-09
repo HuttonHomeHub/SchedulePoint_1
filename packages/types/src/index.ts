@@ -117,4 +117,56 @@ export interface OrgMemberSummary {
   version: number;
 }
 
+/** Lifecycle state of a Plan. Mirrors the API's Prisma `PlanStatus` enum. */
+export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+
+/** A client (top level of the Org → Client → Project → Plan hierarchy). */
+export interface ClientSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  /** Optimistic-locking version — echo it back when updating or deleting. */
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A project, scoped to a client. */
+export interface ProjectSummary {
+  id: string;
+  clientId: string;
+  name: string;
+  description: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A plan, scoped to a project — the future host of activities and the TSLD. */
+export interface PlanSummary {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  status: PlanStatus;
+  /** Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. */
+  plannedStart: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A soft-deleted hierarchy row surfaced in the "recently deleted" list. `kind`
+ * discriminates which entity it is; `canRestore` is false when an ancestor is
+ * still deleted (restore the parent first — the top-down invariant).
+ */
+export interface DeletedHierarchyItem {
+  kind: 'client' | 'project' | 'plan';
+  id: string;
+  name: string;
+  deletedAt: string;
+  canRestore: boolean;
+}
+
 export {};
