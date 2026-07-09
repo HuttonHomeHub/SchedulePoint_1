@@ -13,8 +13,8 @@ flowchart TD
   B --> C{Pending changesets?}
   C -- yes --> D[Open/update 'Version Packages' PR]
   D --> E[Maintainer merges version PR]
-  E --> F[Versions bumped + CHANGELOG updated + tag vX.Y.Z]
-  F --> G[docker-publish workflow on tag]
+  E --> F[Versions bumped + CHANGELOG updated]
+  F --> G[Release job tags vX.Y.Z + invokes publish]
   G --> H[Images pushed to ghcr.io with SemVer + sha tags]
   H --> I[Promote images through environments]
   C -- no --> J[No release]
@@ -25,20 +25,30 @@ flowchart TD
 - **Semantic Versioning**, driven by **Changesets**. Contributors add a
   changeset (`pnpm changeset`) for user-visible changes.
 - The [`release`](../.github/workflows/release.yml) workflow maintains a
-  "Version Packages" PR. Merging it bumps versions, writes `CHANGELOG.md`
-  entries, and creates a `vX.Y.Z` tag.
+  "Version Packages" PR. Merging it bumps versions and writes `CHANGELOG.md`
+  entries; the workflow then creates the `vX.Y.Z` tag and invokes image
+  publishing directly. (It does **not** use `changeset publish` — that is npm-only
+  and no-ops on our private packages, so it never tags. And it publishes by
+  calling `docker-publish` as a reusable workflow rather than relying on the tag
+  push to trigger it, because a push made with the default `GITHUB_TOKEN` cannot
+  start another workflow.)
 
 ## Container images
 
-- Built by [`docker-publish.yml`](../.github/workflows/docker-publish.yml) on
-  version tags (and manually via `workflow_dispatch`).
-- Published to **GitHub Container Registry**:
-  - `ghcr.io/HuttonHomeHub/blank-app/api`
-  - `ghcr.io/HuttonHomeHub/blank-app/web`
-- Tags: full SemVer, `major.minor`, and commit `sha`. Images include an **SBOM**
-  and **build provenance**.
+- Built by [`docker-publish.yml`](../.github/workflows/docker-publish.yml): on
+  version tags, when invoked by the release workflow (`workflow_call`), and
+  manually via `workflow_dispatch`.
+- Published to **GitHub Container Registry** (GHCR paths are all-lowercase):
+  - `ghcr.io/huttonhomehub/schedulepoint_1/api`
+  - `ghcr.io/huttonhomehub/schedulepoint_1/web`
+- Tags: full SemVer + `latest` on a release, plus commit `sha` and the branch
+  name on manual/branch builds. Images include an **SBOM** and **build
+  provenance**.
 - Images are **immutable**: the same artifact is promoted across environments;
   we never rebuild per environment.
+- To run the published images locally, use
+  [`docker-compose.release.yml`](../docker-compose.release.yml) (see its header for
+  the `docker login`, `IMAGE_TAG`, and one-time migration steps).
 
 ## Environments (intended)
 

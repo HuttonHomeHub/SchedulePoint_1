@@ -8,6 +8,15 @@ on:
       tag:
         description: 'Image tag to publish (defaults to git sha)'
         required: false
+  # Called by the Release workflow when a version lands, so publishing is fully
+  # automatic. The default GITHUB_TOKEN cannot make a tag push trigger a separate
+  # workflow, so Release invokes this reusable workflow directly instead.
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version to tag the images with (e.g. 0.2.1).'
+        required: false
+        type: string
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -52,7 +61,12 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=raw,value=latest,enable=${{ inputs.version != '' }}
             type=sha
+            # On a branch/dispatch build (and on the release call, which inherits
+            # the push-to-main context) this also tags the branch name, e.g.
+            # `:main` — which docker-compose.release.yml defaults IMAGE_TAG to.
             type=ref,event=branch
 
       - name: Build and push

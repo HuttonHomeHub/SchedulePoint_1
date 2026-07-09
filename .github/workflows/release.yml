@@ -13,11 +13,14 @@ permissions:
 
 jobs:
   release:
-    name: Version & release
+    name: Version & tag
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create tags/releases and push version commits
+      contents: write # push version commits and the vX.Y.Z tag
       pull-requests: write # open/update the "Version Packages" PR
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release: ${{ steps.meta.outputs.release }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,15 +38,63 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Changesets either opens/updates a release PR that bumps versions and
-      # updates CHANGELOG.md, or — when such a PR is merged — publishes the
-      # release. See docs/DEPLOYMENT.md and .changeset/README.md.
-      - name: Create release pull request or publish
+      # When there are pending changesets this opens/updates the "Version
+      # Packages" PR (bumping versions + writing CHANGELOG.md). When that PR is
+      # merged, no changesets remain (hasChangesets == 'false') and the bumped
+      # versions are already on this commit — that is a release.
+      #
+      # We do NOT use a `publish` command here: `changeset publish` is npm-only
+      # and no-ops on our private packages (so it never creates a tag). Tagging
+      # and image publishing are handled explicitly below.
+      - name: Create release pull request
+        id: changesets
         uses: changesets/action@v1
         with:
           version: pnpm version-packages
-          publish: pnpm release
           commit: 'chore(release): version packages'
           title: 'chore(release): version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A release lands when the "Version Packages" PR was just merged: no
+      # changesets remain AND the current app version has no git tag yet. All
+      # workspace packages version together, so apps/api is the canonical version.
+      #
+      # NOTE: `hasChangesets` is a changesets/action@v1 output (camelCase). v2
+      # renames it to `has-changesets`; update this expression when bumping the
+      # major, or the gate silently reads empty and releases stop tagging.
+      - name: Determine release
+        id: meta
+        run: |
+          VERSION="$(node -p "require('./apps/api/package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ] \
+            && ! git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "New version v$VERSION — tagging release."
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "No release to tag (pending changesets, or v$VERSION already tagged)."
+          fi
+
+      - name: Tag release
+        if: steps.meta.outputs.release == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -a "v${{ steps.meta.outputs.version }}" -m "Release v${{ steps.meta.outputs.version }}"
+          git push origin "v${{ steps.meta.outputs.version }}"
+
+  # Build + push the container images for the release. Invoked directly (rather
+  # than via the tag push above, which the default GITHUB_TOKEN cannot use to
+  # trigger another workflow) so publishing is fully automatic.
+  publish:
+    name: Publish images
+    needs: release
+    if: needs.release.outputs.release == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
