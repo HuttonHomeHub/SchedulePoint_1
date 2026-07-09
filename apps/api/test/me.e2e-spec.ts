@@ -51,6 +51,9 @@ describe.skipIf(!hasDatabase)('Auth & Me (e2e)', () => {
     // FK-safe order (invitations + memberships RESTRICT-reference orgs/users);
     // clears any rows left by other e2e specs sharing this database.
     await prisma.invitation.deleteMany();
+    await prisma.plan.deleteMany();
+    await prisma.project.deleteMany();
+    await prisma.client.deleteMany();
     await prisma.orgMember.deleteMany();
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();

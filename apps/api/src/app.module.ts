@@ -15,6 +15,7 @@ import { MailModule } from './common/mail/mail.module';
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
+import { ClientsModule } from './modules/clients/clients.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MeModule } from './modules/me/me.module';
 import { MembersModule } from './modules/members/members.module';
@@ -89,6 +90,7 @@ function isPrettyLoggingAvailable(): boolean {
     OrganizationsModule,
     MembersModule,
     InvitationsModule,
+    ClientsModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.
