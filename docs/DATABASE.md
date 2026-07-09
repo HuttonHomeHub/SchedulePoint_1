@@ -123,6 +123,73 @@
 - No business logic in triggers/stored procedures unless justified and
   documented (keep logic in the app for testability).
 
+## Domain hierarchy: scoping & cascade soft-delete (Client/Project/Plan)
+
+The `clients`, `projects`, and `plans` tables are the organisation-scoped
+containers the scheduling domain hangs off (`Organization → Client → Project →
+Plan`). They apply every standard above and establish two reusable conventions
+future descendant tables (activities, notes, baselines, …) copy.
+
+### Denormalised `organization_id`
+
+`Project` and `Plan` carry `organization_id` **directly**, in addition to their
+parent FK (`client_id` / `project_id`). It is a deliberate, measured denormalisation
+(per _Relationships_ above):
+
+- **Why.** Every scope/IDOR check and org-scoped query then filters a single
+  indexed column instead of joining Plan → Project → Client to reach the org, and
+  the query/authorisation shape is identical across all three modules.
+- **Invariant.** A child's `organization_id` **always equals its parent's**. It is
+  set by the service layer inside the create transaction (copied from the resolved
+  parent), **never from client input**. The DB does not (cannot cheaply) enforce
+  the equality; the service owns it and it is unit-tested.
+- `Client.organization_id` is **native**, not denormalised — the organisation is a
+  client's direct parent.
+
+### Cascade soft-delete + batch restore (`delete_batch_id`)
+
+Deletes across the hierarchy are **soft and cascading, performed in the service
+layer** — there is no DB `ON DELETE CASCADE`. Each table carries a nullable
+`delete_batch_id UUID` (a correlation id, **not** a foreign key):
+
+- **Delete.** In one `$transaction`, the target row and its whole _active_ subtree
+  are soft-deleted (`deleted_at` set) and stamped with the **same** freshly-generated
+  `delete_batch_id`.
+- **Restore.** Restoring clears the soft-delete on **exactly the rows sharing that
+  batch id**, so a descendant deleted separately _earlier_ (a different batch) is
+  not resurrected — history is preserved. Restore is top-down: a row whose parent
+  is still deleted cannot be restored (the "no active row under a deleted ancestor"
+  invariant, surfaced as `409 PARENT_DELETED`).
+- **FKs stay `ON DELETE RESTRICT`.** We never hard-delete; `RESTRICT` is a guard
+  against an accidental hard delete orphaning children, not the delete mechanism.
+
+### Indexes (and their rationale)
+
+Managed composite indexes are declared in `schema.prisma` (`@@index`, Prisma-named);
+partial indexes are **raw SQL in the migration** because Prisma cannot express a
+`WHERE` predicate.
+
+| Index                                       | On                                  | Kind           | Serves                                                                                                                                 |
+| ------------------------------------------- | ----------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `clients_organization_id_created_at_id_idx` | `(organization_id, created_at, id)` | full composite | `organization_id` FK (leftmost prefix) + org-scoped active list + its `(created_at, id)` cursor sort — subsumes a standalone org index |
+| `projects_client_id_created_at_id_idx`      | `(client_id, created_at, id)`       | full composite | `client_id` FK + list-projects-under-a-client + cursor sort — subsumes a standalone client index                                       |
+| `projects_organization_id_idx`              | `(organization_id)`                 | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR loads (no org-wide ordered list exists, so no composite)                             |
+| `plans_project_id_created_at_id_idx`        | `(project_id, created_at, id)`      | full composite | `project_id` FK + list-plans-under-a-project + cursor sort — subsumes a standalone project index                                       |
+| `plans_organization_id_idx`                 | `(organization_id)`                 | full           | `organization_id` FK + org-scoped IDOR loads                                                                                           |
+| `uq_clients_org_name`                       | `(organization_id, name)`           | partial unique | name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `NAME_TAKEN` (409) + name lookups                              |
+| `uq_projects_client_name`                   | `(client_id, name)`                 | partial unique | name unique per client among live rows                                                                                                 |
+| `uq_plans_project_name`                     | `(project_id, name)`                | partial unique | name unique per project among live rows                                                                                                |
+| `idx_clients_delete_batch_id`               | `(delete_batch_id)`                 | partial        | batch restore lookup (`WHERE delete_batch_id IS NOT NULL`); tiny — only soft-deleted rows carry a value                                |
+| `idx_projects_delete_batch_id`              | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
+| `idx_plans_delete_batch_id`                 | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
+
+The scope/list composites are **full (not partial on `deleted_at`)** so they also
+back the FK `RESTRICT` check, which must find referencing rows _including_
+soft-deleted ones; the active-list query filters `deleted_at IS NULL` on top of the
+already-ordered index scan (cheap at the target scale of ≤ ~100 plans/org). No
+redundant single-column FK index is added where a composite's leftmost prefix
+already covers it.
+
 ## Testing & performance
 
 - Integration tests run against a **real Postgres** (see [`TESTING.md`](TESTING.md)).

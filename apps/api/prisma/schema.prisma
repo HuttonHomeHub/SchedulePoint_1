@@ -131,6 +131,13 @@ model Organization {
   deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz(3)
   members     OrgMember[]
   invitations Invitation[]
+  // Domain hierarchy owned by this organisation. Project/Plan back-relations
+  // exist because those tables carry a denormalised organization_id FK (see the
+  // Client/Project/Plan models below), not because the org is their direct
+  // parent — the tree is Organization → Client → Project → Plan.
+  clients     Client[]
+  projects    Project[]
+  plans       Plan[]
 
   @@map("organizations")
 }
@@ -198,4 +205,145 @@ model Invitation {
 
   @@index([organizationId, status])
   @@map("invitations")
+}
+
+// ---------------------------------------------------------------------------
+// Domain hierarchy — Client → Project → Plan (feature: hierarchy CRUD).
+//
+// The three organisation-scoped container levels every scheduling feature hangs
+// off: an org owns Clients, a Client owns Projects, a Project owns Plans (a Plan
+// is the future host of Activities and the TSLD canvas). All follow the same
+// house standards as the tenancy models above: UUID v7 PKs, snake_case columns
+// via @map, timestamptz UTC, NOT NULL by default, soft delete, audit columns,
+// optimistic-locking `version`, and scoped indexes. See docs/DATABASE.md.
+//
+// Two cross-cutting conventions (recorded in docs/DECISIONS.md) apply here:
+//
+//   1. Denormalised `organization_id`. Project and Plan carry organization_id
+//      directly (copied from their parent by the service layer inside the create
+//      transaction, NEVER from client input) in addition to their parent FK, so
+//      every scope/IDOR check and org-scoped query filters one indexed column
+//      without a 2–3 table join. Invariant: a child's organization_id always
+//      equals its parent's. Client's organization_id is native (the org is its
+//      direct parent), not denormalised.
+//
+//   2. Cascade soft-delete + batch restore via `delete_batch_id`. There is no
+//      DB cascade — deletes are soft and performed in the service layer. When a
+//      row is soft-deleted, it and its whole active subtree are stamped in one
+//      transaction with the same `delete_batch_id`, so restoring the parent
+//      restores exactly that batch (and nothing that was deleted separately
+//      earlier). Parent FKs stay ON DELETE RESTRICT: we never hard-delete, and
+//      RESTRICT guards against an accidental hard delete orphaning children.
+//
+// Audit columns `created_by`/`updated_by` are plain TEXT (String, NO @db.Uuid):
+// they hold Better Auth user ids, which are opaque TEXT, not UUIDs — mirroring
+// OrgMember.userId. Typing them as uuid breaks inserts (it bit the prior slice).
+// ---------------------------------------------------------------------------
+
+// Lifecycle state of a Plan — plain metadata in this slice (no scheduling maths
+// keys off it yet). MUST stay in lock-step with the TypeScript `PlanStatus` union
+// in @repo/types.
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model Client {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?   @map("created_by")
+  updatedBy      String?   @map("updated_by")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  // Correlation id (NOT a FK) shared by a row and every descendant soft-deleted
+  // in the same operation; the unit of batch restore. Indexed by a partial index
+  // (WHERE delete_batch_id IS NOT NULL) added as raw SQL in the migration.
+  deleteBatchId  String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projects     Project[]
+
+  // Client name is unique per organisation among ACTIVE rows only — enforced by a
+  // PARTIAL unique index (uq_clients_org_name ON (organization_id, name) WHERE
+  // deleted_at IS NULL), added as raw SQL in the migration (Prisma cannot express
+  // partial indexes). A soft-deleted name is therefore free to reuse.
+  //
+  // (organization_id, created_at, id) is a full composite that serves three
+  // patterns at once: the organization_id FK (leftmost prefix), the org-scoped
+  // active-list query, AND its deterministic cursor sort (ORDER BY created_at,
+  // id). It subsumes a standalone organization_id index, so none is added.
+  @@index([organizationId, createdAt, id])
+  @@map("clients")
+}
+
+model Project {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent client (see the block comment above). RESTRICT.
+  organizationId String    @map("organization_id") @db.Uuid
+  clientId       String    @map("client_id") @db.Uuid
+  name           String
+  description    String?
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?   @map("created_by")
+  updatedBy      String?   @map("updated_by")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId  String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  plans        Plan[]
+
+  // Project name is unique per CLIENT among ACTIVE rows — partial unique
+  // (uq_projects_client_name ON (client_id, name) WHERE deleted_at IS NULL), raw
+  // SQL in the migration. The same name may exist under a different client.
+  //
+  // (client_id, created_at, id) covers the client FK (leftmost prefix), the
+  // list-projects-under-a-client query and its cursor sort in one; it subsumes a
+  // standalone client_id index. organization_id is indexed on its own to back its
+  // FK (RESTRICT) and org-scoped IDOR loads; there is no org-wide ordered project
+  // list, so a single column suffices (no composite needed there).
+  @@index([clientId, createdAt, id])
+  @@index([organizationId])
+  @@map("projects")
+}
+
+model Plan {
+  id             String     @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent project (see the block comment above). RESTRICT.
+  organizationId String     @map("organization_id") @db.Uuid
+  projectId      String     @map("project_id") @db.Uuid
+  name           String
+  description    String?
+  status         PlanStatus @default(DRAFT)
+  // Date-only (no time / no timezone): a plan's start is a calendar day, not an
+  // instant, so it is @db.Date, not timestamptz. Optional metadata in this slice.
+  plannedStart   DateTime?  @map("planned_start") @db.Date
+  version        Int        @default(1)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?    @map("created_by")
+  updatedBy      String?    @map("updated_by")
+  deletedAt      DateTime?  @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId  String?    @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  // Plan name is unique per PROJECT among ACTIVE rows — partial unique
+  // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
+  // SQL in the migration.
+  //
+  // (project_id, created_at, id) covers the project FK, the list-plans-under-a-
+  // project query and its cursor sort; subsumes a standalone project_id index.
+  // organization_id is indexed on its own for its FK and org-scoped IDOR loads.
+  @@index([projectId, createdAt, id])
+  @@index([organizationId])
+  @@map("plans")
 }
