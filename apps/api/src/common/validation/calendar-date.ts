@@ -12,6 +12,9 @@ export function isCalendarDate(value: unknown): value is string {
   if (typeof value !== 'string' || !CALENDAR_DATE_REGEX.test(value)) return false;
   const [year, month, day] = value.split('-').map(Number) as [number, number, number];
   const date = new Date(Date.UTC(year, month - 1, day));
+  // The round-trip also fails safe for the JS legacy two-digit-year remap
+  // (`Date.UTC(0..99)` → 1900–1999): a `00xx` year won't equal `getUTCFullYear()`
+  // and is rejected — acceptable for calendar dates, which never need years 0–99.
   return (
     date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
   );
