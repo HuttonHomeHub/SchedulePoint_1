@@ -1,21 +1,42 @@
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate, useParams } from '@tanstack/react-router';
 
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { useSession, useSignOut } from '@/features/auth';
 import { OrgSwitcher } from '@/features/organizations';
 
-/** The app shell header: product name, theme toggle, current user, sign-out. */
+/** The app shell header: product name, org nav, theme toggle, current user, sign-out. */
 export function AppHeader(): React.ReactElement {
   const { data: session } = useSession();
   const signOut = useSignOut();
   const navigate = useNavigate();
+  const params = useParams({ strict: false });
+  const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
 
   return (
     <header className="border-border bg-background sticky top-0 z-10 border-b">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
         <span className="font-semibold tracking-tight">SchedulePoint</span>
         <OrgSwitcher />
+        {orgSlug ? (
+          <nav aria-label="Organisation" className="flex items-center gap-1 text-sm">
+            <Link
+              to="/orgs/$orgSlug"
+              params={{ orgSlug }}
+              activeOptions={{ exact: true }}
+              className="text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium"
+            >
+              Overview
+            </Link>
+            <Link
+              to="/orgs/$orgSlug/members"
+              params={{ orgSlug }}
+              className="text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium"
+            >
+              Members
+            </Link>
+          </nav>
+        ) : null}
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
           {session?.user ? (

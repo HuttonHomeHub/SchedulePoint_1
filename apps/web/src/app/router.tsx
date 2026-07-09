@@ -11,7 +11,9 @@ import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
+import { AcceptInviteScreen } from '@/routes/accept-invite';
 import { AuthedLayout } from '@/routes/authed-layout';
+import { MembersScreen } from '@/routes/members';
 import { OnboardingScreen } from '@/routes/onboarding';
 import { OrgHomeScreen } from '@/routes/org-home';
 import { SignInScreen } from '@/routes/sign-in';
@@ -85,27 +87,48 @@ const onboardingRoute = createRoute({
   component: OnboardingScreen,
 });
 
-/** Organisation-scoped home. Validates membership and records the active org. */
+/** Validate that the caller belongs to `orgSlug`; record it as the active org. */
+async function ensureOrgMembership(queryClient: QueryClient, orgSlug: string): Promise<void> {
+  const organizations = await queryClient.ensureQueryData(organizationsQueryOptions);
+  const organization = organizations.find((o) => o.slug === orgSlug);
+  if (!organization) {
+    // Not a member (or no such org) → let the home resolver re-route.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
+    throw redirect({ to: '/' });
+  }
+  setLastActiveOrg(organization.slug);
+}
+
+/** Organisation-scoped home. */
 const orgHomeRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug',
-  beforeLoad: async ({ context, params }) => {
-    const organizations = await context.queryClient.ensureQueryData(organizationsQueryOptions);
-    const organization = organizations.find((o) => o.slug === params.orgSlug);
-    if (!organization) {
-      // Not a member (or no such org) → let the home resolver re-route.
-      // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
-      throw redirect({ to: '/' });
-    }
-    setLastActiveOrg(organization.slug);
-  },
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: OrgHomeScreen,
+});
+
+/** Organisation members management. */
+const membersRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/members',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: MembersScreen,
+});
+
+/** Public invitation-accept route (keyed by the token in the URL). */
+const acceptInviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/accept-invite',
+  validateSearch: (search: Record<string, unknown>): { token?: string } =>
+    typeof search.token === 'string' ? { token: search.token } : {},
+  component: AcceptInviteScreen,
 });
 
 const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
-  authedRoute.addChildren([indexRoute, onboardingRoute, orgHomeRoute]),
+  acceptInviteRoute,
+  authedRoute.addChildren([indexRoute, onboardingRoute, orgHomeRoute, membersRoute]),
 ]);
 
 /** Single query client shared by the app providers and the router loaders. */
