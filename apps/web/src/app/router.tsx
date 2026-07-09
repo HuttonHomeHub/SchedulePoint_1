@@ -8,9 +8,12 @@ import {
 } from '@tanstack/react-router';
 
 import { sessionQueryOptions } from '@/features/auth';
+import { organizationsQueryOptions } from '@/features/organizations';
+import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { AuthedLayout } from '@/routes/authed-layout';
-import { DashboardScreen } from '@/routes/dashboard';
+import { OnboardingScreen } from '@/routes/onboarding';
+import { OrgHomeScreen } from '@/routes/org-home';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
 
@@ -57,16 +60,52 @@ const authedRoute = createRoute({
   component: AuthedLayout,
 });
 
-const dashboardRoute = createRoute({
+/**
+ * Home resolver. Sends the user to onboarding if they have no organisations, or
+ * to their last-active (or first) organisation otherwise. The URL is always the
+ * authoritative active org.
+ */
+const indexRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/',
-  component: DashboardScreen,
+  beforeLoad: async ({ context }) => {
+    const organizations = await context.queryClient.ensureQueryData(organizationsQueryOptions);
+    // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
+    if (organizations.length === 0) throw redirect({ to: '/onboarding' });
+    const lastActive = getLastActiveOrg();
+    const target = organizations.find((o) => o.slug === lastActive) ?? organizations[0]!;
+    // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
+    throw redirect({ to: '/orgs/$orgSlug', params: { orgSlug: target.slug } });
+  },
+});
+
+const onboardingRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/onboarding',
+  component: OnboardingScreen,
+});
+
+/** Organisation-scoped home. Validates membership and records the active org. */
+const orgHomeRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug',
+  beforeLoad: async ({ context, params }) => {
+    const organizations = await context.queryClient.ensureQueryData(organizationsQueryOptions);
+    const organization = organizations.find((o) => o.slug === params.orgSlug);
+    if (!organization) {
+      // Not a member (or no such org) → let the home resolver re-route.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
+      throw redirect({ to: '/' });
+    }
+    setLastActiveOrg(organization.slug);
+  },
+  component: OrgHomeScreen,
 });
 
 const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
-  authedRoute.addChildren([dashboardRoute]),
+  authedRoute.addChildren([indexRoute, onboardingRoute, orgHomeRoute]),
 ]);
 
 /** Single query client shared by the app providers and the router loaders. */

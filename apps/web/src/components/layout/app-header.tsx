@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { useSession, useSignOut } from '@/features/auth';
+import { OrgSwitcher } from '@/features/organizations';
 
 /** The app shell header: product name, theme toggle, current user, sign-out. */
 export function AppHeader(): React.ReactElement {
@@ -14,6 +15,7 @@ export function AppHeader(): React.ReactElement {
     <header className="border-border bg-background sticky top-0 z-10 border-b">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
         <span className="font-semibold tracking-tight">SchedulePoint</span>
+        <OrgSwitcher />
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
           {session?.user ? (
