@@ -30,8 +30,8 @@ describe.skipIf(!hasDatabase)('Reference API (e2e)', () => {
   const principal = new Principal(USER, [
     {
       organizationId: ORGANIZATION,
-      role: OrganizationRole.OWNER,
-      permissions: referencePermissionsForRole(OrganizationRole.OWNER),
+      role: OrganizationRole.ORG_ADMIN,
+      permissions: referencePermissionsForRole(OrganizationRole.ORG_ADMIN),
     },
   ]);
   const base = '/api/v1/reference-items';

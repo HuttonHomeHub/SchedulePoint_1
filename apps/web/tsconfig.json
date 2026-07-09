@@ -1,10 +1,14 @@
 {
-  "extends": "@repo/config/tsconfig/react.json",
+  // Extended via a direct relative path (not the "@repo/config" package name):
+  // Vite's rolldown transform does not resolve tsconfig `extends` through pnpm's
+  // node_modules symlink, so the preset's own relative `extends` chain would
+  // mis-resolve. tsc handles either form; this resolves on real paths for both.
+  "extends": "../../packages/config/tsconfig/react.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "e2e"]
 }

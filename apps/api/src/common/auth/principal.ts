@@ -12,12 +12,25 @@
  * reference-feature template in `apps/api/examples/` for a worked mapping.
  */
 
-/** Organisation-scoped roles, least → most privileged. */
-export enum OrganizationRole {
-  VIEWER = 'VIEWER',
-  MEMBER = 'MEMBER',
-  OWNER = 'OWNER',
-}
+/**
+ * Organisation-scoped roles, least → most privileged (ADR-0016). Modelled as a
+ * const object + union (not a TS `enum`) so the type is structurally identical
+ * to Prisma's generated `$Enums.OrganizationRole` and the `@repo/types` union —
+ * they interoperate without casts, while `OrganizationRole.ORG_ADMIN` access
+ * still works.
+ *
+ * `EXTERNAL_GUEST` from the product brief is intentionally NOT a member role —
+ * a guest holds a revocable per-plan share grant, not an organisation
+ * membership, and is modelled separately (a future ADR). See ADR-0016.
+ */
+export const OrganizationRole = {
+  VIEWER: 'VIEWER',
+  CONTRIBUTOR: 'CONTRIBUTOR',
+  PLANNER: 'PLANNER',
+  ORG_ADMIN: 'ORG_ADMIN',
+} as const;
+
+export type OrganizationRole = (typeof OrganizationRole)[keyof typeof OrganizationRole];
 
 /** A permission code, namespaced by resource, e.g. `'item:create'`. */
 export type Permission = string;

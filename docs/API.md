@@ -15,6 +15,9 @@
 - Use HTTP verbs correctly: `GET` (read, safe), `POST` (create), `PATCH`
   (partial update), `PUT` (full replace), `DELETE` (remove).
 - All routes are served under the `/api` prefix and a version segment (below).
+- **Path identifiers** are the resource UUID by default. A collection with a
+  natural, human-readable, immutable key **may** use that key instead (e.g.
+  `/organizations/{orgSlug}`); the UUID is still returned in the body.
 
 ## Versioning
 
@@ -77,6 +80,10 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
   include `meta.nextCursor` and `meta.hasMore`.
 - Filtering via explicit query params; sorting via `?sort=field&order=asc|desc`.
 - Always cap `limit` server-side to a sane maximum.
+- A list that is **inherently bounded and caller-owned** (e.g.
+  `GET /organizations` — only the caller's memberships, no filters) may return an
+  unpaginated array; note the exemption at the endpoint. Revisit if the set can
+  grow large.
 
 ## Validation & data types
 
@@ -86,8 +93,16 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 
 ## Authentication
 
-- Cookie-based sessions via Better Auth (secure, http-only, same-site).
-- State-changing requests require CSRF protection.
+- Cookie-based sessions via Better Auth (secure, http-only, same-site); ADR-0003.
+- The Better Auth handler is mounted at **`/api/auth/*`** (sign-up, sign-in,
+  sign-out, session). It is a raw Node handler, mounted before body parsing, and
+  sits outside the versioned `/api/v1` surface.
+- State-changing requests require CSRF protection: Better Auth rejects requests
+  whose `Origin` is missing or not in the allow-list (`trustedOrigins`, wired to
+  `CORS_ORIGINS`) — browsers send `Origin` automatically.
+- Deny-by-default: every route is authenticated unless marked `@Public()`. The
+  authenticated identity is exposed at **`GET /api/v1/me`** (the current user and
+  their organisation memberships).
 - Protected routes are guarded server-side; `401`/`403` as per the table above.
 
 ## OpenAPI / docs

@@ -17,21 +17,42 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // Allow pointing at a pre-installed Chromium (e.g. a managed CI/dev image
+        // whose browser build differs from Playwright's default). Unset → default.
+        ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
+          ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
+          : {}),
+      },
+    },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
-  // The dev server is started automatically for local runs. It is skipped when
-  // PLAYWRIGHT_SKIP_WEBSERVER is set (e.g. before the web app has an entry
-  // point, or when testing against an already-running deployment).
+  // The API and web dev servers are started automatically for local runs (the
+  // journey exercises the full stack: browser → web → /api proxy → API →
+  // Postgres). Skipped when PLAYWRIGHT_SKIP_WEBSERVER is set (e.g. testing
+  // against an already-running deployment). The API needs a reachable database
+  // (DATABASE_URL) and its migrations applied.
   ...(process.env.PLAYWRIGHT_SKIP_WEBSERVER
     ? {}
     : {
-        webServer: {
-          command: 'pnpm dev',
-          url: 'http://localhost:5173',
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
-        },
+        webServer: [
+          {
+            command: 'pnpm --filter @repo/api exec nest start',
+            url: 'http://localhost:3000/api/v1/health',
+            reuseExistingServer: !process.env.CI,
+            timeout: 120_000,
+            env: { LOG_LEVEL: 'silent' },
+          },
+          {
+            command: 'pnpm dev',
+            url: 'http://localhost:5173',
+            reuseExistingServer: !process.env.CI,
+            timeout: 120_000,
+          },
+        ],
       }),
 });

@@ -18,9 +18,184 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// No domain models yet — the real application starts from a clean schema.
-// The first feature adds the first model and the first migration
-// (`prisma migrate dev`). Use the reference-feature template in
-// `apps/api/examples/reference-feature/` as the pattern to copy
-// (see docs/REFERENCE_FEATURE.md).
+// Identity (Better Auth) — ADR-0003, ADR-0016.
+//
+// These four tables are owned by Better Auth (the authentication provider) and
+// must keep the field names it expects; @map keeps the DB columns snake_case
+// and the tables plural per docs/DATABASE.md. Their primary keys are the opaque
+// string ids Better Auth generates (a deliberate, documented exception to the
+// UUID-v7 default: these rows are library-managed, not domain rows). `User` is
+// modelled here — not hidden inside the auth library — so future domain tables
+// (OrgMember, Invitation, …) can foreign-key to it and be organisation-scoped.
 // ---------------------------------------------------------------------------
+
+model User {
+  id            String      @id
+  name          String
+  email         String      @unique
+  emailVerified Boolean     @default(false) @map("email_verified")
+  image         String?
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions      Session[]
+  accounts      Account[]
+  memberships   OrgMember[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  token     String   @unique
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at") @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at") @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy foundation — Organization & OrgMember (ADR-0016).
+//
+// These are the canonical organisation-scoping models the whole product builds
+// on. `OrgMember` is the single source of truth for "which user is in which
+// organisation, with what role" — the scoping key every future feature's
+// `principal.can(permission, organizationId)` check resolves against. Follows
+// docs/DATABASE.md: UUID v7 PKs, snake_case columns via @map, timestamptz UTC,
+// soft delete, audit columns, optimistic-locking `version`, scoped indexes.
+// ---------------------------------------------------------------------------
+
+// Organisation-scoped roles, least → most privileged. MUST stay in lock-step
+// with the TypeScript `OrganizationRole` enum in
+// apps/api/src/common/auth/principal.ts (ADR-0016). `EXTERNAL_GUEST` is
+// deliberately NOT a member role (it is a per-plan share grant, modelled
+// separately in a future ADR).
+enum OrganizationRole {
+  VIEWER
+  CONTRIBUTOR
+  PLANNER
+  ORG_ADMIN
+}
+
+model Organization {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  name        String
+  // URL-safe, unique per deployment, immutable in v1. Uniqueness is enforced by
+  // a PARTIAL unique index that ignores soft-deleted rows (uq_organizations_slug
+  // WHERE deleted_at IS NULL) — Prisma cannot express partial indexes, so it is
+  // added as raw SQL in the migration. This index also serves slug lookups
+  // (which always filter deleted_at IS NULL), so no separate @@index is needed.
+  slug        String
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy   String?      @map("created_by")
+  updatedBy   String?      @map("updated_by")
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz(3)
+  members     OrgMember[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}
+
+model OrgMember {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  // FK → users.id. Better Auth generates opaque TEXT ids (NOT UUIDs), so this
+  // column is plain `String` with NO @db.Uuid — it must match the TEXT PK it
+  // references, otherwise the FK/migration fails.
+  userId         String           @map("user_id")
+  role           OrganizationRole
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?          @map("created_by")
+  updatedBy      String?          @map("updated_by")
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // A user is an active member of an org at most once → enforced by a PARTIAL
+  // unique index (uq_org_members_org_user ON (organization_id, user_id) WHERE
+  // deleted_at IS NULL), added as raw SQL in the migration (Prisma cannot
+  // express partial indexes). Re-adding a soft-deleted member is therefore
+  // allowed.
+  //
+  // (organization_id, role) serves both "list an org's members" (leftmost
+  // prefix on organization_id, also covering the FK) and the last-Org-Admin
+  // count invariant; it subsumes a standalone organization_id index.
+  @@index([organizationId, role])
+  @@index([userId])
+  @@map("org_members")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+// An invitation to join an organisation with a role (ADR-0016). The raw token is
+// never stored — only its hash (defence in depth); the raw value is returned once
+// on create and emailed via the MailService port. A partial unique index keeps at
+// most one PENDING invite per (organisation, email); expiry + status gate accept.
+model Invitation {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  email            String
+  role             OrganizationRole
+  tokenHash        String           @unique @map("token_hash")
+  status           InvitationStatus @default(PENDING)
+  expiresAt        DateTime         @map("expires_at") @db.Timestamptz(3)
+  acceptedByUserId String?          @map("accepted_by_user_id")
+  acceptedAt       DateTime?        @map("accepted_at") @db.Timestamptz(3)
+  version          Int              @default(1)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy        String?          @map("created_by")
+  updatedBy        String?          @map("updated_by")
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@map("invitations")
+}

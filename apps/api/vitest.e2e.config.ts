@@ -15,6 +15,10 @@ export default defineConfig({
     root: '.',
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // e2e specs share one PostgreSQL and mutate global tables, so run the spec
+    // files sequentially (tests within a file already run in order) to avoid
+    // cross-file races on shared data.
+    fileParallelism: false,
   },
   plugins: [swc.vite()],
 });

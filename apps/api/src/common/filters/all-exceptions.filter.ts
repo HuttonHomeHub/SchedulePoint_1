@@ -14,6 +14,7 @@ import {
   ConflictError,
   DomainError,
   ForbiddenError,
+  GoneError,
   NotFoundError,
   ValidationError,
 } from '../errors/domain-errors';
@@ -96,6 +97,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (error instanceof NotFoundError) return HttpStatus.NOT_FOUND;
     if (error instanceof ConflictError) return HttpStatus.CONFLICT;
     if (error instanceof ForbiddenError) return HttpStatus.FORBIDDEN;
+    if (error instanceof GoneError) return HttpStatus.GONE;
     if (error instanceof ValidationError) return HttpStatus.UNPROCESSABLE_ENTITY;
     return HttpStatus.BAD_REQUEST;
   }

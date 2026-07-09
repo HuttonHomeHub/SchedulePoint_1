@@ -36,6 +36,40 @@ export class AppConfigService {
       .filter(Boolean);
   }
 
+  get betterAuthSecret(): string {
+    return this.config.get('BETTER_AUTH_SECRET', { infer: true });
+  }
+
+  get betterAuthUrl(): string {
+    return this.config.get('BETTER_AUTH_URL', { infer: true });
+  }
+
+  /**
+   * Whether a verified email is required before an account is usable and before
+   * an invitation can be accepted. Single source of truth for both Better Auth
+   * and the invitation-accept email-ownership check (see env.validation.ts).
+   */
+  get requireEmailVerification(): boolean {
+    return this.config.get('AUTH_REQUIRE_EMAIL_VERIFICATION', { infer: true });
+  }
+
+  /**
+   * Public base URL of the web app, used to build user-facing links (e.g. an
+   * invitation accept URL). Defaults to the first configured CORS origin.
+   */
+  get appUrl(): string {
+    return this.corsOrigins[0] ?? 'http://localhost:5173';
+  }
+
+  /** Trusted proxy IPs/CIDRs used to resolve the real client IP for rate limiting. */
+  get trustedProxyIps(): string[] {
+    return this.config
+      .get('TRUSTED_PROXY_IPS', { infer: true })
+      .split(',')
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+  }
+
   get rateLimit(): { ttlMs: number; limit: number } {
     return {
       ttlMs: this.config.get('RATE_LIMIT_TTL', { infer: true }) * 1000,

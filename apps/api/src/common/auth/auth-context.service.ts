@@ -1,26 +1,57 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { fromNodeHeaders } from 'better-auth/node';
 import type { Request } from 'express';
 
-import type { Principal } from './principal';
+import { PrismaService } from '../../prisma/prisma.service';
+
+import { AUTH_INSTANCE, type AuthInstance } from './better-auth';
+import { permissionsForRole } from './org-permissions';
+import { Principal } from './principal';
 
 /**
  * Resolves the {@link Principal} for a request. This is the **authentication
- * seam**: the production implementation validates the Better Auth session
- * cookie (ADR-0003) and loads the user's organisation memberships.
+ * seam**: it validates the Better Auth session cookie (ADR-0003) and loads the
+ * user's active organisation memberships so authorisation can be evaluated per
+ * organisation (ADR-0012, ADR-0016).
  *
  * It is deliberately isolated behind this service so the rest of the app never
- * depends on the auth library, and so tests can supply a principal by
- * overriding this provider (see the reference e2e test). Until Better Auth is
- * wired (when you add authentication), it returns `null` → requests are
- * unauthenticated (secure by default).
+ * depends on the auth library, and so tests can supply a principal by overriding
+ * this provider. No valid session → `null` → the request is unauthenticated
+ * (secure by default).
  */
 @Injectable()
 export class AuthContextService {
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async resolve(_request: Request): Promise<Principal | null> {
-    // TODO(auth): validate the Better Auth session cookie and hydrate the
-    // principal (userId + organisation memberships). Returning null keeps every
-    // protected route locked until real authentication is in place.
-    return null;
+  constructor(
+    @Inject(AUTH_INSTANCE) private readonly auth: AuthInstance,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  async resolve(request: Request): Promise<Principal | null> {
+    const session = await this.auth.api.getSession({
+      headers: fromNodeHeaders(request.headers),
+    });
+    if (!session?.user) {
+      return null;
+    }
+
+    // Hydrate the user's active memberships (excluding soft-deleted rows and
+    // soft-deleted organisations) so `principal.can(permission, orgId)` works.
+    const memberships = await this.prisma.orgMember.findMany({
+      where: {
+        userId: session.user.id,
+        deletedAt: null,
+        organization: { deletedAt: null },
+      },
+      select: { organizationId: true, role: true },
+    });
+
+    return new Principal(
+      session.user.id,
+      memberships.map((membership) => ({
+        organizationId: membership.organizationId,
+        role: membership.role,
+        permissions: permissionsForRole(membership.role),
+      })),
+    );
   }
 }

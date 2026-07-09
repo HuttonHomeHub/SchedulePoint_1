@@ -10,6 +10,32 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-09 — Web walking skeleton: code-based routing + a tsconfig-extends workaround
+
+**Decision.** For the first web slice, define the TanStack Router route tree in
+**code** (`createRoute`/`createRouter` in `apps/web/src/app/router.tsx`) rather
+than the file-based route generator that `docs/FRONTEND_ARCHITECTURE.md` names as
+the default. Separately, `apps/web/tsconfig.json` extends the shared preset via a
+**direct relative path** (`../../packages/config/tsconfig/react.json`) instead of
+the `@repo/config` package name.
+
+**Why.** (1) The repo's `web` build is `tsc --noEmit && vite build`; the
+file-based generator emits `routeTree.gen.ts` at dev/build time, which would need
+to exist before the typecheck step — fragile in a clean CI checkout. Code-based
+routing is first-class in TanStack Router, fully type-safe, and needs no codegen
+step, keeping the build deterministic. (2) Vite's rolldown transform does not
+resolve tsconfig `extends` through pnpm's `node_modules` symlink, so the preset's
+own relative `extends` chain mis-resolved; a direct relative path resolves on real
+paths for both `tsc` and the bundler.
+
+**Consequences.** Routes are registered centrally; screen components live in
+`routes/` and are wired in `app/router.tsx`. Migrating to file-based routing later
+is mechanical (move each route object into a file) and can be revisited if the
+route count grows. The tsconfig deviation is localised to `apps/web` and
+documented inline.
+
+---
+
 ### 2026-07-09 — Generalise the repository into a domain-neutral base ("Blank App")
 
 **Decision.** Repurpose this repository from the Bills product into **Blank App**,

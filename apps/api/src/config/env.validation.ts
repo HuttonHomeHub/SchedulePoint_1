@@ -16,6 +16,28 @@ export const envSchema = z
     /** Session signing secret — must be strong in production. */
     BETTER_AUTH_SECRET: z.string().min(16).default('dev-insecure-secret-change-me!!'),
     BETTER_AUTH_URL: z.string().min(1).default('http://localhost:3000'),
+    /**
+     * When `true`, users must have a verified email before their account is
+     * usable — and, critically, before they can accept an organisation
+     * invitation. The accept flow matches the signed-in user's email to the
+     * invitee's, but that only proves mailbox ownership when verification is
+     * enforced; otherwise an account can be registered for any address without
+     * proof. Off for the alpha because the verification-email loop is not built
+     * yet (ADR-0016, docs/TECH_DEBT.md) — turning it on is the single switch
+     * that closes that gap.
+     */
+    AUTH_REQUIRE_EMAIL_VERIFICATION: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    /**
+     * Comma-separated trusted proxy IPs/CIDRs, ordered outermost→innermost. The
+     * auth rate limiter derives the client IP from `X-Forwarded-For`; without a
+     * trusted-proxy list a client can spoof that header and bypass the limit
+     * (credential stuffing). Required in production so the vulnerable default
+     * cannot ship. Empty in dev (the app is reached directly).
+     */
+    TRUSTED_PROXY_IPS: z.string().default(''),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
@@ -24,12 +46,34 @@ export const envSchema = z
     RATE_LIMIT_LIMIT: z.coerce.number().int().positive().default(100),
   })
   .superRefine((env, ctx) => {
-    // Never allow the insecure development secret in production.
-    if (env.NODE_ENV === 'production' && env.BETTER_AUTH_SECRET.includes('dev-insecure')) {
+    if (env.NODE_ENV !== 'production') return;
+
+    // Never allow the insecure development secret — and demand real entropy.
+    if (env.BETTER_AUTH_SECRET.includes('dev-insecure') || env.BETTER_AUTH_SECRET.length < 32) {
       ctx.addIssue({
         code: 'custom',
         path: ['BETTER_AUTH_SECRET'],
-        message: 'A strong BETTER_AUTH_SECRET must be set in production.',
+        message: 'A strong BETTER_AUTH_SECRET (≥ 32 chars) must be set in production.',
+      });
+    }
+
+    // The auth rate limiter cannot safely resolve client IPs without knowing
+    // which proxies to trust — refuse to boot on the spoofable default.
+    if (env.TRUSTED_PROXY_IPS.trim() === '') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TRUSTED_PROXY_IPS'],
+        message:
+          'TRUSTED_PROXY_IPS must list your proxy IP(s)/CIDR(s) in production so auth rate limiting cannot be bypassed via a spoofed X-Forwarded-For header.',
+      });
+    }
+
+    // Don't silently trust only localhost as a CORS/CSRF origin in production.
+    if (env.CORS_ORIGINS.split(',').some((origin) => origin.includes('localhost'))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ORIGINS'],
+        message: 'Set CORS_ORIGINS to your real web origin(s) in production (not localhost).',
       });
     }
   });

@@ -11,9 +11,14 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuthenticationGuard } from './common/guards/authentication.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { MailModule } from './common/mail/mail.module';
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
+import { InvitationsModule } from './modules/invitations/invitations.module';
+import { MeModule } from './modules/me/me.module';
+import { MembersModule } from './modules/members/members.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -64,7 +69,12 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     PrismaModule,
     AuthModule,
+    MailModule,
     HealthModule,
+    MeModule,
+    OrganizationsModule,
+    MembersModule,
+    InvitationsModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.

@@ -14,7 +14,7 @@ describe('Principal', () => {
   const principal = new Principal(USER, [
     {
       organizationId: ORGANIZATION,
-      role: OrganizationRole.MEMBER,
+      role: OrganizationRole.CONTRIBUTOR,
       permissions: ['item:read', 'item:create'],
     },
   ]);
