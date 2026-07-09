@@ -2,14 +2,21 @@
 #   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wait
 #
 # Boots the images built from source with development-safe config so the API's
-# production config guards (strong secret, trusted proxies, non-local CORS) do
-# not refuse to start during a health smoke test. This is NOT a production
-# profile — real deployment is described in docs/DEPLOYMENT.md.
+# PRODUCTION startup guards (≥32-char secret, non-empty TRUSTED_PROXY_IPS,
+# non-localhost CORS) do not refuse to start during a health smoke test.
+#
+# Note: the API also enforces an UNCONDITIONAL BETTER_AUTH_SECRET length of ≥16
+# chars in every NODE_ENV, and the base compose default ("change-me") is shorter
+# than that — so this override must supply a long-enough secret of its own or
+# the container crash-loops before it can serve health. This is NOT a production
+# profile; real deployment is described in docs/DEPLOYMENT.md.
 
 services:
   api:
     environment:
-      # The `quality`/`e2e` jobs cover behaviour; this job only proves the
-      # container boots and serves health, so run it under the development
-      # profile to bypass the production-only startup guards.
+      # Development profile: covers behaviour elsewhere (quality/e2e); this job
+      # only proves the container boots and serves health.
       NODE_ENV: development
+      # Throwaway CI-only secret, ≥16 chars to satisfy the unconditional length
+      # check. Never a real credential — the smoke test creates no real users.
+      BETTER_AUTH_SECRET: ci-smoke-boot-secret-not-a-real-credential
