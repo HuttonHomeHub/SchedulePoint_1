@@ -20,6 +20,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MeModule } from './modules/me/me.module';
 import { MembersModule } from './modules/members/members.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { PlansModule } from './modules/plans/plans.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -93,6 +94,7 @@ function isPrettyLoggingAvailable(): boolean {
     InvitationsModule,
     ClientsModule,
     ProjectsModule,
+    PlansModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.
