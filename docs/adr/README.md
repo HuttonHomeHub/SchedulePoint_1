@@ -39,3 +39,8 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0013](0013-observability-otel-pino.md)                    | Observability (OTel + Pino)               | Accepted |
 | [0014](0014-reference-feature-as-non-shipping-template.md) | Reference feature → non-shipping template | Accepted |
 | [0015](0015-template-driven-feature-development.md)        | Template-driven feature development       | Accepted |
+| [0016](0016-core-identity-tenancy-role-model.md)           | Core identity & tenancy role model        | Accepted |
+| [0017](0017-release-tagging-and-image-publishing.md)       | Release tagging & image publishing        | Accepted |
+| [0018](0018-self-migrating-container-image.md)             | Self-migrating container image            | Accepted |
+| [0019](0019-shared-package-build-contract.md)              | Shared-package build contract             | Accepted |
+| [0020](0020-ci-image-smoke-boot.md)                        | CI image build & smoke-boot               | Accepted |
