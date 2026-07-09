@@ -1,5 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiCookieAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCookieAuth,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -21,6 +28,8 @@ export class MeController {
   @Get()
   @ApiOperation({ summary: 'Get the current user and their organisation memberships.' })
   @ApiOkResponse({ type: MeResponseDto })
+  @ApiUnauthorizedResponse({ description: 'No valid session.' })
+  @ApiNotFoundResponse({ description: 'The session user no longer exists.' })
   getMe(@CurrentUser() principal: Principal): Promise<MeResponseDto> {
     return this.meService.getProfile(principal);
   }

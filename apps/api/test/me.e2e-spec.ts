@@ -63,6 +63,16 @@ describe.skipIf(!hasDatabase)('Auth & Me (e2e)', () => {
     await request(server()).get('/api/v1/me').expect(401);
   });
 
+  it('sets a hardened session cookie on sign-up (HttpOnly, SameSite=Lax)', async () => {
+    const res = await signUp(request.agent(server())).expect(200);
+    const setCookie = res.headers['set-cookie'] as unknown as string[] | undefined;
+    const sessionCookie = (setCookie ?? []).find((c) => c.includes('session_token'));
+    expect(sessionCookie).toBeDefined();
+    expect(sessionCookie).toMatch(/HttpOnly/i);
+    expect(sessionCookie).toMatch(/SameSite=Lax/i);
+    // Secure is only set in production (useSecureCookies), so not asserted here.
+  });
+
   it('signs up and returns the user + empty memberships from /me (200)', async () => {
     const agent = request.agent(server());
     await signUp(agent).expect(200);

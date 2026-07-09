@@ -18,6 +18,12 @@ export interface CreateAuthOptions {
   baseURL: string;
   /** Origins allowed to call auth endpoints (CSRF / redirect allow-list). */
   trustedOrigins: string[];
+  /**
+   * Trusted proxy IPs/CIDRs used to resolve the real client IP from
+   * `X-Forwarded-For` for rate limiting. Empty in dev (direct access); required
+   * in production so the header cannot be spoofed to bypass the limiter.
+   */
+  trustedProxies: string[];
   isProduction: boolean;
 }
 
@@ -45,15 +51,24 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
     },
     // Deny abusive traffic at the auth layer (Nest's ThrottlerGuard does not see
     // these routes — they are mounted as a raw Node handler). Better Auth applies
-    // stricter per-path limits (e.g. sign-in) on top of this window.
+    // stricter per-path limits (e.g. sign-in) on top of this window. Enabled in
+    // production; off in dev/test for a frictionless local/test experience. The
+    // client IP is resolved via `advanced.ipAddress` below (spoof-resistant with
+    // TRUSTED_PROXY_IPS), so the limit can't be bypassed by header forgery.
     rateLimit: {
-      enabled: true,
+      enabled: options.isProduction,
       window: 60,
       max: 100,
     },
     advanced: {
       cookiePrefix: 'schedulepoint',
       useSecureCookies: options.isProduction,
+      // Resolve the client IP for rate limiting only from X-Forwarded-For hops
+      // we trust; without this a spoofed header defeats the sign-in throttle.
+      ipAddress: {
+        ipAddressHeaders: ['x-forwarded-for'],
+        trustedProxies: options.trustedProxies,
+      },
     },
   });
 }

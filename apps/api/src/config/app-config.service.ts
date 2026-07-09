@@ -44,6 +44,15 @@ export class AppConfigService {
     return this.config.get('BETTER_AUTH_URL', { infer: true });
   }
 
+  /** Trusted proxy IPs/CIDRs used to resolve the real client IP for rate limiting. */
+  get trustedProxyIps(): string[] {
+    return this.config
+      .get('TRUSTED_PROXY_IPS', { infer: true })
+      .split(',')
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+  }
+
   get rateLimit(): { ttlMs: number; limit: number } {
     return {
       ttlMs: this.config.get('RATE_LIMIT_TTL', { infer: true }) * 1000,

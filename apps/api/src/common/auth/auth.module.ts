@@ -23,6 +23,7 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           secret: config.betterAuthSecret,
           baseURL: config.betterAuthUrl,
           trustedOrigins: config.corsOrigins,
+          trustedProxies: config.trustedProxyIps,
           isProduction: config.isProduction,
         }),
     },
