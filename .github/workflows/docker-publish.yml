@@ -64,6 +64,9 @@ jobs:
             type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
             type=raw,value=latest,enable=${{ inputs.version != '' }}
             type=sha
+            # On a branch/dispatch build (and on the release call, which inherits
+            # the push-to-main context) this also tags the branch name, e.g.
+            # `:main` — which docker-compose.release.yml defaults IMAGE_TAG to.
             type=ref,event=branch
 
       - name: Build and push

@@ -59,6 +59,10 @@ jobs:
       # A release lands when the "Version Packages" PR was just merged: no
       # changesets remain AND the current app version has no git tag yet. All
       # workspace packages version together, so apps/api is the canonical version.
+      #
+      # NOTE: `hasChangesets` is a changesets/action@v1 output (camelCase). v2
+      # renames it to `has-changesets`; update this expression when bumping the
+      # major, or the gate silently reads empty and releases stop tagging.
       - name: Determine release
         id: meta
         run: |

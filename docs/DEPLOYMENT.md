@@ -38,9 +38,9 @@ flowchart TD
 - Built by [`docker-publish.yml`](../.github/workflows/docker-publish.yml): on
   version tags, when invoked by the release workflow (`workflow_call`), and
   manually via `workflow_dispatch`.
-- Published to **GitHub Container Registry**:
-  - `ghcr.io/HuttonHomeHub/schedulepoint_1/api`
-  - `ghcr.io/HuttonHomeHub/schedulepoint_1/web`
+- Published to **GitHub Container Registry** (GHCR paths are all-lowercase):
+  - `ghcr.io/huttonhomehub/schedulepoint_1/api`
+  - `ghcr.io/huttonhomehub/schedulepoint_1/web`
 - Tags: full SemVer + `latest` on a release, plus commit `sha` and the branch
   name on manual/branch builds. Images include an **SBOM** and **build
   provenance**.
