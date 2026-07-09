@@ -35,25 +35,30 @@ Authored in **OKLCH** for perceptual uniformity and reliable light/dark pairs.
 Every colour is **semantic** (named by role, not hue) so themes flip
 automatically. Full values (light + dark) are in `globals.css`.
 
-| Token (role)                 | Purpose                                |
-| ---------------------------- | -------------------------------------- |
-| `background` / `foreground`  | Page surface and default text          |
-| `card` / `card-foreground`   | Raised content surface                 |
-| `popover` / `*-foreground`   | Overlays (menus, popovers, tooltips)   |
-| `primary` / `*-foreground`   | Primary actions, active/brand emphasis |
-| `secondary` / `*-foreground` | Secondary surfaces/buttons             |
-| `muted` / `muted-foreground` | Subtle surfaces and secondary text     |
-| `accent` / `*-foreground`    | Hover/selected surfaces                |
-| `destructive` / `*-fg`       | Errors, destructive actions            |
-| `success` / `*-fg`           | Positive/confirmation status           |
-| `warning` / `*-fg`           | Caution status                         |
-| `info` / `*-fg`              | Informational status                   |
-| `border` / `input` / `ring`  | Lines, field borders, focus ring       |
-| `chart-1…5`                  | Categorical data-visualisation series  |
-| `sidebar*`                   | Navigation shell surface + states      |
+| Token (role)                 | Purpose                                               |
+| ---------------------------- | ----------------------------------------------------- |
+| `background` / `foreground`  | Page surface and default text                         |
+| `card` / `card-foreground`   | Raised content surface                                |
+| `popover` / `*-foreground`   | Overlays (menus, popovers, tooltips)                  |
+| `primary` / `*-foreground`   | Primary actions, active/brand emphasis                |
+| `secondary` / `*-foreground` | Secondary surfaces/buttons                            |
+| `muted` / `muted-foreground` | Subtle surfaces and secondary text                    |
+| `accent` / `*-foreground`    | Hover/selected surfaces                               |
+| `destructive` / `*-fg`       | Destructive **button/chip** surface + its foreground  |
+| `destructive-text`           | Destructive **text & state borders** on page surfaces |
+| `success` / `*-fg`           | Positive/confirmation status                          |
+| `warning` / `*-fg`           | Caution status                                        |
+| `info` / `*-fg`              | Informational status                                  |
+| `border` / `input` / `ring`  | Lines, field borders, focus ring                      |
+| `chart-1…5`                  | Categorical data-visualisation series                 |
+| `sidebar*`                   | Navigation shell surface + states                     |
 
 **Rules:** every solid-fill/foreground pair is validated to meet WCAG AA
 (≥ 4.5:1 for text) in **both** themes — re-verify when editing any colour token.
+A solid-surface token (e.g. `destructive`) is tuned for its light foreground and
+is **not** guaranteed legible as text on the page; use its paired `*-text` token
+(`destructive-text`) for coloured text and state borders on `background`/`card`,
+which is validated to ≥ 4.5:1 (text) / ≥ 3:1 (border) in both themes.
 Status is never conveyed by colour alone — always pair with an icon and/or text.
 
 ### Typography

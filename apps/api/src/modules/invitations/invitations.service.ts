@@ -165,10 +165,18 @@ export class InvitationsService {
       throw new GoneError('This invitation has expired.');
     }
 
-    // The signed-in user must be the invitee (compared by email).
+    // The signed-in user must be the invitee (compared by email). This match is
+    // only a real proof of mailbox ownership when email verification is enforced
+    // — otherwise an account can be registered for any address without proof, so
+    // acceptance is a privilege grant gated on an unverified claim (ADR-0016,
+    // docs/TECH_DEBT.md). When AUTH_REQUIRE_EMAIL_VERIFICATION is on we also
+    // require the account's email to be verified before granting membership.
     const user = await this.prisma.user.findUnique({ where: { id: principal.userId } });
     if (!user || user.email.toLowerCase() !== invitation.email.toLowerCase()) {
       throw new ForbiddenError('You are signed in as a different account than the one invited.');
+    }
+    if (this.config.requireEmailVerification && !user.emailVerified) {
+      throw new ForbiddenError('Verify your email address before accepting this invitation.');
     }
 
     const existing = await this.members.findActiveByOrgAndUser(

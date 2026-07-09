@@ -45,6 +45,15 @@ export class AppConfigService {
   }
 
   /**
+   * Whether a verified email is required before an account is usable and before
+   * an invitation can be accepted. Single source of truth for both Better Auth
+   * and the invitation-accept email-ownership check (see env.validation.ts).
+   */
+  get requireEmailVerification(): boolean {
+    return this.config.get('AUTH_REQUIRE_EMAIL_VERIFICATION', { infer: true });
+  }
+
+  /**
    * Public base URL of the web app, used to build user-facing links (e.g. an
    * invitation accept URL). Defaults to the first configured CORS origin.
    */

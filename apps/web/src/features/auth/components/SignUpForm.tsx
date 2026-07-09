@@ -24,7 +24,7 @@ export function SignUpForm({ onSuccess }: { onSuccess: () => void }): React.Reac
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
       <FormErrorSummary errors={errors} />
       {signUp.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {signUp.error.message}
         </p>
       ) : null}

@@ -71,6 +71,23 @@ organizationId)` check resolves against. Authentication is provided by Better
    onboarding is testable with no provider wired. Selecting a concrete provider is
    deferred to its own ADR; this ADR only records that the seam exists.
 
+5. **Invitation acceptance is gated on an email match, whose strength depends on
+   email verification.** Accepting an invite grants organisation membership and a
+   role, so it is a privilege grant. The accept flow requires the caller to be
+   signed in as an account whose email equals the invited address. That match is
+   only a genuine proof of mailbox ownership when email verification is enforced;
+   with verification off (the alpha default — no verification-email loop is built
+   yet), an account can be registered for any address without proof, so an
+   adversary who both controls a matching account **and** possesses the one-time
+   token could accept. We accept this risk **only for the alpha** because: the
+   token is a 256-bit secret delivered to the invited mailbox (possession already
+   implies mailbox access in the normal path), and the check is strictly stronger
+   than a pure bearer-link invite. The enforcement is **wired but off**: a single
+   flag, `AUTH_REQUIRE_EMAIL_VERIFICATION`, drives both Better Auth's
+   `requireEmailVerification` and an `emailVerified` gate in the accept path, so
+   turning it on (once the verification-email loop lands) closes the gap with no
+   further code change. Tracked in `docs/TECH_DEBT.md`.
+
 ## Alternatives considered
 
 - **Keep the placeholder `OWNER/MEMBER/VIEWER` enum and map product roles onto

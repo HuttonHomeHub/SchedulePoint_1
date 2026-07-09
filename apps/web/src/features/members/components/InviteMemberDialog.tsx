@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
@@ -57,12 +58,7 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
               Invitation created. Share this link so they can join:
             </p>
             <div className="flex items-center gap-2">
-              <input
-                readOnly
-                aria-label="Invitation link"
-                value={acceptUrl}
-                className="border-input bg-muted h-10 w-full rounded-md border px-3 text-sm"
-              />
+              <Input readOnly aria-label="Invitation link" value={acceptUrl} className="bg-muted" />
               <Button
                 variant="outline"
                 onClick={() => void navigator.clipboard?.writeText(acceptUrl)}
@@ -80,7 +76,7 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
           >
             <FormErrorSummary errors={errors} />
             {create.isError ? (
-              <p role="alert" className="text-destructive text-sm">
+              <p role="alert" className="text-destructive-text text-sm">
                 {create.error.message}
               </p>
             ) : null}

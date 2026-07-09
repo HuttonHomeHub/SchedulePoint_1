@@ -25,6 +25,12 @@ export interface CreateAuthOptions {
    */
   trustedProxies: string[];
   isProduction: boolean;
+  /**
+   * Require a verified email before an account is usable. Off for the alpha
+   * (no verification-email loop yet); when on, it also becomes the real
+   * mailbox-ownership proof the invitation-accept check relies on (ADR-0016).
+   */
+  requireEmailVerification: boolean;
 }
 
 /**
@@ -46,7 +52,9 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       minPasswordLength: 12,
       maxPasswordLength: 128,
       // v1: verification email is not enforced before first use (ADR-0016).
-      requireEmailVerification: false,
+      // Driven by config so the invitation-accept email check can be hardened
+      // with a single switch once the verification-email loop is built.
+      requireEmailVerification: options.requireEmailVerification,
       autoSignIn: true,
     },
     // Deny abusive traffic at the auth layer (Nest's ThrottlerGuard does not see

@@ -8,9 +8,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Spinner } from '@/components/ui/spinner';
 import { useSession } from '@/features/auth';
 
-function Shell({ children }: { children: React.ReactNode }): React.ReactElement {
+function Shell({
+  children,
+  busy = false,
+}: {
+  children: React.ReactNode;
+  busy?: boolean;
+}): React.ReactElement {
+  // A polite live region so screen-reader users hear the outcome when the
+  // invitation resolves (loading → not-found / wrong-account / ready-to-join),
+  // which is the page's key decision point (SC 4.1.3).
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4">
+    <main
+      className="flex min-h-dvh items-center justify-center p-4"
+      aria-live="polite"
+      aria-busy={busy}
+    >
       <Card className="w-full max-w-md">{children}</Card>
     </main>
   );
@@ -25,7 +38,7 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
 
   if (preview.isPending || session.isPending) {
     return (
-      <Shell>
+      <Shell busy>
         <CardContent className="flex justify-center p-10">
           <Spinner label="Loading invitation…" />
         </CardContent>
@@ -113,7 +126,7 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {accept.isError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive-text text-sm">
             {accept.error.message}
           </p>
         ) : null}

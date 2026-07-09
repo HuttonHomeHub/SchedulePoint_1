@@ -25,6 +25,7 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           trustedOrigins: config.corsOrigins,
           trustedProxies: config.trustedProxyIps,
           isProduction: config.isProduction,
+          requireEmailVerification: config.requireEmailVerification,
         }),
     },
     AuthContextService,

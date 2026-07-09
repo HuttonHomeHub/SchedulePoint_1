@@ -32,7 +32,7 @@ export function CreateOrganizationForm({
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
       <FormErrorSummary errors={errors} />
       {create.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {create.error.message}
         </p>
       ) : null}

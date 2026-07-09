@@ -27,7 +27,7 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
 
   if (members.isError) {
     return (
-      <p role="alert" className="text-destructive text-sm">
+      <p role="alert" className="text-destructive-text text-sm">
         Couldn&rsquo;t load members. Please try again.
       </p>
     );
@@ -51,7 +51,7 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
   return (
     <div className="flex flex-col gap-3">
       {error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {error}
         </p>
       ) : null}

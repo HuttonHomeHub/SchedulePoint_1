@@ -70,6 +70,7 @@ describe('InvitationsService', () => {
     user: { findUnique: ReturnType<typeof vi.fn> };
   };
   let mail: { sendInvitation: ReturnType<typeof vi.fn> };
+  let config: { appUrl: string; requireEmailVerification: boolean };
   let service: InvitationsService;
 
   beforeEach(() => {
@@ -89,7 +90,7 @@ describe('InvitationsService', () => {
       user: { findUnique: vi.fn() },
     };
     mail = { sendInvitation: vi.fn().mockResolvedValue(undefined) };
-    const config = { appUrl: 'https://app.example' } as AppConfigService;
+    config = { appUrl: 'https://app.example', requireEmailVerification: false };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new InvitationsService(
       organizations as unknown as OrganizationsService,
@@ -97,7 +98,7 @@ describe('InvitationsService', () => {
       members as unknown as OrgMemberRepository,
       prisma as unknown as PrismaService,
       mail as unknown as MailService,
-      config,
+      config as unknown as AppConfigService,
       logger,
     );
   });
@@ -201,6 +202,34 @@ describe('InvitationsService', () => {
       prisma.user.findUnique.mockResolvedValue({ id: USER_ID, email: 'invitee@example.com' });
       members.findActiveByOrgAndUser.mockResolvedValue({ id: 'member-1' });
       await expect(service.accept(invitee, token)).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it('403s when email verification is required but the account is unverified', async () => {
+      config.requireEmailVerification = true;
+      invitations.findActiveByTokenHash.mockResolvedValue(invitation());
+      prisma.user.findUnique.mockResolvedValue({
+        id: USER_ID,
+        email: 'invitee@example.com',
+        emailVerified: false,
+      });
+      await expect(service.accept(invitee, token)).rejects.toBeInstanceOf(ForbiddenError);
+      expect(members.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts when email verification is required and the account is verified', async () => {
+      config.requireEmailVerification = true;
+      invitations.findActiveByTokenHash.mockResolvedValue(invitation());
+      prisma.user.findUnique.mockResolvedValue({
+        id: USER_ID,
+        email: 'invitee@example.com',
+        emailVerified: true,
+      });
+      members.findActiveByOrgAndUser.mockResolvedValue(null);
+
+      const result = await service.accept(invitee, token);
+
+      expect(result.organization.id).toBe(ORG_ID);
+      expect(members.create).toHaveBeenCalled();
     });
   });
 

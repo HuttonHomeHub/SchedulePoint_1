@@ -17,6 +17,20 @@ export const envSchema = z
     BETTER_AUTH_SECRET: z.string().min(16).default('dev-insecure-secret-change-me!!'),
     BETTER_AUTH_URL: z.string().min(1).default('http://localhost:3000'),
     /**
+     * When `true`, users must have a verified email before their account is
+     * usable — and, critically, before they can accept an organisation
+     * invitation. The accept flow matches the signed-in user's email to the
+     * invitee's, but that only proves mailbox ownership when verification is
+     * enforced; otherwise an account can be registered for any address without
+     * proof. Off for the alpha because the verification-email loop is not built
+     * yet (ADR-0016, docs/TECH_DEBT.md) — turning it on is the single switch
+     * that closes that gap.
+     */
+    AUTH_REQUIRE_EMAIL_VERIFICATION: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    /**
      * Comma-separated trusted proxy IPs/CIDRs, ordered outermost→innermost. The
      * auth rate limiter derives the client IP from `X-Forwarded-For`; without a
      * trusted-proxy list a client can spoof that header and bypass the limit

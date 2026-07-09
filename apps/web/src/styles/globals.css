@@ -49,6 +49,11 @@
   /* Status */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
+  /* Readable destructive for text & state borders on page surfaces. The solid
+     `--destructive` above is tuned as a button surface (light foreground), which
+     is too light to also serve as text on light/dark surfaces — this token keeps
+     text/borders at ≥ 4.5:1 (text) / ≥ 3:1 (border). See docs/DESIGN_SYSTEM.md. */
+  --destructive-text: oklch(0.505 0.21 27.5);
   --success: oklch(0.52 0.14 155);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.769 0.15 80);
@@ -107,6 +112,9 @@
 
   --destructive: oklch(0.52 0.2 22.216);
   --destructive-foreground: oklch(0.985 0 0);
+  /* Lighter than the button surface so red text/borders stay legible on the
+     dark background/card (≥ 4.5:1 text, ≥ 3:1 border). */
+  --destructive-text: oklch(0.7 0.19 22);
   --success: oklch(0.696 0.14 160);
   --success-foreground: oklch(0.205 0 0);
   --warning: oklch(0.82 0.16 82);
@@ -154,6 +162,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);

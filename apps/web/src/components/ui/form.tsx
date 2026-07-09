@@ -41,7 +41,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         {...props}
       />
       {error ? (
-        <p id={errorId} className="text-destructive text-sm">
+        <p id={errorId} className="text-destructive-text text-sm">
           {error}
         </p>
       ) : hint ? (
@@ -75,7 +75,7 @@ export function FormErrorSummary({
     <div
       role="alert"
       className={cn(
-        'border-destructive/50 bg-destructive/10 text-destructive rounded-md border p-3 text-sm',
+        'border-destructive-text bg-destructive-text/5 text-destructive-text rounded-md border p-3 text-sm',
         className,
       )}
     >
