@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }): unknown =>
@@ -28,6 +28,7 @@ export class UpdateClientDto {
   description?: string;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   version!: number;

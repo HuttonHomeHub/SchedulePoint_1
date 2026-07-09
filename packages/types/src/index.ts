@@ -128,6 +128,7 @@ export interface ClientSummary {
   /** Optimistic-locking version — echo it back when updating or deleting. */
   version: number;
   createdAt: string;
+  updatedAt: string;
 }
 
 /** A project, scoped to a client. */
@@ -138,6 +139,7 @@ export interface ProjectSummary {
   description: string | null;
   version: number;
   createdAt: string;
+  updatedAt: string;
 }
 
 /** A plan, scoped to a project — the future host of activities and the TSLD. */
@@ -151,6 +153,7 @@ export interface PlanSummary {
   plannedStart: string | null;
   version: number;
   createdAt: string;
+  updatedAt: string;
 }
 
 /**

@@ -38,6 +38,7 @@ describe('HierarchyLifecycleService', () => {
       tx.project.findMany.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
       tx.plan.updateMany.mockResolvedValue({ count: 3 });
       tx.project.updateMany.mockResolvedValue({ count: 2 });
+      tx.client.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
 
@@ -51,23 +52,26 @@ describe('HierarchyLifecycleService', () => {
         where: { clientId: 'c1', deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
-      expect(tx.client.update).toHaveBeenCalledWith({
-        where: { id: 'c1' },
+      // The root update is guarded by deletedAt: null (idempotent under a race).
+      expect(tx.client.updateMany).toHaveBeenCalledWith({
+        where: { id: 'c1', deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
     });
 
     it('skips the plan sweep when a client has no active projects', async () => {
       tx.project.findMany.mockResolvedValue([]);
+      tx.client.updateMany.mockResolvedValue({ count: 1 });
       const result = await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
       expect(tx.plan.updateMany).not.toHaveBeenCalled();
       expect(result.counts).toEqual({ clients: 1, projects: 0, plans: 0 });
     });
 
     it('deletes a plan alone (no descendants)', async () => {
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
       const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
-      expect(tx.plan.update).toHaveBeenCalledWith({
-        where: { id: 'pl1' },
+      expect(tx.plan.updateMany).toHaveBeenCalledWith({
+        where: { id: 'pl1', deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
       expect(result.counts).toEqual({ clients: 0, projects: 0, plans: 1 });

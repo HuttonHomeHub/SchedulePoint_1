@@ -46,7 +46,6 @@ import { UpdateClientDto } from './dto/update-client.dto';
 @ApiNotFoundResponse({
   description: 'Organisation or client not found (or the caller is not a member).',
 })
-@ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
 @Controller({ path: 'organizations/:orgSlug/clients', version: '1' })
 export class ClientsController {
   constructor(private readonly service: ClientsService) {}
@@ -70,6 +69,7 @@ export class ClientsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a client (Planner or Org Admin).' })
   @ApiCreatedResponse({ type: ClientResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'A client with this name already exists.' })
   async create(
     @CurrentUser() principal: Principal,
@@ -93,6 +93,7 @@ export class ClientsController {
   @Patch(':clientId')
   @ApiOperation({ summary: 'Update a client (Planner or Org Admin; optimistic locking).' })
   @ApiOkResponse({ type: ClientResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'Stale version, or a name collision.' })
   async update(
     @CurrentUser() principal: Principal,
@@ -107,6 +108,7 @@ export class ClientsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a client and its projects/plans (soft cascade).' })
   @ApiNoContentResponse()
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -119,6 +121,7 @@ export class ClientsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Restore a soft-deleted client and everything deleted with it.' })
   @ApiOkResponse({ type: ClientResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'A restored name would collide with an active client.' })
   async restore(
     @CurrentUser() principal: Principal,

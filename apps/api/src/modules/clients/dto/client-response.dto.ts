@@ -19,6 +19,9 @@ export class ClientResponseDto implements ClientSummary {
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
+  @ApiProperty({ format: 'date-time' })
+  updatedAt!: string;
+
   static from(entity: Client): ClientResponseDto {
     return {
       id: entity.id,
@@ -26,6 +29,7 @@ export class ClientResponseDto implements ClientSummary {
       description: entity.description,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
+      updatedAt: entity.updatedAt.toISOString(),
     };
   }
 }

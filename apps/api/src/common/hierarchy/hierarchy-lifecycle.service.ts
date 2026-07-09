@@ -58,6 +58,10 @@ export class HierarchyLifecycleService {
     const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
     const counts: CascadeCounts = { clients: 0, projects: 0, plans: 0 };
 
+    // Root updates use updateMany with a `deletedAt: null` guard (not `update`)
+    // so the whole cascade is idempotent: a concurrent delete of the same row
+    // re-stamps nothing (its updateMany matches 0 already-deleted rows), which
+    // prevents a split batch under a delete/delete race (security review §3).
     if (entity === 'client') {
       // Delete the client's active plans (via its active projects), then those
       // projects, then the client — active-only so separately-deleted subtrees
@@ -79,17 +83,20 @@ export class HierarchyLifecycleService {
       counts.projects = (
         await tx.project.updateMany({ where: { clientId: id, deletedAt: null }, data: stamp })
       ).count;
-      await tx.client.update({ where: { id }, data: stamp });
-      counts.clients = 1;
+      counts.clients = (
+        await tx.client.updateMany({ where: { id, deletedAt: null }, data: stamp })
+      ).count;
     } else if (entity === 'project') {
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
       ).count;
-      await tx.project.update({ where: { id }, data: stamp });
-      counts.projects = 1;
+      counts.projects = (
+        await tx.project.updateMany({ where: { id, deletedAt: null }, data: stamp })
+      ).count;
     } else {
-      await tx.plan.update({ where: { id }, data: stamp });
-      counts.plans = 1;
+      counts.plans = (
+        await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
+      ).count;
     }
 
     return { batchId, counts };
