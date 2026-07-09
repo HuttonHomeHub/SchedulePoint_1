@@ -10,14 +10,10 @@
 #
 # 3. Start the stack:
 #      docker compose -f docker-compose.release.yml up -d
+#    The API container applies any pending database migrations on startup
+#    (prisma migrate deploy), so no manual migration step is needed.
 #
-# 4. Apply database migrations ONCE. The runtime image is production-only and
-#    does not ship the Prisma CLI (see docs/TECH_DEBT.md — self-migrating image),
-#    so run this from the repo root against the compose database:
-#      DATABASE_URL='postgresql://app:app@localhost:5432/app?schema=public' \
-#        pnpm --filter @repo/api exec prisma migrate deploy
-#
-# 5. Open http://localhost:8080 — the web app talks to the API on :3000.
+# 4. Open http://localhost:8080 — the web app talks to the API on :3000.
 #
 # NODE_ENV defaults to `development` here: the API's production config guards
 # (strong secret, trusted proxies, non-localhost CORS) intentionally refuse to

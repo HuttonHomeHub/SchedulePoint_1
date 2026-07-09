@@ -48,7 +48,9 @@ flowchart TD
   we never rebuild per environment.
 - To run the published images locally, use
   [`docker-compose.release.yml`](../docker-compose.release.yml) (see its header for
-  the `docker login`, `IMAGE_TAG`, and one-time migration steps).
+  the `docker login` and `IMAGE_TAG` steps). The API container applies pending
+  database migrations on startup (`prisma migrate deploy`), so no manual
+  migration step is needed.
 
 ## Environments (intended)
 
