@@ -45,6 +45,7 @@ describe('MembersService', () => {
     countActiveByRole: ReturnType<typeof vi.fn>;
     updateRoleIfVersionMatches: ReturnType<typeof vi.fn>;
     softDelete: ReturnType<typeof vi.fn>;
+    lockOrganization: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: MembersService;
@@ -56,7 +57,8 @@ describe('MembersService', () => {
       findManyActiveByOrg: vi.fn(),
       countActiveByRole: vi.fn(),
       updateRoleIfVersionMatches: vi.fn(),
-      softDelete: vi.fn().mockResolvedValue(undefined),
+      softDelete: vi.fn().mockResolvedValue(1),
+      lockOrganization: vi.fn().mockResolvedValue(undefined),
     };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
@@ -70,7 +72,9 @@ describe('MembersService', () => {
 
   describe('changeRole', () => {
     it('changes a role when the actor is an admin and the invariant holds', async () => {
+      // Reads: pre-tx existence, in-tx re-read, and the final read of the update.
       members.findActiveByIdInOrg
+        .mockResolvedValueOnce(member())
         .mockResolvedValueOnce(member())
         .mockResolvedValueOnce(member({ role: 'PLANNER' }));
       members.countActiveByRole.mockResolvedValue(2);

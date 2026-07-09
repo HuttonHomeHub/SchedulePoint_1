@@ -60,10 +60,16 @@ export class MembersService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'member:update_role', organization.id);
 
-    const member = await this.members.findActiveByIdInOrg(memberId, organization.id);
-    if (!member) throw new NotFoundError('Member not found.');
+    if (!(await this.members.findActiveByIdInOrg(memberId, organization.id))) {
+      throw new NotFoundError('Member not found.');
+    }
 
     await this.prisma.$transaction(async (tx) => {
+      // Serialize per-org so the last-admin count can't be read stale.
+      await this.members.lockOrganization(tx, organization.id);
+      const member = await this.members.findActiveByIdInOrg(memberId, organization.id, tx);
+      if (!member) throw new NotFoundError('Member not found.');
+
       if (member.role === ADMIN_ROLE && dto.role !== ADMIN_ROLE) {
         await this.assertNotLastAdmin(organization.id, tx);
       }
@@ -93,14 +99,22 @@ export class MembersService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'member:remove', organization.id);
 
-    const member = await this.members.findActiveByIdInOrg(memberId, organization.id);
-    if (!member) throw new NotFoundError('Member not found.');
+    if (!(await this.members.findActiveByIdInOrg(memberId, organization.id))) {
+      throw new NotFoundError('Member not found.');
+    }
 
     await this.prisma.$transaction(async (tx) => {
+      await this.members.lockOrganization(tx, organization.id);
+      const member = await this.members.findActiveByIdInOrg(memberId, organization.id, tx);
+      if (!member) throw new NotFoundError('Member not found.');
+
       if (member.role === ADMIN_ROLE) {
         await this.assertNotLastAdmin(organization.id, tx);
       }
-      await this.members.softDelete(memberId, principal.userId, tx);
+      const removed = await this.members.softDelete(memberId, principal.userId, tx);
+      if (removed === 0) {
+        throw new ConflictError('This member was changed elsewhere. Refresh and try again.');
+      }
     });
 
     this.logger.info(

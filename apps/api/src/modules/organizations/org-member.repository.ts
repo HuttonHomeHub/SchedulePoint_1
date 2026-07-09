@@ -37,8 +37,12 @@ export class OrgMemberRepository {
   }
 
   /** A specific active membership scoped to an organisation (anti-IDOR). */
-  findActiveByIdInOrg(id: string, organizationId: string): Promise<OrgMemberWithUser | null> {
-    return this.prisma.orgMember.findFirst({
+  findActiveByIdInOrg(
+    id: string,
+    organizationId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<OrgMemberWithUser | null> {
+    return client.orgMember.findFirst({
       where: this.active({ id, organizationId }),
       include: { user: true },
     });
@@ -89,15 +93,31 @@ export class OrgMemberRepository {
     return result.count;
   }
 
+  /**
+   * Soft-delete an active membership. Guarded by `deletedAt: null` so a
+   * concurrent delete can't double-apply; returns rows changed (`0` → already
+   * gone), which the service treats as a conflict.
+   */
   async softDelete(
     id: string,
     deletedBy: string,
     client: Prisma.TransactionClient = this.prisma,
-  ): Promise<void> {
-    await client.orgMember.update({
-      where: { id },
-      data: { deletedAt: new Date(), updatedBy: deletedBy },
+  ): Promise<number> {
+    const result = await client.orgMember.updateMany({
+      where: this.active({ id }),
+      data: { deletedAt: new Date(), updatedBy: deletedBy, version: { increment: 1 } },
     });
+    return result.count;
+  }
+
+  /**
+   * Serialize invariant-affecting membership mutations per organisation with a
+   * transaction-scoped advisory lock. Without this, concurrent role-change/remove
+   * requests each read the admin count before the other commits and can leave an
+   * organisation with zero admins (write skew under READ COMMITTED).
+   */
+  async lockOrganization(tx: Prisma.TransactionClient, organizationId: string): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`;
   }
 }
 
