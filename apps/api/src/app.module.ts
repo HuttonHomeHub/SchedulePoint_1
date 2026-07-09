@@ -14,6 +14,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
+import { MeModule } from './modules/me/me.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -65,6 +66,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuthModule,
     HealthModule,
+    MeModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.

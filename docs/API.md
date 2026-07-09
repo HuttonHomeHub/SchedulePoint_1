@@ -86,8 +86,16 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 
 ## Authentication
 
-- Cookie-based sessions via Better Auth (secure, http-only, same-site).
-- State-changing requests require CSRF protection.
+- Cookie-based sessions via Better Auth (secure, http-only, same-site); ADR-0003.
+- The Better Auth handler is mounted at **`/api/auth/*`** (sign-up, sign-in,
+  sign-out, session). It is a raw Node handler, mounted before body parsing, and
+  sits outside the versioned `/api/v1` surface.
+- State-changing requests require CSRF protection: Better Auth rejects requests
+  whose `Origin` is missing or not in the allow-list (`trustedOrigins`, wired to
+  `CORS_ORIGINS`) — browsers send `Origin` automatically.
+- Deny-by-default: every route is authenticated unless marked `@Public()`. The
+  authenticated identity is exposed at **`GET /api/v1/me`** (the current user and
+  their organisation memberships).
 - Protected routes are guarded server-side; `401`/`403` as per the table above.
 
 ## OpenAPI / docs

@@ -36,6 +36,14 @@ export class AppConfigService {
       .filter(Boolean);
   }
 
+  get betterAuthSecret(): string {
+    return this.config.get('BETTER_AUTH_SECRET', { infer: true });
+  }
+
+  get betterAuthUrl(): string {
+    return this.config.get('BETTER_AUTH_URL', { infer: true });
+  }
+
   get rateLimit(): { ttlMs: number; limit: number } {
     return {
       ttlMs: this.config.get('RATE_LIMIT_TTL', { infer: true }) * 1000,
