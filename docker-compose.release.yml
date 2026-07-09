@@ -1,0 +1,72 @@
+# Run SchedulePoint from the PUBLISHED GHCR images (no local build).
+# For building from source instead, use docker-compose.yml.
+#
+# 1. Authenticate to GHCR (the repo is private):
+#      echo $GHCR_PAT | docker login ghcr.io -u <github-user> --password-stdin
+#      (PAT needs the `read:packages` scope.)
+#
+# 2. Pick the image tag (defaults to `main`):
+#      export IMAGE_TAG=main        # or a specific build: 0.2.0 / sha-<short>
+#
+# 3. Start the stack:
+#      docker compose -f docker-compose.release.yml up -d
+#
+# 4. Apply database migrations ONCE. The runtime image is production-only and
+#    does not ship the Prisma CLI (see docs/TECH_DEBT.md — self-migrating image),
+#    so run this from the repo root against the compose database:
+#      DATABASE_URL='postgresql://app:app@localhost:5432/app?schema=public' \
+#        pnpm --filter @repo/api exec prisma migrate deploy
+#
+# 5. Open http://localhost:8080 — the web app talks to the API on :3000.
+#
+# NODE_ENV defaults to `development` here: the API's production config guards
+# (strong secret, trusted proxies, non-localhost CORS) intentionally refuse to
+# boot with local values, so a local test run uses the development profile.
+
+name: schedulepoint-release
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/huttonhomehub/schedulepoint_1/api:${IMAGE_TAG:-main}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-app}?schema=public
+      API_PORT: 3000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-insecure-secret-change-me!!}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-false}
+    ports:
+      - '3000:3000'
+
+  web:
+    image: ghcr.io/huttonhomehub/schedulepoint_1/web:${IMAGE_TAG:-main}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '8080:8080'
+
+volumes:
+  db-data:
