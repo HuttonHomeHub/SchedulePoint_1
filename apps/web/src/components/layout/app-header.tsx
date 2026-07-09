@@ -29,6 +29,13 @@ export function AppHeader(): React.ReactElement {
               Overview
             </Link>
             <Link
+              to="/orgs/$orgSlug/clients"
+              params={{ orgSlug }}
+              className="text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium"
+            >
+              Clients
+            </Link>
+            <Link
               to="/orgs/$orgSlug/members"
               params={{ orgSlug }}
               className="text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium"

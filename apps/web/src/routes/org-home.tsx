@@ -1,5 +1,6 @@
-import { useParams } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOrganizations } from '@/features/organizations';
 
@@ -25,12 +26,23 @@ export function OrgHomeScreen(): React.ReactElement {
         <CardHeader>
           <CardTitle className="text-lg">You&rsquo;re all set up</CardTitle>
           <CardDescription>
-            Inviting teammates, and building clients, projects, and schedules, arrive in upcoming
-            updates.
+            Organise your work as clients, projects, and plans. The schedule editor arrives in an
+            upcoming update.
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-muted-foreground text-sm">
-          Use the organisation switcher in the header to move between your organisations.
+        <CardContent className="flex flex-col gap-3 text-sm">
+          {orgSlug ? (
+            <Link
+              to="/orgs/$orgSlug/clients"
+              params={{ orgSlug }}
+              className={buttonVariants({ className: 'self-start' })}
+            >
+              Go to clients
+            </Link>
+          ) : null}
+          <p className="text-muted-foreground">
+            Use the organisation switcher in the header to move between your organisations.
+          </p>
         </CardContent>
       </Card>
     </main>
