@@ -10,6 +10,32 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-09 — Hierarchy: denormalised org id + cascade soft-delete via a batch id
+
+**Decision.** For the Client → Project → Plan hierarchy (and every descendant
+table that follows it): (1) **denormalise `organization_id`** onto Project and
+Plan — copied from the parent inside the create transaction, never from client
+input — in addition to the parent FK; (2) implement delete as a **cascade soft
+delete stamped with a shared `delete_batch_id`**, done in the service layer
+inside one transaction (parent FKs stay `ON DELETE RESTRICT`), so restoring a
+row restores exactly the batch it was deleted with. Restore is **top-down**:
+a row can only be restored while its parent is active (`PARENT_DELETED`
+otherwise). Both mechanics live in one shared `HierarchyLifecycleService`.
+
+**Why.** Denormalised org id makes every scope/IDOR check and org-scoped query a
+single indexed-column filter with no 2–3 table join (the invariant "a child's
+org equals its parent's" is enforced in code). A batch id gives symmetric,
+one-click cascade restore that matches the brief's soft-delete/restore-for-
+planners intent and 90-day retention, without a DB cascade that would hard-delete.
+
+**Consequences.** Recorded in [DATABASE.md](DATABASE.md) (schema, indexes) and
+carried by ADR-0008/0012/0016 unchanged (no new ADR). If a second consumer
+copies the cascade helper (e.g. the Activities slice), promote both conventions
+to a short ADR then. The partial `delete_batch_id` indexes and the shared helper
+are the enforcement points.
+
+---
+
 ### 2026-07-09 — Web walking skeleton: code-based routing + a tsconfig-extends workaround
 
 **Decision.** For the first web slice, define the TanStack Router route tree in
