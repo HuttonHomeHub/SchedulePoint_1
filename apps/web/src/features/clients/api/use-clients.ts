@@ -75,7 +75,9 @@ export function useUpdateClient(orgSlug: string) {
           version: input.version,
         }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientKeys.list(orgSlug) }),
+    // Refetch on settle (not just success) so a 409 conflict refreshes the
+    // cached row's version — the retry then carries the current version.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: clientKeys.list(orgSlug) }),
   });
 }
 
@@ -84,6 +86,6 @@ export function useDeleteClient(orgSlug: string) {
   return useMutation({
     mutationFn: (clientId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/clients/${clientId}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientKeys.list(orgSlug) }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: clientKeys.list(orgSlug) }),
   });
 }

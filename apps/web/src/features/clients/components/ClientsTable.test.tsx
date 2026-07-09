@@ -1,7 +1,7 @@
 import type { ClientSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { clientKeys } from '../api/use-clients';
@@ -78,5 +78,15 @@ describe('ClientsTable', () => {
   it('shows an empty state when there are no clients', () => {
     renderTable(true, []);
     expect(screen.getByText(/No clients yet/)).toBeInTheDocument();
+  });
+
+  it('confirms before deleting (no immediate destructive action)', () => {
+    renderTable(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Northgate' }));
+    // A confirm dialog appears rather than deleting straight away.
+    expect(screen.getByRole('heading', { name: 'Delete client' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Delete .*Northgate.* and all its projects and plans/),
+    ).toBeInTheDocument();
   });
 });

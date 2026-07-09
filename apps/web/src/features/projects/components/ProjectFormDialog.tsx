@@ -6,14 +6,15 @@ import { useForm } from 'react-hook-form';
 import { useCreateProject, useUpdateProject } from '../api/use-projects';
 import { projectFormSchema, type ProjectFormValues } from '../schemas/project-schemas';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
-import { Label } from '@/components/ui/label';
+import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 
 /**
  * Create-or-edit dialog for a project under a client. Edit mode PATCHes with the
- * row's optimistic-locking `version`. Controlled via `open`/`onClose`.
+ * row's optimistic-locking `version`; a conflict refetches the list so a retry
+ * carries the current version. Controlled via `open`/`onClose`.
  */
 export function ProjectFormDialog({
   orgSlug,
@@ -32,6 +33,7 @@ export function ProjectFormDialog({
   const create = useCreateProject(orgSlug, clientId);
   const update = useUpdateProject(orgSlug, clientId);
   const mutation = isEdit ? update : create;
+  const announce = useAnnounce();
 
   const {
     register,
@@ -55,10 +57,20 @@ export function ProjectFormDialog({
     if (isEdit) {
       update.mutate(
         { projectId: project.id, version: project.version, ...values },
-        { onSuccess: onClose },
+        {
+          onSuccess: () => {
+            announce(`Project “${values.name}” saved.`);
+            onClose();
+          },
+        },
       );
     } else {
-      create.mutate(values, { onSuccess: onClose });
+      create.mutate(values, {
+        onSuccess: () => {
+          announce(`Project “${values.name}” created.`);
+          onClose();
+        },
+      });
     }
   });
 
@@ -82,15 +94,11 @@ export function ProjectFormDialog({
           error={errors.name?.message}
           {...register('name')}
         />
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="project-description">Description (optional)</Label>
-          <textarea
-            id="project-description"
-            rows={3}
-            className="border-input bg-background focus-visible:ring-ring min-h-16 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-            {...register('description')}
-          />
-        </div>
+        <TextareaField
+          label="Description (optional)"
+          error={errors.description?.message}
+          {...register('description')}
+        />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel

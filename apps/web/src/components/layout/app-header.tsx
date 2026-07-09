@@ -1,9 +1,14 @@
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useRouterState } from '@tanstack/react-router';
 
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { useSession, useSignOut } from '@/features/auth';
 import { OrgSwitcher } from '@/features/organizations';
+import { cn } from '@/lib/utils';
+
+const NAV_LINK_CLASS =
+  'text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium';
+const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
 
 /** The app shell header: product name, org nav, theme toggle, current user, sign-out. */
 export function AppHeader(): React.ReactElement {
@@ -12,6 +17,10 @@ export function AppHeader(): React.ReactElement {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // A project's plans live at /orgs/:slug/projects/:id (a sibling of /clients),
+  // so keep the Clients nav item current across the whole hierarchy tree.
+  const onHierarchy = /\/orgs\/[^/]+\/(clients|projects)(\/|$)/.test(pathname);
 
   return (
     <header className="border-border bg-background sticky top-0 z-10 border-b">
@@ -24,22 +33,19 @@ export function AppHeader(): React.ReactElement {
               to="/orgs/$orgSlug"
               params={{ orgSlug }}
               activeOptions={{ exact: true }}
-              className="text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium"
+              className={NAV_LINK_CLASS}
             >
               Overview
             </Link>
             <Link
               to="/orgs/$orgSlug/clients"
               params={{ orgSlug }}
-              className="text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium"
+              aria-current={onHierarchy ? 'page' : undefined}
+              className={cn(NAV_LINK_CLASS, onHierarchy && NAV_LINK_ACTIVE_CLASS)}
             >
               Clients
             </Link>
-            <Link
-              to="/orgs/$orgSlug/members"
-              params={{ orgSlug }}
-              className="text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium"
-            >
+            <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
               Members
             </Link>
           </nav>

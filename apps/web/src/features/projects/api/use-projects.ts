@@ -78,7 +78,9 @@ export function useUpdateProject(orgSlug: string, clientId: string) {
           version: input.version,
         }),
       }),
-    onSuccess: () =>
+    // Refetch on settle (not just success) so a 409 conflict refreshes the
+    // cached row's version — the retry then carries the current version.
+    onSettled: () =>
       queryClient.invalidateQueries({ queryKey: projectKeys.listByClient(orgSlug, clientId) }),
   });
 }
@@ -88,7 +90,7 @@ export function useDeleteProject(orgSlug: string, clientId: string) {
   return useMutation({
     mutationFn: (projectId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/projects/${projectId}`, { method: 'DELETE' }),
-    onSuccess: () =>
+    onSettled: () =>
       queryClient.invalidateQueries({ queryKey: projectKeys.listByClient(orgSlug, clientId) }),
   });
 }

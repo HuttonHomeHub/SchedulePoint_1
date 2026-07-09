@@ -35,7 +35,8 @@ export function ProjectDetailScreen(): React.ReactElement {
             { label: 'Not found' },
           ]}
         />
-        <div className="border-border text-muted-foreground mt-6 rounded-lg border border-dashed p-8 text-center text-sm">
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Project not found</h1>
+        <div className="border-border text-muted-foreground mt-4 rounded-lg border border-dashed p-8 text-center text-sm">
           <p>This project doesn’t exist, was deleted, or you don’t have access to it.</p>
           <Link
             to="/orgs/$orgSlug/clients"

@@ -29,7 +29,13 @@ export function ConfirmDialog({
   error?: string | null;
 }): React.ReactElement {
   return (
-    <Dialog open={open} onClose={onClose} title={title} {...(description ? { description } : {})}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={title}
+      role="alertdialog"
+      {...(description ? { description } : {})}
+    >
       <div className="flex flex-col gap-4">
         {error ? (
           <p role="alert" className="text-destructive-text text-sm">

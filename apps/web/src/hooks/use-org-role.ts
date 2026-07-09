@@ -2,13 +2,7 @@ import type { OrganizationRole } from '@repo/types';
 
 import { useOrganizations } from '@/features/organizations';
 
-/** Roles allowed to create/update/delete hierarchy rows (mirrors the API's write RBAC). */
-const WRITER_ROLES: readonly OrganizationRole[] = ['PLANNER', 'ORG_ADMIN'];
-
-/** Whether a role may manage clients/projects/plans (write). */
-export function canManageHierarchy(role: OrganizationRole | undefined): boolean {
-  return role !== undefined && WRITER_ROLES.includes(role);
-}
+export { canManageHierarchy } from '@/lib/rbac';
 
 /**
  * The current user's role in `orgSlug`, from the already-loaded organisations

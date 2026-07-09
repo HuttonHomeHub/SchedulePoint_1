@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -6,23 +6,30 @@ import { cn } from '@/lib/utils';
 /**
  * Accessible modal dialog built on the native `<dialog>` element, which gives
  * focus trapping, Escape-to-close, and an inert backdrop for free. Controlled
- * via `open`/`onClose`.
+ * via `open`/`onClose`. The title and (optional) description are associated via
+ * `aria-labelledby`/`aria-describedby` with per-instance ids so two dialogs can
+ * safely mount on the same screen. `role` may be raised to `alertdialog` for
+ * destructive confirmations.
  */
 export function Dialog({
   open,
   onClose,
   title,
   description,
+  role,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   description?: string;
+  role?: 'dialog' | 'alertdialog';
   children: React.ReactNode;
 }): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
-  const titleId = 'dialog-title';
+  const baseId = useId();
+  const titleId = `${baseId}-title`;
+  const descriptionId = `${baseId}-description`;
 
   useEffect(() => {
     const dialog = ref.current;
@@ -35,6 +42,8 @@ export function Dialog({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
+      {...(role ? { role } : {})}
       onClose={onClose}
       onCancel={onClose}
       className={cn(
@@ -49,7 +58,11 @@ export function Dialog({
               <h2 id={titleId} className="text-lg font-semibold">
                 {title}
               </h2>
-              {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
+              {description ? (
+                <p id={descriptionId} className="text-muted-foreground text-sm">
+                  {description}
+                </p>
+              ) : null}
             </div>
             <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close dialog">
               ✕

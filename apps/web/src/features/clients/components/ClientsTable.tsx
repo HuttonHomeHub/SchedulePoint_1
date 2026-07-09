@@ -1,19 +1,22 @@
 import type { ClientSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useClients, useDeleteClient } from '../api/use-clients';
 
 import { ClientFormDialog } from './ClientFormDialog';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Spinner } from '@/components/ui/spinner';
+import { DataTable, type Column } from '@/components/ui/data-table';
 
 /**
  * The organisation's clients as a table. Each name links to the client's
- * projects. Edit/Delete actions render only for writers (`canWrite`); delete is
- * a soft cascade confirmed first. Covers loading, error, and empty states.
+ * projects. Edit/Delete render only for writers (`canWrite`); delete is a soft
+ * cascade confirmed first. The edit target is looked up by id from the live
+ * query, so after a 409 conflict the refetched (current) version is used on
+ * retry. Loading/empty/error states come from the shared DataTable.
  */
 export function ClientsTable({
   orgSlug,
@@ -24,113 +27,102 @@ export function ClientsTable({
 }): React.ReactElement {
   const clients = useClients(orgSlug);
   const deleteClient = useDeleteClient(orgSlug);
-  const [editing, setEditing] = useState<ClientSummary | null>(null);
+  const announce = useAnnounce();
+  const regionRef = useRef<HTMLDivElement>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ClientSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (clients.isPending) {
-    return (
-      <div className="p-6">
-        <Spinner label="Loading clients…" />
-      </div>
-    );
-  }
+  const editing = editingId ? clients.data?.find((client) => client.id === editingId) : undefined;
 
-  if (clients.isError) {
-    return (
-      <p role="alert" className="text-destructive-text text-sm">
-        Couldn&rsquo;t load clients. Please try again.
-      </p>
-    );
-  }
-
-  if (clients.data.length === 0) {
-    return (
-      <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-        No clients yet.{canWrite ? ' Create your first client to get started.' : ''}
-      </div>
-    );
+  const columns: Column<ClientSummary>[] = [
+    {
+      header: 'Name',
+      cell: (client) => (
+        <Link
+          to="/orgs/$orgSlug/clients/$clientId"
+          params={{ orgSlug, clientId: client.id }}
+          className="font-medium underline-offset-4 hover:underline"
+        >
+          {client.name}
+        </Link>
+      ),
+    },
+    {
+      header: 'Description',
+      cell: (client) => <span className="text-muted-foreground">{client.description ?? '—'}</span>,
+    },
+  ];
+  if (canWrite) {
+    columns.push({
+      header: 'Actions',
+      srHeader: true,
+      headClassName: 'py-2 font-medium',
+      cellClassName: 'py-2 text-right whitespace-nowrap',
+      cell: (client) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditingId(client.id)}
+            aria-label={`Edit ${client.name}`}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDeleteError(null);
+              setDeleting(client);
+            }}
+            aria-label={`Delete ${client.name}`}
+          >
+            Delete
+          </Button>
+        </div>
+      ),
+    });
   }
 
   const confirmDelete = (): void => {
     if (!deleting) return;
+    const name = deleting.name;
     deleteClient.mutate(deleting.id, {
       onSuccess: () => {
         setDeleting(null);
         setDeleteError(null);
+        announce(`Client “${name}” deleted.`);
+        // The deleted row (and its focused Delete button) unmounts on refetch;
+        // move focus to a stable container rather than letting it fall to body.
+        regionRef.current?.focus();
       },
       onError: (err) => setDeleteError(err.message),
     });
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <caption className="sr-only">Clients</caption>
-          <thead>
-            <tr className="border-border text-muted-foreground border-b text-left">
-              <th scope="col" className="py-2 pr-4 font-medium">
-                Name
-              </th>
-              <th scope="col" className="py-2 pr-4 font-medium">
-                Description
-              </th>
-              {canWrite ? (
-                <th scope="col" className="py-2 font-medium">
-                  <span className="sr-only">Actions</span>
-                </th>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {clients.data.map((client) => (
-              <tr key={client.id} className="border-border border-b">
-                <td className="py-2 pr-4">
-                  <Link
-                    to="/orgs/$orgSlug/clients/$clientId"
-                    params={{ orgSlug, clientId: client.id }}
-                    className="font-medium underline-offset-4 hover:underline"
-                  >
-                    {client.name}
-                  </Link>
-                </td>
-                <td className="text-muted-foreground py-2 pr-4">{client.description ?? '—'}</td>
-                {canWrite ? (
-                  <td className="py-2 text-right whitespace-nowrap">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditing(client)}
-                      aria-label={`Edit ${client.name}`}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setDeleteError(null);
-                        setDeleting(client);
-                      }}
-                      aria-label={`Delete ${client.name}`}
-                    >
-                      Delete
-                    </Button>
-                  </td>
-                ) : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+      <DataTable
+        caption="Clients"
+        columns={columns}
+        query={clients}
+        getRowKey={(client) => client.id}
+        loadingLabel="Loading clients…"
+        errorLabel="Couldn’t load clients. Please try again."
+        empty={
+          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+            No clients yet.{canWrite ? ' Create your first client to get started.' : ''}
+          </div>
+        }
+      />
 
       {canWrite ? (
         <>
           <ClientFormDialog
             orgSlug={orgSlug}
-            open={editing !== null}
-            onClose={() => setEditing(null)}
+            open={editing !== undefined}
+            onClose={() => setEditingId(null)}
             {...(editing ? { client: editing } : {})}
           />
           <ConfirmDialog
