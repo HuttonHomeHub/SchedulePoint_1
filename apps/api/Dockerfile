@@ -26,7 +26,7 @@ FROM deps AS build
 COPY . .
 RUN pnpm --filter @repo/api prisma:generate \
     && pnpm --filter @repo/api build \
-    && pnpm --filter @repo/api --prod deploy /out
+    && pnpm --filter @repo/api --prod --legacy deploy /out
 
 # --- Runtime: minimal, non-root ----------------------------------------------
 FROM node:22-alpine AS runtime
