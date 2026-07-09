@@ -1,4 +1,4 @@
-# Local development stack for the app.
+# Local development stack for SchedulePoint.
 # Usage:
 #   cp .env.example .env
 #   docker compose up -d
@@ -7,7 +7,7 @@
 # deployment is described in docs/DEPLOYMENT.md and uses images published to
 # the GitHub Container Registry (ghcr.io).
 
-name: blank-app
+name: schedulepoint
 
 services:
   db:
@@ -42,6 +42,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      # Off by default until the verification-email loop exists (ADR-0016).
+      AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-false}
     ports:
       - '3000:3000'
 
