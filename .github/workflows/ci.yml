@@ -112,6 +112,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The Playwright API web server runs the compiled app (`nest start` →
+      # `node dist/main.js`), which resolves `@repo/types` to its built output
+      # (`exports.default` → `dist/`). Unlike the Turbo-driven `quality` job,
+      # this job runs those steps directly, so it must build the shared package
+      # first — otherwise the web e2e web server crashes with MODULE_NOT_FOUND.
+      - name: Build shared packages
+        run: pnpm --filter @repo/types build
+
       - name: Generate Prisma client
         run: pnpm --filter @repo/api prisma:generate
 
