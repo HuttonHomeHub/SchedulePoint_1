@@ -24,7 +24,10 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 # --- Build: compile the API and generate the Prisma client -------------------
 FROM deps AS build
 COPY . .
-RUN pnpm --filter @repo/api prisma:generate \
+# Build the shared @repo/types package first (its compiled JS is required at
+# runtime — the raw TypeScript source cannot be loaded by plain Node).
+RUN pnpm --filter @repo/types build \
+    && pnpm --filter @repo/api prisma:generate \
     && pnpm --filter @repo/api build \
     && pnpm --filter @repo/api --prod --legacy deploy /out
 
