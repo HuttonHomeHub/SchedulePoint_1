@@ -222,9 +222,9 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
 
     await actor.agent.delete(`${base}/${id}`).expect(204);
 
-    // The calendar is gone from the active list...
+    // The calendar is gone from the active list (the seeded Standard remains)...
     const list = await actor.agent.get(base).expect(200);
-    expect(list.body.data).toHaveLength(0);
+    expect(list.body.data.map((c: { id: string }) => c.id)).not.toContain(id);
     // ...and its exceptions were soft-deleted in the same batch.
     const cal = await prisma.calendar.findUniqueOrThrow({ where: { id } });
     const exceptions = await prisma.calendarException.findMany({ where: { calendarId: id } });
