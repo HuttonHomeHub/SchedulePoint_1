@@ -120,14 +120,15 @@ export function PlanDetailScreen(): React.ReactElement {
         <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={canCalculate} />
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
-        The computed critical path and early/late dates. Recalculate after editing activities,
-        durations or logic to bring them up to date.
+        The computed critical path and early/late dates. Recalculate after changing activities,
+        durations, logic or the calendar to bring them up to date.
       </p>
       <div className="mt-3">
         <PlanCalendarPicker
           orgSlug={orgSlug}
           plan={plan.data}
           calendars={calendars.data ?? []}
+          calendarsLoading={calendars.isPending}
           canEdit={canWrite}
         />
       </div>

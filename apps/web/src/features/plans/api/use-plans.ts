@@ -95,9 +95,10 @@ export function useUpdatePlan(orgSlug: string, projectId: string) {
 /**
  * Set (or clear) a plan's default working-day calendar (M5, ADR-0024) — a targeted
  * PATCH of just `calendarId` + `version`, so it doesn't need the plan form. `null`
- * clears the calendar (all-days-work). Invalidates the plan detail (so the picker
- * reflects the new value + version) and the schedule summary (which a later
- * recalculation will refresh under the new calendar).
+ * clears the calendar (all-days-work). On success the returned plan is written
+ * straight into the detail cache, so the picker sees the new `calendarId` **and the
+ * fresh `version`** at once (a following change can't send a stale version); the
+ * schedule summary is invalidated so a later recalculation reflects the new calendar.
  */
 export function useSetPlanCalendar(orgSlug: string) {
   const queryClient = useQueryClient();
@@ -107,11 +108,11 @@ export function useSetPlanCalendar(orgSlug: string) {
         method: 'PATCH',
         body: JSON.stringify({ calendarId: input.calendarId, version: input.version }),
       }),
+    onSuccess: (updated, input) => {
+      queryClient.setQueryData(planKeys.detail(orgSlug, input.planId), updated);
+    },
     onSettled: (_data, _error, input) =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: planKeys.detail(orgSlug, input.planId) }),
-        queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
-      ]),
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
   });
 }
 

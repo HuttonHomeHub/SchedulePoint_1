@@ -87,6 +87,17 @@ describe('PlanCalendarPicker', () => {
     expect(JSON.parse(init?.body as string)).toEqual({ calendarId: null, version: 4 });
   });
 
+  it('keeps the current calendar selected (not blank) while the calendars list loads', () => {
+    // Plan has a calendar, but the list hasn't arrived yet — the Select must not
+    // silently show "None" (which would misrepresent the plan's actual calendar).
+    renderPicker({ calendars: [], calendarsLoading: true });
+    const select = screen.getByLabelText('Calendar');
+    expect(select).toBeDisabled();
+    expect(select).toHaveValue('cal-standard');
+    // A placeholder option represents the not-yet-loaded current calendar.
+    expect(screen.getByRole('option', { name: 'Loading…' })).toBeInTheDocument();
+  });
+
   it('renders read-only (no select) for a non-editor, showing the calendar name', () => {
     renderPicker({ canEdit: false });
     expect(screen.queryByLabelText('Calendar')).not.toBeInTheDocument();
