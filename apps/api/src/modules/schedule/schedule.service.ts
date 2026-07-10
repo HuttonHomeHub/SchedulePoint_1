@@ -11,8 +11,10 @@ import { PlanRepository } from '../plans/plan.repository';
 import {
   allDaysWorkCalendar,
   computeSchedule,
+  ScheduleGraphNotADagError,
   type EngineActivity,
   type EngineEdge,
+  type EngineSummary,
 } from './engine';
 import {
   ScheduleRepository,
@@ -77,21 +79,39 @@ export class ScheduleService {
     const dataDate = formatCalendarDate(plan.plannedStart);
 
     const startedAt = Date.now();
-    const summary = await this.prisma.$transaction(async (tx) => {
-      // Serialise with dependency creates and other recalcs on this plan, then
-      // read a consistent snapshot of the graph (ADR-0021/0022).
-      await this.schedule.lockPlanForWrite(planId, tx);
-      const activityRows = await this.schedule.loadActivities(organization.id, planId, tx);
-      const edgeRows = await this.schedule.loadEdges(organization.id, planId, tx);
+    let summary: EngineSummary;
+    try {
+      summary = await this.prisma.$transaction(async (tx) => {
+        // Serialise with dependency creates and other recalcs on this plan, then
+        // read a consistent snapshot of the graph (ADR-0021/0022).
+        await this.schedule.lockPlanForWrite(planId, tx);
+        const activityRows = await this.schedule.loadActivities(organization.id, planId, tx);
+        const edgeRows = await this.schedule.loadEdges(organization.id, planId, tx);
 
-      const output = computeSchedule(
-        activityRows.map(toEngineActivity),
-        edgeRows.map(toEngineEdge),
-        { dataDate, calendar: allDaysWorkCalendar },
-      );
-      await this.schedule.writeResults(organization.id, planId, output.results, tx);
-      return output.summary;
-    });
+        const output = computeSchedule(
+          activityRows.map(toEngineActivity),
+          edgeRows.map(toEngineEdge),
+          { dataDate, calendar: allDaysWorkCalendar },
+        );
+        await this.schedule.writeResults(organization.id, planId, output.results, tx);
+        return output.summary;
+      });
+    } catch (error) {
+      // A residual cycle is a breach of the DAG invariant the write path
+      // guarantees (ADR-0021) — it should be unreachable. Log it distinctly and
+      // rethrow so the global filter returns an opaque 500 (no data persisted).
+      if (error instanceof ScheduleGraphNotADagError) {
+        this.logger.error(
+          {
+            organizationId: organization.id,
+            planId,
+            unresolvedActivityIds: error.unresolvedActivityIds,
+          },
+          'schedule DAG invariant breached',
+        );
+      }
+      throw error;
+    }
 
     this.logger.info(
       {

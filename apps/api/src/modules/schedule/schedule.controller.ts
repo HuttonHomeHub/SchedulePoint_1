@@ -1,0 +1,48 @@
+import { Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  ApiCookieAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
+} from '@nestjs/swagger';
+
+import type { Principal } from '../../common/auth/principal';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ParseUuidPipe } from '../../common/validation/uuid';
+
+import { PlanScheduleSummaryDto } from './dto/plan-schedule-summary.dto';
+import { ScheduleService } from './schedule.service';
+
+/**
+ * CPM schedule routes for a plan (ADR-0022). `recalculate` runs the engine and
+ * persists the computed columns (Planner or Org Admin); it is a synchronous
+ * action, not a resource creation, so it returns `200` with the plan summary.
+ */
+@ApiTags('schedule')
+@ApiCookieAuth('schedulepoint.session_token')
+@ApiUnauthorizedResponse({ description: 'No valid session.' })
+@ApiNotFoundResponse({ description: 'Organisation or plan not found (or not a member).' })
+@Controller({ path: 'organizations/:orgSlug/plans/:planId/schedule', version: '1' })
+export class ScheduleController {
+  constructor(private readonly service: ScheduleService) {}
+
+  @Post('recalculate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Recalculate a plan’s CPM schedule (Planner or Org Admin).' })
+  @ApiOkResponse({ type: PlanScheduleSummaryDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiUnprocessableEntityResponse({
+    description: 'The plan has no start date (PLAN_START_REQUIRED).',
+  })
+  async recalculate(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<PlanScheduleSummaryDto> {
+    return PlanScheduleSummaryDto.from(await this.service.recalculate(principal, orgSlug, planId));
+  }
+}
