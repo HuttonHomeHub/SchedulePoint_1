@@ -16,6 +16,7 @@ import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
 import { ActivitiesModule } from './modules/activities/activities.module';
+import { BaselinesModule } from './modules/baselines/baselines.module';
 import { CalendarsModule } from './modules/calendars/calendars.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { DependenciesModule } from './modules/dependencies/dependencies.module';
@@ -104,6 +105,7 @@ function isPrettyLoggingAvailable(): boolean {
     DependenciesModule,
     ScheduleModule,
     CalendarsModule,
+    BaselinesModule,
     RecycleBinModule,
   ],
   providers: [
