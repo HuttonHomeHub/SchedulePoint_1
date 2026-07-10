@@ -219,14 +219,25 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     const { actor } = await adminWithOrg();
     const id = await createCalendar(actor, 'Secret');
 
+    const missingExceptionId = '00000000-0000-0000-0000-000000000000';
     const outsider = await signUp('outsider@example.com');
-    // Non-member: the org is invisible (404, not 403).
+    // Non-member: the org is invisible (404, not 403) on every route, read or write.
     await outsider.agent.get(base).expect(404);
     await outsider.agent.get(`${base}/${id}`).expect(404);
+    await outsider.agent.patch(`${base}/${id}`).send({ name: 'X', version: 1 }).expect(404);
+    await outsider.agent.delete(`${base}/${id}`).expect(404);
+    await outsider.agent.post(`${base}/${id}/exceptions`).send({ date: '2026-12-25' }).expect(404);
+    await outsider.agent.delete(`${base}/${id}/exceptions/${missingExceptionId}`).expect(404);
 
-    // A member of a *different* org cannot reach this org's calendar either.
+    // A member of a *different* org cannot reach this org's calendar on ANY route —
+    // scope resolves to 'other', then the scoped calendar load 404s (anti-IDOR).
     await outsider.agent.post('/api/v1/organizations').send({ name: 'Other' }).expect(201);
-    await outsider.agent.get(`/api/v1/organizations/other/calendars/${id}`).expect(404);
+    const other = '/api/v1/organizations/other/calendars';
+    await outsider.agent.get(`${other}/${id}`).expect(404);
+    await outsider.agent.patch(`${other}/${id}`).send({ name: 'X', version: 1 }).expect(404);
+    await outsider.agent.delete(`${other}/${id}`).expect(404);
+    await outsider.agent.post(`${other}/${id}/exceptions`).send({ date: '2026-12-25' }).expect(404);
+    await outsider.agent.delete(`${other}/${id}/exceptions/${missingExceptionId}`).expect(404);
   });
 
   it('forbids Viewer and Contributor writes but allows reading (403 / 200)', async () => {
@@ -242,6 +253,7 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
       data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
     });
 
+    const missingExceptionId = '00000000-0000-0000-0000-000000000000';
     for (const member of [viewer, contributor]) {
       await member.agent.get(base).expect(200);
       await member.agent.get(`${base}/${id}`).expect(200);
@@ -249,7 +261,10 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
         .post(base)
         .send({ name: 'Nope', workingWeekdays: STANDARD_WEEKDAYS_MASK })
         .expect(403);
+      await member.agent.patch(`${base}/${id}`).send({ name: 'Nope', version: 1 }).expect(403);
       await member.agent.post(`${base}/${id}/exceptions`).send({ date: '2026-12-25' }).expect(403);
+      // removeException denies on calendar:update before it ever loads the exception.
+      await member.agent.delete(`${base}/${id}/exceptions/${missingExceptionId}`).expect(403);
       await member.agent.delete(`${base}/${id}`).expect(403);
     }
   });

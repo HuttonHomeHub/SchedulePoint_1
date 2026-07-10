@@ -140,6 +140,7 @@ export class CalendarsController {
   @ApiOperation({ summary: 'Add a dated exception (holiday / worked day) to a calendar.' })
   @ApiCreatedResponse({ type: CalendarExceptionResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiUnprocessableEntityResponse({ description: 'Invalid date (must be YYYY-MM-DD).' })
   @ApiConflictResponse({ description: 'An exception for this date already exists.' })
   async addException(
     @CurrentUser() principal: Principal,

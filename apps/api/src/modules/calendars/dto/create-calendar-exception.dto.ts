@@ -26,6 +26,9 @@ export class CreateCalendarExceptionDto {
   @IsBoolean()
   isWorking?: boolean;
 
+  // `@IsNotEmpty` under `@IsOptional` rejects an explicit `label: ""` — deliberate:
+  // an exception is created, not edited, so there is no "clear the label" case (unlike
+  // Calendar.description, which omits @IsNotEmpty to allow clearing with "").
   @ApiPropertyOptional({ maxLength: 120, description: 'Optional label, e.g. "Christmas Day".' })
   @IsOptional()
   @IsString()
