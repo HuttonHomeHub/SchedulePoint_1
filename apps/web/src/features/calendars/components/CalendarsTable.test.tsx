@@ -65,12 +65,14 @@ describe('CalendarsTable', () => {
     expect(screen.getByRole('button', { name: 'Delete Seven-day' })).toBeInTheDocument();
   });
 
-  it('hides write actions for non-writers', () => {
+  it('hides write actions for non-writers but offers a read-only View', () => {
     renderTable(false);
 
     expect(screen.getByText('Standard')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit Standard' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete Seven-day' })).not.toBeInTheDocument();
+    // Readers can still open a calendar read-only (to see its pattern + holidays).
+    expect(screen.getByRole('button', { name: 'View Standard' })).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no calendars', () => {

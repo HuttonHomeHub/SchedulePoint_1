@@ -1,8 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { CalendarSummary } from '@repo/types';
 import { STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
-import { useEffect, useId } from 'react';
+import { useEffect, useId, type Ref } from 'react';
 import { Controller, useForm } from 'react-hook-form';
+
+/**
+ * The weekly working-day pattern control (a bitmask), extracted so its markup and
+ * the focus/description wiring for accessibility live in one place.
+ */
 
 import { useCreateCalendar, useUpdateCalendar } from '../api/use-calendars';
 import {
@@ -22,22 +27,38 @@ import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form
 /**
  * Accessible weekday toggle group bound to a {@link WorkingWeekdays} bitmask.
  * A `<fieldset>`/`<legend>` names the group; each day is a real `<button>` with
- * `aria-pressed` carrying its on/off state (so meaning is not colour-only and
- * the control is fully keyboard operable). Toggling flips the day's bit.
+ * `aria-pressed` carrying its on/off state (so meaning is not colour-only and the
+ * control is fully keyboard operable). The group-level validation error is linked
+ * via `aria-describedby`, and the fieldset is programmatically focusable
+ * (`tabIndex={-1}`) with React Hook Form's `field.ref` attached — so a failed
+ * submit moves focus here and the screen reader announces the group + its error
+ * (a plain, non-focusable fieldset would never surface that description).
  */
 function WeekdayToggleGroup({
   value,
   onChange,
   error,
+  disabled,
+  groupRef,
 }: {
   value: number;
   onChange: (mask: number) => void;
   error?: string | undefined;
+  disabled?: boolean;
+  groupRef?: Ref<HTMLFieldSetElement>;
 }): React.ReactElement {
   const errorId = useId();
   return (
-    <fieldset className="flex flex-col gap-1.5" aria-describedby={error ? errorId : undefined}>
-      <legend className="mb-1.5 text-sm font-medium">Working days</legend>
+    <fieldset
+      ref={groupRef}
+      tabIndex={-1}
+      aria-describedby={error ? errorId : undefined}
+      className="flex flex-col gap-1.5 outline-none"
+    >
+      <legend className="text-sm font-medium">Working days</legend>
+      <p className="text-muted-foreground mb-1.5 text-sm">
+        The weekly pattern this calendar repeats.
+      </p>
       <div className="flex flex-wrap gap-1.5">
         {WEEKDAY_SHORT_LABELS.map((label, index) => {
           const pressed = WorkingWeekdays.has(value, index);
@@ -47,6 +68,7 @@ function WeekdayToggleGroup({
               type="button"
               size="sm"
               variant={pressed ? 'default' : 'outline'}
+              disabled={disabled}
               aria-pressed={pressed}
               aria-label={WEEKDAY_LONG_LABELS[index]}
               onClick={() => onChange(WorkingWeekdays.toggle(value, index))}
@@ -67,20 +89,24 @@ function WeekdayToggleGroup({
 
 /**
  * Create-or-edit dialog for an organisation calendar. The weekly pattern is a
- * bitmask edited via the weekday toggle group. In edit mode (`calendar` given)
- * it PATCHes with the row's optimistic-locking `version` and additionally
- * surfaces the exceptions editor for that calendar.
+ * bitmask edited via the weekday toggle group. In edit mode (`calendar` given) it
+ * PATCHes with the row's optimistic-locking `version` and additionally surfaces the
+ * exceptions editor. When `readOnly` (a reader opening a calendar), the fields and
+ * exceptions are shown but not editable — every member may read a calendar's
+ * pattern and holidays (spec US-4), only Planners/Org Admins may change them.
  */
 export function CalendarFormDialog({
   orgSlug,
   open,
   onClose,
   calendar,
+  readOnly = false,
 }: {
   orgSlug: string;
   open: boolean;
   onClose: () => void;
   calendar?: CalendarSummary;
+  readOnly?: boolean;
 }): React.ReactElement {
   const isEdit = calendar !== undefined;
   const create = useCreateCalendar(orgSlug);
@@ -132,12 +158,14 @@ export function CalendarFormDialog({
     }
   });
 
+  const title = readOnly ? 'Calendar' : isEdit ? 'Edit calendar' : 'New calendar';
+
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      size="lg"
-      title={isEdit ? 'Edit calendar' : 'New calendar'}
+      size={isEdit ? 'lg' : 'md'}
+      title={title}
       {...(isEdit ? {} : { description: 'Define a reusable working-day pattern.' })}
     >
       <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
@@ -150,6 +178,7 @@ export function CalendarFormDialog({
         <TextField
           label="Name"
           autoComplete="off"
+          readOnly={readOnly}
           error={errors.name?.message}
           {...register('name')}
         />
@@ -160,28 +189,37 @@ export function CalendarFormDialog({
             <WeekdayToggleGroup
               value={field.value}
               onChange={field.onChange}
+              disabled={readOnly}
+              groupRef={field.ref}
               error={errors.workingWeekdays?.message}
             />
           )}
         />
         <TextareaField
           label="Description (optional)"
+          readOnly={readOnly}
           error={errors.description?.message}
           {...register('description')}
         />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </Button>
-          <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create calendar'}
-          </Button>
+          {readOnly ? null : (
+            <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
+              {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create calendar'}
+            </Button>
+          )}
         </div>
       </form>
 
       {isEdit ? (
         <div className="border-border mt-6 border-t pt-6">
-          <CalendarExceptionsEditor orgSlug={orgSlug} calendarId={calendar.id} />
+          <CalendarExceptionsEditor
+            orgSlug={orgSlug}
+            calendarId={calendar.id}
+            readOnly={readOnly}
+          />
         </div>
       ) : null}
     </Dialog>

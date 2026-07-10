@@ -29,10 +29,12 @@ function deleteErrorMessage(error: unknown): string {
 
 /**
  * The organisation's calendars as a table (name, working-day pattern,
- * description). Edit/Delete render only for writers (`canWrite`). A delete
- * blocked because plans still reference the calendar surfaces a friendly inline
- * message. The edit target is looked up by id from the live query so a 409 retry
- * carries the current version. States come from the shared DataTable.
+ * description). Writers (`canWrite`) get Edit + Delete; everyone else gets View
+ * (the same dialog, read-only) so any member can browse a calendar's pattern and
+ * holidays (spec US-4). A delete blocked because plans still reference the calendar
+ * surfaces a friendly inline message. The open target is looked up by id from the
+ * live query so a 409 retry carries the current version. States come from the
+ * shared DataTable.
  */
 export function CalendarsTable({
   orgSlug,
@@ -66,13 +68,13 @@ export function CalendarsTable({
       ),
     },
   ];
-  if (canWrite) {
-    columns.push({
-      header: 'Actions',
-      srHeader: true,
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right whitespace-nowrap',
-      cell: (calendar) => (
+  columns.push({
+    header: 'Actions',
+    srHeader: true,
+    headClassName: 'py-2 font-medium',
+    cellClassName: 'py-2 text-right whitespace-nowrap',
+    cell: (calendar) =>
+      canWrite ? (
         <div className="flex justify-end gap-2">
           <Button
             variant="ghost"
@@ -94,9 +96,19 @@ export function CalendarsTable({
             Delete
           </Button>
         </div>
+      ) : (
+        <div className="flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditingId(calendar.id)}
+            aria-label={`View ${calendar.name}`}
+          >
+            View
+          </Button>
+        </div>
       ),
-    });
-  }
+  });
 
   const confirmDelete = (): void => {
     if (!deleting) return;
@@ -131,28 +143,27 @@ export function CalendarsTable({
         }
       />
 
+      <CalendarFormDialog
+        orgSlug={orgSlug}
+        open={editing !== undefined}
+        onClose={() => setEditingId(null)}
+        readOnly={!canWrite}
+        {...(editing ? { calendar: editing } : {})}
+      />
       {canWrite ? (
-        <>
-          <CalendarFormDialog
-            orgSlug={orgSlug}
-            open={editing !== undefined}
-            onClose={() => setEditingId(null)}
-            {...(editing ? { calendar: editing } : {})}
-          />
-          <ConfirmDialog
-            open={deleting !== null}
-            onClose={() => {
-              setDeleting(null);
-              setDeleteError(null);
-            }}
-            onConfirm={confirmDelete}
-            title="Delete calendar"
-            description={deleting ? `Delete “${deleting.name}”?` : ''}
-            pending={deleteCalendar.isPending}
-            pendingLabel="Deleting…"
-            error={deleteError}
-          />
-        </>
+        <ConfirmDialog
+          open={deleting !== null}
+          onClose={() => {
+            setDeleting(null);
+            setDeleteError(null);
+          }}
+          onConfirm={confirmDelete}
+          title="Delete calendar"
+          description={deleting ? `Delete “${deleting.name}”?` : ''}
+          pending={deleteCalendar.isPending}
+          pendingLabel="Deleting…"
+          error={deleteError}
+        />
       ) : null}
     </div>
   );

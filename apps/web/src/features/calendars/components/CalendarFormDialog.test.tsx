@@ -67,6 +67,41 @@ describe('CalendarFormDialog', () => {
     expect(init?.method).toBe('POST');
   });
 
+  it('embeds the exceptions editor in edit mode (and not in create mode)', () => {
+    const { unmount } = renderDialog({ calendar: CALENDAR });
+    expect(screen.getByRole('heading', { name: 'Exceptions' })).toBeInTheDocument();
+    unmount();
+
+    renderDialog();
+    expect(screen.queryByRole('heading', { name: 'Exceptions' })).not.toBeInTheDocument();
+  });
+
+  it('rejects an empty working-day pattern with a validation error (no request)', async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'None' } });
+    // Toggle every worked weekday (Mon–Fri) off → mask 0.
+    for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']) {
+      fireEvent.click(screen.getByRole('button', { name: day }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Create calendar' }));
+
+    // Surfaced in both the form error summary and inline on the toggle group.
+    const messages = await screen.findAllByText('Select at least one working day.');
+    expect(messages.length).toBeGreaterThan(0);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('renders read-only for a reader: fields shown, no save/edit affordances', () => {
+    renderDialog({ calendar: CALENDAR, readOnly: true });
+    expect(screen.getByLabelText('Name')).toHaveValue('Standard');
+    expect(screen.getByLabelText('Name')).toHaveAttribute('readonly');
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    // Readers still see the exceptions section, but no add form / remove buttons.
+    expect(screen.getByRole('heading', { name: 'Exceptions' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add exception' })).not.toBeInTheDocument();
+  });
+
   it('round-trips the weekday toggle group to the bitmask (Saturday sets bit 5)', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Six-day' } });

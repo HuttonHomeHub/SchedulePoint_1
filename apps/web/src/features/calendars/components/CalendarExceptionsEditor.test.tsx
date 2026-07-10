@@ -72,7 +72,7 @@ describe('CalendarExceptionsEditor', () => {
     renderEditor({ ...DETAIL, exceptions: [] });
 
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2027-01-01' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
 
     await waitFor(() =>
       expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
@@ -101,7 +101,7 @@ describe('CalendarExceptionsEditor', () => {
     renderEditor({ ...DETAIL, exceptions: [] });
 
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-12-25' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
 
     expect(
       await screen.findByText('An exception already exists for that date.'),
