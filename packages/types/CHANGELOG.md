@@ -1,5 +1,34 @@
 # @repo/types
 
+## 0.5.0
+
+### Minor Changes
+
+- [#22](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/22) [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the working-day calendar schema and permissions (M5, ADR-0024). New `calendars`
+  and `calendar_exceptions` tables: an org-scoped calendar is a 7-bit `working_weekdays`
+  mask (Monday…Sunday) plus dated exceptions (holidays / worked weekends), with a
+  `working_weekdays > 0 AND <= 127` CHECK, partial-unique names/exception-dates among
+  live rows, soft delete + batch restore, and the documented indexes (the active
+  `(calendar_id, date)` unique doubles as the engine's exception load). Adds the
+  `calendar:read` / `calendar:create` / `calendar:update` / `calendar:delete` permissions
+  (read for every member; write for Planner + Org Admin) and the shared `@repo/types`
+  `Calendar`/`CalendarException` shapes plus a pure `WorkingWeekdays` bitmask helper (the
+  single source of truth the API DTO validates against and the web toggle group binds to).
+  Schema and permissions only — the CRUD module and engine wiring land next.
+
+- [#22](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/22) [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Wire calendars into plans (M5 Task C1, ADR-0024). Plans gain a nullable
+  `calendar_id` (FK to calendars, RESTRICT, partial-indexed); a null calendar means
+  all-days-work (M6 back-compat). Each organisation is seeded a **Standard (Mon–Fri)**
+  calendar — on org create and backfilled for existing orgs by the migration — and new
+  plans default to it. A Planner can assign a plan's calendar via `PATCH plans/:id`
+  (`calendarId`, validated to be an active calendar in the same organisation — a
+  foreign/unknown id is a 404, indistinguishable from missing; null clears it), and a
+  calendar referenced by an active plan can no longer be deleted (409 `CALENDAR_IN_USE`).
+  Calendar assignment and the delete-in-use guard serialise on a calendar-scoped advisory
+  lock, so a plan can never be assigned a calendar that is being deleted. `Plan.calendarId` is added to `@repo/types` and the plan
+  response. Recalculation still ignores the calendar until Task C2 wires it into the
+  engine.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,5 +1,77 @@
 # @repo/api
 
+## 0.6.0
+
+### Minor Changes
+
+- [#22](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/22) [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the pure `buildWorkingDayCalendar` factory to the CPM engine (M5, ADR-0024):
+  a real working-day calendar from a weekday bitmask + dated exceptions (holidays
+  and worked-weekends), implemented behind the existing `WorkingDayCalendar` port
+  with O(1) week arithmetic + O(log H) binary search over sorted exceptions — no
+  day-by-day scan, so recalculation stays within the M6 performance budget. Correct
+  by construction: pinned to a naive day-by-day reference by a differential test and
+  to the inverse invariant `workingDaysBetween(from, addWorkingDays(from, n)) === n`.
+  Still an internal library — nothing consumes it yet; the calendar CRUD module and
+  engine wiring land next.
+
+- [#22](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/22) [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the working-day calendar schema and permissions (M5, ADR-0024). New `calendars`
+  and `calendar_exceptions` tables: an org-scoped calendar is a 7-bit `working_weekdays`
+  mask (Monday…Sunday) plus dated exceptions (holidays / worked weekends), with a
+  `working_weekdays > 0 AND <= 127` CHECK, partial-unique names/exception-dates among
+  live rows, soft delete + batch restore, and the documented indexes (the active
+  `(calendar_id, date)` unique doubles as the engine's exception load). Adds the
+  `calendar:read` / `calendar:create` / `calendar:update` / `calendar:delete` permissions
+  (read for every member; write for Planner + Org Admin) and the shared `@repo/types`
+  `Calendar`/`CalendarException` shapes plus a pure `WorkingWeekdays` bitmask helper (the
+  single source of truth the API DTO validates against and the web toggle group binds to).
+  Schema and permissions only — the CRUD module and engine wiring land next.
+
+- [#22](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/22) [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the working-day calendar library CRUD API (M5, ADR-0024). A new org-scoped
+  `calendars` module (controller → `CalendarsService` → `CalendarRepository`) exposes
+  list / create / get / update / delete calendars plus an exception editor
+  (add / remove dated holidays and worked-weekends), all under
+  `/api/v1/organizations/:orgSlug/calendars`. Deny-by-default: reads need
+  `calendar:read` (every member), writes need `calendar:create|update|delete`
+  (Planner + Org Admin); every route re-resolves the org scope from the caller's
+  memberships (anti-IDOR). The weekday mask is validated 1–127 (422), calendar names
+  are unique per org and exception dates unique per calendar (409
+  `DUPLICATE_CALENDAR` / `DUPLICATE_EXCEPTION`), updates use optimistic locking, and
+  delete is a self-contained soft-cascade over the calendar and its exceptions
+  (adding/removing an exception bumps the calendar's version). The delete-in-use
+  guard and plan assignment land next (Task C1); nothing consumes a calendar for
+  scheduling yet.
+
+- [#22](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/22) [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Wire calendars into plans (M5 Task C1, ADR-0024). Plans gain a nullable
+  `calendar_id` (FK to calendars, RESTRICT, partial-indexed); a null calendar means
+  all-days-work (M6 back-compat). Each organisation is seeded a **Standard (Mon–Fri)**
+  calendar — on org create and backfilled for existing orgs by the migration — and new
+  plans default to it. A Planner can assign a plan's calendar via `PATCH plans/:id`
+  (`calendarId`, validated to be an active calendar in the same organisation — a
+  foreign/unknown id is a 404, indistinguishable from missing; null clears it), and a
+  calendar referenced by an active plan can no longer be deleted (409 `CALENDAR_IN_USE`).
+  Calendar assignment and the delete-in-use guard serialise on a calendar-scoped advisory
+  lock, so a plan can never be assigned a calendar that is being deleted. `Plan.calendarId` is added to `@repo/types` and the plan
+  response. Recalculation still ignores the calendar until Task C2 wires it into the
+  engine.
+
+- [#22](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/22) [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Wire the working-day calendar into CPM recalculation (M5 Task C2, ADR-0024) — the
+  engine now computes **true working-day dates**. `ScheduleService.recalculate` loads
+  the plan's calendar (`working_weekdays` + active exceptions) as part of the locked
+  recalc snapshot, builds a `WorkingDayCalendar` once via `buildWorkingDayCalendar`, and
+  injects it at the existing `ComputeOptions.calendar` port seam — **the pure engine's
+  pass code is unchanged**. A plan with no calendar (or a defensively-missing one) uses
+  `allDaysWorkCalendar`, so the null path is byte-identical to M6 and the golden suite
+  still holds. Early/late start & finish now skip the calendar's non-working weekdays and
+  holiday dates, and the project finish absorbs them. The calendar used is recorded in the
+  recalc audit log. The calendar maths is O(1) week arithmetic + O(log H) per call (built
+  once per recalc), so recalculation stays within the M6 performance budget; a perf smoke
+  at 500 activities now also runs on a real Mon–Fri calendar.
+
+### Patch Changes
+
+- Updated dependencies [[`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14), [`5756fa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5756fa0932f7b45ba71a3ae30ee20ef996404a14)]:
+  - @repo/types@0.5.0
+
 ## 0.5.0
 
 ### Minor Changes
