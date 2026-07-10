@@ -19,7 +19,13 @@ function makeTx() {
     update: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({ count: 0 }),
   });
-  return { client: model(), project: model(), plan: model(), activity: model() };
+  return {
+    client: model(),
+    project: model(),
+    plan: model(),
+    activity: model(),
+    activityDependency: model(),
+  };
 }
 
 describe('HierarchyLifecycleService', () => {
@@ -44,7 +50,13 @@ describe('HierarchyLifecycleService', () => {
 
       const result = await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
 
-      expect(result.counts).toEqual({ clients: 1, projects: 2, plans: 3, activities: 7 });
+      expect(result.counts).toEqual({
+        clients: 1,
+        projects: 2,
+        plans: 3,
+        activities: 7,
+        dependencies: 0,
+      });
       // Activities deleted are those under the client's active plans.
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1', 'pl2', 'pl3'] }, deletedAt: null },
@@ -69,7 +81,13 @@ describe('HierarchyLifecycleService', () => {
       expect(tx.plan.findMany).not.toHaveBeenCalled();
       expect(tx.plan.updateMany).not.toHaveBeenCalled();
       expect(tx.activity.updateMany).not.toHaveBeenCalled();
-      expect(result.counts).toEqual({ clients: 1, projects: 0, plans: 0, activities: 0 });
+      expect(result.counts).toEqual({
+        clients: 1,
+        projects: 0,
+        plans: 0,
+        activities: 0,
+        dependencies: 0,
+      });
     });
 
     it('deletes a project with its plans and their activities', async () => {
@@ -80,7 +98,13 @@ describe('HierarchyLifecycleService', () => {
 
       const result = await service.cascadeSoftDelete(asTx(), 'project', 'p1', ACTOR);
 
-      expect(result.counts).toEqual({ clients: 0, projects: 1, plans: 1, activities: 4 });
+      expect(result.counts).toEqual({
+        clients: 0,
+        projects: 1,
+        plans: 1,
+        activities: 4,
+        dependencies: 0,
+      });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1'] }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
@@ -101,7 +125,13 @@ describe('HierarchyLifecycleService', () => {
         where: { id: 'pl1', deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
-      expect(result.counts).toEqual({ clients: 0, projects: 0, plans: 1, activities: 5 });
+      expect(result.counts).toEqual({
+        clients: 0,
+        projects: 0,
+        plans: 1,
+        activities: 5,
+        dependencies: 0,
+      });
     });
 
     it('deletes an activity alone as a leaf (no descendants)', async () => {
@@ -111,11 +141,73 @@ describe('HierarchyLifecycleService', () => {
         where: { id: 'a1', deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
-      expect(result.counts).toEqual({ clients: 0, projects: 0, plans: 0, activities: 1 });
+      expect(result.counts).toEqual({
+        clients: 0,
+        projects: 0,
+        plans: 0,
+        activities: 1,
+        dependencies: 0,
+      });
+    });
+
+    it("also soft-deletes an activity's incident links (both directions) in its batch", async () => {
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      tx.activityDependency.updateMany.mockResolvedValue({ count: 2 });
+      const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(result.counts.dependencies).toBe(2);
+      expect(tx.activityDependency.updateMany).toHaveBeenCalledWith({
+        where: { deletedAt: null, OR: [{ predecessorId: 'a1' }, { successorId: 'a1' }] },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+    });
+
+    it("sweeps a plan's contained links into the batch when the plan is deleted", async () => {
+      tx.activity.updateMany.mockResolvedValue({ count: 5 });
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.activityDependency.updateMany.mockResolvedValue({ count: 3 });
+      const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      expect(result.counts.dependencies).toBe(3);
+      expect(tx.activityDependency.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+    });
+
+    it('deletes a dependency alone as a leaf (its own batch)', async () => {
+      tx.activityDependency.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.cascadeSoftDelete(asTx(), 'dependency', 'd1', ACTOR);
+      expect(result.counts.dependencies).toBe(1);
+      expect(tx.activityDependency.updateMany).toHaveBeenCalledWith({
+        where: { id: 'd1', deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
     });
   });
 
   describe('restoreBatch', () => {
+    it('restores only batch links whose BOTH endpoints are active (endpoint-guarded)', async () => {
+      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-p', projectId: 'pr1' });
+      tx.project.findFirst.mockResolvedValue({ id: 'pr1' }); // parent project active
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.activity.updateMany.mockResolvedValue({ count: 3 });
+      // Two links in the batch; d2's successor a3 was deleted separately (not active).
+      tx.activityDependency.findMany.mockResolvedValue([
+        { id: 'd1', predecessorId: 'a1', successorId: 'a2' },
+        { id: 'd2', predecessorId: 'a1', successorId: 'a3' },
+      ]);
+      tx.activity.findMany.mockResolvedValue([{ id: 'a1' }, { id: 'a2' }]);
+      tx.activityDependency.updateMany.mockResolvedValue({ count: 1 });
+
+      const counts = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+      expect(counts.dependencies).toBe(1);
+      // Only the fully-active link d1 is reactivated; d2 stays soft-deleted.
+      expect(tx.activityDependency.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['d1'] } },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+    });
+
     it('restores the whole batch (incl. activities) when the parent is active', async () => {
       tx.project.findFirst.mockResolvedValue({ deleteBatchId: 'batch-9', clientId: 'c1' });
       tx.client.findFirst.mockResolvedValue({ id: 'c1' }); // parent client active
@@ -125,7 +217,7 @@ describe('HierarchyLifecycleService', () => {
 
       const counts = await service.restoreBatch(asTx(), 'project', 'p1', ACTOR);
 
-      expect(counts).toEqual({ clients: 0, projects: 1, plans: 4, activities: 9 });
+      expect(counts).toEqual({ clients: 0, projects: 1, plans: 4, activities: 9, dependencies: 0 });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-9' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
