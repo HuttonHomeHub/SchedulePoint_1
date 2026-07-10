@@ -29,6 +29,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     description: null,
     status: 'DRAFT',
     plannedStart: new Date('2026-01-01T00:00:00.000Z'),
+    calendarId: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -72,6 +73,7 @@ describe('ScheduleService.recalculate', () => {
     lockPlanForWrite: ReturnType<typeof vi.fn>;
     loadActivities: ReturnType<typeof vi.fn>;
     loadEdges: ReturnType<typeof vi.fn>;
+    loadPlanCalendar: ReturnType<typeof vi.fn>;
     writeResults: ReturnType<typeof vi.fn>;
     summarise: ReturnType<typeof vi.fn>;
   };
@@ -87,6 +89,7 @@ describe('ScheduleService.recalculate', () => {
       lockPlanForWrite: vi.fn().mockResolvedValue(undefined),
       loadActivities: vi.fn().mockResolvedValue([]),
       loadEdges: vi.fn().mockResolvedValue([]),
+      loadPlanCalendar: vi.fn().mockResolvedValue(null),
       writeResults: vi.fn().mockResolvedValue(undefined),
       summarise: vi.fn().mockResolvedValue({
         activityCount: 0,
@@ -130,6 +133,19 @@ describe('ScheduleService.recalculate', () => {
       ValidationError,
     );
     expect(schedule.lockPlanForWrite).not.toHaveBeenCalled();
+  });
+
+  it('uses all-days-work without loading a calendar when the plan has none', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: null }));
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    expect(schedule.loadPlanCalendar).not.toHaveBeenCalled();
+  });
+
+  it('loads the plan calendar (scoped) when one is assigned', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: 'cal-1' }));
+    schedule.loadPlanCalendar.mockResolvedValue({ workingWeekdays: 0b0011111, exceptions: [] });
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    expect(schedule.loadPlanCalendar).toHaveBeenCalledWith(ORG_ID, 'cal-1', expect.anything());
   });
 
   it('is a no-op write for an empty plan and returns a zeroed summary', async () => {

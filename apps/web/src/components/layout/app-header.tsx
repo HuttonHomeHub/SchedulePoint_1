@@ -55,6 +55,9 @@ export function AppHeader(): React.ReactElement {
             >
               Clients
             </Link>
+            <Link to="/orgs/$orgSlug/calendars" params={{ orgSlug }} className={NAV_LINK_CLASS}>
+              Calendars
+            </Link>
             <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
               Members
             </Link>

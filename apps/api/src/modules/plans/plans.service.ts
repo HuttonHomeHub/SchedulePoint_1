@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Plan } from '@prisma/client';
-import type { PageMeta } from '@repo/types';
+import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import {
   HIERARCHY_CONFLICT,
@@ -11,6 +12,7 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { ProjectRepository } from '../projects/project.repository';
 
@@ -33,6 +35,7 @@ export class PlansService {
     private readonly organizations: OrganizationsService,
     private readonly projects: ProjectRepository,
     private readonly plans: PlanRepository,
+    private readonly calendars: CalendarRepository,
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(PlansService.name) private readonly logger: PinoLogger,
@@ -80,6 +83,13 @@ export class PlansService {
     this.assertCan(principal, 'plan:create', organization.id);
     const project = await this.loadActiveProject(projectId, organization.id);
 
+    // New plans default to the org's seeded Standard calendar (ADR-0024). If the org
+    // has no active Standard (renamed/deleted), fall back to null (all-days-work).
+    const standard = await this.calendars.findActiveByNameInOrg(
+      project.organizationId,
+      STANDARD_CALENDAR_NAME,
+    );
+
     try {
       const plan = await this.plans.create({
         // Copy the organisation id from the parent project, never from input.
@@ -89,6 +99,7 @@ export class PlansService {
         description: dto.description ?? null,
         ...(dto.status ? { status: dto.status } : {}),
         ...(dto.plannedStart ? { plannedStart: parseCalendarDate(dto.plannedStart) } : {}),
+        ...(standard ? { calendarId: standard.id } : {}),
         createdBy: principal.userId,
         updatedBy: principal.userId,
       });
@@ -128,17 +139,40 @@ export class PlansService {
     if (dto.plannedStart !== undefined) {
       patch.plannedStart = dto.plannedStart === null ? null : parseCalendarDate(dto.plannedStart);
     }
+    // A null clears the calendar (all-days-work); a specific id is validated + written
+    // under a calendar-scoped advisory lock below.
+    const calendarId = dto.calendarId;
+    if (calendarId === null) patch.calendarId = null;
 
     try {
-      const changed = await this.plans.updateIfVersionMatches(
-        planId,
-        dto.version,
-        patch,
-        principal.userId,
-      );
-      if (changed === 0) {
-        throw new ConflictError('This plan was changed elsewhere. Refresh and try again.');
-      }
+      await this.prisma.$transaction(async (tx) => {
+        if (calendarId !== undefined && calendarId !== null) {
+          // Assigning a specific calendar: serialise with the delete-in-use guard on
+          // the same key so a plan can never be assigned a calendar that is being
+          // deleted (no TOCTOU dangling reference). Only an ACTIVE calendar in the
+          // plan's OWN organisation may be referenced (anti-IDOR); a foreign/deleted/
+          // unknown id is indistinguishable from missing (404), leaking nothing —
+          // matching the dependencies endpoint's cross-scope handling.
+          await acquireCalendarWriteLock(tx, calendarId);
+          const calendar = await this.calendars.findActiveByIdInOrg(
+            calendarId,
+            organization.id,
+            tx,
+          );
+          if (!calendar) throw new NotFoundError('Calendar not found.');
+          patch.calendarId = calendar.id;
+        }
+        const changed = await this.plans.updateIfVersionMatches(
+          planId,
+          dto.version,
+          patch,
+          principal.userId,
+          tx,
+        );
+        if (changed === 0) {
+          throw new ConflictError('This plan was changed elsewhere. Refresh and try again.');
+        }
+      });
     } catch (error) {
       if (this.isNameConflict(error)) throw this.nameTakenError();
       throw error;

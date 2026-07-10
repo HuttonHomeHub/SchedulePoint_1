@@ -29,6 +29,14 @@ export class PlanResponseDto implements PlanSummary {
   })
   plannedStart!: string | null;
 
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description: "The plan's default working-day calendar, or null for all-days-work.",
+  })
+  calendarId!: string | null;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -46,6 +54,7 @@ export class PlanResponseDto implements PlanSummary {
       description: entity.description,
       status: entity.status,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
+      calendarId: entity.calendarId,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

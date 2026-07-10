@@ -6,9 +6,10 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
+import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { DependencyEditor } from '@/features/dependencies';
-import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
+import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import {
@@ -41,6 +42,8 @@ export function PlanDetailScreen(): React.ReactElement {
   // Shares the activities cache with the table below (same query key); used to
   // populate the logic-editor's add picker.
   const activities = useActivities(orgSlug, planId);
+  // The org's calendars, for the plan calendar picker (read for every member).
+  const calendars = useCalendars(orgSlug);
   const canManageLogic = canWrite; // dependency write = the hierarchy-writer roles
 
   if (plan.isPending) {
@@ -117,9 +120,18 @@ export function PlanDetailScreen(): React.ReactElement {
         <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={canCalculate} />
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
-        The computed critical path and early/late dates. Recalculate after editing activities,
-        durations or logic to bring them up to date.
+        The computed critical path and early/late dates. Recalculate after changing activities,
+        durations, logic or the calendar to bring them up to date.
       </p>
+      <div className="mt-3">
+        <PlanCalendarPicker
+          orgSlug={orgSlug}
+          plan={plan.data}
+          calendars={calendars.data ?? []}
+          calendarsLoading={calendars.isPending}
+          canEdit={canWrite}
+        />
+      </div>
       <div className="mt-3">
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       </div>

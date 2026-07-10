@@ -7,12 +7,14 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
 
 import { IsCalendarDate } from '../../../common/validation/calendar-date';
+import { UUID_REGEX } from '../../../common/validation/uuid';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -55,6 +57,21 @@ export class UpdatePlanDto {
   @ValidateIf((_, value) => value !== null)
   @IsCalendarDate()
   plannedStart?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      "The plan's default working-day calendar (must be an active calendar in the same " +
+      'organisation), or null to clear it (all-days-work). Validated service-side.',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear the calendar); validate the shape only for a value.
+  // @Matches(UUID_REGEX) — not @IsUUID — because our ids are UUID v7 and some
+  // class-validator versions reject v7 (see common/validation/uuid.ts).
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
+  calendarId?: string | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

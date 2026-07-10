@@ -13,6 +13,7 @@ import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { AcceptInviteScreen } from '@/routes/accept-invite';
 import { AuthedLayout } from '@/routes/authed-layout';
+import { CalendarsScreen } from '@/routes/calendars';
 import { ClientDetailScreen } from '@/routes/client-detail';
 import { ClientsScreen } from '@/routes/clients';
 import { MembersScreen } from '@/routes/members';
@@ -128,6 +129,14 @@ const clientsRoute = createRoute({
   component: ClientsScreen,
 });
 
+/** Calendars library. */
+const calendarsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/calendars',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: CalendarsScreen,
+});
+
 /** A client's projects. */
 const clientDetailRoute = createRoute({
   getParentRoute: () => authedRoute,
@@ -179,6 +188,7 @@ const routeTree = rootRoute.addChildren([
     orgHomeRoute,
     membersRoute,
     clientsRoute,
+    calendarsRoute,
     clientDetailRoute,
     projectDetailRoute,
     planDetailRoute,

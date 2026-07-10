@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import type { PlanScheduleSummary } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -11,11 +12,13 @@ import { PlanRepository } from '../plans/plan.repository';
 
 import {
   allDaysWorkCalendar,
+  buildWorkingDayCalendar,
   computeSchedule,
   ScheduleGraphNotADagError,
   type EngineActivity,
   type EngineEdge,
   type EngineSummary,
+  type WorkingDayCalendar,
 } from './engine';
 import {
   ScheduleRepository,
@@ -74,11 +77,14 @@ export class ScheduleService {
         await this.schedule.lockPlanForWrite(planId, tx);
         const activityRows = await this.schedule.loadActivities(organization.id, planId, tx);
         const edgeRows = await this.schedule.loadEdges(organization.id, planId, tx);
+        // Build the plan's working-day calendar once and inject it at the existing
+        // port seam (ADR-0023 §5) — the engine's pass code is unchanged (ADR-0024).
+        const calendar = await this.resolveCalendar(organization.id, plan.calendarId, tx);
 
         const output = computeSchedule(
           activityRows.map(toEngineActivity),
           edgeRows.map(toEngineEdge),
-          { dataDate, calendar: allDaysWorkCalendar },
+          { dataDate, calendar },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
         return output.summary;
@@ -105,6 +111,8 @@ export class ScheduleService {
         organizationId: organization.id,
         planId,
         userId: principal.userId,
+        // Which calendar drove the dates (null → all-days-work) — auditable per ADR-0024.
+        calendarId: plan.calendarId ?? null,
         activityCount: summary.activityCount,
         criticalCount: summary.criticalCount,
         parkedConstraintCount: summary.parkedConstraintCount,
@@ -149,6 +157,30 @@ export class ScheduleService {
       nearCriticalCount: aggregate.nearCriticalCount,
       parkedConstraintCount: aggregate.parkedConstraintCount,
     };
+  }
+
+  /**
+   * The plan's working-day calendar for this recalculation, built once (ADR-0024).
+   * A null `calendarId`, or a calendar that is missing/soft-deleted (defensive — the
+   * delete-in-use guard prevents deleting an in-use calendar), falls back to
+   * `allDaysWorkCalendar`, so the null path is byte-identical to M6 and the golden
+   * suite still holds.
+   */
+  private async resolveCalendar(
+    organizationId: string,
+    calendarId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkingDayCalendar> {
+    if (!calendarId) return allDaysWorkCalendar;
+    const calendar = await this.schedule.loadPlanCalendar(organizationId, calendarId, tx);
+    if (!calendar) return allDaysWorkCalendar;
+    return buildWorkingDayCalendar(
+      calendar.workingWeekdays,
+      calendar.exceptions.map((e) => ({
+        date: formatCalendarDate(e.date),
+        isWorking: e.isWorking,
+      })),
+    );
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {

@@ -6,10 +6,11 @@ import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { ProjectRepository } from '../projects/project.repository';
 
-import type { PlanRepository } from './plan.repository';
+import type { PlanPatch, PlanRepository } from './plan.repository';
 import { PlansService } from './plans.service';
 
 const ORG_ID = 'org-1';
@@ -43,6 +44,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     description: null,
     status: 'DRAFT',
     plannedStart: null,
+    calendarId: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -80,6 +82,10 @@ describe('PlansService', () => {
     findManyActiveByProject: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
   };
+  let calendars: {
+    findActiveByNameInOrg: ReturnType<typeof vi.fn>;
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+  };
   let lifecycle: {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
     restoreBatch: ReturnType<typeof vi.fn>;
@@ -99,16 +105,26 @@ describe('PlansService', () => {
       findManyActiveByProject: vi.fn(),
       updateIfVersionMatches: vi.fn(),
     };
+    calendars = {
+      // By default the org has a seeded Standard calendar new plans default to.
+      findActiveByNameInOrg: vi.fn().mockResolvedValue({ id: 'cal-standard' }),
+      findActiveByIdInOrg: vi.fn(),
+    };
     lifecycle = {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
       restoreBatch: vi.fn().mockResolvedValue({}),
     };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    // The tx handle exposes $executeRaw (the calendar advisory lock) for the
+    // calendar-assignment path; repo methods are mocked, so they ignore the tx arg.
+    prisma = {
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+    };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new PlansService(
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
       plans as unknown as PlanRepository,
+      calendars as unknown as CalendarRepository,
       lifecycle as unknown as HierarchyLifecycleService,
       prisma as unknown as PrismaService,
       logger,
@@ -127,8 +143,18 @@ describe('PlansService', () => {
           organizationId: ORG_ID,
           projectId: PROJECT_ID,
           name: 'Baseline',
+          // Defaults to the org's seeded Standard calendar.
+          calendarId: 'cal-standard',
         }),
       );
+    });
+
+    it('defaults calendarId to null when the org has no active Standard calendar', async () => {
+      calendars.findActiveByNameInOrg.mockResolvedValue(null);
+      plans.create.mockResolvedValue(plan());
+      await service.create(principalWith(ALL), 'acme', PROJECT_ID, { name: 'NoCal' });
+      const arg = plans.create.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect('calendarId' in arg).toBe(false);
     });
 
     it('converts plannedStart (YYYY-MM-DD) to a UTC-midnight Date and passes status', async () => {
@@ -185,6 +211,29 @@ describe('PlansService', () => {
         plannedStart: Date | null;
       };
       expect(patch.plannedStart).toBeNull();
+    });
+
+    it('assigns a same-org active calendar and clears it on explicit null', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      plans.updateIfVersionMatches.mockResolvedValue(1);
+      calendars.findActiveByIdInOrg.mockResolvedValue({ id: 'cal-1' });
+
+      await service.update(principalWith(ALL), 'acme', 'pl1', { calendarId: 'cal-1', version: 1 });
+      expect((plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch).calendarId).toBe(
+        'cal-1',
+      );
+
+      await service.update(principalWith(ALL), 'acme', 'pl1', { calendarId: null, version: 1 });
+      expect((plans.updateIfVersionMatches.mock.calls[1]?.[2] as PlanPatch).calendarId).toBeNull();
+    });
+
+    it('404s when assigning a foreign/unknown calendar (anti-IDOR, no leak)', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      calendars.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'pl1', { calendarId: 'foreign', version: 1 }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(plans.updateIfVersionMatches).not.toHaveBeenCalled();
     });
 
     it('409s on a stale version', async () => {

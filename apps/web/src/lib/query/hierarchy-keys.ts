@@ -51,6 +51,13 @@ export const dependencyKeys = {
     [...dependencyKeys.all(orgSlug), 'activity', activityId, 'successors'] as const,
 };
 
+export const calendarKeys = {
+  all: (orgSlug: string) => ['calendars', orgSlug] as const,
+  list: (orgSlug: string) => [...calendarKeys.all(orgSlug), 'list'] as const,
+  detail: (orgSlug: string, calendarId: string) =>
+    [...calendarKeys.all(orgSlug), 'detail', calendarId] as const,
+};
+
 export const scheduleKeys = {
   all: (orgSlug: string) => ['schedule', orgSlug] as const,
   summary: (orgSlug: string, planId: string) =>

@@ -51,9 +51,24 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
   round trips, not the maths.
 - **The write touches only the seven engine columns**, never `version` /
   `updated_at`, so it neither conflicts with nor invalidates cached user edits.
+- **Working-day calendar: one more indexed load, near-log cost per call (M5,
+  ADR-0024).** When the plan has a calendar, the recalc snapshot adds **one Prisma
+  load** for its `working_weekdays` + active exceptions (two short indexed reads under
+  Prisma's default relation strategy, served by `uq_calendar_exceptions_cal_date` —
+  never a query-per-exception), and the calendar is **built once** and reused for
+  every engine port call. `workingDaysBetween` is a single **O(log H)** count (`H` =
+  exception count); `addWorkingDays` is a monotonic binary search over that primitive,
+  **O(log(n + H) · log H)** — never a day-by-day scan, and sub-millisecond at realistic
+  `n`/`H`, so a real calendar keeps the recalc inside the same budget even over
+  multi-year spans. A **null calendar** skips the load entirely and schedules exactly
+  as M6 (all-days-work). The engine's pass code is unchanged.
 - **Scale ceiling:** when a plan outgrows the synchronous budget (or progress-
   aware re-forecasting lands), move to the queued path (ADR-0009) — the endpoint
-  and service stay the same. A perf smoke at 500/2,000 guards the NFR in CI.
+  and service stay the same. A CI **structural** smoke at 500 activities (all-days
+  **and** a real calendar) proves the whole plan computes and persists in one batched
+  write; the wall-clock targets (< 500ms @ 500, < 2s @ 2,000) are measured
+  **out-of-band**, not asserted on a shared CI runner where timing is too noisy to
+  gate on.
 
 ## Profiling & measurement
 

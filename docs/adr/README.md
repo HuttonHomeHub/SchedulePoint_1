@@ -47,3 +47,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0021](0021-dependency-graph-dag-invariant.md)             | Dependency graph DAG invariant            | Accepted |
 | [0022](0022-cpm-execution-and-persistence-model.md)        | CPM execution & persistence model         | Accepted |
 | [0023](0023-cpm-scheduling-date-convention.md)             | CPM scheduling date convention            | Accepted |
+| [0024](0024-working-day-calendars.md)                      | Working-day calendars                     | Accepted |

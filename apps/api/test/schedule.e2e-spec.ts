@@ -50,6 +50,8 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
+    await prisma.calendarException.deleteMany();
+    await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
@@ -111,9 +113,12 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       .send({ name: 'Baseline' })
       .expect(201);
     const planId = plan.body.data.id as string;
+    // Clear the org's default Standard calendar (M5-C1) so these golden cases run on
+    // all-days-work — the M6 baseline this suite pins. Calendar-aware scheduling is
+    // covered by its own case below.
     await actor.agent
       .patch(`/api/v1/organizations/acme/plans/${planId}`)
-      .send({ plannedStart, version: 1 })
+      .send({ plannedStart, calendarId: null, version: 1 })
       .expect(200);
     return planId;
   }
@@ -314,6 +319,98 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const planId = await makePlan(actor, 'Northgate');
     const outsider = await signUp('outsider@example.com');
     await outsider.agent.get(summaryUrl(planId)).expect(404);
+  });
+
+  it('recalculates on a Mon–Fri calendar with a holiday: dates skip weekends & holidays', async () => {
+    const { actor } = await adminWithOrg();
+    // Thu 1 Jan 2026; makePlan clears the org default, so we start from all-days-work.
+    const planId = await makePlan(actor, 'CalOrg', '2026-01-01');
+
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'UK 5-day', workingWeekdays: 31 })
+      .expect(201);
+    const calId = cal.body.data.id as string;
+    await actor.agent
+      .post(`/api/v1/organizations/acme/calendars/${calId}/exceptions`)
+      .send({ date: '2026-01-05', isWorking: false, label: 'Bank Holiday' })
+      .expect(201);
+    // Assign the calendar (the plan is at version 2 after makePlan's start-date PATCH).
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: calId, version: 2 })
+      .expect(200);
+
+    // A single 5-working-day task from Thu 1 Jan works Thu1, Fri2, (skip Sat3/Sun4),
+    // (skip holiday Mon5), Tue6, Wed7, Thu8 → inclusive finish Thu 8 Jan.
+    await makeActivity(actor, planId, 'T', 5);
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+    expect(res.body.data.projectFinish).toBe('2026-01-08');
+
+    const t = (await activitiesByName(actor, planId)).get('T')!;
+    expect(t).toMatchObject({ earlyStart: '2026-01-01', earlyFinish: '2026-01-08' });
+    // No computed date lands on a weekend or the holiday.
+    const isWorkingDay = (d: string): boolean => {
+      const day = new Date(`${d}T00:00:00Z`).getUTCDay(); // 0 = Sun … 6 = Sat
+      return day !== 0 && day !== 6 && d !== '2026-01-05';
+    };
+    for (const key of ['earlyStart', 'earlyFinish', 'lateStart', 'lateFinish'] as const) {
+      expect(isWorkingDay(t[key] as string)).toBe(true);
+    }
+  });
+
+  it('null-calendar recalc is byte-identical to M6 (all-days regression)', async () => {
+    // makePlan clears the calendar, so this is the M6 golden baseline: A(3)→B(4)→D(5)→E(1)
+    // finishes 2026-01-13 all-days (proven in the first case above), unaffected by M5.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'NullCal', '2026-01-01');
+    await makeActivity(actor, planId, 'Solo', 5);
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+    // 5 all-days from Thu 1 Jan (no calendar) → Mon 5 Jan, NOT the Mon–Fri Jan 8 above.
+    expect(res.body.data.projectFinish).toBe('2026-01-05');
+  });
+
+  it('scale smoke: a 500-activity chain recalculates on a real Mon–Fri calendar', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const planId = await makePlan(actor, 'BigCalPlan');
+    // Assign the org's seeded Standard (Mon–Fri) calendar.
+    const cals = await actor.agent.get('/api/v1/organizations/acme/calendars').expect(200);
+    const standardId = (cals.body.data as { id: string; name: string }[]).find(
+      (c) => c.name === 'Standard',
+    )!.id;
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: standardId, version: 2 })
+      .expect(200);
+
+    const ids = Array.from({ length: 500 }, () => randomUUID());
+    await prisma.activity.createMany({
+      data: ids.map((id, i) => ({
+        id,
+        organizationId: orgId,
+        planId,
+        name: `A${i}`,
+        durationDays: 1,
+      })),
+    });
+    await prisma.activityDependency.createMany({
+      data: ids.slice(0, -1).map((id, i) => ({
+        organizationId: orgId,
+        planId,
+        predecessorId: id,
+        successorId: ids[i + 1]!,
+      })),
+    });
+
+    // The calendar is built ONCE and applied O(1)/O(log H) per engine call, so a real
+    // calendar computes and persists the whole 500-node plan in one recalculation.
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+    expect(res.body.data).toMatchObject({ activityCount: 500, criticalCount: 500 });
+    const finish = res.body.data.projectFinish as string;
+    const day = new Date(`${finish}T00:00:00Z`).getUTCDay();
+    expect(day === 0 || day === 6).toBe(false); // the finish is a working day
+    // Working-day scheduling pushes the finish out past the all-days answer (2027-05-15).
+    expect(finish > '2027-05-15').toBe(true);
   });
 
   it('scale smoke: a 500-activity chain recalculates in one batched write', async () => {

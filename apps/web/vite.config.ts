@@ -8,9 +8,20 @@ import { defineConfig } from 'vite';
 // Tailwind CSS v4 is wired in via its first-party Vite plugin (no PostCSS config needed).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Pre-bundle the shared types package (consumed as compiled JS via the alias
+  // below) so the dev server serves an esbuild-bundled chunk instead of routing
+  // its file through Vite's Oxc transform — which otherwise walks up to that
+  // package's tsconfig, whose `extends` a workspace preset Oxc can't resolve.
+  optimizeDeps: { include: ['@repo/types'] },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Consume the shared types package as its compiled output (ADR-0019 build
+      // contract). Its TypeScript source can't be processed by the dev/test Oxc
+      // transformer (its tsconfig `extends` a workspace preset Oxc can't resolve),
+      // so runtime value imports (e.g. the `WorkingWeekdays` helper) load from
+      // `dist` — run `pnpm --filter @repo/types build` first.
+      '@repo/types': fileURLToPath(new URL('../../packages/types/dist/index.js', import.meta.url)),
     },
   },
   server: {
