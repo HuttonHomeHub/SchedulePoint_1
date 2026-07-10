@@ -272,6 +272,8 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0020** — CI builds & smoke-boots the container images.
 - **ADR-0021** — Activity dependency graph: the DAG invariant & service-layer
   cycle prevention.
+- **ADR-0023** — CPM scheduling date convention (continuous-internal /
+  inclusive-display; data date, milestone rule, working-day calendar seam).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

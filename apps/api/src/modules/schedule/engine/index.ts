@@ -5,6 +5,7 @@
  */
 export { NEAR_CRITICAL_THRESHOLD_WORKING_DAYS } from './constants';
 export { allDaysWorkCalendar, type WorkingDayCalendar } from './calendar';
+export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
 export { buildGraph, type ScheduleGraph } from './graph';
 export { ScheduleGraphNotADagError, UnknownActivityError } from './errors';
 export type { EngineActivity, EngineEdge, EngineResult, EngineSummary } from './types';
