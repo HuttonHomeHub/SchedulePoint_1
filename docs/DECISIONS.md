@@ -10,6 +10,38 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-10 — Activity dependencies: `dependency:*` permission set + link cascade behaviour
+
+**Decision.** For the M4 dependencies slice (ADR-0021, spec
+`docs/specs/activity-dependencies.md`): (1) authorise logic edits with a **new
+`dependency:*` permission namespace** — `dependency:read` granted to every member
+(alongside the other `*:read`), `dependency:create/update/delete` to **Planner +
+Org Admin only** (the same "hierarchy write" rule; deliberately **not**
+Contributor). (2) When an activity (or an ancestor plan/project/client) is
+soft-deleted, its **incident/contained dependencies are soft-deleted in the same
+`delete_batch_id`** and reactivated on restore — but restore is **endpoint-guarded**:
+a link is only reactivated when **both** its endpoints are active, so a link whose
+other end was separately deleted stays soft-deleted (a bounded, documented edge
+case). A directly-deleted dependency gets its own fresh batch and has **no
+standalone restore endpoint** in this slice.
+
+**Why.** A distinct `dependency:*` set keeps authorisation and audit legible
+("who may edit the network" is separate from "who may edit an activity") and is
+future-guest-friendly, at the cost of four extra permission codes — cheap. Folding
+links into the existing cascade batch keeps delete/restore symmetric with the rest
+of the hierarchy (one batch id, one transaction) rather than inventing a second
+mechanism; the endpoint-guard prevents a restore from resurrecting a link to an
+activity that no longer exists.
+
+**Consequences.** `HIERARCHY_READ`/`HIERARCHY_WRITE` in
+`apps/api/src/common/auth/org-permissions.ts` carry the new codes (unit-tested:
+Contributor gets `dependency:read` only). The shared `HierarchyLifecycleService`
+gains a `dependency` leaf and link-aware cascade/restore (A3) — touching
+already-shipped M3 code, so it ships with full M3 regression coverage. These two
+choices are recorded here rather than as ADRs (the DAG invariant, which _is_
+cross-cutting, is ADR-0021); promote them if a reviewer judges them broadly
+load-bearing.
+
 ### 2026-07-10 — Activity progress: dedicated endpoint, derived status, paired-constraint invariant
 
 **Decision.** An activity's **progress** (percent complete + actual start/finish)

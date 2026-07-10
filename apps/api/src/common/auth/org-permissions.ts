@@ -48,14 +48,23 @@ export type OrgPermission =
   | 'activity:update'
   | 'activity:delete'
   | 'activity:restore'
-  | 'activity:update_progress';
+  | 'activity:update_progress'
+  // Dependencies (activity logic ties) are the edges of the schedule network.
+  // Read is granted to every member (browse the logic); create/update/delete
+  // ("write") to Planner + Org Admin — the same rule as the hierarchy, and
+  // deliberately NOT Contributor (reporting progress ≠ editing the network).
+  | 'dependency:read'
+  | 'dependency:create'
+  | 'dependency:update'
+  | 'dependency:delete';
 
-/** Read the hierarchy — every member (Viewer upward) may browse the tree. */
+/** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
   'client:read',
   'project:read',
   'plan:read',
   'activity:read',
+  'dependency:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -76,6 +85,9 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'activity:update',
   'activity:delete',
   'activity:restore',
+  'dependency:create',
+  'dependency:update',
+  'dependency:delete',
 ];
 
 /**

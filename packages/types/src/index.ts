@@ -206,6 +206,43 @@ export interface ActivitySummary {
 }
 
 /**
+ * Dependency (logic-tie) types, in the CPM/GPM tradition (FS finish-to-start,
+ * SS start-to-start, FF finish-to-finish, SF start-to-finish). Const-array
+ * source-of-truth (like {@link ORGANIZATION_ROLES}) kept in lock-step with the
+ * API's Prisma `DependencyType` enum; consumers that need an iterable list use
+ * this directly.
+ */
+export const DEPENDENCY_TYPES = ['FS', 'SS', 'FF', 'SF'] as const;
+
+export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
+
+/** The minimal shape of a dependency's endpoint activity (for list rendering). */
+export interface DependencyEndpoint {
+  id: string;
+  code: string | null;
+  name: string;
+}
+
+/**
+ * A dependency — a directed, typed, lagged edge from a predecessor activity to a
+ * successor activity within one plan. Together with activities it forms the
+ * plan's schedule network (a DAG). The endpoints are embedded as light summaries
+ * so a predecessors/successors list needs no extra fetch. `lagDays` is a signed
+ * count of working days (lead = negative).
+ */
+export interface DependencySummary {
+  id: string;
+  planId: string;
+  type: DependencyType;
+  lagDays: number;
+  predecessor: DependencyEndpoint;
+  successor: DependencyEndpoint;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * A soft-deleted hierarchy row surfaced in the "recently deleted" list. `kind`
  * discriminates which entity it is; `canRestore` is false when an ancestor is
  * still deleted (restore the parent first — the top-down invariant).

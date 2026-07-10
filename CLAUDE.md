@@ -270,6 +270,8 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0018** — Self-migrating container image (entrypoint runs migrations).
 - **ADR-0019** — Shared workspace packages ship compiled output (build contract).
 - **ADR-0020** — CI builds & smoke-boots the container images.
+- **ADR-0021** — Activity dependency graph: the DAG invariant & service-layer
+  cycle prevention.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

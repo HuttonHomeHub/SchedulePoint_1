@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { permissionsForRole } from './org-permissions';
 import { OrganizationRole } from './principal';
 
-const READ = ['client:read', 'project:read', 'plan:read', 'activity:read'] as const;
+const READ = [
+  'client:read',
+  'project:read',
+  'plan:read',
+  'activity:read',
+  'dependency:read',
+] as const;
 const WRITE = [
   'client:create',
   'client:update',
@@ -15,6 +21,9 @@ const WRITE = [
   'activity:update',
   'activity:delete',
   'activity:restore',
+  'dependency:create',
+  'dependency:update',
+  'dependency:delete',
 ] as const;
 
 describe('permissionsForRole — hierarchy', () => {
@@ -75,6 +84,15 @@ describe('permissionsForRole — activity progress vs logic (the Contributor spl
     expect(perms).not.toContain('activity:update');
     expect(perms).not.toContain('activity:create');
     expect(perms).not.toContain('activity:delete');
+  });
+
+  it('lets a Contributor read dependencies but NOT edit the network', () => {
+    const perms = permissionsForRole(OrganizationRole.CONTRIBUTOR);
+    expect(perms).toContain('dependency:read');
+    // Editing logic ties is Planner+ only, like the rest of hierarchy write.
+    expect(perms).not.toContain('dependency:create');
+    expect(perms).not.toContain('dependency:update');
+    expect(perms).not.toContain('dependency:delete');
   });
 
   it('gives Planner/Org Admin both progress and full definition write', () => {
