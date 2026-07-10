@@ -51,9 +51,19 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
   round trips, not the maths.
 - **The write touches only the seven engine columns**, never `version` /
   `updated_at`, so it neither conflicts with nor invalidates cached user edits.
+- **Working-day calendar: one more indexed load, O(1)/O(log H) per call (M5,
+  ADR-0024).** When the plan has a calendar, the recalc snapshot adds a **single**
+  query for its `working_weekdays` + active exceptions (served by
+  `uq_calendar_exceptions_cal_date`), and the calendar is **built once** and reused
+  for every `addWorkingDays`/`workingDaysBetween` call. Those are **O(1) week
+  arithmetic + O(log H)** binary search over the sorted exceptions (`H` = exception
+  count) — never a day-by-day scan — so a real calendar keeps the recalc inside the
+  same budget even over multi-year spans. A **null calendar** skips the load entirely
+  and schedules exactly as M6 (all-days-work). The engine's pass code is unchanged.
 - **Scale ceiling:** when a plan outgrows the synchronous budget (or progress-
   aware re-forecasting lands), move to the queued path (ADR-0009) — the endpoint
-  and service stay the same. A perf smoke at 500/2,000 guards the NFR in CI.
+  and service stay the same. A perf smoke at 500/2,000 (all-days **and** a real
+  calendar) guards the NFR in CI.
 
 ## Profiling & measurement
 

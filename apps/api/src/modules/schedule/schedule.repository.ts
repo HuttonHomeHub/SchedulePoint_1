@@ -28,6 +28,12 @@ export interface ScheduleEdgeRow {
   lagDays: number;
 }
 
+/** A plan's calendar as the engine needs it: the weekly mask + active dated exceptions. */
+export interface ScheduleCalendarRow {
+  workingWeekdays: number;
+  exceptions: { date: Date; isWorking: boolean }[];
+}
+
 /** The read-side aggregate over a plan's persisted engine columns (C1). */
 export interface ScheduleAggregate {
   activityCount: number;
@@ -110,6 +116,31 @@ export class ScheduleRepository {
       parkedConstraintCount: Number(row.parked_constraint_count),
       projectFinish: row.project_finish,
     };
+  }
+
+  /**
+   * A plan's calendar (`working_weekdays`) plus its ACTIVE exceptions, date-ordered,
+   * in one query — part of the recalculate snapshot (M5, ADR-0024). Scoped by org
+   * (anti-IDOR) and `deletedAt: null`; returns null if the calendar is missing or
+   * soft-deleted, so the service falls back to all-days-work.
+   */
+  async loadPlanCalendar(
+    organizationId: string,
+    calendarId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ScheduleCalendarRow | null> {
+    const calendar = await db.calendar.findFirst({
+      where: { id: calendarId, organizationId, deletedAt: null },
+      select: {
+        workingWeekdays: true,
+        exceptions: {
+          where: { deletedAt: null },
+          orderBy: [{ date: 'asc' }],
+          select: { date: true, isWorking: true },
+        },
+      },
+    });
+    return calendar ?? null;
   }
 
   /** A plan's active dependency edges, projected to what the engine needs. */
