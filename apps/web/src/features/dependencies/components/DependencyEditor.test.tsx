@@ -74,7 +74,7 @@ function renderEditor(
 describe('DependencyEditor', () => {
   it('shows a predecessor with its type and lag, and an empty successors state', () => {
     renderEditor([link()], []);
-    expect(screen.getByRole('heading', { name: /Logic — Pour slab/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Logic for Pour slab/ })).toBeInTheDocument();
     // The predecessors table shows the OTHER end (the predecessor activity).
     expect(screen.getByText('Excavate')).toBeInTheDocument();
     expect(screen.getByText('Finish → Start')).toBeInTheDocument();

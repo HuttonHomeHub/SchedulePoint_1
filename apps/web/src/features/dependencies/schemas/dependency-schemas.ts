@@ -28,19 +28,28 @@ export function formatLag(lagDays: number): string {
 }
 
 /**
- * Add/edit dependency form schema — mirrors the API DTO. `otherActivityId` is the
- * far endpoint chosen from the plan's activities; `lagDays` is a signed integer
- * (registered with `valueAsNumber`). The predecessor/successor roles are decided
- * by which direction the dialog is opened in, not by the form.
+ * The mutable fields shared by add and edit — a dependency's type and signed lag
+ * (registered with `valueAsNumber`). Single source of truth for the bounds so the
+ * two dialogs can't drift.
  */
-export const dependencyFormSchema = z.object({
-  otherActivityId: z.string().min(1, 'Choose an activity.'),
+export const typeAndLagSchema = z.object({
   type: z.enum(DEPENDENCY_TYPES),
   lagDays: z
     .number({ message: 'Enter a whole number of days.' })
     .int('Enter a whole number of days.')
     .min(-3650, 'Lag is too large.')
     .max(3650, 'Lag is too large.'),
+});
+
+export type TypeAndLagValues = z.infer<typeof typeAndLagSchema>;
+
+/**
+ * Add-dependency form schema. `otherActivityId` is the far endpoint chosen from
+ * the plan's activities; the predecessor/successor roles are decided by which
+ * direction the dialog is opened in, not by the form.
+ */
+export const dependencyFormSchema = typeAndLagSchema.extend({
+  otherActivityId: z.string().min(1, 'Choose an activity.'),
 });
 
 export type DependencyFormValues = z.infer<typeof dependencyFormSchema>;

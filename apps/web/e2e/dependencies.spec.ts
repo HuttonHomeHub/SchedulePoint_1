@@ -49,7 +49,7 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   // Open the Logic panel for the activity.
   await page.getByRole('button', { name: 'Logic for Excavate' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: /Logic — Excavate/ })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: /Logic for Excavate/ })).toBeVisible();
   await expect(dialog.getByText(/No predecessors/)).toBeVisible();
   await expect(dialog.getByText(/No successors/)).toBeVisible();
 

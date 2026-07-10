@@ -2,10 +2,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { DependencySummary } from '@repo/types';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import { useUpdateDependency } from '../api/use-dependencies';
-import { DEPENDENCY_TYPES, DEPENDENCY_TYPE_LABELS } from '../schemas/dependency-schemas';
+import {
+  DEPENDENCY_TYPES,
+  DEPENDENCY_TYPE_LABELS,
+  typeAndLagSchema,
+  type TypeAndLagValues,
+} from '../schemas/dependency-schemas';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -13,18 +17,6 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-
-/** Edit form — only type and lag are mutable (the endpoints are fixed). */
-const editSchema = z.object({
-  type: z.enum(DEPENDENCY_TYPES),
-  lagDays: z
-    .number({ message: 'Enter a whole number of days.' })
-    .int('Enter a whole number of days.')
-    .min(-3650, 'Lag is too large.')
-    .max(3650, 'Lag is too large.'),
-});
-
-type EditValues = z.infer<typeof editSchema>;
 
 /**
  * Edit a dependency's type and lag (the endpoints are immutable — re-pointing a
@@ -51,8 +43,8 @@ export function EditDependencyDialog({
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<EditValues>({
-    resolver: zodResolver(editSchema),
+  } = useForm<TypeAndLagValues>({
+    resolver: zodResolver(typeAndLagSchema),
     defaultValues: { type: 'FS', lagDays: 0 },
   });
 
@@ -100,6 +92,10 @@ export function EditDependencyDialog({
             {update.error.message}
           </p>
         ) : null}
+        <p className="text-muted-foreground text-sm">
+          The linked activities are fixed. To connect different activities, remove this link and add
+          a new one.
+        </p>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-dependency-type">Type</Label>
           <Select id="edit-dependency-type" {...register('type')}>

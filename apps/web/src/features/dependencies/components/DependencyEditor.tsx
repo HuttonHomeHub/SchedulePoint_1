@@ -1,6 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useDeleteDependency, usePredecessors, useSuccessors } from '../api/use-dependencies';
@@ -132,22 +132,32 @@ export function DependencyEditor({
   const successors = useSuccessors(orgSlug, activityId, enabled);
   const deleteDependency = useDeleteDependency(orgSlug);
   const announce = useAnnounce();
+  const regionRef = useRef<HTMLDivElement>(null);
 
   const [adding, setAdding] = useState<LinkDirection | null>(null);
-  const [editing, setEditing] = useState<DependencySummary | null>(null);
-  const [removing, setRemoving] = useState<DependencySummary | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const others = activity
     ? (planActivities ?? []).filter((candidate) => candidate.id !== activity.id)
     : [];
 
+  // Look the edit/remove targets up by id from the live query each render, so a
+  // 409 retry (after a concurrent edit) carries the refreshed version, not a
+  // stale snapshot (matches ActivitiesTable / ClientsTable).
+  const links = [...(predecessors.data ?? []), ...(successors.data ?? [])];
+  const byId = (id: string | null): DependencySummary | undefined =>
+    id ? links.find((link) => link.id === id) : undefined;
+  const editing = byId(editingId);
+  const removing = byId(removingId);
+
   const editHandlers = canManageLogic
     ? {
-        onEdit: setEditing,
+        onEdit: (dep: DependencySummary) => setEditingId(dep.id),
         onRemove: (dep: DependencySummary) => {
           setRemoveError(null);
-          setRemoving(dep);
+          setRemovingId(dep.id);
         },
       }
     : {};
@@ -156,11 +166,16 @@ export function DependencyEditor({
     if (!removing) return;
     deleteDependency.mutate(removing.id, {
       onSuccess: () => {
+        // Close the confirm dialog synchronously before moving focus: while the
+        // native <dialog> is still modal, focusing an element outside it is a
+        // no-op and focus would fall to <body> once the removed row unmounts on
+        // refetch (see ClientsTable). The region lives inside the Logic dialog.
         flushSync(() => {
-          setRemoving(null);
+          setRemovingId(null);
           setRemoveError(null);
         });
         announce('Dependency removed.');
+        regionRef.current?.focus();
       },
       onError: (err) => setRemoveError(err.message),
     });
@@ -171,10 +186,11 @@ export function DependencyEditor({
       <Dialog
         open={open}
         onClose={onClose}
-        title={activity ? `Logic — ${activity.name}` : 'Logic'}
+        size="lg"
+        title={activity ? `Logic for ${activity.name}` : 'Logic'}
         description="The predecessors and successors that link this activity into the schedule."
       >
-        <div className="flex flex-col gap-6">
+        <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-6 outline-none">
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-sm font-medium">Predecessors</h3>
@@ -212,27 +228,27 @@ export function DependencyEditor({
         </div>
       </Dialog>
 
-      {canManageLogic && activity ? (
+      {canManageLogic ? (
         <>
           <AddDependencyDialog
             orgSlug={orgSlug}
             planId={planId}
-            anchor={activity}
             direction={adding ?? 'predecessor'}
             options={others}
             open={adding !== null}
             onClose={() => setAdding(null)}
+            {...(activity ? { anchor: activity } : {})}
           />
           <EditDependencyDialog
             orgSlug={orgSlug}
-            open={editing !== null}
-            onClose={() => setEditing(null)}
+            open={editing !== undefined}
+            onClose={() => setEditingId(null)}
             {...(editing ? { dependency: editing } : {})}
           />
           <ConfirmDialog
-            open={removing !== null}
+            open={removing !== undefined}
             onClose={() => {
-              setRemoving(null);
+              setRemovingId(null);
               setRemoveError(null);
             }}
             onConfirm={confirmRemove}

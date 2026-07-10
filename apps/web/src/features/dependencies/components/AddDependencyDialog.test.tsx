@@ -41,7 +41,7 @@ function activity(id: string, name: string): ActivitySummary {
 const ANCHOR = activity('anchor', 'Pour slab');
 const OPTIONS = [activity('a1', 'Excavate'), activity('c1', 'Cure')];
 
-function renderDialog(direction: LinkDirection) {
+function renderDialog(direction: LinkDirection, options: ActivitySummary[] = OPTIONS) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
@@ -50,7 +50,7 @@ function renderDialog(direction: LinkDirection) {
         planId="pl1"
         anchor={ANCHOR}
         direction={direction}
-        options={OPTIONS}
+        options={options}
         open
         onClose={vi.fn()}
       />
@@ -100,6 +100,14 @@ describe('AddDependencyDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add dependency' }));
 
     await waitFor(() => expect(screen.getByText(/would create a cycle/)).toBeInTheDocument());
+  });
+
+  it('shows a way-out empty state when the plan has no other activities', () => {
+    renderDialog('predecessor', []);
+    expect(screen.getByText(/no other activities to link to/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Predecessor activity')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add dependency' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 
   it('requires choosing an activity', async () => {
