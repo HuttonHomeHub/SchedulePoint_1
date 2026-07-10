@@ -57,8 +57,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # A release lands when the "Version Packages" PR was just merged: no
-      # changesets remain AND the current app version has no git tag yet. All
-      # workspace packages version together, so apps/api is the canonical version.
+      # changesets remain AND the app version has no git tag yet. Packages do NOT
+      # always bump together — a changeset that touches only one (e.g. a web-only
+      # fix) bumps just that package — so the app version is the HIGHEST of the
+      # workspace package versions, not apps/api's alone. (Keying off apps/api
+      # meant a web-only release was silently skipped because api's version — and
+      # its tag — hadn't moved.)
       #
       # NOTE: `hasChangesets` is a changesets/action@v1 output (camelCase). v2
       # renames it to `has-changesets`; update this expression when bumping the
@@ -66,7 +70,7 @@ jobs:
       - name: Determine release
         id: meta
         run: |
-          VERSION="$(node -p "require('./apps/api/package.json').version")"
+          VERSION="$(node -p "['./apps/api/package.json','./apps/web/package.json'].map((p) => require(p).version).sort((a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); return (y[0] - x[0]) || (y[1] - x[1]) || (y[2] - x[2]); })[0]")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ] \
             && ! git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
