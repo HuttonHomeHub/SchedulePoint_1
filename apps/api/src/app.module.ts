@@ -15,6 +15,7 @@ import { MailModule } from './common/mail/mail.module';
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
+import { ActivitiesModule } from './modules/activities/activities.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MeModule } from './modules/me/me.module';
@@ -96,6 +97,7 @@ function isPrettyLoggingAvailable(): boolean {
     ClientsModule,
     ProjectsModule,
     PlansModule,
+    ActivitiesModule,
     RecycleBinModule,
   ],
   providers: [
