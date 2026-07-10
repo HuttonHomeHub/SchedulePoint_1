@@ -10,8 +10,13 @@ import { useClient } from '@/features/clients';
 import { DependencyEditor } from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { ScheduleSummaryStrip } from '@/features/schedule';
-import { canManageHierarchy, canReportProgress, useOrgRole } from '@/hooks/use-org-role';
+import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
+import {
+  canCalculateSchedule,
+  canManageHierarchy,
+  canReportProgress,
+  useOrgRole,
+} from '@/hooks/use-org-role';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -26,6 +31,7 @@ export function PlanDetailScreen(): React.ReactElement {
   const role = useOrgRole(orgSlug);
   const canWrite = canManageHierarchy(role);
   const canProgress = canReportProgress(role);
+  const canCalculate = canCalculateSchedule(role);
   const [editing, setEditing] = useState(false);
   const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
 
@@ -107,6 +113,14 @@ export function PlanDetailScreen(): React.ReactElement {
       ) : null}
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+        <h2 className="text-lg font-medium">Schedule</h2>
+        <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={canCalculate} />
+      </div>
+      <div className="mt-3">
+        <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
+      </div>
+
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-medium">Activities</h2>
         {canWrite ? <CreateActivityButton orgSlug={orgSlug} planId={planId} /> : null}
       </div>
@@ -114,9 +128,6 @@ export function PlanDetailScreen(): React.ReactElement {
         The activities that make up this plan. The graphical Time-Scaled Logic Diagram will edit
         these on a timeline in a later release.
       </p>
-      <div className="mt-3">
-        <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
-      </div>
       <div className="mt-3">
         <ActivitiesTable
           orgSlug={orgSlug}

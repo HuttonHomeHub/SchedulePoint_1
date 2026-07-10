@@ -33,3 +33,12 @@ export function canReportProgress(role: OrganizationRole | undefined): boolean {
 export function canManageLogic(role: OrganizationRole | undefined): boolean {
   return canManageHierarchy(role);
 }
+
+/**
+ * Whether a role may trigger a CPM recalculation (mirrors the API's
+ * `schedule:calculate` — Planner + Org Admin, the same write roles). Named for
+ * intent so the Recalculate gate reads clearly and can diverge later.
+ */
+export function canCalculateSchedule(role: OrganizationRole | undefined): boolean {
+  return canManageHierarchy(role);
+}
