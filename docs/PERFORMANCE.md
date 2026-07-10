@@ -70,6 +70,20 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
   **out-of-band**, not asserted on a shared CI runner where timing is too noisy to
   gate on.
 
+## Baselines: capture & variance (M7, ADR-0025)
+
+- **Capture** freezes the plan's currently-persisted computed activities in one
+  **batched `createMany`** under the plan write-lock — no per-row round trips, so a
+  2,000-activity plan is a single bulk insert (target: capture < 5s p95 at 2,000).
+- **Variance** (`GET …/baselines/variance`) is a **bounded, plan-scoped read**, not
+  cursor-paginated: three indexed loads (the active baseline, its snapshot rows, the
+  plan's live activities) plus **one** working-day calendar build (reused for every
+  row, O(1)/O(log H) per call, ADR-0024), then an **O(n) in-memory join** on
+  `source_activity_id` (the `(baseline_id, source_activity_id)` index serves the
+  snapshot side). No N+1, no per-activity calendar rebuild (target: variance < 300ms
+  p95 at 2,000). A CI structural smoke at 500 activities proves the whole plan's
+  variance serves in one read; wall-clock is measured out-of-band as above.
+
 ## Profiling & measurement
 
 - Use OpenTelemetry traces/metrics (see [`OBSERVABILITY.md`](OBSERVABILITY.md))

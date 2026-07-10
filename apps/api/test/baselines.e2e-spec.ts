@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -350,6 +352,100 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     expect(restored.isActive).toBe(true);
     const list = await actor.agent.get(baselinesUrl(planId)).expect(200);
     expect(list.body.data.map((b: { id: string }) => b.id)).toContain(baselineId);
+  });
+
+  const varianceUrl = (planId: string) => `${baselinesUrl(planId)}/variance`;
+
+  it('variance is empty with a null baselineId when the plan has no active baseline', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    expect(res.body.data).toEqual([]);
+    expect(res.body.meta.baselineId).toBeNull();
+  });
+
+  it('computes per-activity variance (behind + added) vs the active baseline', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await makeActivity(actor, planId, 'A', 3); // finishes 2026-01-03 (all-days)
+    await recalc(actor, planId);
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+
+    // Extend A by 3 days and add a new activity B, then recalculate.
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${a}`)
+      .send({ durationDays: 6, version: 1 })
+      .expect(200);
+    await makeActivity(actor, planId, 'B', 2);
+    await recalc(actor, planId);
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    const byId = new Map(
+      (res.body.data as { activityId: string; name: string }[]).map((r) => [r.name, r]),
+    );
+    expect(byId.get('A')).toMatchObject({ inBaseline: true, finishVarianceDays: 3 });
+    expect(byId.get('B')).toMatchObject({ inBaseline: false, finishVarianceDays: null });
+    expect(res.body.meta).toMatchObject({ worstFinishSlipDays: 3, behindCount: 1, addedCount: 1 });
+  });
+
+  it('reports a baselined activity deleted since capture as a removed row', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await makeActivity(actor, planId, 'A', 3);
+    await recalc(actor, planId);
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+
+    await actor.agent.delete(`/api/v1/organizations/acme/activities/${a}`).expect(204);
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0]).toMatchObject({ name: 'A', removed: true, currentFinish: null });
+    expect(res.body.meta.removedCount).toBe(1);
+  });
+
+  it('variance reads for any member but hides the plan from non-members (404)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    await viewer.agent.get(varianceUrl(planId)).expect(200);
+    const outsider = await signUp('outsider@example.com');
+    await outsider.agent.get(varianceUrl(planId)).expect(404);
+  });
+
+  it('scale smoke: variance for a 500-activity baseline is one bounded read', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const planId = await makePlan(actor, 'BigPlan');
+    // Seed a 500-node chain directly (HTTP per-activity is too slow for a fixture).
+    const ids = Array.from({ length: 500 }, () => randomUUID());
+    await prisma.activity.createMany({
+      data: ids.map((id, i) => ({
+        id,
+        organizationId: orgId,
+        planId,
+        name: `A${i}`,
+        durationDays: 1,
+      })),
+    });
+    await prisma.activityDependency.createMany({
+      data: ids.slice(0, -1).map((id, i) => ({
+        organizationId: orgId,
+        planId,
+        predecessorId: id,
+        successorId: ids[i + 1]!,
+      })),
+    });
+    await recalc(actor, planId);
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Big' }).expect(201);
+
+    // The variance join + one calendar build serves the whole plan in a single read
+    // (the same O(n) join scales to the 2,000-activity ceiling; asserted here at 500).
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    expect(res.body.data).toHaveLength(500);
+    expect((res.body.data as { inBaseline: boolean }[]).every((r) => r.inBaseline)).toBe(true);
+    expect(res.body.meta.behindCount).toBe(0); // live matches the just-captured baseline
   });
 
   it('401s without a session', async () => {

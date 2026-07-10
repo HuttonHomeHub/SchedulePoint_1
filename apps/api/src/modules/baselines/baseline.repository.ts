@@ -123,6 +123,96 @@ export class BaselineRepository {
     });
   }
 
+  /** The plan's active comparison baseline, or null when it has none — the variance source. */
+  findActiveBaselineByPlan(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Baseline | null> {
+    return db.baseline.findFirst({
+      where: this.active({ organizationId, planId, isActive: true }),
+    });
+  }
+
+  /** A baseline's frozen snapshot rows projected to the fields variance needs. */
+  loadSnapshotRowsForVariance(
+    baselineId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    {
+      sourceActivityId: string;
+      code: string | null;
+      name: string;
+      baselineStart: Date | null;
+      baselineFinish: Date | null;
+      totalFloat: number | null;
+    }[]
+  > {
+    return db.baselineActivity.findMany({
+      where: { baselineId, deletedAt: null },
+      select: {
+        sourceActivityId: true,
+        code: true,
+        name: true,
+        baselineStart: true,
+        baselineFinish: true,
+        totalFloat: true,
+      },
+    });
+  }
+
+  /** A plan's active live activities projected to the fields variance needs, in a stable order. */
+  loadActiveActivitiesForVariance(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    {
+      id: string;
+      code: string | null;
+      name: string;
+      earlyStart: Date | null;
+      earlyFinish: Date | null;
+      totalFloat: number | null;
+    }[]
+  > {
+    return db.activity.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        earlyStart: true,
+        earlyFinish: true,
+        totalFloat: true,
+      },
+    });
+  }
+
+  /**
+   * A plan's calendar (`working_weekdays`) plus its ACTIVE exceptions, for building the
+   * working-day calendar variance is measured on (M5, ADR-0024). Scoped by org
+   * (anti-IDOR); null if the calendar is missing/soft-deleted (→ all-days-work).
+   */
+  loadPlanCalendar(
+    organizationId: string,
+    calendarId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ workingWeekdays: number; exceptions: { date: Date; isWorking: boolean }[] } | null> {
+    return db.calendar.findFirst({
+      where: { id: calendarId, organizationId, deletedAt: null },
+      select: {
+        workingWeekdays: true,
+        exceptions: {
+          where: { deletedAt: null },
+          orderBy: [{ date: 'asc' }],
+          select: { date: true, isWorking: true },
+        },
+      },
+    });
+  }
+
   /** Count a plan's active baselines — used to decide whether a capture is the first (auto-active). */
   countActiveByPlan(
     organizationId: string,

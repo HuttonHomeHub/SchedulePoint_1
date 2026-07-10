@@ -108,6 +108,10 @@ describe('BaselinesService', () => {
     clearActive: ReturnType<typeof vi.fn>;
     setActive: ReturnType<typeof vi.fn>;
     softDeleteWithSnapshot: ReturnType<typeof vi.fn>;
+    findActiveBaselineByPlan: ReturnType<typeof vi.fn>;
+    loadSnapshotRowsForVariance: ReturnType<typeof vi.fn>;
+    loadActiveActivitiesForVariance: ReturnType<typeof vi.fn>;
+    loadPlanCalendar: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: BaselinesService;
@@ -128,6 +132,10 @@ describe('BaselinesService', () => {
       clearActive: vi.fn(),
       setActive: vi.fn().mockResolvedValue(1),
       softDeleteWithSnapshot: vi.fn(),
+      findActiveBaselineByPlan: vi.fn().mockResolvedValue(null),
+      loadSnapshotRowsForVariance: vi.fn().mockResolvedValue([]),
+      loadActiveActivitiesForVariance: vi.fn().mockResolvedValue([]),
+      loadPlanCalendar: vi.fn().mockResolvedValue(null),
     };
     // The tx handle exposes $executeRaw (the plan advisory lock used by capture).
     prisma = {
@@ -321,6 +329,65 @@ describe('BaselinesService', () => {
         service.remove(principalWith(['baseline:read']), 'acme', PLAN_ID, 'base-1'),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect(baselines.softDeleteWithSnapshot).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('variance', () => {
+    it('returns an empty result with a null baselineId when there is no active baseline', async () => {
+      baselines.findActiveBaselineByPlan.mockResolvedValue(null);
+      const { rows, summary } = await service.variance(principalWith(ALL), 'acme', PLAN_ID);
+      expect(rows).toEqual([]);
+      expect(summary).toMatchObject({ baselineId: null, behindCount: 0 });
+      expect(baselines.loadSnapshotRowsForVariance).not.toHaveBeenCalled();
+    });
+
+    it('computes variance against the active baseline (all-days calendar when the plan has none)', async () => {
+      baselines.findActiveBaselineByPlan.mockResolvedValue(baseline({ id: 'active-1' }));
+      baselines.loadSnapshotRowsForVariance.mockResolvedValue([
+        {
+          sourceActivityId: 'a1',
+          code: 'A1',
+          name: 'A',
+          baselineStart: new Date('2026-01-05T00:00:00Z'),
+          baselineFinish: new Date('2026-01-09T00:00:00Z'),
+          totalFloat: 0,
+        },
+      ]);
+      baselines.loadActiveActivitiesForVariance.mockResolvedValue([
+        {
+          id: 'a1',
+          code: 'A1',
+          name: 'A',
+          earlyStart: new Date('2026-01-05T00:00:00Z'),
+          earlyFinish: new Date('2026-01-12T00:00:00Z'), // 3 calendar days behind
+          totalFloat: 0,
+        },
+      ]);
+
+      const { rows, summary } = await service.variance(principalWith(ALL), 'acme', PLAN_ID);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ activityId: 'a1', finishVarianceDays: 3, inBaseline: true });
+      expect(summary).toMatchObject({
+        baselineId: 'active-1',
+        baselineName: 'Contract Baseline',
+        worstFinishSlipDays: 3,
+        behindCount: 1,
+      });
+      // plan.calendarId is null in the fixture → all-days-work, no calendar load.
+      expect(baselines.loadPlanCalendar).not.toHaveBeenCalled();
+    });
+
+    it('forbids a caller without baseline:read', async () => {
+      await expect(service.variance(principalWith([]), 'acme', PLAN_ID)).rejects.toBeInstanceOf(
+        ForbiddenError,
+      );
+    });
+
+    it('404s when the plan is missing', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(service.variance(principalWith(ALL), 'acme', PLAN_ID)).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
     });
   });
 

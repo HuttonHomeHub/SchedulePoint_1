@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Baseline } from '@prisma/client';
-import type { PageMeta } from '@repo/types';
+import type { BaselineVarianceRow, PageMeta, PlanVarianceSummary } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -11,13 +11,25 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../common/errors/domain-errors';
+import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
+import {
+  allDaysWorkCalendar,
+  buildWorkingDayCalendar,
+  type WorkingDayCalendar,
+} from '../schedule/engine';
 
 import { BaselineRepository, type CaptureActivityRow } from './baseline.repository';
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
 import type { CreateBaselineDto } from './dto/create-baseline.dto';
+import { computeVariance } from './variance';
+
+/** A calendar-day (or null) as a `YYYY-MM-DD` string, for the pure variance helper. */
+function day(value: Date | null): string | null {
+  return value ? formatCalendarDate(value) : null;
+}
 
 /** Machine-readable conflict reasons carried in a {@link ConflictError}'s `details`. */
 export const BASELINE_CONFLICT = {
@@ -229,6 +241,93 @@ export class BaselinesService {
     this.logger.info(
       { organizationId: organization.id, planId, baselineId, userId: principal.userId },
       'baseline deleted (with snapshot)',
+    );
+  }
+
+  async variance(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<{ rows: BaselineVarianceRow[]; summary: PlanVarianceSummary }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'baseline:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    const active = await this.baselines.findActiveBaselineByPlan(organization.id, planId);
+    // No active baseline → nothing to compare against; the UI hides variance.
+    if (!active) {
+      return {
+        rows: [],
+        summary: {
+          baselineId: null,
+          baselineName: null,
+          capturedAt: null,
+          worstFinishSlipDays: null,
+          behindCount: 0,
+          addedCount: 0,
+          removedCount: 0,
+        },
+      };
+    }
+
+    const [snapshot, liveRows, calendar] = await Promise.all([
+      this.baselines.loadSnapshotRowsForVariance(active.id),
+      this.baselines.loadActiveActivitiesForVariance(organization.id, planId),
+      this.resolveCalendar(organization.id, plan.calendarId),
+    ]);
+
+    const { rows, rollup } = computeVariance(
+      snapshot.map((s) => ({
+        sourceActivityId: s.sourceActivityId,
+        code: s.code,
+        name: s.name,
+        baselineStart: day(s.baselineStart),
+        baselineFinish: day(s.baselineFinish),
+        totalFloat: s.totalFloat,
+      })),
+      liveRows.map((l) => ({
+        id: l.id,
+        code: l.code,
+        name: l.name,
+        earlyStart: day(l.earlyStart),
+        earlyFinish: day(l.earlyFinish),
+        totalFloat: l.totalFloat,
+      })),
+      calendar,
+    );
+
+    return {
+      rows,
+      summary: {
+        baselineId: active.id,
+        baselineName: active.name,
+        capturedAt: active.capturedAt.toISOString(),
+        ...rollup,
+      },
+    };
+  }
+
+  /**
+   * Build the working-day calendar variance is measured on (ADR-0024) — the plan's
+   * calendar, or `allDaysWorkCalendar` when it has none or the calendar is
+   * missing/soft-deleted. Mirrors `ScheduleService.recalculate` so variance days match
+   * the computed dates they diff.
+   */
+  private async resolveCalendar(
+    organizationId: string,
+    calendarId: string | null,
+  ): Promise<WorkingDayCalendar> {
+    if (!calendarId) return allDaysWorkCalendar;
+    const calendar = await this.baselines.loadPlanCalendar(organizationId, calendarId);
+    if (!calendar) return allDaysWorkCalendar;
+    return buildWorkingDayCalendar(
+      calendar.workingWeekdays,
+      calendar.exceptions.map((e) => ({
+        date: formatCalendarDate(e.date),
+        isWorking: e.isWorking,
+      })),
     );
   }
 

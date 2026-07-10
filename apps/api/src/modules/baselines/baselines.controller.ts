@@ -22,6 +22,7 @@ import {
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import type { PlanVarianceSummary } from '@repo/types';
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -31,13 +32,14 @@ import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { BaselinesService } from './baselines.service';
 import { BaselineDetailResponseDto, BaselineResponseDto } from './dto/baseline-response.dto';
+import { BaselineVarianceRowResponseDto } from './dto/baseline-variance-response.dto';
 import { CreateBaselineDto } from './dto/create-baseline.dto';
 
 /**
  * Baselines HTTP surface, nested under a plan (ADR-0025). Every route resolves the org
  * from `:orgSlug` against the caller's memberships (404 for non-members) and the plan
- * from `:planId` within that org. Reading is open to any member; capturing a baseline is
- * Planner + Org Admin. Activate/delete land in Task B2; variance in Task C1.
+ * from `:planId` within that org. Reading (list, get, variance) is open to any member;
+ * capturing, activating, and deleting a baseline are Planner + Org Admin.
  */
 @ApiTags('baselines')
 @ApiCookieAuth('schedulepoint.session_token')
@@ -87,6 +89,24 @@ export class BaselinesController {
   ): Promise<BaselineResponseDto> {
     const { baseline, activityCount } = await this.service.capture(principal, orgSlug, planId, dto);
     return BaselineResponseDto.from(baseline, activityCount);
+  }
+
+  @Get('variance')
+  @ApiOperation({
+    summary: "Per-activity variance vs the plan's active baseline, plus a roll-up (any member).",
+    description:
+      'A bounded, plan-scoped list (no cursor pagination). Empty with meta.baselineId = null ' +
+      'when the plan has no active baseline. Variance is in working days on the plan calendar; ' +
+      'positive = current later than baseline (behind).',
+  })
+  @ApiOkResponse({ type: BaselineVarianceRowResponseDto, isArray: true })
+  async variance(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<Paginated<BaselineVarianceRowResponseDto, PlanVarianceSummary>> {
+    const { rows, summary } = await this.service.variance(principal, orgSlug, planId);
+    return new Paginated(rows, summary);
   }
 
   @Get(':baselineId')
