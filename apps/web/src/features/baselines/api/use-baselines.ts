@@ -80,7 +80,10 @@ export function useBaselineVariance(orgSlug: string, planId: string): UseQueryRe
   });
 }
 
-/** Invalidate everything a baseline mutation can affect: the list and the variance read. */
+/**
+ * Invalidate everything a baseline mutation can affect: the list, the variance read, and
+ * any cached single-baseline detail (activate flips the `isActive` flag on a detail row).
+ */
 function invalidateBaselines(
   queryClient: ReturnType<typeof useQueryClient>,
   orgSlug: string,
@@ -89,6 +92,9 @@ function invalidateBaselines(
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: baselineKeys.listByPlan(orgSlug, planId) }),
     queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
+    queryClient.invalidateQueries({
+      queryKey: [...baselineKeys.all(orgSlug), 'plan', planId, 'detail'],
+    }),
   ]);
 }
 

@@ -6,7 +6,7 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
-import { BaselinesPanel, useBaselineVariance } from '@/features/baselines';
+import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { DependencyEditor } from '@/features/dependencies';
@@ -165,6 +165,11 @@ export function PlanDetailScreen(): React.ReactElement {
         The activities that make up this plan. The graphical Time-Scaled Logic Diagram will edit
         these on a timeline in a later release.
       </p>
+      {variance.data ? (
+        <div className="mt-2">
+          <BaselineVarianceSummary summary={variance.data.summary} />
+        </div>
+      ) : null}
       <div className="mt-3">
         <ActivitiesTable
           orgSlug={orgSlug}

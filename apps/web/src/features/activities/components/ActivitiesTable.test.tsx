@@ -186,7 +186,7 @@ describe('ActivitiesTable — baseline variance', () => {
         <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} />
       </QueryClientProvider>,
     );
-    expect(screen.queryByRole('columnheader', { name: 'Baseline finish' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Finish variance' })).not.toBeInTheDocument();
 
     // With the prop: the column appears.
     rerender(
@@ -199,7 +199,9 @@ describe('ActivitiesTable — baseline variance', () => {
         />
       </QueryClientProvider>,
     );
-    expect(screen.getByRole('columnheader', { name: 'Baseline finish' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Finish variance' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Start variance' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Float variance' })).toBeInTheDocument();
   });
 
   it('formats a slip as "behind" and a gain as "ahead" (text, not colour alone)', () => {
@@ -207,14 +209,20 @@ describe('ActivitiesTable — baseline variance', () => {
     expect(screen.getByText('3 d behind')).toBeInTheDocument();
   });
 
-  it('labels an activity added since capture', () => {
+  it('shows a float loss as behind (less float than baseline)', () => {
+    renderWithVariance(varianceRow({ finishVarianceDays: 0, floatVarianceDays: -2 }));
+    expect(screen.getByText('−2 d float')).toBeInTheDocument();
+  });
+
+  it('labels an activity added since capture (across the variance columns)', () => {
     renderWithVariance(varianceRow({ inBaseline: false, finishVarianceDays: null }));
-    expect(screen.getByText('Added')).toBeInTheDocument();
+    // "Added" shows in each of the start/finish/float variance columns.
+    expect(screen.getAllByText('Added').length).toBeGreaterThan(0);
   });
 
   it('shows an em dash for an activity with no variance row in the map', () => {
     renderWithVariance(null);
     // The variance column renders "—" when the activity isn't in the map.
-    expect(screen.getByRole('columnheader', { name: 'Baseline finish' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Finish variance' })).toBeInTheDocument();
   });
 });

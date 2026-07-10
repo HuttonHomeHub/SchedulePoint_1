@@ -64,7 +64,7 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   await expect(page.getByText('Project finish')).toBeVisible();
 
   // No baseline yet → no variance column.
-  await expect(page.getByRole('columnheader', { name: 'Baseline finish' })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: 'Finish variance' })).toHaveCount(0);
 
   // Capture a baseline; it becomes the plan's active baseline.
   await page.getByRole('button', { name: 'Capture baseline' }).click();
@@ -74,10 +74,11 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   await expect(page.getByRole('cell', { name: 'Contract Baseline' })).toBeVisible();
   await expect(page.getByText('Active', { exact: true })).toBeVisible();
 
-  // The activities table now shows the Baseline-finish variance column; the sole
-  // activity matches the just-captured baseline.
-  await expect(page.getByRole('columnheader', { name: 'Baseline finish' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'On baseline' })).toBeVisible();
+  // The activities table now shows the variance columns; the sole activity matches the
+  // just-captured baseline, and the plan-level roll-up appears above the table.
+  await expect(page.getByRole('columnheader', { name: 'Finish variance' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'On baseline' }).first()).toBeVisible();
+  await expect(page.getByText(/vs\. Contract Baseline:/)).toBeVisible();
 
   // Add a new activity after capture and recalculate → it reads as "Added" variance.
   await addActivity(page, 'Pour slab');

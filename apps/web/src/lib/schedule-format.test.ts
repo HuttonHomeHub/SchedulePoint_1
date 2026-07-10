@@ -1,7 +1,12 @@
 import type { BaselineVarianceRow } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { criticality, formatFinishVariance, formatFloat } from './schedule-format';
+import {
+  criticality,
+  formatDayVariance,
+  formatFinishVariance,
+  formatFloat,
+} from './schedule-format';
 
 const base = { isCritical: false, isNearCritical: false, totalFloat: 5 };
 
@@ -91,5 +96,24 @@ describe('formatFinishVariance', () => {
       'Removed',
     );
     expect(formatFinishVariance(row({ finishVarianceDays: null })).text).toBe('—');
+  });
+
+  it('flips the sign for float: less float than baseline is behind, more is ahead', () => {
+    // A negative float delta (lost float) reads as behind; positive as ahead.
+    expect(formatDayVariance(row({ floatVarianceDays: -2 }), 'float')).toEqual({
+      text: '−2 d float',
+      tone: 'behind',
+    });
+    expect(formatDayVariance(row({ floatVarianceDays: 3 }), 'float')).toEqual({
+      text: '+3 d float',
+      tone: 'ahead',
+    });
+  });
+
+  it('applies the behind-when-later convention to start variance', () => {
+    expect(formatDayVariance(row({ startVarianceDays: 4 }), 'start')).toEqual({
+      text: '4 d behind',
+      tone: 'behind',
+    });
   });
 });

@@ -41,18 +41,42 @@ export interface FinishVariance {
   tone: 'behind' | 'ahead' | 'onTrack' | 'neutral';
 }
 
+/** Which variance a cell shows. Start/finish: later = behind. Float: less float = behind. */
+export type VarianceField = 'start' | 'finish' | 'float';
+
 /**
- * Format a variance row's finish variance for the activities table. Working days,
- * signed so positive = behind. Returns "Added"/"Removed" for activities that don't line
- * up with the baseline, and "—" when the dates aren't comparable yet.
+ * Format one of a variance row's day deltas for the activities table (working days).
+ * For **start/finish**, positive = later than baseline = **behind**. For **float**, the
+ * convention flips: less float than baseline (a negative delta) is **behind**, more float
+ * is ahead — so a slipping activity reads "behind" consistently across all three columns.
+ * "Added"/"Removed" mark activities that don't line up with the baseline; "—" means the
+ * values aren't comparable yet (a not-computed live date, or an unbaselined activity).
  */
-export function formatFinishVariance(row: BaselineVarianceRow): FinishVariance {
+export function formatDayVariance(row: BaselineVarianceRow, field: VarianceField): FinishVariance {
   if (row.removed) return { text: 'Removed', tone: 'neutral' };
   if (!row.inBaseline) return { text: 'Added', tone: 'neutral' };
-  const days = row.finishVarianceDays;
+  const days =
+    field === 'start'
+      ? row.startVarianceDays
+      : field === 'finish'
+        ? row.finishVarianceDays
+        : row.floatVarianceDays;
   if (days === null) return { text: '—', tone: 'neutral' };
   if (days === 0) return { text: 'On baseline', tone: 'onTrack' };
-  return days > 0
-    ? { text: `${days} d behind`, tone: 'behind' }
-    : { text: `${Math.abs(days)} d ahead`, tone: 'ahead' };
+  const behind = field === 'float' ? days < 0 : days > 0;
+  const magnitude = Math.abs(days);
+  if (field === 'float') {
+    // Show the signed change in float (positive = more float now, i.e. ahead).
+    return behind
+      ? { text: `−${magnitude} d float`, tone: 'behind' }
+      : { text: `+${magnitude} d float`, tone: 'ahead' };
+  }
+  return behind
+    ? { text: `${magnitude} d behind`, tone: 'behind' }
+    : { text: `${magnitude} d ahead`, tone: 'ahead' };
+}
+
+/** Finish variance — the headline comparison. Convenience wrapper over {@link formatDayVariance}. */
+export function formatFinishVariance(row: BaselineVarianceRow): FinishVariance {
+  return formatDayVariance(row, 'finish');
 }

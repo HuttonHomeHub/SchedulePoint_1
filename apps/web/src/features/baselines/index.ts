@@ -12,4 +12,5 @@ export {
   type PlanVariance,
 } from './api/use-baselines';
 export { BaselinesPanel } from './components/BaselinesPanel';
+export { BaselineVarianceSummary } from './components/BaselineVarianceSummary';
 export { CreateBaselineDialog } from './components/CreateBaselineDialog';

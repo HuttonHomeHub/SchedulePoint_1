@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { formatCalendarDate } from '@/lib/format-date';
+import { formatCalendarDate, formatTimestamp } from '@/lib/format-date';
 
 /**
  * A plan's baselines (M7, ADR-0025): name, active badge, when captured, the captured
@@ -72,7 +72,8 @@ export function BaselinesPanel({
         </span>
       ),
     },
-    { header: 'Captured', cell: (b) => formatCalendarDate(b.capturedAt.slice(0, 10)) },
+    // capturedAt is an ISO instant (not a calendar day) → format as a local timestamp.
+    { header: 'Captured', cell: (b) => formatTimestamp(b.capturedAt) },
     {
       header: 'Project finish',
       cell: (b) => formatCalendarDate(b.capturedProjectFinish),

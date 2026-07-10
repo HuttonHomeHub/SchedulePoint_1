@@ -20,9 +20,10 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
   criticality,
-  formatFinishVariance,
+  formatDayVariance,
   formatFloat,
   type FinishVariance,
+  type VarianceField,
 } from '@/lib/schedule-format';
 
 /** Tone → text colour for a finish-variance cell. Text carries the meaning; colour reinforces. */
@@ -154,18 +155,32 @@ export function ActivitiesTable({
   ];
   // Variance vs the active baseline — only when the route supplies the map (M7). The
   // text carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces.
+  // Finish variance is the headline (always shown); start/float variance hide first on
+  // narrow screens, mirroring the early/late date columns.
   if (varianceByActivityId) {
-    columns.push({
-      header: 'Baseline finish',
-      headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap tabular-nums md:table-cell',
-      cell: (activity) => {
-        const row = varianceByActivityId.get(activity.id);
-        if (!row) return <span className="text-muted-foreground">—</span>;
-        const variance = formatFinishVariance(row);
-        return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
-      },
-    });
+    const varianceColumn = (
+      header: string,
+      field: VarianceField,
+      hideBelow?: 'lg',
+    ): Column<ActivitySummary> => {
+      const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
+      return {
+        header,
+        headClassName: `py-2 pr-4 font-medium${show}`,
+        cellClassName: `py-2 pr-4 whitespace-nowrap tabular-nums${show}`,
+        cell: (activity) => {
+          const row = varianceByActivityId.get(activity.id);
+          if (!row) return <span className="text-muted-foreground">—</span>;
+          const variance = formatDayVariance(row, field);
+          return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
+        },
+      };
+    };
+    columns.push(
+      varianceColumn('Start variance', 'start', 'lg'),
+      varianceColumn('Finish variance', 'finish'),
+      varianceColumn('Float variance', 'float', 'lg'),
+    );
   }
   if (canWrite || canReportProgress || onOpenLogic) {
     columns.push({
