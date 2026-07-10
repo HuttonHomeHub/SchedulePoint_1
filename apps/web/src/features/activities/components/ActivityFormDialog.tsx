@@ -134,13 +134,23 @@ export function ActivityFormDialog({
         />
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="activity-type">Type</Label>
-          <Select id="activity-type" {...register('type')}>
+          <Select
+            id="activity-type"
+            aria-invalid={errors.type ? true : undefined}
+            aria-describedby={errors.type ? 'activity-type-error' : undefined}
+            {...register('type')}
+          >
             {ACTIVITY_TYPES.map((value) => (
               <option key={value} value={value}>
                 {ACTIVITY_TYPE_LABELS[value]}
               </option>
             ))}
           </Select>
+          {errors.type?.message ? (
+            <p id="activity-type-error" className="text-destructive-text text-sm">
+              {errors.type.message}
+            </p>
+          ) : null}
         </div>
         {isMilestoneType(type) ? null : (
           <TextField
@@ -153,7 +163,12 @@ export function ActivityFormDialog({
         )}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="activity-constraint-type">Constraint (optional)</Label>
-          <Select id="activity-constraint-type" {...register('constraintType')}>
+          <Select
+            id="activity-constraint-type"
+            aria-invalid={errors.constraintType ? true : undefined}
+            aria-describedby={errors.constraintType ? 'activity-constraint-type-error' : undefined}
+            {...register('constraintType')}
+          >
             <option value="">None</option>
             {CONSTRAINT_TYPES.map((value) => (
               <option key={value} value={value}>
@@ -162,7 +177,9 @@ export function ActivityFormDialog({
             ))}
           </Select>
           {errors.constraintType?.message ? (
-            <p className="text-destructive-text text-sm">{errors.constraintType.message}</p>
+            <p id="activity-constraint-type-error" className="text-destructive-text text-sm">
+              {errors.constraintType.message}
+            </p>
           ) : null}
         </div>
         {constraintType ? (

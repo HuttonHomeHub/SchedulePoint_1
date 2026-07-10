@@ -59,6 +59,12 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await dialog.getByLabel('Name').fill('Excavate');
   await dialog.getByLabel('Code (optional)').fill('A100');
   await dialog.getByLabel(/Duration/).fill('10');
+  // Choosing a constraint reveals its date field — check that revealed state is accessible.
+  await dialog.getByLabel('Constraint (optional)').selectOption('SNET');
+  await dialog.getByLabel('Constraint date').fill('2026-05-01');
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
   await dialog.getByRole('button', { name: 'Create activity' }).click();
 
   // It appears in the table with its code, type and duration.
@@ -77,7 +83,19 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await expect(page.getByRole('cell', { name: 'Start milestone', exact: true })).toBeVisible();
 
   // Report progress on the task — the derived status shows in the row afterwards.
-  await page.getByRole('button', { name: 'Report progress for Excavate' }).click();
+  const progressButton = page.getByRole('button', { name: 'Report progress for Excavate' });
+  await progressButton.click();
+  await expect(dialog).toBeVisible();
+  // The progress dialog (with its live status preview) is accessible.
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
+  // Cancelling returns focus to the trigger (native <dialog> focus restore).
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(progressButton).toBeFocused();
+
+  await progressButton.click();
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Percent complete').fill('40');
   await dialog.getByLabel(/Actual start/).fill('2026-05-01');

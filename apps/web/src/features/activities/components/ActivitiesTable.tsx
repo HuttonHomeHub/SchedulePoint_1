@@ -78,6 +78,7 @@ export function ActivitiesTable({
     },
     {
       header: 'Progress',
+      cellClassName: 'tabular-nums',
       cell: (activity) => <span className="text-muted-foreground">{formatProgress(activity)}</span>,
     },
   ];
@@ -160,13 +161,13 @@ export function ActivitiesTable({
         }
       />
 
-      {canReportProgress && reporting ? (
+      {canReportProgress ? (
         <ActivityProgressDialog
           orgSlug={orgSlug}
           planId={planId}
-          open
+          open={reporting !== undefined}
           onClose={() => setProgressId(null)}
-          activity={reporting}
+          {...(reporting ? { activity: reporting } : {})}
         />
       ) : null}
 

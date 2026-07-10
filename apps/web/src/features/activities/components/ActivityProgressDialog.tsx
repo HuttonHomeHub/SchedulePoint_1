@@ -33,7 +33,9 @@ export function ActivityProgressDialog({
   planId: string;
   open: boolean;
   onClose: () => void;
-  activity: ActivitySummary;
+  /** The row being edited. Optional so the dialog stays mounted (toggled by
+   * `open`), which preserves the native `<dialog>` close/focus-restore. */
+  activity?: ActivitySummary;
 }): React.ReactElement {
   const update = useUpdateActivityProgress(orgSlug, planId);
   const announce = useAnnounce();
@@ -50,7 +52,7 @@ export function ActivityProgressDialog({
   });
 
   useEffect(() => {
-    if (open) {
+    if (open && activity) {
       reset({
         percentComplete: activity.percentComplete,
         actualStart: activity.actualStart ?? '',
@@ -59,7 +61,7 @@ export function ActivityProgressDialog({
       update.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
-  }, [open, activity.id]);
+  }, [open, activity?.id]);
 
   const percentComplete = useWatch({ control, name: 'percentComplete' });
   const actualStart = useWatch({ control, name: 'actualStart' });
@@ -71,6 +73,7 @@ export function ActivityProgressDialog({
   });
 
   const onSubmit = handleSubmit((values) => {
+    if (!activity) return;
     update.mutate(
       { activityId: activity.id, version: activity.version, ...values },
       {
@@ -87,7 +90,7 @@ export function ActivityProgressDialog({
       open={open}
       onClose={onClose}
       title="Report progress"
-      description={`Update progress for “${activity.name}”.`}
+      {...(activity ? { description: `Update progress for “${activity.name}”.` } : {})}
     >
       <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
         <FormErrorSummary errors={errors} />
@@ -116,7 +119,7 @@ export function ActivityProgressDialog({
           error={errors.actualFinish?.message}
           {...register('actualFinish')}
         />
-        <p className="text-muted-foreground text-sm">
+        <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
           Status (set automatically): <span className="text-foreground font-medium">{preview}</span>
         </p>
         <div className="flex justify-end gap-2">
