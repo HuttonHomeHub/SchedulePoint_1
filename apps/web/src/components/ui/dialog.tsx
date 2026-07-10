@@ -11,12 +11,17 @@ import { cn } from '@/lib/utils';
  * safely mount on the same screen. `role` may be raised to `alertdialog` for
  * destructive confirmations.
  */
+/** Max-width presets: `md` (default, form dialogs) or `lg` for content-dense
+ * dialogs such as tables. */
+const SIZE_CLASSES = { md: 'max-w-md', lg: 'max-w-2xl' } as const;
+
 export function Dialog({
   open,
   onClose,
   title,
   description,
   role,
+  size = 'md',
   children,
 }: {
   open: boolean;
@@ -24,6 +29,7 @@ export function Dialog({
   title: string;
   description?: string;
   role?: 'dialog' | 'alertdialog';
+  size?: keyof typeof SIZE_CLASSES;
   children: React.ReactNode;
 }): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
@@ -47,7 +53,8 @@ export function Dialog({
       onClose={onClose}
       onCancel={onClose}
       className={cn(
-        'border-border bg-card text-card-foreground m-auto w-[calc(100vw-2rem)] max-w-md rounded-lg border p-0 shadow-lg',
+        'border-border bg-card text-card-foreground m-auto w-[calc(100vw-2rem)] rounded-lg border p-0 shadow-lg',
+        SIZE_CLASSES[size],
         'backdrop:bg-black/50',
       )}
     >

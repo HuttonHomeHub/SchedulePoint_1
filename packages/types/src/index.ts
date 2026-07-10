@@ -157,6 +157,92 @@ export interface PlanSummary {
 }
 
 /**
+ * Activity enums. Mirror the API's Prisma `ActivityType`/`ActivityStatus`/
+ * `ConstraintType` enums (kept in lock-step). Modelled as string unions like
+ * `PlanStatus`; consumers that need an iterable list define a local const array
+ * (as the web does for plan statuses) to avoid importing runtime values here.
+ */
+export type ActivityType =
+  'TASK' | 'START_MILESTONE' | 'FINISH_MILESTONE' | 'HAMMOCK' | 'LEVEL_OF_EFFORT';
+export type ActivityStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
+export type ConstraintType =
+  'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO' | 'MANDATORY_START' | 'MANDATORY_FINISH';
+
+/**
+ * An activity — the leaf of the Org → Client → Project → Plan → Activity
+ * hierarchy and the atomic unit of a schedule. The CPM output fields
+ * (early/late dates, total float, critical flags) are **engine-owned**: null/false
+ * until the CPM engine slice computes them. Calendar-day fields are `YYYY-MM-DD`.
+ */
+export interface ActivitySummary {
+  id: string;
+  planId: string;
+  code: string | null;
+  name: string;
+  description: string | null;
+  type: ActivityType;
+  /** Working days (milestones are 0). */
+  durationDays: number;
+  constraintType: ConstraintType | null;
+  constraintDate: string | null;
+  /** Graphical y-lane for the TSLD canvas. */
+  laneIndex: number;
+  status: ActivityStatus;
+  /** 0–100. */
+  percentComplete: number;
+  actualStart: string | null;
+  actualFinish: string | null;
+  // CPM output — engine-owned, null/false until computed by the CPM engine slice.
+  earlyStart: string | null;
+  earlyFinish: string | null;
+  lateStart: string | null;
+  lateFinish: string | null;
+  totalFloat: number | null;
+  isCritical: boolean;
+  isNearCritical: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Dependency (logic-tie) types, in the CPM/GPM tradition (FS finish-to-start,
+ * SS start-to-start, FF finish-to-finish, SF start-to-finish). Const-array
+ * source-of-truth (like {@link ORGANIZATION_ROLES}) kept in lock-step with the
+ * API's Prisma `DependencyType` enum; consumers that need an iterable list use
+ * this directly.
+ */
+export const DEPENDENCY_TYPES = ['FS', 'SS', 'FF', 'SF'] as const;
+
+export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
+
+/** The minimal shape of a dependency's endpoint activity (for list rendering). */
+export interface DependencyEndpoint {
+  id: string;
+  code: string | null;
+  name: string;
+}
+
+/**
+ * A dependency — a directed, typed, lagged edge from a predecessor activity to a
+ * successor activity within one plan. Together with activities it forms the
+ * plan's schedule network (a DAG). The endpoints are embedded as light summaries
+ * so a predecessors/successors list needs no extra fetch. `lagDays` is a signed
+ * count of working days (lead = negative).
+ */
+export interface DependencySummary {
+  id: string;
+  planId: string;
+  type: DependencyType;
+  lagDays: number;
+  predecessor: DependencyEndpoint;
+  successor: DependencyEndpoint;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * A soft-deleted hierarchy row surfaced in the "recently deleted" list. `kind`
  * discriminates which entity it is; `canRestore` is false when an ancestor is
  * still deleted (restore the parent first — the top-down invariant).

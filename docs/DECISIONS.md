@@ -10,6 +10,66 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-10 — Activity dependencies: `dependency:*` permission set + link cascade behaviour
+
+**Decision.** For the M4 dependencies slice (ADR-0021, spec
+`docs/specs/activity-dependencies.md`): (1) authorise logic edits with a **new
+`dependency:*` permission namespace** — `dependency:read` granted to every member
+(alongside the other `*:read`), `dependency:create/update/delete` to **Planner +
+Org Admin only** (the same "hierarchy write" rule; deliberately **not**
+Contributor). (2) When an activity (or an ancestor plan/project/client) is
+soft-deleted, its **incident/contained dependencies are soft-deleted in the same
+`delete_batch_id`** and reactivated on restore — but restore is **endpoint-guarded**:
+a link is only reactivated when **both** its endpoints are active, so a link whose
+other end was separately deleted stays soft-deleted (a bounded, documented edge
+case). A directly-deleted dependency gets its own fresh batch and has **no
+standalone restore endpoint** in this slice.
+
+**Why.** A distinct `dependency:*` set keeps authorisation and audit legible
+("who may edit the network" is separate from "who may edit an activity") and is
+future-guest-friendly, at the cost of four extra permission codes — cheap. Folding
+links into the existing cascade batch keeps delete/restore symmetric with the rest
+of the hierarchy (one batch id, one transaction) rather than inventing a second
+mechanism; the endpoint-guard prevents a restore from resurrecting a link to an
+activity that no longer exists.
+
+**Consequences.** `HIERARCHY_READ`/`HIERARCHY_WRITE` in
+`apps/api/src/common/auth/org-permissions.ts` carry the new codes (unit-tested:
+Contributor gets `dependency:read` only). The shared `HierarchyLifecycleService`
+gains a `dependency` leaf and link-aware cascade/restore (A3) — touching
+already-shipped M3 code, so it ships with full M3 regression coverage. These two
+choices are recorded here rather than as ADRs (the DAG invariant, which _is_
+cross-cutting, is ADR-0021); promote them if a reviewer judges them broadly
+load-bearing.
+
+### 2026-07-10 — Activity progress: dedicated endpoint, derived status, paired-constraint invariant
+
+**Decision.** An activity's **progress** (percent complete + actual start/finish)
+is reported through a dedicated `PATCH .../activities/:id/progress` endpoint that
+requires only `activity:update_progress` (Contributor upward), separate from the
+Planner-only `activity:update` that changes logic/definition. `status`
+(`NOT_STARTED/IN_PROGRESS/COMPLETE`) is **not** client-settable — it is derived
+server-side: a finish date (or 100%) → COMPLETE, a start date (or any %) →
+IN_PROGRESS, else NOT_STARTED. Actual dates may be cleared with `null`; an actual
+finish requires an actual start and cannot precede it (422). The definition
+endpoints never accept progress or CPM-output fields, and this endpoint never
+accepts definition fields.
+
+**Why.** The brief's role model gives a **Contributor** the ability to record
+progress without editing the schedule's logic — this endpoint + permission is the
+first concrete realisation of that split (the first capability separating
+Contributor from Viewer). Deriving `status` from the measurable numbers makes a
+contradictory state (e.g. `COMPLETE` at 20%) unrepresentable, so clients send one
+signal (%/dates) rather than two that can disagree. Using the actual-start signal —
+not only the percentage — lets an activity be _in progress at 0%_ (started, no
+measurable work yet), which construction planning needs.
+
+**Consequences.** `UpdateActivityProgressDto` carries only `percentComplete`,
+`actualStart`, `actualFinish`, `version`. The constraint type/date pairing is
+enforced on key-presence in the service **and** by a DB `CHECK`
+(`ck_activities_constraint_pair`) as defence-in-depth. The web progress editor
+(C2) gates on `activity:update_progress` and shows the derived status read-only.
+
 ### 2026-07-10 — Recycle bin: one org-scoped `/deleted` endpoint over a keyset-merged union
 
 **Decision.** Surface the hierarchy's soft-deleted rows through a single

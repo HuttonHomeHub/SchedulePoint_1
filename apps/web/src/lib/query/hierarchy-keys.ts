@@ -32,3 +32,21 @@ export const planKeys = {
   detail: (orgSlug: string, planId: string) =>
     [...planKeys.all(orgSlug), 'detail', planId] as const,
 };
+
+export const activityKeys = {
+  all: (orgSlug: string) => ['activities', orgSlug] as const,
+  listByPlan: (orgSlug: string, planId: string) =>
+    [...activityKeys.all(orgSlug), 'plan', planId] as const,
+  detail: (orgSlug: string, activityId: string) =>
+    [...activityKeys.all(orgSlug), 'detail', activityId] as const,
+};
+
+export const dependencyKeys = {
+  all: (orgSlug: string) => ['dependencies', orgSlug] as const,
+  byPlan: (orgSlug: string, planId: string) =>
+    [...dependencyKeys.all(orgSlug), 'plan', planId] as const,
+  predecessors: (orgSlug: string, activityId: string) =>
+    [...dependencyKeys.all(orgSlug), 'activity', activityId, 'predecessors'] as const,
+  successors: (orgSlug: string, activityId: string) =>
+    [...dependencyKeys.all(orgSlug), 'activity', activityId, 'successors'] as const,
+};
