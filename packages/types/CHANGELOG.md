@@ -1,5 +1,18 @@
 # @repo/types
 
+## 0.4.0
+
+### Minor Changes
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the read-side schedule summary: `GET
+/organizations/:orgSlug/plans/:planId/schedule/summary` (permission
+  `schedule:read`, every member) returns a plan's computed schedule roll-up from a
+  single aggregate over the persisted engine columns — no recompute. It returns the
+  identical `PlanScheduleSummary` shape as recalculate (data date, project finish,
+  activity/critical/near-critical/parked counts), now a shared type in `@repo/types`.
+  Null-safe for a never-calculated plan (null finish) and a plan with no start date
+  (null data date).
+
 ## 0.3.0
 
 ### Minor Changes
