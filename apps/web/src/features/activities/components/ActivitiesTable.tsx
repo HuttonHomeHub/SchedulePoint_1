@@ -39,6 +39,7 @@ export function ActivitiesTable({
   planId,
   canWrite,
   canReportProgress = false,
+  onOpenLogic,
 }: {
   orgSlug: string;
   planId: string;
@@ -46,6 +47,9 @@ export function ActivitiesTable({
   canWrite: boolean;
   /** May report progress (Contributor upward). Planners also have it. */
   canReportProgress?: boolean;
+  /** Open the logic (predecessors/successors) panel for a row. Available to any
+   * member (read); the host owns the panel so this feature stays dependency-free. */
+  onOpenLogic?: (activity: ActivitySummary) => void;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -82,7 +86,7 @@ export function ActivitiesTable({
       cell: (activity) => <span className="text-muted-foreground">{formatProgress(activity)}</span>,
     },
   ];
-  if (canWrite || canReportProgress) {
+  if (canWrite || canReportProgress || onOpenLogic) {
     columns.push({
       header: 'Actions',
       srHeader: true,
@@ -90,6 +94,16 @@ export function ActivitiesTable({
       cellClassName: 'py-2 text-right whitespace-nowrap',
       cell: (activity) => (
         <div className="flex justify-end gap-2">
+          {onOpenLogic ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenLogic(activity)}
+              aria-label={`Logic for ${activity.name}`}
+            >
+              Logic
+            </Button>
+          ) : null}
           {canReportProgress ? (
             <Button
               variant="ghost"

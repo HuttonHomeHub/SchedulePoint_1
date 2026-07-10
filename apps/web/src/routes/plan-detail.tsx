@@ -1,3 +1,4 @@
+import type { ActivitySummary } from '@repo/types';
 import { Link, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { useClient } from '@/features/clients';
+import { DependencyEditor } from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { canManageHierarchy, canReportProgress, useOrgRole } from '@/hooks/use-org-role';
@@ -24,6 +26,7 @@ export function PlanDetailScreen(): React.ReactElement {
   const canWrite = canManageHierarchy(role);
   const canProgress = canReportProgress(role);
   const [editing, setEditing] = useState(false);
+  const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
 
   const plan = usePlan(orgSlug, planId);
   const project = useProject(orgSlug, plan.data?.projectId ?? '');
@@ -112,8 +115,16 @@ export function PlanDetailScreen(): React.ReactElement {
           planId={planId}
           canWrite={canWrite}
           canReportProgress={canProgress}
+          onOpenLogic={setLogicActivity}
         />
       </div>
+
+      <DependencyEditor
+        orgSlug={orgSlug}
+        open={logicActivity !== undefined}
+        onClose={() => setLogicActivity(undefined)}
+        {...(logicActivity ? { activity: logicActivity } : {})}
+      />
 
       {canWrite ? (
         <PlanFormDialog

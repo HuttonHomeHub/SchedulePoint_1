@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
@@ -104,5 +104,19 @@ describe('ActivitiesTable', () => {
   it('shows an empty state when there are no activities', () => {
     renderTable(true, []);
     expect(screen.getByText(/No activities yet/)).toBeInTheDocument();
+  });
+
+  it('renders a Logic action (for any member) when onOpenLogic is provided', () => {
+    const onOpenLogic = vi.fn();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [ACTIVITY]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} onOpenLogic={onOpenLogic} />
+      </QueryClientProvider>,
+    );
+    const button = screen.getByRole('button', { name: 'Logic for Excavate' });
+    fireEvent.click(button);
+    expect(onOpenLogic).toHaveBeenCalledWith(ACTIVITY);
   });
 });

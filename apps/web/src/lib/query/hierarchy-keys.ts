@@ -40,3 +40,13 @@ export const activityKeys = {
   detail: (orgSlug: string, activityId: string) =>
     [...activityKeys.all(orgSlug), 'detail', activityId] as const,
 };
+
+export const dependencyKeys = {
+  all: (orgSlug: string) => ['dependencies', orgSlug] as const,
+  byPlan: (orgSlug: string, planId: string) =>
+    [...dependencyKeys.all(orgSlug), 'plan', planId] as const,
+  predecessors: (orgSlug: string, activityId: string) =>
+    [...dependencyKeys.all(orgSlug), 'activity', activityId, 'predecessors'] as const,
+  successors: (orgSlug: string, activityId: string) =>
+    [...dependencyKeys.all(orgSlug), 'activity', activityId, 'successors'] as const,
+};
