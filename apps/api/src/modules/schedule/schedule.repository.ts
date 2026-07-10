@@ -119,10 +119,12 @@ export class ScheduleRepository {
   }
 
   /**
-   * A plan's calendar (`working_weekdays`) plus its ACTIVE exceptions, date-ordered,
-   * in one query — part of the recalculate snapshot (M5, ADR-0024). Scoped by org
-   * (anti-IDOR) and `deletedAt: null`; returns null if the calendar is missing or
-   * soft-deleted, so the service falls back to all-days-work.
+   * A plan's calendar (`working_weekdays`) plus its ACTIVE exceptions, date-ordered —
+   * part of the recalculate snapshot (M5, ADR-0024). One Prisma call (with
+   * `previewFeatures = []`, no `relationJoins`, it emits two short round trips: the
+   * calendar row, then a single batched exceptions read — never a query-per-exception).
+   * Scoped by org (anti-IDOR) and `deletedAt: null`; returns null if the calendar is
+   * missing or soft-deleted, so the service falls back to all-days-work.
    */
   async loadPlanCalendar(
     organizationId: string,

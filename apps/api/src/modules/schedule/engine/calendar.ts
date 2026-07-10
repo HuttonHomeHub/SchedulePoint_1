@@ -93,11 +93,14 @@ function weekdayMonday0(date: string): number {
  * `addWorkingDays` non-terminating — mirrored by the `working_weekdays > 0` DB
  * CHECK), otherwise this throws.
  *
- * The maths is **O(1) week arithmetic + O(log H)** binary search over the sorted
- * exceptions — never a day-by-day scan — so a recalculation stays within the M6
- * performance budget even over multi-year spans. `addWorkingDays` is defined as a
- * monotonic binary search over the single trusted counting primitive
- * (`countWorkingDays`), which keeps the off-by-one surface to one place.
+ * The maths is week arithmetic + binary search over the sorted exceptions — never a
+ * day-by-day scan. `workingDaysBetween` is a single **O(log H)** counting call (`H` =
+ * exception count); `addWorkingDays` is a monotonic **outer** binary search (over a
+ * span of `~(n + H)` weeks) that calls that counting primitive each step, so it is
+ * **O(log(n + H) · log H)** — still comfortably sub-millisecond at realistic `n`/`H`,
+ * so a recalculation stays within the M6 budget even over multi-year spans. Defining
+ * `addWorkingDays` over the single trusted primitive keeps the off-by-one surface in
+ * one place.
  */
 export function buildWorkingDayCalendar(
   workingWeekdays: number,
