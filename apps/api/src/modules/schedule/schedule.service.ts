@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { PlanScheduleSummary } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -29,20 +30,6 @@ export const SCHEDULE_ERROR = {
 } as const;
 
 /**
- * The plan-level result of a recalculation (and, in C1, the read summary). The
- * `dataDate` is the plan's start; `projectFinish` is the latest computed finish
- * (null for an empty plan). Dates are calendar days (`YYYY-MM-DD`).
- */
-export interface PlanScheduleSummaryResult {
-  dataDate: string;
-  projectFinish: string | null;
-  activityCount: number;
-  criticalCount: number;
-  nearCriticalCount: number;
-  parkedConstraintCount: number;
-}
-
-/**
  * The CPM recalculation service (ADR-0022). Resolves the org from the caller's
  * memberships (anti-IDOR) and requires `schedule:calculate`, loads the plan
  * (404) and requires a `plannedStart` (422), then — under the plan-scoped lock,
@@ -65,7 +52,7 @@ export class ScheduleService {
     principal: Principal,
     orgSlug: string,
     planId: string,
-  ): Promise<PlanScheduleSummaryResult> {
+  ): Promise<PlanScheduleSummary> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'schedule:calculate', organization.id);
 
@@ -133,6 +120,34 @@ export class ScheduleService {
       criticalCount: summary.criticalCount,
       nearCriticalCount: summary.nearCriticalCount,
       parkedConstraintCount: summary.parkedConstraintCount,
+    };
+  }
+
+  /**
+   * Read a plan's schedule summary WITHOUT recomputing — a single aggregate over
+   * the persisted engine columns (`schedule:read`, every member). Reflects the
+   * last recalculation; `projectFinish` is null for a never-calculated or empty
+   * plan, and `dataDate` is null when the plan has no start date.
+   */
+  async summary(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<PlanScheduleSummary> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'schedule:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    const aggregate = await this.schedule.summarise(organization.id, planId);
+    return {
+      dataDate: plan.plannedStart ? formatCalendarDate(plan.plannedStart) : null,
+      projectFinish: aggregate.projectFinish,
+      activityCount: aggregate.activityCount,
+      criticalCount: aggregate.criticalCount,
+      nearCriticalCount: aggregate.nearCriticalCount,
+      parkedConstraintCount: aggregate.parkedConstraintCount,
     };
   }
 

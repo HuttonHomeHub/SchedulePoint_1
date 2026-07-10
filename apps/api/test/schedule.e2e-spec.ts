@@ -259,6 +259,53 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       .expect(401);
   });
 
+  const summaryUrl = (planId: string) =>
+    `/api/v1/organizations/acme/plans/${planId}/schedule/summary`;
+
+  it('summary reflects the last recompute and reads for any member', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 2);
+    await link(actor, planId, a, b);
+
+    // Before any recompute: zeroed counts, null finish, but the data date is set.
+    const before = await actor.agent.get(summaryUrl(planId)).expect(200);
+    expect(before.body.data).toMatchObject({
+      dataDate: '2026-01-01',
+      projectFinish: null,
+      activityCount: 2,
+      criticalCount: 0,
+    });
+
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    // After: the summary reflects the persisted columns.
+    const after = await actor.agent.get(summaryUrl(planId)).expect(200);
+    expect(after.body.data).toMatchObject({
+      dataDate: '2026-01-01',
+      projectFinish: '2026-01-05',
+      activityCount: 2,
+      criticalCount: 2,
+      nearCriticalCount: 0,
+      parkedConstraintCount: 0,
+    });
+
+    // A Viewer can read the summary (schedule:read is granted to every member).
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    await viewer.agent.get(summaryUrl(planId)).expect(200);
+  });
+
+  it('summary hides the plan from non-members (404)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const outsider = await signUp('outsider@example.com');
+    await outsider.agent.get(summaryUrl(planId)).expect(404);
+  });
+
   it('performance smoke: a 500-activity chain recalculates within budget', async () => {
     const { actor, orgId } = await adminWithOrg();
     const planId = await makePlan(actor, 'BigPlan');

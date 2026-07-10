@@ -73,6 +73,7 @@ describe('ScheduleService.recalculate', () => {
     loadActivities: ReturnType<typeof vi.fn>;
     loadEdges: ReturnType<typeof vi.fn>;
     writeResults: ReturnType<typeof vi.fn>;
+    summarise: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: ScheduleService;
@@ -87,6 +88,13 @@ describe('ScheduleService.recalculate', () => {
       loadActivities: vi.fn().mockResolvedValue([]),
       loadEdges: vi.fn().mockResolvedValue([]),
       writeResults: vi.fn().mockResolvedValue(undefined),
+      summarise: vi.fn().mockResolvedValue({
+        activityCount: 0,
+        criticalCount: 0,
+        nearCriticalCount: 0,
+        parkedConstraintCount: 0,
+        projectFinish: null,
+      }),
     };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
@@ -188,5 +196,78 @@ describe('ScheduleService.recalculate', () => {
 
     const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
     expect(results[0]).toMatchObject({ activityId: 'A', earlyStart: '2026-01-04' });
+  });
+});
+
+const READ: Permission[] = ['schedule:read'];
+
+describe('ScheduleService.summary', () => {
+  let organizations: { resolveScope: ReturnType<typeof vi.fn> };
+  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let schedule: { summarise: ReturnType<typeof vi.fn> };
+  let service: ScheduleService;
+
+  beforeEach(() => {
+    organizations = {
+      resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'VIEWER' }),
+    };
+    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    schedule = {
+      summarise: vi.fn().mockResolvedValue({
+        activityCount: 3,
+        criticalCount: 2,
+        nearCriticalCount: 1,
+        parkedConstraintCount: 0,
+        projectFinish: '2026-01-13',
+      }),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    service = new ScheduleService(
+      organizations as unknown as OrganizationsService,
+      plans as unknown as PlanRepository,
+      schedule as unknown as ScheduleRepository,
+      { $transaction: vi.fn() } as unknown as PrismaService,
+      logger,
+    );
+  });
+
+  it('returns the aggregate with the plan’s start as the data date (any member)', async () => {
+    const result = await service.summary(principalWith(READ), 'acme', PLAN_ID);
+    expect(result).toEqual({
+      dataDate: '2026-01-01',
+      projectFinish: '2026-01-13',
+      activityCount: 3,
+      criticalCount: 2,
+      nearCriticalCount: 1,
+      parkedConstraintCount: 0,
+    });
+  });
+
+  it('reports a null data date when the plan has no start, without erroring', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ plannedStart: null }));
+    schedule.summarise.mockResolvedValue({
+      activityCount: 0,
+      criticalCount: 0,
+      nearCriticalCount: 0,
+      parkedConstraintCount: 0,
+      projectFinish: null,
+    });
+    const result = await service.summary(principalWith(READ), 'acme', PLAN_ID);
+    expect(result.dataDate).toBeNull();
+    expect(result.projectFinish).toBeNull();
+  });
+
+  it('404s when the plan is not in the caller’s org', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(null);
+    await expect(service.summary(principalWith(READ), 'acme', PLAN_ID)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it('denies a caller without schedule:read (403)', async () => {
+    await expect(service.summary(principalWith([]), 'acme', PLAN_ID)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    expect(schedule.summarise).not.toHaveBeenCalled();
   });
 });

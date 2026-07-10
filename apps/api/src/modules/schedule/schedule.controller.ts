@@ -1,4 +1,4 @@
-import { Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -44,5 +44,16 @@ export class ScheduleController {
     @Param('planId', ParseUuidPipe) planId: string,
   ): Promise<PlanScheduleSummaryDto> {
     return PlanScheduleSummaryDto.from(await this.service.recalculate(principal, orgSlug, planId));
+  }
+
+  @Get('summary')
+  @ApiOperation({ summary: 'Read a plan’s computed schedule summary (any member).' })
+  @ApiOkResponse({ type: PlanScheduleSummaryDto })
+  async summary(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<PlanScheduleSummaryDto> {
+    return PlanScheduleSummaryDto.from(await this.service.summary(principal, orgSlug, planId));
   }
 }

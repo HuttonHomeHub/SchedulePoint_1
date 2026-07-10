@@ -28,6 +28,16 @@ export interface ScheduleEdgeRow {
   lagDays: number;
 }
 
+/** The read-side aggregate over a plan's persisted engine columns (C1). */
+export interface ScheduleAggregate {
+  activityCount: number;
+  criticalCount: number;
+  nearCriticalCount: number;
+  parkedConstraintCount: number;
+  /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
+  projectFinish: string | null;
+}
+
 /**
  * Data-access for CPM recalculation (ADR-0022). It does three things, all under
  * the caller's transaction: take the plan-scoped write lock (shared with the
@@ -62,6 +72,44 @@ export class ScheduleRepository {
         constraintDate: true,
       },
     });
+  }
+
+  /**
+   * A single grouped aggregate over a plan's active activities' persisted engine
+   * columns — no recompute, no N+1. `early_finish` is cast to text so the date
+   * crosses the boundary as `YYYY-MM-DD` with no timezone reinterpretation.
+   */
+  async summarise(organizationId: string, planId: string): Promise<ScheduleAggregate> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        activity_count: bigint;
+        critical_count: bigint;
+        near_critical_count: bigint;
+        parked_constraint_count: bigint;
+        project_finish: string | null;
+      }>
+    >`
+      SELECT
+        COUNT(*) AS activity_count,
+        COUNT(*) FILTER (WHERE is_critical) AS critical_count,
+        COUNT(*) FILTER (WHERE is_near_critical) AS near_critical_count,
+        COUNT(*) FILTER (
+          WHERE constraint_type IN ('MANDATORY_START', 'MANDATORY_FINISH')
+        ) AS parked_constraint_count,
+        to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
+      FROM activities
+      WHERE plan_id = ${planId}::uuid
+        AND organization_id = ${organizationId}::uuid
+        AND deleted_at IS NULL
+    `;
+    const row = rows[0]!;
+    return {
+      activityCount: Number(row.activity_count),
+      criticalCount: Number(row.critical_count),
+      nearCriticalCount: Number(row.near_critical_count),
+      parkedConstraintCount: Number(row.parked_constraint_count),
+      projectFinish: row.project_finish,
+    };
   }
 
   /** A plan's active dependency edges, projected to what the engine needs. */

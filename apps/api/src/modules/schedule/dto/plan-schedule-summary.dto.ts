@@ -1,16 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
-
-import type { PlanScheduleSummaryResult } from '../schedule.service';
+import type { PlanScheduleSummary } from '@repo/types';
 
 /**
  * Public representation of a plan's computed schedule roll-up — the result of a
  * recalculation and the shape of the read summary (C1). Dates are calendar days
  * (`YYYY-MM-DD`); `projectFinish` is null until the plan has been calculated (or
- * for an empty plan).
+ * for an empty plan); `dataDate` is null when the plan has no start date.
  */
-export class PlanScheduleSummaryDto {
-  @ApiProperty({ format: 'date', description: "The data date (the plan's start)." })
-  dataDate!: string;
+export class PlanScheduleSummaryDto implements PlanScheduleSummary {
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description: "The data date (the plan's start); null if unset.",
+  })
+  dataDate!: string | null;
 
   @ApiProperty({
     format: 'date',
@@ -34,7 +38,7 @@ export class PlanScheduleSummaryDto {
   })
   parkedConstraintCount!: number;
 
-  static from(summary: PlanScheduleSummaryResult): PlanScheduleSummaryDto {
+  static from(summary: PlanScheduleSummary): PlanScheduleSummaryDto {
     return {
       dataDate: summary.dataDate,
       projectFinish: summary.projectFinish,

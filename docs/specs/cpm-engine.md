@@ -649,6 +649,14 @@ CSRF on the mutation. Org scope is `:orgSlug` (via `resolveScope`).
 - **Response DTO** `PlanScheduleSummaryDto`: `{ planId, dataDate, projectFinish |
 null, durationWorkingDays | null, activityCount, criticalCount, nearCriticalCount,
 parkedConstraintCount, computedAt }`. Never exposes audit/internal columns.
+  - **As shipped (M6-B2/C1):** the recalculate and summary endpoints return the
+    identical shape `{ dataDate | null, projectFinish | null, activityCount,
+criticalCount, nearCriticalCount, parkedConstraintCount }`. The draft's
+    `planId` (already in the URL), `durationWorkingDays` (derivable from
+    `dataDate`/`projectFinish`), and `computedAt` are intentionally dropped —
+    `computedAt` in particular would need a persisted timestamp, contradicting
+    ADR-0022's guarantee that a recalculation never touches `updated_at`. Kept
+    lock-step in `@repo/types` as `PlanScheduleSummary`.
 - **Shared types** added to `packages/types`: **`PlanScheduleSummary`**. The per-
   activity computed fields are **already** on `ActivitySummary` (M3) — no contract
   change there.
