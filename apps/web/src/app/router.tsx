@@ -18,6 +18,7 @@ import { ClientsScreen } from '@/routes/clients';
 import { MembersScreen } from '@/routes/members';
 import { OnboardingScreen } from '@/routes/onboarding';
 import { OrgHomeScreen } from '@/routes/org-home';
+import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
@@ -134,12 +135,20 @@ const clientDetailRoute = createRoute({
   component: ClientDetailScreen,
 });
 
-/** A project's plans (shell in E1). */
+/** A project's plans. */
 const projectDetailRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug/projects/$projectId',
   beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: ProjectDetailScreen,
+});
+
+/** A single plan (metadata + the future TSLD canvas). */
+const planDetailRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/plans/$planId',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: PlanDetailScreen,
 });
 
 /** Public invitation-accept route (keyed by the token in the URL). */
@@ -163,6 +172,7 @@ const routeTree = rootRoute.addChildren([
     clientsRoute,
     clientDetailRoute,
     projectDetailRoute,
+    planDetailRoute,
   ]),
 ]);
 

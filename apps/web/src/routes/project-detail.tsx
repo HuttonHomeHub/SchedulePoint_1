@@ -3,17 +3,20 @@ import { Link, useParams } from '@tanstack/react-router';
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Spinner } from '@/components/ui/spinner';
 import { useClient } from '@/features/clients';
+import { CreatePlanButton, PlansTable } from '@/features/plans';
 import { useProject } from '@/features/projects';
+import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
 /**
- * A project's plans screen (`/orgs/$orgSlug/projects/$projectId`). For E1 this is
- * the shell (breadcrumbs + header + an empty plans area); the plans table and
- * plan detail land in E2.
+ * A project's plans screen (`/orgs/$orgSlug/projects/$projectId`): the project's
+ * plans, with create/edit/delete for writers. Individual plan detail (and the
+ * future TSLD canvas) lives at `/orgs/$orgSlug/plans/$planId`.
  */
 export function ProjectDetailScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const projectId = 'projectId' in params ? params.projectId : '';
+  const canWrite = canManageHierarchy(useOrgRole(orgSlug));
   const project = useProject(orgSlug, projectId);
   // The parent client (for the breadcrumb trail); resolved once the project loads.
   const client = useClient(orgSlug, project.data?.clientId ?? '');
@@ -63,13 +66,18 @@ export function ProjectDetailScreen(): React.ReactElement {
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 p-6">
       <Breadcrumbs items={crumbs} />
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{project.data.name}</h1>
-      {project.data.description ? (
-        <p className="text-muted-foreground mt-1 text-sm">{project.data.description}</p>
-      ) : null}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{project.data.name}</h1>
+          {project.data.description ? (
+            <p className="text-muted-foreground mt-1 text-sm">{project.data.description}</p>
+          ) : null}
+        </div>
+        {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
+      </div>
       <h2 className="mt-6 text-lg font-medium">Plans</h2>
-      <div className="border-border text-muted-foreground mt-3 rounded-lg border border-dashed p-8 text-center text-sm">
-        Plans and the schedule editor arrive in the next update.
+      <div className="mt-3">
+        <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
       </div>
     </main>
   );

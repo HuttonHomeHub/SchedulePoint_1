@@ -54,8 +54,8 @@ test('a user can create a client and a project under it (accessible)', async ({ 
   await projectDialog.getByRole('button', { name: 'Create project' }).click();
   await expect(page.getByRole('link', { name: 'Riverside' })).toBeVisible();
 
-  // Open the project → the plans shell (E2 fills this in).
+  // Open the project → its (empty) plans list.
   await page.getByRole('link', { name: 'Riverside' }).click();
   await expect(page.getByRole('heading', { name: 'Riverside', exact: true })).toBeVisible();
-  await expect(page.getByText(/Plans and the schedule editor/)).toBeVisible();
+  await expect(page.getByText(/No plans yet/)).toBeVisible();
 });
