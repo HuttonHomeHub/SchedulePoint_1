@@ -63,3 +63,13 @@ export const scheduleKeys = {
   summary: (orgSlug: string, planId: string) =>
     [...scheduleKeys.all(orgSlug), 'plan', planId, 'summary'] as const,
 };
+
+export const baselineKeys = {
+  all: (orgSlug: string) => ['baselines', orgSlug] as const,
+  listByPlan: (orgSlug: string, planId: string) =>
+    [...baselineKeys.all(orgSlug), 'plan', planId, 'list'] as const,
+  detail: (orgSlug: string, planId: string, baselineId: string) =>
+    [...baselineKeys.all(orgSlug), 'plan', planId, 'detail', baselineId] as const,
+  variance: (orgSlug: string, planId: string) =>
+    [...baselineKeys.all(orgSlug), 'plan', planId, 'variance'] as const,
+};

@@ -24,6 +24,19 @@ export class ApiFetchError extends Error {
  * feature hooks, not this directly.
  */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await apiFetchEnvelope<T>(path, init)).data;
+}
+
+/**
+ * As {@link apiFetch}, but returns the full `{ data, meta }` envelope. Use when a
+ * caller needs the `meta` roll-up too — e.g. the baseline variance read, whose meta
+ * is the plan variance summary (ADR-0025). For a 204 the data is `undefined` and meta
+ * is absent.
+ */
+export async function apiFetchEnvelope<T, M = Record<string, unknown>>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ data: T; meta?: M }> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
@@ -34,7 +47,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   });
 
   if (response.status === 204) {
-    return undefined as T;
+    return { data: undefined as T };
   }
 
   const body: unknown = await response.json().catch(() => undefined);
@@ -47,5 +60,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new ApiFetchError(response.status, error);
   }
 
-  return (body as ApiResponse<T>).data;
+  const envelope = body as ApiResponse<T> & { meta?: M };
+  return envelope.meta !== undefined
+    ? { data: envelope.data, meta: envelope.meta }
+    : { data: envelope.data };
 }

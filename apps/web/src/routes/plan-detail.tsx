@@ -6,6 +6,7 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
+import { BaselinesPanel } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { DependencyEditor } from '@/features/dependencies';
@@ -134,6 +135,17 @@ export function PlanDetailScreen(): React.ReactElement {
       </div>
       <div className="mt-3">
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-base font-medium">Baselines</h3>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Frozen snapshots of the schedule to compare against. The active baseline drives the
+          variance shown in the activities table.
+        </p>
+        <div className="mt-3">
+          <BaselinesPanel orgSlug={orgSlug} planId={planId} canManage={canWrite} />
+        </div>
       </div>
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
