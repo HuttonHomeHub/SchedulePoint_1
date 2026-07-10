@@ -10,20 +10,15 @@ import {
 import type { ProjectFormValues } from '../schemas/project-schemas';
 
 import { apiFetch } from '@/lib/api/client';
+import { projectKeys } from '@/lib/query/hierarchy-keys';
+
+export { projectKeys };
 
 /** Normalise a form's optional description: a blank field is sent as absent. */
 function descriptionField(description?: string): string | undefined {
   const trimmed = description?.trim();
   return trimmed ? trimmed : undefined;
 }
-
-export const projectKeys = {
-  all: (orgSlug: string) => ['projects', orgSlug] as const,
-  listByClient: (orgSlug: string, clientId: string) =>
-    [...projectKeys.all(orgSlug), 'client', clientId] as const,
-  detail: (orgSlug: string, projectId: string) =>
-    [...projectKeys.all(orgSlug), 'detail', projectId] as const,
-};
 
 export function projectQueryOptions(orgSlug: string, projectId: string) {
   return queryOptions({

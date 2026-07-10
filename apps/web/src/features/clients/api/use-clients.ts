@@ -10,19 +10,15 @@ import {
 import type { ClientFormValues } from '../schemas/client-schemas';
 
 import { apiFetch } from '@/lib/api/client';
+import { clientKeys } from '@/lib/query/hierarchy-keys';
+
+export { clientKeys };
 
 /** Normalise a form's optional description: a blank field is sent as absent. */
 function descriptionField(description?: string): string | undefined {
   const trimmed = description?.trim();
   return trimmed ? trimmed : undefined;
 }
-
-export const clientKeys = {
-  all: (orgSlug: string) => ['clients', orgSlug] as const,
-  list: (orgSlug: string) => [...clientKeys.all(orgSlug), 'list'] as const,
-  detail: (orgSlug: string, clientId: string) =>
-    [...clientKeys.all(orgSlug), 'detail', clientId] as const,
-};
 
 export function clientsQueryOptions(orgSlug: string) {
   return queryOptions({

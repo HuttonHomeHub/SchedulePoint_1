@@ -8,7 +8,7 @@ import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { cn } from '@/lib/utils';
 
 const NAV_LINK_CLASS =
-  'text-muted-foreground hover:text-foreground [&.active]:text-foreground rounded-md px-2 py-1 [&.active]:font-medium';
+  'text-muted-foreground hover:text-foreground [&.active]:text-foreground shrink-0 rounded-md px-2 py-1 whitespace-nowrap [&.active]:font-medium';
 const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
 
 /** The app shell header: product name, org nav, theme toggle, current user, sign-out. */
@@ -29,10 +29,16 @@ export function AppHeader(): React.ReactElement {
   return (
     <header className="border-border bg-background sticky top-0 z-10 border-b">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
-        <span className="font-semibold tracking-tight">SchedulePoint</span>
+        <span className="shrink-0 font-semibold tracking-tight">SchedulePoint</span>
         <OrgSwitcher />
         {orgSlug ? (
-          <nav aria-label="Organisation" className="flex items-center gap-1 text-sm">
+          // Nav shrinks and scrolls horizontally on narrow viewports so it never
+          // pushes the header (or page) into overflow. A proper drawer-below-lg
+          // shell is still owed — see TECH_DEBT.md.
+          <nav
+            aria-label="Organisation"
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm"
+          >
             <Link
               to="/orgs/$orgSlug"
               params={{ orgSlug }}
@@ -63,7 +69,7 @@ export function AppHeader(): React.ReactElement {
             ) : null}
           </nav>
         ) : null}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <ThemeToggle />
           {session?.user ? (
             <span

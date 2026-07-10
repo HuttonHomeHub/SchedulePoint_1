@@ -33,12 +33,15 @@ export function RecentlyDeletedTable({
   const restore = useRestoreItem(orgSlug);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
-  const [restoringId, setRestoringId] = useState<string | null>(null);
+  // A set (not a single id) so two rows restored back-to-back each keep their own
+  // pending state — there's no confirm dialog serialising them like delete has.
+  const [restoringIds, setRestoringIds] = useState<ReadonlySet<string>>(new Set());
   const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const onRestore = (item: DeletedHierarchyItem): void => {
+    if (restoringIds.has(item.id)) return; // guard: aria-disabled doesn't block clicks
     setRestoreError(null);
-    setRestoringId(item.id);
+    setRestoringIds((prev) => new Set(prev).add(item.id));
     restore.mutate(
       { kind: item.kind, id: item.id },
       {
@@ -48,11 +51,16 @@ export function RecentlyDeletedTable({
           announce(`${KIND_LABEL[item.kind]} “${item.name}” restored.`);
           regionRef.current?.focus();
         },
-        onError: (error) => {
-          setRestoreError(error.message);
-          announce(error.message);
-        },
-        onSettled: () => setRestoringId(null),
+        // On error the row stays; the button (aria-disabled, not natively
+        // disabled) keeps focus, so the user can retry. The error is surfaced by
+        // the role="alert" below — no extra announce (that would double-speak it).
+        onError: (error) => setRestoreError(error.message),
+        onSettled: () =>
+          setRestoringIds((prev) => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          }),
       },
     );
   };
@@ -81,15 +89,18 @@ export function RecentlyDeletedTable({
           <Button
             variant="ghost"
             size="sm"
-            disabled={restoringId === item.id}
-            aria-busy={restoringId === item.id}
+            // aria-disabled (not native `disabled`) keeps the button focused while
+            // the request is in flight, so focus isn't dropped to <body>; the
+            // onRestore guard rejects the click instead.
+            aria-disabled={restoringIds.has(item.id)}
+            aria-busy={restoringIds.has(item.id)}
             onClick={() => onRestore(item)}
             aria-label={`Restore ${KIND_LABEL[item.kind].toLowerCase()} ${item.name}`}
           >
-            {restoringId === item.id ? 'Restoring…' : 'Restore'}
+            {restoringIds.has(item.id) ? 'Restoring…' : 'Restore'}
           </Button>
         ) : (
-          <span className="text-muted-foreground text-xs">Restore its parent first</span>
+          <span className="text-muted-foreground text-sm">Restore its parent first</span>
         ),
     });
   }

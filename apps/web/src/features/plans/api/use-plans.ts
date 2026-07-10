@@ -10,14 +10,9 @@ import {
 import type { PlanFormValues } from '../schemas/plan-schemas';
 
 import { apiFetch } from '@/lib/api/client';
+import { planKeys } from '@/lib/query/hierarchy-keys';
 
-export const planKeys = {
-  all: (orgSlug: string) => ['plans', orgSlug] as const,
-  listByProject: (orgSlug: string, projectId: string) =>
-    [...planKeys.all(orgSlug), 'project', projectId] as const,
-  detail: (orgSlug: string, planId: string) =>
-    [...planKeys.all(orgSlug), 'detail', planId] as const,
-};
+export { planKeys };
 
 /** A blank optional field is sent as absent. */
 function optional(value?: string): string | undefined {

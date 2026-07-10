@@ -7,10 +7,8 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { clientKeys } from '@/features/clients';
-import { planKeys } from '@/features/plans';
-import { projectKeys } from '@/features/projects';
 import { apiFetch } from '@/lib/api/client';
+import { clientKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
 
 export const deletedItemKeys = {
   all: (orgSlug: string) => ['deleted-items', orgSlug] as const,
