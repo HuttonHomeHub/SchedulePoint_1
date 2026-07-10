@@ -1,5 +1,18 @@
 # @repo/types
 
+## 0.2.2
+
+### Patch Changes
+
+- [#10](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/10) [`a3e9e01`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a3e9e01d4684f945b48cd116374a545d39a7f9bc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix `@repo/types` so it resolves under classic `tsc` without a prior build.
+  Its top-level `types` field pointed at `./dist/index.d.ts`, but the API compiles
+  with `moduleResolution: "Node"`, which ignores `exports` and reads that field —
+  so any `tsc` run outside Turbo's `^build` graph (the `verify-template.sh`
+  type-check and the e2e Playwright web server) failed with `TS2307` because
+  `dist/` had not been built. The field now points at `./src/index.ts`, so
+  type-checking resolves from source everywhere; the Node runtime is unaffected
+  because it resolves the `exports.default` condition to `./dist/index.js`.
+
 ## 0.2.1
 
 ### Patch Changes
