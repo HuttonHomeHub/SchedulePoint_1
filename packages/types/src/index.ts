@@ -273,4 +273,109 @@ export interface PlanScheduleSummary {
   parkedConstraintCount: number;
 }
 
+/**
+ * Working-day calendar weekly pattern as a 7-bit mask (M5, ADR-0024): bit 0 =
+ * Monday … bit 6 = Sunday, a set bit meaning that weekday is worked. This is the
+ * single cross-boundary source of truth for the mask semantics — the web weekday
+ * toggle group binds to it and the API DTO validates against it. It mirrors the
+ * engine's own constants in `apps/api/src/modules/schedule/engine/calendar.ts`
+ * (the pure factory), which are kept in lock-step with the values here.
+ */
+export const WEEKDAYS = [
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+  'SUNDAY',
+] as const;
+
+export type Weekday = (typeof WEEKDAYS)[number];
+
+/** All seven weekdays worked — a 7-day calendar (equivalent to all-days-work). */
+export const ALL_WEEKDAYS_MASK = 0b1111111; // 127
+/** Monday–Friday — the seeded "Standard" pattern new plans default to. */
+export const STANDARD_WEEKDAYS_MASK = 0b0011111; // 31
+/** Inclusive valid range of a mask: ≥ 1 working weekday, ≤ 7 bits (matches the DB CHECK). */
+export const MIN_WORKING_WEEKDAYS_MASK = 1;
+export const MAX_WORKING_WEEKDAYS_MASK = 127;
+
+/**
+ * Pure helpers for the {@link WEEKDAYS} bitmask. No runtime deps — safe to share
+ * between web and api. Indices are 0 = Monday … 6 = Sunday, matching the bit order.
+ */
+export const WorkingWeekdays = {
+  /** True when `mask` is a valid pattern: an integer in [1, 127] (≥ 1 day, ≤ 7 bits). */
+  isValid(mask: number): boolean {
+    return (
+      Number.isInteger(mask) &&
+      mask >= MIN_WORKING_WEEKDAYS_MASK &&
+      mask <= MAX_WORKING_WEEKDAYS_MASK
+    );
+  },
+  /** True when weekday `index` (0 = Monday … 6 = Sunday) is worked in `mask`. */
+  has(mask: number, index: number): boolean {
+    return ((mask >> index) & 1) === 1;
+  },
+  /** `mask` with weekday `index` flipped (kept within the 7-bit week). */
+  toggle(mask: number, index: number): number {
+    return (mask ^ (1 << index)) & ALL_WEEKDAYS_MASK;
+  },
+  /** The worked weekday indices (0 = Monday … 6 = Sunday), ascending. */
+  toIndices(mask: number): number[] {
+    const indices: number[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      if (((mask >> i) & 1) === 1) indices.push(i);
+    }
+    return indices;
+  },
+  /** Build a mask from weekday indices (0 = Monday … 6 = Sunday); out-of-range ignored. */
+  fromIndices(indices: readonly number[]): number {
+    let mask = 0;
+    for (const i of indices) {
+      if (i >= 0 && i < 7) mask |= 1 << i;
+    }
+    return mask;
+  },
+} as const;
+
+/**
+ * A working-day calendar (M5, ADR-0024) — an org-scoped, reusable library entry: a
+ * weekly working pattern (a {@link WorkingWeekdays} bitmask) plus dated exceptions.
+ * The list shape mirrors the other `*Summary` types; the embedded exceptions live
+ * on {@link CalendarDetail} (the single-calendar read).
+ */
+export interface CalendarSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  /** 7-bit weekly pattern (bit 0 = Monday … bit 6 = Sunday); see {@link WorkingWeekdays}. */
+  workingWeekdays: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A dated override of a calendar's weekly default (M5, ADR-0024). `isWorking: false`
+ * is a holiday (a normally-working day made non-working); `isWorking: true` a worked
+ * exception (e.g. a worked Saturday). `date` is a calendar day (`YYYY-MM-DD`); the
+ * optional `label` names it (e.g. "Christmas Day").
+ */
+export interface CalendarExceptionSummary {
+  id: string;
+  date: string;
+  isWorking: boolean;
+  label: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A calendar with its active exceptions embedded — the single-calendar (GET one) shape. */
+export interface CalendarDetail extends CalendarSummary {
+  exceptions: CalendarExceptionSummary[];
+}
+
 export {};

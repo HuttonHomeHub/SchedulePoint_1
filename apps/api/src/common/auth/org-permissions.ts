@@ -62,7 +62,15 @@ export type OrgPermission =
   // is a Planner + Org Admin action — it rewrites the engine-owned columns of the
   // whole plan, so it follows the same "write" rule as the hierarchy, NOT Contributor.
   | 'schedule:read'
-  | 'schedule:calculate';
+  | 'schedule:calculate'
+  // The org-scoped working-day calendar library (M5, ADR-0024). Read is granted to
+  // every member (browse the calendars a plan can use); create/update/delete
+  // ("write") to Planner + Org Admin — the same rule as the hierarchy, and
+  // deliberately NOT Contributor (managing calendars ≠ reporting progress).
+  | 'calendar:read'
+  | 'calendar:create'
+  | 'calendar:update'
+  | 'calendar:delete';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -72,6 +80,7 @@ const HIERARCHY_READ: readonly OrgPermission[] = [
   'activity:read',
   'dependency:read',
   'schedule:read',
+  'calendar:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -96,6 +105,9 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'dependency:update',
   'dependency:delete',
   'schedule:calculate',
+  'calendar:create',
+  'calendar:update',
+  'calendar:delete',
 ];
 
 /**

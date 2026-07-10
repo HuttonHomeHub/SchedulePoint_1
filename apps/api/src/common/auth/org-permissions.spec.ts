@@ -9,6 +9,7 @@ const READ = [
   'plan:read',
   'activity:read',
   'dependency:read',
+  'calendar:read',
 ] as const;
 const WRITE = [
   'client:create',
@@ -24,6 +25,9 @@ const WRITE = [
   'dependency:create',
   'dependency:update',
   'dependency:delete',
+  'calendar:create',
+  'calendar:update',
+  'calendar:delete',
 ] as const;
 
 describe('permissionsForRole — hierarchy', () => {
@@ -117,6 +121,29 @@ describe('permissionsForRole — CPM schedule (read vs calculate)', () => {
       const perms = permissionsForRole(role);
       expect(perms).toContain('activity:update_progress');
       expect(perms).toContain('activity:update');
+    }
+  });
+});
+
+describe('permissionsForRole — calendar library (read vs write)', () => {
+  it('grants calendar:read to every member role', () => {
+    for (const role of Object.values(OrganizationRole)) {
+      expect(permissionsForRole(role)).toContain('calendar:read');
+    }
+  });
+
+  it('grants calendar create/update/delete to Planner + Org Admin only', () => {
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      const perms = permissionsForRole(role);
+      expect(perms).not.toContain('calendar:create');
+      expect(perms).not.toContain('calendar:update');
+      expect(perms).not.toContain('calendar:delete');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      const perms = permissionsForRole(role);
+      expect(perms).toContain('calendar:create');
+      expect(perms).toContain('calendar:update');
+      expect(perms).toContain('calendar:delete');
     }
   });
 });

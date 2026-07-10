@@ -115,33 +115,38 @@ enum OrganizationRole {
 }
 
 model Organization {
-  id          String       @id @default(uuid(7)) @db.Uuid
-  name        String
+  id                 String               @id @default(uuid(7)) @db.Uuid
+  name               String
   // URL-safe, unique per deployment, immutable in v1. Uniqueness is enforced by
   // a PARTIAL unique index that ignores soft-deleted rows (uq_organizations_slug
   // WHERE deleted_at IS NULL) — Prisma cannot express partial indexes, so it is
   // added as raw SQL in the migration. This index also serves slug lookups
   // (which always filter deleted_at IS NULL), so no separate @@index is needed.
-  slug        String
-  version     Int          @default(1)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy   String?      @map("created_by")
-  updatedBy   String?      @map("updated_by")
-  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz(3)
-  members     OrgMember[]
-  invitations Invitation[]
+  slug               String
+  version            Int                  @default(1)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy          String?              @map("created_by")
+  updatedBy          String?              @map("updated_by")
+  deletedAt          DateTime?            @map("deleted_at") @db.Timestamptz(3)
+  members            OrgMember[]
+  invitations        Invitation[]
   // Domain hierarchy owned by this organisation. Project/Plan back-relations
   // exist because those tables carry a denormalised organization_id FK (see the
   // Client/Project/Plan models below), not because the org is their direct
   // parent — the tree is Organization → Client → Project → Plan.
-  clients     Client[]
-  projects    Project[]
-  plans       Plan[]
-  activities  Activity[]
+  clients            Client[]
+  projects           Project[]
+  plans              Plan[]
+  activities         Activity[]
   // Denormalised scope back-relation: dependencies carry organization_id directly
   // (copied from their endpoints), like Activity — see the ActivityDependency model.
-  dependencies ActivityDependency[]
+  dependencies       ActivityDependency[]
+  // Org-scoped calendar library + its dated exceptions (M5, ADR-0024). Calendar's
+  // organization_id is native (the org is its direct parent, like Client);
+  // CalendarException's is denormalised from its parent calendar (like Activity).
+  calendars          Calendar[]
+  calendarExceptions CalendarException[]
 
   @@map("organizations")
 }
@@ -370,8 +375,8 @@ model Plan {
   deletedAt      DateTime?  @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId  String?    @map("delete_batch_id") @db.Uuid
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
   activities   Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
   dependencies ActivityDependency[]
@@ -548,4 +553,107 @@ model ActivityDependency {
   @@index([successorId])
   @@index([organizationId])
   @@map("dependencies")
+}
+
+// ---------------------------------------------------------------------------
+// Working-day calendars — Calendar + CalendarException (M5, ADR-0024).
+//
+// A calendar fills the CPM engine's `WorkingDayCalendar` port (ADR-0023 §5) with
+// a real working-week: a 7-bit weekday mask (`working_weekdays`, bit 0 = Monday …
+// bit 6 = Sunday; must be non-zero) plus a sparse list of dated exceptions that
+// flip a specific day's default (a holiday, or a worked weekend). Calendars are an
+// org-scoped, reusable LIBRARY; a plan carries a nullable default calendar
+// (`plans.calendar_id`, added in Task C1). The engine is unchanged — a pure
+// factory (`buildWorkingDayCalendar`) builds the port impl from these rows.
+//
+// Both follow the house standards (UUID v7 PK, snake_case via @map, timestamptz
+// UTC, NOT NULL by default, soft delete + `delete_batch_id`, audit, optimistic-
+// locking `version`, scoped indexes) and the domain-hierarchy conventions in
+// docs/DATABASE.md. Calendar's organization_id is NATIVE (the org is its direct
+// parent, like Client); CalendarException's is DENORMALISED from its parent
+// calendar (copied by the service, never client input — like Activity), so an
+// org-scope/IDOR check and the cascade batch filter one indexed column.
+// ---------------------------------------------------------------------------
+
+model Calendar {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+
+  // The weekly working pattern as a 7-bit mask (bit 0 = Monday … bit 6 = Sunday).
+  // Stored as smallint (2 bytes is ample for a 7-bit value). A `working_weekdays
+  // > 0 AND <= 127` CHECK (raw SQL in the migration) mirrors the factory's
+  // non-zero guard: a pattern with no working weekday would make addWorkingDays
+  // non-terminating, and a value above 127 has bits outside the 7-day week.
+  workingWeekdays Int @map("working_weekdays") @db.SmallInt
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  exceptions   CalendarException[]
+
+  // Calendar name is unique per organisation among ACTIVE rows — partial unique
+  // (uq_calendars_org_name ON (organization_id, name) WHERE deleted_at IS NULL),
+  // raw SQL in the migration (Prisma cannot express partial indexes). A soft-
+  // deleted name is free to reuse. Backs the create DUPLICATE_CALENDAR (409) check.
+  //
+  // (organization_id, created_at, id) covers the organization_id FK (leftmost
+  // prefix), the org-scoped active-list query AND its deterministic cursor sort
+  // (ORDER BY created_at, id) — the same full-composite pattern as Client. It
+  // subsumes a standalone organization_id index. The partial delete_batch_id index
+  // (raw SQL, WHERE ... IS NOT NULL) backs batch restore.
+  @@index([organizationId, createdAt, id])
+  @@map("calendars")
+}
+
+// A dated override of a calendar's weekly default (ADR-0024). `is_working = false`
+// is a holiday (a normally-working weekday made non-working); `is_working = true`
+// is a working exception (a normally-non-working day, e.g. a worked Saturday). An
+// optional `label` names it (e.g. "Christmas Day") for the editor. `date` is a
+// calendar day (date-only, no time/timezone), like Plan.plannedStart.
+model CalendarException {
+  id             String @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent calendar (never client input). RESTRICT.
+  organizationId String @map("organization_id") @db.Uuid
+  calendarId     String @map("calendar_id") @db.Uuid
+
+  date      DateTime @db.Date
+  isWorking Boolean  @map("is_working")
+  label     String?
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  calendar     Calendar     @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+
+  // At most one ACTIVE exception per (calendar, date) — partial unique
+  // (uq_calendar_exceptions_cal_date ON (calendar_id, date) WHERE deleted_at IS
+  // NULL), raw SQL in the migration. A single day cannot be both a holiday and a
+  // worked day, and a soft-deleted exception frees its (calendar, date) for reuse.
+  // Backs the add DUPLICATE_EXCEPTION (409) check. This index (active rows, keyed
+  // by (calendar_id, date)) is exactly the engine's active-exception load — WHERE
+  // calendar_id = ? AND deleted_at IS NULL ORDER BY date — so no separate index is
+  // needed for it (the Organization-slug precedent).
+  //
+  // (calendar_id, date) as a plain index backs the calendar_id FK (leftmost prefix)
+  // and the editor's list-all-exceptions load over ALL rows (the partial unique
+  // only covers active ones). organization_id is indexed on its own for its FK
+  // (RESTRICT) and org-scoped IDOR loads. The partial delete_batch_id index (raw
+  // SQL) backs batch restore alongside the parent calendar.
+  @@index([calendarId, date])
+  @@index([organizationId])
+  @@map("calendar_exceptions")
 }
