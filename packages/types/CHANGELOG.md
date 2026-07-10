@@ -1,5 +1,19 @@
 # @repo/types
 
+## 0.3.0
+
+### Minor Changes
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the activity-dependency authorisation and contract foundation (ADR-0021). New
+  `dependency:*` permission codes follow the hierarchy rule — `dependency:read` for
+  every member, `dependency:create/update/delete` for Planner + Org Admin only
+  (deliberately not Contributor). `@repo/types` gains the `DEPENDENCY_TYPES` const
+  (FS/SS/FF/SF, source-of-truth kept in lock-step with the API's Prisma enum) and
+  the `DependencySummary`/`DependencyEndpoint` contracts the dependency API and web
+  logic editor agree on. Documentation: ADR-0021 records the DAG invariant and the
+  service-layer cycle-prevention strategy; DECISIONS.md records the permission
+  namespace and link cascade/restore behaviour.
+
 ## 0.2.2
 
 ### Patch Changes

@@ -1,5 +1,127 @@
 # @repo/api
 
+## 0.4.0
+
+### Minor Changes
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the Activity CRUD API — the leaf of the Client → Project → Plan → Activity
+  hierarchy and the atomic unit of a schedule. Activities are created and listed
+  under a parent plan (`POST`/`GET /organizations/:orgSlug/plans/:planId/activities`,
+  cursor-paginated), and read/updated/soft-deleted/restored by id
+  (`/organizations/:orgSlug/activities/:activityId` + `/restore`). Following the
+  `plans` module: definition writes (name, code, description, type, duration,
+  constraint, lane) are Planner + Org Admin only, org-scoped (anti-IDOR), with
+  per-plan name and code uniqueness, optimistic locking, and soft-delete/restore
+  via the shared four-level lifecycle (top-down `PARENT_DELETED` invariant). A
+  milestone's duration is always coerced to 0, and a schedule constraint's type
+  and date must be set (or cleared) together. Progress fields (status / % / actual
+  dates) and the engine-owned CPM output columns are deliberately not writable
+  here — progress gets its own Contributor-capable endpoint next.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the activity authorisation and lifecycle foundation. New permission codes
+  `activity:read|create|update|delete|restore` follow the same Planner+Org-Admin
+  "write" rule as the rest of the hierarchy, plus a separate
+  `activity:update_progress` granted to Contributor upward — the first capability
+  that distinguishes a Contributor from a Viewer, letting them report progress
+  (status / % complete / actual dates) without being able to change logic. The
+  shared `HierarchyLifecycleService` is extended from three levels to four:
+  deleting a plan (or project, or client) now cascades to its activities in the
+  same `delete_batch_id`, restoring the parent brings them back, and an activity
+  can be soft-deleted/restored on its own (restore requires its parent plan to be
+  active — `PARENT_DELETED` otherwise). Adds the `ActivitySummary`/`ActivityType`/
+  `ActivityStatus`/`ConstraintType` cross-boundary contracts to `@repo/types`. The
+  existing 3-level cascade is covered by regression tests.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the activity progress endpoint — `PATCH /organizations/:orgSlug/activities/:activityId/progress`.
+  This is the Contributor-capable path: it requires only `activity:update_progress`
+  (granted to Contributor upward), so a Contributor can record progress without the
+  Planner-only `activity:update` that changes logic or definition — the first
+  capability that distinguishes a Contributor from a Viewer. It moves
+  `percentComplete` and the actual start/finish dates only; `status` is derived
+  server-side (finish/100% → COMPLETE, start/any % → IN_PROGRESS, else NOT_STARTED)
+  so it can never contradict the numbers, and an actual finish must have a start and
+  cannot precede it (422). Definition endpoints continue to reject progress fields
+  and vice-versa.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the `Activity` domain table — the leaf of the Client → Project → Plan →
+  Activity hierarchy and the atomic unit of a schedule — plus the `ActivityType`,
+  `ActivityStatus` and `ConstraintType` enums and their migration. Each activity is
+  plan-scoped with a denormalised `organization_id` (copied from the parent plan),
+  soft-delete + `delete_batch_id`, audit columns (TEXT `created_by`/`updated_by`),
+  and an optimistic-locking `version`; name — and optional `code` — are unique per
+  plan among live rows via partial-unique indexes. The full field set is persisted
+  now (definition: type/duration/constraint/lane; progress: status/percent/actuals;
+  engine-owned CPM outputs: early/late dates, total float, critical flags; and a
+  reserved `calendar_id`) so the deferred dependencies/calendars/CPM/canvas slices
+  are additive. Schema + migration only — no module or endpoint behaviour yet.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the Dependency CRUD API — the edges of a plan's schedule network. Dependencies
+  are created and listed under a plan
+  (`POST`/`GET /organizations/:orgSlug/plans/:planId/dependencies`, cursor-paginated),
+  browsed by direction from an activity
+  (`GET …/activities/:activityId/predecessors` and `…/successors`), and
+  read/updated/soft-deleted by id (`/organizations/:orgSlug/dependencies/:dependencyId`).
+  Following the activities module: writes are Planner + Org Admin only, org-scoped
+  (anti-IDOR), with both endpoints loaded active and asserted to be in the same plan
+  (no cross-plan links), the organisation/plan ids copied from the parent, per-plan
+  `(predecessor, successor, type)` uniqueness (`409 DUPLICATE_DEPENDENCY`), a
+  self-loop guard (`422 SELF_DEPENDENCY`), optimistic locking (type/lag only — the
+  endpoints are immutable), and soft-delete via the shared lifecycle. Responses embed
+  the endpoint activity summaries (no N+1). Cycle detection — the DAG guarantee of
+  ADR-0021 — lands next.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Guarantee the plan's dependency graph stays acyclic (ADR-0021). Creating a
+  dependency now runs its load-check-insert inside one transaction under a
+  plan-scoped advisory lock: it loads the plan's active edges, walks forward from
+  the proposed successor, and rejects the link with `409 CYCLE_DETECTED` if the
+  predecessor is already reachable (which would close a cycle). The lock serialises
+  concurrent creates within a plan, so the mirror-insert race (`A→B` ‖ `B→A`)
+  resolves to exactly one success and one conflict — a cycle can never be persisted.
+  Different plans never contend. A pure `wouldCreateCycle` detector (O(V+E)) is
+  unit-tested for self/2-node/longer cycles and large graphs; an e2e race test
+  asserts the concurrency guarantee.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Extend the shared HierarchyLifecycleService so soft-delete/restore includes
+  activity dependencies (links). Deleting an activity now also soft-deletes its
+  incident links (either direction) in the same batch; deleting a plan/project/
+  client sweeps every link contained in the affected plans; a dependency can also
+  be soft-deleted directly as its own leaf. Restore reactivates a batch's links
+  **endpoint-guarded** — only where both endpoint activities are active — so a link
+  whose other end was deleted separately stays soft-deleted (a bounded, documented
+  edge case). The four-level M3 cascade/restore is unchanged and fully regression-
+  covered.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the activity-dependency authorisation and contract foundation (ADR-0021). New
+  `dependency:*` permission codes follow the hierarchy rule — `dependency:read` for
+  every member, `dependency:create/update/delete` for Planner + Org Admin only
+  (deliberately not Contributor). `@repo/types` gains the `DEPENDENCY_TYPES` const
+  (FS/SS/FF/SF, source-of-truth kept in lock-step with the API's Prisma enum) and
+  the `DependencySummary`/`DependencyEndpoint` contracts the dependency API and web
+  logic editor agree on. Documentation: ADR-0021 records the DAG invariant and the
+  service-layer cycle-prevention strategy; DECISIONS.md records the permission
+  namespace and link cascade/restore behaviour.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the `ActivityDependency` schema — the typed, lagged logic edge between two
+  activities that turns a plan's activities (nodes) into a schedule network. The new
+  `dependencies` table carries a `DependencyType` enum (`FS`/`SS`/`FF`/`SF`, default
+  `FS`) and a signed working-day `lag_days`, with denormalised `organization_id` and
+  `plan_id` (both `RESTRICT` FKs, copied from the endpoints, never client input) and
+  two `RESTRICT` FKs to `activities` via named self-relations
+  (`Activity.predecessorLinks` / `successorLinks`). Follows the house standards: UUID
+  v7 PK, snake_case, timestamptz UTC, TEXT audit ids, optimistic-locking `version`,
+  soft delete + `delete_batch_id`. Integrity is enforced in the DB as defence in
+  depth: a partial-unique index on `(predecessor_id, successor_id, type)` among live
+  rows (per-type uniqueness — allows the SS+FF overlap ladder, blocks exact
+  duplicates), a `CHECK` forbidding self-loops, and a `CHECK` bounding `lag_days` to
+  −3650…3650, plus direction/plan/org and batch-restore indexes. Schema + migration
+  only — the CRUD API, `dependency:*` permissions, cycle detection and lifecycle
+  cascade land in follow-up tasks.
+
+### Patch Changes
+
+- Updated dependencies [[`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6)]:
+  - @repo/types@0.3.0
+
 ## 0.3.0
 
 ### Minor Changes
