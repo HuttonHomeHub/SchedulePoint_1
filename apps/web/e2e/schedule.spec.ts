@@ -89,6 +89,40 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   ).toEqual([]);
 });
 
+test('a planner picks the plan calendar and recalculates on it (accessible)', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewPlan(page);
+
+  // Give the plan a start date so it can be scheduled.
+  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page
+    .getByRole('dialog')
+    .getByLabel(/Planned start/)
+    .fill('2026-01-01');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
+
+  // The plan defaults to the org's seeded Standard (Mon–Fri) calendar.
+  const calendar = page.getByLabel('Calendar');
+  await expect(calendar).toHaveValue(/.+/);
+  await expect(calendar.getByRole('option', { name: 'Standard' })).toBeAttached();
+
+  // Switch to all-days-work, then back to Standard — the choice persists.
+  await calendar.selectOption({ label: 'None (all days work)' });
+  await expect(calendar).toHaveValue('');
+  await calendar.selectOption({ label: 'Standard' });
+  await expect(calendar).not.toHaveValue('');
+
+  await addActivity(page, 'Excavate');
+  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await expect(page.getByText('Project finish')).toBeVisible();
+
+  // The plan view with the calendar picker is accessible.
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
+});
+
 test('recalculating a plan with no start date shows a friendly prompt', async ({ page }) => {
   const stamp = Date.now();
   await onboard(page, stamp);

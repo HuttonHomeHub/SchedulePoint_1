@@ -10,7 +10,7 @@ import {
 import type { PlanFormValues } from '../schemas/plan-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { planKeys } from '@/lib/query/hierarchy-keys';
+import { planKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
 
 export { planKeys };
 
@@ -88,6 +88,29 @@ export function useUpdatePlan(orgSlug: string, projectId: string) {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) }),
         queryClient.invalidateQueries({ queryKey: planKeys.detail(orgSlug, input.planId) }),
+      ]),
+  });
+}
+
+/**
+ * Set (or clear) a plan's default working-day calendar (M5, ADR-0024) — a targeted
+ * PATCH of just `calendarId` + `version`, so it doesn't need the plan form. `null`
+ * clears the calendar (all-days-work). Invalidates the plan detail (so the picker
+ * reflects the new value + version) and the schedule summary (which a later
+ * recalculation will refresh under the new calendar).
+ */
+export function useSetPlanCalendar(orgSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { planId: string; version: number; calendarId: string | null }) =>
+      apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ calendarId: input.calendarId, version: input.version }),
+      }),
+    onSettled: (_data, _error, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: planKeys.detail(orgSlug, input.planId) }),
+        queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
       ]),
   });
 }

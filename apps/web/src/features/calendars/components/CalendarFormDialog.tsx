@@ -4,11 +4,6 @@ import { STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
 import { useEffect, useId, type Ref } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
-/**
- * The weekly working-day pattern control (a bitmask), extracted so its markup and
- * the focus/description wiring for accessibility live in one place.
- */
-
 import { useCreateCalendar, useUpdateCalendar } from '../api/use-calendars';
 import {
   calendarFormSchema,
