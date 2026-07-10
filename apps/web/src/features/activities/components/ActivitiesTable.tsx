@@ -115,7 +115,6 @@ export function ActivitiesTable({
     scheduleColumn('Late finish', (a) => a.lateFinish, 'lg'),
     {
       header: 'Float',
-      headClassName: 'py-2 pr-4 font-medium',
       cellClassName: 'py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground',
       cell: (activity) => formatFloat(activity.totalFloat),
     },

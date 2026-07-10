@@ -70,11 +70,14 @@ describe('RecalculateButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recalculate' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(/Set the plan’s start date first/),
+      expect(screen.getByRole('alert')).toHaveTextContent(/Set the plan’s start date/),
     );
+    // The prompt is programmatically associated with the button.
+    const button = screen.getByRole('button', { name: 'Recalculate' });
+    expect(button).toHaveAttribute('aria-describedby', screen.getByRole('alert').id);
   });
 
-  it('announces a generic failure without an inline prompt for other errors', async () => {
+  it('shows a visible inline error (not just an announcement) for other failures', async () => {
     vi.mocked(apiFetch).mockRejectedValue(
       new ApiFetchError(500, { code: 'INTERNAL_ERROR', message: 'boom' }),
     );
@@ -82,8 +85,7 @@ describe('RecalculateButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recalculate' }));
 
     await waitFor(() =>
-      expect(screen.getByTestId('announcer')).toHaveTextContent(/Couldn’t recalculate/),
+      expect(screen.getByRole('alert')).toHaveTextContent(/Couldn’t recalculate/),
     );
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

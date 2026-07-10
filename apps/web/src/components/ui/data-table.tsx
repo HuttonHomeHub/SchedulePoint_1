@@ -63,7 +63,11 @@ export function DataTable<T>({
   if (rows.length === 0) return <>{empty}</>;
 
   return (
-    <div className="overflow-x-auto">
+    // Focusable + labelled so a keyboard-only user can scroll a wide table
+    // (WCAG 2.1.1); the caption names the region. A scroll container with a
+    // `region` role is the recommended pattern here — the lint rule doesn't model it.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+    <div className="overflow-x-auto" role="region" aria-label={caption} tabIndex={0}>
       <table className="w-full text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>

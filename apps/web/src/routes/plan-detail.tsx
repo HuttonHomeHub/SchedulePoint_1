@@ -116,6 +116,10 @@ export function PlanDetailScreen(): React.ReactElement {
         <h2 className="text-lg font-medium">Schedule</h2>
         <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={canCalculate} />
       </div>
+      <p className="text-muted-foreground mt-1 text-sm">
+        The computed critical path and early/late dates. Recalculate after editing activities,
+        durations or logic to bring them up to date.
+      </p>
       <div className="mt-3">
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       </div>

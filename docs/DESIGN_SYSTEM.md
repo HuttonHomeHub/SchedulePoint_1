@@ -48,6 +48,7 @@ automatically. Full values (light + dark) are in `globals.css`.
 | `destructive-text`           | Destructive **text & state borders** on page surfaces |
 | `success` / `*-fg`           | Positive/confirmation status                          |
 | `warning` / `*-fg`           | Caution status                                        |
+| `warning-text`               | Caution **text** on page surfaces (e.g. status chips) |
 | `info` / `*-fg`              | Informational status                                  |
 | `border` / `input` / `ring`  | Lines, field borders, focus ring                      |
 | `chart-1…5`                  | Categorical data-visualisation series                 |

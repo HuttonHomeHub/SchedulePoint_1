@@ -96,5 +96,5 @@ test('recalculating a plan with no start date shows a friendly prompt', async ({
 
   // No planned start was set → the API returns 422 and the button prompts for one.
   await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect(page.getByRole('alert')).toContainText(/Set the plan’s start date first/);
+  await expect(page.getByRole('alert')).toContainText(/Set the plan’s start date/);
 });

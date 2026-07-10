@@ -1,5 +1,6 @@
-import { useScheduleSummary } from '../api/use-schedule';
+import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 
+import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -39,13 +40,19 @@ export function ScheduleSummaryStrip({
 
   if (summary.isError) {
     return shell(
-      <p role="alert" className="text-destructive-text text-sm">
-        Couldn’t load the schedule summary.
-      </p>,
+      <div className="flex flex-col items-start gap-3">
+        <p role="alert" className="text-destructive-text text-sm">
+          Couldn’t load the schedule summary.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => void summary.refetch()}>
+          Try again
+        </Button>
+      </div>,
     );
   }
 
   const { dataDate, projectFinish, activityCount, criticalCount, nearCriticalCount } = summary.data;
+  const { parkedConstraintCount } = summary.data;
 
   // No computed finish yet → the plan has never been recalculated (or is empty).
   if (projectFinish === null) {
@@ -54,7 +61,7 @@ export function ScheduleSummaryStrip({
         <p className="text-foreground font-medium">Schedule not yet calculated</p>
         <p className="mt-1">
           {dataDate === null
-            ? 'Set the plan’s start date, then recalculate to see the critical path.'
+            ? NO_START_HINT
             : `Data date ${formatCalendarDate(dataDate)}. Recalculate to compute the critical path.`}
         </p>
       </div>,
@@ -68,6 +75,9 @@ export function ScheduleSummaryStrip({
       <Stat label="Activities" value={activityCount} />
       <Stat label="Critical" value={criticalCount} />
       <Stat label="Near-critical" value={nearCriticalCount} />
+      {parkedConstraintCount > 0 ? (
+        <Stat label="Parked constraints" value={parkedConstraintCount} />
+      ) : null}
     </dl>,
   );
 }

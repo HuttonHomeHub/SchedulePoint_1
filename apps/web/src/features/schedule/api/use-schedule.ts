@@ -15,6 +15,9 @@ export { scheduleKeys };
 /** The reason a recalculation is rejected because the plan has no start date. */
 export const PLAN_START_REQUIRED = 'PLAN_START_REQUIRED';
 
+/** Shared guidance shown wherever a plan can't be scheduled for lack of a start date. */
+export const NO_START_HINT = 'Set the plan’s start date, then recalculate.';
+
 export function scheduleSummaryQueryOptions(orgSlug: string, planId: string) {
   return queryOptions({
     queryKey: scheduleKeys.summary(orgSlug, planId),
