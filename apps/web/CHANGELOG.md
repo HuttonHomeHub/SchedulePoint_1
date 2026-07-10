@@ -1,5 +1,32 @@
 # @repo/web
 
+## 0.5.0
+
+### Minor Changes
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the Recalculate action to the plan view (Planner/Org Admin). A `Recalculate`
+  button triggers the CPM engine and refetches the schedule summary and activities
+  so the computed dates, float and critical-path badges update in place; a plan
+  with no start date surfaces a friendly inline prompt (from the API's 422) instead
+  of a raw error, and other failures are announced politely. Readers don't see the
+  action. Also darkens the `--primary` design token slightly so white-on-primary
+  buttons clear the WCAG 2.2 AA 4.5:1 contrast bar (verified by axe) — an app-wide
+  accessibility fix the new page surfaced.
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Surface the computed CPM schedule in the plan view (read-only). The activities
+  table gains early/late start & finish and total-float columns plus a
+  critical / near-critical badge (late dates hide first on narrow screens; an
+  uncomputed plan shows em dashes). A new schedule summary strip shows the data
+  date, project finish, and the activity / critical / near-critical counts, with a
+  "not yet calculated" empty state and its own loading/error states. Adds a shared
+  `Badge` primitive and `scheduleKeys` / `useScheduleSummary`. The Recalculate
+  action is a separate control (next).
+
+### Patch Changes
+
+- Updated dependencies [[`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c)]:
+  - @repo/types@0.4.0
+
 ## 0.4.0
 
 ### Minor Changes

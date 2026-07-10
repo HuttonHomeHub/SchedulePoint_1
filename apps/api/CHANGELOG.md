@@ -1,5 +1,58 @@
 # @repo/api
 
+## 0.5.0
+
+### Minor Changes
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Teach the CPM engine the six moderate schedule constraints. The forward pass
+  clamps early dates (`SNET`, `FNET`, `MSO`, `MFO`) and the backward pass clamps
+  late dates (`SNLT`, `FNLT`, `MSO`, `MFO`), converting each `constraintDate` to a
+  working-day offset via the calendar port (ADR-0023). `MANDATORY_START` /
+  `MANDATORY_FINISH` are parked as their moderate equivalents (`MSO` / `MFO`) and
+  counted in the schedule summary's `parkedConstraintCount`. A constraint that the
+  logic cannot satisfy surfaces as negative total float (and criticality), never
+  an error.
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the CPM engine's forward/backward pass to the pure scheduling library:
+  early/late start & finish, total float, and critical / near-critical flags,
+  computed in continuous working-day offsets and mapped to inclusive calendar
+  dates via the `WorkingDayCalendar` port (ADR-0023). Honours all four
+  relationship types (FS/SS/FF/SF) with signed lag and zero-duration milestones,
+  proven against a golden suite of hand-worked networks. Still an internal library
+  (unwired) — the recalculate endpoint that persists these values lands next.
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Expose the CPM recalculation over HTTP: `POST
+/organizations/:orgSlug/plans/:planId/schedule/recalculate` (permission
+  `schedule:calculate`, Planner + Org Admin). It runs the engine, persists the
+  computed columns, and returns the plan schedule summary (`200`); a plan with no
+  start date returns `422 PLAN_START_REQUIRED`, and the unreachable DAG-invariant
+  breach is logged distinctly and surfaces as an opaque `500`. Covered by an API
+  e2e matrix (multi-path critical set, version/updated_by untouched, RBAC 403,
+  IDOR/cross-org 404, 422 no-start) and a 500-activity performance smoke.
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Wire the CPM engine to persistence (ADR-0022). Add the `schedule` module with a
+  `ScheduleService.recalculate` that — under the plan-scoped advisory lock shared
+  with the dependency cycle check (ADR-0021) — loads a plan's active activities and
+  edges, runs the pure engine, and writes the seven engine-owned columns via a
+  single batched raw `UPDATE … FROM unnest(...)` that never touches `version` or
+  `updated_at`. Introduce the `schedule:read` (every member) and `schedule:calculate`
+  (Planner + Org Admin) permissions. The recalculation is not yet exposed over HTTP —
+  the endpoint lands next.
+
+- [#20](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/20) [`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the read-side schedule summary: `GET
+/organizations/:orgSlug/plans/:planId/schedule/summary` (permission
+  `schedule:read`, every member) returns a plan's computed schedule roll-up from a
+  single aggregate over the persisted engine columns — no recompute. It returns the
+  identical `PlanScheduleSummary` shape as recalculate (data date, project finish,
+  activity/critical/near-critical/parked counts), now a shared type in `@repo/types`.
+  Null-safe for a never-calculated plan (null finish) and a plan with no start date
+  (null data date).
+
+### Patch Changes
+
+- Updated dependencies [[`9f614f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f614f22d9e233fb4783c4c81bc01bb9cc5b398c)]:
+  - @repo/types@0.4.0
+
 ## 0.4.0
 
 ### Minor Changes
