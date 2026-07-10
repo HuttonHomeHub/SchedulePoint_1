@@ -278,6 +278,9 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   inclusive-display; data date, milestone rule, working-day calendar seam).
 - **ADR-0024** — Working-day calendars (weekday mask + dated exceptions; pure
   factory at the engine port; org library + per-plan default; per-activity deferred).
+- **ADR-0025** — Baselines: snapshot-copy model (non-FK `source_activity_id`),
+  one-active-per-plan invariant (partial unique + plan lock), and server-side
+  working-day variance.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

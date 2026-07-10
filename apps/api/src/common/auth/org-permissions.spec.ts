@@ -10,6 +10,7 @@ const READ = [
   'activity:read',
   'dependency:read',
   'calendar:read',
+  'baseline:read',
 ] as const;
 const WRITE = [
   'client:create',
@@ -28,6 +29,9 @@ const WRITE = [
   'calendar:create',
   'calendar:update',
   'calendar:delete',
+  'baseline:create',
+  'baseline:activate',
+  'baseline:delete',
 ] as const;
 
 describe('permissionsForRole — hierarchy', () => {
@@ -144,6 +148,29 @@ describe('permissionsForRole — calendar library (read vs write)', () => {
       expect(perms).toContain('calendar:create');
       expect(perms).toContain('calendar:update');
       expect(perms).toContain('calendar:delete');
+    }
+  });
+});
+
+describe('permissionsForRole — baselines (read/variance vs write)', () => {
+  it('grants baseline:read to every member role', () => {
+    for (const role of Object.values(OrganizationRole)) {
+      expect(permissionsForRole(role)).toContain('baseline:read');
+    }
+  });
+
+  it('grants baseline create/activate/delete to Planner + Org Admin only', () => {
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      const perms = permissionsForRole(role);
+      expect(perms).not.toContain('baseline:create');
+      expect(perms).not.toContain('baseline:activate');
+      expect(perms).not.toContain('baseline:delete');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      const perms = permissionsForRole(role);
+      expect(perms).toContain('baseline:create');
+      expect(perms).toContain('baseline:activate');
+      expect(perms).toContain('baseline:delete');
     }
   });
 });

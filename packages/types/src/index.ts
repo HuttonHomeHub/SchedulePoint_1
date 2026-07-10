@@ -391,4 +391,106 @@ export interface CalendarDetail extends CalendarSummary {
   exceptions: CalendarExceptionSummary[];
 }
 
+/**
+ * A baseline — a named, frozen snapshot of a plan's schedule, the "plan of record"
+ * a planner compares the live schedule against (M7, ADR-0025). At most one baseline
+ * per plan is `isActive` (the comparison baseline). The denormalised fields
+ * (`capturedAt`, `dataDate`, `capturedProjectFinish`, `activityCount`) let the list
+ * panel render without loading the frozen activity rows. All dates are calendar days
+ * (`YYYY-MM-DD`) except `capturedAt` (an ISO instant).
+ */
+export interface BaselineSummary {
+  id: string;
+  planId: string;
+  name: string;
+  /** Whether this is the plan's active comparison baseline (at most one per plan). */
+  isActive: boolean;
+  /** ISO instant the snapshot was frozen. */
+  capturedAt: string;
+  /** The plan's `plannedStart` at capture (`YYYY-MM-DD`), or null if it had none. */
+  dataDate: string | null;
+  /** The plan's latest inclusive finish at capture (`YYYY-MM-DD`), or null. */
+  capturedProjectFinish: string | null;
+  /** How many activity snapshots the baseline froze. */
+  activityCount: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One activity's frozen snapshot inside a baseline (M7, ADR-0025) — a self-contained
+ * copy of the activity's identity and captured CPM dates. `sourceActivityId` is the
+ * id of the activity it was captured from (a plain correlation id — the live activity
+ * may since have been edited or deleted). `baselineStart`/`baselineFinish` are the
+ * captured early start/finish. All schedule dates are calendar days (`YYYY-MM-DD`).
+ */
+export interface BaselineActivitySnapshot {
+  sourceActivityId: string;
+  code: string | null;
+  name: string;
+  type: ActivityType;
+  durationDays: number;
+  baselineStart: string | null;
+  baselineFinish: string | null;
+  lateStart: string | null;
+  lateFinish: string | null;
+  totalFloat: number | null;
+  isCritical: boolean;
+}
+
+/** A baseline with its frozen activity snapshots embedded — the single-baseline (GET one) shape. */
+export interface BaselineDetail extends BaselineSummary {
+  activities: BaselineActivitySnapshot[];
+}
+
+/**
+ * One row of a plan's variance read model (M7, ADR-0025): a live activity compared to
+ * its snapshot in the plan's **active** baseline, or a baselined activity that has
+ * since been removed. Variance is in **working days** on the plan's calendar
+ * (consistent with float/lag, ADR-0024), signed so that **positive = current later
+ * than baseline (behind schedule)**; `floatVarianceDays` is `current − baseline`
+ * total float (positive = more float now). `inBaseline` is false for an activity added
+ * after capture (variance fields null); `removed` is true for a baselined activity no
+ * longer present live (current fields null). All dates are calendar days (`YYYY-MM-DD`).
+ */
+export interface BaselineVarianceRow {
+  /** The activity id — the live activity's id, or the baselined `sourceActivityId` for a removed row. */
+  activityId: string;
+  code: string | null;
+  name: string;
+  /** True when the activity existed in the active baseline. */
+  inBaseline: boolean;
+  /** True when a baselined activity is no longer a live activity (current fields null). */
+  removed: boolean;
+  currentStart: string | null;
+  currentFinish: string | null;
+  currentTotalFloat: number | null;
+  baselineStart: string | null;
+  baselineFinish: string | null;
+  baselineTotalFloat: number | null;
+  /** Working-day variance (positive = later/behind); null when not comparable. */
+  startVarianceDays: number | null;
+  finishVarianceDays: number | null;
+  /** `current − baseline` total float in days (positive = more float now); null when not comparable. */
+  floatVarianceDays: number | null;
+}
+
+/**
+ * The plan-level roll-up returned in the `meta` of the variance read (M7). `baselineId`
+ * is null when the plan has no active baseline (the UI hides variance). `worstFinishSlipDays`
+ * is the largest positive `finishVarianceDays` across comparable activities (null when
+ * none is behind). Counts: activities finishing behind the baseline, added since capture,
+ * and removed since capture.
+ */
+export interface PlanVarianceSummary {
+  baselineId: string | null;
+  baselineName: string | null;
+  capturedAt: string | null;
+  worstFinishSlipDays: number | null;
+  behindCount: number;
+  addedCount: number;
+  removedCount: number;
+}
+
 export {};

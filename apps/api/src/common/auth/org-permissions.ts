@@ -70,7 +70,16 @@ export type OrgPermission =
   | 'calendar:read'
   | 'calendar:create'
   | 'calendar:update'
-  | 'calendar:delete';
+  | 'calendar:delete'
+  // Baselines — named plan-of-record snapshots (M7, ADR-0025). Read/variance is
+  // granted to every member (browse the record, see variance); capture/activate/
+  // delete ("write") to Planner + Org Admin — the same rule as the hierarchy, and
+  // deliberately NOT Contributor (freezing/choosing the plan of record ≠ reporting
+  // progress). `activate` is a distinct write code so the taxonomy mirrors the action.
+  | 'baseline:read'
+  | 'baseline:create'
+  | 'baseline:activate'
+  | 'baseline:delete';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -81,6 +90,7 @@ const HIERARCHY_READ: readonly OrgPermission[] = [
   'dependency:read',
   'schedule:read',
   'calendar:read',
+  'baseline:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -108,6 +118,9 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'calendar:create',
   'calendar:update',
   'calendar:delete',
+  'baseline:create',
+  'baseline:activate',
+  'baseline:delete',
 ];
 
 /**

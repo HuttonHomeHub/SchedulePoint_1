@@ -354,6 +354,52 @@ indexes).
   column stays reserved — **per-activity calendars are deferred** (they break the engine's
   continuous-offset arithmetic; ADR-0024).
 
+### Baseline & BaselineActivity: the plan-of-record snapshot
+
+The `baselines` and `baseline_activities` tables (M7, ADR-0025) freeze a plan's schedule
+as a **named plan of record** that the live schedule is compared against (PROJECT_BRIEF
+§8/§11, Journey 4). A `Baseline` names the snapshot; a `BaselineActivity` is one
+activity's frozen copy. Both follow every house standard (UUID v7 PK, snake_case via
+`@map`, timestamptz UTC, soft delete + `delete_batch_id`, TEXT audit ids,
+optimistic-locking `version`, scoped indexes).
+
+- **Snapshot-copy, not reference (ADR-0025).** `BaselineActivity` **duplicates** each
+  activity's identity (`code`, `name`, `type`, `duration_days`) and its captured CPM
+  dates (`baseline_start`/`baseline_finish` = the captured early start/finish,
+  `late_start`/`late_finish`, `total_float`, `is_critical`). `source_activity_id` is a
+  **plain correlation UUID with NO foreign key** — so the snapshot survives the source
+  activity's 90-day hard purge (§13) and stays faithful even if the live activity is
+  edited or deleted. Variance joins live activities to the snapshot on this id.
+- **Scope.** `Baseline.organization_id` is **denormalised** from its plan;
+  `BaselineActivity.organization_id` from its parent baseline (copied by the service,
+  never client input — the `Activity` pattern), so an org-scope/IDOR check and the cascade
+  batch filter one indexed column. Baselines are **descendants of a plan** (`plan_id` FK,
+  `RESTRICT`), not a new hierarchy level.
+- **One active per plan.** `uq_baselines_plan_active` (partial, `WHERE is_active = true
+AND deleted_at IS NULL`) guarantees **at most one active baseline per plan** — the
+  comparison baseline — in the database, not just in code. `activate` flips it atomically
+  under the plan write-lock (the same advisory lock as `ScheduleService.recalculate`,
+  ADR-0022); the partial unique is the concurrency backstop. The plan's **first** baseline
+  is captured active; later captures are inactive until activated. Deleting the active
+  baseline simply leaves the plan with none active.
+- **Uniqueness.** `uq_baselines_plan_name` (partial, `WHERE deleted_at IS NULL`) keeps a
+  baseline name unique per plan among live rows (backs `DUPLICATE_BASELINE` 409); a
+  soft-deleted name is free to reuse.
+- **Denormalised capture fields.** `captured_at` (the freeze instant), `data_date` (the
+  plan's `planned_start` at capture) and `captured_project_finish` (the plan's latest
+  inclusive finish at capture) let the list panel render without loading snapshot rows.
+- **Indexes.** `(plan_id, created_at, id)` on `baselines` backs the plan FK, the
+  list-baselines-for-a-plan query and its cursor sort. On `baseline_activities`,
+  `(baseline_id, source_activity_id)` is both the variance join key and the
+  load-all-rows-for-a-baseline path (so no standalone `baseline_id` index); each table's
+  `organization_id` backs its FK and IDOR loads.
+- **Cascade.** Both FKs are `RESTRICT`; nothing is hard-deleted. A baseline and its
+  snapshot rows soft-delete together under one `delete_batch_id`, and a
+  plan/project/client delete cascades to contained baselines the same way (the
+  `HierarchyLifecycleService` gains a `'baseline'` level) — restore brings the set back.
+  Capture reads its snapshot **inside the plan write-lock**, so it is never taken
+  mid-recalculation.
+
 ## Testing & performance
 
 - Integration tests run against a **real Postgres** (see [`TESTING.md`](TESTING.md)).
