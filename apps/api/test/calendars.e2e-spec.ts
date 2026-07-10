@@ -48,8 +48,11 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
 
   async function resetDatabase(): Promise<void> {
     await prisma.calendarException.deleteMany();
-    await prisma.calendar.deleteMany();
+    // Plans reference calendars (plans.calendar_id FK, RESTRICT, since Task C1), so
+    // delete plans BEFORE calendars — the delete-in-use test leaves a plan pointing at
+    // a calendar.
     await prisma.plan.deleteMany();
+    await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
