@@ -58,3 +58,63 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
 });
+
+test('a planner adds a dependency, is stopped from making a loop, and removes it', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const email = `logic2-${stamp}@example.com`;
+  const orgSlug = `logic-two-${stamp}`;
+
+  await page.goto('/sign-up');
+  await page.getByLabel('Full name').fill('Planner Two');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('correct-horse-battery');
+  await page.getByRole('button', { name: /create account/i }).click();
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  await page.getByLabel('Organisation name').fill(`Logic Two ${stamp}`);
+  await page.getByRole('button', { name: /create organisation/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
+
+  await page.getByRole('link', { name: 'Clients', exact: true }).click();
+  await page.getByRole('button', { name: 'New client' }).click();
+  await page.getByRole('dialog').getByLabel('Name').fill('Northgate');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
+  await page.getByRole('link', { name: 'Northgate' }).click();
+  await page.getByRole('button', { name: 'New project' }).click();
+  await page.getByRole('dialog').getByLabel('Name').fill('Riverside');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
+  await page.getByRole('link', { name: 'Riverside' }).click();
+  await page.getByRole('button', { name: 'New plan' }).click();
+  await page.getByRole('dialog').getByLabel('Name').fill('Baseline');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
+  await page.getByRole('link', { name: 'Baseline' }).click();
+
+  for (const name of ['Excavate', 'Pour slab']) {
+    await page.getByRole('button', { name: 'New activity' }).click();
+    await page.getByRole('dialog').getByLabel('Name').fill(name);
+    await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
+    await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
+  }
+
+  const dialog = page.getByRole('dialog');
+
+  // Add Excavate as a predecessor of Pour slab (Excavate → Pour slab).
+  await page.getByRole('button', { name: 'Logic for Pour slab' }).click();
+  await dialog.getByRole('button', { name: 'Add predecessor' }).click();
+  await dialog.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
+  await dialog.getByRole('button', { name: 'Add dependency' }).click();
+  await expect(dialog.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
+
+  // Adding Excavate as a SUCCESSOR too would close a loop — the API stops it, shown inline.
+  await dialog.getByRole('button', { name: 'Add successor' }).click();
+  await dialog.getByLabel('Successor activity').selectOption({ label: 'Excavate' });
+  await dialog.getByRole('button', { name: 'Add dependency' }).click();
+  await expect(dialog.getByRole('alert')).toContainText(/cycle/i);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+  // Removing the predecessor link takes it away again.
+  await dialog.getByRole('button', { name: 'Remove link to Excavate' }).click();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(dialog.getByText(/No predecessors/)).toBeVisible();
+});

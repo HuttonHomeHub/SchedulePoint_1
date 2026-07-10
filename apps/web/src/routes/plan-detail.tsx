@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
+import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
 import { useClient } from '@/features/clients';
 import { DependencyEditor } from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
@@ -31,6 +31,10 @@ export function PlanDetailScreen(): React.ReactElement {
   const plan = usePlan(orgSlug, planId);
   const project = useProject(orgSlug, plan.data?.projectId ?? '');
   const client = useClient(orgSlug, project.data?.clientId ?? '');
+  // Shares the activities cache with the table below (same query key); used to
+  // populate the logic-editor's add picker.
+  const activities = useActivities(orgSlug, planId);
+  const canManageLogic = canWrite; // dependency write = the hierarchy-writer roles
 
   if (plan.isPending) {
     return (
@@ -121,6 +125,9 @@ export function PlanDetailScreen(): React.ReactElement {
 
       <DependencyEditor
         orgSlug={orgSlug}
+        planId={planId}
+        planActivities={activities.data ?? []}
+        canManageLogic={canManageLogic}
         open={logicActivity !== undefined}
         onClose={() => setLogicActivity(undefined)}
         {...(logicActivity ? { activity: logicActivity } : {})}

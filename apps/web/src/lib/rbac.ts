@@ -23,3 +23,13 @@ export const PROGRESS_REPORTER_ROLES: readonly OrganizationRole[] = [
 export function canReportProgress(role: OrganizationRole | undefined): boolean {
   return role !== undefined && PROGRESS_REPORTER_ROLES.includes(role);
 }
+
+/**
+ * Whether a role may edit schedule **logic** (create/update/delete dependencies).
+ * Mirrors the API's `dependency:create/update/delete` — the same Planner + Org
+ * Admin roles as hierarchy write. A named helper so the gate reads intentfully
+ * and can diverge later without touching call sites.
+ */
+export function canManageLogic(role: OrganizationRole | undefined): boolean {
+  return canManageHierarchy(role);
+}

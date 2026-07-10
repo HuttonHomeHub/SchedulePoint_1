@@ -49,13 +49,24 @@ function link(overrides: Partial<DependencySummary> = {}): DependencySummary {
   };
 }
 
-function renderEditor(predecessors: DependencySummary[], successors: DependencySummary[]) {
+function renderEditor(
+  predecessors: DependencySummary[],
+  successors: DependencySummary[],
+  canManageLogic = false,
+) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(dependencyKeys.predecessors('acme', 'b1'), predecessors);
   queryClient.setQueryData(dependencyKeys.successors('acme', 'b1'), successors);
   return render(
     <QueryClientProvider client={queryClient}>
-      <DependencyEditor orgSlug="acme" activity={ACTIVITY} open onClose={() => {}} />
+      <DependencyEditor
+        orgSlug="acme"
+        planId="pl1"
+        activity={ACTIVITY}
+        canManageLogic={canManageLogic}
+        open
+        onClose={() => {}}
+      />
     </QueryClientProvider>,
   );
 }
@@ -80,5 +91,19 @@ describe('DependencyEditor', () => {
     expect(screen.getByText('Start → Start')).toBeInTheDocument();
     expect(screen.getByText('−2d')).toBeInTheDocument();
     expect(screen.getByText(/No predecessors/)).toBeInTheDocument();
+  });
+
+  it('hides write affordances for a reader', () => {
+    renderEditor([link()], []);
+    expect(screen.queryByRole('button', { name: 'Add predecessor' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit link/ })).not.toBeInTheDocument();
+  });
+
+  it('shows add/edit/remove affordances for a logic manager', () => {
+    renderEditor([link()], [], true);
+    expect(screen.getByRole('button', { name: 'Add predecessor' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add successor' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit link to Excavate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove link to Excavate' })).toBeInTheDocument();
   });
 });

@@ -1,0 +1,113 @@
+import type { ActivitySummary } from '@repo/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AddDependencyDialog, type LinkDirection } from './AddDependencyDialog';
+
+import { apiFetch } from '@/lib/api/client';
+
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
+
+function activity(id: string, name: string): ActivitySummary {
+  return {
+    id,
+    planId: 'pl1',
+    code: null,
+    name,
+    description: null,
+    type: 'TASK',
+    durationDays: 1,
+    constraintType: null,
+    constraintDate: null,
+    laneIndex: 0,
+    status: 'NOT_STARTED',
+    percentComplete: 0,
+    actualStart: null,
+    actualFinish: null,
+    earlyStart: null,
+    earlyFinish: null,
+    lateStart: null,
+    lateFinish: null,
+    totalFloat: null,
+    isCritical: false,
+    isNearCritical: false,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
+}
+
+const ANCHOR = activity('anchor', 'Pour slab');
+const OPTIONS = [activity('a1', 'Excavate'), activity('c1', 'Cure')];
+
+function renderDialog(direction: LinkDirection) {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AddDependencyDialog
+        orgSlug="acme"
+        planId="pl1"
+        anchor={ANCHOR}
+        direction={direction}
+        options={OPTIONS}
+        open
+        onClose={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+}
+
+describe('AddDependencyDialog', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset().mockResolvedValue({});
+  });
+
+  it('adds a predecessor: the chosen activity → the anchor', async () => {
+    renderDialog('predecessor');
+    fireEvent.change(screen.getByLabelText('Predecessor activity'), { target: { value: 'a1' } });
+    fireEvent.change(screen.getByLabelText(/Lag/), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add dependency' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(path).toBe('/organizations/acme/plans/pl1/dependencies');
+    expect(JSON.parse(init?.body as string)).toMatchObject({
+      predecessorId: 'a1',
+      successorId: 'anchor',
+      type: 'FS',
+      lagDays: 2,
+    });
+  });
+
+  it('adds a successor: the anchor → the chosen activity', async () => {
+    renderDialog('successor');
+    fireEvent.change(screen.getByLabelText('Successor activity'), { target: { value: 'c1' } });
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'SS' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add dependency' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
+    expect(body).toMatchObject({ predecessorId: 'anchor', successorId: 'c1', type: 'SS' });
+  });
+
+  it('surfaces a server rejection (e.g. a cycle) inline', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(
+      new Error('This dependency would create a cycle in the schedule.'),
+    );
+    renderDialog('successor');
+    fireEvent.change(screen.getByLabelText('Successor activity'), { target: { value: 'a1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add dependency' }));
+
+    await waitFor(() => expect(screen.getByText(/would create a cycle/)).toBeInTheDocument());
+  });
+
+  it('requires choosing an activity', async () => {
+    renderDialog('predecessor');
+    fireEvent.click(screen.getByRole('button', { name: 'Add dependency' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('Choose an activity.').length).toBeGreaterThan(0),
+    );
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+});

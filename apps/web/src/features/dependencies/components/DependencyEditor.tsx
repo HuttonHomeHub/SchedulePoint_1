@@ -1,9 +1,17 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { useState } from 'react';
+import { flushSync } from 'react-dom';
 
-import { usePredecessors, useSuccessors } from '../api/use-dependencies';
+import { useDeleteDependency, usePredecessors, useSuccessors } from '../api/use-dependencies';
 import { DEPENDENCY_TYPE_LABELS, formatLag } from '../schemas/dependency-schemas';
 
+import { AddDependencyDialog, type LinkDirection } from './AddDependencyDialog';
+import { EditDependencyDialog } from './EditDependencyDialog';
+
+import { useAnnounce } from '@/components/ui/announcer';
+import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Dialog } from '@/components/ui/dialog';
 
@@ -15,11 +23,15 @@ function DirectionTable({
   endpoint,
   caption,
   emptyLabel,
+  onEdit,
+  onRemove,
 }: {
   query: UseQueryResult<DependencySummary[]>;
   endpoint: Endpoint;
   caption: string;
   emptyLabel: string;
+  onEdit?: (dependency: DependencySummary) => void;
+  onRemove?: (dependency: DependencySummary) => void;
 }): React.ReactElement {
   const columns: Column<DependencySummary>[] = [
     {
@@ -43,6 +55,33 @@ function DirectionTable({
       cell: (dep) => <span className="text-muted-foreground">{formatLag(dep.lagDays)}</span>,
     },
   ];
+  if (onEdit && onRemove) {
+    columns.push({
+      header: 'Actions',
+      srHeader: true,
+      cellClassName: 'py-2 text-right whitespace-nowrap',
+      cell: (dep) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit(dep)}
+            aria-label={`Edit link to ${dep[endpoint].name}`}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onRemove(dep)}
+            aria-label={`Remove link to ${dep[endpoint].name}`}
+          >
+            Remove
+          </Button>
+        </div>
+      ),
+    });
+  }
 
   return (
     <DataTable
@@ -63,19 +102,27 @@ function DirectionTable({
 
 /**
  * The Logic panel for one activity — its predecessors (what must come before) and
- * successors (what it drives), each a table of the other end · type · lag. Opened
- * from the activities table. Read-only in this slice; the add/edit/remove
- * affordances land next (gated on `dependency:*` write). `activity` is optional so
- * the dialog stays mounted (toggled by `open`), preserving native focus-restore.
+ * successors (what it drives). Read for any member; Planners/Org Admins
+ * (`canManageLogic`) also get add/edit/remove. Cycle, duplicate and self
+ * rejections come back from the API and surface inline (the server owns the
+ * acyclic guarantee). `activity` is optional so the dialog stays mounted (toggled
+ * by `open`), preserving native focus-restore.
  */
 export function DependencyEditor({
   orgSlug,
+  planId,
   activity,
+  planActivities,
+  canManageLogic = false,
   open,
   onClose,
 }: {
   orgSlug: string;
+  planId: string;
   activity?: ActivitySummary;
+  /** The plan's activities, for the add picker (self is excluded here). */
+  planActivities?: ActivitySummary[];
+  canManageLogic?: boolean;
   open: boolean;
   onClose: () => void;
 }): React.ReactElement {
@@ -83,34 +130,125 @@ export function DependencyEditor({
   const enabled = open && activity !== undefined;
   const predecessors = usePredecessors(orgSlug, activityId, enabled);
   const successors = useSuccessors(orgSlug, activityId, enabled);
+  const deleteDependency = useDeleteDependency(orgSlug);
+  const announce = useAnnounce();
+
+  const [adding, setAdding] = useState<LinkDirection | null>(null);
+  const [editing, setEditing] = useState<DependencySummary | null>(null);
+  const [removing, setRemoving] = useState<DependencySummary | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  const others = activity
+    ? (planActivities ?? []).filter((candidate) => candidate.id !== activity.id)
+    : [];
+
+  const editHandlers = canManageLogic
+    ? {
+        onEdit: setEditing,
+        onRemove: (dep: DependencySummary) => {
+          setRemoveError(null);
+          setRemoving(dep);
+        },
+      }
+    : {};
+
+  const confirmRemove = (): void => {
+    if (!removing) return;
+    deleteDependency.mutate(removing.id, {
+      onSuccess: () => {
+        flushSync(() => {
+          setRemoving(null);
+          setRemoveError(null);
+        });
+        announce('Dependency removed.');
+      },
+      onError: (err) => setRemoveError(err.message),
+    });
+  };
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title={activity ? `Logic — ${activity.name}` : 'Logic'}
-      description="The predecessors and successors that link this activity into the schedule."
-    >
-      <div className="flex flex-col gap-6">
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">Predecessors</h3>
-          <DirectionTable
-            query={predecessors}
-            endpoint="predecessor"
-            caption="Predecessors"
-            emptyLabel="No predecessors — nothing has to finish before this activity."
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title={activity ? `Logic — ${activity.name}` : 'Logic'}
+        description="The predecessors and successors that link this activity into the schedule."
+      >
+        <div className="flex flex-col gap-6">
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-sm font-medium">Predecessors</h3>
+              {canManageLogic ? (
+                <Button variant="outline" size="sm" onClick={() => setAdding('predecessor')}>
+                  Add predecessor
+                </Button>
+              ) : null}
+            </div>
+            <DirectionTable
+              query={predecessors}
+              endpoint="predecessor"
+              caption="Predecessors"
+              emptyLabel="No predecessors — nothing has to finish before this activity."
+              {...editHandlers}
+            />
+          </section>
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-sm font-medium">Successors</h3>
+              {canManageLogic ? (
+                <Button variant="outline" size="sm" onClick={() => setAdding('successor')}>
+                  Add successor
+                </Button>
+              ) : null}
+            </div>
+            <DirectionTable
+              query={successors}
+              endpoint="successor"
+              caption="Successors"
+              emptyLabel="No successors — this activity doesn’t drive anything yet."
+              {...editHandlers}
+            />
+          </section>
+        </div>
+      </Dialog>
+
+      {canManageLogic && activity ? (
+        <>
+          <AddDependencyDialog
+            orgSlug={orgSlug}
+            planId={planId}
+            anchor={activity}
+            direction={adding ?? 'predecessor'}
+            options={others}
+            open={adding !== null}
+            onClose={() => setAdding(null)}
           />
-        </section>
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">Successors</h3>
-          <DirectionTable
-            query={successors}
-            endpoint="successor"
-            caption="Successors"
-            emptyLabel="No successors — this activity doesn’t drive anything yet."
+          <EditDependencyDialog
+            orgSlug={orgSlug}
+            open={editing !== null}
+            onClose={() => setEditing(null)}
+            {...(editing ? { dependency: editing } : {})}
           />
-        </section>
-      </div>
-    </Dialog>
+          <ConfirmDialog
+            open={removing !== null}
+            onClose={() => {
+              setRemoving(null);
+              setRemoveError(null);
+            }}
+            onConfirm={confirmRemove}
+            title="Remove dependency"
+            description={
+              removing
+                ? `Remove the link ${removing.predecessor.name} → ${removing.successor.name}?`
+                : ''
+            }
+            confirmLabel="Remove"
+            pending={deleteDependency.isPending}
+            pendingLabel="Removing…"
+            error={removeError}
+          />
+        </>
+      ) : null}
+    </>
   );
 }
