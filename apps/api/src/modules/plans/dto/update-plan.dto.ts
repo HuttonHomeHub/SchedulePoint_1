@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   ValidateIf,
@@ -55,6 +56,19 @@ export class UpdatePlanDto {
   @ValidateIf((_, value) => value !== null)
   @IsCalendarDate()
   plannedStart?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      "The plan's default working-day calendar (must be an active calendar in the same " +
+      'organisation), or null to clear it (all-days-work). Validated service-side.',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear the calendar); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  calendarId?: string | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

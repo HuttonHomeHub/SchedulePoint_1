@@ -41,13 +41,20 @@ describe('OrganizationsService', () => {
     findManyActiveByIds: ReturnType<typeof vi.fn>;
   };
   let members: { create: ReturnType<typeof vi.fn> };
+  let calendarCreate: ReturnType<typeof vi.fn>;
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: OrganizationsService;
 
   beforeEach(() => {
     organizations = { create: vi.fn(), findActiveBySlug: vi.fn(), findManyActiveByIds: vi.fn() };
     members = { create: vi.fn().mockResolvedValue({}) };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    // The org-create transaction also seeds the Standard calendar via tx.calendar.create.
+    calendarCreate = vi.fn().mockResolvedValue({});
+    prisma = {
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
+        cb({ calendar: { create: calendarCreate } }),
+      ),
+    };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new OrganizationsService(
       organizations as unknown as OrganizationRepository,
@@ -78,6 +85,10 @@ describe('OrganizationsService', () => {
         expect.objectContaining({ userId: USER, role: 'ORG_ADMIN' }),
         expect.anything(),
       );
+      // The org is seeded a Standard (Mon–Fri) calendar in the same transaction.
+      expect(calendarCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ name: 'Standard', workingWeekdays: 31, createdBy: USER }),
+      });
     });
 
     it('retries with a numeric suffix when the slug is taken', async () => {

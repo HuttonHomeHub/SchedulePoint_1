@@ -367,6 +367,12 @@ model Plan {
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. Optional metadata in this slice.
   plannedStart   DateTime?  @map("planned_start") @db.Date
+  // The plan's default working-day calendar (M5, ADR-0024). Nullable → all-days-work
+  // (M6 back-compat); new plans default to the org's seeded Standard calendar. FK is
+  // RESTRICT (calendars soft-delete only; the service in-use guard returns 409
+  // CALENDAR_IN_USE before any delete). Backed by a partial index on (calendar_id)
+  // WHERE deleted_at IS NULL — raw SQL in the migration.
+  calendarId     String?    @map("calendar_id") @db.Uuid
   version        Int        @default(1)
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -377,6 +383,7 @@ model Plan {
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   project      Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  calendar     Calendar?            @relation(fields: [calendarId], references: [id], onDelete: Restrict)
   activities   Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
   dependencies ActivityDependency[]
@@ -598,6 +605,10 @@ model Calendar {
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   exceptions   CalendarException[]
+  // Plans defaulting to this calendar (M5 Task C1). The service in-use guard counts
+  // ACTIVE plans here before allowing a delete (409 CALENDAR_IN_USE); the FK is
+  // RESTRICT as defence in depth.
+  plans        Plan[]
 
   // Calendar name is unique per organisation among ACTIVE rows — partial unique
   // (uq_calendars_org_name ON (organization_id, name) WHERE deleted_at IS NULL),

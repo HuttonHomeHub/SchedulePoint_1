@@ -99,19 +99,35 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     return res.body.data.id as string;
   }
 
+  it('seeds a Standard (Mon–Fri) calendar for a new organisation', async () => {
+    const { actor } = await adminWithOrg();
+    const list = await actor.agent.get(base).expect(200);
+    // Org create seeds exactly one Standard calendar (M5, ADR-0024).
+    expect(list.body.data).toHaveLength(1);
+    expect(list.body.data[0]).toMatchObject({
+      name: 'Standard',
+      workingWeekdays: STANDARD_WEEKDAYS_MASK,
+    });
+  });
+
   it('creates, gets and lists calendars', async () => {
     const { actor } = await adminWithOrg();
-    const id = await createCalendar(actor, 'Standard');
+    const id = await createCalendar(actor, 'Project Calendar');
 
     const got = await actor.agent.get(`${base}/${id}`).expect(200);
     expect(got.body.data).toMatchObject({
-      name: 'Standard',
+      name: 'Project Calendar',
       workingWeekdays: STANDARD_WEEKDAYS_MASK,
     });
     expect(got.body.data.exceptions).toEqual([]);
 
     const list = await actor.agent.get(base).expect(200);
-    expect(list.body.data).toHaveLength(1);
+    // The seeded Standard plus the one just created.
+    expect(list.body.data).toHaveLength(2);
+    expect(list.body.data.map((c: { name: string }) => c.name).sort()).toEqual([
+      'Project Calendar',
+      'Standard',
+    ]);
     expect(list.body.meta).toMatchObject({ hasMore: false });
     // The list shape is the summary — no embedded exceptions.
     expect(list.body.data[0]).not.toHaveProperty('exceptions');
@@ -213,6 +229,38 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     expect(exceptions).toHaveLength(1);
     expect(exceptions[0]?.deletedAt).not.toBeNull();
     expect(exceptions[0]?.deleteBatchId).toBe(cal.deleteBatchId);
+  });
+
+  it('refuses to delete a calendar in use by an active plan (409 CALENDAR_IN_USE)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const calId = await createCalendar(actor, 'In Use');
+
+    // Seed a client → project → plan referencing the calendar directly (the plan
+    // calendar picker is a web concern; here we assert the service guard).
+    const client = await prisma.client.create({
+      data: { organizationId: orgId, name: 'C', createdBy: actor.userId },
+    });
+    const project = await prisma.project.create({
+      data: { organizationId: orgId, clientId: client.id, name: 'P', createdBy: actor.userId },
+    });
+    const plan = await prisma.plan.create({
+      data: {
+        organizationId: orgId,
+        projectId: project.id,
+        name: 'Pl',
+        calendarId: calId,
+        createdBy: actor.userId,
+      },
+    });
+
+    const res = await actor.agent.delete(`${base}/${calId}`).expect(409);
+    expect(res.body.error?.details?.reason).toBe('CALENDAR_IN_USE');
+    // Still active — the delete was refused.
+    await actor.agent.get(`${base}/${calId}`).expect(200);
+
+    // Once the plan is soft-deleted it no longer counts, so the calendar can be deleted.
+    await prisma.plan.update({ where: { id: plan.id }, data: { deletedAt: new Date() } });
+    await actor.agent.delete(`${base}/${calId}`).expect(204);
   });
 
   it('404s a foreign/unknown calendar id and hides calendars from non-members', async () => {

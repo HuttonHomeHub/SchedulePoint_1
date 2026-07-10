@@ -1,16 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Plan } from '@prisma/client';
-import type { PageMeta } from '@repo/types';
+import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { ProjectRepository } from '../projects/project.repository';
 
@@ -33,6 +39,7 @@ export class PlansService {
     private readonly organizations: OrganizationsService,
     private readonly projects: ProjectRepository,
     private readonly plans: PlanRepository,
+    private readonly calendars: CalendarRepository,
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(PlansService.name) private readonly logger: PinoLogger,
@@ -80,6 +87,13 @@ export class PlansService {
     this.assertCan(principal, 'plan:create', organization.id);
     const project = await this.loadActiveProject(projectId, organization.id);
 
+    // New plans default to the org's seeded Standard calendar (ADR-0024). If the org
+    // has no active Standard (renamed/deleted), fall back to null (all-days-work).
+    const standard = await this.calendars.findActiveByNameInOrg(
+      project.organizationId,
+      STANDARD_CALENDAR_NAME,
+    );
+
     try {
       const plan = await this.plans.create({
         // Copy the organisation id from the parent project, never from input.
@@ -89,6 +103,7 @@ export class PlansService {
         description: dto.description ?? null,
         ...(dto.status ? { status: dto.status } : {}),
         ...(dto.plannedStart ? { plannedStart: parseCalendarDate(dto.plannedStart) } : {}),
+        ...(standard ? { calendarId: standard.id } : {}),
         createdBy: principal.userId,
         updatedBy: principal.userId,
       });
@@ -127,6 +142,20 @@ export class PlansService {
     if (dto.status !== undefined) patch.status = dto.status;
     if (dto.plannedStart !== undefined) {
       patch.plannedStart = dto.plannedStart === null ? null : parseCalendarDate(dto.plannedStart);
+    }
+    if (dto.calendarId !== undefined) {
+      // A plan may only reference an ACTIVE calendar in its OWN organisation
+      // (anti-IDOR); null clears it (all-days-work). A foreign/deleted/unknown id is
+      // rejected as invalid input (422) rather than leaking whether it exists.
+      if (dto.calendarId === null) {
+        patch.calendarId = null;
+      } else {
+        const calendar = await this.calendars.findActiveByIdInOrg(dto.calendarId, organization.id);
+        if (!calendar) {
+          throw new ValidationError('The selected calendar was not found in this organisation.');
+        }
+        patch.calendarId = calendar.id;
+      }
     }
 
     try {

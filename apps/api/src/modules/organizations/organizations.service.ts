@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Organization } from '@prisma/client';
+import { STANDARD_CALENDAR_NAME, STANDARD_WEEKDAYS_MASK } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import { OrganizationRole, type Principal } from '../../common/auth/principal';
@@ -65,6 +66,19 @@ export class OrganizationsService {
             },
             tx,
           );
+          // Seed the org's default Standard (Mon–Fri) calendar in the same
+          // transaction, so new plans have a calendar to default to (M5, ADR-0024).
+          // Written directly via the tx handle (not the calendars module) to avoid a
+          // module cycle: CalendarsModule already depends on OrganizationsModule.
+          await tx.calendar.create({
+            data: {
+              organizationId: created.id,
+              name: STANDARD_CALENDAR_NAME,
+              workingWeekdays: STANDARD_WEEKDAYS_MASK,
+              createdBy: principal.userId,
+              updatedBy: principal.userId,
+            },
+          });
           return created;
         });
 

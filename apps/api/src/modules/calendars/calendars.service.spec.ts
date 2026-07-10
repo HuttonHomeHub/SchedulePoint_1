@@ -75,6 +75,7 @@ describe('CalendarsService', () => {
     findManyActiveByOrg: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
     softDeleteWithExceptions: ReturnType<typeof vi.fn>;
+    countActivePlansUsing: ReturnType<typeof vi.fn>;
     createException: ReturnType<typeof vi.fn>;
     findActiveExceptionByIdInCalendar: ReturnType<typeof vi.fn>;
     softDeleteException: ReturnType<typeof vi.fn>;
@@ -94,6 +95,7 @@ describe('CalendarsService', () => {
       findManyActiveByOrg: vi.fn(),
       updateIfVersionMatches: vi.fn(),
       softDeleteWithExceptions: vi.fn(),
+      countActivePlansUsing: vi.fn().mockResolvedValue(0),
       createException: vi.fn(),
       findActiveExceptionByIdInCalendar: vi.fn(),
       softDeleteException: vi.fn(),
@@ -207,6 +209,15 @@ describe('CalendarsService', () => {
       calendars.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(service.remove(principalWith(ALL), 'acme', 'cal-1')).rejects.toBeInstanceOf(
         NotFoundError,
+      );
+      expect(calendars.softDeleteWithExceptions).not.toHaveBeenCalled();
+    });
+
+    it('409s (CALENDAR_IN_USE) when an active plan references the calendar', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
+      calendars.countActivePlansUsing.mockResolvedValue(2);
+      await expect(service.remove(principalWith(ALL), 'acme', 'cal-1')).rejects.toBeInstanceOf(
+        ConflictError,
       );
       expect(calendars.softDeleteWithExceptions).not.toHaveBeenCalled();
     });

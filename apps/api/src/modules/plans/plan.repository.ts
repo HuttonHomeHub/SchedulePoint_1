@@ -9,6 +9,8 @@ export interface PlanPatch {
   description?: string | null;
   status?: PlanStatus;
   plannedStart?: Date | null;
+  /** The plan's default calendar id, or null to clear it (validated in the service). */
+  calendarId?: string | null;
 }
 
 /**

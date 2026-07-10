@@ -61,6 +61,31 @@ export class CalendarRepository {
     });
   }
 
+  /**
+   * An active calendar in an org by name (case-sensitive) — used to resolve the
+   * seeded `Standard` calendar that new plans default to (Task C1). Returns null if
+   * the org has no active calendar with that name (e.g. it was renamed/deleted).
+   */
+  findActiveByNameInOrg(
+    organizationId: string,
+    name: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Calendar | null> {
+    return db.calendar.findFirst({ where: this.active({ organizationId, name }) });
+  }
+
+  /**
+   * Count the ACTIVE plans whose default calendar is `calendarId` — the delete-in-use
+   * guard (Task C1). A soft-deleted plan does not count (it no longer references the
+   * calendar for scheduling). Backed by the partial `idx_plans_calendar_id`.
+   */
+  countActivePlansUsing(
+    calendarId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.plan.count({ where: { calendarId, deletedAt: null } });
+  }
+
   /** A page of an organisation's active calendars (keyset cursor by id). */
   findManyActiveByOrg(params: {
     organizationId: string;

@@ -151,6 +151,12 @@ export interface PlanSummary {
   status: PlanStatus;
   /** Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. */
   plannedStart: string | null;
+  /**
+   * The plan's default working-day calendar (M5, ADR-0024), or null for
+   * all-days-work (the M6 back-compat behaviour). New plans default to the org's
+   * seeded {@link STANDARD_CALENDAR_NAME} calendar.
+   */
+  calendarId: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -300,6 +306,13 @@ export const STANDARD_WEEKDAYS_MASK = 0b0011111; // 31
 /** Inclusive valid range of a mask: ≥ 1 working weekday, ≤ 7 bits (matches the DB CHECK). */
 export const MIN_WORKING_WEEKDAYS_MASK = 1;
 export const MAX_WORKING_WEEKDAYS_MASK = 127;
+
+/**
+ * The name of the Mon–Fri calendar seeded once per organisation (on org create and
+ * by the M5 backfill migration) and used as the default for new plans (ADR-0024).
+ * The single source of truth shared by the seeder and the plan-create default.
+ */
+export const STANDARD_CALENDAR_NAME = 'Standard';
 
 /**
  * Pure helpers for the {@link WEEKDAYS} bitmask. No runtime deps — safe to share

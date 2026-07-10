@@ -190,6 +190,7 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `idx_clients_delete_batch_id`                 | `(delete_batch_id)`                    | partial        | batch restore lookup (`WHERE delete_batch_id IS NOT NULL`); tiny — only soft-deleted rows carry a value                                                            |
 | `idx_projects_delete_batch_id`                | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                               |
 | `idx_plans_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                               |
+| `idx_plans_calendar_id`                       | `(calendar_id)`                        | partial        | `plans.calendar_id` FK + the delete-in-use guard's active-plan count (`WHERE deleted_at IS NULL AND calendar_id IS NOT NULL`)                                      |
 | `idx_activities_delete_batch_id`              | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                               |
 | `dependencies_plan_id_created_at_id_idx`      | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + plan-level dependency list + cursor sort — subsumes a standalone plan index                                                                         |
 | `dependencies_predecessor_id_idx`             | `(predecessor_id)`                     | full           | `predecessor_id` FK + "successors of X" list (edges out of X) + the cycle-walk adjacency load                                                                      |
@@ -320,8 +321,11 @@ indexes).
   parent calendar (copied by the service, never client input — like `Activity`), so an
   org-scope/IDOR check and the cascade batch filter one indexed column without a join.
   The calendar library is a **sibling** of the Client→Project→Plan tree, not part of it;
-  a `Plan` references its default calendar via the nullable `plans.calendar_id` FK (added
-  in a later task), which is why calendars are not a hierarchy level.
+  a `Plan` references its default calendar via the nullable `plans.calendar_id` FK
+  (`RESTRICT`, backed by the partial `idx_plans_calendar_id`), which is why calendars are
+  not a hierarchy level. A null `calendar_id` means all-days-work (M6 back-compat); new
+  plans default to the org's seeded **Standard (Mon–Fri)** calendar, seeded on org create
+  and backfilled for existing orgs by the M5 data migration.
 - **`working_weekdays` CHECK** (raw SQL — defence-in-depth). `ck_calendars_working_weekdays_range`
   bounds the mask to **`> 0 AND <= 127`**: it must have at least one working weekday (an
   empty pattern would make the engine's `addWorkingDays` non-terminating — mirrored by the
@@ -341,9 +345,12 @@ indexes).
   active ones); `organization_id` backs its FK and IDOR loads.
 - **Cascade.** Both FKs are `RESTRICT`; calendars/exceptions are never hard-deleted.
   Soft-deleting a calendar stamps it and its exceptions with one `delete_batch_id` so
-  restore brings the set back — the same service-owned mechanism as the hierarchy (the
-  delete-in-use guard, so a calendar referenced by an active plan cannot be deleted, is a
-  service check added with `plans.calendar_id`). The reserved `activities.calendar_id`
+  restore brings the set back — the same service-owned mechanism as the hierarchy. A
+  **delete-in-use guard** (`CalendarsService`) counts active plans referencing the
+  calendar and returns **409 `CALENDAR_IN_USE`** before any delete, so a calendar
+  referenced by an active plan can never be removed (soft delete never trips the DB FK, so
+  the service check is the real guard; `RESTRICT` is defence in depth). The reserved
+  `activities.calendar_id`
   column stays reserved — **per-activity calendars are deferred** (they break the engine's
   continuous-offset arithmetic; ADR-0024).
 

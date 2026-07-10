@@ -154,9 +154,18 @@ export class CalendarsService {
       throw new NotFoundError('Calendar not found.');
     }
 
-    // The delete-in-use guard (count active plans referencing the calendar → 409
-    // CALENDAR_IN_USE) is added in Task C1 with `plans.calendar_id`; no plan can
-    // reference a calendar yet, so the delete is unguarded-but-unreferenced.
+    // Delete-in-use guard: a calendar referenced by an active plan cannot be deleted,
+    // so a plan can never dangle a missing calendar (409 CALENDAR_IN_USE). Soft delete
+    // never trips the DB FK, so this service check is the real guard (RESTRICT is
+    // defence in depth). Counted before the delete transaction.
+    const inUse = await this.calendars.countActivePlansUsing(calendarId);
+    if (inUse > 0) {
+      throw new ConflictError(
+        `This calendar is in use by ${inUse} active plan${inUse === 1 ? '' : 's'}.`,
+        { reason: CALENDAR_CONFLICT.CALENDAR_IN_USE, count: inUse },
+      );
+    }
+
     await this.prisma.$transaction((tx) =>
       this.calendars.softDeleteWithExceptions(calendarId, principal.userId, tx),
     );

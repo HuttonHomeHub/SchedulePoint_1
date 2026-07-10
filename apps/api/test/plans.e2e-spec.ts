@@ -47,6 +47,8 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
 
   beforeEach(async () => {
     await prisma.plan.deleteMany();
+    await prisma.calendarException.deleteMany();
+    await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
@@ -137,6 +139,56 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
       .send({ status: 'ARCHIVED', plannedStart: null, version: 1 })
       .expect(200);
     expect(patched.body.data).toMatchObject({ status: 'ARCHIVED', plannedStart: null, version: 2 });
+  });
+
+  it('defaults a new plan to the org Standard calendar and lets a Planner reassign/clear it', async () => {
+    const { actor, projectId } = await setup();
+    // The org was seeded a Standard calendar; a new plan defaults to it (ADR-0024).
+    const cals = await actor.agent.get('/api/v1/organizations/acme/calendars').expect(200);
+    const standardId = (cals.body.data as { id: string; name: string }[]).find(
+      (c) => c.name === 'Standard',
+    )?.id;
+    expect(standardId).toBeDefined();
+
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .send({ name: 'Scheduled' })
+      .expect(201);
+    expect(created.body.data.calendarId).toBe(standardId);
+    const id = created.body.data.id as string;
+
+    // Reassign to another calendar in the same org.
+    const other = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'Site 7-day', workingWeekdays: 127 })
+      .expect(201);
+    const otherId = other.body.data.id as string;
+    const patched = await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${id}`)
+      .send({ calendarId: otherId, version: 1 })
+      .expect(200);
+    expect(patched.body.data).toMatchObject({ calendarId: otherId, version: 2 });
+
+    // Clear it (null) → all-days-work.
+    const cleared = await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${id}`)
+      .send({ calendarId: null, version: 2 })
+      .expect(200);
+    expect(cleared.body.data.calendarId).toBeNull();
+  });
+
+  it('rejects assigning a foreign/unknown calendar to a plan (422, anti-IDOR)', async () => {
+    const { actor, projectId } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .send({ name: 'Guarded' })
+      .expect(201);
+    const id = created.body.data.id as string;
+    // A well-formed UUID that is not a calendar in this org → 422 (not 404 leak).
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${id}`)
+      .send({ calendarId: '00000000-0000-0000-0000-000000000000', version: 1 })
+      .expect(422);
   });
 
   it('rejects an invalid status or plannedStart (422)', async () => {
