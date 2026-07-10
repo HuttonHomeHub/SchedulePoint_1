@@ -1,9 +1,10 @@
 import type { PlanSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { useDeletePlan, usePlans } from '../api/use-plans';
-import { PLAN_STATUS_LABELS, formatPlannedStart } from '../schemas/plan-schemas';
+import { PLAN_STATUS_LABELS } from '../schemas/plan-schemas';
 
 import { PlanFormDialog } from './PlanFormDialog';
 
@@ -11,6 +12,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { formatCalendarDate } from '@/lib/format-date';
 
 /**
  * A project's plans as a table (name → plan detail, status, planned start).
@@ -54,7 +56,7 @@ export function PlansTable({
     {
       header: 'Planned start',
       cell: (plan) => (
-        <span className="text-muted-foreground">{formatPlannedStart(plan.plannedStart)}</span>
+        <span className="text-muted-foreground">{formatCalendarDate(plan.plannedStart)}</span>
       ),
     },
   ];
@@ -95,8 +97,11 @@ export function PlansTable({
     const name = deleting.name;
     deletePlan.mutate(deleting.id, {
       onSuccess: () => {
-        setDeleting(null);
-        setDeleteError(null);
+        // Close the dialog synchronously before moving focus (see ClientsTable).
+        flushSync(() => {
+          setDeleting(null);
+          setDeleteError(null);
+        });
         announce(`Plan “${name}” deleted.`);
         regionRef.current?.focus();
       },

@@ -1,6 +1,7 @@
 import type { ClientSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { useClients, useDeleteClient } from '../api/use-clients';
 
@@ -90,11 +91,14 @@ export function ClientsTable({
     const name = deleting.name;
     deleteClient.mutate(deleting.id, {
       onSuccess: () => {
-        setDeleting(null);
-        setDeleteError(null);
+        // Close the confirm dialog synchronously first: while the native
+        // <dialog> is still modal, focusing an element outside it is a no-op and
+        // focus would fall to <body> once the deleted row unmounts on refetch.
+        flushSync(() => {
+          setDeleting(null);
+          setDeleteError(null);
+        });
         announce(`Client “${name}” deleted.`);
-        // The deleted row (and its focused Delete button) unmounts on refetch;
-        // move focus to a stable container rather than letting it fall to body.
         regionRef.current?.focus();
       },
       onError: (err) => setDeleteError(err.message),

@@ -45,6 +45,11 @@ test('a user can create a plan and open its detail (accessible)', async ({ page 
   // Create a plan with a status + planned start.
   await page.getByRole('button', { name: 'New plan' }).click();
   const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  // The open form dialog (status select + date field) is accessible.
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
   await dialog.getByLabel('Name').fill('Baseline');
   await dialog.getByLabel('Status').selectOption('ACTIVE');
   await dialog.getByLabel(/Planned start/).fill('2026-05-01');
@@ -58,4 +63,8 @@ test('a user can create a plan and open its detail (accessible)', async ({ page 
   await expect(page.getByRole('heading', { name: 'Baseline', exact: true })).toBeVisible();
   await expect(page.getByText('Active', { exact: true })).toBeVisible();
   await expect(page.getByText(/Time-Scaled Logic Diagram/)).toBeVisible();
+  // The plan-detail screen is accessible.
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
 });

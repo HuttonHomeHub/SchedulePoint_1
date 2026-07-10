@@ -1,6 +1,7 @@
 import type { ProjectSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { useDeleteProject, useProjects } from '../api/use-projects';
 
@@ -95,8 +96,11 @@ export function ProjectsTable({
     const name = deleting.name;
     deleteProject.mutate(deleting.id, {
       onSuccess: () => {
-        setDeleting(null);
-        setDeleteError(null);
+        // Close the dialog synchronously before moving focus (see ClientsTable).
+        flushSync(() => {
+          setDeleting(null);
+          setDeleteError(null);
+        });
         announce(`Project “${name}” deleted.`);
         regionRef.current?.focus();
       },

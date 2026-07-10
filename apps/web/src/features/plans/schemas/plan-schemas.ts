@@ -1,30 +1,19 @@
 import type { PlanStatus } from '@repo/types';
 import { z } from 'zod';
 
-/** Plan lifecycle states, in order — kept in step with `@repo/types`' `PlanStatus`. */
-export const PLAN_STATUSES = [
-  'DRAFT',
-  'ACTIVE',
-  'ARCHIVED',
-] as const satisfies readonly PlanStatus[];
-
-/** Human labels for the plan lifecycle states (native select options). */
+/**
+ * Human labels for the plan lifecycle states — the exhaustive source of truth
+ * for the web (a `Record<PlanStatus, …>`, so a new `PlanStatus` fails to
+ * compile until a label is added).
+ */
 export const PLAN_STATUS_LABELS: Record<PlanStatus, string> = {
   DRAFT: 'Draft',
   ACTIVE: 'Active',
   ARCHIVED: 'Archived',
 };
 
-/** Format a `YYYY-MM-DD` calendar day for display (en-GB `dd MMM yyyy`), UTC-safe. */
-export function formatPlannedStart(value: string | null): string {
-  if (!value) return '—';
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${value}T00:00:00Z`));
-}
+/** Plan lifecycle states, in order — derived from the labels so it stays exhaustive. */
+export const PLAN_STATUSES = Object.keys(PLAN_STATUS_LABELS) as [PlanStatus, ...PlanStatus[]];
 
 /**
  * Plan create/edit form schema — mirrors the API DTO. `plannedStart` is the raw

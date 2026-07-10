@@ -5,9 +5,10 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useClient } from '@/features/clients';
-import { PLAN_STATUS_LABELS, PlanFormDialog, formatPlannedStart, usePlan } from '@/features/plans';
+import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import { formatCalendarDate } from '@/lib/format-date';
 
 /**
  * A single plan (`/orgs/$orgSlug/plans/$planId`): its metadata plus a region
@@ -88,7 +89,7 @@ export function PlanDetailScreen(): React.ReactElement {
         <dt className="text-muted-foreground">Status</dt>
         <dd>{PLAN_STATUS_LABELS[plan.data.status]}</dd>
         <dt className="text-muted-foreground">Planned start</dt>
-        <dd>{formatPlannedStart(plan.data.plannedStart)}</dd>
+        <dd>{formatCalendarDate(plan.data.plannedStart)}</dd>
       </dl>
       {plan.data.description ? (
         <p className="text-muted-foreground mt-4 max-w-2xl text-sm">{plan.data.description}</p>
