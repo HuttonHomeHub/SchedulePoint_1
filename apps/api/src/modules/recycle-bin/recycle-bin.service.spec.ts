@@ -11,6 +11,10 @@ import { RecycleBinService } from './recycle-bin.service';
 
 const ORG_ID = 'org-1';
 const USER_ID = 'user-1';
+/** Valid uuids — the cursor codec rejects non-uuid ids (defensive). */
+const UUID_A = '00000000-0000-4000-8000-000000000000';
+const UUID_B = '11111111-1111-4111-8111-111111111111';
+const UUID_C = '22222222-2222-4222-8222-222222222222';
 
 function row(overrides: Partial<DeletedRow> = {}): DeletedRow {
   return {
@@ -88,8 +92,8 @@ describe('RecycleBinService', () => {
   });
 
   it('over-fetches limit + 1 and returns a cursor for the next page when there is more', async () => {
-    const rows: DeletedRow[] = Array.from({ length: 3 }, (_, i) =>
-      row({ id: `c${i}`, deletedAt: new Date(Date.UTC(2026, 6, 10, 12 - i)) }),
+    const rows: DeletedRow[] = [UUID_A, UUID_B, UUID_C].map((id, i) =>
+      row({ id, deletedAt: new Date(Date.UTC(2026, 6, 10, 12 - i)) }),
     );
     repo.findDeletedPage.mockResolvedValue(rows);
 
@@ -106,7 +110,7 @@ describe('RecycleBinService', () => {
     // The cursor points at the last returned row (keyset position).
     expect(decodeDeletedCursor(meta.nextCursor as string)).toEqual({
       deletedAt: rows[1]?.deletedAt,
-      id: 'c1',
+      id: UUID_B,
     });
   });
 
@@ -114,14 +118,14 @@ describe('RecycleBinService', () => {
     repo.findDeletedPage.mockResolvedValue([]);
     const cursor = encodeDeletedCursor({
       deletedAt: new Date('2026-07-10T08:00:00.000Z'),
-      id: 'x9',
+      id: UUID_A,
     });
 
     await service.list(principalWith(['client:read']), 'acme', { limit: 20, cursor });
 
     expect(repo.findDeletedPage).toHaveBeenCalledWith(
       expect.objectContaining({
-        cursor: { deletedAt: new Date('2026-07-10T08:00:00.000Z'), id: 'x9' },
+        cursor: { deletedAt: new Date('2026-07-10T08:00:00.000Z'), id: UUID_A },
       }),
     );
   });
@@ -142,9 +146,9 @@ describe('RecycleBinService', () => {
 describe('deleted-cursor codec', () => {
   it('round-trips a (deletedAt, id) position', () => {
     const at = new Date('2026-07-10T10:00:00.000Z');
-    expect(decodeDeletedCursor(encodeDeletedCursor({ deletedAt: at, id: 'abc' }))).toEqual({
+    expect(decodeDeletedCursor(encodeDeletedCursor({ deletedAt: at, id: UUID_A }))).toEqual({
       deletedAt: at,
-      id: 'abc',
+      id: UUID_A,
     });
   });
 
@@ -154,8 +158,15 @@ describe('deleted-cursor codec', () => {
     expect(
       decodeDeletedCursor(Buffer.from('no-separator', 'utf8').toString('base64url')),
     ).toBeUndefined();
+    // Valid timestamp but a non-uuid id → rejected (avoids a downstream DB error).
     expect(
-      decodeDeletedCursor(Buffer.from('not-a-date|id', 'utf8').toString('base64url')),
+      decodeDeletedCursor(
+        Buffer.from('2026-07-10T10:00:00.000Z|not-a-uuid', 'utf8').toString('base64url'),
+      ),
+    ).toBeUndefined();
+    // Valid uuid but an unparseable timestamp → rejected.
+    expect(
+      decodeDeletedCursor(Buffer.from(`not-a-date|${UUID_A}`, 'utf8').toString('base64url')),
     ).toBeUndefined();
   });
 });

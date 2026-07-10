@@ -4,6 +4,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { useSession, useSignOut } from '@/features/auth';
 import { OrgSwitcher } from '@/features/organizations';
+import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { cn } from '@/lib/utils';
 
 const NAV_LINK_CLASS =
@@ -21,6 +22,9 @@ export function AppHeader(): React.ReactElement {
   // A project's plans live at /orgs/:slug/projects/:id (a sibling of /clients),
   // so keep the Clients nav item current across the whole hierarchy tree.
   const onHierarchy = /\/orgs\/[^/]+\/(clients|projects)(\/|$)/.test(pathname);
+  // The recycle bin is a writer surface (only writers can restore); non-writers
+  // never see the entry point, though the API read itself is member-level.
+  const canWrite = canManageHierarchy(useOrgRole(orgSlug ?? ''));
 
   return (
     <header className="border-border bg-background sticky top-0 z-10 border-b">
@@ -48,6 +52,15 @@ export function AppHeader(): React.ReactElement {
             <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
               Members
             </Link>
+            {canWrite ? (
+              <Link
+                to="/orgs/$orgSlug/recently-deleted"
+                params={{ orgSlug }}
+                className={NAV_LINK_CLASS}
+              >
+                Recently deleted
+              </Link>
+            ) : null}
           </nav>
         ) : null}
         <div className="ml-auto flex items-center gap-2">

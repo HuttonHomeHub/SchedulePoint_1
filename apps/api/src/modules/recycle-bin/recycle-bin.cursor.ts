@@ -1,5 +1,8 @@
 import type { DeletedCursor, DeletedRow } from './recycle-bin.repository';
 
+/** The `id` half of a cursor is a row uuid; reject anything else before it reaches Postgres. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Opaque keyset cursor for the merged deleted stream. Encodes the last row's
  * `(deletedAt, id)` — an ISO timestamp and a uuid — as base64url (see
@@ -25,7 +28,9 @@ export function decodeDeletedCursor(raw: string): DeletedCursor | undefined {
   if (sep <= 0) return undefined;
   const iso = decoded.slice(0, sep);
   const id = decoded.slice(sep + 1);
-  if (!id) return undefined;
+  // Validate the id is a uuid so a well-formed-but-bogus cursor degrades to the
+  // first page rather than raising a Postgres "invalid uuid" error downstream.
+  if (!UUID_RE.test(id)) return undefined;
   const deletedAt = new Date(iso);
   if (Number.isNaN(deletedAt.getTime())) return undefined;
   return { deletedAt, id };

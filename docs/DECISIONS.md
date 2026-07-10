@@ -36,12 +36,14 @@ three cursors. Reusing the existing per-entity restore endpoints avoids a second
 way to restore. This resolves the deleted-list shape deferred in the hierarchy
 plan (`docs/plans/hierarchy-crud.md`, Task E3 / risk row).
 
-**Consequences.** The `order` query param is ignored (the list is inherently
-newest-first). The endpoint over-fetches up to `3 × (limit + 1)` rows per page —
-fine for the bounded recycle-bin set; if it ever grows hot, a raw `UNION ALL`
-keyset query is the next step (noted in [TECH_DEBT.md](TECH_DEBT.md)). No new
-ADR: it composes existing patterns (org scope resolver, `{ data, meta }`
-envelope, soft-delete, RBAC) without changing a cross-cutting standard.
+**Consequences.** The `order` query param is accepted but ignored (the list is
+inherently newest-first) — the same repo-wide pattern already tracked as
+[TECH_DEBT.md](TECH_DEBT.md) #19, now showing up in a new place rather than a
+one-off exception. The endpoint over-fetches up to `3 × (limit + 1)` rows per
+page — fine for the bounded recycle-bin set; if it ever grows hot, a raw
+`UNION ALL` keyset query is the next step (TECH_DEBT.md #22). No new ADR: it
+composes existing patterns (org scope resolver, `{ data, meta }` envelope,
+soft-delete, RBAC) without changing a cross-cutting standard.
 
 ---
 

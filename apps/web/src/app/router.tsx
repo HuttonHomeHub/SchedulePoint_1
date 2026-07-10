@@ -20,6 +20,7 @@ import { OnboardingScreen } from '@/routes/onboarding';
 import { OrgHomeScreen } from '@/routes/org-home';
 import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
+import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
 
@@ -151,6 +152,14 @@ const planDetailRoute = createRoute({
   component: PlanDetailScreen,
 });
 
+/** The organisation recycle bin (soft-deleted clients/projects/plans + restore). */
+const recentlyDeletedRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/recently-deleted',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: RecentlyDeletedScreen,
+});
+
 /** Public invitation-accept route (keyed by the token in the URL). */
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -173,6 +182,7 @@ const routeTree = rootRoute.addChildren([
     clientDetailRoute,
     projectDetailRoute,
     planDetailRoute,
+    recentlyDeletedRoute,
   ]),
 ]);
 
