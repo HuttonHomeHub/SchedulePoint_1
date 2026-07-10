@@ -292,6 +292,89 @@ describe('ActivitiesService', () => {
     });
   });
 
+  describe('updateProgress', () => {
+    const PROGRESS: Permission[] = ['activity:update_progress'];
+
+    it('derives IN_PROGRESS from a partial percentage', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ percentComplete: 0 }));
+      activities.updateIfVersionMatches.mockResolvedValue(1);
+      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+        percentComplete: 40,
+        version: 1,
+      });
+      const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        status: string;
+        percentComplete: number;
+      };
+      expect(patch.status).toBe('IN_PROGRESS');
+      expect(patch.percentComplete).toBe(40);
+    });
+
+    it('derives COMPLETE from 100% and IN_PROGRESS from a start date at 0%', async () => {
+      activities.updateIfVersionMatches.mockResolvedValue(1);
+
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+        percentComplete: 100,
+        actualStart: '2026-05-01',
+        actualFinish: '2026-06-01',
+        version: 1,
+      });
+      expect(
+        (activities.updateIfVersionMatches.mock.calls[0]?.[2] as { status: string }).status,
+      ).toBe('COMPLETE');
+
+      // Started but 0% → IN_PROGRESS (the actual-start signal, not just the %).
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ percentComplete: 0 }));
+      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+        actualStart: '2026-05-01',
+        version: 1,
+      });
+      expect(
+        (activities.updateIfVersionMatches.mock.calls[1]?.[2] as { status: string }).status,
+      ).toBe('IN_PROGRESS');
+    });
+
+    it('rejects a finish without a start, and a finish before the start', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualFinish: '2026-06-01',
+          version: 1,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualStart: '2026-06-01',
+          actualFinish: '2026-05-01',
+          version: 1,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
+    it('forbids a caller without activity:update_progress', async () => {
+      await expect(
+        service.updateProgress(principalWith(['activity:read']), 'acme', ACTIVITY_ID, {
+          percentComplete: 10,
+          version: 1,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(activities.findActiveByIdInOrg).not.toHaveBeenCalled();
+    });
+
+    it('409s on a stale version', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      activities.updateIfVersionMatches.mockResolvedValue(0);
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          percentComplete: 50,
+          version: 1,
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
   describe('remove', () => {
     it('soft-deletes an existing activity', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());

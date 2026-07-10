@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Activity, type ActivityType } from '@prisma/client';
+import { Prisma, type Activity, type ActivityStatus, type ActivityType } from '@prisma/client';
 import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -21,9 +21,27 @@ import { PlanRepository } from '../plans/plan.repository';
 
 import { ActivityRepository, type ActivityPatch } from './activity.repository';
 import type { CreateActivityDto } from './dto/create-activity.dto';
+import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import type { UpdateActivityDto } from './dto/update-activity.dto';
 
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
+
+/**
+ * Derive an activity's status from its measurable progress so the two can never
+ * contradict: a finish date (or 100%) means COMPLETE; a start date (or any
+ * progress) means IN_PROGRESS; otherwise NOT_STARTED. Using the actual dates as
+ * the started/finished signal — not just the percentage — lets an activity be
+ * "in progress" at 0% (started but no measurable work yet).
+ */
+function deriveStatus(
+  percentComplete: number,
+  actualStart: Date | null,
+  actualFinish: Date | null,
+): ActivityStatus {
+  if (actualFinish !== null || percentComplete >= 100) return 'COMPLETE';
+  if (actualStart !== null || percentComplete > 0) return 'IN_PROGRESS';
+  return 'NOT_STARTED';
+}
 
 /**
  * Business logic for activities — the leaf of the Client → Project → Plan →
@@ -186,6 +204,76 @@ export class ActivitiesService {
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
     return updated;
+  }
+
+  /**
+   * Report progress (status / % / actual dates) — the Contributor-capable path.
+   * Requires only `activity:update_progress`, so a Contributor can move progress
+   * without the `activity:update` needed to change logic or definition. `status`
+   * is derived, not taken from input, so it always agrees with the numbers.
+   */
+  async updateProgress(
+    principal: Principal,
+    orgSlug: string,
+    activityId: string,
+    dto: UpdateActivityProgressDto,
+  ): Promise<Activity> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:update_progress', organization.id);
+
+    const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
+    if (!existing) throw new NotFoundError('Activity not found.');
+
+    // Resolve the effective values: a provided field overrides the stored one; an
+    // omitted field keeps it. This lets us re-derive status and check the
+    // date invariants against the FINAL state, not just what was sent.
+    const percentComplete = dto.percentComplete ?? existing.percentComplete;
+    const actualStart = this.resolveDate(dto.actualStart, existing.actualStart);
+    const actualFinish = this.resolveDate(dto.actualFinish, existing.actualFinish);
+
+    // You cannot finish what you never started, and a finish cannot precede a start.
+    if (actualFinish !== null && actualStart === null) {
+      throw new ValidationError('An actual finish needs an actual start.', {
+        reason: 'FINISH_WITHOUT_START',
+      });
+    }
+    if (actualStart !== null && actualFinish !== null && actualFinish < actualStart) {
+      throw new ValidationError('Actual finish cannot precede actual start.', {
+        reason: 'FINISH_BEFORE_START',
+      });
+    }
+
+    const patch: ActivityPatch = {
+      percentComplete,
+      actualStart,
+      actualFinish,
+      status: deriveStatus(percentComplete, actualStart, actualFinish),
+    };
+
+    const changed = await this.activities.updateIfVersionMatches(
+      activityId,
+      dto.version,
+      patch,
+      principal.userId,
+    );
+    if (changed === 0) {
+      throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
+    }
+    this.logger.info(
+      { organizationId: organization.id, activityId, userId: principal.userId },
+      'activity progress updated',
+    );
+
+    const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
+    if (!updated) throw new NotFoundError('Activity not found.');
+    return updated;
+  }
+
+  /** A provided date field (parsed, or null to clear) overrides the stored one;
+   * `undefined` (omitted) keeps the existing value. */
+  private resolveDate(field: string | null | undefined, existing: Date | null): Date | null {
+    if (field === undefined) return existing;
+    return field === null ? null : parseCalendarDate(field);
   }
 
   async remove(principal: Principal, orgSlug: string, activityId: string): Promise<void> {

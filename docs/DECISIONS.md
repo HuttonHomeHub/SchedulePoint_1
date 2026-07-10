@@ -10,6 +10,34 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-10 — Activity progress: dedicated endpoint, derived status, paired-constraint invariant
+
+**Decision.** An activity's **progress** (percent complete + actual start/finish)
+is reported through a dedicated `PATCH .../activities/:id/progress` endpoint that
+requires only `activity:update_progress` (Contributor upward), separate from the
+Planner-only `activity:update` that changes logic/definition. `status`
+(`NOT_STARTED/IN_PROGRESS/COMPLETE`) is **not** client-settable — it is derived
+server-side: a finish date (or 100%) → COMPLETE, a start date (or any %) →
+IN_PROGRESS, else NOT_STARTED. Actual dates may be cleared with `null`; an actual
+finish requires an actual start and cannot precede it (422). The definition
+endpoints never accept progress or CPM-output fields, and this endpoint never
+accepts definition fields.
+
+**Why.** The brief's role model gives a **Contributor** the ability to record
+progress without editing the schedule's logic — this endpoint + permission is the
+first concrete realisation of that split (the first capability separating
+Contributor from Viewer). Deriving `status` from the measurable numbers makes a
+contradictory state (e.g. `COMPLETE` at 20%) unrepresentable, so clients send one
+signal (%/dates) rather than two that can disagree. Using the actual-start signal —
+not only the percentage — lets an activity be _in progress at 0%_ (started, no
+measurable work yet), which construction planning needs.
+
+**Consequences.** `UpdateActivityProgressDto` carries only `percentComplete`,
+`actualStart`, `actualFinish`, `version`. The constraint type/date pairing is
+enforced on key-presence in the service **and** by a DB `CHECK`
+(`ck_activities_constraint_pair`) as defence-in-depth. The web progress editor
+(C2) gates on `activity:update_progress` and shows the derived status read-only.
+
 ### 2026-07-10 — Recycle bin: one org-scoped `/deleted` endpoint over a keyset-merged union
 
 **Decision.** Surface the hierarchy's soft-deleted rows through a single

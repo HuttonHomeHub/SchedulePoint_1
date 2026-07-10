@@ -27,6 +27,7 @@ import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivitiesService } from './activities.service';
 import { ActivityResponseDto } from './dto/activity-response.dto';
+import { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 
 /**
@@ -71,6 +72,27 @@ export class ActivitiesController {
     @Body() dto: UpdateActivityDto,
   ): Promise<ActivityResponseDto> {
     return ActivityResponseDto.from(await this.service.update(principal, orgSlug, activityId, dto));
+  }
+
+  @Patch(':activityId/progress')
+  @ApiOperation({
+    summary: 'Report progress: status / % / actual dates (Contributor upward).',
+    description:
+      'Moves progress only, not logic — requires activity:update_progress, which a ' +
+      'Contributor has but a Viewer does not. Status is derived from the numbers.',
+  })
+  @ApiOkResponse({ type: ActivityResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiConflictResponse({ description: 'Stale version — refresh and retry.' })
+  async updateProgress(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Body() dto: UpdateActivityProgressDto,
+  ): Promise<ActivityResponseDto> {
+    return ActivityResponseDto.from(
+      await this.service.updateProgress(principal, orgSlug, activityId, dto),
+    );
   }
 
   @Delete(':activityId')

@@ -364,6 +364,58 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(403);
   });
 
+  it('reports progress and derives status; a Contributor can, a Viewer cannot', async () => {
+    const { orgId, actor, planId } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Framing', durationDays: 10 })
+      .expect(201);
+    const id = created.body.data.id as string;
+    const item = `/api/v1/organizations/acme/activities/${id}`;
+
+    // A Contributor (who cannot edit the definition) reports progress.
+    const contributor = await signUp('contributor@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+    });
+    const progressed = await contributor.agent
+      .patch(`${item}/progress`)
+      .send({ percentComplete: 40, actualStart: '2026-05-01', version: 1 })
+      .expect(200);
+    expect(progressed.body.data).toMatchObject({
+      percentComplete: 40,
+      actualStart: '2026-05-01',
+      status: 'IN_PROGRESS', // derived from the numbers, not sent
+      version: 2,
+    });
+
+    // Completing it (100% + finish date) derives COMPLETE.
+    const done = await contributor.agent
+      .patch(`${item}/progress`)
+      .send({ percentComplete: 100, actualFinish: '2026-06-01', version: 2 })
+      .expect(200);
+    expect(done.body.data).toMatchObject({ status: 'COMPLETE', actualFinish: '2026-06-01' });
+
+    // A finish before the start, or without one, is rejected.
+    await contributor.agent
+      .patch(`${item}/progress`)
+      .send({ actualStart: '2026-07-01', actualFinish: '2026-06-01', version: 3 })
+      .expect(422);
+
+    // A Viewer cannot report progress.
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    await viewer.agent
+      .patch(`${item}/progress`)
+      .send({ percentComplete: 50, version: 3 })
+      .expect(403);
+
+    // A Contributor still cannot edit the definition (that split is the whole point).
+    await contributor.agent.patch(item).send({ name: 'Renamed', version: 3 }).expect(403);
+  });
+
   it('401s without a session', async () => {
     await request(server())
       .get('/api/v1/organizations/acme/plans/00000000-0000-7000-8000-000000000000/activities')
