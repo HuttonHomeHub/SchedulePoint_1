@@ -94,6 +94,23 @@ describe('permissionsForRole — activity progress vs logic (the Contributor spl
     expect(perms).not.toContain('dependency:update');
     expect(perms).not.toContain('dependency:delete');
   });
+});
+
+describe('permissionsForRole — CPM schedule (read vs calculate)', () => {
+  it('grants schedule:read to every member role', () => {
+    for (const role of Object.values(OrganizationRole)) {
+      expect(permissionsForRole(role)).toContain('schedule:read');
+    }
+  });
+
+  it('grants schedule:calculate to Planner + Org Admin only', () => {
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      expect(permissionsForRole(role)).not.toContain('schedule:calculate');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      expect(permissionsForRole(role)).toContain('schedule:calculate');
+    }
+  });
 
   it('gives Planner/Org Admin both progress and full definition write', () => {
     for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {

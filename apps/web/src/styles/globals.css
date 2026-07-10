@@ -36,8 +36,10 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
 
-  /* Brand / interactive */
-  --primary: oklch(0.55 0.18 255);
+  /* Brand / interactive. L is 0.50 (not lighter) so white foreground clears the
+     WCAG 2.2 AA 4.5:1 contrast bar even after the blue is clipped into the sRGB
+     gamut — verified by axe on a solid primary button (DESIGN_SYSTEM.md). */
+  --primary: oklch(0.5 0.18 255);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -58,6 +60,10 @@
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.769 0.15 80);
   --warning-foreground: oklch(0.205 0 0);
+  /* Readable warning for TEXT on page surfaces. Like `--destructive-text`, the
+     solid `--warning` above is a surface tone (near-black foreground) and is not
+     legible as coloured text on `background`/`card`; this keeps text ≥ 4.5:1. */
+  --warning-text: oklch(0.48 0.13 80);
   --info: oklch(0.5 0.14 240);
   --info-foreground: oklch(0.985 0 0);
 
@@ -76,7 +82,7 @@
   /* Sidebar surface (navigation shell) */
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.18 255);
+  --sidebar-primary: oklch(0.5 0.18 255);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
@@ -119,6 +125,8 @@
   --success-foreground: oklch(0.205 0 0);
   --warning: oklch(0.82 0.16 82);
   --warning-foreground: oklch(0.205 0 0);
+  /* Lighter amber so warning text stays legible on the dark background/card. */
+  --warning-text: oklch(0.85 0.14 82);
   --info: oklch(0.7 0.13 240);
   --info-foreground: oklch(0.205 0 0);
 
@@ -167,6 +175,7 @@
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-text: var(--warning-text);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);

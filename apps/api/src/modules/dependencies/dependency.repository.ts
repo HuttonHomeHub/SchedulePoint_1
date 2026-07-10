@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type DependencyType } from '@prisma/client';
 
+import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /** Endpoint fields embedded in a dependency response (no N+1 — loaded via include). */
@@ -137,8 +138,8 @@ export class DependencyRepository {
    * The lock releases automatically when the transaction ends.
    */
   async lockPlanForWrite(planId: string, db: Prisma.TransactionClient): Promise<void> {
-    // Two-int form: a fixed namespace + the plan-id hash. `hashtext` → int4.
-    await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('dependency-plan'), hashtext(${planId}))`;
+    // Shared with the CPM recalculation (ADR-0022) so the two serialise per plan.
+    await acquirePlanWriteLock(db, planId);
   }
 
   /**

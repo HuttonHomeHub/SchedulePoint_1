@@ -13,9 +13,12 @@ import { ActivityFormDialog } from './ActivityFormDialog';
 import { ActivityProgressDialog } from './ActivityProgressDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { formatCalendarDate } from '@/lib/format-date';
+import { criticality, formatFloat } from '@/lib/schedule-format';
 
 /** "5 d" for a task; an em dash for a milestone (which has no duration). */
 function formatDuration(activity: ActivitySummary): string {
@@ -26,6 +29,25 @@ function formatDuration(activity: ActivitySummary): string {
 function formatProgress(activity: ActivitySummary): string {
   const label = ACTIVITY_STATUS_LABELS[activity.status];
   return activity.status === 'IN_PROGRESS' ? `${label} · ${activity.percentComplete}%` : label;
+}
+
+/**
+ * A read-only computed-date column. Renders the calendar day (em dash when the
+ * plan hasn't been calculated) and hides below the given breakpoint to keep the
+ * table legible on narrow screens.
+ */
+function scheduleColumn(
+  header: string,
+  get: (activity: ActivitySummary) => string | null,
+  hideBelow: 'md' | 'lg',
+): Column<ActivitySummary> {
+  const show = hideBelow === 'md' ? 'md:table-cell' : 'lg:table-cell';
+  return {
+    header,
+    headClassName: `hidden py-2 pr-4 font-medium ${show}`,
+    cellClassName: `hidden py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground ${show}`,
+    cell: (activity) => formatCalendarDate(get(activity)),
+  };
 }
 
 /**
@@ -84,6 +106,29 @@ export function ActivitiesTable({
       header: 'Progress',
       cellClassName: 'tabular-nums',
       cell: (activity) => <span className="text-muted-foreground">{formatProgress(activity)}</span>,
+    },
+    // Engine-owned computed columns (M6, read-only). Null renders as an em dash
+    // until the plan is recalculated. Late dates hide first on narrow screens.
+    scheduleColumn('Early start', (a) => a.earlyStart, 'md'),
+    scheduleColumn('Early finish', (a) => a.earlyFinish, 'md'),
+    scheduleColumn('Late start', (a) => a.lateStart, 'lg'),
+    scheduleColumn('Late finish', (a) => a.lateFinish, 'lg'),
+    {
+      header: 'Float',
+      cellClassName: 'py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground',
+      cell: (activity) => formatFloat(activity.totalFloat),
+    },
+    {
+      header: 'Critical path',
+      cellClassName: 'py-2 pr-4 whitespace-nowrap',
+      cell: (activity) => {
+        const flag = criticality(activity);
+        return flag ? (
+          <Badge variant={flag.variant}>{flag.label}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
     },
   ];
   if (canWrite || canReportProgress || onOpenLogic) {

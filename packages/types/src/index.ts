@@ -255,4 +255,22 @@ export interface DeletedHierarchyItem {
   canRestore: boolean;
 }
 
+/**
+ * A plan's computed CPM schedule roll-up — the result of a recalculation and the
+ * shape of the read summary (they return the identical type). `dataDate` is the
+ * plan's start (`plannedStart`); it is null when the plan has no start date yet.
+ * `projectFinish` is the latest computed finish across the plan (the max inclusive
+ * `earlyFinish`); it is null until the plan has been calculated (or when empty).
+ * `parkedConstraintCount` is how many mandatory constraints were treated as their
+ * moderate equivalents (MSO/MFO). All dates are calendar days (`YYYY-MM-DD`).
+ */
+export interface PlanScheduleSummary {
+  dataDate: string | null;
+  projectFinish: string | null;
+  activityCount: number;
+  criticalCount: number;
+  nearCriticalCount: number;
+  parkedConstraintCount: number;
+}
+
 export {};

@@ -37,6 +37,24 @@
   observable (queue depth, failure rate). The worker scales independently of the
   API.
 
+## CPM recalculation (M6, ADR-0022)
+
+The synchronous schedule recalculation is designed to hit the brief's targets
+(< 500ms at 500 activities, < 2s at 2,000) with a fixed, predictable cost:
+
+- **Two indexed loads, one batched write.** Under the plan-scoped lock it reads
+  the plan's active activities and edges (both served by the `(plan_id, …)`
+  indexes) and writes the whole plan's results in a **single raw `UPDATE … FROM
+unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
+- **`O(V + E)` compute.** The pure engine (Kahn topo order + one forward + one
+  backward pass) is linear in the graph size; the work is dominated by the two
+  round trips, not the maths.
+- **The write touches only the seven engine columns**, never `version` /
+  `updated_at`, so it neither conflicts with nor invalidates cached user edits.
+- **Scale ceiling:** when a plan outgrows the synchronous budget (or progress-
+  aware re-forecasting lands), move to the queued path (ADR-0009) — the endpoint
+  and service stay the same. A perf smoke at 500/2,000 guards the NFR in CI.
+
 ## Profiling & measurement
 
 - Use OpenTelemetry traces/metrics (see [`OBSERVABILITY.md`](OBSERVABILITY.md))

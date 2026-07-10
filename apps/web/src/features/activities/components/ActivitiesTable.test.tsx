@@ -106,6 +106,30 @@ describe('ActivitiesTable', () => {
     expect(screen.getByText(/No activities yet/)).toBeInTheDocument();
   });
 
+  it('shows computed dates, float and a Critical badge for a calculated activity', () => {
+    renderTable(false, [
+      {
+        ...ACTIVITY,
+        earlyStart: '2026-01-01',
+        earlyFinish: '2026-01-05',
+        lateStart: '2026-01-01',
+        lateFinish: '2026-01-05',
+        totalFloat: 0,
+        isCritical: true,
+        isNearCritical: false,
+      },
+    ]);
+    expect(screen.getAllByText('01 Jan 2026').length).toBeGreaterThan(0); // early/late start
+    expect(screen.getByText('0 d')).toBeInTheDocument(); // total float
+    expect(screen.getByText('Critical')).toBeInTheDocument();
+  });
+
+  it('badges a near-critical activity and shows a negative float as a lead', () => {
+    renderTable(false, [{ ...ACTIVITY, totalFloat: -2, isCritical: false, isNearCritical: true }]);
+    expect(screen.getByText('Near-critical')).toBeInTheDocument();
+    expect(screen.getByText('−2 d')).toBeInTheDocument();
+  });
+
   it('renders a Logic action (for any member) when onOpenLogic is provided', () => {
     const onOpenLogic = vi.fn();
     const queryClient = new QueryClient();
