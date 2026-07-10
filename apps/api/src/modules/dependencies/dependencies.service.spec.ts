@@ -127,6 +127,8 @@ describe('DependenciesService', () => {
     findManyActiveByPlan: ReturnType<typeof vi.fn>;
     findPredecessorsOf: ReturnType<typeof vi.fn>;
     findSuccessorsOf: ReturnType<typeof vi.fn>;
+    findActiveEdgesByPlan: ReturnType<typeof vi.fn>;
+    lockPlanForWrite: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
   };
   let lifecycle: { cascadeSoftDelete: ReturnType<typeof vi.fn> };
@@ -147,6 +149,8 @@ describe('DependenciesService', () => {
       findManyActiveByPlan: vi.fn(),
       findPredecessorsOf: vi.fn(),
       findSuccessorsOf: vi.fn(),
+      findActiveEdgesByPlan: vi.fn().mockResolvedValue([]),
+      lockPlanForWrite: vi.fn().mockResolvedValue(undefined),
       updateIfVersionMatches: vi.fn(),
     };
     lifecycle = { cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }) };
@@ -178,6 +182,7 @@ describe('DependenciesService', () => {
           predecessorId: PRED_ID,
           successorId: SUCC_ID,
         }),
+        expect.anything(),
       );
     });
 
@@ -235,6 +240,23 @@ describe('DependenciesService', () => {
           successorId: SUCC_ID,
         }),
       ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it('rejects a link that would close a cycle (409 CYCLE_DETECTED), under the plan lock', async () => {
+      // An existing edge succ → pred means adding pred → succ closes a cycle.
+      deps.findActiveEdgesByPlan.mockResolvedValue([
+        { predecessorId: SUCC_ID, successorId: PRED_ID },
+      ]);
+      const error = await service
+        .create(principalWith(ALL), 'acme', PLAN_ID, {
+          predecessorId: PRED_ID,
+          successorId: SUCC_ID,
+        })
+        .catch((e) => e);
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).details).toEqual({ reason: 'CYCLE_DETECTED' });
+      expect(deps.lockPlanForWrite).toHaveBeenCalledWith(PLAN_ID, expect.anything());
+      expect(deps.create).not.toHaveBeenCalled();
     });
 
     it('maps a duplicate (pred, succ, type) to a 409', async () => {

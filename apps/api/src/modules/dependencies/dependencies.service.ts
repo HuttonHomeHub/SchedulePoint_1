@@ -16,6 +16,7 @@ import { ActivityRepository } from '../activities/activity.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 
+import { wouldCreateCycle } from './cycle-detector';
 import {
   DependencyRepository,
   type DependencyPatch,
@@ -149,15 +150,30 @@ export class DependenciesService {
     await this.loadEndpointInPlan(dto.successorId, organization.id, planId);
 
     try {
-      const dependency = await this.dependencies.create({
-        organizationId: plan.organizationId,
-        planId: plan.id,
-        predecessorId: dto.predecessorId,
-        successorId: dto.successorId,
-        ...(dto.type ? { type: dto.type } : {}),
-        ...(dto.lagDays !== undefined ? { lagDays: dto.lagDays } : {}),
-        createdBy: principal.userId,
-        updatedBy: principal.userId,
+      // Load-check-insert runs in ONE transaction under a plan-scoped advisory lock
+      // so the acyclicity invariant is race-safe: a concurrent mirror insert in the
+      // same plan is serialised behind us and its walk sees our edge (ADR-0021).
+      const dependency = await this.prisma.$transaction(async (tx) => {
+        await this.dependencies.lockPlanForWrite(plan.id, tx);
+        const edges = await this.dependencies.findActiveEdgesByPlan(organization.id, plan.id, tx);
+        if (wouldCreateCycle(edges, dto.predecessorId, dto.successorId)) {
+          throw new ConflictError('This dependency would create a cycle in the schedule.', {
+            reason: DEPENDENCY_CONFLICT.CYCLE_DETECTED,
+          });
+        }
+        return this.dependencies.create(
+          {
+            organizationId: plan.organizationId,
+            planId: plan.id,
+            predecessorId: dto.predecessorId,
+            successorId: dto.successorId,
+            ...(dto.type ? { type: dto.type } : {}),
+            ...(dto.lagDays !== undefined ? { lagDays: dto.lagDays } : {}),
+            createdBy: principal.userId,
+            updatedBy: principal.userId,
+          },
+          tx,
+        );
       });
       this.logger.info(
         {

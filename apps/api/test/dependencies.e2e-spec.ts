@@ -193,6 +193,41 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
     await actor.agent.post(base).send({ predecessorId: a, successorId: b, type: 'SS' }).expect(201);
   });
 
+  it('rejects a dependency that would create a cycle (409 CYCLE_DETECTED)', async () => {
+    const { actor, planId, a, b } = await setup();
+    const c = await makeActivity(actor, planId, 'Cure');
+    const base = `/api/v1/organizations/acme/plans/${planId}/dependencies`;
+
+    await actor.agent.post(base).send({ predecessorId: a, successorId: b }).expect(201); // a → b
+    await actor.agent.post(base).send({ predecessorId: b, successorId: c }).expect(201); // b → c
+    // c → a would close a → b → c → a.
+    const cyclic = await actor.agent
+      .post(base)
+      .send({ predecessorId: c, successorId: a })
+      .expect(409);
+    expect(cyclic.body.error?.details?.reason).toBe('CYCLE_DETECTED');
+    // A forward shortcut a → c keeps the graph acyclic.
+    await actor.agent.post(base).send({ predecessorId: a, successorId: c }).expect(201);
+  });
+
+  it('serialises concurrent mirror inserts so exactly one wins (no persisted cycle)', async () => {
+    const { actor, planId, a, b } = await setup();
+    const base = `/api/v1/organizations/acme/plans/${planId}/dependencies`;
+
+    // a → b and b → a raced together: the plan lock orders them; the loser's walk
+    // sees the winner's edge and is rejected as a cycle (ADR-0021).
+    const [r1, r2] = await Promise.all([
+      actor.agent.post(base).send({ predecessorId: a, successorId: b }),
+      actor.agent.post(base).send({ predecessorId: b, successorId: a }),
+    ]);
+    const statuses = [r1.status, r2.status].sort((x, y) => x - y);
+    expect(statuses).toEqual([201, 409]);
+    const loser = r1.status === 409 ? r1 : r2;
+    expect(loser.body.error?.details?.reason).toBe('CYCLE_DETECTED');
+    // Exactly one edge persisted.
+    expect((await actor.agent.get(base).expect(200)).body.data).toHaveLength(1);
+  });
+
   it('refuses to link activities across plans (404) and validates the endpoint ids (422)', async () => {
     const { actor, planId, a } = await setup();
     const otherPlan = await makePlan(actor, 'Southgate');

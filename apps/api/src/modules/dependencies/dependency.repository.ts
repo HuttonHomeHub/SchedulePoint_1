@@ -116,15 +116,29 @@ export class DependencyRepository {
     );
   }
 
-  /** Every active edge in a plan (direction only) — the adjacency load for the cycle walk (B2). */
+  /** Every active edge in a plan (direction only) — the adjacency load for the cycle walk.
+   * Scoped by organisation as well as plan (defence-in-depth, matching the other reads). */
   findActiveEdgesByPlan(
+    organizationId: string,
     planId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<PlanEdge[]> {
     return db.activityDependency.findMany({
-      where: this.active({ planId }),
+      where: this.active({ organizationId, planId }),
       select: { predecessorId: true, successorId: true },
     });
+  }
+
+  /**
+   * Take a transaction-scoped advisory lock keyed by the plan, so concurrent
+   * dependency creates in the SAME plan are serialised — the cycle walk of one
+   * insert always sees the other's edge, closing the mirror-insert race
+   * (ADR-0021). Different plans (and orgs) use different keys and never contend.
+   * The lock releases automatically when the transaction ends.
+   */
+  async lockPlanForWrite(planId: string, db: Prisma.TransactionClient): Promise<void> {
+    // Two-int form: a fixed namespace + the plan-id hash. `hashtext` → int4.
+    await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('dependency-plan'), hashtext(${planId}))`;
   }
 
   /**
