@@ -123,18 +123,21 @@
 - No business logic in triggers/stored procedures unless justified and
   documented (keep logic in the app for testability).
 
-## Domain hierarchy: scoping & cascade soft-delete (Client/Project/Plan)
+## Domain hierarchy: scoping & cascade soft-delete (Client/Project/Plan/Activity)
 
-The `clients`, `projects`, and `plans` tables are the organisation-scoped
-containers the scheduling domain hangs off (`Organization → Client → Project →
-Plan`). They apply every standard above and establish two reusable conventions
-future descendant tables (activities, notes, baselines, …) copy.
+The `clients`, `projects`, `plans`, and `activities` tables are the
+organisation-scoped containers the scheduling domain hangs off (`Organization →
+Client → Project → Plan → Activity`). They apply every standard above and share two
+reusable conventions future descendant tables (notes, baselines, …) copy.
+`Activity` is the **leaf** of this tree — the atomic unit of a schedule
+(PROJECT_BRIEF §9). It persists its full field set up front (see _Activity: the
+schedule leaf_ below) so the deferred scheduling slices are additive.
 
 ### Denormalised `organization_id`
 
-`Project` and `Plan` carry `organization_id` **directly**, in addition to their
-parent FK (`client_id` / `project_id`). It is a deliberate, measured denormalisation
-(per _Relationships_ above):
+`Project`, `Plan`, and `Activity` carry `organization_id` **directly**, in addition
+to their parent FK (`client_id` / `project_id` / `plan_id`). It is a deliberate,
+measured denormalisation (per _Relationships_ above):
 
 - **Why.** Every scope/IDOR check and org-scoped query then filters a single
   indexed column instead of joining Plan → Project → Client to reach the org, and
@@ -145,6 +148,7 @@ parent FK (`client_id` / `project_id`). It is a deliberate, measured denormalisa
   the equality; the service owns it and it is unit-tested.
 - `Client.organization_id` is **native**, not denormalised — the organisation is a
   client's direct parent.
+- `Activity.organization_id` is copied from its parent **plan** (same invariant).
 
 ### Cascade soft-delete + batch restore (`delete_batch_id`)
 
@@ -179,9 +183,14 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `uq_clients_org_name`                       | `(organization_id, name)`           | partial unique | name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `NAME_TAKEN` (409) + name lookups                              |
 | `uq_projects_client_name`                   | `(client_id, name)`                 | partial unique | name unique per client among live rows                                                                                                 |
 | `uq_plans_project_name`                     | `(project_id, name)`                | partial unique | name unique per project among live rows                                                                                                |
+| `activities_plan_id_created_at_id_idx`      | `(plan_id, created_at, id)`         | full composite | `plan_id` FK + list-activities-under-a-plan + cursor sort — subsumes a standalone plan index                                           |
+| `activities_organization_id_idx`            | `(organization_id)`                 | full           | `organization_id` FK + org-scoped IDOR loads                                                                                           |
+| `uq_activities_plan_name`                   | `(plan_id, name)`                   | partial unique | name unique per plan among live rows                                                                                                   |
+| `uq_activities_plan_code`                   | `(plan_id, code)`                   | partial unique | optional `code` unique per plan among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt               |
 | `idx_clients_delete_batch_id`               | `(delete_batch_id)`                 | partial        | batch restore lookup (`WHERE delete_batch_id IS NOT NULL`); tiny — only soft-deleted rows carry a value                                |
 | `idx_projects_delete_batch_id`              | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
 | `idx_plans_delete_batch_id`                 | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
+| `idx_activities_delete_batch_id`            | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -189,6 +198,50 @@ soft-deleted ones; the active-list query filters `deleted_at IS NULL` on top of 
 already-ordered index scan (cheap at the target scale of ≤ ~100 plans/org). No
 redundant single-column FK index is added where a composite's leftmost prefix
 already covers it.
+
+### Cascade now runs four levels deep
+
+The cascade soft-delete / batch-restore mechanism above extends unchanged to
+`Activity`: deleting a plan (or project, or client) soft-deletes its activities in
+the **same `delete_batch_id`**, and restoring the parent brings them back. The
+shared `HierarchyLifecycleService` is entity-agnostic and gained `'activity'` as a
+fourth level (delivered with the activities module); `activities` is a **leaf** —
+it has its own soft-delete/restore but no children, so `assertParentActive` for an
+activity checks its parent **plan**.
+
+### Activity: the schedule leaf
+
+`Activity` follows every standard above and adds three column groups the deferred
+scheduling slices depend on, persisted **now** so those slices are additive (no
+wide `ALTER TABLE` + backfill later):
+
+- **Definition** (`type`, `duration_days`, `constraint_type`/`constraint_date`,
+  `lane_index`, optional `code`) — Planner-owned. `duration_days` is an integer
+  count of **working days** (= calendar days until the Calendars slice adds
+  working patterns); milestones are `0`.
+- **Progress** (`status`, `percent_complete`, `actual_start`, `actual_finish`) —
+  Contributor-updatable via a dedicated progress path, never via a definition
+  update.
+- **CPM output — engine-owned** (`early_start`/`early_finish`,
+  `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`):
+  nullable/defaulted, **never accepted from a write DTO**. They are populated by
+  the CPM engine (a later slice); until then they read as null/false ("—" in the
+  UI). Storing them now avoids a wide migration when the engine lands.
+- **`calendar_id`** is a **reserved** nullable UUID column with **no FK relation
+  yet** — the Calendars slice adds the FK and makes it settable. It is not client-
+  settable in this slice.
+
+Calendar-day fields (`constraint_date`, `actual_start/finish`, the CPM `*_start/
+finish` columns) are `@db.Date` (date-only, no timezone), like `Plan.planned_start`
+— a schedule day is a calendar day, not an instant.
+
+`activities` is the first domain table with bounded numerics, so it is also the
+first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
+invariants in the DB, not only in code): `ck_activities_percent_complete`
+(0–100), `ck_activities_duration_days_nonneg` (≥ 0), and
+`ck_activities_lane_index_nonneg` (≥ 0). They are raw SQL in the migration (Prisma
+cannot express `CHECK`). `total_float` is deliberately unconstrained — negative
+float is valid.
 
 ## Testing & performance
 

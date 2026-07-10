@@ -138,6 +138,7 @@ model Organization {
   clients     Client[]
   projects    Project[]
   plans       Plan[]
+  activities  Activity[]
 
   @@map("organizations")
 }
@@ -249,6 +250,39 @@ enum PlanStatus {
   ARCHIVED
 }
 
+// The kind of schedule activity (PROJECT_BRIEF §8). All five are modelled so the
+// deferred slices (dependencies, CPM, canvas) never need an enum migration; the
+// web UI exposes only TASK + START/FINISH milestones in this slice — HAMMOCK and
+// LEVEL_OF_EFFORT derive their duration from dependencies that don't exist yet.
+enum ActivityType {
+  TASK
+  START_MILESTONE
+  FINISH_MILESTONE
+  HAMMOCK
+  LEVEL_OF_EFFORT
+}
+
+// Progress state of an activity. Set via the progress path (Contributor+), never
+// via the definition update.
+enum ActivityStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETE
+}
+
+// Schedule constraint kinds (PROJECT_BRIEF §11). Reserved for the CPM engine
+// (M6) — stored now so constraints round-trip before the engine honours them.
+enum ConstraintType {
+  SNET // start no earlier than
+  SNLT // start no later than
+  FNET // finish no earlier than
+  FNLT // finish no later than
+  MSO // must start on
+  MFO // must finish on
+  MANDATORY_START
+  MANDATORY_FINISH
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -335,6 +369,7 @@ model Plan {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  activities   Activity[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -346,4 +381,74 @@ model Plan {
   @@index([projectId, createdAt, id])
   @@index([organizationId])
   @@map("plans")
+}
+
+// An Activity — the atomic unit of a schedule (PROJECT_BRIEF §9), the leaf of the
+// Client → Project → Plan → Activity hierarchy. Org-scoped via a denormalised
+// organization_id copied from the parent plan (never client input), following the
+// Project/Plan pattern. The full field set is persisted now — including the
+// CPM output columns and the graphical lane — so the deferred slices (M4
+// dependencies, M5 calendars, M6 CPM engine, M7 TSLD canvas) are additive with no
+// wide migration. The CPM columns are engine-owned: nullable/defaulted, never
+// accepted from write DTOs, populated by the M6 engine.
+model Activity {
+  id             String @id @default(uuid(7)) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  planId         String @map("plan_id") @db.Uuid
+
+  // Definition (Planner-owned).
+  code           String?
+  name           String
+  description    String?
+  type           ActivityType    @default(TASK)
+  // Working days (= calendar days until the M5 Calendars slice); milestones are 0.
+  durationDays   Int             @default(1) @map("duration_days")
+  // Reserved for M5 (Calendars) — a nullable column with NO FK relation yet; not
+  // client-settable in this slice.
+  calendarId     String?         @map("calendar_id") @db.Uuid
+  constraintType ConstraintType? @map("constraint_type")
+  // Calendar day (date-only, no timezone), like Plan.plannedStart.
+  constraintDate DateTime?       @map("constraint_date") @db.Date
+  // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
+  // persisted model per PROJECT_BRIEF §9, not a runtime concern.
+  laneIndex      Int             @default(0) @map("lane_index")
+
+  // Progress (Contributor-updatable via the progress path).
+  status          ActivityStatus @default(NOT_STARTED)
+  percentComplete Int            @default(0) @map("percent_complete")
+  actualStart     DateTime?      @map("actual_start") @db.Date
+  actualFinish    DateTime?      @map("actual_finish") @db.Date
+
+  // CPM output — engine-owned (M6). Nullable/defaulted; never set from input.
+  earlyStart     DateTime? @map("early_start") @db.Date
+  earlyFinish    DateTime? @map("early_finish") @db.Date
+  lateStart      DateTime? @map("late_start") @db.Date
+  lateFinish     DateTime? @map("late_finish") @db.Date
+  totalFloat     Int?      @map("total_float")
+  isCritical     Boolean   @default(false) @map("is_critical")
+  isNearCritical Boolean   @default(false) @map("is_near_critical")
+
+  // Housekeeping (as Project/Plan): TEXT audit ids (Better Auth ids are TEXT),
+  // optimistic-lock version, soft delete + restore-batch correlation.
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
+  // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
+  // deleted_at IS NULL [AND code IS NOT NULL]), raw SQL in the migration.
+  //
+  // (plan_id, created_at, id) covers the plan FK, the list-activities-under-a-plan
+  // query and its cursor sort in one. organization_id is indexed on its own for
+  // its FK (RESTRICT) and org-scoped IDOR loads.
+  @@index([planId, createdAt, id])
+  @@index([organizationId])
+  @@map("activities")
 }
