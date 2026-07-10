@@ -43,6 +43,12 @@
   processed/failed, queue depth) named consistently.
 - Instrument the meaningful things; avoid unbounded label cardinality (never use
   ids/PII as label values).
+- **CPM recalculation (M6, ADR-0022):** every recalculation emits a structured
+  `'schedule recalculated'` log with `{ organizationId, planId, userId,
+activityCount, criticalCount, parkedConstraintCount, durationMs }` — enough to
+  watch the perf NFR (`durationMs` vs plan size) and spot parked mandatory
+  constraints without logging any schedule data. The unreachable DAG-guard breach
+  logs distinctly (a broken invariant) and surfaces as a 500.
 
 ## Tracing
 

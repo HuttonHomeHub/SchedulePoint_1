@@ -56,7 +56,13 @@ export type OrgPermission =
   | 'dependency:read'
   | 'dependency:create'
   | 'dependency:update'
-  | 'dependency:delete';
+  | 'dependency:delete'
+  // The CPM schedule (M6). Reading the computed schedule/summary is granted to
+  // every member (`schedule:read`); triggering a recalculation (`schedule:calculate`)
+  // is a Planner + Org Admin action — it rewrites the engine-owned columns of the
+  // whole plan, so it follows the same "write" rule as the hierarchy, NOT Contributor.
+  | 'schedule:read'
+  | 'schedule:calculate';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -65,6 +71,7 @@ const HIERARCHY_READ: readonly OrgPermission[] = [
   'plan:read',
   'activity:read',
   'dependency:read',
+  'schedule:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -88,6 +95,7 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'dependency:create',
   'dependency:update',
   'dependency:delete',
+  'schedule:calculate',
 ];
 
 /**

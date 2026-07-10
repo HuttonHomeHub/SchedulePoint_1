@@ -25,6 +25,7 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
 import { PlansModule } from './modules/plans/plans.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
+import { ScheduleModule } from './modules/schedule/schedule.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /** Whether the optional `pino-pretty` dev logger transport can be loaded. */
@@ -100,6 +101,7 @@ function isPrettyLoggingAvailable(): boolean {
     PlansModule,
     ActivitiesModule,
     DependenciesModule,
+    ScheduleModule,
     RecycleBinModule,
   ],
   providers: [
