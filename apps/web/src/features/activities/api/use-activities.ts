@@ -7,7 +7,11 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { isMilestoneType, type ActivityFormValues } from '../schemas/activity-schemas';
+import {
+  isMilestoneType,
+  type ActivityFormValues,
+  type ProgressFormValues,
+} from '../schemas/activity-schemas';
 
 import { apiFetch } from '@/lib/api/client';
 import { activityKeys } from '@/lib/query/hierarchy-keys';
@@ -83,6 +87,35 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
         method: 'PATCH',
         body: JSON.stringify(updateBody(input)),
       }),
+    onSettled: (_data, _error, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, input.activityId) }),
+      ]),
+  });
+}
+
+function progressBody(input: ProgressFormValues & { version: number }) {
+  return {
+    percentComplete: input.percentComplete,
+    // A blank date field clears the value (null), matching the API.
+    actualStart: input.actualStart ? input.actualStart : null,
+    actualFinish: input.actualFinish ? input.actualFinish : null,
+    version: input.version,
+  };
+}
+
+export function useUpdateActivityProgress(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { activityId: string; version: number } & ProgressFormValues) =>
+      apiFetch<ActivitySummary>(
+        `/organizations/${orgSlug}/activities/${input.activityId}/progress`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(progressBody(input)),
+        },
+      ),
     onSettled: (_data, _error, input) =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),

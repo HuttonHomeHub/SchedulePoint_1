@@ -34,12 +34,21 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderTable(canWrite: boolean, data: ActivitySummary[] = [ACTIVITY]) {
+function renderTable(
+  canWrite: boolean,
+  data: ActivitySummary[] = [ACTIVITY],
+  canReportProgress = false,
+) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), data);
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={canWrite} />
+      <ActivitiesTable
+        orgSlug="acme"
+        planId="pl1"
+        canWrite={canWrite}
+        canReportProgress={canReportProgress}
+      />
     </QueryClientProvider>,
   );
 }
@@ -58,6 +67,23 @@ describe('ActivitiesTable', () => {
   it('hides write actions for non-writers', () => {
     renderTable(false);
     expect(screen.queryByRole('button', { name: 'Edit Excavate' })).not.toBeInTheDocument();
+  });
+
+  it('shows only the progress action for a progress-reporter who cannot write', () => {
+    renderTable(false, [ACTIVITY], true);
+    expect(
+      screen.getByRole('button', { name: 'Report progress for Excavate' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit Excavate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Excavate' })).not.toBeInTheDocument();
+  });
+
+  it('shows progress plus edit/delete for a writer who can also report progress', () => {
+    renderTable(true, [ACTIVITY], true);
+    expect(
+      screen.getByRole('button', { name: 'Report progress for Excavate' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Excavate' })).toBeInTheDocument();
   });
 
   it('shows an em dash duration for a milestone and no percentage when not started', () => {

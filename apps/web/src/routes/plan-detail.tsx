@@ -8,7 +8,7 @@ import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { useClient } from '@/features/clients';
 import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import { canManageHierarchy, canReportProgress, useOrgRole } from '@/hooks/use-org-role';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -20,7 +20,9 @@ export function PlanDetailScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const planId = 'planId' in params ? params.planId : '';
-  const canWrite = canManageHierarchy(useOrgRole(orgSlug));
+  const role = useOrgRole(orgSlug);
+  const canWrite = canManageHierarchy(role);
+  const canProgress = canReportProgress(role);
   const [editing, setEditing] = useState(false);
 
   const plan = usePlan(orgSlug, planId);
@@ -105,7 +107,12 @@ export function PlanDetailScreen(): React.ReactElement {
         these on a timeline in a later release.
       </p>
       <div className="mt-3">
-        <ActivitiesTable orgSlug={orgSlug} planId={planId} canWrite={canWrite} />
+        <ActivitiesTable
+          orgSlug={orgSlug}
+          planId={planId}
+          canWrite={canWrite}
+          canReportProgress={canProgress}
+        />
       </div>
 
       {canWrite ? (

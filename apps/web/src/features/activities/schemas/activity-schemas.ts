@@ -81,3 +81,42 @@ export const activityFormSchema = z
   });
 
 export type ActivityFormValues = z.infer<typeof activityFormSchema>;
+
+/**
+ * Activity PROGRESS form schema — for the Contributor-capable progress editor.
+ * `percentComplete` is a number (registered with `valueAsNumber`); the actual
+ * dates are raw `<input type="date">` values (`''` = unset). Cross-field rules
+ * mirror the API: you cannot finish before you start, or finish without starting.
+ */
+export const progressFormSchema = z
+  .object({
+    percentComplete: z
+      .number({ message: 'Enter a percentage from 0 to 100.' })
+      .int('Enter a whole percentage.')
+      .min(0, 'Percentage cannot be negative.')
+      .max(100, 'Percentage cannot exceed 100.'),
+    actualStart: z.string().optional(),
+    actualFinish: z.string().optional(),
+  })
+  .refine((v) => !v.actualFinish || Boolean(v.actualStart), {
+    message: 'Set an actual start before a finish.',
+    path: ['actualFinish'],
+  })
+  .refine((v) => !v.actualStart || !v.actualFinish || v.actualFinish >= v.actualStart, {
+    message: 'Finish cannot be before the start.',
+    path: ['actualFinish'],
+  });
+
+export type ProgressFormValues = z.infer<typeof progressFormSchema>;
+
+/**
+ * Preview the status the API will derive from progress (kept in step with the
+ * server's `deriveStatus`): a finish (or 100%) → Complete, a start (or any %) →
+ * In progress, else Not started. Used to show the resulting status live in the
+ * editor; the server remains the source of truth.
+ */
+export function deriveStatusLabel(values: ProgressFormValues): string {
+  if (values.actualFinish || values.percentComplete >= 100) return ACTIVITY_STATUS_LABELS.COMPLETE;
+  if (values.actualStart || values.percentComplete > 0) return ACTIVITY_STATUS_LABELS.IN_PROGRESS;
+  return ACTIVITY_STATUS_LABELS.NOT_STARTED;
+}

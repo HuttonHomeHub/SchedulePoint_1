@@ -3,6 +3,7 @@ export {
   useActivities,
   useCreateActivity,
   useUpdateActivity,
+  useUpdateActivityProgress,
   useDeleteActivity,
   activitiesQueryOptions,
   activityKeys,
@@ -10,6 +11,7 @@ export {
 export { ActivitiesTable } from './components/ActivitiesTable';
 export { CreateActivityButton } from './components/CreateActivityButton';
 export { ActivityFormDialog } from './components/ActivityFormDialog';
+export { ActivityProgressDialog } from './components/ActivityProgressDialog';
 export {
   ACTIVITY_TYPE_LABELS,
   ACTIVITY_STATUS_LABELS,

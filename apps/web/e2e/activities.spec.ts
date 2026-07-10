@@ -75,4 +75,14 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
 
   await expect(page.getByRole('cell', { name: 'Kickoff', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Start milestone', exact: true })).toBeVisible();
+
+  // Report progress on the task — the derived status shows in the row afterwards.
+  await page.getByRole('button', { name: 'Report progress for Excavate' }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Percent complete').fill('40');
+  await dialog.getByLabel(/Actual start/).fill('2026-05-01');
+  await expect(dialog.getByText('In progress')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save progress' }).click();
+
+  await expect(page.getByRole('cell', { name: 'In progress · 40%', exact: true })).toBeVisible();
 });

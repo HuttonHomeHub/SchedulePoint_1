@@ -10,6 +10,7 @@ import {
 } from '../schemas/activity-schemas';
 
 import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityProgressDialog } from './ActivityProgressDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -37,20 +38,26 @@ export function ActivitiesTable({
   orgSlug,
   planId,
   canWrite,
+  canReportProgress = false,
 }: {
   orgSlug: string;
   planId: string;
+  /** May create/edit/delete the definition (Planner/Org Admin). */
   canWrite: boolean;
+  /** May report progress (Contributor upward). Planners also have it. */
+  canReportProgress?: boolean;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [progressId, setProgressId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const editing = editingId ? activities.data?.find((a) => a.id === editingId) : undefined;
+  const reporting = progressId ? activities.data?.find((a) => a.id === progressId) : undefined;
 
   const columns: Column<ActivitySummary>[] = [
     {
@@ -74,7 +81,7 @@ export function ActivitiesTable({
       cell: (activity) => <span className="text-muted-foreground">{formatProgress(activity)}</span>,
     },
   ];
-  if (canWrite) {
+  if (canWrite || canReportProgress) {
     columns.push({
       header: 'Actions',
       srHeader: true,
@@ -82,25 +89,39 @@ export function ActivitiesTable({
       cellClassName: 'py-2 text-right whitespace-nowrap',
       cell: (activity) => (
         <div className="flex justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditingId(activity.id)}
-            aria-label={`Edit ${activity.name}`}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setDeleteError(null);
-              setDeleting(activity);
-            }}
-            aria-label={`Delete ${activity.name}`}
-          >
-            Delete
-          </Button>
+          {canReportProgress ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setProgressId(activity.id)}
+              aria-label={`Report progress for ${activity.name}`}
+            >
+              Progress
+            </Button>
+          ) : null}
+          {canWrite ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingId(activity.id)}
+                aria-label={`Edit ${activity.name}`}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleting(activity);
+                }}
+                aria-label={`Delete ${activity.name}`}
+              >
+                Delete
+              </Button>
+            </>
+          ) : null}
         </div>
       ),
     });
@@ -138,6 +159,16 @@ export function ActivitiesTable({
           </div>
         }
       />
+
+      {canReportProgress && reporting ? (
+        <ActivityProgressDialog
+          orgSlug={orgSlug}
+          planId={planId}
+          open
+          onClose={() => setProgressId(null)}
+          activity={reporting}
+        />
+      ) : null}
 
       {canWrite ? (
         <>
