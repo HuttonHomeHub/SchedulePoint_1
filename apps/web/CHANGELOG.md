@@ -1,5 +1,46 @@
 # @repo/web
 
+## 0.4.0
+
+### Minor Changes
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the activities table and definition CRUD to the plan-detail screen. A plan now
+  lists its activities (code, name, type, duration, progress); Planners and Org
+  Admins can add, edit, and soft-delete them from a form dialog that mirrors the API
+  rules — the duration field is hidden for milestone types (which have no duration),
+  and the constraint date only appears once a constraint type is chosen (the two are
+  sent, or cleared, together). The graphical Time-Scaled Logic Diagram will edit
+  these on a timeline in a later release.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the activity progress editor with role gating. A "Progress" action on each
+  activity row opens a dialog to set percent complete and the actual start/finish
+  dates; the resulting status is shown as a live, read-only preview (the API derives
+  it). The action is gated on `canReportProgress` (Contributor upward), so a
+  Contributor — who cannot edit an activity's definition — can still report progress,
+  while Planners and Org Admins see it alongside Edit/Delete. Client-side validation
+  mirrors the API (a finish needs a start and cannot precede it).
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add/edit/remove dependencies from the Logic panel. Planners and Org Admins
+  (`canManageLogic`) get "Add predecessor"/"Add successor" buttons and per-row
+  Edit/Remove: adding picks the other activity from the plan (self excluded),
+  chooses a type (FS/SS/FF/SF) and a signed lag; editing changes type/lag with
+  optimistic locking; removing confirms first. The API stays the source of truth
+  for the acyclic guarantee — a cycle, duplicate, or stale-version rejection is
+  surfaced inline. Viewers and Contributors keep the read-only panel.
+
+- [#18](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/18) [`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the read-only Logic panel for activities. Each activity row on the plan-detail
+  screen gets a "Logic" action (available to any member) that opens a panel showing
+  its **predecessors** (what must finish before it) and **successors** (what it
+  drives) — each a table of the other-end activity, dependency type (FS/SS/FF/SF),
+  and signed lag. The activities table stays dependency-free: it emits an
+  `onOpenLogic` callback and the plan-detail route owns the panel. Add/edit/remove
+  affordances land next.
+
+### Patch Changes
+
+- Updated dependencies [[`7a8ebba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a8ebba2b1fe336b9d1e0c95ef302da80db840c6)]:
+  - @repo/types@0.3.0
+
 ## 0.3.1
 
 ### Patch Changes
