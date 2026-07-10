@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -18,7 +18,20 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { formatCalendarDate } from '@/lib/format-date';
-import { criticality, formatFloat } from '@/lib/schedule-format';
+import {
+  criticality,
+  formatFinishVariance,
+  formatFloat,
+  type FinishVariance,
+} from '@/lib/schedule-format';
+
+/** Tone → text colour for a finish-variance cell. Text carries the meaning; colour reinforces. */
+const VARIANCE_TONE_CLASS: Record<FinishVariance['tone'], string> = {
+  behind: 'text-destructive-text',
+  ahead: 'text-foreground',
+  onTrack: 'text-muted-foreground',
+  neutral: 'text-muted-foreground',
+};
 
 /** "5 d" for a task; an em dash for a milestone (which has no duration). */
 function formatDuration(activity: ActivitySummary): string {
@@ -62,6 +75,7 @@ export function ActivitiesTable({
   canWrite,
   canReportProgress = false,
   onOpenLogic,
+  varianceByActivityId,
 }: {
   orgSlug: string;
   planId: string;
@@ -72,6 +86,13 @@ export function ActivitiesTable({
   /** Open the logic (predecessors/successors) panel for a row. Available to any
    * member (read); the host owns the panel so this feature stays dependency-free. */
   onOpenLogic?: (activity: ActivitySummary) => void;
+  /**
+   * Per-activity variance vs the plan's active baseline, keyed by activity id. When
+   * present (the plan has an active baseline), a "Baseline finish" column is shown. The
+   * route composes this from the baselines feature, so activities stays dependency-free
+   * (a shared `@repo/types` shape, no cross-feature import).
+   */
+  varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow>;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -131,6 +152,21 @@ export function ActivitiesTable({
       },
     },
   ];
+  // Variance vs the active baseline — only when the route supplies the map (M7). The
+  // text carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces.
+  if (varianceByActivityId) {
+    columns.push({
+      header: 'Baseline finish',
+      headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
+      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap tabular-nums md:table-cell',
+      cell: (activity) => {
+        const row = varianceByActivityId.get(activity.id);
+        if (!row) return <span className="text-muted-foreground">—</span>;
+        const variance = formatFinishVariance(row);
+        return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
+      },
+    });
+  }
   if (canWrite || canReportProgress || onOpenLogic) {
     columns.push({
       header: 'Actions',

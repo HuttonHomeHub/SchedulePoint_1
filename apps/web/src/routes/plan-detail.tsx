@@ -1,12 +1,12 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { Link, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
-import { BaselinesPanel } from '@/features/baselines';
+import { BaselinesPanel, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { DependencyEditor } from '@/features/dependencies';
@@ -45,6 +45,15 @@ export function PlanDetailScreen(): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   // The org's calendars, for the plan calendar picker (read for every member).
   const calendars = useCalendars(orgSlug);
+  // Variance vs the plan's active baseline (M7). The route composes it and passes a
+  // per-activity map into the activities table, so that feature imports no baseline code.
+  const variance = useBaselineVariance(orgSlug, planId);
+  const varianceByActivityId = useMemo(() => {
+    if (!variance.data || variance.data.summary.baselineId === null) return undefined;
+    return new Map<string, BaselineVarianceRow>(
+      variance.data.rows.map((row) => [row.activityId, row]),
+    );
+  }, [variance.data]);
   const canManageLogic = canWrite; // dependency write = the hierarchy-writer roles
 
   if (plan.isPending) {
@@ -163,6 +172,7 @@ export function PlanDetailScreen(): React.ReactElement {
           canWrite={canWrite}
           canReportProgress={canProgress}
           onOpenLogic={setLogicActivity}
+          {...(varianceByActivityId ? { varianceByActivityId } : {})}
         />
       </div>
 

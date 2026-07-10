@@ -1,6 +1,6 @@
 # Feature Spec: Baselines (M7)
 
-- **Status:** Draft — awaiting approval (five critical questions in §1, each with a recommended default)
+- **Status:** Approved — implemented in M7 (A1–D2).
 - **Author(s):** Feature Analyst / Claude
 - **Date:** 2026-07-10
 - **Tracking issue / epic:** _tbd_

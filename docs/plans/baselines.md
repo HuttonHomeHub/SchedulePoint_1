@@ -1,7 +1,7 @@
 # Implementation Plan: Baselines (M7)
 
 - **Feature spec:** [`docs/specs/baselines.md`](../specs/baselines.md)
-- **Status:** Draft — awaiting approval (five critical questions in the spec §1, each with a recommended default)
+- **Status:** Approved — implemented in M7 (A1–D2).
 - **Owner:** Feature Analyst / Claude
 
 ## Breakdown

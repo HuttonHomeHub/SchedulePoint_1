@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 
 /** The critical/near-critical fields the criticality badge reads. */
 type Schedulable = Pick<ActivitySummary, 'isCritical' | 'isNearCritical' | 'totalFloat'>;
@@ -28,4 +28,31 @@ export function formatFloat(totalFloat: number | null): string {
   if (totalFloat === null) return '—';
   // Use a real minus sign for negatives (matches the design system's numerals).
   return totalFloat < 0 ? `−${Math.abs(totalFloat)} d` : `${totalFloat} d`;
+}
+
+/**
+ * How an activity's finish compares to the active baseline (M7, ADR-0025). `tone`
+ * drives an optional visual accent but is **never the only signal** — `text` always
+ * carries the meaning (WCAG 2.2). `behind` = later than baseline, `ahead` = earlier,
+ * `onTrack` = on the baseline, `neutral` = not comparable / added / removed.
+ */
+export interface FinishVariance {
+  text: string;
+  tone: 'behind' | 'ahead' | 'onTrack' | 'neutral';
+}
+
+/**
+ * Format a variance row's finish variance for the activities table. Working days,
+ * signed so positive = behind. Returns "Added"/"Removed" for activities that don't line
+ * up with the baseline, and "—" when the dates aren't comparable yet.
+ */
+export function formatFinishVariance(row: BaselineVarianceRow): FinishVariance {
+  if (row.removed) return { text: 'Removed', tone: 'neutral' };
+  if (!row.inBaseline) return { text: 'Added', tone: 'neutral' };
+  const days = row.finishVarianceDays;
+  if (days === null) return { text: '—', tone: 'neutral' };
+  if (days === 0) return { text: 'On baseline', tone: 'onTrack' };
+  return days > 0
+    ? { text: `${days} d behind`, tone: 'behind' }
+    : { text: `${Math.abs(days)} d ahead`, tone: 'ahead' };
 }
