@@ -1,5 +1,47 @@
 # @repo/web
 
+## 0.3.0
+
+### Minor Changes
+
+- [#14](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/14) [`34f1604`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/34f160433f80c294f00114ab5c3847aa9ceebd37) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the web screens to browse and manage clients and projects (E1). New routes
+  `/orgs/:orgSlug/clients` (list), `/orgs/:orgSlug/clients/:clientId` (a client's
+  projects), and `/orgs/:orgSlug/projects/:projectId` (the plans shell, filled in
+  by E2), reachable from a new "Clients" nav item. Each screen has create/edit
+  dialogs and a confirm-first soft delete, breadcrumbs, and loading/empty/error/
+  not-found states; write affordances are hidden for non-writers (Viewer/
+  Contributor) while the API still enforces authorisation. Covered by component
+  tests and a Playwright journey (create client → open → create project) with an
+  accessibility check.
+
+- [#14](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/14) [`34f1604`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/34f160433f80c294f00114ab5c3847aa9ceebd37) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the web plans slice (E2): a project's plans table (name → plan detail,
+  status, planned start) with create/edit/delete for writers, a plan form with a
+  status select and an optional planned-start date (`<input type="date">`, wire
+  format `YYYY-MM-DD`), and a plan-detail route (`/orgs/:orgSlug/plans/:planId`)
+  showing the plan's metadata plus a region reserved for the future Time-Scaled
+  Logic Diagram canvas. The project screen now lists real plans instead of a
+  placeholder.
+
+- [#14](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/14) [`34f1604`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/34f160433f80c294f00114ab5c3847aa9ceebd37) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the recycle-bin web slice (E3): a "Recently deleted" screen
+  (`/orgs/:orgSlug/recently-deleted`, linked from the org nav for writers) listing
+  soft-deleted clients, projects and plans newest-first, each with a Restore
+  action. An item whose ancestor is still deleted can't be restored on its own, so
+  its row guides the user to restore the parent first (the top-down invariant);
+  restoring a client or project brings back everything deleted with it. Restore
+  outcomes (and name-collision errors) are announced via the shared live region.
+
+### Patch Changes
+
+- [#13](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/13) [`7c96a33`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7c96a3335182f90b0628d44f4c4e31b9748fed49) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the hierarchy authorisation and lifecycle foundation: `client|project|plan`
+  read/create/update/delete/restore permission codes (read for every member,
+  write for Planner + Org Admin), a shared `HierarchyLifecycleService` implementing
+  cascade soft-delete + batch restore (one `delete_batch_id` per delete, top-down
+  `PARENT_DELETED` invariant, `NAME_TAKEN` on colliding restore), and the
+  `ClientSummary`/`ProjectSummary`/`PlanSummary`/`PlanStatus`/`DeletedHierarchyItem`
+  cross-boundary types.
+- Updated dependencies [[`a3e9e01`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a3e9e01d4684f945b48cd116374a545d39a7f9bc)]:
+  - @repo/types@0.2.2
+
 ## 0.2.1
 
 ### Patch Changes

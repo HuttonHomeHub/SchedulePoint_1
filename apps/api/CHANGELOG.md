@@ -1,5 +1,77 @@
 # @repo/api
 
+## 0.3.0
+
+### Minor Changes
+
+- [#13](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/13) [`7c96a33`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7c96a3335182f90b0628d44f4c4e31b9748fed49) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the clients REST API — the top level of the Client → Project → Plan
+  hierarchy. `GET/POST /organizations/:orgSlug/clients`,
+  `GET/PATCH/DELETE /organizations/:orgSlug/clients/:clientId`, and
+  `POST .../clients/:clientId/restore`. Reads are open to any member; create/
+  update/delete/restore are Planner + Org Admin. Every route resolves the org
+  scope from the caller's memberships (404 for non-members), names are unique per
+  active org, updates use optimistic locking, and delete is a soft cascade to the
+  client's projects and plans (restored together as one batch).
+
+- [#13](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/13) [`7c96a33`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7c96a3335182f90b0628d44f4c4e31b9748fed49) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the plans REST API — the leaf level of the Client → Project → Plan
+  hierarchy and the future host of activities and the TSLD. Create and list are
+  nested under a parent project
+  (`GET/POST /organizations/:orgSlug/projects/:projectId/plans`); item operations
+  are flat by id (`GET/PATCH/DELETE /organizations/:orgSlug/plans/:planId` and
+  `POST .../plans/:planId/restore`). Plans carry `status` (`DRAFT`/`ACTIVE`/
+  `ARCHIVED`, default `DRAFT`) and an optional date-only `plannedStart`
+  (`YYYY-MM-DD`, stored without timezone drift and validated as a real calendar
+  day). Reads are open to any member; create/update/delete/restore are Planner +
+  Org Admin. The parent project is resolved active and in-org first (404
+  otherwise) and its organisation id is copied onto the plan; names are unique per
+  project among active rows; updates use optimistic locking; delete is a soft
+  delete (a plan is a leaf); and restore requires the parent project to be active
+  (`PARENT_DELETED` otherwise).
+
+- [#13](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/13) [`7c96a33`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7c96a3335182f90b0628d44f4c4e31b9748fed49) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the projects REST API — the middle level of the Client → Project → Plan
+  hierarchy. Create and list are nested under a parent client
+  (`GET/POST /organizations/:orgSlug/clients/:clientId/projects`); item operations
+  are flat by id (`GET/PATCH/DELETE /organizations/:orgSlug/projects/:projectId`
+  and `POST .../projects/:projectId/restore`). Reads are open to any member;
+  create/update/delete/restore are Planner + Org Admin. The parent client is
+  resolved active and in-org first (404 otherwise) and its organisation id is
+  copied onto the project (never taken from input); names are unique per client
+  among active rows; updates use optimistic locking; delete is a soft cascade to
+  the project's plans; and restore brings the batch back but requires the parent
+  client to be active (`PARENT_DELETED` otherwise).
+
+- [#14](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/14) [`34f1604`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/34f160433f80c294f00114ab5c3847aa9ceebd37) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the organisation recycle-bin endpoint (`GET /organizations/:orgSlug/deleted`):
+  one deletion-time-ordered, cursor-paginated list of soft-deleted clients,
+  projects and plans, each carrying a `canRestore` flag that is false while an
+  ancestor is still deleted (surfacing the top-down restore invariant). Reading
+  requires hierarchy read (any member); restore stays on the existing per-entity,
+  writer-only `.../{id}/restore` routes. Pagination is keyset over the union of the
+  three tables by `(deletedAt, id)`.
+
+- [#13](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/13) [`7c96a33`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7c96a3335182f90b0628d44f4c4e31b9748fed49) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the hierarchy authorisation and lifecycle foundation: `client|project|plan`
+  read/create/update/delete/restore permission codes (read for every member,
+  write for Planner + Org Admin), a shared `HierarchyLifecycleService` implementing
+  cascade soft-delete + batch restore (one `delete_batch_id` per delete, top-down
+  `PARENT_DELETED` invariant, `NAME_TAKEN` on colliding restore), and the
+  `ClientSummary`/`ProjectSummary`/`PlanSummary`/`PlanStatus`/`DeletedHierarchyItem`
+  cross-boundary types.
+
+- [#13](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/13) [`7c96a33`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7c96a3335182f90b0628d44f4c4e31b9748fed49) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the `Client`, `Project`, and `Plan` domain-hierarchy tables (and the
+  `PlanStatus` enum) plus their migration — the organisation-scoped containers the
+  scheduling features hang off. Each follows the house standards (UUID v7 PKs,
+  snake_case columns, timestamptz UTC, soft delete, audit, optimistic-locking
+  `version`) and adds two reusable conventions: a denormalised `organization_id` on
+  `Project`/`Plan` (copied from the parent for single-column scope/IDOR checks) and
+  a `delete_batch_id` correlation column that groups a row and its subtree for
+  cascade soft-delete and one-shot batch restore. Parent FKs are `ON DELETE
+RESTRICT`; name uniqueness is per immediate parent among live rows via partial
+  unique indexes. Schema and migration only — no module/endpoint behaviour yet.
+
+### Patch Changes
+
+- Updated dependencies [[`a3e9e01`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a3e9e01d4684f945b48cd116374a545d39a7f9bc)]:
+  - @repo/types@0.2.2
+
 ## 0.2.1
 
 ### Patch Changes
