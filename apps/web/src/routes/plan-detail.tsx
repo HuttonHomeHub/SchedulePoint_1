@@ -10,6 +10,7 @@ import { useClient } from '@/features/clients';
 import { DependencyEditor } from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
+import { ScheduleSummaryStrip } from '@/features/schedule';
 import { canManageHierarchy, canReportProgress, useOrgRole } from '@/hooks/use-org-role';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -113,6 +114,9 @@ export function PlanDetailScreen(): React.ReactElement {
         The activities that make up this plan. The graphical Time-Scaled Logic Diagram will edit
         these on a timeline in a later release.
       </p>
+      <div className="mt-3">
+        <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
+      </div>
       <div className="mt-3">
         <ActivitiesTable
           orgSlug={orgSlug}
