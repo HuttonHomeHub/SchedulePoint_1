@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { permissionsForRole } from './org-permissions';
 import { OrganizationRole } from './principal';
 
-const READ = ['client:read', 'project:read', 'plan:read'] as const;
+const READ = ['client:read', 'project:read', 'plan:read', 'activity:read'] as const;
 const WRITE = [
   'client:create',
   'client:update',
@@ -11,6 +11,10 @@ const WRITE = [
   'client:restore',
   'project:create',
   'plan:delete',
+  'activity:create',
+  'activity:update',
+  'activity:delete',
+  'activity:restore',
 ] as const;
 
 describe('permissionsForRole — hierarchy', () => {
@@ -48,5 +52,36 @@ describe('permissionsForRole — hierarchy', () => {
     const perms = permissionsForRole(OrganizationRole.PLANNER);
     expect(perms).not.toContain('member:remove');
     expect(perms).not.toContain('invitation:revoke');
+  });
+});
+
+describe('permissionsForRole — activity progress vs logic (the Contributor split)', () => {
+  it('grants activity:update_progress to Contributor upward, but NOT to Viewer', () => {
+    expect(permissionsForRole(OrganizationRole.VIEWER)).not.toContain('activity:update_progress');
+    for (const role of [
+      OrganizationRole.CONTRIBUTOR,
+      OrganizationRole.PLANNER,
+      OrganizationRole.ORG_ADMIN,
+    ]) {
+      expect(permissionsForRole(role)).toContain('activity:update_progress');
+    }
+  });
+
+  it('lets a Contributor update progress but NOT change logic/definition', () => {
+    const perms = permissionsForRole(OrganizationRole.CONTRIBUTOR);
+    expect(perms).toContain('activity:read');
+    expect(perms).toContain('activity:update_progress');
+    // The whole point of the split: no definition write for a Contributor.
+    expect(perms).not.toContain('activity:update');
+    expect(perms).not.toContain('activity:create');
+    expect(perms).not.toContain('activity:delete');
+  });
+
+  it('gives Planner/Org Admin both progress and full definition write', () => {
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      const perms = permissionsForRole(role);
+      expect(perms).toContain('activity:update_progress');
+      expect(perms).toContain('activity:update');
+    }
   });
 });

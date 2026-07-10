@@ -37,10 +37,26 @@ export type OrgPermission =
   | 'plan:create'
   | 'plan:update'
   | 'plan:delete'
-  | 'plan:restore';
+  | 'plan:restore'
+  // Activities are the leaf of the hierarchy. Read/create/update/delete/restore
+  // follow the same Planner+Admin "write" rule as clients/projects/plans, BUT
+  // `activity:update_progress` is separate: it is granted to Contributor upward so
+  // a Contributor can move progress (status / % / actual dates) WITHOUT the logic
+  // and definition write the full `activity:update` implies (brief §5).
+  | 'activity:read'
+  | 'activity:create'
+  | 'activity:update'
+  | 'activity:delete'
+  | 'activity:restore'
+  | 'activity:update_progress';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree. */
-const HIERARCHY_READ: readonly OrgPermission[] = ['client:read', 'project:read', 'plan:read'];
+const HIERARCHY_READ: readonly OrgPermission[] = [
+  'client:read',
+  'project:read',
+  'plan:read',
+  'activity:read',
+];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
 const HIERARCHY_WRITE: readonly OrgPermission[] = [
@@ -56,7 +72,19 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'plan:update',
   'plan:delete',
   'plan:restore',
+  'activity:create',
+  'activity:update',
+  'activity:delete',
+  'activity:restore',
 ];
+
+/**
+ * Update an activity's PROGRESS (status / % complete / actual dates) — Contributor
+ * upward. Deliberately separate from `HIERARCHY_WRITE` so a Contributor can report
+ * progress without being able to change logic, dates, or structure. Planners/Org
+ * Admins also hold it (they can do everything).
+ */
+const PROGRESS_WRITE: readonly OrgPermission[] = ['activity:update_progress'];
 
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
@@ -73,12 +101,23 @@ const ADMIN: readonly OrgPermission[] = [
 ];
 
 const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
-  // Every member can read the org, its roster, and browse the hierarchy. Planner
-  // adds hierarchy write; Org Admin adds member/invitation administration too.
+  // Every member can read the org, its roster, and browse the hierarchy.
+  // Contributor adds activity-progress updates; Planner adds full hierarchy write;
+  // Org Admin adds member/invitation administration on top.
   [OrganizationRole.VIEWER]: [...MEMBER_BASELINE, ...HIERARCHY_READ],
-  [OrganizationRole.CONTRIBUTOR]: [...MEMBER_BASELINE, ...HIERARCHY_READ],
-  [OrganizationRole.PLANNER]: [...MEMBER_BASELINE, ...HIERARCHY_READ, ...HIERARCHY_WRITE],
-  [OrganizationRole.ORG_ADMIN]: [...ADMIN, ...HIERARCHY_READ, ...HIERARCHY_WRITE],
+  [OrganizationRole.CONTRIBUTOR]: [...MEMBER_BASELINE, ...HIERARCHY_READ, ...PROGRESS_WRITE],
+  [OrganizationRole.PLANNER]: [
+    ...MEMBER_BASELINE,
+    ...HIERARCHY_READ,
+    ...HIERARCHY_WRITE,
+    ...PROGRESS_WRITE,
+  ],
+  [OrganizationRole.ORG_ADMIN]: [
+    ...ADMIN,
+    ...HIERARCHY_READ,
+    ...HIERARCHY_WRITE,
+    ...PROGRESS_WRITE,
+  ],
 };
 
 /** Resolve the permissions a role grants (used when building the principal). */

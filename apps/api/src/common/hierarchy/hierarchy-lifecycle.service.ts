@@ -5,14 +5,15 @@ import { Prisma } from '@prisma/client';
 
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
 
-/** The three levels of the Client → Project → Plan hierarchy. */
-export type HierarchyEntity = 'client' | 'project' | 'plan';
+/** The four levels of the Client → Project → Plan → Activity hierarchy. */
+export type HierarchyEntity = 'client' | 'project' | 'plan' | 'activity';
 
 /** Per-level row counts affected by a cascade operation. */
 export interface CascadeCounts {
   clients: number;
   projects: number;
   plans: number;
+  activities: number;
 }
 
 export interface CascadeDeleteResult {
@@ -56,28 +57,48 @@ export class HierarchyLifecycleService {
   ): Promise<CascadeDeleteResult> {
     const batchId = randomUUID();
     const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
-    const counts: CascadeCounts = { clients: 0, projects: 0, plans: 0 };
+    const counts: CascadeCounts = { clients: 0, projects: 0, plans: 0, activities: 0 };
+
+    // Soft-delete the active activities under a set of plans, in one updateMany.
+    const deleteActivitiesUnderPlans = async (planIds: string[]): Promise<number> => {
+      if (planIds.length === 0) return 0;
+      return (
+        await tx.activity.updateMany({
+          where: { planId: { in: planIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
 
     // Root updates use updateMany with a `deletedAt: null` guard (not `update`)
     // so the whole cascade is idempotent: a concurrent delete of the same row
     // re-stamps nothing (its updateMany matches 0 already-deleted rows), which
     // prevents a split batch under a delete/delete race (security review §3).
+    // Children are stamped before parents (activities → plans → projects → client),
+    // all with the same batch id, so a restore of the root reactivates the subtree.
     if (entity === 'client') {
-      // Delete the client's active plans (via its active projects), then those
-      // projects, then the client — active-only so separately-deleted subtrees
-      // (their own batch) are left untouched.
+      // Resolve the active subtree top-down BEFORE deleting it: the client's active
+      // projects, then the active plans under them, then those plans' activities —
+      // active-only so separately-deleted subtrees (their own batch) are untouched.
       const projectIds = (
         await tx.project.findMany({
           where: { clientId: id, deletedAt: null },
           select: { id: true },
         })
       ).map((p) => p.id);
-      if (projectIds.length > 0) {
+      const planIds =
+        projectIds.length > 0
+          ? (
+              await tx.plan.findMany({
+                where: { projectId: { in: projectIds }, deletedAt: null },
+                select: { id: true },
+              })
+            ).map((p) => p.id)
+          : [];
+      counts.activities = await deleteActivitiesUnderPlans(planIds);
+      if (planIds.length > 0) {
         counts.plans = (
-          await tx.plan.updateMany({
-            where: { projectId: { in: projectIds }, deletedAt: null },
-            data: stamp,
-          })
+          await tx.plan.updateMany({ where: { id: { in: planIds }, deletedAt: null }, data: stamp })
         ).count;
       }
       counts.projects = (
@@ -87,15 +108,25 @@ export class HierarchyLifecycleService {
         await tx.client.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
     } else if (entity === 'project') {
+      const planIds = (
+        await tx.plan.findMany({ where: { projectId: id, deletedAt: null }, select: { id: true } })
+      ).map((p) => p.id);
+      counts.activities = await deleteActivitiesUnderPlans(planIds);
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
       ).count;
       counts.projects = (
         await tx.project.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
-    } else {
+    } else if (entity === 'plan') {
+      counts.activities = await deleteActivitiesUnderPlans([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
+      ).count;
+    } else {
+      // Activity is a leaf — soft-delete just this row.
+      counts.activities = (
+        await tx.activity.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
     }
 
@@ -118,11 +149,11 @@ export class HierarchyLifecycleService {
     await this.assertParentActive(tx, entity, root);
 
     // Every soft-deleted row carries a batch id; fall back to the row itself for
-    // defensiveness. Restore across all three tables so a client's batch (which
-    // spans projects/plans) is reactivated in one shot.
+    // defensiveness. Restore across all four tables so a client's batch (which
+    // spans projects/plans/activities) is reactivated in one shot.
     const batchId = root.deleteBatchId ?? undefined;
     const restore = { deletedAt: null, deleteBatchId: null, updatedBy: actorId };
-    const counts: CascadeCounts = { clients: 0, projects: 0, plans: 0 };
+    const counts: CascadeCounts = { clients: 0, projects: 0, plans: 0, activities: 0 };
 
     try {
       if (batchId) {
@@ -135,6 +166,9 @@ export class HierarchyLifecycleService {
         counts.plans = (
           await tx.plan.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
+        counts.activities = (
+          await tx.activity.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
       } else {
         // Defensive: a soft-deleted row should always carry a batch id.
         if (entity === 'client') {
@@ -143,9 +177,12 @@ export class HierarchyLifecycleService {
         } else if (entity === 'project') {
           await tx.project.update({ where: { id }, data: restore });
           counts.projects = 1;
-        } else {
+        } else if (entity === 'plan') {
           await tx.plan.update({ where: { id }, data: restore });
           counts.plans = 1;
+        } else {
+          await tx.activity.update({ where: { id }, data: restore });
+          counts.activities = 1;
         }
       }
     } catch (error) {
@@ -181,26 +218,38 @@ export class HierarchyLifecycleService {
       if (!row) throw new NotFoundError('Project not found.');
       return { deleteBatchId: row.deleteBatchId, parentId: row.clientId };
     }
-    const row = await tx.plan.findFirst({
+    if (entity === 'plan') {
+      const row = await tx.plan.findFirst({
+        where: { id, deletedAt: { not: null } },
+        select: { deleteBatchId: true, projectId: true },
+      });
+      if (!row) throw new NotFoundError('Plan not found.');
+      return { deleteBatchId: row.deleteBatchId, parentId: row.projectId };
+    }
+    const row = await tx.activity.findFirst({
       where: { id, deletedAt: { not: null } },
-      select: { deleteBatchId: true, projectId: true },
+      select: { deleteBatchId: true, planId: true },
     });
-    if (!row) throw new NotFoundError('Plan not found.');
-    return { deleteBatchId: row.deleteBatchId, parentId: row.projectId };
+    if (!row) throw new NotFoundError('Activity not found.');
+    return { deleteBatchId: row.deleteBatchId, parentId: row.planId };
   }
 
-  /** A client's parent is its org (always active here); a project/plan's is its
-   * client/project — which must be active to restore under it. */
+  /** A client's parent is its org (always active here); a project/plan/activity's
+   * is its client/project/plan — which must be active to restore under it. */
   private async assertParentActive(
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
     root: { parentId: string | null },
   ): Promise<void> {
     if (entity === 'client' || root.parentId === null) return;
-    const parentActive =
-      entity === 'project'
-        ? await tx.client.findFirst({ where: { id: root.parentId, deletedAt: null } })
-        : await tx.project.findFirst({ where: { id: root.parentId, deletedAt: null } });
+    let parentActive: unknown;
+    if (entity === 'project') {
+      parentActive = await tx.client.findFirst({ where: { id: root.parentId, deletedAt: null } });
+    } else if (entity === 'plan') {
+      parentActive = await tx.project.findFirst({ where: { id: root.parentId, deletedAt: null } });
+    } else {
+      parentActive = await tx.plan.findFirst({ where: { id: root.parentId, deletedAt: null } });
+    }
     if (!parentActive) {
       throw new ConflictError('Restore the parent first.', {
         reason: HIERARCHY_CONFLICT.PARENT_DELETED,

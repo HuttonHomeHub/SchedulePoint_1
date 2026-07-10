@@ -19,7 +19,7 @@ function makeTx() {
     update: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({ count: 0 }),
   });
-  return { client: model(), project: model(), plan: model() };
+  return { client: model(), project: model(), plan: model(), activity: model() };
 }
 
 describe('HierarchyLifecycleService', () => {
@@ -34,22 +34,25 @@ describe('HierarchyLifecycleService', () => {
   const asTx = () => tx as unknown as Prisma.TransactionClient;
 
   describe('cascadeSoftDelete', () => {
-    it('deletes a client with its active projects and their plans, under one batch', async () => {
+    it('deletes a client with its projects, plans AND activities under one batch', async () => {
       tx.project.findMany.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+      tx.plan.findMany.mockResolvedValue([{ id: 'pl1' }, { id: 'pl2' }, { id: 'pl3' }]);
+      tx.activity.updateMany.mockResolvedValue({ count: 7 });
       tx.plan.updateMany.mockResolvedValue({ count: 3 });
       tx.project.updateMany.mockResolvedValue({ count: 2 });
       tx.client.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
 
-      expect(result.counts).toEqual({ clients: 1, projects: 2, plans: 3 });
-      // Plans deleted are only those under the client's *active* projects.
-      expect(tx.plan.updateMany).toHaveBeenCalledWith({
-        where: { projectId: { in: ['p1', 'p2'] }, deletedAt: null },
+      expect(result.counts).toEqual({ clients: 1, projects: 2, plans: 3, activities: 7 });
+      // Activities deleted are those under the client's active plans.
+      expect(tx.activity.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1', 'pl2', 'pl3'] }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId, updatedBy: ACTOR }),
       });
-      expect(tx.project.updateMany).toHaveBeenCalledWith({
-        where: { clientId: 'c1', deletedAt: null },
+      // Those plans are deleted by id (resolved from the active projects).
+      expect(tx.plan.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['pl1', 'pl2', 'pl3'] }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
       // The root update is guarded by deletedAt: null (idempotent under a race).
@@ -59,39 +62,99 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
-    it('skips the plan sweep when a client has no active projects', async () => {
+    it('skips the plan/activity sweep when a client has no active projects', async () => {
       tx.project.findMany.mockResolvedValue([]);
       tx.client.updateMany.mockResolvedValue({ count: 1 });
       const result = await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
+      expect(tx.plan.findMany).not.toHaveBeenCalled();
       expect(tx.plan.updateMany).not.toHaveBeenCalled();
-      expect(result.counts).toEqual({ clients: 1, projects: 0, plans: 0 });
+      expect(tx.activity.updateMany).not.toHaveBeenCalled();
+      expect(result.counts).toEqual({ clients: 1, projects: 0, plans: 0, activities: 0 });
     });
 
-    it('deletes a plan alone (no descendants)', async () => {
+    it('deletes a project with its plans and their activities', async () => {
+      tx.plan.findMany.mockResolvedValue([{ id: 'pl1' }]);
+      tx.activity.updateMany.mockResolvedValue({ count: 4 });
       tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.project.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.cascadeSoftDelete(asTx(), 'project', 'p1', ACTOR);
+
+      expect(result.counts).toEqual({ clients: 0, projects: 1, plans: 1, activities: 4 });
+      expect(tx.activity.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+    });
+
+    it('deletes a plan with its activities (the plan is not a leaf anymore)', async () => {
+      tx.activity.updateMany.mockResolvedValue({ count: 5 });
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+
       const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+
+      expect(tx.activity.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
       expect(tx.plan.updateMany).toHaveBeenCalledWith({
         where: { id: 'pl1', deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
-      expect(result.counts).toEqual({ clients: 0, projects: 0, plans: 1 });
+      expect(result.counts).toEqual({ clients: 0, projects: 0, plans: 1, activities: 5 });
+    });
+
+    it('deletes an activity alone as a leaf (no descendants)', async () => {
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(tx.activity.updateMany).toHaveBeenCalledWith({
+        where: { id: 'a1', deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+      expect(result.counts).toEqual({ clients: 0, projects: 0, plans: 0, activities: 1 });
     });
   });
 
   describe('restoreBatch', () => {
-    it('restores the whole batch when the parent is active', async () => {
+    it('restores the whole batch (incl. activities) when the parent is active', async () => {
       tx.project.findFirst.mockResolvedValue({ deleteBatchId: 'batch-9', clientId: 'c1' });
       tx.client.findFirst.mockResolvedValue({ id: 'c1' }); // parent client active
       tx.project.updateMany.mockResolvedValue({ count: 1 });
       tx.plan.updateMany.mockResolvedValue({ count: 4 });
+      tx.activity.updateMany.mockResolvedValue({ count: 9 });
 
       const counts = await service.restoreBatch(asTx(), 'project', 'p1', ACTOR);
 
-      expect(counts).toEqual({ clients: 0, projects: 1, plans: 4 });
-      expect(tx.project.updateMany).toHaveBeenCalledWith({
+      expect(counts).toEqual({ clients: 0, projects: 1, plans: 4, activities: 9 });
+      expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-9' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
+    });
+
+    it('restores an activity whose parent plan is active', async () => {
+      tx.activity.findFirst.mockResolvedValue({ deleteBatchId: 'batch-a', planId: 'pl1' });
+      tx.plan.findFirst.mockResolvedValue({ id: 'pl1' }); // parent plan active
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+
+      const counts = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR);
+
+      expect(counts.activities).toBe(1);
+      expect(tx.plan.findFirst).toHaveBeenCalledWith({
+        where: { id: 'pl1', deletedAt: null },
+      });
+    });
+
+    it('rejects restoring an activity whose plan is still deleted (PARENT_DELETED)', async () => {
+      tx.activity.findFirst.mockResolvedValue({ deleteBatchId: 'batch-a', planId: 'pl1' });
+      tx.plan.findFirst.mockResolvedValue(null); // parent plan deleted
+
+      const error = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR).catch((e) => e);
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).details).toEqual({
+        reason: HIERARCHY_CONFLICT.PARENT_DELETED,
+      });
+      expect(tx.activity.updateMany).not.toHaveBeenCalled();
     });
 
     it('rejects restore when the parent is still deleted (PARENT_DELETED)', async () => {
@@ -118,6 +181,10 @@ describe('HierarchyLifecycleService', () => {
     it('404s when the row is missing or not deleted', async () => {
       tx.plan.findFirst.mockResolvedValue(null);
       await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+      tx.activity.findFirst.mockResolvedValue(null);
+      await expect(service.restoreBatch(asTx(), 'activity', 'a1', ACTOR)).rejects.toBeInstanceOf(
         NotFoundError,
       );
     });
