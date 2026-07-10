@@ -58,7 +58,13 @@ export function useSignIn() {
       });
       if (error) throw new Error(messageFrom(error, 'Could not sign in. Check your details.'));
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: sessionKeys.session }),
+    // Fetch the session fresh before the caller navigates: the `_authed` guard
+    // reads it via `ensureQueryData`, which returns cached data without
+    // revalidating, so the cache must already hold the new user — else the
+    // post-login navigation reads the stale `null` and bounces back to sign-in.
+    // `fetchQuery` runs the queryFn and returns a promise react-query awaits, so
+    // the session is populated before the mutate-level onSuccess (navigation).
+    onSuccess: () => queryClient.fetchQuery(sessionQueryOptions),
   });
 }
 
@@ -74,7 +80,9 @@ export function useSignUp() {
       });
       if (error) throw new Error(messageFrom(error, 'Could not create your account.'));
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: sessionKeys.session }),
+    // See useSignIn: fetch so the session cache holds the new user before the
+    // post-sign-up navigation runs (the guard reads cache without revalidating).
+    onSuccess: () => queryClient.fetchQuery(sessionQueryOptions),
   });
 }
 
