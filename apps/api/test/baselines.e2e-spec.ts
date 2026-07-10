@@ -251,6 +251,107 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     await actor.agent.get('/api/v1/organizations/acme/plans/not-a-uuid/baselines').expect(400); // malformed plan id
   });
 
+  it('activates exactly one baseline, atomically deactivating the previous', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const first = await actor.agent.post(baselinesUrl(planId)).send({ name: 'First' }).expect(201);
+    const second = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Second' })
+      .expect(201);
+    const firstId = first.body.data.id as string;
+    const secondId = second.body.data.id as string;
+
+    const activated = await actor.agent
+      .post(`${baselinesUrl(planId)}/${secondId}/activate`)
+      .expect(200);
+    expect(activated.body.data).toMatchObject({ id: secondId, isActive: true });
+
+    const list = await actor.agent.get(baselinesUrl(planId)).expect(200);
+    const byId = new Map(
+      (list.body.data as { id: string; isActive: boolean }[]).map((b) => [b.id, b.isActive]),
+    );
+    expect(byId.get(secondId)).toBe(true);
+    expect(byId.get(firstId)).toBe(false); // exactly one active
+
+    // Idempotent: activating the already-active one keeps it active, still only one.
+    await actor.agent.post(`${baselinesUrl(planId)}/${secondId}/activate`).expect(200);
+    const active = await prisma.baseline.count({
+      where: { planId, isActive: true, deletedAt: null },
+    });
+    expect(active).toBe(1);
+  });
+
+  it('deletes a baseline (soft cascade) and frees its name; deleting the active leaves none active', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const created = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Contract' })
+      .expect(201);
+    const baselineId = created.body.data.id as string;
+
+    await actor.agent.delete(`${baselinesUrl(planId)}/${baselineId}`).expect(204);
+    const list = await actor.agent.get(baselinesUrl(planId)).expect(200);
+    expect(list.body.data).toHaveLength(0);
+    // Its snapshot rows soft-deleted with it, under one batch.
+    const snap = await prisma.baselineActivity.findFirst({
+      where: { baselineId, deletedAt: null },
+    });
+    expect(snap).toBeNull();
+
+    // The plan now has no active baseline; a fresh capture reuses the name and is active again.
+    const again = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Contract' })
+      .expect(201);
+    expect(again.body.data.isActive).toBe(true);
+  });
+
+  it('enforces RBAC on activate/delete: Viewer and Contributor are forbidden (403)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const created = await actor.agent.post(baselinesUrl(planId)).send({ name: 'Base' }).expect(201);
+    const baselineId = created.body.data.id as string;
+
+    for (const [email, role] of [
+      ['viewer@example.com', 'VIEWER'],
+      ['contributor@example.com', 'CONTRIBUTOR'],
+    ] as const) {
+      const user = await signUp(email);
+      await prisma.orgMember.create({ data: { organizationId: orgId, userId: user.userId, role } });
+      await user.agent.post(`${baselinesUrl(planId)}/${baselineId}/activate`).expect(403);
+      await user.agent.delete(`${baselinesUrl(planId)}/${baselineId}`).expect(403);
+    }
+  });
+
+  it('cascades: deleting the plan soft-deletes its baselines; restoring the plan brings them back', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const created = await actor.agent.post(baselinesUrl(planId)).send({ name: 'Base' }).expect(201);
+    const baselineId = created.body.data.id as string;
+
+    // Delete the plan → its baselines + snapshot rows are swept into the same batch.
+    await actor.agent.delete(`/api/v1/organizations/acme/plans/${planId}`).expect(204);
+    const deleted = await prisma.baseline.findUniqueOrThrow({ where: { id: baselineId } });
+    expect(deleted.deletedAt).not.toBeNull();
+    expect(deleted.deleteBatchId).not.toBeNull();
+    const liveSnap = await prisma.baselineActivity.count({
+      where: { baselineId, deletedAt: null },
+    });
+    expect(liveSnap).toBe(0);
+    // The plan is gone, so the baselines endpoint 404s.
+    await actor.agent.get(baselinesUrl(planId)).expect(404);
+
+    // Restore the plan → its baselines come back, active flag preserved.
+    await actor.agent.post(`/api/v1/organizations/acme/plans/${planId}/restore`).expect(200);
+    const restored = await prisma.baseline.findUniqueOrThrow({ where: { id: baselineId } });
+    expect(restored.deletedAt).toBeNull();
+    expect(restored.isActive).toBe(true);
+    const list = await actor.agent.get(baselinesUrl(planId)).expect(200);
+    expect(list.body.data.map((b: { id: string }) => b.id)).toContain(baselineId);
+  });
+
   it('401s without a session', async () => {
     await request(server())
       .get('/api/v1/organizations/acme/plans/00000000-0000-7000-8000-000000000000/baselines')

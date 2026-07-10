@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable } from '@nestjs/common';
 import { Prisma, type ActivityType, type Baseline } from '@prisma/client';
 
@@ -138,6 +140,76 @@ export class BaselineRepository {
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<Baseline | null> {
     return db.baseline.findFirst({ where: this.active({ id, organizationId, planId }) });
+  }
+
+  /** An active baseline with its snapshot-row count — the summary shape for a single read. */
+  async findActiveWithCountByIdInPlan(
+    id: string,
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<(Baseline & { activityCount: number }) | null> {
+    const row = await db.baseline.findFirst({
+      where: this.active({ id, organizationId, planId }),
+      include: { _count: { select: { activities: true } } },
+    });
+    if (!row) return null;
+    const { _count, ...baseline } = row;
+    return { ...baseline, activityCount: _count.activities };
+  }
+
+  /**
+   * Clear the plan's current active baseline (`is_active = false`), scoped to org +
+   * plan. Runs first in an activate flip (before setting the target), so the
+   * one-active partial unique is never momentarily violated. Idempotent.
+   */
+  async clearActive(
+    organizationId: string,
+    planId: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    await db.baseline.updateMany({
+      where: this.active({ organizationId, planId, isActive: true }),
+      data: { isActive: false, updatedBy: actorId, version: { increment: 1 } },
+    });
+  }
+
+  /**
+   * Set a baseline active, scoped to org + plan. Returns rows changed — `0` means the
+   * baseline is gone (deleted concurrently), which the service maps to 404. Must run
+   * AFTER {@link clearActive} in the same transaction.
+   */
+  async setActive(
+    id: string,
+    organizationId: string,
+    planId: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await db.baseline.updateMany({
+      where: this.active({ id, organizationId, planId }),
+      data: { isActive: true, updatedBy: actorId, version: { increment: 1 } },
+    });
+    return result.count;
+  }
+
+  /**
+   * Soft-delete a baseline and its snapshot rows under one batch id, in the caller's
+   * transaction. The `deletedAt: null` guards make it idempotent under a concurrent
+   * delete. The caller must have verified scope + authorisation.
+   */
+  async softDeleteWithSnapshot(
+    id: string,
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    const stamp = { deletedAt: new Date(), deleteBatchId: randomUUID(), updatedBy: actorId };
+    await db.baselineActivity.updateMany({
+      where: { baselineId: id, deletedAt: null },
+      data: stamp,
+    });
+    await db.baseline.updateMany({ where: { id, deletedAt: null }, data: stamp });
   }
 
   /** An active baseline with its frozen activity rows (source-id ordered) — the read shape. */

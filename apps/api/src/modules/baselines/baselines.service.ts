@@ -163,6 +163,75 @@ export class BaselinesService {
     }
   }
 
+  async activate(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    baselineId: string,
+  ): Promise<{ baseline: Baseline; activityCount: number }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'baseline:activate', organization.id);
+
+    if (!(await this.baselines.findActiveByIdInPlan(baselineId, organization.id, planId))) {
+      throw new NotFoundError('Baseline not found.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Serialise with capture/other activates on this plan. Clear the current active
+      // baseline BEFORE setting the target, so the one-active partial unique is never
+      // momentarily violated (ADR-0025); idempotent if the target is already active.
+      await acquirePlanWriteLock(tx, planId);
+      await this.baselines.clearActive(organization.id, planId, principal.userId, tx);
+      const changed = await this.baselines.setActive(
+        baselineId,
+        organization.id,
+        planId,
+        principal.userId,
+        tx,
+      );
+      // Deleted between the existence check and the locked flip → 404 (nothing activated).
+      if (changed === 0) throw new NotFoundError('Baseline not found.');
+    });
+
+    const updated = await this.baselines.findActiveWithCountByIdInPlan(
+      baselineId,
+      organization.id,
+      planId,
+    );
+    if (!updated) throw new NotFoundError('Baseline not found.');
+    this.logger.info(
+      { organizationId: organization.id, planId, baselineId, userId: principal.userId },
+      'baseline activated',
+    );
+    const { activityCount, ...baseline } = updated;
+    return { baseline, activityCount };
+  }
+
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    baselineId: string,
+  ): Promise<void> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'baseline:delete', organization.id);
+
+    if (!(await this.baselines.findActiveByIdInPlan(baselineId, organization.id, planId))) {
+      throw new NotFoundError('Baseline not found.');
+    }
+
+    // Soft-cascade the baseline and its snapshot rows under one batch. Deleting the
+    // active baseline simply leaves the plan with none active (variance is then hidden).
+    await this.prisma.$transaction(async (tx) => {
+      await acquirePlanWriteLock(tx, planId);
+      await this.baselines.softDeleteWithSnapshot(baselineId, principal.userId, tx);
+    });
+    this.logger.info(
+      { organizationId: organization.id, planId, baselineId, userId: principal.userId },
+      'baseline deleted (with snapshot)',
+    );
+  }
+
   /** Assert an active plan exists in this org, so a list/read on a bogus plan is a 404 (not empty). */
   private async assertPlanExists(planId: string, organizationId: string): Promise<void> {
     if (!(await this.plans.findActiveByIdInOrg(planId, organizationId))) {

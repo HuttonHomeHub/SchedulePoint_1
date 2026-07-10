@@ -25,6 +25,8 @@ function makeTx() {
     plan: model(),
     activity: model(),
     activityDependency: model(),
+    baseline: model(),
+    baselineActivity: model(),
   };
 }
 
@@ -56,6 +58,7 @@ describe('HierarchyLifecycleService', () => {
         plans: 3,
         activities: 7,
         dependencies: 0,
+        baselines: 0,
       });
       // Activities deleted are those under the client's active plans.
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -87,6 +90,7 @@ describe('HierarchyLifecycleService', () => {
         plans: 0,
         activities: 0,
         dependencies: 0,
+        baselines: 0,
       });
     });
 
@@ -104,6 +108,7 @@ describe('HierarchyLifecycleService', () => {
         plans: 1,
         activities: 4,
         dependencies: 0,
+        baselines: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1'] }, deletedAt: null },
@@ -131,6 +136,7 @@ describe('HierarchyLifecycleService', () => {
         plans: 1,
         activities: 5,
         dependencies: 0,
+        baselines: 0,
       });
     });
 
@@ -147,6 +153,7 @@ describe('HierarchyLifecycleService', () => {
         plans: 0,
         activities: 1,
         dependencies: 0,
+        baselines: 0,
       });
     });
 
@@ -171,6 +178,30 @@ describe('HierarchyLifecycleService', () => {
         where: { planId: { in: ['pl1'] }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
+    });
+
+    it("sweeps a plan's baselines and their snapshot rows into the batch", async () => {
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.baseline.updateMany.mockResolvedValue({ count: 2 });
+      const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      expect(result.counts.baselines).toBe(2);
+      // Snapshot rows are stamped via their parent baseline's plan, in the same batch.
+      expect(tx.baselineActivity.updateMany).toHaveBeenCalledWith({
+        where: { baseline: { planId: { in: ['pl1'] } }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+      expect(tx.baseline.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+    });
+
+    it('does NOT sweep baselines when a single activity is deleted', async () => {
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(result.counts.baselines).toBe(0);
+      expect(tx.baseline.updateMany).not.toHaveBeenCalled();
+      expect(tx.baselineActivity.updateMany).not.toHaveBeenCalled();
     });
 
     it('deletes a dependency alone as a leaf (its own batch)', async () => {
@@ -217,9 +248,35 @@ describe('HierarchyLifecycleService', () => {
 
       const counts = await service.restoreBatch(asTx(), 'project', 'p1', ACTOR);
 
-      expect(counts).toEqual({ clients: 0, projects: 1, plans: 4, activities: 9, dependencies: 0 });
+      expect(counts).toEqual({
+        clients: 0,
+        projects: 1,
+        plans: 4,
+        activities: 9,
+        dependencies: 0,
+        baselines: 0,
+      });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-9' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+    });
+
+    it("restores a plan's baselines and their snapshot rows with the batch", async () => {
+      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-b', projectId: 'pr1' });
+      tx.project.findFirst.mockResolvedValue({ id: 'pr1' }); // parent project active
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.baseline.updateMany.mockResolvedValue({ count: 2 });
+
+      const counts = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+      expect(counts.baselines).toBe(2);
+      expect(tx.baseline.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-b' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+      expect(tx.baselineActivity.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-b' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
     });

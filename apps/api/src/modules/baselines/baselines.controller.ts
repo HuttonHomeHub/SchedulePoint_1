@@ -1,9 +1,20 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -90,5 +101,41 @@ export class BaselinesController {
     return BaselineDetailResponseDto.fromDetail(
       await this.service.get(principal, orgSlug, planId, baselineId),
     );
+  }
+
+  @Post(':baselineId/activate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Activate a baseline as the plan's comparison baseline (Planner or Org Admin).",
+  })
+  @ApiOkResponse({ type: BaselineResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  async activate(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('baselineId', ParseUuidPipe) baselineId: string,
+  ): Promise<BaselineResponseDto> {
+    const { baseline, activityCount } = await this.service.activate(
+      principal,
+      orgSlug,
+      planId,
+      baselineId,
+    );
+    return BaselineResponseDto.from(baseline, activityCount);
+  }
+
+  @Delete(':baselineId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a baseline and its snapshot rows (soft cascade).' })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  async remove(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('baselineId', ParseUuidPipe) baselineId: string,
+  ): Promise<void> {
+    await this.service.remove(principal, orgSlug, planId, baselineId);
   }
 }

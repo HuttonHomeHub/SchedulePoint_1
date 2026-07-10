@@ -103,7 +103,11 @@ describe('BaselinesService', () => {
     countActiveByPlan: ReturnType<typeof vi.fn>;
     findActiveByIdInPlan: ReturnType<typeof vi.fn>;
     findActiveDetailByIdInPlan: ReturnType<typeof vi.fn>;
+    findActiveWithCountByIdInPlan: ReturnType<typeof vi.fn>;
     findManyActiveByPlan: ReturnType<typeof vi.fn>;
+    clearActive: ReturnType<typeof vi.fn>;
+    setActive: ReturnType<typeof vi.fn>;
+    softDeleteWithSnapshot: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: BaselinesService;
@@ -117,9 +121,13 @@ describe('BaselinesService', () => {
       createWithSnapshot: vi.fn().mockResolvedValue(baseline()),
       loadActiveActivitiesForCapture: vi.fn().mockResolvedValue([activityRow()]),
       countActiveByPlan: vi.fn().mockResolvedValue(0),
-      findActiveByIdInPlan: vi.fn(),
+      findActiveByIdInPlan: vi.fn().mockResolvedValue(baseline()),
       findActiveDetailByIdInPlan: vi.fn(),
+      findActiveWithCountByIdInPlan: vi.fn().mockResolvedValue({ ...baseline(), activityCount: 1 }),
       findManyActiveByPlan: vi.fn().mockResolvedValue([]),
+      clearActive: vi.fn(),
+      setActive: vi.fn().mockResolvedValue(1),
+      softDeleteWithSnapshot: vi.fn(),
     };
     // The tx handle exposes $executeRaw (the plan advisory lock used by capture).
     prisma = {
@@ -253,6 +261,66 @@ describe('BaselinesService', () => {
       await expect(
         service.list(principalWith([]), 'acme', PLAN_ID, { limit: 20, order: 'desc' }),
       ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe('activate', () => {
+    it('clears the current active then sets the target active (in that order)', async () => {
+      const result = await service.activate(principalWith(ALL), 'acme', PLAN_ID, 'base-1');
+      // clearActive must run before setActive so the one-active partial unique never trips.
+      expect(baselines.clearActive.mock.invocationCallOrder[0]).toBeLessThan(
+        baselines.setActive.mock.invocationCallOrder[0]!,
+      );
+      expect(result.baseline.id).toBe('base-1');
+      expect(result.activityCount).toBe(1);
+    });
+
+    it('404s when the baseline is missing', async () => {
+      baselines.findActiveByIdInPlan.mockResolvedValue(null);
+      await expect(
+        service.activate(principalWith(ALL), 'acme', PLAN_ID, 'base-1'),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(baselines.setActive).not.toHaveBeenCalled();
+    });
+
+    it('404s when the baseline is deleted between the check and the flip', async () => {
+      baselines.setActive.mockResolvedValue(0);
+      await expect(
+        service.activate(principalWith(ALL), 'acme', PLAN_ID, 'base-1'),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('forbids a caller without baseline:activate', async () => {
+      await expect(
+        service.activate(principalWith(['baseline:read']), 'acme', PLAN_ID, 'base-1'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(baselines.clearActive).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('soft-cascades the baseline and its snapshot rows', async () => {
+      await service.remove(principalWith(ALL), 'acme', PLAN_ID, 'base-1');
+      expect(baselines.softDeleteWithSnapshot).toHaveBeenCalledWith(
+        'base-1',
+        USER_ID,
+        expect.anything(),
+      );
+    });
+
+    it('404s (and does not delete) when the baseline is missing', async () => {
+      baselines.findActiveByIdInPlan.mockResolvedValue(null);
+      await expect(
+        service.remove(principalWith(ALL), 'acme', PLAN_ID, 'base-1'),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(baselines.softDeleteWithSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('forbids a caller without baseline:delete', async () => {
+      await expect(
+        service.remove(principalWith(['baseline:read']), 'acme', PLAN_ID, 'base-1'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(baselines.softDeleteWithSnapshot).not.toHaveBeenCalled();
     });
   });
 

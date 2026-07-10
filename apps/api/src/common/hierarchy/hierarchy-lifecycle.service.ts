@@ -21,6 +21,8 @@ export interface CascadeCounts {
   plans: number;
   activities: number;
   dependencies: number;
+  /** Baselines swept under the deleted plans (M7, ADR-0025). Their snapshot rows share the batch. */
+  baselines: number;
 }
 
 export interface CascadeDeleteResult {
@@ -72,6 +74,25 @@ export class HierarchyLifecycleService {
       plans: 0,
       activities: 0,
       dependencies: 0,
+      baselines: 0,
+    };
+
+    // Soft-delete the active baselines (and their snapshot rows) under a set of plans
+    // (M7, ADR-0025). Baselines are plan-scoped descendants — not an activity concern —
+    // so only a plan/project/client delete sweeps them, never a single-activity delete.
+    // Snapshot rows are stamped first (children), via their parent baseline's plan.
+    const deleteBaselinesUnderPlans = async (planIds: string[]): Promise<number> => {
+      if (planIds.length === 0) return 0;
+      await tx.baselineActivity.updateMany({
+        where: { baseline: { planId: { in: planIds } }, deletedAt: null },
+        data: stamp,
+      });
+      return (
+        await tx.baseline.updateMany({
+          where: { planId: { in: planIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
     };
 
     // Soft-delete the active activities under a set of plans, in one updateMany.
@@ -136,6 +157,7 @@ export class HierarchyLifecycleService {
               })
             ).map((p) => p.id)
           : [];
+      counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       if (planIds.length > 0) {
@@ -153,6 +175,7 @@ export class HierarchyLifecycleService {
       const planIds = (
         await tx.plan.findMany({ where: { projectId: id, deletedAt: null }, select: { id: true } })
       ).map((p) => p.id);
+      counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       counts.plans = (
@@ -162,6 +185,7 @@ export class HierarchyLifecycleService {
         await tx.project.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
     } else if (entity === 'plan') {
+      counts.baselines = await deleteBaselinesUnderPlans([id]);
       counts.dependencies = await deleteLinksUnderPlans([id]);
       counts.activities = await deleteActivitiesUnderPlans([id]);
       counts.plans = (
@@ -209,6 +233,7 @@ export class HierarchyLifecycleService {
       plans: 0,
       activities: 0,
       dependencies: 0,
+      baselines: 0,
     };
 
     try {
@@ -225,6 +250,16 @@ export class HierarchyLifecycleService {
         counts.activities = (
           await tx.activity.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
+        // Restore the batch's baselines and their snapshot rows (M7, ADR-0025). The
+        // batch is self-consistent — at most one baseline was active when deleted — so
+        // the one-active partial unique cannot collide on restore.
+        counts.baselines = (
+          await tx.baseline.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
+        await tx.baselineActivity.updateMany({
+          where: { deleteBatchId: batchId },
+          data: restore,
+        });
         // Restore the batch's links AFTER their activities, and only where BOTH
         // endpoints are now active — a link whose other end was deleted separately
         // stays soft-deleted (endpoint-guarded; see ADR-0021 / DECISIONS.md).
