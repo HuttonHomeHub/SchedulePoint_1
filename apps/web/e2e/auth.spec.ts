@@ -18,7 +18,9 @@ test.describe('Authentication journey', () => {
     expect(results.violations).toEqual([]);
   });
 
-  test('a new user can sign up, onboard an organisation, and sign out', async ({ page }) => {
+  test('a new user can sign up, onboard an organisation, sign out and back in', async ({
+    page,
+  }) => {
     // Unique per run: the API + database persist across e2e runs.
     const stamp = Date.now();
     const email = `e2e-${stamp}@example.com`;
@@ -43,5 +45,15 @@ test.describe('Authentication journey', () => {
 
     await page.getByRole('button', { name: /sign out/i }).click();
     await expect(page).toHaveURL(/\/sign-in/);
+
+    // Signing back in must land the user in the app — not bounce back to sign-in.
+    // (Regression: after sign-out the guard has a cached null session, so sign-in
+    // must refetch it before navigating or the _authed guard reads the stale null.)
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill('correct-horse-battery');
+    await page.getByRole('button', { name: /sign in/i }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
+    await expect(page.getByRole('heading', { name: orgName })).toBeVisible();
   });
 });
