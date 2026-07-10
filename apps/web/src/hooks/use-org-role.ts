@@ -2,7 +2,7 @@ import type { OrganizationRole } from '@repo/types';
 
 import { useOrganizations } from '@/features/organizations';
 
-export { canManageHierarchy } from '@/lib/rbac';
+export { canManageHierarchy, canReportProgress } from '@/lib/rbac';
 
 /**
  * The current user's role in `orgSlug`, from the already-loaded organisations

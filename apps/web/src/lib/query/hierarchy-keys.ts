@@ -32,3 +32,11 @@ export const planKeys = {
   detail: (orgSlug: string, planId: string) =>
     [...planKeys.all(orgSlug), 'detail', planId] as const,
 };
+
+export const activityKeys = {
+  all: (orgSlug: string) => ['activities', orgSlug] as const,
+  listByPlan: (orgSlug: string, planId: string) =>
+    [...activityKeys.all(orgSlug), 'plan', planId] as const,
+  detail: (orgSlug: string, activityId: string) =>
+    [...activityKeys.all(orgSlug), 'detail', activityId] as const,
+};

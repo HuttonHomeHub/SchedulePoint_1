@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { useClient } from '@/features/clients';
 import { PLAN_STATUS_LABELS, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
@@ -95,9 +96,16 @@ export function PlanDetailScreen(): React.ReactElement {
         <p className="text-muted-foreground mt-4 max-w-2xl text-sm">{plan.data.description}</p>
       ) : null}
 
-      <h2 className="mt-8 text-lg font-medium">Schedule</h2>
-      <div className="border-border text-muted-foreground mt-3 flex min-h-64 items-center justify-center rounded-lg border border-dashed p-8 text-center text-sm">
-        The schedule editor (Time-Scaled Logic Diagram) will live here.
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+        <h2 className="text-lg font-medium">Activities</h2>
+        {canWrite ? <CreateActivityButton orgSlug={orgSlug} planId={planId} /> : null}
+      </div>
+      <p className="text-muted-foreground mt-1 text-sm">
+        The activities that make up this plan. The graphical Time-Scaled Logic Diagram will edit
+        these on a timeline in a later release.
+      </p>
+      <div className="mt-3">
+        <ActivitiesTable orgSlug={orgSlug} planId={planId} canWrite={canWrite} />
       </div>
 
       {canWrite ? (
