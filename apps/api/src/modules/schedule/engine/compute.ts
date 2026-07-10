@@ -1,5 +1,6 @@
 import type { WorkingDayCalendar } from './calendar';
 import { NEAR_CRITICAL_THRESHOLD_WORKING_DAYS } from './constants';
+import { clampBackwardFinish, clampForwardStart, isParkedMandatory } from './constraints';
 import { buildGraph } from './graph';
 import type { EngineActivity, EngineEdge, EngineResult, EngineSummary } from './types';
 
@@ -28,8 +29,10 @@ export interface EngineOutput {
  * (`early_finish = DD + EF − 1` for a task; `= early_start` for a zero-duration
  * milestone).
  *
- * Constraints (`constraintType`/`constraintDate`) are ignored in this task and
- * honoured from Task A3; `parkedConstraintCount` is therefore `0` here.
+ * Moderate constraints (SNET/SNLT/FNET/FNLT/MSO/MFO) clamp the passes; the two
+ * `MANDATORY_*` kinds are parked as MSO/MFO and counted in `parkedConstraintCount`
+ * (ADR-0023 §6). A constraint that logic cannot satisfy surfaces as **negative
+ * total float** (and criticality), never an error.
  *
  * @throws {ScheduleGraphNotADagError} via {@link buildGraph} if the graph cycles.
  */
@@ -45,7 +48,8 @@ export function computeSchedule(
   const earlyStart = new Map<string, number>();
   const earlyFinish = new Map<string, number>();
   for (const id of graph.order) {
-    const duration = graph.activities.get(id)!.durationDays;
+    const activity = graph.activities.get(id)!;
+    const duration = activity.durationDays;
     let start = 0; // the data date is the earliest any activity can start
     for (const edge of graph.incoming.get(id)!) {
       const predEs = earlyStart.get(edge.predecessorId)!;
@@ -53,6 +57,7 @@ export function computeSchedule(
       const bound = forwardLowerBound(edge, predEs, predEf, duration);
       if (bound > start) start = bound;
     }
+    start = clampForwardStart(activity, start, calendar, dataDate);
     earlyStart.set(id, start);
     earlyFinish.set(id, start + duration);
   }
@@ -71,7 +76,8 @@ export function computeSchedule(
   const projectFinish = projectFinishOffset ?? 0;
   for (let i = graph.order.length - 1; i >= 0; i -= 1) {
     const id = graph.order[i]!;
-    const duration = graph.activities.get(id)!.durationDays;
+    const activity = graph.activities.get(id)!;
+    const duration = activity.durationDays;
     let finish = projectFinish;
     for (const edge of graph.outgoing.get(id)!) {
       const succLs = lateStart.get(edge.successorId)!;
@@ -79,6 +85,7 @@ export function computeSchedule(
       const bound = backwardUpperBound(edge, succLs, succLf, duration);
       if (bound < finish) finish = bound;
     }
+    finish = clampBackwardFinish(activity, finish, calendar, dataDate);
     lateFinish.set(id, finish);
     lateStart.set(id, finish - duration);
   }
@@ -91,9 +98,12 @@ export function computeSchedule(
   const results: EngineResult[] = [];
   let criticalCount = 0;
   let nearCriticalCount = 0;
+  let parkedConstraintCount = 0;
   let maxInclusiveFinishOffset: number | null = null;
   for (const id of graph.order) {
-    const duration = graph.activities.get(id)!.durationDays;
+    const activity = graph.activities.get(id)!;
+    const duration = activity.durationDays;
+    if (isParkedMandatory(activity.constraintType)) parkedConstraintCount += 1;
     const es = earlyStart.get(id)!;
     const ef = earlyFinish.get(id)!;
     const ls = lateStart.get(id)!;
@@ -132,7 +142,7 @@ export function computeSchedule(
     activityCount: results.length,
     criticalCount,
     nearCriticalCount,
-    parkedConstraintCount: 0,
+    parkedConstraintCount,
     projectFinishOffset,
     projectFinish:
       maxInclusiveFinishOffset === null
