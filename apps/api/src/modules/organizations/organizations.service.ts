@@ -70,6 +70,8 @@ export class OrganizationsService {
           // transaction, so new plans have a calendar to default to (M5, ADR-0024).
           // Written directly via the tx handle (not the calendars module) to avoid a
           // module cycle: CalendarsModule already depends on OrganizationsModule.
+          // This insert cannot raise a unique violation — the org was just created and
+          // has no other calendar — so it never reaches the slug-collision retry below.
           await tx.calendar.create({
             data: {
               organizationId: created.id,

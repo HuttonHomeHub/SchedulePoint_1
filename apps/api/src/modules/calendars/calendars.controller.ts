@@ -126,7 +126,9 @@ export class CalendarsController {
   @ApiOperation({ summary: 'Delete a calendar and its exceptions (soft cascade).' })
   @ApiNoContentResponse()
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiConflictResponse({ description: 'The calendar is in use by an active plan (from Task C1).' })
+  @ApiConflictResponse({
+    description: 'The calendar is in use by an active plan (CALENDAR_IN_USE).',
+  })
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

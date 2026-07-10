@@ -101,7 +101,10 @@ describe('CalendarsService', () => {
       softDeleteException: vi.fn(),
       touchVersion: vi.fn(),
     };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    // The tx handle exposes $executeRaw (the calendar advisory lock used by remove).
+    prisma = {
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+    };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new CalendarsService(
       organizations as unknown as OrganizationsService,

@@ -177,18 +177,29 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     expect(cleared.body.data.calendarId).toBeNull();
   });
 
-  it('rejects assigning a foreign/unknown calendar to a plan (422, anti-IDOR)', async () => {
+  it('rejects assigning a foreign (other-org) or unknown calendar to a plan (404, anti-IDOR)', async () => {
     const { actor, projectId } = await setup();
     const created = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
       .send({ name: 'Guarded' })
       .expect(201);
     const id = created.body.data.id as string;
-    // A well-formed UUID that is not a calendar in this org → 422 (not 404 leak).
+
+    // A well-formed UUID that is no calendar at all → 404 (indistinguishable from foreign).
     await actor.agent
       .patch(`/api/v1/organizations/acme/plans/${id}`)
       .send({ calendarId: '00000000-0000-0000-0000-000000000000', version: 1 })
-      .expect(422);
+      .expect(404);
+
+    // A REAL, active calendar that belongs to a DIFFERENT org → 404 (never leaks it).
+    const outsider = await signUp('outsider@example.com');
+    await outsider.agent.post('/api/v1/organizations').send({ name: 'Other' }).expect(201);
+    const otherCals = await outsider.agent.get('/api/v1/organizations/other/calendars').expect(200);
+    const otherCalId = otherCals.body.data[0].id as string;
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${id}`)
+      .send({ calendarId: otherCalId, version: 1 })
+      .expect(404);
   });
 
   it('rejects an invalid status or plannedStart (422)', async () => {

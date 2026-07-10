@@ -4,6 +4,7 @@ import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -157,18 +158,21 @@ export class CalendarsService {
     // Delete-in-use guard: a calendar referenced by an active plan cannot be deleted,
     // so a plan can never dangle a missing calendar (409 CALENDAR_IN_USE). Soft delete
     // never trips the DB FK, so this service check is the real guard (RESTRICT is
-    // defence in depth). Counted before the delete transaction.
-    const inUse = await this.calendars.countActivePlansUsing(calendarId);
-    if (inUse > 0) {
-      throw new ConflictError(
-        `This calendar is in use by ${inUse} active plan${inUse === 1 ? '' : 's'}.`,
-        { reason: CALENDAR_CONFLICT.CALENDAR_IN_USE, count: inUse },
-      );
-    }
-
-    await this.prisma.$transaction((tx) =>
-      this.calendars.softDeleteWithExceptions(calendarId, principal.userId, tx),
-    );
+    // defence in depth). The count + delete run in ONE transaction under a
+    // calendar-scoped advisory lock shared with plan-calendar assignment, so a
+    // concurrent PATCH cannot slip a plan onto the calendar between the count and the
+    // delete (no TOCTOU dangling reference).
+    await this.prisma.$transaction(async (tx) => {
+      await acquireCalendarWriteLock(tx, calendarId);
+      const inUse = await this.calendars.countActivePlansUsing(calendarId, tx);
+      if (inUse > 0) {
+        throw new ConflictError(
+          `This calendar is in use by ${inUse} active plan${inUse === 1 ? '' : 's'}.`,
+          { reason: CALENDAR_CONFLICT.CALENDAR_IN_USE, count: inUse },
+        );
+      }
+      await this.calendars.softDeleteWithExceptions(calendarId, principal.userId, tx);
+    });
     this.logger.info(
       { organizationId: organization.id, calendarId, userId: principal.userId },
       'calendar deleted (with exceptions)',

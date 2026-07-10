@@ -4,10 +4,12 @@ ALTER TABLE "plans" ADD COLUMN "calendar_id" UUID;
 -- AddForeignKey
 ALTER TABLE "plans" ADD CONSTRAINT "plans_calendar_id_fkey" FOREIGN KEY ("calendar_id") REFERENCES "calendars"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- Partial index (Prisma cannot express `WHERE ...`). Backs both the FK and the
--- delete-in-use guard, which counts ACTIVE plans referencing a calendar
--- (`WHERE calendar_id = ? AND deleted_at IS NULL`) before allowing a calendar delete.
--- Restricted to rows that actually reference a calendar so it stays small.
+-- Partial index (Prisma cannot express `WHERE ...`). Serves the delete-in-use guard,
+-- which counts ACTIVE plans referencing a calendar (`WHERE calendar_id = ? AND
+-- deleted_at IS NULL`) before allowing a calendar delete. Restricted to rows that
+-- actually reference a calendar so it stays small. (It does not back the FK RESTRICT
+-- referential check, which scans all referencing rows — but calendars are soft-deleted
+-- only, so that check never fires; the service guard is the real one.)
 CREATE INDEX "idx_plans_calendar_id" ON "plans" ("calendar_id") WHERE "deleted_at" IS NULL AND "calendar_id" IS NOT NULL;
 
 -- Data migration (M5, ADR-0024): seed one Standard (Mon–Fri) calendar per existing

@@ -3,12 +3,7 @@ import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Principal, type Permission } from '../../common/auth/principal';
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from '../../common/errors/domain-errors';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
@@ -119,7 +114,11 @@ describe('PlansService', () => {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
       restoreBatch: vi.fn().mockResolvedValue({}),
     };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    // The tx handle exposes $executeRaw (the calendar advisory lock) for the
+    // calendar-assignment path; repo methods are mocked, so they ignore the tx arg.
+    prisma = {
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+    };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new PlansService(
       organizations as unknown as OrganizationsService,
@@ -228,12 +227,12 @@ describe('PlansService', () => {
       expect((plans.updateIfVersionMatches.mock.calls[1]?.[2] as PlanPatch).calendarId).toBeNull();
     });
 
-    it('422s when assigning a foreign/unknown calendar (anti-IDOR)', async () => {
+    it('404s when assigning a foreign/unknown calendar (anti-IDOR, no leak)', async () => {
       plans.findActiveByIdInOrg.mockResolvedValue(plan());
       calendars.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(
         service.update(principalWith(ALL), 'acme', 'pl1', { calendarId: 'foreign', version: 1 }),
-      ).rejects.toBeInstanceOf(ValidationError);
+      ).rejects.toBeInstanceOf(NotFoundError);
       expect(plans.updateIfVersionMatches).not.toHaveBeenCalled();
     });
 

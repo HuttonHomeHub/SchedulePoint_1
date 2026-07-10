@@ -85,9 +85,15 @@ describe('OrganizationsService', () => {
         expect.objectContaining({ userId: USER, role: 'ORG_ADMIN' }),
         expect.anything(),
       );
-      // The org is seeded a Standard (Mon–Fri) calendar in the same transaction.
+      // The org is seeded a Standard (Mon–Fri) calendar in the same transaction,
+      // scoped to the just-created org (id copied from the created row, not input).
       expect(calendarCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({ name: 'Standard', workingWeekdays: 31, createdBy: USER }),
+        data: expect.objectContaining({
+          organizationId: 'org-1',
+          name: 'Standard',
+          workingWeekdays: 31,
+          createdBy: USER,
+        }),
       });
     });
 

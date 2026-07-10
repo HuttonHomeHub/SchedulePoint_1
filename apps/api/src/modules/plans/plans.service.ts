@@ -4,12 +4,8 @@ import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from '../../common/errors/domain-errors';
+import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
@@ -143,31 +139,40 @@ export class PlansService {
     if (dto.plannedStart !== undefined) {
       patch.plannedStart = dto.plannedStart === null ? null : parseCalendarDate(dto.plannedStart);
     }
-    if (dto.calendarId !== undefined) {
-      // A plan may only reference an ACTIVE calendar in its OWN organisation
-      // (anti-IDOR); null clears it (all-days-work). A foreign/deleted/unknown id is
-      // rejected as invalid input (422) rather than leaking whether it exists.
-      if (dto.calendarId === null) {
-        patch.calendarId = null;
-      } else {
-        const calendar = await this.calendars.findActiveByIdInOrg(dto.calendarId, organization.id);
-        if (!calendar) {
-          throw new ValidationError('The selected calendar was not found in this organisation.');
-        }
-        patch.calendarId = calendar.id;
-      }
-    }
+    // A null clears the calendar (all-days-work); a specific id is validated + written
+    // under a calendar-scoped advisory lock below.
+    const calendarId = dto.calendarId;
+    if (calendarId === null) patch.calendarId = null;
 
     try {
-      const changed = await this.plans.updateIfVersionMatches(
-        planId,
-        dto.version,
-        patch,
-        principal.userId,
-      );
-      if (changed === 0) {
-        throw new ConflictError('This plan was changed elsewhere. Refresh and try again.');
-      }
+      await this.prisma.$transaction(async (tx) => {
+        if (calendarId !== undefined && calendarId !== null) {
+          // Assigning a specific calendar: serialise with the delete-in-use guard on
+          // the same key so a plan can never be assigned a calendar that is being
+          // deleted (no TOCTOU dangling reference). Only an ACTIVE calendar in the
+          // plan's OWN organisation may be referenced (anti-IDOR); a foreign/deleted/
+          // unknown id is indistinguishable from missing (404), leaking nothing —
+          // matching the dependencies endpoint's cross-scope handling.
+          await acquireCalendarWriteLock(tx, calendarId);
+          const calendar = await this.calendars.findActiveByIdInOrg(
+            calendarId,
+            organization.id,
+            tx,
+          );
+          if (!calendar) throw new NotFoundError('Calendar not found.');
+          patch.calendarId = calendar.id;
+        }
+        const changed = await this.plans.updateIfVersionMatches(
+          planId,
+          dto.version,
+          patch,
+          principal.userId,
+          tx,
+        );
+        if (changed === 0) {
+          throw new ConflictError('This plan was changed elsewhere. Refresh and try again.');
+        }
+      });
     } catch (error) {
       if (this.isNameConflict(error)) throw this.nameTakenError();
       throw error;
