@@ -65,7 +65,10 @@ test('a deleted client cascade is shown and restored from the recycle bin (acces
   // The recycle bin: the client is restorable; its descendants say restore the parent first.
   await navLink(page, 'Recently deleted').click();
   await expect(page.getByRole('heading', { name: 'Recently deleted' })).toBeVisible();
-  await expect(page.getByText('Northgate')).toBeVisible();
+  // Scope to the exact name cell: a bare getByText also matches the announcer live
+  // region, and a non-exact cell match also catches the "Restore client Northgate"
+  // actions cell — exact pins it to the name column.
+  await expect(page.getByRole('cell', { name: 'Northgate', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Restore client Northgate' })).toBeVisible();
   await expect(page.getByText('Restore its parent first')).toHaveCount(2);
 
@@ -106,9 +109,9 @@ test('a directly-deleted plan can be restored from the recycle bin', async ({ pa
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText(/No plans yet/)).toBeVisible();
 
-  // Restore it from the bin.
+  // Restore it from the bin (exact name cell — avoids the announcer and actions cell).
   await navLink(page, 'Recently deleted').click();
-  await expect(page.getByText('Baseline')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Baseline', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Restore plan Baseline' }).click();
   await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
 
