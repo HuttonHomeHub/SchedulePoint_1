@@ -139,6 +139,9 @@ model Organization {
   projects    Project[]
   plans       Plan[]
   activities  Activity[]
+  // Denormalised scope back-relation: dependencies carry organization_id directly
+  // (copied from their endpoints), like Activity — see the ActivityDependency model.
+  dependencies ActivityDependency[]
 
   @@map("organizations")
 }
@@ -370,6 +373,8 @@ model Plan {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
   activities   Activity[]
+  // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
+  dependencies ActivityDependency[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -441,6 +446,15 @@ model Activity {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
 
+  // The dependency edges incident on this activity (M4). Two named self-relations
+  // on ActivityDependency point back here: `predecessorLinks` are the edges where
+  // this activity is the PREDECESSOR (its successors), `successorLinks` where it is
+  // the SUCCESSOR (its predecessors). Explicit relation names are required because
+  // ActivityDependency has two FKs to `activities` — Prisma cannot disambiguate them
+  // otherwise. Both FKs are RESTRICT; link soft-delete is service-owned (see A3).
+  predecessorLinks ActivityDependency[] @relation("DependencyPredecessor")
+  successorLinks   ActivityDependency[] @relation("DependencySuccessor")
+
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
   // deleted_at IS NULL [AND code IS NOT NULL]), raw SQL in the migration.
@@ -451,4 +465,87 @@ model Activity {
   @@index([planId, createdAt, id])
   @@index([organizationId])
   @@map("activities")
+}
+
+// The four CPM/GPM relationship types between two activities (PROJECT_BRIEF §10).
+// MUST stay in lock-step with the TypeScript `DependencyType` union in @repo/types
+// (A2). FS = finish-to-start (default), SS = start-to-start, FF = finish-to-finish,
+// SF = start-to-finish. The type does not affect the acyclicity check (a cycle is a
+// structural property of the edges); it and the signed lag are what the M6 CPM engine
+// reads to compute dates.
+enum DependencyType {
+  FS
+  SS
+  FF
+  SF
+}
+
+// An ActivityDependency — a typed, lagged logic edge between two activities in a plan
+// (PROJECT_BRIEF §10), turning a Plan's flat list of activities into a schedule
+// network (a directed graph). The complete edge the CPM engine (M6) reads: `type`
+// + signed `lag_days`. Follows every house standard (UUID v7 PK, snake_case via @map,
+// timestamptz UTC, NOT NULL by default, soft delete, audit, optimistic-locking
+// `version`, scoped indexes) and the domain-hierarchy conventions in docs/DATABASE.md.
+//
+// Scope is denormalised, exactly like Activity: `organization_id` and `plan_id` are
+// copied from the (validated) endpoints by the service inside the create transaction —
+// NEVER from client input. Invariant: `plan_id == predecessor.plan_id ==
+// successor.plan_id` and `organization_id == predecessor.organization_id`. This powers
+// the plan-level list, the single-query cycle-check edge load, and the plan-level
+// cascade without a join.
+//
+// Two FKs point at `activities` (`predecessor_id`, `successor_id`) via explicitly
+// named self-relations so Prisma can disambiguate the back-relations
+// (Activity.predecessorLinks / Activity.successorLinks). Both are ON DELETE RESTRICT:
+// links are never hard-deleted; soft-delete + endpoint-guarded restore is handled by
+// the service layer (HierarchyLifecycleService, task A3), and RESTRICT guards against
+// an accidental hard delete orphaning an edge.
+model ActivityDependency {
+  id             String @id @default(uuid(7)) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  planId         String @map("plan_id") @db.Uuid
+  predecessorId  String @map("predecessor_id") @db.Uuid
+  successorId    String @map("successor_id") @db.Uuid
+
+  // Logic (Planner-owned). `lag_days` is a SIGNED working-day lag (negative = lead),
+  // bounded to −3650…3650 by a CHECK in the migration (matches the DTO bound in B1).
+  type    DependencyType @default(FS)
+  lagDays Int            @default(0) @map("lag_days")
+
+  // Housekeeping (as Activity): TEXT audit ids (Better Auth ids are TEXT — nullable),
+  // optimistic-lock version, soft delete + restore-batch correlation.
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  predecessor  Activity     @relation("DependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Restrict)
+  successor    Activity     @relation("DependencySuccessor", fields: [successorId], references: [id], onDelete: Restrict)
+
+  // A given ordered pair may carry at most one link of each type among ACTIVE rows —
+  // enforced by a PARTIAL unique index (uq_dependencies_pred_succ_type ON
+  // (predecessor_id, successor_id, type) WHERE deleted_at IS NULL), raw SQL in the
+  // migration (Prisma cannot express partial indexes). This allows the SS+FF overlap
+  // "ladder" idiomatic to construction/linear scheduling while blocking exact
+  // duplicates; a soft-deleted link frees its (pred, succ, type) triple for reuse.
+  // It also backs the create DUPLICATE_DEPENDENCY (409) check.
+  //
+  // Direction indexes back the activity predecessors/successors lists AND the two FKs:
+  // `predecessor_id` serves "successors of X" (edges out of X) and the cycle-walk
+  // adjacency load; `successor_id` serves "predecessors of X". `(plan_id, created_at,
+  // id)` covers the plan FK (leftmost prefix), the plan-level dependency list and its
+  // cursor sort in one. `organization_id` is indexed on its own for its FK (RESTRICT)
+  // and org-scoped IDOR loads. The partial delete_batch_id index (raw SQL, WHERE ...
+  // IS NOT NULL) backs batch restore. A self-loop CHECK (predecessor_id <>
+  // successor_id) and the lag-range CHECK are raw SQL in the migration.
+  @@index([planId, createdAt, id])
+  @@index([predecessorId])
+  @@index([successorId])
+  @@index([organizationId])
+  @@map("dependencies")
 }

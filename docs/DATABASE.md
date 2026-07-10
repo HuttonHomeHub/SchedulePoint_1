@@ -173,24 +173,30 @@ Managed composite indexes are declared in `schema.prisma` (`@@index`, Prisma-nam
 partial indexes are **raw SQL in the migration** because Prisma cannot express a
 `WHERE` predicate.
 
-| Index                                       | On                                  | Kind           | Serves                                                                                                                                 |
-| ------------------------------------------- | ----------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `clients_organization_id_created_at_id_idx` | `(organization_id, created_at, id)` | full composite | `organization_id` FK (leftmost prefix) + org-scoped active list + its `(created_at, id)` cursor sort — subsumes a standalone org index |
-| `projects_client_id_created_at_id_idx`      | `(client_id, created_at, id)`       | full composite | `client_id` FK + list-projects-under-a-client + cursor sort — subsumes a standalone client index                                       |
-| `projects_organization_id_idx`              | `(organization_id)`                 | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR loads (no org-wide ordered list exists, so no composite)                             |
-| `plans_project_id_created_at_id_idx`        | `(project_id, created_at, id)`      | full composite | `project_id` FK + list-plans-under-a-project + cursor sort — subsumes a standalone project index                                       |
-| `plans_organization_id_idx`                 | `(organization_id)`                 | full           | `organization_id` FK + org-scoped IDOR loads                                                                                           |
-| `uq_clients_org_name`                       | `(organization_id, name)`           | partial unique | name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `NAME_TAKEN` (409) + name lookups                              |
-| `uq_projects_client_name`                   | `(client_id, name)`                 | partial unique | name unique per client among live rows                                                                                                 |
-| `uq_plans_project_name`                     | `(project_id, name)`                | partial unique | name unique per project among live rows                                                                                                |
-| `activities_plan_id_created_at_id_idx`      | `(plan_id, created_at, id)`         | full composite | `plan_id` FK + list-activities-under-a-plan + cursor sort — subsumes a standalone plan index                                           |
-| `activities_organization_id_idx`            | `(organization_id)`                 | full           | `organization_id` FK + org-scoped IDOR loads                                                                                           |
-| `uq_activities_plan_name`                   | `(plan_id, name)`                   | partial unique | name unique per plan among live rows                                                                                                   |
-| `uq_activities_plan_code`                   | `(plan_id, code)`                   | partial unique | optional `code` unique per plan among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt               |
-| `idx_clients_delete_batch_id`               | `(delete_batch_id)`                 | partial        | batch restore lookup (`WHERE delete_batch_id IS NOT NULL`); tiny — only soft-deleted rows carry a value                                |
-| `idx_projects_delete_batch_id`              | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
-| `idx_plans_delete_batch_id`                 | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
-| `idx_activities_delete_batch_id`            | `(delete_batch_id)`                 | partial        | batch restore lookup                                                                                                                   |
+| Index                                       | On                                     | Kind           | Serves                                                                                                                                                      |
+| ------------------------------------------- | -------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clients_organization_id_created_at_id_idx` | `(organization_id, created_at, id)`    | full composite | `organization_id` FK (leftmost prefix) + org-scoped active list + its `(created_at, id)` cursor sort — subsumes a standalone org index                      |
+| `projects_client_id_created_at_id_idx`      | `(client_id, created_at, id)`          | full composite | `client_id` FK + list-projects-under-a-client + cursor sort — subsumes a standalone client index                                                            |
+| `projects_organization_id_idx`              | `(organization_id)`                    | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR loads (no org-wide ordered list exists, so no composite)                                                  |
+| `plans_project_id_created_at_id_idx`        | `(project_id, created_at, id)`         | full composite | `project_id` FK + list-plans-under-a-project + cursor sort — subsumes a standalone project index                                                            |
+| `plans_organization_id_idx`                 | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                |
+| `uq_clients_org_name`                       | `(organization_id, name)`              | partial unique | name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `NAME_TAKEN` (409) + name lookups                                                   |
+| `uq_projects_client_name`                   | `(client_id, name)`                    | partial unique | name unique per client among live rows                                                                                                                      |
+| `uq_plans_project_name`                     | `(project_id, name)`                   | partial unique | name unique per project among live rows                                                                                                                     |
+| `activities_plan_id_created_at_id_idx`      | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + list-activities-under-a-plan + cursor sort — subsumes a standalone plan index                                                                |
+| `activities_organization_id_idx`            | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                |
+| `uq_activities_plan_name`                   | `(plan_id, name)`                      | partial unique | name unique per plan among live rows                                                                                                                        |
+| `uq_activities_plan_code`                   | `(plan_id, code)`                      | partial unique | optional `code` unique per plan among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt                                    |
+| `idx_clients_delete_batch_id`               | `(delete_batch_id)`                    | partial        | batch restore lookup (`WHERE delete_batch_id IS NOT NULL`); tiny — only soft-deleted rows carry a value                                                     |
+| `idx_projects_delete_batch_id`              | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                        |
+| `idx_plans_delete_batch_id`                 | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                        |
+| `idx_activities_delete_batch_id`            | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                        |
+| `dependencies_plan_id_created_at_id_idx`    | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + plan-level dependency list + cursor sort — subsumes a standalone plan index                                                                  |
+| `dependencies_predecessor_id_idx`           | `(predecessor_id)`                     | full           | `predecessor_id` FK + "successors of X" list (edges out of X) + the cycle-walk adjacency load                                                               |
+| `dependencies_successor_id_idx`             | `(successor_id)`                       | full           | `successor_id` FK + "predecessors of X" list (edges into X)                                                                                                 |
+| `dependencies_organization_id_idx`          | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                |
+| `uq_dependencies_pred_succ_type`            | `(predecessor_id, successor_id, type)` | partial unique | at most one **active** link of each type per ordered pair (`WHERE deleted_at IS NULL`); backs `DUPLICATE_DEPENDENCY` (409); allows the SS+FF overlap ladder |
+| `idx_dependencies_delete_batch_id`          | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                        |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -244,6 +250,52 @@ and `constraint_date` are both set or both null (never one without the other), s
 half-set constraint can never corrupt CPM scheduling even if a future code path
 bypasses the service. They are raw SQL in the migration (Prisma cannot express
 `CHECK`). `total_float` is deliberately unconstrained — negative float is valid.
+
+### Dependency: the schedule edge
+
+The `dependencies` table (Prisma model `ActivityDependency`, `@@map("dependencies")` —
+the shorter plural reads cleaner and matches the API module name) is the **edge** of the
+schedule network: a typed, lagged logic tie between two activities in a plan
+(`FS`/`SS`/`FF`/`SF` + a signed working-day `lag_days`). Together with `activities` (the
+nodes) it forms the directed graph the CPM engine (a later slice) walks. It follows every
+standard above — UUID v7 PK, snake_case via `@map`, timestamptz UTC, soft delete, audit
+with **TEXT** `created_by`/`updated_by`, optimistic-locking `version`, `delete_batch_id`.
+
+- **Denormalised scope.** Like `Activity`, a dependency carries both `organization_id`
+  **and** `plan_id` directly (each a `RESTRICT` FK), copied from its two endpoints by the
+  service inside the create transaction — **never from client input**. Invariant:
+  `dep.plan_id == predecessor.plan_id == successor.plan_id` and
+  `dep.organization_id == predecessor.organization_id`. This powers the plan-level list,
+  the single-query cycle-check edge load, and the plan-level cascade without a join.
+- **Two endpoint FKs to `activities`.** `predecessor_id` and `successor_id` are both
+  `RESTRICT` FKs to `activities.id`, modelled in Prisma as **explicitly named
+  self-relations** (`"DependencyPredecessor"` / `"DependencySuccessor"`) so Prisma can
+  disambiguate the back-relations (`Activity.predecessorLinks` are the edges where the
+  activity is the predecessor; `Activity.successorLinks` where it is the successor). Two
+  FKs to one table **require** named relations or Prisma errors.
+- **Uniqueness is per `(predecessor, successor, type)`.** The partial unique index
+  `uq_dependencies_pred_succ_type` (`WHERE deleted_at IS NULL`, raw SQL) allows a pair to
+  hold up to four distinct-typed links — the **SS+FF overlap "ladder"** idiomatic to
+  construction/linear scheduling — while blocking exact duplicates; a soft-deleted link
+  frees its triple for reuse. It backs the create `DUPLICATE_DEPENDENCY` (409) check.
+- **Direction indexes** (`predecessor_id`, `successor_id`) back the activity
+  predecessors/successors direction lists **and** the two FKs; `predecessor_id` also
+  serves the cycle-walk adjacency load. `(plan_id, created_at, id)` covers the plan FK,
+  the plan-level list and its cursor sort; `organization_id` backs its FK and IDOR loads.
+- **CHECK constraints** (raw SQL — defence-in-depth). `ck_dependencies_no_self_loop`
+  (`predecessor_id <> successor_id`) guarantees a self-edge (the trivial 1-node cycle) can
+  never persist even if the service's 422 `SELF_DEPENDENCY` guard is bypassed;
+  `ck_dependencies_lag_days_range` bounds `lag_days` to **−3650…3650** (≈ ±10 years,
+  matching the create DTO). The broader **DAG (no-cycle) invariant** is a graph-wide
+  property the DB cannot express as a CHECK — it is enforced by a service-layer
+  reachability walk inside the create transaction (a later task / ADR-0021).
+- **Link soft-delete/cascade is service-owned.** Both endpoint FKs are `RESTRICT`; links
+  are never hard-deleted. Deleting an activity soft-deletes its **incident** links (where
+  it is predecessor **or** successor) and a plan/project/client cascade soft-deletes the
+  links **contained** in the affected plans — all stamped in the same `delete_batch_id`;
+  restore is **endpoint-guarded** (a batch's links reactivate only where both endpoints
+  are active). This lives in the shared `HierarchyLifecycleService` (task A3), consistent
+  with the four-level hierarchy cascade above.
 
 ## Testing & performance
 
