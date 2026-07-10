@@ -10,6 +10,41 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-10 — Recycle bin: one org-scoped `/deleted` endpoint over a keyset-merged union
+
+**Decision.** Surface the hierarchy's soft-deleted rows through a single
+org-scoped endpoint, `GET /organizations/:orgSlug/deleted`, that returns
+clients, projects and plans together as a discriminated `DeletedHierarchyItem`
+list (`kind`, `id`, `name`, `deletedAt`, `canRestore`), newest-deleted first and
+cursor-paginated. It lists **every** soft-deleted row (not just batch roots) and
+marks `canRestore = false` when an ancestor is still deleted, so the UI can show
+the whole removed subtree and steer the user to restore the parent first
+(surfacing the top-down `PARENT_DELETED` invariant without a failed request).
+Reading it needs `client:read` (any member, consistent with the active-list
+reads); restore keeps its existing per-entity, writer-only endpoints
+(`POST .../{id}/restore`). Pagination is keyset over the union: each table is
+queried for its own top `limit + 1` by `(deletedAt desc, id asc)` and the
+service merge-sorts and slices; the id tiebreaker gives a total order across the
+three tables (uuids are globally unique) and keeps a single cascade batch — which
+shares one `deletedAt` — deterministically ordered and safe to page.
+
+**Why.** The "recently deleted" screen is one unified, deletion-time-ordered view
+with a per-row restore action; a combined endpoint serves it in one request and
+centralises the parent-active (`canRestore`) computation server-side, rather than
+making the client fan out to three per-entity `?deleted=true` lists and merge
+three cursors. Reusing the existing per-entity restore endpoints avoids a second
+way to restore. This resolves the deleted-list shape deferred in the hierarchy
+plan (`docs/plans/hierarchy-crud.md`, Task E3 / risk row).
+
+**Consequences.** The `order` query param is ignored (the list is inherently
+newest-first). The endpoint over-fetches up to `3 × (limit + 1)` rows per page —
+fine for the bounded recycle-bin set; if it ever grows hot, a raw `UNION ALL`
+keyset query is the next step (noted in [TECH_DEBT.md](TECH_DEBT.md)). No new
+ADR: it composes existing patterns (org scope resolver, `{ data, meta }`
+envelope, soft-delete, RBAC) without changing a cross-cutting standard.
+
+---
+
 ### 2026-07-09 — Hierarchy: denormalised org id + cascade soft-delete via a batch id
 
 **Decision.** For the Client → Project → Plan hierarchy (and every descendant
