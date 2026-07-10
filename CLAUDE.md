@@ -276,6 +276,8 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   endpoint; engine-owned batched write bypassing optimistic locking).
 - **ADR-0023** — CPM scheduling date convention (continuous-internal /
   inclusive-display; data date, milestone rule, working-day calendar seam).
+- **ADR-0024** — Working-day calendars (weekday mask + dated exceptions; pure
+  factory at the engine port; org library + per-plan default; per-activity deferred).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
