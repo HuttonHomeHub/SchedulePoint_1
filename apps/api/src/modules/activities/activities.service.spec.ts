@@ -3,7 +3,12 @@ import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Principal, type Permission } from '../../common/auth/principal';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -258,6 +263,17 @@ describe('ActivitiesService', () => {
         durationDays: number;
       };
       expect(patch.durationDays).toBe(0);
+    });
+
+    it('422s a partial constraint update (one side omitted) without touching the row', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await expect(
+        service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          constraintType: null,
+          version: 1,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
     });
 
     it('409s on a stale version', async () => {

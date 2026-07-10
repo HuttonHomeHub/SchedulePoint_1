@@ -238,10 +238,12 @@ finish` columns) are `@db.Date` (date-only, no timezone), like `Plan.planned_sta
 `activities` is the first domain table with bounded numerics, so it is also the
 first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
 invariants in the DB, not only in code): `ck_activities_percent_complete`
-(0–100), `ck_activities_duration_days_nonneg` (≥ 0), and
-`ck_activities_lane_index_nonneg` (≥ 0). They are raw SQL in the migration (Prisma
-cannot express `CHECK`). `total_float` is deliberately unconstrained — negative
-float is valid.
+(0–100), `ck_activities_duration_days_nonneg` (≥ 0), `ck_activities_lane_index_nonneg`
+(≥ 0), and `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
+and `constraint_date` are both set or both null (never one without the other), so a
+half-set constraint can never corrupt CPM scheduling even if a future code path
+bypasses the service. They are raw SQL in the migration (Prisma cannot express
+`CHECK`). `total_float` is deliberately unconstrained — negative float is valid.
 
 ## Testing & performance
 

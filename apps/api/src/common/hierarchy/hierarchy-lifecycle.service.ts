@@ -26,8 +26,10 @@ export interface CascadeDeleteResult {
 export const HIERARCHY_CONFLICT = {
   /** Tried to restore a row whose parent is still soft-deleted (restore top-down). */
   PARENT_DELETED: 'PARENT_DELETED',
-  /** Restoring would collide with an active sibling of the same name. */
+  /** Restoring/writing would collide with an active sibling of the same name. */
   NAME_TAKEN: 'NAME_TAKEN',
+  /** Writing would collide with an active sibling of the same code (activities). */
+  CODE_TAKEN: 'CODE_TAKEN',
 } as const;
 
 /**

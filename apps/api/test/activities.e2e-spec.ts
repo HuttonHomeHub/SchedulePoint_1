@@ -186,6 +186,42 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(422);
   });
 
+  it('rejects a partial constraint update that omits one side (422), keeping the pair intact', async () => {
+    const { actor, planId } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Constrained', constraintType: 'SNET', constraintDate: '2026-05-01' })
+      .expect(201);
+    const id = created.body.data.id as string;
+    const item = `/api/v1/organizations/acme/activities/${id}`;
+
+    // Clearing only the type (date omitted) would leave a dangling date — refused.
+    const res = await actor.agent
+      .patch(item)
+      .send({ constraintType: null, version: 1 })
+      .expect(422);
+    expect(res.body.error?.details?.reason).toBe('CONSTRAINT_PAIR_REQUIRED');
+    // The symmetric case (date only) is refused too.
+    await actor.agent.patch(item).send({ constraintDate: null, version: 1 }).expect(422);
+    // And setting only a type on an unconstrained field is refused.
+    await actor.agent.patch(item).send({ constraintType: 'FNLT', version: 1 }).expect(422);
+
+    // The activity is untouched — the original pair is still intact.
+    const got = await actor.agent.get(item).expect(200);
+    expect(got.body.data).toMatchObject({
+      constraintType: 'SNET',
+      constraintDate: '2026-05-01',
+      version: 1,
+    });
+
+    // Clearing BOTH together is allowed.
+    const cleared = await actor.agent
+      .patch(item)
+      .send({ constraintType: null, constraintDate: null, version: 1 })
+      .expect(200);
+    expect(cleared.body.data).toMatchObject({ constraintType: null, constraintDate: null });
+  });
+
   it('allows the same activity name under different plans, but not within one', async () => {
     const { actor, planId } = await setup();
     // A second plan under the same project.
@@ -211,7 +247,9 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     const { actor, planId } = await setup();
     const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
     await actor.agent.post(base).send({ name: 'One', code: 'A100' }).expect(201);
-    await actor.agent.post(base).send({ name: 'Two', code: 'A100' }).expect(409);
+    const clash = await actor.agent.post(base).send({ name: 'Two', code: 'A100' }).expect(409);
+    // The 409 pinpoints the code (not the name) so the client can fix the field.
+    expect(clash.body.error?.details?.reason).toBe('CODE_TAKEN');
     // Two activities with no code do not collide (the code unique is partial).
     await actor.agent.post(base).send({ name: 'Three' }).expect(201);
     await actor.agent.post(base).send({ name: 'Four' }).expect(201);

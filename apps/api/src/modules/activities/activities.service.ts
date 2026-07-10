@@ -4,7 +4,12 @@ import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
@@ -133,6 +138,17 @@ export class ActivitiesService {
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
 
+    // A constraint's type and date move together. The DTO's cross-field validator
+    // can't see this when a client OMITS one side and sends the other as `null`
+    // (an absent/empty property skips its own validators), so enforce it here on
+    // KEY PRESENCE — otherwise a `PATCH { constraintType: null }` would clear the
+    // type but leave a dangling date (or vice-versa), an invalid persisted state.
+    if ((dto.constraintType !== undefined) !== (dto.constraintDate !== undefined)) {
+      throw new ValidationError('constraintType and constraintDate must be updated together.', {
+        reason: 'CONSTRAINT_PAIR_REQUIRED',
+      });
+    }
+
     const patch: ActivityPatch = {};
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.code !== undefined) patch.code = dto.code === '' ? null : dto.code;
@@ -219,12 +235,26 @@ export class ActivitiesService {
     return plan;
   }
 
-  /** Map a Prisma unique-violation (name/code per plan) to a 409, else rethrow. */
+  /**
+   * Map a Prisma unique-violation to a 409, distinguishing the two partial-unique
+   * constraints an activity carries (name-per-plan vs code-per-plan) so the caller
+   * knows which field to fix; else rethrow untouched.
+   */
   private mapWriteError(error: unknown): unknown {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return new ConflictError('An activity with this name or code already exists for this plan.', {
-        reason: HIERARCHY_CONFLICT.NAME_TAKEN,
-      });
+      // `meta.target` names the failing unique — the field list (e.g.
+      // `['plan_id', 'code']`) on PostgreSQL, or the index name as a string.
+      const target = error.meta?.target;
+      const isCode = Array.isArray(target)
+        ? target.includes('code')
+        : typeof target === 'string' && target.includes('code');
+      return isCode
+        ? new ConflictError('An activity with this code already exists for this plan.', {
+            reason: HIERARCHY_CONFLICT.CODE_TAKEN,
+          })
+        : new ConflictError('An activity with this name already exists for this plan.', {
+            reason: HIERARCHY_CONFLICT.NAME_TAKEN,
+          });
     }
     return error;
   }

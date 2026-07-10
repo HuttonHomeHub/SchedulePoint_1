@@ -62,6 +62,13 @@ ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_percent_complete" CHECK (
 ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_duration_days_nonneg" CHECK ("duration_days" >= 0);
 ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_lane_index_nonneg" CHECK ("lane_index" >= 0);
 
+-- A schedule constraint is meaningless without both its type and its date, so the
+-- two are set together or not at all. The service enforces this, but the DB
+-- guarantees it as defence-in-depth against any future code path (or direct SQL)
+-- that bypasses the DTO/service layer — a half-set constraint would silently
+-- corrupt CPM scheduling. NULL = NULL is UNKNOWN in SQL, so compare the IS NULL flags.
+ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_constraint_pair" CHECK (("constraint_type" IS NULL) = ("constraint_date" IS NULL));
+
 -- Partial unique indexes (Prisma cannot express `WHERE deleted_at IS NULL`).
 -- An activity's name — and, when present, its human-facing code — is unique per
 -- PLAN among LIVE rows only. Soft-deleting a row frees its name/code for reuse.
