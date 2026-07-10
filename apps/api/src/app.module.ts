@@ -22,6 +22,7 @@ import { MembersModule } from './modules/members/members.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /** Whether the optional `pino-pretty` dev logger transport can be loaded. */
@@ -95,6 +96,7 @@ function isPrettyLoggingAvailable(): boolean {
     ClientsModule,
     ProjectsModule,
     PlansModule,
+    RecycleBinModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.

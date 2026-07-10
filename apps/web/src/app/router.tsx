@@ -13,9 +13,14 @@ import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { AcceptInviteScreen } from '@/routes/accept-invite';
 import { AuthedLayout } from '@/routes/authed-layout';
+import { ClientDetailScreen } from '@/routes/client-detail';
+import { ClientsScreen } from '@/routes/clients';
 import { MembersScreen } from '@/routes/members';
 import { OnboardingScreen } from '@/routes/onboarding';
 import { OrgHomeScreen } from '@/routes/org-home';
+import { PlanDetailScreen } from '@/routes/plan-detail';
+import { ProjectDetailScreen } from '@/routes/project-detail';
+import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
 
@@ -115,6 +120,46 @@ const membersRoute = createRoute({
   component: MembersScreen,
 });
 
+/** Clients list. */
+const clientsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/clients',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: ClientsScreen,
+});
+
+/** A client's projects. */
+const clientDetailRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/clients/$clientId',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: ClientDetailScreen,
+});
+
+/** A project's plans. */
+const projectDetailRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/projects/$projectId',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: ProjectDetailScreen,
+});
+
+/** A single plan (metadata + the future TSLD canvas). */
+const planDetailRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/plans/$planId',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: PlanDetailScreen,
+});
+
+/** The organisation recycle bin (soft-deleted clients/projects/plans + restore). */
+const recentlyDeletedRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/recently-deleted',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: RecentlyDeletedScreen,
+});
+
 /** Public invitation-accept route (keyed by the token in the URL). */
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -128,7 +173,17 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
   acceptInviteRoute,
-  authedRoute.addChildren([indexRoute, onboardingRoute, orgHomeRoute, membersRoute]),
+  authedRoute.addChildren([
+    indexRoute,
+    onboardingRoute,
+    orgHomeRoute,
+    membersRoute,
+    clientsRoute,
+    clientDetailRoute,
+    projectDetailRoute,
+    planDetailRoute,
+    recentlyDeletedRoute,
+  ]),
 ]);
 
 /** Single query client shared by the app providers and the router loaders. */

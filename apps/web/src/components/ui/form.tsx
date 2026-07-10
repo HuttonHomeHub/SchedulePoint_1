@@ -3,6 +3,7 @@ import type { FieldErrors } from 'react-hook-form';
 
 import { Input, type InputProps } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea, type TextareaProps } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 export interface TextFieldProps extends InputProps {
@@ -52,6 +53,52 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     </div>
   );
 });
+
+export interface TextareaFieldProps extends TextareaProps {
+  label: string;
+  /** Validation message for this field, if any (from React Hook Form). */
+  error?: string | undefined;
+  /** Optional helper text rendered under the control when there is no error. */
+  hint?: string | undefined;
+}
+
+/**
+ * Accessible labelled multi-line field — the {@link TextField} equivalent for a
+ * {@link Textarea}: binds the label, exposes `aria-invalid`, and links the
+ * error/hint via `aria-describedby`. Forwards its ref for `register()`.
+ */
+export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>(
+  function TextareaField({ label, error, hint, id, className, ...props }, ref) {
+    const generatedId = useId();
+    const fieldId = id ?? generatedId;
+    const errorId = `${fieldId}-error`;
+    const hintId = `${fieldId}-hint`;
+    const describedBy = error ? errorId : hint ? hintId : undefined;
+
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={fieldId}>{label}</Label>
+        <Textarea
+          ref={ref}
+          id={fieldId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className={className}
+          {...props}
+        />
+        {error ? (
+          <p id={errorId} className="text-destructive-text text-sm">
+            {error}
+          </p>
+        ) : hint ? (
+          <p id={hintId} className="text-muted-foreground text-sm">
+            {hint}
+          </p>
+        ) : null}
+      </div>
+    );
+  },
+);
 
 /**
  * Summarises form-level and field errors at the top of a form, announced via
