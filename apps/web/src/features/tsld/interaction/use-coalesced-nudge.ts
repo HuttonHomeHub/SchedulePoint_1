@@ -107,6 +107,10 @@ export function useCoalescedNudge(
           targetRef.current = null; // truth wins — re-seed from props on the next nudge
         }
         if (outcome.applied) {
+          // NB: deliberately do NOT null targetRef here. It's the absolute target and must survive
+          // the window before `activities` refetches, so a fast follow-up nudge extends from it
+          // rather than re-seeding from a stale prop (that would re-introduce the cross-burst
+          // clobber this hook fixes). Once props catch up, the next commit's caught-up check no-ops.
           announce(
             laneChanged
               ? `Moved “${name}” to lane ${finalLane + 1}${timeChanged ? '; dates will update' : ''}.`

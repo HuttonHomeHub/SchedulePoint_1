@@ -302,6 +302,15 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(await screen.findByLabelText('New activity name')).toBeInTheDocument();
   });
 
+  it('returns focus to the activity list when an n-opened create popover is closed', async () => {
+    const { listbox } = renderEditing();
+    fireEvent.keyDown(listbox, { key: 'n' });
+    const cancel = await screen.findByRole('button', { name: 'Cancel' });
+    fireEvent.click(cancel);
+    // Opened from the list via keyboard → focus returns there, not to the toolbar (WCAG 2.4.3).
+    expect(listbox).toHaveFocus();
+  });
+
   it('draws a dependency by dragging from a bar edge to another bar → onLink (FS by default)', async () => {
     const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     const succ = activity({
