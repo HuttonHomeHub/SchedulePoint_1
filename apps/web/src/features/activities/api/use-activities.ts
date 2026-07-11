@@ -39,7 +39,7 @@ function createBody(input: ActivityFormValues) {
   };
 }
 
-function updateBody(input: ActivityFormValues & { version: number }) {
+function updateBody(input: ActivityFormValues & { version: number; laneIndex?: number }) {
   const hasConstraint = Boolean(input.constraintType);
   return {
     name: input.name,
@@ -50,6 +50,9 @@ function updateBody(input: ActivityFormValues & { version: number }) {
     // Clear both sides together when the constraint is removed (API pairs them).
     constraintType: hasConstraint ? input.constraintType : null,
     constraintDate: hasConstraint ? input.constraintDate : null,
+    // Carry a lane change through the same write when a free-2D drag moved both axes (M4); the
+    // canvas is the only caller that sets this — the form dialog never sends it.
+    ...(input.laneIndex !== undefined ? { laneIndex: input.laneIndex } : {}),
     version: input.version,
   };
 }
@@ -116,7 +119,9 @@ export function useCreatePlacedActivity(orgSlug: string, planId: string) {
 export function useUpdateActivity(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { activityId: string; version: number } & ActivityFormValues) =>
+    mutationFn: (
+      input: { activityId: string; version: number; laneIndex?: number } & ActivityFormValues,
+    ) =>
       apiFetch<ActivitySummary>(`/organizations/${orgSlug}/activities/${input.activityId}`, {
         method: 'PATCH',
         body: JSON.stringify(updateBody(input)),
@@ -126,6 +131,50 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, input.activityId) }),
       ]),
+  });
+}
+
+/**
+ * A canvas lane move (TSLD M4): the minimal `{ laneIndex, version }` PATCH on the single-activity
+ * endpoint. It changes only vertical layout — no constraint/definition, so the CPM output is
+ * untouched and it needs **no recalc**; it therefore invalidates only the activities list (dates,
+ * criticality and variance don't move). Backs a pure vertical drag and the `Alt+↑/↓` lane nudge.
+ */
+export function useRepositionLane(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { activityId: string; laneIndex: number; version: number }) =>
+      apiFetch<ActivitySummary>(`/organizations/${orgSlug}/activities/${input.activityId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ laneIndex: input.laneIndex, version: input.version }),
+      }),
+    onSettled: (_data, _error, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, input.activityId) }),
+      ]),
+  });
+}
+
+/**
+ * Batch lane-position write (TSLD M4 auto-arrange): move many activities to new lanes in one
+ * all-or-nothing PATCH on the plan's positions endpoint (per-row optimistic lock; no recalc — lane
+ * is layout). Layout only, so it invalidates just the activities list. Backs the "Auto-arrange
+ * lanes" action; a single stale `version` rejects the whole batch (409).
+ */
+export function useBatchPositions(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { positions: { id: string; laneIndex: number; version: number }[] }) =>
+      apiFetch<ActivitySummary[]>(
+        `/organizations/${orgSlug}/plans/${planId}/activities/positions`,
+        { method: 'PATCH', body: JSON.stringify(input) },
+      ),
+    // Activities list only — deliberately NOT per-row `detail` (unlike useRepositionLane): a bulk
+    // reorder touches many rows and no open detail view renders laneIndex, so an N-key invalidation
+    // would be waste. No variance/summary either — lane is layout, dates don't move.
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
   });
 }
 

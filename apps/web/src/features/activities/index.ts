@@ -4,6 +4,8 @@ export {
   useCreateActivity,
   useCreatePlacedActivity,
   useUpdateActivity,
+  useRepositionLane,
+  useBatchPositions,
   useUpdateActivityProgress,
   useDeleteActivity,
   activitiesQueryOptions,

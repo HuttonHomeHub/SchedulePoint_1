@@ -3,6 +3,7 @@ import type { DependencyType } from '@repo/types';
 import {
   dayColumnAt,
   laneRowAt,
+  LANE_HEIGHT,
   type HitZone,
   type Point,
   type Viewport,
@@ -17,7 +18,8 @@ import {
  * shell (`TsldCanvas`) feeds it events, paints the transient state, and hands each intent
  * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 D8).
  *
- * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), and **dependency-draw** (2.3).
+ * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), **dependency-draw** (2.3),
+ * and **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once).
  */
 
 /** The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition. */
@@ -73,8 +75,9 @@ export type GestureEvent =
 
 /**
  * A committed edit, emitted on drop. The canvas produces geometry (days/lanes); `TsldPanel`
- * maps it to the reused write endpoints (create → `POST /activities`; reposition → an SNET
- * `PATCH /activities/:id`) and the authoritative recalc.
+ * maps it to the reused write endpoints (create → `POST /activities`; reposition → a
+ * `PATCH /activities/:id` carrying an SNET constraint and/or a new `laneIndex`) and, when the
+ * day changed, the authoritative recalc.
  */
 export type EditIntent =
   | {
@@ -87,8 +90,14 @@ export type EditIntent =
   | {
       kind: 'reposition';
       activityId: string;
-      /** The new early-start day offset — imposed as an SNET constraint (ADR-0023). */
-      startDay: number;
+      /**
+       * The new early-start day offset — imposed as an SNET constraint (ADR-0023).
+       * Present iff the drag crossed a whole day column; omitted ⇒ time unchanged (a pure
+       * lane move, no recalc). Free-2D drag (M4): a drop reports only the axes that changed.
+       */
+      startDay?: number;
+      /** The new lane (whole, ≥ 0). Present iff the drag crossed a whole lane row; omitted ⇒ lane unchanged. */
+      laneIndex?: number;
     }
   | {
       kind: 'link';
@@ -111,12 +120,17 @@ export type GestureState =
       grabDay: number;
       /** The screen x grabbed at pointer-down — for the pixel-distance select/move guard. */
       grabX: number;
-      /** Whether the pointer has travelled past {@link REPOSITION_THRESHOLD_PX} since grab. */
+      /** The screen y grabbed at pointer-down — for the vertical (lane) delta. */
+      grabY: number;
+      /** Whether the pointer has travelled past {@link REPOSITION_THRESHOLD_PX} since grab (either axis). */
       movedPastThreshold: boolean;
       originStartDay: number;
       spanDays: number;
+      /** The lane grabbed at pointer-down (the vertical origin). */
       laneIndex: number;
       currentStartDay: number;
+      /** The lane under the pointer now — `round(dy / LANE_HEIGHT)` from the grab, clamped ≥ 0. */
+      currentLaneIndex: number;
     }
   | {
       kind: 'linking';
@@ -180,11 +194,13 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             activityId: id,
             grabDay: dayColumnAt(event.point.x, ctx.view),
             grabX: event.point.x,
+            grabY: event.point.y,
             movedPastThreshold: false,
             originStartDay: startDay,
             spanDays: endDay - startDay,
             laneIndex,
             currentStartDay: startDay,
+            currentLaneIndex: laneIndex,
           },
         };
       }
@@ -198,17 +214,27 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         return { state: { ...state, currentDay } };
       }
       if (state.kind === 'repositioning') {
+        // Free-2D (M4): the drag moves on both axes at once. The threshold trips on whichever
+        // axis first crosses it; x snaps to day columns, y to whole lane rows (LANE_HEIGHT is
+        // fixed — no y zoom). Per-axis rounding gives a half-cell dead-zone, so sub-cell wander
+        // on the "other" axis yields a delta of 0 (no accidental cross-axis change — §1).
         const movedPastThreshold =
           state.movedPastThreshold ||
-          Math.abs(event.point.x - state.grabX) > REPOSITION_THRESHOLD_PX;
+          Math.max(Math.abs(event.point.x - state.grabX), Math.abs(event.point.y - state.grabY)) >
+            REPOSITION_THRESHOLD_PX;
         const delta = dayColumnAt(event.point.x, ctx.view) - state.grabDay;
         const currentStartDay = state.originStartDay + delta;
+        const currentLaneIndex = Math.max(
+          0,
+          state.laneIndex + Math.round((event.point.y - state.grabY) / LANE_HEIGHT),
+        );
         if (
           currentStartDay === state.currentStartDay &&
+          currentLaneIndex === state.currentLaneIndex &&
           movedPastThreshold === state.movedPastThreshold
         )
           return { state };
-        return { state: { ...state, currentStartDay, movedPastThreshold } };
+        return { state: { ...state, currentStartDay, currentLaneIndex, movedPastThreshold } };
       }
       if (state.kind === 'linking') {
         // Track the free end + the hovered drop target (a different activity) + the live type.
@@ -235,17 +261,22 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         };
       }
       if (state.kind === 'repositioning') {
+        const dayChanged = state.currentStartDay !== state.originStartDay;
+        const laneChanged = state.currentLaneIndex !== state.laneIndex;
         // A press that never travelled past the pixel threshold — or that landed back on the
-        // origin day — is a select, not a move (guards click-jitter at low zoom, ADR-0026 D5).
-        if (!state.movedPastThreshold || state.currentStartDay === state.originStartDay) {
+        // origin day AND lane — is a select, not a move (guards click-jitter at low zoom, D5).
+        if (!state.movedPastThreshold || (!dayChanged && !laneChanged)) {
           return { state: IDLE, select: state.activityId };
         }
+        // Free-2D: emit ONE reposition carrying only the axes that changed — so the route can
+        // pick the minimal write (lane-only skips recalc; time needs it) — §3/§4.
         return {
           state: IDLE,
           intent: {
             kind: 'reposition',
             activityId: state.activityId,
-            startDay: state.currentStartDay,
+            ...(dayChanged ? { startDay: state.currentStartDay } : {}),
+            ...(laneChanged ? { laneIndex: state.currentLaneIndex } : {}),
           },
         };
       }

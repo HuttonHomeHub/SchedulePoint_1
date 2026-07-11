@@ -7,6 +7,7 @@ export {
   type TsldRepositionOutcome,
   type TsldLinkInput,
   type TsldLinkOutcome,
+  type TsldEditOutcome,
 } from './components/TsldPanel';
 /** Calendar-day math (day offset → date) the route needs to map a create intent to a constraint. */
 export { addCalendarDays } from './render/render-model';

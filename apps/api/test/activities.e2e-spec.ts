@@ -418,6 +418,131 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     await contributor.agent.patch(item).send({ name: 'Renamed', version: 3 }).expect(403);
   });
 
+  describe('batch lane positions (M4)', () => {
+    async function makeAct(actor: Actor, planId: string, name: string) {
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name })
+        .expect(201);
+      return { id: res.body.data.id as string, version: res.body.data.version as number };
+    }
+    const positionsUrl = (planId: string) =>
+      `/api/v1/organizations/acme/plans/${planId}/activities/positions`;
+
+    it('moves several activities to new lanes in one call and bumps their versions', async () => {
+      const { actor, planId } = await setup();
+      const a = await makeAct(actor, planId, 'A');
+      const b = await makeAct(actor, planId, 'B');
+
+      const res = await actor.agent
+        .patch(positionsUrl(planId))
+        .send({
+          positions: [
+            { id: a.id, laneIndex: 2, version: a.version },
+            { id: b.id, laneIndex: 3, version: b.version },
+          ],
+        })
+        .expect(200);
+
+      const byId = new Map(
+        (res.body.data as Array<{ id: string; laneIndex: number; version: number }>).map((x) => [
+          x.id,
+          x,
+        ]),
+      );
+      expect(byId.get(a.id)).toMatchObject({ laneIndex: 2, version: 2 });
+      expect(byId.get(b.id)).toMatchObject({ laneIndex: 3, version: 2 });
+    });
+
+    it('is all-or-nothing: a single stale version rejects the whole batch (409), nothing moves', async () => {
+      const { actor, planId } = await setup();
+      const a = await makeAct(actor, planId, 'A');
+      const b = await makeAct(actor, planId, 'B');
+
+      await actor.agent
+        .patch(positionsUrl(planId))
+        .send({
+          positions: [
+            { id: a.id, laneIndex: 5, version: a.version },
+            { id: b.id, laneIndex: 6, version: 99 }, // stale
+          ],
+        })
+        .expect(409);
+
+      // Neither row moved — the good one rolled back with the bad one.
+      const got = await actor.agent
+        .get(`/api/v1/organizations/acme/activities/${a.id}`)
+        .expect(200);
+      expect(got.body.data).toMatchObject({ laneIndex: 0, version: 1 });
+    });
+
+    it('rejects an id from another plan (404) and moves nothing (anti-IDOR)', async () => {
+      const { actor, planId } = await setup();
+      const a = await makeAct(actor, planId, 'A');
+      // A second plan in the same org with its own activity.
+      const project = await actor.agent
+        .post(`/api/v1/organizations/acme/clients`)
+        .send({ name: 'Other' })
+        .expect(201);
+      const proj = await actor.agent
+        .post(`/api/v1/organizations/acme/clients/${project.body.data.id}/projects`)
+        .send({ name: 'P2' })
+        .expect(201);
+      const plan2 = await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${proj.body.data.id}/plans`)
+        .send({ name: 'Plan2' })
+        .expect(201);
+      const foreign = await makeAct(actor, plan2.body.data.id as string, 'Foreign');
+
+      await actor.agent
+        .patch(positionsUrl(planId))
+        .send({
+          positions: [
+            { id: a.id, laneIndex: 4, version: a.version },
+            { id: foreign.id, laneIndex: 4, version: foreign.version },
+          ],
+        })
+        .expect(404);
+
+      const got = await actor.agent
+        .get(`/api/v1/organizations/acme/activities/${a.id}`)
+        .expect(200);
+      expect(got.body.data).toMatchObject({ laneIndex: 0 }); // in-plan row untouched
+    });
+
+    it('422s a batch that names the same activity twice', async () => {
+      const { actor, planId } = await setup();
+      const a = await makeAct(actor, planId, 'A');
+      await actor.agent
+        .patch(positionsUrl(planId))
+        .send({
+          positions: [
+            { id: a.id, laneIndex: 1, version: a.version },
+            { id: a.id, laneIndex: 2, version: a.version },
+          ],
+        })
+        .expect(422);
+    });
+
+    it('forbids a Contributor and a Viewer from moving lanes (403)', async () => {
+      const { actor, orgId, planId } = await setup();
+      const a = await makeAct(actor, planId, 'A');
+      const body = { positions: [{ id: a.id, laneIndex: 1, version: a.version }] };
+
+      const contributor = await signUp('lane-contrib@example.com');
+      await prisma.orgMember.create({
+        data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+      });
+      await contributor.agent.patch(positionsUrl(planId)).send(body).expect(403);
+
+      const viewer = await signUp('lane-viewer@example.com');
+      await prisma.orgMember.create({
+        data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+      });
+      await viewer.agent.patch(positionsUrl(planId)).send(body).expect(403);
+    });
+  });
+
   it('401s without a session', async () => {
     await request(server())
       .get('/api/v1/organizations/acme/plans/00000000-0000-7000-8000-000000000000/activities')

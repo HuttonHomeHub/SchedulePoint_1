@@ -98,10 +98,11 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
     return dayCellRect(left, right, state.laneIndex, view);
   }
   if (state.kind === 'repositioning') {
+    // Free-2D (M4): the ghost tracks the live day column AND lane row under the pointer.
     return dayCellRect(
       state.currentStartDay,
       state.currentStartDay + state.spanDays,
-      state.laneIndex,
+      state.currentLaneIndex,
       view,
     );
   }

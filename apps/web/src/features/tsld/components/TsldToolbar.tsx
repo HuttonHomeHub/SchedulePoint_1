@@ -1,4 +1,4 @@
-import { MousePointer2, SquarePlus } from 'lucide-react';
+import { AlignVerticalSpaceAround, MousePointer2, SquarePlus } from 'lucide-react';
 
 import type { EditMode } from '../interaction/gesture-machine';
 
@@ -9,6 +9,8 @@ export interface TsldToolbarProps {
   onModeChange: (mode: EditMode) => void;
   onFit: () => void;
   fitDisabled?: boolean;
+  /** Open the auto-arrange confirm dialog (M4 4.3). Absent → the action isn't offered. */
+  onAutoArrange?: () => void;
   /** Focus target for returning focus after the create popover closes. */
   addActivityRef?: React.Ref<HTMLButtonElement>;
 }
@@ -24,6 +26,7 @@ export function TsldToolbar({
   onModeChange,
   onFit,
   fitDisabled = false,
+  onAutoArrange,
   addActivityRef,
 }: TsldToolbarProps): React.ReactElement {
   return (
@@ -52,6 +55,12 @@ export function TsldToolbar({
       <Button variant="outline" size="sm" onClick={onFit} disabled={fitDisabled}>
         Fit to plan
       </Button>
+      {onAutoArrange ? (
+        <Button variant="outline" size="sm" onClick={onAutoArrange}>
+          <AlignVerticalSpaceAround aria-hidden="true" className="size-4" />
+          Auto-arrange lanes
+        </Button>
+      ) : null}
     </div>
   );
 }

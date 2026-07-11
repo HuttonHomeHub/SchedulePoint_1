@@ -202,6 +202,55 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(onReposition).not.toHaveBeenCalled();
   });
 
+  it('a vertical body drag is a lane-only reposition (laneIndex only, no startDay, so no recalc)', async () => {
+    const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    const utils = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    // Grab the lane-0 bar and drag straight down one row (LANE_HEIGHT = 28, fixed — no y zoom).
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 60, clientY: 82, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 82, pointerId: 1 });
+    await waitFor(() => expect(onReposition).toHaveBeenCalled());
+    // Only the lane axis is reported — no startDay ⇒ the route takes the no-recalc lane path.
+    expect(onReposition.mock.calls[0]?.[0]).toEqual({ activityId: 'a1', laneIndex: 1 });
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('lane 2')),
+    );
+  });
+
+  it('nudges a bar one lane with Alt+↓ in the listbox (keyboard equivalent, lane-only)', async () => {
+    const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+      />,
+    );
+    const listbox = screen.getByRole('listbox');
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // select the first activity
+    fireEvent.keyDown(listbox, { key: 'ArrowDown', altKey: true }); // Alt+↓ → nudge one lane down
+    await waitFor(() =>
+      expect(onReposition).toHaveBeenCalledWith({ activityId: 'a1', laneIndex: 1 }),
+    );
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('lane 2')),
+    );
+  });
+
   it('draws a dependency by dragging from a bar edge to another bar → onLink (FS by default)', async () => {
     const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     const succ = activity({
@@ -374,5 +423,78 @@ describe('TsldPanel editing (M2, flag on)', () => {
     fireEvent.click(cancel);
     expect(screen.queryByLabelText('New activity name')).not.toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  // Two activities overlapping in time, both stacked in lane 0 → the packer moves the second to lane 1.
+  const overlappingPair = (): ReturnType<typeof activity>[] => [
+    activity(),
+    activity({ id: 'a2', name: 'Pour', earlyStart: '2026-01-02', earlyFinish: '2026-01-04' }),
+  ];
+
+  it('auto-arranges lanes: toolbar → confirm dialog → onAutoArrange with the minimal packed changes', async () => {
+    const onAutoArrange = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(
+      <TsldPanel
+        activities={overlappingPair()}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onAutoArrange={onAutoArrange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
+    // A confirm dialog guards the no-undo bulk reorder.
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('can’t be undone');
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange' }));
+    // Only the overlapping second bar moves — the minimal diff.
+    await waitFor(() => expect(onAutoArrange).toHaveBeenCalledWith([{ id: 'a2', laneIndex: 1 }]));
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('auto-arranged')),
+    );
+  });
+
+  it('on an all-or-nothing 409 shows the auto-arrange conflict banner', async () => {
+    const onAutoArrange = vi.fn().mockResolvedValue({
+      applied: false,
+      conflict:
+        'The plan changed since you opened it, so auto-arrange wasn’t applied. Refresh and try again.',
+    });
+    render(
+      <TsldPanel
+        activities={overlappingPair()}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onAutoArrange={onAutoArrange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Auto-arrange' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('auto-arrange wasn’t applied');
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('auto-arranged'));
+  });
+
+  it('when lanes are already packed, the toolbar action says so immediately (no dialog, no batch call)', async () => {
+    const onAutoArrange = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(
+      <TsldPanel
+        activities={[activity()]} // a single bar is already optimally in lane 0
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onAutoArrange={onAutoArrange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
+    // Nothing to pack → announce immediately, never open the confirm dialog or call the batch.
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('already arranged')),
+    );
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(onAutoArrange).not.toHaveBeenCalled();
   });
 });

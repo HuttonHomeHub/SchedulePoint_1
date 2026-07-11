@@ -3,6 +3,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent, EditMode } from '../interaction/gesture-machine';
+import { packLanes } from '../render/auto-pack';
 import { daysBetween, type Point } from '../render/render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -12,6 +13,7 @@ import { TsldToolbar } from './TsldToolbar';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { RenderActivity, RenderEdge } from '@/features/tsld/render/render-model';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -98,10 +100,17 @@ export interface TsldCreateOutcome {
   recalcConflict: string | null;
 }
 
-/** A committed reposition — a horizontal move mapped to an SNET constraint at the new start. */
+/**
+ * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to
+ * an SNET constraint + recalc; `laneIndex` (present iff the lane changed) is layout only (no
+ * recalc). The route issues the minimal PATCH for whichever axes are present. **At least one axis
+ * is always present** — the gesture machine emits a `reposition` only when a whole cell changed,
+ * and the route treats the all-absent case as a no-op — though the type can't enforce that.
+ */
 export interface TsldRepositionInput {
   activityId: string;
-  startDay: number;
+  startDay?: number;
+  laneIndex?: number;
 }
 
 /**
@@ -144,6 +153,12 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /** Route-composed auto-arrange handler (M4 4.3): persists the packed lanes via the batch
+   * positions endpoint (all-or-nothing, no recalc). Resolves with a conflict message when a stale
+   * version refused the whole batch; rejects on real error. Its presence shows the toolbar action. */
+  onAutoArrange?: (
+    changes: readonly { id: string; laneIndex: number }[],
+  ) => Promise<TsldEditOutcome>;
   /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
    * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). */
   onOpenLogic?: (activity: ActivitySummary) => void;
@@ -183,6 +198,7 @@ export function TsldPanel({
   onCreate,
   onReposition,
   onLink,
+  onAutoArrange,
   onOpenLogic,
   onRefresh,
 }: TsldPanelProps): React.ReactElement {
@@ -195,6 +211,11 @@ export function TsldPanel({
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
   const [pendingReposition, setPendingReposition] = useState<PendingGhost | null>(null);
+  // Auto-arrange confirm dialog + in-flight state (a bulk, no-undo reorder — §5 of the M4 design).
+  // The pending lane changes are computed when the dialog opens, so confirm applies exactly them.
+  const [confirmArrange, setConfirmArrange] = useState(false);
+  const [arrangeChanges, setArrangeChanges] = useState<{ id: string; laneIndex: number }[]>([]);
+  const [arranging, setArranging] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
@@ -226,6 +247,30 @@ export function TsldPanel({
       }
       return;
     }
+    // Alt+↑/↓ nudges the focused activity one lane — the keyboard equivalent of a vertical drag,
+    // so free-2D introduces no pointer-only capability (WCAG 2.1.1). Lane-only ⇒ no recalc.
+    if (
+      editingEnabled &&
+      onReposition &&
+      (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+      event.altKey
+    ) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current) return;
+      const laneIndex = Math.max(0, current.laneIndex + (event.key === 'ArrowDown' ? 1 : -1));
+      if (laneIndex === current.laneIndex) return; // already at lane 0 moving up — no-op
+      setConflict(null);
+      void onReposition({ activityId: current.id, laneIndex })
+        .then((outcome) => {
+          if (outcome.conflict) setConflict(outcome.conflict);
+          if (outcome.applied) announce(`Moved “${current.name}” to lane ${laneIndex + 1}.`);
+        })
+        .catch((err: unknown) => {
+          setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+        });
+      return;
+    }
     const index = activities.findIndex((a) => a.id === selectedId);
     let next = index;
     if (event.key === 'ArrowDown') next = Math.min(activities.length - 1, index + 1);
@@ -243,6 +288,63 @@ export function TsldPanel({
     addActivityRef.current?.focus();
   };
 
+  // Auto-arrange (M4 4.3): pack the drawn (dated) activities into the fewest non-overlapping lanes.
+  // Pure `packLanes` computes the minimal set of moves; undated activities have no x-span → keep
+  // their lane. (Returns [] when the plan isn't schedulable — a dead case, since the toolbar only
+  // renders when editing is enabled, which already requires a data date.)
+  const computeArrangeChanges = (): { id: string; laneIndex: number }[] => {
+    if (dataDate === null) return [];
+    const packItems = activities.flatMap((a) =>
+      a.earlyStart === null
+        ? []
+        : [
+            {
+              id: a.id,
+              startDay: daysBetween(dataDate, a.earlyStart),
+              endDay: daysBetween(dataDate, a.earlyFinish ?? a.earlyStart),
+              laneIndex: a.laneIndex,
+            },
+          ],
+    );
+    return packLanes(packItems);
+  };
+
+  // Toolbar click: compute the pack up front so an already-tidy diagram reports "nothing to move"
+  // immediately (no pointless confirm round-trip, and no dialog that could dead-end) — only open
+  // the confirm when there is actually something to reorder.
+  const openAutoArrange = (): void => {
+    if (!onAutoArrange) return;
+    const changes = computeArrangeChanges();
+    if (changes.length === 0) {
+      announce('Lanes are already arranged; nothing to move.');
+      return;
+    }
+    setArrangeChanges(changes);
+    setConfirmArrange(true);
+  };
+
+  // Confirm: persist exactly the changes shown to the user (the route owns the batch write).
+  const runAutoArrange = (): void => {
+    if (!onAutoArrange || arrangeChanges.length === 0) return;
+    setConflict(null);
+    setArranging(true);
+    void onAutoArrange(arrangeChanges)
+      .then((outcome) => {
+        setArranging(false);
+        setConfirmArrange(false);
+        if (outcome.conflict) setConflict(outcome.conflict);
+        if (outcome.applied) {
+          const n = arrangeChanges.length;
+          announce(`Lanes auto-arranged; ${n} ${n === 1 ? 'activity' : 'activities'} moved.`);
+        }
+      })
+      .catch((err: unknown) => {
+        setArranging(false);
+        setConfirmArrange(false);
+        setConflict(err instanceof Error ? err.message : 'Couldn’t auto-arrange the lanes.');
+      });
+  };
+
   const onIntent = (intent: EditIntent, anchor: Point): void => {
     // Ignore a new gesture while a create popover or a reposition is already in flight.
     if (pendingCreate || pendingReposition) return;
@@ -255,23 +357,37 @@ export function TsldPanel({
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !onReposition) return;
       setConflict(null);
-      // Optimistic ghost of the moved bar (kept until the authoritative recalc lands).
+      // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
+      // activity's current geometry so the optimistic ghost sits at the resulting day+lane.
       const span =
         activity.earlyStart && activity.earlyFinish
           ? daysBetween(activity.earlyStart, activity.earlyFinish)
           : 0;
-      setPendingReposition({
-        startDay: intent.startDay,
-        endDay: intent.startDay + span,
-        laneIndex: activity.laneIndex,
-      });
-      void onReposition({ activityId: intent.activityId, startDay: intent.startDay })
+      const currentStartDay =
+        activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
+      const startDay = intent.startDay ?? currentStartDay;
+      const laneIndex = intent.laneIndex ?? activity.laneIndex;
+      setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
+      void onReposition({
+        activityId: intent.activityId,
+        ...(intent.startDay !== undefined ? { startDay: intent.startDay } : {}),
+        ...(intent.laneIndex !== undefined ? { laneIndex: intent.laneIndex } : {}),
+      })
         .then((outcome) => {
           setPendingReposition(null);
           if (outcome.conflict) setConflict(outcome.conflict);
           // Announce "Moved" only when the move actually landed, so it never contradicts a
-          // "wasn't applied" conflict banner (WCAG 4.1.3).
-          if (outcome.applied) announce(`Moved “${activity.name}”.`);
+          // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed.
+          if (outcome.applied) {
+            // A both-axes drop also moved in time (SNET + recalc) — tell AT users the dates will
+            // change, since the ghost's new column is the only sighted cue for that half.
+            const timeChanged = intent.startDay !== undefined;
+            announce(
+              intent.laneIndex !== undefined
+                ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
+                : `Moved “${activity.name}”.`,
+            );
+          }
         })
         .catch((err: unknown) => {
           setPendingReposition(null);
@@ -337,7 +453,7 @@ export function TsldPanel({
             : editingEnabled && mode === 'add-activity'
               ? 'Drag on the timeline to add an activity. Esc cancels.'
               : editingEnabled
-                ? 'Drag a bar to move it, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
+                ? 'Drag a bar to move it in time or to another lane, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
                 : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
         </p>
         {editingEnabled ? (
@@ -346,6 +462,7 @@ export function TsldPanel({
             onModeChange={setMode}
             onFit={() => setFitSignal((n) => n + 1)}
             fitDisabled={!showDiagram}
+            {...(onAutoArrange ? { onAutoArrange: openAutoArrange } : {})}
             addActivityRef={addActivityRef}
           />
         ) : (
@@ -481,6 +598,18 @@ export function TsldPanel({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmArrange}
+        onClose={() => setConfirmArrange(false)}
+        onConfirm={runAutoArrange}
+        title="Auto-arrange lanes?"
+        description="This repacks activities into the fewest lanes with no time-overlap. It changes only vertical layout, not dates — but it can’t be undone yet."
+        confirmLabel="Auto-arrange"
+        pendingLabel="Arranging…"
+        confirmVariant="default"
+        pending={arranging}
+      />
     </section>
   );
 }
