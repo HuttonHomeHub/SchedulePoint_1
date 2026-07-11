@@ -11,6 +11,7 @@ import {
   useActivities,
   useCreatePlacedActivity,
   useUpdateActivity,
+  useRepositionLane,
 } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
@@ -109,22 +110,42 @@ export function PlanDetailScreen(): React.ReactElement {
     }
   };
 
-  // TSLD reposition-in-time (M2): a horizontal drag becomes an SNET constraint at the new
-  // start via the existing PATCH (carrying the live version for optimistic locking). A stale
-  // version → a non-destructive conflict message (the move isn't re-sent); then recalc.
+  // TSLD free-2D reposition (M4): a body drag moves a bar in time and/or lane at once, reported
+  // as the axes that changed. A day change is an SNET-at-new-start + recalc (M2); a lane change is
+  // a layout-only `laneIndex` write with NO recalc. Both go through the single-activity PATCH with
+  // the live version (optimistic lock) — a stale version is a non-destructive conflict, never re-sent.
   const updateActivity = useUpdateActivity(orgSlug, planId);
+  const repositionLane = useRepositionLane(orgSlug, planId);
+  const moveConflict =
+    'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.';
   const onTsldReposition = async ({
     activityId,
     startDay,
+    laneIndex,
   }: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
-    const plannedStart = plan.data?.plannedStart;
     const activity = (activities.data ?? []).find((a) => a.id === activityId);
-    if (!plannedStart || !activity) return { applied: false, conflict: null };
+    if (!activity) return { applied: false, conflict: null };
+
+    // Pure lane move: the cheap, layout-only PATCH — no constraint change, no recalc.
+    if (startDay === undefined) {
+      if (laneIndex === undefined) return { applied: false, conflict: null };
+      try {
+        await repositionLane.mutateAsync({ activityId, laneIndex, version: activity.version });
+        return { applied: true, conflict: null };
+      } catch (err) {
+        if (err instanceof ApiFetchError && err.status === 409) {
+          return { applied: false, conflict: moveConflict };
+        }
+        throw err;
+      }
+    }
+
+    // Day changed (optionally lane too): one PATCH imposing an SNET-at-new-start (ADR-0023) — which
+    // by design overwrites any prior constraint, re-pinning a pinned bar where it was dropped —
+    // plus the lane if it moved, then recalc. Resent definition fields are unchanged.
+    const plannedStart = plan.data?.plannedStart;
+    if (!plannedStart) return { applied: false, conflict: null };
     try {
-      // A drag always imposes an SNET-at-new-start (ADR-0023), which by design overwrites any
-      // prior constraint (e.g. a MANDATORY_START) on that activity — moving a pinned bar
-      // re-pins it where it was dropped. The version check makes a concurrent edit 409 rather
-      // than clobber; the other fields are resent unchanged (laneIndex is omitted → untouched).
       await updateActivity.mutateAsync({
         activityId,
         version: activity.version,
@@ -135,15 +156,12 @@ export function PlanDetailScreen(): React.ReactElement {
         description: activity.description ?? undefined,
         constraintType: 'SNET',
         constraintDate: addCalendarDays(plannedStart, startDay),
+        ...(laneIndex !== undefined ? { laneIndex } : {}),
       });
     } catch (err) {
       if (err instanceof ApiFetchError && err.status === 409) {
         // Stale version — the move was NOT applied (nothing changed); never re-send.
-        return {
-          applied: false,
-          conflict:
-            'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.',
-        };
+        return { applied: false, conflict: moveConflict };
       }
       throw err;
     }

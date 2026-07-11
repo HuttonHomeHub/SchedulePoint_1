@@ -87,11 +87,13 @@ describe('gesture-machine: reposition-in-time', () => {
       activityId: 'a',
       grabDay: 2,
       grabX: 25,
+      grabY: 40,
       movedPastThreshold: false,
       originStartDay: 2,
       spanDays: 3,
       laneIndex: 1,
       currentStartDay: 2,
+      currentLaneIndex: 1,
     });
   });
 
@@ -148,6 +150,66 @@ describe('gesture-machine: reposition-in-time', () => {
       ctx('add-activity'),
     );
     expect(r.state).toMatchObject({ kind: 'creating' });
+  });
+});
+
+describe('gesture-machine: free-2D drag (M4)', () => {
+  // pxPerDay 10, LANE_HEIGHT 28. Grab a lane-1 bar at (x25 → day 2, y40).
+  const body = { id: 'a', startDay: 2, endDay: 5, laneIndex: 1 };
+  const grab = (): GestureState =>
+    reduce(
+      IDLE,
+      { type: 'pointerDown', point: { x: 25, y: 40 }, hit: { kind: 'body', id: 'a' }, body },
+      ctx('select'),
+    ).state;
+  const move = (state: GestureState, x: number, y: number): GestureState =>
+    reduce(state, { type: 'pointerMove', point: { x, y } }, ctx('select')).state;
+
+  it('tracks the live lane as the pointer moves vertically (round dy / LANE_HEIGHT)', () => {
+    // Down one full row (dy 28) → lane 2; the threshold trips on the vertical axis alone.
+    const moved = move(grab(), 25, 68);
+    expect(moved).toMatchObject({
+      kind: 'repositioning',
+      currentStartDay: 2,
+      currentLaneIndex: 2,
+      movedPastThreshold: true,
+    });
+  });
+
+  it('commits a lane-only reposition (no startDay) when only the lane changed', () => {
+    const up = reduce(move(grab(), 25, 68), { type: 'pointerUp' }, ctx('select'));
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 2 });
+  });
+
+  it('commits both axes in one intent when the drag changed day and lane', () => {
+    const up = reduce(move(grab(), 55, 68), { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', startDay: 5, laneIndex: 2 });
+  });
+
+  it('half-cell vertical wander on a time move yields NO lane change (dead-zone)', () => {
+    // dx → day 5; dy 10px rounds to 0 lanes, so the lane is untouched — a pure time move.
+    const up = reduce(move(grab(), 55, 50), { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', startDay: 5 });
+  });
+
+  it('sub-day horizontal wander on a lane move yields NO day change (dead-zone)', () => {
+    // dx 2px stays in day column 2; dy 28 → lane 2 — a pure lane move.
+    const up = reduce(move(grab(), 27, 68), { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 2 });
+  });
+
+  it('clamps the lane at 0 when dragged above the first row', () => {
+    // dy −56px → −2 lanes from lane 1 → clamped to 0.
+    const up = reduce(move(grab(), 25, -16), { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 0 });
+  });
+
+  it('selects (no intent) when a 2D drag returns to the origin day AND lane', () => {
+    const wandered = move(move(grab(), 55, 68), 25, 40);
+    const up = reduce(wandered, { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toBeUndefined();
+    expect(up.select).toBe('a');
   });
 });
 

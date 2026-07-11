@@ -98,10 +98,15 @@ export interface TsldCreateOutcome {
   recalcConflict: string | null;
 }
 
-/** A committed reposition — a horizontal move mapped to an SNET constraint at the new start. */
+/**
+ * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to
+ * an SNET constraint + recalc; `laneIndex` (present iff the lane changed) is layout only (no
+ * recalc). The route issues the minimal PATCH for whichever axes are present.
+ */
 export interface TsldRepositionInput {
   activityId: string;
-  startDay: number;
+  startDay?: number;
+  laneIndex?: number;
 }
 
 /**
@@ -226,6 +231,30 @@ export function TsldPanel({
       }
       return;
     }
+    // Alt+↑/↓ nudges the focused activity one lane — the keyboard equivalent of a vertical drag,
+    // so free-2D introduces no pointer-only capability (WCAG 2.1.1). Lane-only ⇒ no recalc.
+    if (
+      editingEnabled &&
+      onReposition &&
+      (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+      event.altKey
+    ) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current) return;
+      const laneIndex = Math.max(0, current.laneIndex + (event.key === 'ArrowDown' ? 1 : -1));
+      if (laneIndex === current.laneIndex) return; // already at lane 0 moving up — no-op
+      setConflict(null);
+      void onReposition({ activityId: current.id, laneIndex })
+        .then((outcome) => {
+          if (outcome.conflict) setConflict(outcome.conflict);
+          if (outcome.applied) announce(`Moved “${current.name}” to lane ${laneIndex + 1}.`);
+        })
+        .catch((err: unknown) => {
+          setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+        });
+      return;
+    }
     const index = activities.findIndex((a) => a.id === selectedId);
     let next = index;
     if (event.key === 'ArrowDown') next = Math.min(activities.length - 1, index + 1);
@@ -255,23 +284,34 @@ export function TsldPanel({
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !onReposition) return;
       setConflict(null);
-      // Optimistic ghost of the moved bar (kept until the authoritative recalc lands).
+      // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
+      // activity's current geometry so the optimistic ghost sits at the resulting day+lane.
       const span =
         activity.earlyStart && activity.earlyFinish
           ? daysBetween(activity.earlyStart, activity.earlyFinish)
           : 0;
-      setPendingReposition({
-        startDay: intent.startDay,
-        endDay: intent.startDay + span,
-        laneIndex: activity.laneIndex,
-      });
-      void onReposition({ activityId: intent.activityId, startDay: intent.startDay })
+      const currentStartDay =
+        activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
+      const startDay = intent.startDay ?? currentStartDay;
+      const laneIndex = intent.laneIndex ?? activity.laneIndex;
+      setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
+      void onReposition({
+        activityId: intent.activityId,
+        ...(intent.startDay !== undefined ? { startDay: intent.startDay } : {}),
+        ...(intent.laneIndex !== undefined ? { laneIndex: intent.laneIndex } : {}),
+      })
         .then((outcome) => {
           setPendingReposition(null);
           if (outcome.conflict) setConflict(outcome.conflict);
           // Announce "Moved" only when the move actually landed, so it never contradicts a
-          // "wasn't applied" conflict banner (WCAG 4.1.3).
-          if (outcome.applied) announce(`Moved “${activity.name}”.`);
+          // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed.
+          if (outcome.applied) {
+            announce(
+              intent.laneIndex !== undefined
+                ? `Moved “${activity.name}” to lane ${laneIndex + 1}.`
+                : `Moved “${activity.name}”.`,
+            );
+          }
         })
         .catch((err: unknown) => {
           setPendingReposition(null);
