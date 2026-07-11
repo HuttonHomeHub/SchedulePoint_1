@@ -5,6 +5,7 @@
  * when off.
  */
 export { EditLockBanner } from './components/EditLockBanner';
+export { PenReadOnlyNote } from './components/PenReadOnlyNote';
 export {
   usePlanPen,
   usePlanEditLock,

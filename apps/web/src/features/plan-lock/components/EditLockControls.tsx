@@ -49,17 +49,29 @@ export function EditLockControls({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {actions.includes('start') ? (
-        <Button size="sm" onClick={onStart} disabled={isPending}>
+        <Button size="sm" onClick={onStart} disabled={isPending} aria-busy={isPending}>
           {lockCopy.startEditing}
         </Button>
       ) : null}
       {actions.includes('stop') ? (
-        <Button size="sm" variant="outline" onClick={onStop} disabled={isPending}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onStop}
+          disabled={isPending}
+          aria-busy={isPending}
+        >
           {lockCopy.stopEditing}
         </Button>
       ) : null}
       {actions.includes('request') ? (
-        <Button size="sm" variant="outline" onClick={onRequest} disabled={isPending}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onRequest}
+          disabled={isPending}
+          aria-busy={isPending}
+        >
           {lockCopy.requestControl}
         </Button>
       ) : null}
@@ -69,13 +81,18 @@ export function EditLockControls({
         </Button>
       ) : null}
       {actions.includes('takeover') ? (
-        <Button size="sm" onClick={onTakeOver} disabled={isPending}>
+        <Button size="sm" onClick={onTakeOver} disabled={isPending} aria-busy={isPending}>
           {lockCopy.takeOverNow}
         </Button>
       ) : null}
       {actions.includes('override') ? (
         <>
-          <Button size="sm" onClick={() => setConfirmOverride(true)} disabled={isPending}>
+          <Button
+            size="sm"
+            onClick={() => setConfirmOverride(true)}
+            disabled={isPending}
+            aria-busy={isPending}
+          >
             {lockCopy.takeOver}
           </Button>
           <ConfirmDialog
@@ -95,12 +112,18 @@ export function EditLockControls({
         </>
       ) : null}
       {actions.includes('handover') ? (
-        <Button size="sm" onClick={onHandover} disabled={isPending}>
+        <Button size="sm" onClick={onHandover} disabled={isPending} aria-busy={isPending}>
           {lockCopy.handOver}
         </Button>
       ) : null}
       {actions.includes('keep') ? (
-        <Button size="sm" variant="ghost" onClick={onKeep} disabled={isPending}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onKeep}
+          disabled={isPending}
+          aria-busy={isPending}
+        >
           {lockCopy.keepEditing}
         </Button>
       ) : null}

@@ -32,21 +32,39 @@ function firstName(actor: PlanEditLockActor): string {
 
 export const lockCopy = {
   free: 'No one is editing this plan.',
-  freeReadOnly: 'No one is editing this plan.',
+  loading: 'Checking who’s editing this plan…',
   expired: (holder: PlanEditLockActor | null): string =>
     holder ? `${firstName(holder)} was editing (inactive).` : 'No one is editing this plan.',
   holding: 'You’re editing this plan.',
   incomingRequest: (requester: PlanEditLockActor): string =>
     `${firstName(requester)} is asking to edit this plan.`,
-  heldByOther: (holder: PlanEditLockActor, heartbeatAt: string | null, now?: number): string => {
-    const active = heartbeatAt ? ` (active ${relativeTime(heartbeatAt, now)})` : '';
-    return `${firstName(holder)} is editing this plan${active}.`;
+  heldByOther: (holder: PlanEditLockActor): string => `${firstName(holder)} is editing this plan.`,
+  /**
+   * Supplementary "(active {relative})" shown as an **aria-hidden** aside so a
+   * poll flipping the minute bucket doesn't re-announce the whole banner. Null
+   * when there's no heartbeat to describe.
+   */
+  activeAside: (heartbeatAt: string | null, now?: number): string | null =>
+    heartbeatAt ? `active ${relativeTime(heartbeatAt, now)}` : null,
+  /**
+   * The advisory grace countdown for the "waiting" row (design §6) — **aria-hidden**
+   * so it never spams the live region; the transition to "you can take over" is
+   * announced by the banner re-rendering. Null once elapsed / when unknown.
+   */
+  graceCountdown: (graceEndsAt: string | null, now: number = Date.now()): string | null => {
+    if (!graceEndsAt) return null;
+    const secs = Math.ceil((new Date(graceEndsAt).getTime() - now) / 1000);
+    return secs > 0 ? `~${secs}s` : null;
   },
   waitingForHandover: (holder: PlanEditLockActor): string =>
     `Requested — waiting for ${firstName(holder)} to hand over.`,
+  // Covers both take-over paths (grace elapsed after a request, or holder inactive),
+  // so the copy never over-claims "hasn't responded" when no request was made.
   canTakeOver: (holder: PlanEditLockActor): string =>
-    `${firstName(holder)} hasn’t responded. You can take over.`,
+    `You can take over editing from ${firstName(holder)}.`,
   adminNote: 'As an admin, you can take over editing.',
+  /** Shown at the Activities / Logic-diagram sections when the pen is held elsewhere. */
+  scheduleReadOnlyHint: 'Read-only — use “Start editing” at the top of Schedule to make changes.',
   /** Distinct from the 409 "changed elsewhere — refresh" copy (ADR-0028). */
   lost: (reason: PlanEditLockReason): string =>
     reason === 'PLAN_EDIT_LOCK_LOST'
@@ -65,6 +83,8 @@ export const lockCopy = {
   badgeEditing: 'Editing',
   badgeLocked: 'Locked',
   badgeReadOnly: 'Read-only',
+  /** Free + the caller may take the pen — invites the "Start editing" CTA rather than reading as a wall. */
+  badgeAvailable: 'Available',
   // Take-over confirm dialog.
   takeOverTitle: 'Take over editing?',
   takeOverBody: (holder: PlanEditLockActor): string =>

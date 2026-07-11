@@ -10,7 +10,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLockError } from '../lib/lock-error';
 
-import { useAnnounce } from '@/components/ui/announcer';
 import { API_BASE_URL, PLAN_EDIT_LOCK_ENABLED } from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 import { planLockKeys } from '@/lib/query/hierarchy-keys';
@@ -227,24 +226,17 @@ export interface PlanPen {
 export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   const penManaged = PLAN_EDIT_LOCK_ENABLED;
   const queryClient = useQueryClient();
-  const announce = useAnnounce();
 
   const lockQuery = usePlanEditLock(orgSlug, planId, penManaged);
   const status = lockQuery.data;
   const holdsPen = penManaged && status?.state === 'HELD_BY_ME';
 
+  // The `EditLockBanner`'s own `role="status"` live region announces every state
+  // transition (Start/Stop/lost/…), so we deliberately do NOT also fire the shared
+  // `useAnnounce()` for these — a second, near-identical utterance per action reads
+  // as a double-announcement to AT (a11y review). The banner is the single source.
   const [lostControl, setLostControl] = useState<PlanEditLockReason | null>(null);
-  const acknowledgeLost = useCallback(
-    (reason: PlanEditLockReason) => {
-      setLostControl(reason);
-      announce(
-        reason === 'PLAN_EDIT_LOCK_LOST'
-          ? 'Editing control was taken over — you are now read-only.'
-          : 'You are not the current editor of this plan.',
-      );
-    },
-    [announce],
-  );
+  const acknowledgeLost = useCallback((reason: PlanEditLockReason) => setLostControl(reason), []);
   const dismissLost = useCallback(() => setLostControl(null), []);
 
   const acquire = useAcquireLock(orgSlug, planId);
@@ -255,44 +247,25 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   useLockHeartbeat(orgSlug, planId, { holding: Boolean(holdsPen), onLost: acknowledgeLost });
 
   const startEditing = useCallback(() => {
-    acquire.mutate(undefined, {
-      onSuccess: () => {
-        setLostControl(null); // re-acquiring clears any lingering lost-control banner
-        announce('You are now editing this plan.');
-      },
-    });
-  }, [acquire, announce]);
+    // Re-acquiring clears any lingering lost-control banner.
+    acquire.mutate(undefined, { onSuccess: () => setLostControl(null) });
+  }, [acquire]);
 
   const stopEditing = useCallback(() => {
-    release.mutate(undefined, {
-      onSuccess: () => announce('You have stopped editing. The plan is read-only.'),
-    });
-  }, [release, announce]);
+    release.mutate();
+  }, [release]);
 
   const requestControl = useCallback(() => {
-    request.mutate(undefined, {
-      onSuccess: () =>
-        announce('Requested control. The current editor has been asked to hand over.'),
-    });
-  }, [request, announce]);
+    request.mutate();
+  }, [request]);
 
   const handoff = useCallback(() => {
-    handoffMutation.mutate(undefined, {
-      onSuccess: () => announce('You handed over editing control.'),
-    });
-  }, [handoffMutation, announce]);
+    handoffMutation.mutate();
+  }, [handoffMutation]);
 
   const takeOver = useCallback(() => {
-    acquire.mutate(
-      { takeover: true },
-      {
-        onSuccess: () => {
-          setLostControl(null);
-          announce('You are now editing this plan.');
-        },
-      },
-    );
-  }, [acquire, announce]);
+    acquire.mutate({ takeover: true }, { onSuccess: () => setLostControl(null) });
+  }, [acquire]);
 
   const onWriteRejected = useCallback(
     (err: unknown): WriteRejection => {

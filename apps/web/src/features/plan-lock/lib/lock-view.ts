@@ -21,6 +21,9 @@ export interface LockView {
   tone: LockTone;
   badge: string;
   message: string;
+  /** Supplementary text rendered **aria-hidden** (the "active …" relative time, or
+   *  the row-6 grace countdown) so its frequent updates never re-announce the banner. */
+  aside?: string;
   actions: readonly LockAction[];
 }
 
@@ -56,15 +59,17 @@ export function resolveLockView(
   switch (status.state) {
     case 'FREE':
       return {
+        // "Available" (not "Read-only") when the caller can take the pen, so the
+        // badge invites the adjacent "Start editing" CTA instead of contradicting it.
         tone: 'neutral',
-        badge: lockCopy.badgeReadOnly,
+        badge: status.canAcquire ? lockCopy.badgeAvailable : lockCopy.badgeReadOnly,
         message: lockCopy.free,
         actions: status.canAcquire ? ['start'] : [],
       };
     case 'EXPIRED':
       return {
         tone: 'neutral',
-        badge: lockCopy.badgeReadOnly,
+        badge: status.canAcquire ? lockCopy.badgeAvailable : lockCopy.badgeReadOnly,
         message: lockCopy.expired(status.holder),
         actions: status.canAcquire ? ['start'] : [],
       };
@@ -94,11 +99,13 @@ export function resolveLockView(
       if (!holder) {
         return { tone: 'locked', badge: lockCopy.badgeLocked, message: lockCopy.free, actions: [] };
       }
+      const activeAside = lockCopy.activeAside(status.heartbeatAt, now) ?? undefined;
       if (status.canOverride) {
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
-          message: `${lockCopy.heldByOther(holder, status.heartbeatAt, now)} ${lockCopy.adminNote}`,
+          message: `${lockCopy.heldByOther(holder)} ${lockCopy.adminNote}`,
+          ...(activeAside ? { aside: activeAside } : {}),
           actions: ['override'],
         };
       }
@@ -112,25 +119,30 @@ export function resolveLockView(
       }
       if (status.canRequest) {
         const mine = status.requestedBy?.id === currentUserId && currentUserId !== undefined;
-        return mine
-          ? {
-              tone: 'locked',
-              badge: lockCopy.badgeLocked,
-              message: lockCopy.waitingForHandover(holder),
-              actions: ['waiting'],
-            }
-          : {
-              tone: 'locked',
-              badge: lockCopy.badgeLocked,
-              message: lockCopy.heldByOther(holder, status.heartbeatAt, now),
-              actions: ['request'],
-            };
+        if (mine) {
+          const countdown = lockCopy.graceCountdown(status.graceEndsAt, now) ?? undefined;
+          return {
+            tone: 'locked',
+            badge: lockCopy.badgeLocked,
+            message: lockCopy.waitingForHandover(holder),
+            ...(countdown ? { aside: countdown } : {}),
+            actions: ['waiting'],
+          };
+        }
+        return {
+          tone: 'locked',
+          badge: lockCopy.badgeLocked,
+          message: lockCopy.heldByOther(holder),
+          ...(activeAside ? { aside: activeAside } : {}),
+          actions: ['request'],
+        };
       }
       // Viewer / Contributor — read-only, just informed who holds the pen.
       return {
         tone: 'locked',
         badge: lockCopy.badgeLocked,
-        message: lockCopy.heldByOther(holder, status.heartbeatAt, now),
+        message: lockCopy.heldByOther(holder),
+        ...(activeAside ? { aside: activeAside } : {}),
         actions: [],
       };
     }

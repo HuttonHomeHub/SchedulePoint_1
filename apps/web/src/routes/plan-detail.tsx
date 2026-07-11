@@ -23,7 +23,7 @@ import {
   useCreateDependency,
   usePlanDependencies,
 } from '@/features/dependencies';
-import { EditLockBanner, usePlanPen } from '@/features/plan-lock';
+import { EditLockBanner, PenReadOnlyNote, usePlanPen } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { RecalculateButton, ScheduleSummaryStrip, useRecalculate } from '@/features/schedule';
@@ -69,6 +69,10 @@ export function PlanDetailScreen(): React.ReactElement {
   const canProgress = canReportProgress(role); // Contributor progress path — never pen-gated
   const canCalculate = canCalculateSchedule(role);
   const canRecalc = pen.penManaged ? canCalculate && pen.holdsPen : canCalculate;
+  // A would-be editor (role allows it) who doesn't currently hold the pen — the
+  // Activities/Logic sections sit far below the banner, so hint locally why their
+  // edit affordances are gone (UX review).
+  const penReadOnly = pen.penManaged && canWrite && !pen.holdsPen;
   const [editing, setEditing] = useState(false);
   const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
 
@@ -375,6 +379,7 @@ export function PlanDetailScreen(): React.ReactElement {
           The Time-Scaled Logic Diagram: activities plotted on the timeline and connected by their
           logic.
         </p>
+        {penReadOnly ? <PenReadOnlyNote /> : null}
         <div className="mt-3">
           <TsldPanel
             // Remount per plan so selection/viewport state never leaks across a same-route
@@ -402,6 +407,7 @@ export function PlanDetailScreen(): React.ReactElement {
         The activities that make up this plan. Edit their details here; the logic diagram above
         plots them on the timeline.
       </p>
+      {penReadOnly ? <PenReadOnlyNote /> : null}
       {variance.data ? (
         <div className="mt-2">
           <BaselineVarianceSummary summary={variance.data.summary} />

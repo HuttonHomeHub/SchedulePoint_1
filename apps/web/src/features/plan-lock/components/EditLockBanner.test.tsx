@@ -50,9 +50,18 @@ describe('EditLockBanner', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders nothing while status is loading', () => {
-    const { container } = render(<EditLockBanner pen={makePen({ status: undefined })} />);
-    expect(container).toBeEmptyDOMElement();
+  it('shows a loading placeholder (not silence) while status is resolving', () => {
+    render(<EditLockBanner pen={makePen({ status: undefined })} />);
+    expect(screen.getByText(/checking who’s editing/i)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('renders the "Available" badge (not "Read-only") next to a Start CTA', () => {
+    render(
+      <EditLockBanner pen={makePen({ status: status({ state: 'FREE', canAcquire: true }) })} />,
+    );
+    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.queryByText('Read-only')).not.toBeInTheDocument();
   });
 
   it('is a polite live region', () => {

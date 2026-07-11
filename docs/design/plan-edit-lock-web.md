@@ -158,7 +158,7 @@ To keep `plan-detail.tsx` clean and keep all the wiring co-located and unit-test
 single composition hook the route calls once:
 
 ```ts
-const pen = usePlanPen(orgSlug, planId, { role });
+const pen = usePlanPen(orgSlug, planId); // no `role` — everything is capability-flag driven
 // → { penManaged, status, holdsPen, isPending,
 //     startEditing, stopEditing, requestControl, handoff, takeOver, override,
 //     lostControl, acknowledgeLost }
@@ -201,12 +201,17 @@ control's presence is keyed on a server capability flag, never a re-derived rule
 | 9   | `HELD_BY_OTHER` + `!canRequest` (Viewer)                          | "{holder} is editing." (read-only)                                        | —                                          | M2                            |
 | 10  | `lostControl` set (transient, just got 423 `_LOST`)               | "Editing control was taken over — you're now read-only." (distinct §4)    | **Dismiss** (reconciles on next poll)      | M2                            |
 
-**M2 delivers rows 1–3, 9, 10** (the read-only "who holds the pen" surface, Start/Stop, and the
-lost-control transition) plus the badge/copy for row 5. **M3 wires** the request/hand-off/take-over/
-override controls (rows 4, 5-button, 6–8) — the component is authored with all rows so M3 is a
-fill-in, not a rewrite. The take-over (row 7) and admin override (row 8) use the existing
-`ConfirmDialog` (`role="alertdialog"`, focus-trapped) — override defaults to a `default`-variant
-confirm ("Take over editing?"), not destructive.
+**Scope note — the full banner shipped in M2 (accepted acceleration).** This doc originally scoped
+M2 to rows 1–3, 9, 10 + row-5 copy and deferred the request/hand-off/take-over/override _wiring_ to
+M3. In build, all ten rows were wired end-to-end together: the server endpoints and hooks all
+exist, and the capability flags are live for any Org Admin / post-grace peer **today**, so a
+partial banner would have shown dead affordances. The component + a11y coverage lands with them.
+What remains M3 is only the **multi-actor Playwright hand-off journey** (§7), tracked in
+TECH_DEBT #27; the single-actor states are unit- + axe-tested here. The take-over (row 7) and admin
+override (row 8) use the existing `ConfirmDialog` (`role="alertdialog"`, focus-trapped) — override
+is a `default`-variant confirm ("Take over editing?"), not destructive. The row-6 grace countdown
+ships as an **aria-hidden** advisory (§6); the row-6→row-7 transition is announced by the banner's
+own live region re-rendering (no separate announcement).
 
 **Copy discipline (UX_STANDARDS).** All strings live in `lock-copy.ts` and go through the
 ux-reviewer. "active {relative}" uses a relative-time formatter over `heartbeatAt` (e.g. "just
@@ -244,7 +249,7 @@ schedule model** (activities, dependencies, positions, recalculate — ADR-0028 
 split it:
 
 ```ts
-const pen = usePlanPen(orgSlug, planId, { role });
+const pen = usePlanPen(orgSlug, planId); // no `role` — everything is capability-flag driven
 const canWrite = canManageHierarchy(role); // role only — metadata/baselines
 const canEditSchedule = pen.penManaged ? canWrite && pen.holdsPen : canWrite; // pen-gated
 const canProgress = canReportProgress(role); // role only — Contributor path, UNCHANGED

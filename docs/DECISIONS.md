@@ -414,3 +414,11 @@ canWrite` — today's behaviour byte-for-byte.
 Capability flags (`canAcquire/canRequest/canTakeOver/canOverride`) are server-resolved — the client
 renders per the flags and never re-derives lock policy. **No new ADR** (ADR-0028 governs the model,
 the 423 vocabulary, the staged rollout, and polling); this note records the FE realisation.
+
+**Addendum (M2 build).** The full ten-row banner (peer request / hand-off / take-over / admin
+override) shipped **in M2**, not deferred to M3 as the design doc first scoped. The server
+endpoints + hooks already exist and the capability flags are live for any Org Admin / post-grace
+peer today, so a partial banner would have shown dead affordances; the component + a11y coverage
+landed with the controls. What remains M3 is only the multi-actor Playwright hand-off journey
+(TECH_DEBT #27). The row-6 grace countdown is an aria-hidden advisory; per-action announcements use
+the banner's own `role="status"` live region as the single source (no duplicate `useAnnounce`).
