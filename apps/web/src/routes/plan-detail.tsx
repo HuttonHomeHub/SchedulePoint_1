@@ -180,8 +180,8 @@ export function PlanDetailScreen(): React.ReactElement {
         {canWrite ? <CreateActivityButton orgSlug={orgSlug} planId={planId} /> : null}
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
-        The activities that make up this plan. The graphical Time-Scaled Logic Diagram will edit
-        these on a timeline in a later release.
+        The activities that make up this plan. Edit their details here; the logic diagram above
+        plots them on the timeline. On-canvas editing arrives in a later release.
       </p>
       {variance.data ? (
         <div className="mt-2">

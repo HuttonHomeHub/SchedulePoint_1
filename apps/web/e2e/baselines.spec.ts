@@ -9,7 +9,8 @@ import { expect, test, type Page } from '@playwright/test';
  */
 async function onboard(page: Page, stamp: number): Promise<string> {
   const email = `base-${stamp}@example.com`;
-  const orgSlug = `base-co-${stamp}`;
+  // Must match the slug the app derives from the org name below ("Baseline Co" → "baseline-co").
+  const orgSlug = `baseline-co-${stamp}`;
   await page.goto('/sign-up');
   await page.getByLabel('Full name').fill('Baseline Tester');
   await page.getByLabel('Email').fill(email);
