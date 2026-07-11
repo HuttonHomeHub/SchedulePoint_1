@@ -313,3 +313,27 @@ editor (a "Driving" column in the predecessors/successors table — the fuller c
 alternative). Folding a per-activity driving summary into the canvas's parallel listbox
 description (`describeActivity`, alongside the existing "critical" cue) is **deferred to M5**
 (accessibility hardening) — a tracked deferral, not a silent gap (CLAUDE.md §13).
+
+### 2026-07-11 — Free-2D bar drag over dominant-axis lock (TSLD M4)
+
+**Decision.** On the TSLD canvas a body drag moves a bar in **both axes at once** — dx → a
+new start day (an **SNET** constraint, recalcs) and dy → a new `laneIndex` (layout only, no
+recalc). On drop it commits as **one** optimistically-locked write reporting **only the axes
+that changed**: a lane-only move is the minimal `{ laneIndex, version }` PATCH (no recalc); a
+time move (± lane) is one `PATCH …/activities/:id` carrying the SNET constraint (and the lane),
+followed by the existing recalc. This supersedes the earlier dominant-axis-lock proposal.
+
+**Why.** The user chose direct 2D manipulation as the most literal "drag it where you want it"
+model. The two-write concern that had motivated axis-lock **dissolves for a single activity**
+(M4's scope — multi-select stays deferred): the single-activity endpoint already accepts the
+SNET fields + `laneIndex` + `version` atomically, so there is no ordering/atomicity gap. Per-axis
+rounding (`round(dy / LANE_HEIGHT)`, `round(dx → day columns)`) gives a half-cell dead-zone on
+each axis, so a mostly-horizontal drag doesn't accidentally re-lane (and vice-versa) — the main
+free-2D risk, mitigated without extra threshold machinery.
+
+**Consequences.** No new ADR and no amendment to ADR-0026 (D5/D6 already decide lane persistence
+without recalc). Reversible: re-introducing axis-lock would be a gesture-machine-only change. The
+keyboard equivalent for the new lane axis (`Alt+↑/↓` in the parallel listbox) ships in the same
+slice (WCAG 2.1.1); the in-canvas time nudge and full keymap remain M5 work. The **batch
+positions** endpoint is reserved for auto-pack (4.3) and future multi-drag, **not** the single-bar
+path.

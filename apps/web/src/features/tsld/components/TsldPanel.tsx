@@ -101,7 +101,9 @@ export interface TsldCreateOutcome {
 /**
  * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to
  * an SNET constraint + recalc; `laneIndex` (present iff the lane changed) is layout only (no
- * recalc). The route issues the minimal PATCH for whichever axes are present.
+ * recalc). The route issues the minimal PATCH for whichever axes are present. **At least one axis
+ * is always present** — the gesture machine emits a `reposition` only when a whole cell changed,
+ * and the route treats the all-absent case as a no-op — though the type can't enforce that.
  */
 export interface TsldRepositionInput {
   activityId: string;
@@ -306,9 +308,12 @@ export function TsldPanel({
           // Announce "Moved" only when the move actually landed, so it never contradicts a
           // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed.
           if (outcome.applied) {
+            // A both-axes drop also moved in time (SNET + recalc) — tell AT users the dates will
+            // change, since the ghost's new column is the only sighted cue for that half.
+            const timeChanged = intent.startDay !== undefined;
             announce(
               intent.laneIndex !== undefined
-                ? `Moved “${activity.name}” to lane ${laneIndex + 1}.`
+                ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
                 : `Moved “${activity.name}”.`,
             );
           }
@@ -377,7 +382,7 @@ export function TsldPanel({
             : editingEnabled && mode === 'add-activity'
               ? 'Drag on the timeline to add an activity. Esc cancels.'
               : editingEnabled
-                ? 'Drag a bar to move it, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
+                ? 'Drag a bar to move it in time or to another lane, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
                 : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
         </p>
         {editingEnabled ? (
