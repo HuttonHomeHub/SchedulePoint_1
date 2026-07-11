@@ -12,6 +12,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -46,11 +47,13 @@ export class PlanLockController {
   }
 
   @Post()
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Acquire or take over the edit-lock (Planner or Org Admin).' })
   @ApiOkResponse({
     type: PlanEditLockStatusDto,
-    description: 'Acquired/renewed. 423 Locked when held by another (and take-over not permitted).',
+    description: 'Acquired / renewed / taken over (an idempotent upsert of the lease, so 200).',
   })
+  @ApiLockedResponse('Held by another user and take-over is not (yet) permitted.')
   async acquire(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -67,8 +70,9 @@ export class PlanLockController {
   @ApiOperation({ summary: 'Renew the holder’s lease (heartbeat).' })
   @ApiOkResponse({
     type: PlanEditLockStatusDto,
-    description: 'Lease renewed. 423 PLAN_EDIT_LOCK_LOST when it was taken over or expired.',
+    description: 'Lease renewed.',
   })
+  @ApiLockedResponse('PLAN_EDIT_LOCK_LOST — the lease was taken over or expired.')
   async heartbeat(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -99,6 +103,7 @@ export class PlanLockController {
   @ApiOperation({ summary: 'Hand the pen to the pending requester (holder-initiated).' })
   @ApiOkResponse({ type: PlanEditLockStatusDto })
   @ApiConflictResponse({ description: 'No one has requested control of this plan.' })
+  @ApiLockedResponse('PLAN_EDIT_LOCK_LOST — you are no longer the holder.')
   async handoff(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

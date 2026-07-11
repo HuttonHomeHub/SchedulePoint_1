@@ -12,6 +12,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -56,6 +57,7 @@ export class DependenciesController {
   @ApiConflictResponse({
     description: 'Stale version, or the new type duplicates an existing link.',
   })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -72,6 +74,7 @@ export class DependenciesController {
   @ApiOperation({ summary: 'Delete a dependency (soft).' })
   @ApiNoContentResponse()
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

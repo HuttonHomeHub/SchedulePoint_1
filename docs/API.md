@@ -83,7 +83,10 @@ taken over / expired. The specific condition is a `reason` in `details`:
 `PLAN_EDIT_LOCK_REQUIRED` (a structural write without the pen),
 `PLAN_EDIT_LOCK_HELD` (acquire/take-over refused — held, or grace not yet
 elapsed), `PLAN_EDIT_LOCK_LOST` (the caller's lease was stolen or expired). See
-the edit-lock endpoints and the gated-write note below.
+the edit-lock endpoints and the gated-write note below. (Separately, a **409** on
+`POST …/edit-lock/handoff` is a state-precondition clash — "no one has requested
+control" — not a lock/version conflict; it reads the same "conflicting state" 409
+as e.g. restoring a child whose parent is still deleted.)
 
 ### Plan edit-lock (ADR-0028)
 

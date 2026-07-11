@@ -249,7 +249,7 @@ See §4 user-flow diagram.
 
 1. **Acquire:** resolve org scope → check `plan:acquire_lock` → under the plan
    advisory lock, read the lock row → if absent/expired/mine, upsert my lease
-   (200/201); if live-and-not-mine, 423 (unless a take-over path below applies).
+   (200); if live-and-not-mine, 423 (unless a take-over path below applies).
 2. **Heartbeat (holder):** conditional single-row `UPDATE … WHERE plan_id AND
 holder_user_id AND expires_at > now()` setting new `heartbeat_at`/`expires_at`;
    rowcount 0 → 423 `PLAN_EDIT_LOCK_LOST`. The response echoes any pending
@@ -421,7 +421,7 @@ sequenceDiagram
   P1->>API: POST /plans/:id/edit-lock
   API->>API: resolveScope + can(plan:acquire_lock)
   API->>DB: (under plan advisory lock) upsert lease → holder=A, expires=now+TTL
-  API-->>P1: 201 { holder: A, expiresAt }
+  API-->>P1: 200 { holder: A, expiresAt }
   loop every 30s
     P1->>API: POST /edit-lock/heartbeat
     API->>DB: UPDATE … WHERE plan_id AND holder=A AND expires>now()
@@ -434,7 +434,7 @@ sequenceDiagram
   P2->>API: POST /edit-lock { takeover:true }
   API->>API: can(plan:override_lock)? immediate : can(plan:request_control) && (grace elapsed || holder inactive)
   API->>DB: (under advisory lock) replace holder → B, clear request
-  API-->>P2: 201 { holder: B }
+  API-->>P2: 200 { holder: B }
   P1->>API: POST /edit-lock/heartbeat
   API->>DB: UPDATE … WHERE holder=A → 0 rows
   API-->>P1: 423 PLAN_EDIT_LOCK_LOST
@@ -461,7 +461,7 @@ sequenceDiagram
   else A ignores; grace elapses (or A already inactive)
     P2->>API: POST /edit-lock { takeover:true }
     API->>DB: (grace elapsed) replace holder → B, clear request, AUDIT
-    API-->>P2: 201 { holder: B }
+    API-->>P2: 200 { holder: B }
   end
 ```
 
@@ -525,14 +525,14 @@ model PlanLock {
 
 New sub-resource under a plan (envelopes per `docs/API.md`):
 
-| Method | Path                                             | Permission                                                  | Returns / errors                                                                                                                                   |
-| ------ | ------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/v1/organizations/:org/plans/:id/edit-lock` | `plan:read`                                                 | 200 `{ data: LockStatus }` (free/held/expired, holder, isMine, requestedBy, canAcquire, canRequest, canTakeOver, canOverride)                      |
-| POST   | `/api/v1/organizations/:org/plans/:id/edit-lock` | `plan:acquire_lock`                                         | 201 `{ data: LockStatus }` · 423 held (with `takeover:true`: needs `plan:override_lock` **or** `plan:request_control` after grace/holder-inactive) |
-| POST   | `…/plans/:id/edit-lock/heartbeat`                | `plan:acquire_lock`                                         | 200 `{ data: LockStatus }` (echoes pending `requestedBy`) · 423 `PLAN_EDIT_LOCK_LOST`                                                              |
-| POST   | `…/plans/:id/edit-lock/request`                  | `plan:request_control`                                      | 200 `{ data: LockStatus }` (records pending request) · 423 if free/mine (nothing to request)                                                       |
-| POST   | `…/plans/:id/edit-lock/handoff`                  | `plan:acquire_lock` (holder)                                | 200 `{ data: LockStatus }` — release to the pending requester · 409 if no pending request                                                          |
-| DELETE | `…/plans/:id/edit-lock`                          | `plan:acquire_lock` (holder) / `plan:override_lock` (force) | 204                                                                                                                                                |
+| Method | Path                                             | Permission                                                  | Returns / errors                                                                                                                                                                                              |
+| ------ | ------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/organizations/:org/plans/:id/edit-lock` | `plan:read`                                                 | 200 `{ data: LockStatus }` (free/held/expired, holder, isMine, requestedBy, canAcquire, canRequest, canTakeOver, canOverride)                                                                                 |
+| POST   | `/api/v1/organizations/:org/plans/:id/edit-lock` | `plan:acquire_lock`                                         | 200 `{ data: LockStatus }` (idempotent upsert of the lease — acquire/renew/take-over) · 423 held (with `takeover:true`: needs `plan:override_lock` **or** `plan:request_control` after grace/holder-inactive) |
+| POST   | `…/plans/:id/edit-lock/heartbeat`                | `plan:acquire_lock`                                         | 200 `{ data: LockStatus }` (echoes pending `requestedBy`) · 423 `PLAN_EDIT_LOCK_LOST`                                                                                                                         |
+| POST   | `…/plans/:id/edit-lock/request`                  | `plan:request_control`                                      | 200 `{ data: LockStatus }` (records pending request; a benign **no-op** when the lock is free/mine — the client reconciles)                                                                                   |
+| POST   | `…/plans/:id/edit-lock/handoff`                  | `plan:acquire_lock` (holder)                                | 200 `{ data: LockStatus }` — release to the pending requester · 409 if no pending request                                                                                                                     |
+| DELETE | `…/plans/:id/edit-lock`                          | `plan:acquire_lock` (holder) / `plan:override_lock` (force) | 204                                                                                                                                                                                                           |
 
 **Gated write endpoints (add 423, keep existing behaviour):** `POST plans/:id/activities`,
 `PATCH/DELETE/POST activities/:aid[/restore]`, `PATCH plans/:id/activities/positions`,

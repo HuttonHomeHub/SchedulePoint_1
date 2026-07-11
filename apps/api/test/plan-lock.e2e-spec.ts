@@ -125,7 +125,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const before = await actor.agent.get(lockUrl(planId)).expect(200);
     expect(before.body.data).toMatchObject({ state: 'FREE', holder: null, canAcquire: true });
 
-    const acquired = await actor.agent.post(lockUrl(planId)).send({}).expect(201);
+    const acquired = await actor.agent.post(lockUrl(planId)).send({}).expect(200);
     expect(acquired.body.data).toMatchObject({ state: 'HELD_BY_ME' });
     expect(acquired.body.data.holder.id).toBe(actor.userId);
     expect(acquired.body.data.expiresAt).toBeTruthy();
@@ -136,7 +136,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const planner = await addMember(orgId, 'planner@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await admin.agent.post(lockUrl(planId)).send({}).expect(201);
+    await admin.agent.post(lockUrl(planId)).send({}).expect(200);
 
     const res = await planner.agent.post(lockUrl(planId)).send({}).expect(423);
     expect(res.body.error).toMatchObject({
@@ -159,11 +159,11 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const planner = await addMember(orgId, 'planner@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await planner.agent.post(lockUrl(planId)).send({}).expect(201);
+    await planner.agent.post(lockUrl(planId)).send({}).expect(200);
     await planner.agent.post(lockUrl(planId, '/heartbeat')).expect(200);
 
     // Admin overrides immediately; the displaced holder's next heartbeat is 423 LOST.
-    await admin.agent.post(lockUrl(planId)).send({ takeover: true }).expect(201);
+    await admin.agent.post(lockUrl(planId)).send({ takeover: true }).expect(200);
     const lost = await planner.agent.post(lockUrl(planId, '/heartbeat')).expect(423);
     expect(lost.body.error).toMatchObject({ details: { reason: 'PLAN_EDIT_LOCK_LOST' } });
   });
@@ -173,12 +173,12 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const planner = await addMember(orgId, 'planner@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await planner.agent.post(lockUrl(planId)).send({}).expect(201);
+    await planner.agent.post(lockUrl(planId)).send({}).expect(200);
     await planner.agent.delete(lockUrl(planId)).expect(204);
 
     const status = await admin.agent.get(lockUrl(planId)).expect(200);
     expect(status.body.data.state).toBe('FREE');
-    await admin.agent.post(lockUrl(planId)).send({}).expect(201);
+    await admin.agent.post(lockUrl(planId)).send({}).expect(200);
   });
 
   it('reclaims an expired lock', async () => {
@@ -186,7 +186,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const planner = await addMember(orgId, 'planner@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await planner.agent.post(lockUrl(planId)).send({}).expect(201);
+    await planner.agent.post(lockUrl(planId)).send({}).expect(200);
     // Backdate the lease past its TTL — it now reads as free/expired.
     await prisma.planLock.update({
       where: { planId },
@@ -195,7 +195,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
 
     const status = await admin.agent.get(lockUrl(planId)).expect(200);
     expect(status.body.data).toMatchObject({ state: 'EXPIRED', canAcquire: true });
-    const acquired = await admin.agent.post(lockUrl(planId)).send({}).expect(201);
+    const acquired = await admin.agent.post(lockUrl(planId)).send({}).expect(200);
     expect(acquired.body.data).toMatchObject({ state: 'HELD_BY_ME' });
     expect(acquired.body.data.holder.id).toBe(admin.userId);
   });
@@ -206,7 +206,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const p2 = await addMember(orgId, 'p2@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await p1.agent.post(lockUrl(planId)).send({}).expect(201);
+    await p1.agent.post(lockUrl(planId)).send({}).expect(200);
 
     // p2 requests control (no transfer yet).
     const requested = await p2.agent.post(lockUrl(planId, '/request')).expect(200);
@@ -221,7 +221,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
       where: { planId },
       data: { requestedAt: new Date(Date.now() - GRACE_MS - 1_000) },
     });
-    const takenOver = await p2.agent.post(lockUrl(planId)).send({ takeover: true }).expect(201);
+    const takenOver = await p2.agent.post(lockUrl(planId)).send({ takeover: true }).expect(200);
     expect(takenOver.body.data).toMatchObject({ state: 'HELD_BY_ME' });
     expect(takenOver.body.data.holder.id).toBe(p2.userId);
 
@@ -235,7 +235,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const p2 = await addMember(orgId, 'p2@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await p1.agent.post(lockUrl(planId)).send({}).expect(201);
+    await p1.agent.post(lockUrl(planId)).send({}).expect(200);
     // p1 goes quiet: last heartbeat older than the inactive threshold (lease still live).
     await prisma.planLock.update({
       where: { planId },
@@ -244,7 +244,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
 
     const status = await p2.agent.get(lockUrl(planId)).expect(200);
     expect(status.body.data).toMatchObject({ state: 'HELD_BY_OTHER', canTakeOver: true });
-    await p2.agent.post(lockUrl(planId)).send({ takeover: true }).expect(201);
+    await p2.agent.post(lockUrl(planId)).send({ takeover: true }).expect(200);
   });
 
   it('holder hand-off transfers the pen directly to the pending requester', async () => {
@@ -253,7 +253,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const p2 = await addMember(orgId, 'p2@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await p1.agent.post(lockUrl(planId)).send({}).expect(201);
+    await p1.agent.post(lockUrl(planId)).send({}).expect(200);
     await p2.agent.post(lockUrl(planId, '/request')).expect(200);
 
     // p1 sees the request on their next heartbeat and hands over.
@@ -271,7 +271,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
   it('409s a hand-off when no one has requested control', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor);
-    await actor.agent.post(lockUrl(planId)).send({}).expect(201);
+    await actor.agent.post(lockUrl(planId)).send({}).expect(200);
     const res = await actor.agent.post(lockUrl(planId, '/handoff')).expect(409);
     expect(res.body.error.code).toBe('CONFLICT');
   });
@@ -281,10 +281,10 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     const planner = await addMember(orgId, 'planner@example.com', 'PLANNER');
     const planId = await makePlan(admin);
 
-    await planner.agent.post(lockUrl(planId)).send({}).expect(201);
+    await planner.agent.post(lockUrl(planId)).send({}).expect(200);
     const status = await admin.agent.get(lockUrl(planId)).expect(200);
     expect(status.body.data).toMatchObject({ canOverride: true, canTakeOver: true });
-    const takenOver = await admin.agent.post(lockUrl(planId)).send({ takeover: true }).expect(201);
+    const takenOver = await admin.agent.post(lockUrl(planId)).send({ takeover: true }).expect(200);
     expect(takenOver.body.data.holder.id).toBe(admin.userId);
   });
 
@@ -299,7 +299,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     // …but they can still READ the status (plan:read).
     await viewer.agent.get(lockUrl(planId)).expect(200);
     // …and cannot request control.
-    await admin.agent.post(lockUrl(planId)).send({}).expect(201);
+    await admin.agent.post(lockUrl(planId)).send({}).expect(200);
     await contributor.agent.post(lockUrl(planId, '/request')).expect(403);
   });
 

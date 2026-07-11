@@ -291,7 +291,7 @@ export class PlanEditLockService {
     if (state === 'HELD_BY_ME') return;
     const holder =
       row && state === 'HELD_BY_OTHER'
-        ? this.actor(await this.repository.findActors([row.holderUserId]), row.holderUserId)
+        ? this.actor(await this.repository.findActors([row.holderUserId], tx), row.holderUserId)
         : null;
     throw new LockedError('You are not the editor of this plan. Start editing to make changes.', {
       reason: 'PLAN_EDIT_LOCK_REQUIRED',
