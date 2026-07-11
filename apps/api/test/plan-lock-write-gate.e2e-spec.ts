@@ -130,7 +130,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock write-gate (e2e, enforced)', () =>
     actor.agent
       .post(`${base(planId)}/edit-lock`)
       .send({})
-      .expect(201);
+      .expect(200);
 
   /** Create an activity as the current pen-holder. Returns { id, version }. */
   async function makeActivity(actor: Actor, planId: string, name: string, durationDays = 1) {
