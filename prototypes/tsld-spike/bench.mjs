@@ -25,19 +25,25 @@ const require = createRequire(join(here, '../../apps/web/'));
 const { chromium } = require('@playwright/test');
 
 // Serve the harness over HTTP — Chromium blocks ES-module imports over file:// (CORS).
-const server = createServer(async (req, res) => {
+// The three assets are read once at startup from a fixed allow-list, then served from
+// memory: no request-derived path ever reaches the filesystem, so a crafted URL cannot
+// traverse out of this directory, and the request handler does no I/O.
+const ASSETS = new Map(
+  await Promise.all(
+    ['index.html', 'scene.js', 'renderer.js'].map(async (name) => {
+      const type = name.endsWith('.js') ? 'text/javascript' : 'text/html';
+      return [name, { body: await readFile(join(here, name)), type }];
+    }),
+  ),
+);
+const server = createServer((req, res) => {
   const name = (req.url ?? '/').split('?')[0].replace(/^\/+/, '') || 'index.html';
-  try {
-    const body = await readFile(join(here, name));
-    const type = name.endsWith('.js')
-      ? 'text/javascript'
-      : name.endsWith('.html')
-        ? 'text/html'
-        : 'application/octet-stream';
-    res.writeHead(200, { 'content-type': type }).end(body);
-  } catch {
+  const asset = ASSETS.get(name);
+  if (!asset) {
     res.writeHead(404).end('not found');
+    return;
   }
+  res.writeHead(200, { 'content-type': asset.type }).end(asset.body);
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
