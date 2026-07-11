@@ -35,7 +35,7 @@ export function EditConflictBanner({
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss"
-        className="focus-visible:ring-ring rounded-md p-1 hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
+        className="focus-visible:ring-ring rounded-md p-2 hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
       >
         <X aria-hidden="true" className="size-4" />
       </button>

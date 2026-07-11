@@ -18,7 +18,12 @@ import { DependencyEditor, usePlanDependencies } from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { RecalculateButton, ScheduleSummaryStrip, useRecalculate } from '@/features/schedule';
-import { addCalendarDays, TsldPanel, type TsldCreateInput } from '@/features/tsld';
+import {
+  addCalendarDays,
+  TsldPanel,
+  type TsldCreateInput,
+  type TsldCreateOutcome,
+} from '@/features/tsld';
 import {
   canCalculateSchedule,
   canManageHierarchy,
@@ -69,9 +74,12 @@ export function PlanDetailScreen(): React.ReactElement {
   // with an SNET constraint, then the authoritative recalc places it.
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
-  const onTsldCreate = async (input: TsldCreateInput): Promise<void> => {
+  const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
     const plannedStart = plan.data?.plannedStart;
-    if (!plannedStart) return;
+    if (!plannedStart) return { recalcConflict: null };
+    // The create must land first (this throw keeps the popover open with the error). Only
+    // then recalc — a recalc failure is non-fatal: the row persisted, so we report the
+    // conflict without re-prompting (never a second POST). The next recalc reconciles dates.
     await createPlacedActivity.mutateAsync({
       name: input.name,
       type: 'TASK',
@@ -80,7 +88,15 @@ export function PlanDetailScreen(): React.ReactElement {
       constraintType: 'SNET',
       constraintDate: addCalendarDays(plannedStart, input.startDay),
     });
-    await recalculate.mutateAsync();
+    try {
+      await recalculate.mutateAsync();
+      return { recalcConflict: null };
+    } catch {
+      return {
+        recalcConflict:
+          'Activity added, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
+      };
+    }
   };
 
   if (plan.isPending) {
@@ -188,7 +204,7 @@ export function PlanDetailScreen(): React.ReactElement {
         <h2 className="text-lg font-medium">Logic diagram</h2>
         <p className="text-muted-foreground mt-1 text-sm">
           The Time-Scaled Logic Diagram: activities plotted on the timeline and connected by their
-          logic. Editing on the canvas arrives in a later release.
+          logic.
         </p>
         <div className="mt-3">
           <TsldPanel
@@ -207,7 +223,7 @@ export function PlanDetailScreen(): React.ReactElement {
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
         The activities that make up this plan. Edit their details here; the logic diagram above
-        plots them on the timeline. On-canvas editing arrives in a later release.
+        plots them on the timeline.
       </p>
       {variance.data ? (
         <div className="mt-2">

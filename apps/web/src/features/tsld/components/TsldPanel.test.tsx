@@ -74,7 +74,7 @@ describe('TsldPanel', () => {
         dependencies={NO_DEPS}
         dataDate="2026-01-01"
         canEdit
-        onCreate={async () => {}}
+        onCreate={() => Promise.resolve({ recalcConflict: null })}
       />,
     );
     // VITE_TSLD_EDITING is unset in tests → editing gated off → M1 surface (plain Fit only).

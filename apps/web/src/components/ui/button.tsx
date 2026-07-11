@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
+import { forwardRef } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -27,21 +28,20 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
-/** The primary interactive control. Variants/sizes via CVA; tokens only. */
-export function Button({
-  className,
-  variant,
-  size,
-  type,
-  ...props
-}: ButtonProps): React.ReactElement {
+/** The primary interactive control. Variants/sizes via CVA; tokens only. Forwards its ref
+ * so callers can focus it (e.g. returning focus after a popover closes). */
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { className, variant, size, type, ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type ?? 'button'}
       className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     />
   );
-}
+});
 
 export { buttonVariants };

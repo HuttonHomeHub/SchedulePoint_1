@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,8 @@ export interface CreateActivityPopoverProps {
  * The inline name-capture popover for create-by-drag (M2 Slice 2.1, OQ1). It appears at the
  * dropped ghost so no unnamed junk row is ever persisted: `Enter` (submit) commits the name
  * and fires the create + recalc, `Esc` cancels with no write. While saving it disables and
- * echoes "Saving…"; a server error (validation/409) shows inline without losing the typed name.
+ * echoes "Saving…"; a server error shows inline, is linked to the field via `aria-describedby`,
+ * and moves focus back to the input so it can be corrected without hunting for it.
  */
 export function CreateActivityPopover({
   x,
@@ -29,13 +30,19 @@ export function CreateActivityPopover({
 }: CreateActivityPopoverProps): React.ReactElement {
   const [name, setName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
   const trimmed = name.trim();
 
-  // The popover opens on an explicit drop gesture; focus its sole input so typing the name
-  // is immediate (done via a ref effect rather than autoFocus, per the a11y lint rule).
+  // The popover opens on an explicit drop gesture; focus its sole input so typing the name is
+  // immediate (done via a ref effect rather than autoFocus, per the a11y lint rule).
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // On a submit failure, bring focus back to the field that needs correcting (WCAG 3.3.1).
+  useEffect(() => {
+    if (error) inputRef.current?.focus();
+  }, [error]);
 
   return (
     <form
@@ -59,12 +66,14 @@ export function CreateActivityPopover({
         }}
         placeholder="Activity name"
         aria-label="New activity name"
+        aria-required="true"
         aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         disabled={saving}
         className="h-9"
       />
       {error ? (
-        <p role="alert" className="text-destructive-text text-xs">
+        <p id={errorId} role="alert" className="text-destructive-text text-xs">
           {error}
         </p>
       ) : null}

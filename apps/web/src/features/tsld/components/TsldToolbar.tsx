@@ -9,6 +9,8 @@ export interface TsldToolbarProps {
   onModeChange: (mode: EditMode) => void;
   onFit: () => void;
   fitDisabled?: boolean;
+  /** Focus target for returning focus after the create popover closes. */
+  addActivityRef?: React.Ref<HTMLButtonElement>;
 }
 
 /**
@@ -22,6 +24,7 @@ export function TsldToolbar({
   onModeChange,
   onFit,
   fitDisabled = false,
+  addActivityRef,
 }: TsldToolbarProps): React.ReactElement {
   return (
     <div className="flex items-center gap-2">
@@ -36,6 +39,7 @@ export function TsldToolbar({
           Select
         </Button>
         <Button
+          ref={addActivityRef}
           variant={mode === 'add-activity' ? 'default' : 'outline'}
           size="sm"
           aria-pressed={mode === 'add-activity'}

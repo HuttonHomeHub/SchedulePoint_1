@@ -1,5 +1,5 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent, EditMode } from '../interaction/gesture-machine';
@@ -79,6 +79,17 @@ export interface TsldCreateInput {
   laneIndex: number;
 }
 
+/**
+ * The outcome of a create. It **resolves iff the activity was persisted** — so the panel
+ * closes the popover and never re-POSTs. `recalcConflict` carries a non-fatal message when the
+ * row was created but the follow-up recalc was refused (e.g. the plan lock was held): the row
+ * stays, and the message is surfaced via the conflict banner, not the create popover. A create
+ * failure (validation/duplicate) rejects, keeping the popover open with the inline error.
+ */
+export interface TsldCreateOutcome {
+  recalcConflict: string | null;
+}
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
@@ -87,8 +98,9 @@ export interface TsldPanelProps {
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
   canEdit?: boolean;
   /** Route-composed create handler (owns the mutation + recalc, ADR-0026 D8). Its presence + the
-   * flag + `canEdit` enable on-canvas editing. Rejects to surface a failure to the popover. */
-  onCreate?: (input: TsldCreateInput) => Promise<void>;
+   * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
+   * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
+  onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
 }
 
 interface PendingCreate {
@@ -126,6 +138,9 @@ export function TsldPanel({
   const [mode, setMode] = useState<EditMode>('select');
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
+  // Focus returns here when the create popover closes, so keyboard users aren't dropped to
+  // <body> (they're placed back on the tool to draw again).
+  const addActivityRef = useRef<HTMLButtonElement>(null);
 
   const renderActivities = useMemo(() => toRenderActivities(activities), [activities]);
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
@@ -155,7 +170,15 @@ export function TsldPanel({
     if (target) select(target.id);
   };
 
+  const closeCreate = (): void => {
+    setPendingCreate(null);
+    addActivityRef.current?.focus();
+  };
+
   const onIntent = (intent: EditIntent, anchor: Point): void => {
+    // Ignore a new gesture while a create popover is already open, so an in-progress name
+    // (and its ghost) is never silently discarded.
+    if (pendingCreate) return;
     if (intent.kind === 'create') {
       setConflict(null);
       setPendingCreate({ ...intent, anchor, saving: false, error: null });
@@ -166,10 +189,13 @@ export function TsldPanel({
     if (!pendingCreate || !onCreate) return;
     const { startDay, endDay, laneIndex } = pendingCreate;
     setPendingCreate((p) => (p ? { ...p, saving: true, error: null } : p));
+    // onCreate resolves iff the row persisted → close and never re-POST. A recalc conflict is
+    // non-fatal (row kept) and shown in the banner; only a create failure keeps the popover.
     void onCreate({ name, startDay, endDay, laneIndex })
-      .then(() => {
-        setPendingCreate(null);
+      .then((outcome) => {
+        closeCreate();
         announce(`Activity “${name}” added.`);
+        if (outcome.recalcConflict) setConflict(outcome.recalcConflict);
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Couldn’t add the activity.';
@@ -201,6 +227,7 @@ export function TsldPanel({
             onModeChange={setMode}
             onFit={() => setFitSignal((n) => n + 1)}
             fitDisabled={!showDiagram}
+            addActivityRef={addActivityRef}
           />
         ) : (
           <Button
@@ -249,6 +276,7 @@ export function TsldPanel({
               editing={editingEnabled}
               mode={mode}
               onIntent={onIntent}
+              onExitAddMode={() => setMode('select')}
               pending={
                 pendingCreate
                   ? {
@@ -267,7 +295,7 @@ export function TsldPanel({
                 saving={pendingCreate.saving}
                 error={pendingCreate.error}
                 onCommit={commitCreate}
-                onCancel={() => setPendingCreate(null)}
+                onCancel={closeCreate}
               />
             ) : null}
 

@@ -42,7 +42,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 
 const NO_DEPS: DependencySummary[] = [];
 
-function renderEditable(onCreate = vi.fn().mockResolvedValue(undefined)) {
+function renderEditable(onCreate = vi.fn().mockResolvedValue({ recalcConflict: null })) {
   const utils = render(
     <TsldPanel
       activities={[activity()]}
@@ -84,6 +84,41 @@ describe('TsldPanel editing (M2, flag on)', () => {
     await waitFor(() =>
       expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Pour slab' })),
     );
+  });
+
+  it('on a recalc conflict keeps the created row: closes the popover and shows the banner', async () => {
+    const onCreate = vi.fn().mockResolvedValue({ recalcConflict: 'Recalculating elsewhere.' });
+    const { canvas } = renderEditable(onCreate);
+    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.change(await screen.findByLabelText('New activity name'), {
+      target: { value: 'Pour slab' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    // Popover closes (row persisted → never re-POSTs) and the conflict shows in the banner.
+    await waitFor(() =>
+      expect(screen.queryByLabelText('New activity name')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Recalculating elsewhere.');
+    expect(onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('on a create failure keeps the popover open with the inline error (no re-POST yet)', async () => {
+    const onCreate = vi.fn().mockRejectedValue(new Error('That name is taken'));
+    const { canvas } = renderEditable(onCreate);
+    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.change(await screen.findByLabelText('New activity name'), {
+      target: { value: 'Excavate' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText('That name is taken')).toBeInTheDocument();
+    expect(screen.getByLabelText('New activity name')).toBeInTheDocument();
+    expect(onCreate).toHaveBeenCalledTimes(1);
   });
 
   it('cancels the create popover without calling onCreate', async () => {

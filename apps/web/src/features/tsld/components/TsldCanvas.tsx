@@ -46,14 +46,29 @@ export interface TsldCanvasProps {
   editing?: boolean;
   /** The active editing tool (only meaningful when `editing`). */
   mode?: EditMode;
-  /** Called with a committed edit + the drop point (screen, container-relative). */
+  /** Called with a committed edit + the (container-clamped) anchor point for its popover. */
   onIntent?: (intent: EditIntent, anchor: Point) => void;
-  /** A dropped create awaiting its name/commit — drawn as a pending ghost. */
+  /** Called when Esc is pressed while idle in add-activity mode (revert to Select). */
+  onExitAddMode?: () => void;
+  /** A dropped create awaiting its name/commit — drawn as a pending ghost; suspends gestures. */
   pending?: PendingGhost | null;
 }
 
+/** Approximate popover footprint (w-56 + fields) used to keep it inside the canvas. */
+const POPOVER_W = 224;
+const POPOVER_H = 140;
+const POPOVER_MARGIN = 8;
+
 function getDpr(): number {
   return Math.min(globalThis.devicePixelRatio || 1, 2);
+}
+
+/** Keep the create popover fully inside the canvas by clamping its anchor to the surface. */
+function clampAnchor(point: Point, size: Size): Point {
+  return {
+    x: Math.max(POPOVER_MARGIN, Math.min(point.x, size.width - POPOVER_W - POPOVER_MARGIN)),
+    y: Math.max(POPOVER_MARGIN, Math.min(point.y, size.height - POPOVER_H - POPOVER_MARGIN)),
+  };
 }
 
 /** The live ghost rect for the in-flight gesture, or null when idle. */
@@ -88,6 +103,7 @@ export function TsldCanvas({
   editing = false,
   mode = 'select',
   onIntent,
+  onExitAddMode,
   pending = null,
 }: TsldCanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -104,6 +120,13 @@ export function TsldCanvas({
   const gestureActiveRef = useRef(false);
   const interactionDirtyRef = useRef(true);
   const pendingRef = useRef<PendingGhost | null>(pending);
+  // Read by the window key listener (set up once), so it sees the current mode/handler.
+  const modeRef = useRef(mode);
+  const exitAddModeRef = useRef(onExitAddMode);
+  useEffect(() => {
+    modeRef.current = mode;
+    exitAddModeRef.current = onExitAddMode;
+  });
 
   const sceneRef = useRef<TsldScene>({ activities, edges, dataDate, selectedId });
 
@@ -214,9 +237,11 @@ export function TsldCanvas({
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
-    // Esc cancels an in-flight edit gesture (no intent emitted).
+    // Esc cancels an in-flight edit gesture; if none is active, it exits add-activity mode
+    // back to Select (unless a create popover is open — that owns its own Esc).
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && gestureActiveRef.current) {
+      if (e.key !== 'Escape') return;
+      if (gestureActiveRef.current) {
         gestureActiveRef.current = false;
         gestureRef.current = reduce(
           gestureRef.current,
@@ -224,6 +249,8 @@ export function TsldCanvas({
           { mode: 'select', view: viewRef.current, dataDate: sceneRef.current.dataDate },
         ).state;
         interactionDirtyRef.current = true;
+      } else if (editing && modeRef.current === 'add-activity' && !pendingRef.current) {
+        exitAddModeRef.current?.();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -255,6 +282,9 @@ export function TsldCanvas({
             : 'cursor-grab active:cursor-grabbing'
         }`}
         onPointerDown={(e) => {
+          // A create popover is open — the canvas is inert until it commits or cancels, so an
+          // in-progress name (and its ghost) is never lost to a stray drag.
+          if (pending) return;
           drag.current = { x: e.clientX, y: e.clientY, moved: false };
           canvasRef.current?.setPointerCapture?.(e.pointerId);
           if (editing) {
@@ -296,16 +326,21 @@ export function TsldCanvas({
         onPointerUp={(e) => {
           if (gestureActiveRef.current) {
             gestureActiveRef.current = false;
-            const anchor = localPoint(e);
+            drag.current = null;
+            const p = localPoint(e);
+            const { width, height } = sizeRef.current;
+            // Releasing outside the canvas cancels the gesture (US-4) — no intent. Skip the
+            // check until the surface has a real measured size (avoids a degenerate 1×1).
+            const measured = width > 1 && height > 1;
+            const outOfBounds = measured && (p.x < 0 || p.y < 0 || p.x > width || p.y > height);
             const { state, intent } = reduce(
               gestureRef.current,
-              { type: 'pointerUp' },
+              { type: outOfBounds ? 'escape' : 'pointerUp' },
               machineCtx(),
             );
             gestureRef.current = state;
             interactionDirtyRef.current = true;
-            drag.current = null;
-            if (intent) onIntent?.(intent, anchor);
+            if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
             return;
           }
           const wasDrag = drag.current?.moved ?? false;
@@ -313,6 +348,13 @@ export function TsldCanvas({
           if (wasDrag) return;
           const p = localPoint(e);
           onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));
+        }}
+        onPointerCancel={() => {
+          if (!gestureActiveRef.current) return;
+          gestureActiveRef.current = false;
+          drag.current = null;
+          gestureRef.current = reduce(gestureRef.current, { type: 'escape' }, machineCtx()).state;
+          interactionDirtyRef.current = true;
         }}
       />
       {editing ? (
