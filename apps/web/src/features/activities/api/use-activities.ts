@@ -170,6 +170,9 @@ export function useBatchPositions(orgSlug: string, planId: string) {
         `/organizations/${orgSlug}/plans/${planId}/activities/positions`,
         { method: 'PATCH', body: JSON.stringify(input) },
       ),
+    // Activities list only — deliberately NOT per-row `detail` (unlike useRepositionLane): a bulk
+    // reorder touches many rows and no open detail view renders laneIndex, so an N-key invalidation
+    // would be waste. No variance/summary either — lane is layout, dates don't move.
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
   });

@@ -477,7 +477,7 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('auto-arranged'));
   });
 
-  it('when lanes are already packed, confirming moves nothing and says so (no batch call)', async () => {
+  it('when lanes are already packed, the toolbar action says so immediately (no dialog, no batch call)', async () => {
     const onAutoArrange = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     render(
       <TsldPanel
@@ -490,10 +490,11 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Auto-arrange' }));
+    // Nothing to pack → announce immediately, never open the confirm dialog or call the batch.
     await waitFor(() =>
       expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('already arranged')),
     );
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(onAutoArrange).not.toHaveBeenCalled();
   });
 });

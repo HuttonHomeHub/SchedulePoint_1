@@ -212,7 +212,9 @@ export function TsldPanel({
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
   const [pendingReposition, setPendingReposition] = useState<PendingGhost | null>(null);
   // Auto-arrange confirm dialog + in-flight state (a bulk, no-undo reorder — §5 of the M4 design).
+  // The pending lane changes are computed when the dialog opens, so confirm applies exactly them.
   const [confirmArrange, setConfirmArrange] = useState(false);
+  const [arrangeChanges, setArrangeChanges] = useState<{ id: string; laneIndex: number }[]>([]);
   const [arranging, setArranging] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
@@ -286,11 +288,12 @@ export function TsldPanel({
     addActivityRef.current?.focus();
   };
 
-  // Auto-arrange (M4 4.3): pack the drawn (dated) activities into the fewest non-overlapping lanes
-  // and persist the minimal set of lane changes through the batch endpoint. Pure `packLanes`
-  // computes the moves; the route owns the write. Undated activities have no x-span → keep their lane.
-  const runAutoArrange = (): void => {
-    if (!onAutoArrange || dataDate === null) return;
+  // Auto-arrange (M4 4.3): pack the drawn (dated) activities into the fewest non-overlapping lanes.
+  // Pure `packLanes` computes the minimal set of moves; undated activities have no x-span → keep
+  // their lane. (Returns [] when the plan isn't schedulable — a dead case, since the toolbar only
+  // renders when editing is enabled, which already requires a data date.)
+  const computeArrangeChanges = (): { id: string; laneIndex: number }[] => {
+    if (dataDate === null) return [];
     const packItems = activities.flatMap((a) =>
       a.earlyStart === null
         ? []
@@ -303,21 +306,35 @@ export function TsldPanel({
             },
           ],
     );
-    const changes = packLanes(packItems);
+    return packLanes(packItems);
+  };
+
+  // Toolbar click: compute the pack up front so an already-tidy diagram reports "nothing to move"
+  // immediately (no pointless confirm round-trip, and no dialog that could dead-end) — only open
+  // the confirm when there is actually something to reorder.
+  const openAutoArrange = (): void => {
+    if (!onAutoArrange) return;
+    const changes = computeArrangeChanges();
     if (changes.length === 0) {
-      setConfirmArrange(false);
       announce('Lanes are already arranged; nothing to move.');
       return;
     }
+    setArrangeChanges(changes);
+    setConfirmArrange(true);
+  };
+
+  // Confirm: persist exactly the changes shown to the user (the route owns the batch write).
+  const runAutoArrange = (): void => {
+    if (!onAutoArrange || arrangeChanges.length === 0) return;
     setConflict(null);
     setArranging(true);
-    void onAutoArrange(changes)
+    void onAutoArrange(arrangeChanges)
       .then((outcome) => {
         setArranging(false);
         setConfirmArrange(false);
         if (outcome.conflict) setConflict(outcome.conflict);
         if (outcome.applied) {
-          const n = changes.length;
+          const n = arrangeChanges.length;
           announce(`Lanes auto-arranged; ${n} ${n === 1 ? 'activity' : 'activities'} moved.`);
         }
       })
@@ -445,7 +462,7 @@ export function TsldPanel({
             onModeChange={setMode}
             onFit={() => setFitSignal((n) => n + 1)}
             fitDisabled={!showDiagram}
-            {...(onAutoArrange ? { onAutoArrange: () => setConfirmArrange(true) } : {})}
+            {...(onAutoArrange ? { onAutoArrange: openAutoArrange } : {})}
             addActivityRef={addActivityRef}
           />
         ) : (
