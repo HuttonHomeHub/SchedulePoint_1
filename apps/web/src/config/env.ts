@@ -29,5 +29,11 @@ function flag(value: string | undefined): boolean {
  * hardened (interim posture: optimistic-lock version-409 conflict banner, see
  * docs/design/tsld-m2-editing.md). With the flag off the diagram is the M1
  * read-only surface, byte-for-byte.
+ *
+ * PRE-ENABLEMENT GATE (M5 5.2, a11y sign-off): before setting VITE_TSLD_EDITING
+ * true outside dev/test, manually confirm in Chrome, Firefox, Safari and Edge
+ * that the `Alt+←/→` time-nudge does NOT trigger native Back/Forward history
+ * navigation (preventDefault is the mitigation, but browser-chrome accelerators
+ * aren't guaranteed suppressible everywhere). Tracked in docs/TECH_DEBT.md #25.
  */
 export const TSLD_EDITING_ENABLED = flag(import.meta.env.VITE_TSLD_EDITING);
