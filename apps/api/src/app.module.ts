@@ -24,6 +24,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MeModule } from './modules/me/me.module';
 import { MembersModule } from './modules/members/members.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { PlanLockModule } from './modules/plan-lock/plan-lock.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
@@ -106,6 +107,7 @@ function isPrettyLoggingAvailable(): boolean {
     ScheduleModule,
     CalendarsModule,
     BaselinesModule,
+    PlanLockModule,
     RecycleBinModule,
   ],
   providers: [

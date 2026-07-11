@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -65,6 +66,7 @@ export class ActivitiesController {
   @ApiOkResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'Stale version, or a name/code collision within the plan.' })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -100,6 +102,7 @@ export class ActivitiesController {
   @ApiOperation({ summary: 'Delete an activity (soft).' })
   @ApiNoContentResponse()
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -114,6 +117,7 @@ export class ActivitiesController {
   @ApiOkResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'The parent plan is still deleted (restore it first).' })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

@@ -13,6 +13,7 @@ import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ActivityRepository } from '../activities/activity.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
 
 import { DependenciesService } from './dependencies.service';
@@ -157,6 +158,7 @@ describe('DependenciesService', () => {
     };
     lifecycle = { cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }) };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new DependenciesService(
       organizations as unknown as OrganizationsService,
@@ -164,6 +166,7 @@ describe('DependenciesService', () => {
       activities as unknown as ActivityRepository,
       deps as unknown as DependencyRepository,
       lifecycle as unknown as HierarchyLifecycleService,
+      editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       logger,
     );

@@ -384,3 +384,41 @@ D7 fixed (parallel DOM over an aria-hidden canvas, canvas ring, `useAnnounce`) i
 and the three-tier disclosure are pure reads (ship flag-off in 5.1); the edit keymap + the
 coalesce-and-serialize nudge policy harden in 5.2. `accessibility-reviewer` leads the WCAG 2.2 AA
 sign-off (plan §M5).
+
+---
+
+## Plan edit-lock — web "pen" layer (edit-lock M2, 2026-07-11)
+
+**Context.** M1 shipped the server edit-lock (ADR-0028): the lease endpoints, the 423 `LockedError`
+write-gate (inert behind `PLAN_EDIT_LOCK_ENFORCED`), and the peer hand-off model. M2 is its
+front-end realisation — the `features/plan-lock/` "pen" that acquires/holds the lock and gates the
+on-canvas schedule editing. Three front-end choices needed settling; all confirmed against the M1
+staged-rollout discipline (design: `docs/design/plan-edit-lock-web.md`).
+
+**Decisions.**
+
+- **The pen ships behind `VITE_PLAN_EDIT_LOCK` (default off)** — the mirror of the backend's
+  `PLAN_EDIT_LOCK_ENFORCED`. Gating the already-shipped, flag-on activities table on `holdsPen` is a
+  live behaviour change, so it must land inert. Rollout **ordering** (ADR-0028 §9): enable the FE
+  flag first (users take the pen — harmless while the API still accepts non-holder writes), then flip
+  enforcement. Off ⇒ `penManaged: false`: no polling, no heartbeat, no banner, `canEditSchedule ===
+canWrite` — today's behaviour byte-for-byte.
+- **Release-on-unload uses a keepalive `fetch` DELETE on `pagehide`**, not `navigator.sendBeacon`
+  (which is POST-only, whereas release is a DELETE — using it would force a new POST-release alias
+  into the M1 API). It fires only while holding; the 120 s TTL is the correctness backstop, so a
+  missed beacon just costs the next Planner up to one TTL.
+- **A 423 (`LOCKED`) is a lock-state event routed to `EditLockBanner`'s lost-control state**
+  (invalidate the lock query → drop to read-only + distinct row-10 copy), kept separate from the 409
+  `EditConflictBanner` ("changed elsewhere — refresh"). One surface per concern.
+
+Capability flags (`canAcquire/canRequest/canTakeOver/canOverride`) are server-resolved — the client
+renders per the flags and never re-derives lock policy. **No new ADR** (ADR-0028 governs the model,
+the 423 vocabulary, the staged rollout, and polling); this note records the FE realisation.
+
+**Addendum (M2 build).** The full ten-row banner (peer request / hand-off / take-over / admin
+override) shipped **in M2**, not deferred to M3 as the design doc first scoped. The server
+endpoints + hooks already exist and the capability flags are live for any Org Admin / post-grace
+peer today, so a partial banner would have shown dead affordances; the component + a11y coverage
+landed with the controls. What remains M3 is only the multi-actor Playwright hand-off journey
+(TECH_DEBT #27). The row-6 grace countdown is an aria-hidden advisory; per-action announcements use
+the banner's own `role="status"` live region as the single source (no duplicate `useAnnounce`).

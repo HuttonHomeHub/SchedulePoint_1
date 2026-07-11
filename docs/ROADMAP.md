@@ -47,8 +47,11 @@ Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
 - **The TSLD graphical canvas** — the flagship primary editing surface (design-first:
   Canvas 2D vs WebGL is an ADR; layout/lane persistence). Large, multi-milestone.
 - **Gantt view** — the secondary tabular projection of the same model.
-- **Plan edit-lock** (single-editor hand-off), **undo/redo**, **export** (PDF/CSV),
-  and **resources** (library + assignments) — all Must/Should-have per the brief.
+- **Plan edit-lock** (single-editor hand-off) — **delivered** (ADR-0028): the server
+  lease + 423 write-gate and the web "pen" ship behind `PLAN_EDIT_LOCK_ENFORCED` /
+  `VITE_PLAN_EDIT_LOCK` (staged-off), unblocking on-canvas editing enablement.
+- **Undo/redo**, **export** (PDF/CSV), and **resources** (library + assignments) —
+  all Must/Should-have per the brief.
 
 ## Guiding constraints
 

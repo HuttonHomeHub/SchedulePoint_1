@@ -64,6 +64,14 @@ export const scheduleKeys = {
     [...scheduleKeys.all(orgSlug), 'plan', planId, 'summary'] as const,
 };
 
+export const planLockKeys = {
+  all: (orgSlug: string) => ['plan-lock', orgSlug] as const,
+  // One key per plan — the edit-lock is 1:1 with a plan (ADR-0028). Acquire /
+  // release / heartbeat / request / handoff / take-over all invalidate this key.
+  status: (orgSlug: string, planId: string) =>
+    [...planLockKeys.all(orgSlug), 'plan', planId] as const,
+};
+
 export const baselineKeys = {
   all: (orgSlug: string) => ['baselines', orgSlug] as const,
   listByPlan: (orgSlug: string, planId: string) =>

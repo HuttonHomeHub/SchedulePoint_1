@@ -42,3 +42,15 @@ export class ValidationError extends DomainError {
 export class GoneError extends DomainError {
   readonly code = 'GONE';
 }
+
+/**
+ * The action requires holding the plan edit-lock (the "pen") and the caller does
+ * not, or the caller's lease was taken over / expired (→ 423 Locked). Distinct
+ * from {@link ConflictError} (409): a 409 is a lost-update / uniqueness clash on a
+ * specific row; a 423 is a coordination-layer refusal — someone else holds the
+ * single-writer lock. See ADR-0028. The specific condition is carried in `details`
+ * via a machine-readable `reason` (see `@repo/types` PlanEditLockReason).
+ */
+export class LockedError extends DomainError {
+  readonly code = 'LOCKED';
+}

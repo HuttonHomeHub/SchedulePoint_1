@@ -17,6 +17,7 @@ import {
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import { ActivityRepository, type ActivityPatch } from './activity.repository';
@@ -62,6 +63,7 @@ export class ActivitiesService {
     private readonly plans: PlanRepository,
     private readonly activities: ActivityRepository,
     private readonly lifecycle: HierarchyLifecycleService,
+    private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
@@ -107,6 +109,8 @@ export class ActivitiesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:create', organization.id);
     const plan = await this.loadActivePlan(planId, organization.id);
+    // Structural write — the caller must hold the plan edit-lock (ADR-0028), 423 otherwise.
+    await this.editLock.assertHoldsPen(principal, plan.id, organization.id);
 
     const type = dto.type ?? 'TASK';
     // A milestone is a point in time: force its duration to 0 defensively, even
@@ -156,6 +160,7 @@ export class ActivitiesService {
 
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
 
     // A constraint's type and date move together. The DTO's cross-field validator
     // can't see this when a client OMITS one side and sends the other as `null`
@@ -224,6 +229,7 @@ export class ActivitiesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
+    await this.editLock.assertHoldsPen(principal, planId, organization.id);
 
     const ids = dto.positions.map((p) => p.id);
     if (new Set(ids).size !== ids.length) {
@@ -348,9 +354,9 @@ export class ActivitiesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:delete', organization.id);
 
-    if (!(await this.activities.findActiveByIdInOrg(activityId, organization.id))) {
-      throw new NotFoundError('Activity not found.');
-    }
+    const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
+    if (!existing) throw new NotFoundError('Activity not found.');
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
 
     await this.prisma.$transaction((tx) =>
       this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId),
@@ -367,6 +373,7 @@ export class ActivitiesService {
 
     const existing = await this.activities.findByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
     if (!existing.deletedAt) return existing; // already active — restore is a no-op
 
     // The lifecycle enforces the top-down invariant: restoring an activity whose

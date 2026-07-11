@@ -509,4 +509,82 @@ export interface PlanVarianceSummary {
   removedCount: number;
 }
 
+/**
+ * Plan edit-lock (ADR-0028) — the single-editor "pen". A plan is either free
+ * (no active lease) or held by one user; `state` discriminates. The two
+ * concurrency layers below it (optimistic `version` 409, plan advisory lock) are
+ * unchanged — this is the human-facing coordination layer.
+ */
+export type PlanEditLockState =
+  /** No active lease — the plan is editable by any Planner (`Start editing`). */
+  | 'FREE'
+  /** A live lease held by the caller (this user, possibly across tabs). */
+  | 'HELD_BY_ME'
+  /** A live lease held by another user. */
+  | 'HELD_BY_OTHER'
+  /** A lease exists but has expired (past its TTL) — reclaimable like FREE. */
+  | 'EXPIRED';
+
+/** The public profile of a lock holder / requester (never includes credentials). */
+export interface PlanEditLockActor {
+  id: string;
+  name: string;
+  email: string;
+}
+
+/**
+ * A plan's edit-lock status — the shape returned by the lock endpoints and read
+ * by the web to decide who holds the pen. Capability flags are resolved
+ * server-side from the caller's permissions **and** the current lock state, so
+ * the client never re-derives policy. `holder`/`requestedBy` are null when absent.
+ * `graceEndsAt`/`expiresAt`/`heartbeatAt` are ISO instants; the client's
+ * countdowns are advisory — the server is authoritative.
+ */
+export interface PlanEditLockStatus {
+  planId: string;
+  state: PlanEditLockState;
+  /** The current lease holder, or null when FREE. */
+  holder: PlanEditLockActor | null;
+  /** When the current lease expires (ISO instant), or null when FREE. */
+  expiresAt: string | null;
+  /** The holder's last heartbeat (ISO instant), or null when FREE. */
+  heartbeatAt: string | null;
+  /** A pending peer request-control actor (Q-A), or null when none. */
+  requestedBy: PlanEditLockActor | null;
+  /** When a pending request's grace window elapses (ISO instant), or null. */
+  graceEndsAt: string | null;
+  /** The caller may acquire now (state FREE/EXPIRED and holds `plan:acquire_lock`). */
+  canAcquire: boolean;
+  /** The caller may request control of a live lock held by another (Q-A). */
+  canRequest: boolean;
+  /** The caller may take over *right now* (grace elapsed / holder inactive, or admin override). */
+  canTakeOver: boolean;
+  /** The caller may override immediately, skipping the grace handshake (`plan:override_lock`). */
+  canOverride: boolean;
+}
+
+/**
+ * Machine-readable reason on a **423 Locked** (`code: 'LOCKED'`) error (ADR-0028),
+ * carried in the error `details`. Distinct from a 409 optimistic conflict.
+ * - `PLAN_EDIT_LOCK_REQUIRED` — a structural write attempted without holding the pen.
+ * - `PLAN_EDIT_LOCK_HELD` — acquire/take-over refused: another holds a live lease,
+ *   or the peer grace window has not yet elapsed and the holder is still active.
+ * - `PLAN_EDIT_LOCK_LOST` — the caller's lease was taken over or expired (heartbeat
+ *   or write rejected); the client drops to read-only.
+ */
+export const PLAN_EDIT_LOCK_REASONS = [
+  'PLAN_EDIT_LOCK_REQUIRED',
+  'PLAN_EDIT_LOCK_HELD',
+  'PLAN_EDIT_LOCK_LOST',
+] as const;
+
+export type PlanEditLockReason = (typeof PLAN_EDIT_LOCK_REASONS)[number];
+
+/** The `details` payload on a 423 `LOCKED` error — the reason plus optional holder. */
+export interface PlanEditLockErrorDetails {
+  reason: PlanEditLockReason;
+  /** Who currently holds the pen, when known (helps the UI say "Jane is editing"). */
+  holder?: PlanEditLockActor | null;
+}
+
 export {};

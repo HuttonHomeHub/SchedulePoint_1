@@ -8,6 +8,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../common/err
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import {
@@ -47,6 +48,7 @@ export class ScheduleService {
     private readonly organizations: OrganizationsService,
     private readonly plans: PlanRepository,
     private readonly schedule: ScheduleRepository,
+    private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(ScheduleService.name) private readonly logger: PinoLogger,
   ) {}
@@ -75,6 +77,9 @@ export class ScheduleService {
         // Serialise with dependency creates and other recalcs on this plan, then
         // read a consistent snapshot of the graph (ADR-0021/0022).
         await this.schedule.lockPlanForWrite(planId, tx);
+        // Recalculate is a pen-gated plan mutation (ADR-0028, Q-B). Assert INSIDE the
+        // advisory lock so a steal can't slip between the check and the engine write.
+        await this.editLock.assertHoldsPen(principal, planId, organization.id, tx);
         const activityRows = await this.schedule.loadActivities(organization.id, planId, tx);
         const edgeRows = await this.schedule.loadEdges(organization.id, planId, tx);
         // Build the plan's working-day calendar once and inject it at the existing

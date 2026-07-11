@@ -79,7 +79,17 @@ export type OrgPermission =
   | 'baseline:read'
   | 'baseline:create'
   | 'baseline:activate'
-  | 'baseline:delete';
+  | 'baseline:delete'
+  // Plan edit-lock coordination — the single-editor "pen" (ADR-0028). Acquiring/
+  // heartbeating/releasing the lock and handing it off, and requesting control of
+  // a live lock (the graceful peer hand-off, Q-A), are Planner + Org Admin — the
+  // same "write" roles that can edit the schedule, NOT Contributor (reporting
+  // progress is a separate, un-gated path). Immediate override of a *live* lock
+  // (skipping the request/grace handshake) is Org Admin only. Reading lock status
+  // needs no new code — it rides on `plan:read`, held by every member.
+  | 'plan:acquire_lock'
+  | 'plan:request_control'
+  | 'plan:override_lock';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -131,6 +141,16 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
  */
 const PROGRESS_WRITE: readonly OrgPermission[] = ['activity:update_progress'];
 
+/**
+ * Coordinate the plan edit-lock (ADR-0028) — acquire/heartbeat/release/hand-off own
+ * lock and request control of another's live lock (the peer hand-off). Planner +
+ * Org Admin (the schedule-editing roles), deliberately NOT Contributor.
+ */
+const LOCK_COORDINATE: readonly OrgPermission[] = ['plan:acquire_lock', 'plan:request_control'];
+
+/** Immediately override a live edit-lock, skipping the grace handshake — Org Admin only. */
+const LOCK_OVERRIDE: readonly OrgPermission[] = ['plan:override_lock'];
+
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
 
@@ -156,12 +176,15 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...HIERARCHY_READ,
     ...HIERARCHY_WRITE,
     ...PROGRESS_WRITE,
+    ...LOCK_COORDINATE,
   ],
   [OrganizationRole.ORG_ADMIN]: [
     ...ADMIN,
     ...HIERARCHY_READ,
     ...HIERARCHY_WRITE,
     ...PROGRESS_WRITE,
+    ...LOCK_COORDINATE,
+    ...LOCK_OVERRIDE,
   ],
 };
 

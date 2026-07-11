@@ -23,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -71,6 +72,7 @@ export class PlanActivitiesController {
   @ApiCreatedResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'An activity with this name or code already exists.' })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -96,6 +98,7 @@ export class PlanActivitiesController {
   @ApiUnprocessableEntityResponse({
     description: 'The same activity id appears more than once in the batch.',
   })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async updatePositions(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

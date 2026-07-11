@@ -11,6 +11,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -38,6 +39,7 @@ export class ScheduleController {
   @ApiUnprocessableEntityResponse({
     description: 'The plan has no start date (PLAN_START_REQUIRED).',
   })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async recalculate(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

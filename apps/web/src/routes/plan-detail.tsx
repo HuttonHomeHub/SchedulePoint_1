@@ -14,6 +14,7 @@ import {
   useRepositionLane,
   useBatchPositions,
 } from '@/features/activities';
+import { useSession } from '@/features/auth';
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
@@ -22,6 +23,7 @@ import {
   useCreateDependency,
   usePlanDependencies,
 } from '@/features/dependencies';
+import { EditLockBanner, PenReadOnlyNote, usePlanPen } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { RecalculateButton, ScheduleSummaryStrip, useRecalculate } from '@/features/schedule';
@@ -55,9 +57,22 @@ export function PlanDetailScreen(): React.ReactElement {
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const planId = 'planId' in params ? params.planId : '';
   const role = useOrgRole(orgSlug);
-  const canWrite = canManageHierarchy(role);
-  const canProgress = canReportProgress(role);
+  const session = useSession();
+  const currentUserId = session.data?.user.id;
+  // The edit-lock "pen" (ADR-0028). When the pen layer is off (`VITE_PLAN_EDIT_LOCK`
+  // unset) `penManaged` is false and gating falls back to role only — today's behaviour.
+  const pen = usePlanPen(orgSlug, planId);
+  const canWrite = canManageHierarchy(role); // role only — plan metadata + baselines
+  // The on-canvas schedule model (activities/dependencies/positions/recalculate) is
+  // additionally pen-gated: a Planner must hold the pen to edit it (spec §3.1 / ADR-0028).
+  const canEditSchedule = pen.penManaged ? canWrite && pen.holdsPen : canWrite;
+  const canProgress = canReportProgress(role); // Contributor progress path — never pen-gated
   const canCalculate = canCalculateSchedule(role);
+  const canRecalc = pen.penManaged ? canCalculate && pen.holdsPen : canCalculate;
+  // A would-be editor (role allows it) who doesn't currently hold the pen — the
+  // Activities/Logic sections sit far below the banner, so hint locally why their
+  // edit affordances are gone (UX review).
+  const penReadOnly = pen.penManaged && canWrite && !pen.holdsPen;
   const [editing, setEditing] = useState(false);
   const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
 
@@ -80,7 +95,7 @@ export function PlanDetailScreen(): React.ReactElement {
       variance.data.rows.map((row) => [row.activityId, row]),
     );
   }, [variance.data]);
-  const canManageLogic = canWrite; // dependency write = the hierarchy-writer roles
+  const canManageLogic = canEditSchedule; // dependency write is pen-gated schedule editing
 
   // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
   // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
@@ -135,6 +150,7 @@ export function PlanDetailScreen(): React.ReactElement {
         await repositionLane.mutateAsync({ activityId, laneIndex, version: activity.version });
         return { applied: true, conflict: null };
       } catch (err) {
+        if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
         if (err instanceof ApiFetchError && err.status === 409) {
           return { applied: false, conflict: moveConflict };
         }
@@ -161,6 +177,7 @@ export function PlanDetailScreen(): React.ReactElement {
         ...(laneIndex !== undefined ? { laneIndex } : {}),
       });
     } catch (err) {
+      if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && err.status === 409) {
         // Stale version — the move was NOT applied (nothing changed); never re-send.
         return { applied: false, conflict: moveConflict };
@@ -192,6 +209,7 @@ export function PlanDetailScreen(): React.ReactElement {
     try {
       await createDependency.mutateAsync({ planId, predecessorId, successorId, type, lagDays: 0 });
     } catch (err) {
+      if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
         // A cycle/duplicate the engine refused — nothing was created; show the reason, don't retry.
         return { applied: false, conflict: err.error.message };
@@ -228,6 +246,7 @@ export function PlanDetailScreen(): React.ReactElement {
       await batchPositions.mutateAsync({ positions });
       return { applied: true, conflict: null };
     } catch (err) {
+      if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && err.status === 409) {
         // All-or-nothing: one stale row rejected the whole pack — nothing moved.
         return {
@@ -319,12 +338,17 @@ export function PlanDetailScreen(): React.ReactElement {
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-medium">Schedule</h2>
-        <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={canCalculate} />
+        <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={canRecalc} />
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
         The computed critical path and early/late dates. Recalculate after changing activities,
         durations, logic or the calendar to bring them up to date.
       </p>
+      {/* The single "who holds the pen" surface — governs all schedule-model editing below
+          (ADR-0028). Renders nothing when the pen layer is flag-off. */}
+      <div className="mt-3">
+        <EditLockBanner pen={pen} {...(currentUserId ? { currentUserId } : {})} />
+      </div>
       <div className="mt-3">
         <PlanCalendarPicker
           orgSlug={orgSlug}
@@ -355,6 +379,7 @@ export function PlanDetailScreen(): React.ReactElement {
           The Time-Scaled Logic Diagram: activities plotted on the timeline and connected by their
           logic.
         </p>
+        {penReadOnly ? <PenReadOnlyNote /> : null}
         <div className="mt-3">
           <TsldPanel
             // Remount per plan so selection/viewport state never leaks across a same-route
@@ -363,7 +388,7 @@ export function PlanDetailScreen(): React.ReactElement {
             activities={activities.data ?? []}
             dependencies={dependencies.data ?? []}
             dataDate={plan.data.plannedStart}
-            canEdit={canWrite}
+            canEdit={canEditSchedule}
             onCreate={onTsldCreate}
             onReposition={onTsldReposition}
             onLink={onTsldLink}
@@ -376,12 +401,13 @@ export function PlanDetailScreen(): React.ReactElement {
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-medium">Activities</h2>
-        {canWrite ? <CreateActivityButton orgSlug={orgSlug} planId={planId} /> : null}
+        {canEditSchedule ? <CreateActivityButton orgSlug={orgSlug} planId={planId} /> : null}
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
         The activities that make up this plan. Edit their details here; the logic diagram above
         plots them on the timeline.
       </p>
+      {penReadOnly ? <PenReadOnlyNote /> : null}
       {variance.data ? (
         <div className="mt-2">
           <BaselineVarianceSummary summary={variance.data.summary} />
@@ -391,7 +417,7 @@ export function PlanDetailScreen(): React.ReactElement {
         <ActivitiesTable
           orgSlug={orgSlug}
           planId={planId}
-          canWrite={canWrite}
+          canWrite={canEditSchedule}
           canReportProgress={canProgress}
           onOpenLogic={setLogicActivity}
           {...(varianceByActivityId ? { varianceByActivityId } : {})}

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -66,6 +67,7 @@ export class PlanDependenciesController {
     description:
       'A dependency of this type already exists between these activities, or it would form a cycle.',
   })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
