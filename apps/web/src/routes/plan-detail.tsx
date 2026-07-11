@@ -357,6 +357,9 @@ export function PlanDetailScreen(): React.ReactElement {
         </p>
         <div className="mt-3">
           <TsldPanel
+            // Remount per plan so selection/viewport state never leaks across a same-route
+            // plan→plan navigation (else the delete-reconcile effect can mis-fire — a11y review).
+            key={planId}
             activities={activities.data ?? []}
             dependencies={dependencies.data ?? []}
             dataDate={plan.data.plannedStart}

@@ -78,7 +78,9 @@ export function chainNeighbour(
   if (edges.length === 0) return null;
   const chosen = edges.find((d) => d.isDriving) ?? edges[0]!;
   const endpoint = direction === 'pred' ? chosen.predecessor : chosen.successor;
-  return { id: endpoint.id, name: endpoint.name, driving: chosen.isDriving };
+  // Prefix the code like Tier-1 describeActivity, so the neighbour reads consistently across tiers.
+  const name = endpoint.code ? `${endpoint.code} ${endpoint.name}` : endpoint.name;
+  return { id: endpoint.id, name, driving: chosen.isDriving };
 }
 
 /** The spoken line for a chain-nav jump: names the neighbour and whether the tie drives. */

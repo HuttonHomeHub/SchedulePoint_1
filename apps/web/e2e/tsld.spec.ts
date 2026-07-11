@@ -81,6 +81,23 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   await page.keyboard.press('ArrowDown');
   await expect(diagram.getByRole('option', { name: /Pour slab/, selected: true })).toHaveCount(1);
 
+  // The M5 keyboard model runs end-to-end in a real browser (the driving-neighbour *selection*
+  // for [ / ] is covered by the component test; here we prove the keys are wired + announced).
+  const announcer = page.getByTestId('announcer');
+  await page.keyboard.press('Home'); // → Excavate (no logic ties yet)
+  await page.keyboard.press('Space'); // Tier-2 detail on demand
+  await expect(announcer).toHaveText('0 predecessors, 0 successors');
+  await page.keyboard.press(']'); // no successor to trace
+  await expect(announcer).toHaveText('No successors.');
+  await page.keyboard.press('['); // no predecessor to trace
+  await expect(announcer).toHaveText('No predecessors.');
+
+  // `?` opens the in-app keyboard-shortcuts help; Escape closes it (native dialog).
+  await page.keyboard.press('?');
+  await expect(page.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeHidden();
+
   // The "Fit to plan" control re-frames the diagram without error.
   await expect(diagram.getByRole('button', { name: 'Fit to plan' })).toBeVisible();
 

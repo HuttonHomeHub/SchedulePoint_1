@@ -114,7 +114,9 @@ flowchart LR
   the canvas (inset by a small margin), `TsldCanvas` **pans the minimum distance to reveal it**
   (zoom unchanged; if the bar is wider than the viewport, align its start). Pointer selection is
   already visible, so reveal is a no-op there; keyboard selection is the case this fixes. The pan
-  writes the ref and commits to the URL on settle (ADR-0026 D3 — never per-frame).
+  writes the viewport ref and marks the scene dirty for the next frame (ADR-0026 D3 — never
+  per-frame React state). (Viewport is not yet URL-persisted anywhere in the canvas; when that
+  lands it applies uniformly to pan/zoom/reveal.)
 - **WCAG 2.4.11 (Focus Not Obscured, Minimum — new in 2.2):** the reveal margin keeps the ring off
   the canvas edges; the toolbar, legend, and conflict banner render **outside/above** the canvas
   box (not overlapping it), so nothing author-created can obscure the focused ring. The listbox
@@ -175,16 +177,27 @@ opens the **same** dialog pre-filled from the focused activity's lane/start, clo
 _ergonomic_ gap only. (`n` is a bare letter; the listbox has no type-ahead today — if type-ahead is
 ever added, `n` moves to a chord. Noted, not blocking.)
 
-### Chain navigation semantics (`[` / `]`)
+### Chain navigation semantics (`[` / `]`) — **trace the driving path** (revised in 5.1)
 
 Predecessor/successor tracing is the workflow the TSLD exists for ("drivers at a glance"). `[`
 selects the **driving** predecessor (the edge whose timing sets this activity's early start —
-`DependencySummary.isDriving`) **first**, because that is the binding tie a planner traces up the
-critical/driving path; a repeated `[` cycles the remaining predecessors in list order and wraps. `]`
-mirrors it for successors. Each jump **announces the tie**, so driving + logic-tie information is
-delivered exactly when it is relevant (§3). With no predecessor/successor, the key announces
-"No predecessors." / "No successors." All derived from the already-present `dependencies` prop —
-pure read, so this ships in 5.1 **without** the edit flag.
+`DependencySummary.isDriving`), falling back to the first tie in list order when none drives; `]`
+mirrors it for successors. **Selection follows, so a repeated `[` walks _up the driving path_** (the
+new focus's own driving predecessor) and repeated `]` walks _down_ it — a stateless, pure function
+of `(focusedId, dependencies, direction)` (`render/a11y.ts` `chainNeighbour`).
+
+> **Refinement recorded (a11y review).** The initial draft said a repeated `[` would _cycle the
+> other predecessors of the same activity and wrap_. Implementation chose **trace-the-driving-path**
+> instead: for the CPM/GPM "walk the critical/driving path" workflow this is the higher-value
+> behaviour, needs **no per-activity cycle state**, and keeps the pure function trivially testable.
+> **Reaching a _non-driving_ sibling tie is not lost** — `Enter` opens the logic editor (Tier 3),
+> the fully keyboard-navigable predecessors/successors table listing **every** tie with its Driving
+> column. Sibling-cycling on `[`/`]` can be added later without changing this contract.
+
+Each jump **announces the tie** (`announceChainStep`: "Predecessor: {code name}{, driving}."), so
+driving + logic-tie context is delivered exactly when it is relevant (§3). With no
+predecessor/successor the key announces "No predecessors." / "No successors." All derived from the
+already-present `dependencies` prop — pure read, so this ships in 5.1 **without** the edit flag.
 
 ---
 
