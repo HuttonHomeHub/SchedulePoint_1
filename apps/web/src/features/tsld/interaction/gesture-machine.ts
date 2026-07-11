@@ -15,12 +15,11 @@ import {
  * shell (`TsldCanvas`) feeds it events, paints the transient state, and hands each intent
  * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 D8).
  *
- * Slice scope: **create-by-drag** (M2 Slice 2.1). Reposition (2.2) and link (2.3) extend
- * the `EditIntent`/`GestureState` unions and the `pointerDown` routing without changing
- * this contract.
+ * Slices: **create-by-drag** (2.1) and **reposition-in-time** (2.2). Dependency-draw (2.3)
+ * extends the `EditIntent`/`GestureState` unions and the `pointerDown` routing likewise.
  */
 
-/** The active editing tool. `select` behaves like M1 (pan/select); `add-activity` draws. */
+/** The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition. */
 export type EditMode = 'select' | 'add-activity';
 
 export interface GestureCtx {
@@ -30,28 +29,55 @@ export interface GestureCtx {
   dataDate: string;
 }
 
+/** The grabbed activity's current geometry, supplied by the shell on a body pointer-down. */
+export interface BodyGrab {
+  id: string;
+  /** Current early-start / -finish as whole-day offsets about the data date. */
+  startDay: number;
+  endDay: number;
+  laneIndex: number;
+}
+
 export type GestureEvent =
-  | { type: 'pointerDown'; point: Point; hit: HitZone }
+  | { type: 'pointerDown'; point: Point; hit: HitZone; body?: BodyGrab }
   | { type: 'pointerMove'; point: Point }
   | { type: 'pointerUp' }
   | { type: 'escape' };
 
 /**
  * A committed edit, emitted on drop. The canvas produces geometry (days/lanes); `TsldPanel`
- * maps it to the reused write endpoints (create → `POST /activities`; reposition → SNET
- * `PATCH`; link → `POST /dependencies`) and the authoritative recalc.
+ * maps it to the reused write endpoints (create → `POST /activities`; reposition → an SNET
+ * `PATCH /activities/:id`) and the authoritative recalc.
  */
-export type EditIntent = {
-  kind: 'create';
-  /** Inclusive whole-day span about the data date; `startDay === endDay` is a 1-day task. */
-  startDay: number;
-  endDay: number;
-  laneIndex: number;
-};
+export type EditIntent =
+  | {
+      kind: 'create';
+      /** Inclusive whole-day span about the data date; `startDay === endDay` is a 1-day task. */
+      startDay: number;
+      endDay: number;
+      laneIndex: number;
+    }
+  | {
+      kind: 'reposition';
+      activityId: string;
+      /** The new early-start day offset — imposed as an SNET constraint (ADR-0023). */
+      startDay: number;
+    };
 
 /** The live gesture. `idle` means the machine owns nothing — the canvas pans/selects (M1). */
 export type GestureState =
-  { kind: 'idle' } | { kind: 'creating'; originDay: number; laneIndex: number; currentDay: number };
+  | { kind: 'idle' }
+  | { kind: 'creating'; originDay: number; laneIndex: number; currentDay: number }
+  | {
+      kind: 'repositioning';
+      activityId: string;
+      /** The day column grabbed at pointer-down (the drag reference). */
+      grabDay: number;
+      originStartDay: number;
+      spanDays: number;
+      laneIndex: number;
+      currentStartDay: number;
+    };
 
 export const IDLE: GestureState = { kind: 'idle' };
 
@@ -59,14 +85,17 @@ export interface Reduction {
   state: GestureState;
   /** Emitted only on a committing `pointerUp`; the shell forwards it to `onIntent`. */
   intent?: EditIntent;
+  /** Set when a body press ended without moving — the shell should select this activity. */
+  select?: string;
 }
 
 /**
- * Advance the gesture machine. Pure: `(state, event, ctx) → { state, intent? }`. In
- * `select` mode a `pointerDown` returns `idle`, so the canvas keeps its M1 pan/select path
- * untouched; in `add-activity` mode it starts a create ghost that tracks the pointer and
- * commits a whole-day span on release. `escape` (or a release with no active gesture) resets
- * to `idle` and emits nothing.
+ * Advance the gesture machine. Pure: `(state, event, ctx) → { state, intent?, select? }`.
+ * In `select` mode, a `pointerDown` on empty space returns `idle` (the canvas keeps its M1
+ * pan/select path); on a bar **body** it starts a reposition ghost that tracks the pointer by
+ * whole-day columns and commits an SNET move on release — or, if it never moved, selects the
+ * bar. In `add-activity` mode a drag draws a create ghost. `escape` (or a release with no
+ * active gesture) resets to `idle` and emits nothing.
  */
 export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx): Reduction {
   switch (event.type) {
@@ -76,7 +105,21 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const laneIndex = laneRowAt(event.point.y, ctx.view);
         return { state: { kind: 'creating', originDay: day, laneIndex, currentDay: day } };
       }
-      // select mode: reposition/link land in 2.2/2.3; for now the canvas pans/selects.
+      if (event.hit.kind === 'body' && event.body) {
+        const { id, startDay, endDay, laneIndex } = event.body;
+        return {
+          state: {
+            kind: 'repositioning',
+            activityId: id,
+            grabDay: dayColumnAt(event.point.x, ctx.view),
+            originStartDay: startDay,
+            spanDays: endDay - startDay,
+            laneIndex,
+            currentStartDay: startDay,
+          },
+        };
+      }
+      // select mode on empty / handle: the canvas pans/selects; link lands in 2.3.
       return { state: IDLE };
     }
     case 'pointerMove': {
@@ -84,6 +127,12 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const currentDay = dayColumnAt(event.point.x, ctx.view);
         if (currentDay === state.currentDay) return { state };
         return { state: { ...state, currentDay } };
+      }
+      if (state.kind === 'repositioning') {
+        const delta = dayColumnAt(event.point.x, ctx.view) - state.grabDay;
+        const currentStartDay = state.originStartDay + delta;
+        if (currentStartDay === state.currentStartDay) return { state };
+        return { state: { ...state, currentStartDay } };
       }
       return { state };
     }
@@ -94,6 +143,19 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         return {
           state: IDLE,
           intent: { kind: 'create', startDay, endDay, laneIndex: state.laneIndex },
+        };
+      }
+      if (state.kind === 'repositioning') {
+        if (state.currentStartDay === state.originStartDay) {
+          return { state: IDLE, select: state.activityId };
+        }
+        return {
+          state: IDLE,
+          intent: {
+            kind: 'reposition',
+            activityId: state.activityId,
+            startDay: state.currentStartDay,
+          },
         };
       }
       return { state: IDLE };

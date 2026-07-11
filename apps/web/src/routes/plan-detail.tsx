@@ -10,6 +10,7 @@ import {
   CreateActivityButton,
   useActivities,
   useCreatePlacedActivity,
+  useUpdateActivity,
 } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
@@ -23,6 +24,8 @@ import {
   TsldPanel,
   type TsldCreateInput,
   type TsldCreateOutcome,
+  type TsldRepositionInput,
+  type TsldRepositionOutcome,
 } from '@/features/tsld';
 import {
   canCalculateSchedule,
@@ -30,6 +33,7 @@ import {
   canReportProgress,
   useOrgRole,
 } from '@/hooks/use-org-role';
+import { ApiFetchError } from '@/lib/api/client';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -95,6 +99,49 @@ export function PlanDetailScreen(): React.ReactElement {
       return {
         recalcConflict:
           'Activity added, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
+      };
+    }
+  };
+
+  // TSLD reposition-in-time (M2): a horizontal drag becomes an SNET constraint at the new
+  // start via the existing PATCH (carrying the live version for optimistic locking). A stale
+  // version → a non-destructive conflict message (the move isn't re-sent); then recalc.
+  const updateActivity = useUpdateActivity(orgSlug, planId);
+  const onTsldReposition = async ({
+    activityId,
+    startDay,
+  }: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
+    const plannedStart = plan.data?.plannedStart;
+    const activity = (activities.data ?? []).find((a) => a.id === activityId);
+    if (!plannedStart || !activity) return { conflict: null };
+    try {
+      await updateActivity.mutateAsync({
+        activityId,
+        version: activity.version,
+        name: activity.name,
+        code: activity.code ?? undefined,
+        type: activity.type,
+        durationDays: activity.durationDays,
+        description: activity.description ?? undefined,
+        constraintType: 'SNET',
+        constraintDate: addCalendarDays(plannedStart, startDay),
+      });
+    } catch (err) {
+      if (err instanceof ApiFetchError && err.status === 409) {
+        return {
+          conflict:
+            'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.',
+        };
+      }
+      throw err;
+    }
+    try {
+      await recalculate.mutateAsync();
+      return { conflict: null };
+    } catch {
+      return {
+        conflict:
+          'Moved, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
       };
     }
   };
@@ -213,6 +260,7 @@ export function PlanDetailScreen(): React.ReactElement {
             dataDate={plan.data.plannedStart}
             canEdit={canWrite}
             onCreate={onTsldCreate}
+            onReposition={onTsldReposition}
           />
         </div>
       </div>

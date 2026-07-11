@@ -3,7 +3,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent, EditMode } from '../interaction/gesture-machine';
-import type { Point } from '../render/render-model';
+import { daysBetween, type Point } from '../render/render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
@@ -90,6 +90,21 @@ export interface TsldCreateOutcome {
   recalcConflict: string | null;
 }
 
+/** A committed reposition — a horizontal move mapped to an SNET constraint at the new start. */
+export interface TsldRepositionInput {
+  activityId: string;
+  startDay: number;
+}
+
+/**
+ * The outcome of a reposition. It **resolves** for both success and an optimistic-lock (or
+ * recalc) conflict — `conflict` carries the message to show in the banner (the move wasn't
+ * applied, or dates couldn't recalc); a genuine failure rejects.
+ */
+export interface TsldRepositionOutcome {
+  conflict: string | null;
+}
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
@@ -101,6 +116,9 @@ export interface TsldPanelProps {
    * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
   onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
+  /** Route-composed reposition handler (SNET PATCH + recalc). Resolves with a conflict message
+   * when the move was refused (stale version) or dates couldn't recalc; rejects on real error. */
+  onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
 }
 
 interface PendingCreate {
@@ -129,6 +147,7 @@ export function TsldPanel({
   dataDate,
   canEdit = false,
   onCreate,
+  onReposition,
 }: TsldPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = useId();
@@ -137,6 +156,12 @@ export function TsldPanel({
   const [fitSignal, setFitSignal] = useState(0);
   const [mode, setMode] = useState<EditMode>('select');
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
+  // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
+  const [pendingReposition, setPendingReposition] = useState<{
+    startDay: number;
+    endDay: number;
+    laneIndex: number;
+  } | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
@@ -176,12 +201,37 @@ export function TsldPanel({
   };
 
   const onIntent = (intent: EditIntent, anchor: Point): void => {
-    // Ignore a new gesture while a create popover is already open, so an in-progress name
-    // (and its ghost) is never silently discarded.
-    if (pendingCreate) return;
+    // Ignore a new gesture while a create popover or a reposition is already in flight.
+    if (pendingCreate || pendingReposition) return;
     if (intent.kind === 'create') {
       setConflict(null);
       setPendingCreate({ ...intent, anchor, saving: false, error: null });
+      return;
+    }
+    if (intent.kind === 'reposition') {
+      const activity = activities.find((a) => a.id === intent.activityId);
+      if (!activity || !onReposition) return;
+      setConflict(null);
+      // Optimistic ghost of the moved bar (kept until the authoritative recalc lands).
+      const span =
+        activity.earlyStart && activity.earlyFinish
+          ? daysBetween(activity.earlyStart, activity.earlyFinish)
+          : 0;
+      setPendingReposition({
+        startDay: intent.startDay,
+        endDay: intent.startDay + span,
+        laneIndex: activity.laneIndex,
+      });
+      void onReposition({ activityId: intent.activityId, startDay: intent.startDay })
+        .then((outcome) => {
+          setPendingReposition(null);
+          announce(`Moved “${activity.name}”.`);
+          if (outcome.conflict) setConflict(outcome.conflict);
+        })
+        .catch((err: unknown) => {
+          setPendingReposition(null);
+          setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+        });
     }
   };
 
@@ -219,7 +269,9 @@ export function TsldPanel({
             ? 'Recalculate the schedule to plot the activities on the timeline.'
             : editingEnabled && mode === 'add-activity'
               ? 'Drag on the timeline to add an activity. Esc cancels.'
-              : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
+              : editingEnabled
+                ? 'Drag a bar to move it; drag empty space to pan, scroll to zoom.'
+                : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
         </p>
         {editingEnabled ? (
           <TsldToolbar
@@ -284,7 +336,7 @@ export function TsldPanel({
                       endDay: pendingCreate.endDay,
                       laneIndex: pendingCreate.laneIndex,
                     }
-                  : null
+                  : pendingReposition
               }
             />
 

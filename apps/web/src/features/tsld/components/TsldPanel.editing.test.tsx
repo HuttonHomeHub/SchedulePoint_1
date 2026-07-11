@@ -121,6 +121,29 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(onCreate).toHaveBeenCalledTimes(1);
   });
 
+  it('repositions a bar by dragging its body in select mode → onReposition', async () => {
+    const onReposition = vi.fn().mockResolvedValue({ conflict: null });
+    const utils = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    // Default (select) mode: grab the bar body (day 0 at lane 0 sits near x≈60) and drag right.
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    await waitFor(() =>
+      expect(onReposition).toHaveBeenCalledWith(expect.objectContaining({ activityId: 'a1' })),
+    );
+  });
+
   it('cancels the create popover without calling onCreate', async () => {
     const { canvas, onCreate } = renderEditable();
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));

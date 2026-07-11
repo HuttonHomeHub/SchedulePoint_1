@@ -65,3 +65,53 @@ describe('gesture-machine: create-by-drag', () => {
     expect(r.intent).toBeUndefined();
   });
 });
+
+describe('gesture-machine: reposition-in-time', () => {
+  const body = { id: 'a', startDay: 2, endDay: 5, laneIndex: 1 };
+  const grab = (): GestureState =>
+    reduce(
+      IDLE,
+      { type: 'pointerDown', point: { x: 25, y: 40 }, hit: { kind: 'body', id: 'a' }, body },
+      ctx('select'),
+    ).state;
+
+  it('starts a reposition ghost when a bar body is grabbed in select mode', () => {
+    expect(grab()).toEqual({
+      kind: 'repositioning',
+      activityId: 'a',
+      grabDay: 2,
+      originStartDay: 2,
+      spanDays: 3,
+      laneIndex: 1,
+      currentStartDay: 2,
+    });
+  });
+
+  it('shifts the start day by whole day columns as the pointer moves', () => {
+    const moved = reduce(grab(), { type: 'pointerMove', point: { x: 55, y: 40 } }, ctx('select'));
+    expect(moved.state).toMatchObject({ kind: 'repositioning', currentStartDay: 5 });
+  });
+
+  it('commits an SNET reposition intent on release after a move', () => {
+    const moved = reduce(grab(), { type: 'pointerMove', point: { x: 55, y: 40 } }, ctx('select'));
+    const up = reduce(moved.state, { type: 'pointerUp' }, ctx('select'));
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', startDay: 5 });
+  });
+
+  it('selects (does not reposition) when a bar is pressed without moving', () => {
+    const up = reduce(grab(), { type: 'pointerUp' }, ctx('select'));
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toBeUndefined();
+    expect(up.select).toBe('a');
+  });
+
+  it('creates (mode wins) even on a bar body in add-activity mode', () => {
+    const r = reduce(
+      IDLE,
+      { type: 'pointerDown', point: { x: 25, y: 40 }, hit: { kind: 'body', id: 'a' }, body },
+      ctx('add-activity'),
+    );
+    expect(r.state).toMatchObject({ kind: 'creating' });
+  });
+});

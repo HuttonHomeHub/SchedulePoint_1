@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import {
   IDLE,
   reduce,
+  type BodyGrab,
   type EditIntent,
   type EditMode,
   type GestureState,
@@ -12,6 +13,7 @@ import { resolveTsldPalette } from '../render/palette';
 import {
   classifyHit,
   dayCellRect,
+  daysBetween,
   DEFAULT_VIEWPORT,
   fitToContent,
   hitTest,
@@ -78,7 +80,28 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
     const right = Math.max(state.originDay, state.currentDay);
     return dayCellRect(left, right, state.laneIndex, view);
   }
+  if (state.kind === 'repositioning') {
+    return dayCellRect(
+      state.currentStartDay,
+      state.currentStartDay + state.spanDays,
+      state.laneIndex,
+      view,
+    );
+  }
   return null;
+}
+
+/** Build the body-grab (current day span + lane) the machine needs to reposition an activity. */
+function bodyGrab(
+  activities: readonly RenderActivity[],
+  id: string,
+  dataDate: string,
+): BodyGrab | undefined {
+  const a = activities.find((x) => x.id === id);
+  if (!a || a.earlyStart === null) return undefined;
+  const startDay = daysBetween(dataDate, a.earlyStart);
+  const endDay = a.earlyFinish === null ? startDay : daysBetween(dataDate, a.earlyFinish);
+  return { id, startDay, endDay, laneIndex: a.laneIndex };
 }
 
 /**
@@ -290,9 +313,14 @@ export function TsldCanvas({
           if (editing) {
             const p = localPoint(e);
             const hit = classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate);
+            // A body grab in select mode needs the activity's current geometry to reposition it.
+            const body =
+              mode === 'select' && hit.kind === 'body' && hit.id
+                ? bodyGrab(sceneRef.current.activities, hit.id, dataDate)
+                : undefined;
             const { state } = reduce(
               gestureRef.current,
-              { type: 'pointerDown', point: p, hit },
+              { type: 'pointerDown', point: p, hit, ...(body ? { body } : {}) },
               machineCtx(),
             );
             gestureRef.current = state;
@@ -333,7 +361,7 @@ export function TsldCanvas({
             // check until the surface has a real measured size (avoids a degenerate 1×1).
             const measured = width > 1 && height > 1;
             const outOfBounds = measured && (p.x < 0 || p.y < 0 || p.x > width || p.y > height);
-            const { state, intent } = reduce(
+            const { state, intent, select } = reduce(
               gestureRef.current,
               { type: outOfBounds ? 'escape' : 'pointerUp' },
               machineCtx(),
@@ -341,6 +369,7 @@ export function TsldCanvas({
             gestureRef.current = state;
             interactionDirtyRef.current = true;
             if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
+            else if (select) onSelect(select);
             return;
           }
           const wasDrag = drag.current?.moved ?? false;
