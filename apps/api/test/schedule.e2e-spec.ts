@@ -187,16 +187,36 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     });
     expect(acts.get('C')).toMatchObject({ isCritical: false, isNearCritical: true, totalFloat: 2 });
     expect(acts.get('E')).toMatchObject({ earlyFinish: '2026-01-13', isCritical: true });
+
+    // M3: the engine flags the driving ties on recalc, surfaced on the dependency GET.
+    // D's predecessors are B (which drives D's start) and C (which has float into D),
+    // so only the B→D edge is driving.
+    const dPreds = await actor.agent
+      .get(`/api/v1/organizations/acme/activities/${d}/predecessors`)
+      .expect(200);
+    const drivingByPred = new Map<string, boolean>(
+      (dPreds.body.data as Array<{ predecessor: { id: string }; isDriving: boolean }>).map(
+        (dep) => [dep.predecessor.id, dep.isDriving],
+      ),
+    );
+    expect(drivingByPred.get(b)).toBe(true);
+    expect(drivingByPred.get(c)).toBe(false);
   });
 
   it('leaves version and updated_by untouched (the engine-owned write)', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');
     const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 2);
+    await link(actor, planId, a, b); // A→B, so the dependency is driving after recalc
 
     const before = await prisma.activity.findUniqueOrThrow({
       where: { id: a },
       select: { version: true, updatedAt: true, updatedBy: true },
+    });
+    const depBefore = await prisma.activityDependency.findFirstOrThrow({
+      where: { planId },
+      select: { id: true, version: true, updatedAt: true, updatedBy: true, isDriving: true },
     });
 
     await actor.agent.post(recalcUrl(planId)).expect(200);
@@ -209,6 +229,18 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
     expect(after.updatedBy).toBe(before.updatedBy);
     expect(after.earlyStart).not.toBeNull(); // but the schedule DID compute
+
+    // The dependency's driving flag is engine-owned too: it changes (false → true) while
+    // version/updated_at/updated_by stay put — the writeDrivingFlags invariant (ADR-0022).
+    const depAfter = await prisma.activityDependency.findUniqueOrThrow({
+      where: { id: depBefore.id },
+      select: { version: true, updatedAt: true, updatedBy: true, isDriving: true },
+    });
+    expect(depBefore.isDriving).toBe(false);
+    expect(depAfter.isDriving).toBe(true);
+    expect(depAfter.version).toBe(depBefore.version);
+    expect(depAfter.updatedAt.getTime()).toBe(depBefore.updatedAt.getTime());
+    expect(depAfter.updatedBy).toBe(depBefore.updatedBy);
   });
 
   it('422s with PLAN_START_REQUIRED when the plan has no start date', async () => {

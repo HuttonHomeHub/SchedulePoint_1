@@ -243,6 +243,12 @@ export interface DependencySummary {
   lagDays: number;
   predecessor: DependencyEndpoint;
   successor: DependencyEndpoint;
+  /**
+   * Engine-owned (ADR-0022): true when this edge is **driving** — its timing sets its
+   * successor's early start, so it's the binding logic tie the TSLD highlights. Recomputed
+   * on every recalculate; false until the plan is first calculated (or if the edge has slack).
+   */
+  isDriving: boolean;
   version: number;
   createdAt: string;
   updatedAt: string;

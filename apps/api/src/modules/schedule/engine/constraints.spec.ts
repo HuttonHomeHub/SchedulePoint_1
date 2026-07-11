@@ -19,6 +19,7 @@ const task = (
   constraintDate: constraint?.date ?? null,
 });
 const edge = (predecessorId: string, successorId: string): EngineEdge => ({
+  id: `${predecessorId}-${successorId}-FS`,
   predecessorId,
   successorId,
   type: 'FS',
@@ -55,6 +56,17 @@ describe('constraint clamping — forward (early dates)', () => {
   it('MFO pins the early finish on the constraint date', () => {
     const { byId } = run([task('A', 2, { type: 'MFO', date: '2026-01-05' })]);
     expect(byId.get('A')!.earlyFinish).toBe('2026-01-05');
+  });
+
+  it('a constraint clamping the start above the logic bound leaves the edge non-driving (M3)', () => {
+    // A(2) finishes at offset 2, but B is pinned no-earlier-than offset 4 (2026-01-05),
+    // so the A→B tie is not what sets B's start — it does not drive.
+    const { byId, edges } = run(
+      [task('A', 2), task('B', 1, { type: 'SNET', date: '2026-01-05' })],
+      [edge('A', 'B')],
+    );
+    expect(byId.get('B')!.earlyStartOffset).toBe(4);
+    expect(edges.find((e) => e.edgeId === 'A-B-FS')!.isDriving).toBe(false);
   });
 });
 

@@ -15,4 +15,10 @@ export {
 export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
 export { buildGraph, type ScheduleGraph } from './graph';
 export { ScheduleGraphNotADagError, UnknownActivityError } from './errors';
-export type { EngineActivity, EngineEdge, EngineResult, EngineSummary } from './types';
+export type {
+  EngineActivity,
+  EngineEdge,
+  EngineEdgeResult,
+  EngineResult,
+  EngineSummary,
+} from './types';

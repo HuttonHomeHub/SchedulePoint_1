@@ -2,7 +2,13 @@ import type { WorkingDayCalendar } from './calendar';
 import { NEAR_CRITICAL_THRESHOLD_WORKING_DAYS } from './constants';
 import { clampBackwardFinish, clampForwardStart, isParkedMandatory } from './constraints';
 import { buildGraph } from './graph';
-import type { EngineActivity, EngineEdge, EngineResult, EngineSummary } from './types';
+import type {
+  EngineActivity,
+  EngineEdge,
+  EngineEdgeResult,
+  EngineResult,
+  EngineSummary,
+} from './types';
 
 /** Inputs the CPM pass needs beyond the network itself. */
 export interface ComputeOptions {
@@ -12,9 +18,10 @@ export interface ComputeOptions {
   calendar: WorkingDayCalendar;
 }
 
-/** The engine's full result: per-activity schedule plus the plan roll-up. */
+/** The engine's full result: per-activity schedule, per-edge driving flags, plan roll-up. */
 export interface EngineOutput {
   results: EngineResult[];
+  edges: EngineEdgeResult[];
   summary: EngineSummary;
 }
 
@@ -60,6 +67,23 @@ export function computeSchedule(
     start = clampForwardStart(activity, start, calendar, dataDate);
     earlyStart.set(id, start);
     earlyFinish.set(id, start + duration);
+  }
+
+  // Driving edges (M3): an incoming edge drives its successor when its forward bound is
+  // exactly the successor's early start — the binding relationship (CPM/GPM "driver"). An
+  // edge with a lower bound has slack; when a constraint clamped the start above every
+  // incoming bound, no edge matches and none drives. This reads only the forward-pass maps,
+  // so it never changes the computed dates (golden-suite parity holds).
+  const edgeResults: EngineEdgeResult[] = [];
+  for (const id of graph.order) {
+    const successorStart = earlyStart.get(id)!;
+    const successorDuration = graph.activities.get(id)!.durationDays;
+    for (const edge of graph.incoming.get(id)!) {
+      const predEs = earlyStart.get(edge.predecessorId)!;
+      const predEf = earlyFinish.get(edge.predecessorId)!;
+      const bound = forwardLowerBound(edge, predEs, predEf, successorDuration);
+      edgeResults.push({ edgeId: edge.id, isDriving: bound === successorStart });
+    }
   }
 
   // Project finish is the latest early-finish across the whole plan.
@@ -150,7 +174,7 @@ export function computeSchedule(
         : calendar.addWorkingDays(dataDate, maxInclusiveFinishOffset),
   };
 
-  return { results, summary };
+  return { results, edges: edgeResults, summary };
 }
 
 /** The lower bound an incoming edge imposes on the successor's early start (spec §4). */

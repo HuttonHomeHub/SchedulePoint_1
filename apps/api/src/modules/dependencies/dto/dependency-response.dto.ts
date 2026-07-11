@@ -40,6 +40,13 @@ export class DependencyResponseDto implements DependencySummary {
   @ApiProperty({ type: DependencyEndpointDto })
   successor!: DependencyEndpoint;
 
+  @ApiProperty({
+    readOnly: true,
+    description:
+      'Engine-owned (read-only; ignored if sent in a request body): true when this edge drives its successor’s early start (CPM/GPM driver). False until the plan is calculated or if the edge has slack.',
+  })
+  isDriving!: boolean;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -65,6 +72,7 @@ export class DependencyResponseDto implements DependencySummary {
         code: entity.successor.code,
         name: entity.successor.name,
       },
+      isDriving: entity.isDriving,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

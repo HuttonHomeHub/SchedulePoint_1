@@ -64,6 +64,8 @@ export interface RenderActivity {
 export interface RenderEdge {
   predecessorId: string;
   successorId: string;
+  /** Engine-owned: true when this edge drives its successor's start (M3). Drawn emphasised. */
+  isDriving: boolean;
 }
 
 export interface Rect {

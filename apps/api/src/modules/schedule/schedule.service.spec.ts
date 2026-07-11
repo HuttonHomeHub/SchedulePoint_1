@@ -54,6 +54,7 @@ const activityRow = (
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({
+  id: `${predecessorId}-${successorId}-FS`,
   predecessorId,
   successorId,
   type: 'FS',
@@ -75,6 +76,7 @@ describe('ScheduleService.recalculate', () => {
     loadEdges: ReturnType<typeof vi.fn>;
     loadPlanCalendar: ReturnType<typeof vi.fn>;
     writeResults: ReturnType<typeof vi.fn>;
+    writeDrivingFlags: ReturnType<typeof vi.fn>;
     summarise: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
@@ -91,6 +93,7 @@ describe('ScheduleService.recalculate', () => {
       loadEdges: vi.fn().mockResolvedValue([]),
       loadPlanCalendar: vi.fn().mockResolvedValue(null),
       writeResults: vi.fn().mockResolvedValue(undefined),
+      writeDrivingFlags: vi.fn().mockResolvedValue(undefined),
       summarise: vi.fn().mockResolvedValue({
         activityCount: 0,
         criticalCount: 0,
@@ -198,6 +201,18 @@ describe('ScheduleService.recalculate', () => {
       earlyFinish: '2026-01-05',
       isCritical: true,
     });
+
+    // The engine-owned driving flags are persisted alongside the activity results (M3):
+    // A→B is the binding tie that sets B's start, so it is driving.
+    const drivingCall = schedule.writeDrivingFlags.mock.calls[0] as [
+      string,
+      string,
+      Array<{ edgeId: string; isDriving: boolean }>,
+      unknown,
+    ];
+    expect(drivingCall[0]).toBe(ORG_ID);
+    expect(drivingCall[1]).toBe(PLAN_ID);
+    expect(drivingCall[2]).toEqual([{ edgeId: 'A-B-FS', isDriving: true }]);
   });
 
   it('passes constraint dates to the engine as YYYY-MM-DD', async () => {

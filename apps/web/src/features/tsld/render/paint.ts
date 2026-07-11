@@ -122,19 +122,34 @@ export function paintScene(
   }
   ctx.stroke();
 
-  // Layer 2: dependency edges (only when an endpoint is visible).
-  ctx.strokeStyle = palette.edge;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (const edge of scene.edges) {
-    if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
-    const pred = byId.get(edge.predecessorId);
-    const succ = byId.get(edge.successorId);
-    if (!pred || !succ) continue;
-    const line = dependencyPolyline(pred, succ, view, scene.dataDate);
-    if (line) drawPolyline(ctx, line);
+  // Layer 2: dependency edges (only when an endpoint is visible). Driving edges — the
+  // ties that set their successor's start (M3) — are drawn emphasised: a heavier SOLID
+  // line, versus a thin DASHED line for non-driving ties. The weight + dash encode
+  // "driver" without relying on colour (WCAG 1.4.1), mirroring the bar criticality cue.
+  // Two batched passes so each dash/width state is set once, not per edge.
+  if (scene.edges.length > 0) {
+    const drawEdges = (driving: boolean): void => {
+      ctx.beginPath();
+      for (const edge of scene.edges) {
+        if (edge.isDriving !== driving) continue;
+        if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
+        const pred = byId.get(edge.predecessorId);
+        const succ = byId.get(edge.successorId);
+        if (!pred || !succ) continue;
+        const line = dependencyPolyline(pred, succ, view, scene.dataDate);
+        if (line) drawPolyline(ctx, line);
+      }
+      ctx.stroke();
+    };
+    ctx.strokeStyle = palette.edge;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    drawEdges(false); // non-driving: thin, dashed
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    drawEdges(true); // driving: heavier, solid
+    ctx.lineWidth = 1;
   }
-  ctx.stroke();
 
   // Layer 3: activity bars + milestone diamonds. Critical/near-critical activities also
   // get a solid/dashed outline (a non-colour cue for criticality — WCAG 1.4.1).

@@ -23,7 +23,13 @@ const edge = (
   successorId: string,
   type: DependencyType = 'FS',
   lagDays = 0,
-): EngineEdge => ({ predecessorId, successorId, type, lagDays });
+): EngineEdge => ({
+  id: `${predecessorId}-${successorId}-${type}`,
+  predecessorId,
+  successorId,
+  type,
+  lagDays,
+});
 
 function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[]) {
   const output = computeSchedule(activities, edges, {
@@ -31,7 +37,8 @@ function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[]
     calendar: allDaysWorkCalendar,
   });
   const byId = new Map<string, EngineResult>(output.results.map((r) => [r.activityId, r]));
-  return { ...output, byId };
+  const drivingById = new Map<string, boolean>(output.edges.map((e) => [e.edgeId, e.isDriving]));
+  return { ...output, byId, drivingById };
 }
 
 /** Compact offset view for hand-verified assertions. */
@@ -56,6 +63,17 @@ describe('computeSchedule — worked CPM example (all values hand-verified)', ()
     expect(offsets(byId.get('C')!)).toMatchObject({ es: 3, ef: 5 });
     expect(offsets(byId.get('D')!)).toMatchObject({ es: 7, ef: 12 });
     expect(offsets(byId.get('E')!)).toMatchObject({ es: 12, ef: 13 });
+  });
+
+  it('flags driving edges: only C→D has slack, so it is the sole non-driving edge (M3)', () => {
+    const { drivingById } = run(activities, edges);
+    // Binding ties on the critical spine and the driving reach into C.
+    expect(drivingById.get('A-B-FS')).toBe(true);
+    expect(drivingById.get('A-C-FS')).toBe(true);
+    expect(drivingById.get('B-D-FS')).toBe(true);
+    expect(drivingById.get('D-E-FS')).toBe(true);
+    // C finishes at 5 but D starts at 7 (B drives it), so C→D carries slack.
+    expect(drivingById.get('C-D-FS')).toBe(false);
   });
 
   it('computes the backward pass (LS/LF) and total float', () => {
@@ -199,5 +217,33 @@ describe('computeSchedule — degenerate shapes', () => {
         calendar: allDaysWorkCalendar,
       }),
     ).toThrow(ScheduleGraphNotADagError);
+  });
+});
+
+describe('computeSchedule — driving edges (M3)', () => {
+  it('flags BOTH incoming edges driving when two predecessors tie on the successor start', () => {
+    // A(3) and B(3) both FS→ C: C starts at day 3, so both ties are binding (a tied driver).
+    const { drivingById } = run(
+      [task('A', 3), task('B', 3), task('C', 1)],
+      [edge('A', 'C'), edge('B', 'C')],
+    );
+    expect(drivingById.get('A-C-FS')).toBe(true);
+    expect(drivingById.get('B-C-FS')).toBe(true);
+  });
+
+  it('a negative lag floored at the data date is non-driving (0-floor edge case)', () => {
+    // A(2) SS(−5)→ B: the bound is −5 but B floors at the data date (0), so the tie does
+    // not set B's start and must not be flagged driving.
+    const { byId, drivingById } = run([task('A', 2), task('B', 2)], [edge('A', 'B', 'SS', -5)]);
+    expect(byId.get('B')!.earlyStartOffset).toBe(0);
+    expect(drivingById.get('A-B-SS')).toBe(false);
+  });
+
+  it('flags an SS-with-lag tie driving by its own arithmetic (not just FS)', () => {
+    // A(4) SS(+2)→ B: B.es = A.es(0) + 2 = 2, so the SS tie drives B — exercises the
+    // per-type forwardLowerBound in the driving pass, not only the FS path.
+    const { byId, drivingById } = run([task('A', 4), task('B', 2)], [edge('A', 'B', 'SS', 2)]);
+    expect(byId.get('B')!.earlyStartOffset).toBe(2);
+    expect(drivingById.get('A-B-SS')).toBe(true);
   });
 });

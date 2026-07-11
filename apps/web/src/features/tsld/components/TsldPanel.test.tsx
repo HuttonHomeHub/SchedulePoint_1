@@ -67,6 +67,13 @@ describe('TsldPanel', () => {
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
   });
 
+  it('shows a legend distinguishing driving from non-driving links (M3)', () => {
+    render(<TsldPanel activities={[activity()]} dependencies={NO_DEPS} dataDate="2026-01-01" />);
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    expect(legend).toHaveTextContent('Driving link');
+    expect(legend).toHaveTextContent('Non-driving link');
+  });
+
   it('stays read-only (no editing toolbar) when the M2 flag is off, even for a writer', () => {
     render(
       <TsldPanel

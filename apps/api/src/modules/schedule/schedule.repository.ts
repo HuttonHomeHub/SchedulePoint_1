@@ -9,7 +9,7 @@ import {
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 
-import type { EngineResult } from './engine';
+import type { EngineEdgeResult, EngineResult } from './engine';
 
 /** The minimal activity shape the CPM engine reads (a plan's active nodes). */
 export interface ScheduleActivityRow {
@@ -22,6 +22,8 @@ export interface ScheduleActivityRow {
 
 /** The minimal dependency shape the CPM engine reads (a plan's active edges). */
 export interface ScheduleEdgeRow {
+  /** The dependency id — carried so the engine's per-edge driving flag can be written back. */
+  id: string;
   predecessorId: string;
   successorId: string;
   type: DependencyType;
@@ -153,7 +155,7 @@ export class ScheduleRepository {
   ): Promise<ScheduleEdgeRow[]> {
     return db.activityDependency.findMany({
       where: { organizationId, planId, deletedAt: null },
-      select: { predecessorId: true, successorId: true, type: true, lagDays: true },
+      select: { id: true, predecessorId: true, successorId: true, type: true, lagDays: true },
     });
   }
 
@@ -215,6 +217,46 @@ export class ScheduleRepository {
     if (updated !== results.length) {
       throw new Error(
         `Schedule write affected ${updated} rows but expected ${results.length} for plan ${planId}.`,
+      );
+    }
+  }
+
+  /**
+   * Persist the engine's per-edge driving flags in one `unnest` UPDATE, keyed by
+   * dependency id and re-asserting the plan/org/active scope. Like {@link writeResults}
+   * this sets ONLY the engine-owned `is_driving` column — never `version`/`updated_at`/
+   * `updated_by` — so a recalculation stays invisible to optimistic locking (ADR-0022).
+   * A no-op for an empty edge set.
+   */
+  async writeDrivingFlags(
+    organizationId: string,
+    planId: string,
+    edges: readonly EngineEdgeResult[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (edges.length === 0) return;
+
+    const ids = edges.map((e) => e.edgeId);
+    const isDriving = edges.map((e) => e.isDriving);
+
+    const updated = await db.$executeRaw`
+      UPDATE dependencies AS d
+      SET is_driving = v.is_driving
+      FROM unnest(
+        ${ids}::uuid[],
+        ${isDriving}::boolean[]
+      ) AS v(id, is_driving)
+      WHERE d.id = v.id
+        AND d.plan_id = ${planId}::uuid
+        AND d.organization_id = ${organizationId}::uuid
+        AND d.deleted_at IS NULL
+    `;
+
+    // Same locked-snapshot invariant as writeResults: every computed edge id must
+    // match an in-scope active row, or a stale/cross-scope id silently no-op'd.
+    if (updated !== edges.length) {
+      throw new Error(
+        `Driving-flag write affected ${updated} rows but expected ${edges.length} for plan ${planId}.`,
       );
     }
   }

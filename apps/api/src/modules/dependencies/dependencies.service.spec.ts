@@ -91,6 +91,7 @@ function dependency(): DependencyWithEndpoints {
     successorId: SUCC_ID,
     type: 'FS',
     lagDays: 0,
+    isDriving: false,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),

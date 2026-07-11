@@ -16,6 +16,7 @@ const DEP: DependencySummary = {
   lagDays: 3,
   predecessor: { id: 'a1', code: null, name: 'Excavate' },
   successor: { id: 'b1', code: null, name: 'Pour slab' },
+  isDriving: false,
   version: 5,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
