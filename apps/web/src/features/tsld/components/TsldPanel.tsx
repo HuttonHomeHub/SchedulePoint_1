@@ -97,15 +97,18 @@ export interface TsldRepositionInput {
 }
 
 /**
- * The outcome of a reposition. It **resolves** for both success and a conflict; a genuine
- * failure rejects. `applied` says whether the move actually landed — false for a stale-version
- * 409 (nothing changed), true when it landed (even if the follow-up recalc then failed) — so
- * the "Moved …" status is announced only when it's true. `conflict` is the banner message.
+ * The shared outcome of an optimistic edit (reposition or link). It **resolves** for both
+ * success and a domain conflict (stale `version`, a cycle, a duplicate — ADR-0021/0022); a
+ * genuine failure rejects. `applied` says whether the write actually landed — false when it was
+ * refused (nothing changed), true when it landed (even if the follow-up recalc then failed) — so
+ * the success status is announced only when it's true. `conflict` is the banner message.
  */
-export interface TsldRepositionOutcome {
+export interface TsldEditOutcome {
   applied: boolean;
   conflict: string | null;
 }
+
+export type TsldRepositionOutcome = TsldEditOutcome;
 
 /** A committed dependency-draw — predecessor → successor with the modifier-chosen type. */
 export interface TsldLinkInput {
@@ -114,15 +117,7 @@ export interface TsldLinkInput {
   type: DependencyType;
 }
 
-/**
- * The outcome of a link. It **resolves** for both success and a domain conflict (a cycle or a
- * duplicate — ADR-0021); a genuine failure rejects. `applied` says whether the link was created
- * (so "Linked …" is announced only when true); `conflict` is the banner message on rejection.
- */
-export interface TsldLinkOutcome {
-  applied: boolean;
-  conflict: string | null;
-}
+export type TsldLinkOutcome = TsldEditOutcome;
 
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
@@ -144,6 +139,9 @@ export interface TsldPanelProps {
   /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
    * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). */
   onOpenLogic?: (activity: ActivitySummary) => void;
+  /** Refetch the plan's server truth (activities/links/variance). Wired to the conflict banner's
+   * Refresh so the "this changed elsewhere" cases have a real recovery action, not just copy. */
+  onRefresh?: () => void;
 }
 
 interface PendingCreate {
@@ -178,6 +176,7 @@ export function TsldPanel({
   onReposition,
   onLink,
   onOpenLogic,
+  onRefresh,
 }: TsldPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = useId();
@@ -354,7 +353,18 @@ export function TsldPanel({
       </div>
 
       {conflict ? (
-        <EditConflictBanner message={conflict} onDismiss={() => setConflict(null)} />
+        <EditConflictBanner
+          message={conflict}
+          onDismiss={() => setConflict(null)}
+          {...(onRefresh
+            ? {
+                onRefresh: () => {
+                  onRefresh();
+                  setConflict(null);
+                },
+              }
+            : {})}
+        />
       ) : null}
 
       {showDiagram ? (

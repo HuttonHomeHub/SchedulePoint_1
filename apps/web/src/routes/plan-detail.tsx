@@ -104,7 +104,7 @@ export function PlanDetailScreen(): React.ReactElement {
     } catch {
       return {
         recalcConflict:
-          'Activity added, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
+          'Activity added, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
       };
     }
   };
@@ -155,7 +155,7 @@ export function PlanDetailScreen(): React.ReactElement {
       return {
         applied: true,
         conflict:
-          'Moved, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
+          'Moved, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
       };
     }
   };
@@ -186,9 +186,17 @@ export function PlanDetailScreen(): React.ReactElement {
       return {
         applied: true,
         conflict:
-          'Linked, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
+          'Linked, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
       };
     }
+  };
+
+  // The conflict banner's Refresh: re-pull the plan's server truth (diagram + variance) so a
+  // "changed elsewhere" 409 has a real recovery action, not just copy telling the user to refresh.
+  const onTsldRefresh = (): void => {
+    void activities.refetch();
+    void dependencies.refetch();
+    void variance.refetch();
   };
 
   if (plan.isPending) {
@@ -308,6 +316,7 @@ export function PlanDetailScreen(): React.ReactElement {
             onReposition={onTsldReposition}
             onLink={onTsldLink}
             onOpenLogic={setLogicActivity}
+            onRefresh={onTsldRefresh}
           />
         </div>
       </div>

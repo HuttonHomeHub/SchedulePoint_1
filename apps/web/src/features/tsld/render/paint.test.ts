@@ -141,6 +141,26 @@ describe('paintScene', () => {
     expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
   });
 
+  it('marks the selected bar edges when edge handles are enabled, and not otherwise', () => {
+    const scene = (showEdgeHandles: boolean): TsldScene => ({
+      activities: [task({ id: 't' })],
+      edges: [],
+      dataDate: DATA_DATE,
+      selectedId: 't',
+      showEdgeHandles,
+    });
+    // Off (read-only surface): only the bar fill, no edge marks.
+    const plain = mockCtx();
+    paintScene(plain, scene(false), VIEW, SIZE, PALETTE);
+    expect(plain.fillRect).toHaveBeenCalledTimes(1);
+    // On: the bar fill plus two edge-handle marks (start + finish).
+    const editing = mockCtx();
+    paintScene(editing, scene(true), VIEW, SIZE, PALETTE);
+    expect(editing.fillRect).toHaveBeenCalledTimes(3);
+    // The selection ring is still a single strokeRect either way.
+    expect(editing.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
   it('culls off-screen activities (no fillRect, not in the visible set)', () => {
     const ctx = mockCtx();
     const scene: TsldScene = {

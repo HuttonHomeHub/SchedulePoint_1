@@ -212,6 +212,9 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
       }
       if (state.kind === 'linking') {
         // Track the free end + the hovered drop target (a different activity) + the live type.
+        // NB: any other activity is highlighted as a target; a client-side cycle *pre-check*
+        // (ADR-0026 D5's "live legality feedback") is deferred — the API still rejects a cycle on
+        // drop and the conflict banner surfaces it (see docs/DECISIONS.md). Tracked for a later slice.
         const hovered = event.hit;
         const targetId =
           hovered && hovered.kind !== 'empty' && hovered.id && hovered.id !== state.sourceId

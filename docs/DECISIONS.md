@@ -270,3 +270,19 @@ overwrite.
 
 **Consequences.** Editing is dark in the default build. The lock (or hardened
 concurrency) is the prerequisite to enabling the flag; tracked on the TSLD roadmap.
+
+### 2026-07-11 — Defer client-side link legality pre-check (M2 Slice 2.3)
+
+**Decision.** On-canvas dependency-draw highlights **any** other activity as a drop
+target during the rubber-band; it does **not** yet run a client-side cycle/duplicate
+**pre-check** to ring only _legal_ targets (ADR-0026 D5's "live legality feedback").
+Illegal drops are caught authoritatively by the API (cycle/duplicate → 409) and shown
+in the non-destructive conflict banner.
+
+**Why.** The graceful-degradation path (server rejects, banner explains) is correct and
+already in place; a live client pre-check duplicates server reachability logic and adds
+per-move cost. Deferred to keep Slice 2.3 focused; the ADR contract is otherwise met.
+
+**Consequences.** A user can attempt an illegal link and learn it's illegal only on
+drop. Tracked as a follow-up to add the client pre-check (reusing the canvas's existing
+`RenderEdge[]`) so the ring reflects legality before release.

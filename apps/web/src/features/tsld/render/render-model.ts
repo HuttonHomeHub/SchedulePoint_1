@@ -244,7 +244,14 @@ export function hitTest(
   return null;
 }
 
-/** Width of the grab-zone at each end of a bar, for dependency-draw (ADR-0026 D5). */
+/**
+ * Width of the grab-zone at each end of a bar, for dependency-draw (ADR-0026 D5). Kept small and
+ * capped at half the bar (see {@link classifyHit}) so it never swallows the body's reposition
+ * zone on short bars. It is intentionally below the ≥24px target-size guideline: the same
+ * link-creation capability is available through the ≥36px buttons in the dependency dialog
+ * (reachable via Enter on the diagram listbox), so this pointer grab-zone falls under WCAG 2.5.8's
+ * **Equivalent** exception. The selected bar also shows a persistent edge mark (a non-hover cue).
+ */
 export const EDGE_HANDLE_PX = 8;
 
 /** Where a screen point falls relative to the activities, for gesture routing. */

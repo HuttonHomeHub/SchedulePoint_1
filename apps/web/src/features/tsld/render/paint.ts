@@ -36,7 +36,13 @@ export interface TsldScene {
   dataDate: string;
   /** The currently-selected activity id (drawn with a selection ring), if any. */
   selectedId?: string | null;
+  /** When true (editing + linking enabled), draw the persistent edge-handle affordance on the
+   * selected bar. Off for the read-only surface, keeping M1 byte-for-byte unchanged. */
+  showEdgeHandles?: boolean;
 }
+
+/** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
+const EDGE_HANDLE_MARK = 3;
 
 /** The minimal 2D-context surface the painter uses (kept small so it is easy to mock/test). */
 export type Ctx2D = Pick<
@@ -167,7 +173,11 @@ export function paintScene(
     }
   }
 
-  // Layer 4: the selection ring on the selected activity (if visible).
+  // Layer 4: the selection ring on the selected activity (if visible), plus — when editing
+  // enables link-draw — a persistent edge-handle mark at each end of the selected bar. That mark
+  // is the non-hover affordance advertising that the bar's ends are grabbable to draw a
+  // dependency (UX_STANDARDS: hover-only affordances need a non-hover equivalent); selection is
+  // keyboard-reachable via the listbox, so the cue isn't pointer-only either.
   if (scene.selectedId && visibleIds.has(scene.selectedId)) {
     const selected = byId.get(scene.selectedId);
     const rect = selected && activityRect(selected, view, scene.dataDate);
@@ -175,6 +185,18 @@ export function paintScene(
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 2;
       ctx.strokeRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);
+      if (scene.showEdgeHandles && selected && !isMilestone(selected.type)) {
+        const cy = rect.y + rect.h / 2;
+        ctx.fillStyle = palette.selection;
+        for (const cx of [rect.x, rect.x + rect.w]) {
+          ctx.fillRect(
+            cx - EDGE_HANDLE_MARK,
+            cy - EDGE_HANDLE_MARK,
+            EDGE_HANDLE_MARK * 2,
+            EDGE_HANDLE_MARK * 2,
+          );
+        }
+      }
     }
   }
 

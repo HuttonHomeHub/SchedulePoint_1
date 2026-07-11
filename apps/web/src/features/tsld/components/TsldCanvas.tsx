@@ -187,7 +187,8 @@ export function TsldCanvas({
     exitAddModeRef.current = onExitAddMode;
   });
 
-  const sceneRef = useRef<TsldScene>({ activities, edges, dataDate, selectedId });
+  const showEdgeHandles = editing && canLink;
+  const sceneRef = useRef<TsldScene>({ activities, edges, dataDate, selectedId, showEdgeHandles });
 
   useEffect(() => {
     fittedRef.current = false;
@@ -195,10 +196,10 @@ export function TsldCanvas({
   }, [fitSignal, dataDate]);
 
   useEffect(() => {
-    sceneRef.current = { activities, edges, dataDate, selectedId };
+    sceneRef.current = { activities, edges, dataDate, selectedId, showEdgeHandles };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
-  }, [activities, edges, dataDate, selectedId]);
+  }, [activities, edges, dataDate, selectedId, showEdgeHandles]);
 
   // Publish the pending ghost to the loop.
   useEffect(() => {
@@ -404,16 +405,7 @@ export function TsldCanvas({
             interactionDirtyRef.current = true;
             return;
           }
-          if (!drag.current) {
-            // Hover affordance: show a crosshair over an edge handle so the link grab-zone is
-            // discoverable. Only while editing + linking is available; one hit-test per idle move.
-            if (editing && mode === 'select' && canLink && canvasRef.current) {
-              const hit = classifyAt(localPoint(e));
-              const overHandle = hit.kind === 'startHandle' || hit.kind === 'finishHandle';
-              canvasRef.current.style.cursor = overHandle ? 'crosshair' : '';
-            }
-            return;
-          }
+          if (!drag.current) return;
           const dx = e.clientX - drag.current.x;
           const dy = e.clientY - drag.current.y;
           if (Math.abs(dx) + Math.abs(dy) > CLICK_MOVE_THRESHOLD_PX) drag.current.moved = true;

@@ -290,6 +290,80 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Linked'));
   });
 
+  it('opens the logic editor for the focused activity on Enter (keyboard link equivalent)', () => {
+    const onOpenLogic = vi.fn();
+    render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onLink={vi.fn().mockResolvedValue({ applied: true, conflict: null })}
+        onOpenLogic={onOpenLogic}
+      />,
+    );
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+    fireEvent.focus(listbox); // selects the first activity
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(onOpenLogic).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
+  });
+
+  it('with no onLink wired, a handle grab downgrades to reposition (no dangling rubber-band)', async () => {
+    const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    const utils = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+        // deliberately no onLink → canLink is false
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas')!;
+    // Grab a1's finish handle (x≈78) and drag: without a link handler it must reposition, not link.
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    await waitFor(() =>
+      expect(onReposition).toHaveBeenCalledWith(expect.objectContaining({ activityId: 'a1' })),
+    );
+  });
+
+  it('the conflict banner offers a Refresh that refetches and clears the banner', async () => {
+    const onRefresh = vi.fn();
+    const onLink = vi
+      .fn()
+      .mockResolvedValue({ applied: false, conflict: 'That link already exists.' });
+    const succ = activity({
+      id: 'a2',
+      laneIndex: 1,
+      earlyStart: '2026-01-06',
+      earlyFinish: '2026-01-08',
+    });
+    const utils = render(
+      <TsldPanel
+        activities={[activity(), succ]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onLink={onLink}
+        onRefresh={onRefresh}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas')!;
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    const refresh = await screen.findByRole('button', { name: 'Refresh' });
+    fireEvent.click(refresh);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('cancels the create popover without calling onCreate', async () => {
     const { canvas, onCreate } = renderEditable();
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
