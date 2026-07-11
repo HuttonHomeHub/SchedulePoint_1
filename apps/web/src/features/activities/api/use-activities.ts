@@ -156,6 +156,25 @@ export function useRepositionLane(orgSlug: string, planId: string) {
   });
 }
 
+/**
+ * Batch lane-position write (TSLD M4 auto-arrange): move many activities to new lanes in one
+ * all-or-nothing PATCH on the plan's positions endpoint (per-row optimistic lock; no recalc — lane
+ * is layout). Layout only, so it invalidates just the activities list. Backs the "Auto-arrange
+ * lanes" action; a single stale `version` rejects the whole batch (409).
+ */
+export function useBatchPositions(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { positions: { id: string; laneIndex: number; version: number }[] }) =>
+      apiFetch<ActivitySummary[]>(
+        `/organizations/${orgSlug}/plans/${planId}/activities/positions`,
+        { method: 'PATCH', body: JSON.stringify(input) },
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+  });
+}
+
 function progressBody(input: ProgressFormValues & { version: number }) {
   return {
     percentComplete: input.percentComplete,

@@ -12,6 +12,7 @@ import {
   useCreatePlacedActivity,
   useUpdateActivity,
   useRepositionLane,
+  useBatchPositions,
 } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
@@ -33,6 +34,7 @@ import {
   type TsldLinkOutcome,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
+  type TsldEditOutcome,
 } from '@/features/tsld';
 import {
   canCalculateSchedule,
@@ -209,6 +211,35 @@ export function PlanDetailScreen(): React.ReactElement {
     }
   };
 
+  // TSLD auto-arrange (M4 4.3): persist the packed lane changes through the batch positions
+  // endpoint — all-or-nothing, no recalc (lane is layout). The panel computed the moves with the
+  // pure packer; here we attach each row's live version and surface the batch's N-row 409.
+  const batchPositions = useBatchPositions(orgSlug, planId);
+  const onTsldAutoArrange = async (
+    changes: readonly { id: string; laneIndex: number }[],
+  ): Promise<TsldEditOutcome> => {
+    const versionById = new Map((activities.data ?? []).map((a) => [a.id, a.version]));
+    const positions = changes.flatMap((c) => {
+      const version = versionById.get(c.id);
+      return version === undefined ? [] : [{ id: c.id, laneIndex: c.laneIndex, version }];
+    });
+    if (positions.length === 0) return { applied: false, conflict: null };
+    try {
+      await batchPositions.mutateAsync({ positions });
+      return { applied: true, conflict: null };
+    } catch (err) {
+      if (err instanceof ApiFetchError && err.status === 409) {
+        // All-or-nothing: one stale row rejected the whole pack — nothing moved.
+        return {
+          applied: false,
+          conflict:
+            'The plan changed since you opened it, so auto-arrange wasn’t applied. Refresh and try again.',
+        };
+      }
+      throw err;
+    }
+  };
+
   // The conflict banner's Refresh: re-pull the plan's server truth (diagram + variance) so a
   // "changed elsewhere" 409 has a real recovery action, not just copy telling the user to refresh.
   const onTsldRefresh = (): void => {
@@ -333,6 +364,7 @@ export function PlanDetailScreen(): React.ReactElement {
             onCreate={onTsldCreate}
             onReposition={onTsldReposition}
             onLink={onTsldLink}
+            onAutoArrange={onTsldAutoArrange}
             onOpenLogic={setLogicActivity}
             onRefresh={onTsldRefresh}
           />

@@ -424,4 +424,76 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(screen.queryByLabelText('New activity name')).not.toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
   });
+
+  // Two activities overlapping in time, both stacked in lane 0 → the packer moves the second to lane 1.
+  const overlappingPair = (): ReturnType<typeof activity>[] => [
+    activity(),
+    activity({ id: 'a2', name: 'Pour', earlyStart: '2026-01-02', earlyFinish: '2026-01-04' }),
+  ];
+
+  it('auto-arranges lanes: toolbar → confirm dialog → onAutoArrange with the minimal packed changes', async () => {
+    const onAutoArrange = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(
+      <TsldPanel
+        activities={overlappingPair()}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onAutoArrange={onAutoArrange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
+    // A confirm dialog guards the no-undo bulk reorder.
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('can’t be undone');
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange' }));
+    // Only the overlapping second bar moves — the minimal diff.
+    await waitFor(() => expect(onAutoArrange).toHaveBeenCalledWith([{ id: 'a2', laneIndex: 1 }]));
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('auto-arranged')),
+    );
+  });
+
+  it('on an all-or-nothing 409 shows the auto-arrange conflict banner', async () => {
+    const onAutoArrange = vi.fn().mockResolvedValue({
+      applied: false,
+      conflict:
+        'The plan changed since you opened it, so auto-arrange wasn’t applied. Refresh and try again.',
+    });
+    render(
+      <TsldPanel
+        activities={overlappingPair()}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onAutoArrange={onAutoArrange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Auto-arrange' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('auto-arrange wasn’t applied');
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('auto-arranged'));
+  });
+
+  it('when lanes are already packed, confirming moves nothing and says so (no batch call)', async () => {
+    const onAutoArrange = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(
+      <TsldPanel
+        activities={[activity()]} // a single bar is already optimally in lane 0
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onAutoArrange={onAutoArrange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Auto-arrange' }));
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('already arranged')),
+    );
+    expect(onAutoArrange).not.toHaveBeenCalled();
+  });
 });

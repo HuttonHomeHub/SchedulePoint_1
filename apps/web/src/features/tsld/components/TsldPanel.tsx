@@ -3,6 +3,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent, EditMode } from '../interaction/gesture-machine';
+import { packLanes } from '../render/auto-pack';
 import { daysBetween, type Point } from '../render/render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -12,6 +13,7 @@ import { TsldToolbar } from './TsldToolbar';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { RenderActivity, RenderEdge } from '@/features/tsld/render/render-model';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -151,6 +153,12 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /** Route-composed auto-arrange handler (M4 4.3): persists the packed lanes via the batch
+   * positions endpoint (all-or-nothing, no recalc). Resolves with a conflict message when a stale
+   * version refused the whole batch; rejects on real error. Its presence shows the toolbar action. */
+  onAutoArrange?: (
+    changes: readonly { id: string; laneIndex: number }[],
+  ) => Promise<TsldEditOutcome>;
   /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
    * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). */
   onOpenLogic?: (activity: ActivitySummary) => void;
@@ -190,6 +198,7 @@ export function TsldPanel({
   onCreate,
   onReposition,
   onLink,
+  onAutoArrange,
   onOpenLogic,
   onRefresh,
 }: TsldPanelProps): React.ReactElement {
@@ -202,6 +211,9 @@ export function TsldPanel({
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
   const [pendingReposition, setPendingReposition] = useState<PendingGhost | null>(null);
+  // Auto-arrange confirm dialog + in-flight state (a bulk, no-undo reorder — §5 of the M4 design).
+  const [confirmArrange, setConfirmArrange] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
@@ -272,6 +284,48 @@ export function TsldPanel({
   const closeCreate = (): void => {
     setPendingCreate(null);
     addActivityRef.current?.focus();
+  };
+
+  // Auto-arrange (M4 4.3): pack the drawn (dated) activities into the fewest non-overlapping lanes
+  // and persist the minimal set of lane changes through the batch endpoint. Pure `packLanes`
+  // computes the moves; the route owns the write. Undated activities have no x-span → keep their lane.
+  const runAutoArrange = (): void => {
+    if (!onAutoArrange || dataDate === null) return;
+    const packItems = activities.flatMap((a) =>
+      a.earlyStart === null
+        ? []
+        : [
+            {
+              id: a.id,
+              startDay: daysBetween(dataDate, a.earlyStart),
+              endDay: daysBetween(dataDate, a.earlyFinish ?? a.earlyStart),
+              laneIndex: a.laneIndex,
+            },
+          ],
+    );
+    const changes = packLanes(packItems);
+    if (changes.length === 0) {
+      setConfirmArrange(false);
+      announce('Lanes are already arranged; nothing to move.');
+      return;
+    }
+    setConflict(null);
+    setArranging(true);
+    void onAutoArrange(changes)
+      .then((outcome) => {
+        setArranging(false);
+        setConfirmArrange(false);
+        if (outcome.conflict) setConflict(outcome.conflict);
+        if (outcome.applied) {
+          const n = changes.length;
+          announce(`Lanes auto-arranged; ${n} ${n === 1 ? 'activity' : 'activities'} moved.`);
+        }
+      })
+      .catch((err: unknown) => {
+        setArranging(false);
+        setConfirmArrange(false);
+        setConflict(err instanceof Error ? err.message : 'Couldn’t auto-arrange the lanes.');
+      });
   };
 
   const onIntent = (intent: EditIntent, anchor: Point): void => {
@@ -391,6 +445,7 @@ export function TsldPanel({
             onModeChange={setMode}
             onFit={() => setFitSignal((n) => n + 1)}
             fitDisabled={!showDiagram}
+            {...(onAutoArrange ? { onAutoArrange: () => setConfirmArrange(true) } : {})}
             addActivityRef={addActivityRef}
           />
         ) : (
@@ -526,6 +581,18 @@ export function TsldPanel({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmArrange}
+        onClose={() => setConfirmArrange(false)}
+        onConfirm={runAutoArrange}
+        title="Auto-arrange lanes?"
+        description="This repacks activities into the fewest lanes with no time-overlap. It changes only vertical layout, not dates — but it can’t be undone yet."
+        confirmLabel="Auto-arrange"
+        pendingLabel="Arranging…"
+        confirmVariant="default"
+        pending={arranging}
+      />
     </section>
   );
 }

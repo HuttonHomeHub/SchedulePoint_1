@@ -337,3 +337,26 @@ keyboard equivalent for the new lane axis (`Alt+↑/↓` in the parallel listbox
 slice (WCAG 2.1.1); the in-canvas time nudge and full keymap remain M5 work. The **batch
 positions** endpoint is reserved for auto-pack (4.3) and future multi-drag, **not** the single-bar
 path.
+
+### 2026-07-11 — Auto-pack lane batch: all-or-nothing concurrency posture (TSLD M4)
+
+**Decision.** "Auto-arrange lanes" repacks the drawn activities into the fewest
+non-overlapping-in-time lanes with a pure, deterministic greedy first-fit
+(`render/auto-pack.ts`, sorted by `(startDay, endDay, id)`, inclusive-finish per ADR-0023)
+and persists **only the minimal set of lane changes** through the batch positions endpoint,
+which is **all-or-nothing with per-row optimistic locking**: a single stale `version` refuses
+the whole write (409), surfaced via the non-destructive conflict banner with auto-arrange-
+specific copy. The action is opt-in (toolbar button + confirm dialog; **no undo yet**), is
+**not** optimistically previewed (a bulk reorder reconciles on refetch), and triggers **no
+recalc** (lane is layout, ADR-0026 D6). Undated activities are excluded (no x-span to pack).
+
+**Why / contrast with ADR-0022.** The _engine-owned_ CPM batched write bypasses optimistic
+locking because the engine is authoritative over the columns it writes; this _user-authored_
+layout batch **enforces** it because the planner's `version` is exactly what concurrency must
+protect — two planners auto-arranging the same plan must not silently clobber each other.
+All-or-nothing matches the mental model: the pack is one operation, and a partial pack could
+leave overlapping bars.
+
+**Consequences.** No new ADR (ADR-0026 D5/D6 already decide opt-in auto-pack + layout-without-
+recalc). The packer is pure and exhaustively unit-tested and never persists. Undo, and a manual
+multi-drag (the batch endpoint's other future consumer), remain follow-up work.
