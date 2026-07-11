@@ -108,7 +108,7 @@ flowchart LR
 
 ### Milestone 2: Structural editing (flagged; edit-lock gated)
 
-**Outcome:** a Planner can build a network on the canvas — create by click-drag, reposition in time, and draw dependencies with modifier keys — with optimistic feedback < 100 ms and authoritative recalc on drop. Ships behind a feature flag; enabled once the plan edit-lock lands (spec §1 Q2).
+**Outcome:** a Planner can build a network on the canvas — create by click-drag, reposition in time, and draw dependencies with modifier keys — with optimistic feedback < 100 ms and authoritative recalc on drop. Ships behind a feature flag. **The plan edit-lock precondition (spec §1 Q2) is now met** — the edit-lock landed (ADR-0028; server lease + 423 write-gate + the `features/plan-lock` web "pen"), so enabling on-canvas editing means turning on `VITE_PLAN_EDIT_LOCK` (+ API `PLAN_EDIT_LOCK_ENFORCED`) alongside `VITE_TSLD_EDITING` per ADR-0028 §9; the remaining enablement gate is the separate a11y `Alt+←/→` cross-browser check (TECH_DEBT #25).
 
 > **Cross-cutting risk:** editing without a lock → concurrent-write conflicts. Mitigation: gate behind the edit-lock; interim rely on optimistic-locking `version` 409s with a conflict banner (no silent overwrite).
 
