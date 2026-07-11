@@ -513,12 +513,7 @@ export function TsldPanel({
           </Button>
         )}
         {showDiagram ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHelp(true)}
-            aria-haspopup="dialog"
-          >
+          <Button variant="ghost" size="sm" onClick={() => setShowHelp(true)}>
             Keyboard shortcuts
           </Button>
         ) : null}

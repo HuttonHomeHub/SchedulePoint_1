@@ -209,6 +209,9 @@ export function TsldCanvas({
   // it's already visible (so pointer selection doesn't jump), or when it has no drawn position.
   useEffect(() => {
     if (!selectedId) return;
+    // Skip while a (re-)fit is pending: the next frame reframes the whole plan and would discard
+    // this pan anyway, so revealing off the pre-fit viewport is pointless (and would flicker).
+    if (!fittedRef.current) return;
     const size = sizeRef.current;
     if (size.width <= 1) return; // not measured yet
     const activity = activities.find((a) => a.id === selectedId);
