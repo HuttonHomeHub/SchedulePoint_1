@@ -75,6 +75,9 @@ const LEGEND: ReadonlyArray<LegendItem> = [
   { label: 'Non-driving link', line: 'dashed' },
 ];
 
+/** Debounce (ms) that coalesces a held Alt+arrow key-repeat into one nudge write (M5 5.2 §4). */
+const NUDGE_DEBOUNCE_MS = 150;
+
 /** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
 export interface TsldCreateInput {
   name: string;
@@ -246,6 +249,115 @@ export function TsldPanel({
     announce('Activity removed.');
   }, [activities, selectedId, announce]);
 
+  // Coalesced keyboard nudge (M5 5.2): a held Alt+arrow fires OS key-repeat faster than a PATCH
+  // round-trip. Rather than one racing write per repeat (which self-inflicts stale-version 409s and,
+  // for time, a recalc per keystroke), accumulate the net lane/day delta with an optimistic ghost,
+  // debounce the commit, and serialize writes — so a burst becomes ONE minimal PATCH read at the
+  // live version (M5 §4). Refs (not state) hold the in-flight burst; the panel is keyed by plan.
+  const nudgeRef = useRef<{
+    activityId: string;
+    name: string;
+    span: number;
+    origLane: number;
+    origStartDay: number;
+    laneIndex: number;
+    startDay: number;
+  } | null>(null);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nudgeBusyRef = useRef(false);
+  useEffect(() => {
+    return () => {
+      if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+    };
+  }, []);
+
+  const commitNudge = (): void => {
+    const s = nudgeRef.current;
+    if (!s || !onReposition) {
+      nudgeRef.current = null;
+      return;
+    }
+    // Serialize: don't read a version while the previous burst's write/invalidation is in flight.
+    if (nudgeBusyRef.current) {
+      nudgeTimerRef.current = setTimeout(commitNudge, 40);
+      return;
+    }
+    const laneChanged = s.laneIndex !== s.origLane;
+    const timeChanged = s.startDay !== s.origStartDay;
+    const finalLane = s.laneIndex;
+    const { activityId, name } = s;
+    nudgeRef.current = null;
+    if (!laneChanged && !timeChanged) {
+      setPendingReposition(null);
+      return;
+    }
+    nudgeBusyRef.current = true;
+    void onReposition({
+      activityId,
+      ...(timeChanged ? { startDay: s.startDay } : {}),
+      ...(laneChanged ? { laneIndex: s.laneIndex } : {}),
+    })
+      .then((outcome) => {
+        setPendingReposition(null);
+        if (outcome.conflict) setConflict(outcome.conflict);
+        if (outcome.applied) {
+          announce(
+            laneChanged
+              ? `Moved “${name}” to lane ${finalLane + 1}${timeChanged ? '; dates will update' : ''}.`
+              : `Moved “${name}”; dates will update.`,
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        setPendingReposition(null);
+        setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+      })
+      .finally(() => {
+        nudgeBusyRef.current = false;
+      });
+  };
+
+  const nudge = (activity: ActivitySummary, axis: 'lane' | 'time', delta: number): void => {
+    if (!onReposition || dataDate === null) return;
+    let s = nudgeRef.current;
+    if (!s || s.activityId !== activity.id) {
+      const origStartDay = activity.earlyStart ? daysBetween(dataDate, activity.earlyStart) : 0;
+      const span =
+        activity.earlyStart && activity.earlyFinish
+          ? daysBetween(activity.earlyStart, activity.earlyFinish)
+          : 0;
+      s = {
+        activityId: activity.id,
+        name: activity.name,
+        span,
+        origLane: activity.laneIndex,
+        origStartDay,
+        laneIndex: activity.laneIndex,
+        startDay: origStartDay,
+      };
+      nudgeRef.current = s;
+    }
+    if (axis === 'lane') {
+      const next = Math.max(0, s.laneIndex + delta);
+      if (next === s.laneIndex) {
+        announce('Already in the top lane.'); // lane boundary (#24b)
+        return;
+      }
+      s.laneIndex = next;
+    } else {
+      s.startDay += delta; // an SNET before the data date is legal; the engine clamps as needed
+    }
+    setConflict(null);
+    // Optimistic ghost tracks the burst for sighted users; AT hears the net result on commit.
+    setPendingReposition({
+      startDay: s.startDay,
+      endDay: s.startDay + s.span,
+      laneIndex: s.laneIndex,
+    });
+    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+    nudgeTimerRef.current = setTimeout(commitNudge, NUDGE_DEBOUNCE_MS);
+  };
+
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
@@ -284,28 +396,43 @@ export function TsldPanel({
       if (current) announce(summarizeLogic(current.id, dependencies));
       return;
     }
-    // Alt+↑/↓ nudges the focused activity one lane — the keyboard equivalent of a vertical drag,
-    // so free-2D introduces no pointer-only capability (WCAG 2.1.1). Lane-only ⇒ no recalc.
+    // Alt+arrows nudge the focused activity — vertical = lane (no recalc), horizontal = start day
+    // (an SNET constraint, recalcs). The keyboard equivalent of a free-2D drag, coalesced so a held
+    // key is one net write (WCAG 2.1.1; no pointer-only capability). Behind the edit flag.
     if (
       editingEnabled &&
       onReposition &&
-      (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
-      event.altKey
+      event.altKey &&
+      (event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowLeft' ||
+        event.key === 'ArrowRight')
     ) {
       event.preventDefault();
       const current = activities.find((a) => a.id === selectedId);
       if (!current) return;
-      const laneIndex = Math.max(0, current.laneIndex + (event.key === 'ArrowDown' ? 1 : -1));
-      if (laneIndex === current.laneIndex) return; // already at lane 0 moving up — no-op
+      if (event.key === 'ArrowUp') nudge(current, 'lane', -1);
+      else if (event.key === 'ArrowDown') nudge(current, 'lane', 1);
+      else if (event.key === 'ArrowLeft') nudge(current, 'time', -1);
+      else nudge(current, 'time', 1);
+      return;
+    }
+    // n opens the create-activity popover pre-filled from the focused activity's lane + start —
+    // in-canvas keyboard parity for create (the activities-table dialog is the 2.1.1 alternative).
+    if (editingEnabled && (event.key === 'n' || event.key === 'N')) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      const startDay =
+        current?.earlyStart && dataDate ? daysBetween(dataDate, current.earlyStart) : 0;
       setConflict(null);
-      void onReposition({ activityId: current.id, laneIndex })
-        .then((outcome) => {
-          if (outcome.conflict) setConflict(outcome.conflict);
-          if (outcome.applied) announce(`Moved “${current.name}” to lane ${laneIndex + 1}.`);
-        })
-        .catch((err: unknown) => {
-          setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
-        });
+      setPendingCreate({
+        startDay,
+        endDay: startDay,
+        laneIndex: current ? current.laneIndex : 0,
+        anchor: { x: 24, y: 24 },
+        saving: false,
+        error: null,
+      });
       return;
     }
     const index = activities.findIndex((a) => a.id === selectedId);

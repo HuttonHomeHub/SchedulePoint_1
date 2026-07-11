@@ -15,11 +15,10 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Esc', action: 'Cancel the current gesture / close a popover' },
 ];
 
-// Only the shortcuts actually wired today. The time nudge (Alt+←/→) and create (n) land with M5
-// slice 5.2 — add them here in the same change that implements them, so the sheet never documents
-// a key that does nothing.
 const EDIT_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Alt + ↑ / ↓', action: 'Move the activity up / down one lane' },
+  { keys: 'Alt + ← / →', action: 'Nudge the start one day earlier / later (recalculates)' },
+  { keys: 'n', action: 'Create an activity in the focused lane and start' },
 ];
 
 function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactElement {
