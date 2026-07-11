@@ -360,3 +360,27 @@ leave overlapping bars.
 **Consequences.** No new ADR (ADR-0026 D5/D6 already decide opt-in auto-pack + layout-without-
 recalc). The packer is pure and exhaustively unit-tested and never persists. Undo, and a manual
 multi-drag (the batch endpoint's other future consumer), remain follow-up work.
+
+### 2026-07-11 — TSLD accessibility model & canonical keymap (M5)
+
+**Decision.** The TSLD's parallel accessible surface is a single `sr-only` `role="listbox"` driven by
+**`aria-activedescendant`** (not roving `tabindex`) over the `aria-hidden` canvas, with the **canvas
+ring** as the visible focus and **focus-follows-viewport** panning the minimum distance to keep the
+ring on-screen (WCAG 2.4.7 / 2.4.11). The canonical keymap, focused on that listbox and documented
+in-app via a `?` shortcuts sheet: `↑/↓/Home/End` navigate; `[`/`]` jump driving-first to the
+predecessor/successor (trace the driving path); `Space` announces logic-tie + driving detail
+(Tier 2); `Enter` opens the logic editor (Tier 3); edit keys (behind `VITE_TSLD_EDITING`): `Alt+↑↓`
+lane, `Alt+←→` SNET day nudge, `n` create. The per-keystroke announcement stays lean (name, dates,
+lane, float, critical); driving/ties are on demand, never folded into every keystroke.
+
+**Why.** With the listbox `sr-only` and the visible focus being the _canvas ring_ (not a DOM
+outline), roving `tabindex`'s payoff (a native focus ring, simple `:focus` styling) is worthless,
+while `aria-activedescendant` keeps **one tab stop** and **one source of truth** — `selectedId`
+drives the active option _and_ the ring, so keyboard and visual focus cannot diverge. This refines
+the _technique_ ADR-0026 D7 named loosely ("roving tabindex", positioned proxies); the _architecture_
+D7 fixed (parallel DOM over an aria-hidden canvas, canvas ring, `useAnnounce`) is unchanged.
+
+**Consequences.** No new ADR and no D7 reversal — a local, reversible ratification. Chain navigation
+and the three-tier disclosure are pure reads (ship flag-off in 5.1); the edit keymap + the
+coalesce-and-serialize nudge policy harden in 5.2. `accessibility-reviewer` leads the WCAG 2.2 AA
+sign-off (plan §M5).

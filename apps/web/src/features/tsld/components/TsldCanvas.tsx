@@ -26,6 +26,7 @@ import {
   edgeAnchor,
   fitToContent,
   hitTest,
+  LANE_HEIGHT,
   pan,
   zoomAt,
   type HitZone,
@@ -201,6 +202,36 @@ export function TsldCanvas({
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
   }, [activities, edges, dataDate, selectedId, showEdgeHandles]);
+
+  // Focus-follows-viewport (M5, WCAG 2.4.7/2.4.11): when the selection changes — e.g. keyboard
+  // navigation or chain-nav to an off-screen bar — pan the minimum distance so the selected bar's
+  // ring is fully on-screen, kept off the edges by a margin so nothing obscures it. A no-op when
+  // it's already visible (so pointer selection doesn't jump), or when it has no drawn position.
+  useEffect(() => {
+    if (!selectedId) return;
+    const size = sizeRef.current;
+    if (size.width <= 1) return; // not measured yet
+    const activity = activities.find((a) => a.id === selectedId);
+    if (!activity) return;
+    const rect = activityRect(activity, viewRef.current, dataDate);
+    if (!rect) return;
+    const margin = LANE_HEIGHT;
+    const reveal = (start: number, span: number, extent: number): number => {
+      if (start < margin) return margin - start;
+      if (start + span > extent - margin) {
+        // If it's larger than the viewport, align its start; else pan just enough to fit the end.
+        return span > extent - 2 * margin ? margin - start : extent - margin - (start + span);
+      }
+      return 0;
+    };
+    const dx = reveal(rect.x, rect.w, size.width);
+    const dy = reveal(rect.y, rect.h, size.height);
+    if (dx !== 0 || dy !== 0) {
+      viewRef.current = pan(viewRef.current, dx, dy);
+      dirtyRef.current = true;
+      interactionDirtyRef.current = true;
+    }
+  }, [selectedId, activities, dataDate]);
 
   // Publish the pending ghost to the loop.
   useEffect(() => {
