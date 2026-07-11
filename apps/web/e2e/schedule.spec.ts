@@ -71,6 +71,9 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   await dialog.getByRole('button', { name: 'Add predecessor' }).click();
   await dialog.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
   await dialog.getByRole('button', { name: 'Add dependency' }).click();
+  // The "Add predecessor" sub-dialog closes on success; wait for it to go before clicking
+  // Close, otherwise both dialogs' close (✕) buttons match and the click is ambiguous.
+  await expect(page.getByRole('dialog', { name: 'Add predecessor' })).toBeHidden();
   await expect(dialog.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
 
