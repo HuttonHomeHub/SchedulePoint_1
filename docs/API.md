@@ -108,6 +108,12 @@ the pen and return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from th
 409 version clash). The Contributor progress path (`…/activities/:id/progress`),
 all reads, and plan-metadata `PATCH …/plans/:id` are **not** pen-gated.
 
+The write-gate is **behind a staged-rollout flag** `PLAN_EDIT_LOCK_ENFORCED`
+(default off): the lock mechanism ships inert so it never breaks the existing
+(flag-on) activities-table / dependency-editor / recalculate flows, which don't
+acquire a lock yet. Ops enable it only once the front end acquires the pen across
+every editing entry point (edit-lock M2/M3).
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

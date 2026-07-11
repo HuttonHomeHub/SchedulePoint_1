@@ -16,6 +16,7 @@ import {
   LockedError,
   NotFoundError,
 } from '../../common/errors/domain-errors';
+import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -48,6 +49,7 @@ export class PlanEditLockService {
     private readonly organizations: OrganizationsService,
     private readonly plans: PlanRepository,
     private readonly repository: PlanLockRepository,
+    private readonly config: AppConfigService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(PlanEditLockService.name) private readonly logger: PinoLogger,
   ) {}
@@ -278,6 +280,11 @@ export class PlanEditLockService {
     organizationId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
+    // Staged rollout (ADR-0028): the gate ships inert so it never breaks the
+    // existing (flag-on) activities-table / dependency-editor / recalculate flows,
+    // which don't acquire a lock yet. Ops flip PLAN_EDIT_LOCK_ENFORCED on once the
+    // front end holds the pen across every editing entry point.
+    if (!this.config.planEditLockEnforced) return;
     const now = new Date();
     const row = await this.repository.find(planId, organizationId, tx);
     const state = deriveLockState(row, now, principal.userId);

@@ -14,6 +14,7 @@ import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-life
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import { wouldCreateCycle } from './cycle-detector';
@@ -54,6 +55,7 @@ export class DependenciesService {
     private readonly activities: ActivityRepository,
     private readonly dependencies: DependencyRepository,
     private readonly lifecycle: HierarchyLifecycleService,
+    private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(DependenciesService.name) private readonly logger: PinoLogger,
   ) {}
@@ -155,6 +157,9 @@ export class DependenciesService {
       // same plan is serialised behind us and its walk sees our edge (ADR-0021).
       const dependency = await this.prisma.$transaction(async (tx) => {
         await this.dependencies.lockPlanForWrite(plan.id, tx);
+        // Assert the pen INSIDE the advisory lock (ADR-0028): a graph write is
+        // serialised, so a steal can't slip between the check and the insert.
+        await this.editLock.assertHoldsPen(principal, plan.id, organization.id, tx);
         const edges = await this.dependencies.findActiveEdgesByPlan(organization.id, plan.id, tx);
         if (wouldCreateCycle(edges, dto.predecessorId, dto.successorId)) {
           throw new ConflictError('This dependency would create a cycle in the schedule.', {
@@ -199,9 +204,9 @@ export class DependenciesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:update', organization.id);
 
-    if (!(await this.dependencies.findActiveByIdInOrg(dependencyId, organization.id))) {
-      throw new NotFoundError('Dependency not found.');
-    }
+    const existing = await this.dependencies.findActiveByIdInOrg(dependencyId, organization.id);
+    if (!existing) throw new NotFoundError('Dependency not found.');
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
 
     const patch: DependencyPatch = {};
     if (dto.type !== undefined) patch.type = dto.type;
@@ -230,9 +235,9 @@ export class DependenciesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:delete', organization.id);
 
-    if (!(await this.dependencies.findActiveByIdInOrg(dependencyId, organization.id))) {
-      throw new NotFoundError('Dependency not found.');
-    }
+    const existing = await this.dependencies.findActiveByIdInOrg(dependencyId, organization.id);
+    if (!existing) throw new NotFoundError('Dependency not found.');
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
 
     await this.prisma.$transaction((tx) =>
       this.lifecycle.cascadeSoftDelete(tx, 'dependency', dependencyId, principal.userId),

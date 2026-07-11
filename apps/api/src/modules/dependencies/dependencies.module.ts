@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { HierarchyModule } from '../../common/hierarchy/hierarchy.module';
 import { ActivitiesModule } from '../activities/activities.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
 
 import { ActivityDependenciesController } from './activity-dependencies.controller';
@@ -19,7 +20,7 @@ import { PlanDependenciesController } from './plan-dependencies.controller';
  * HierarchyLifecycleService (soft-delete; restore comes with the endpoints' batch).
  */
 @Module({
-  imports: [OrganizationsModule, HierarchyModule, PlansModule, ActivitiesModule],
+  imports: [OrganizationsModule, HierarchyModule, PlansModule, ActivitiesModule, PlanLockModule],
   controllers: [PlanDependenciesController, ActivityDependenciesController, DependenciesController],
   providers: [DependenciesService, DependencyRepository],
   exports: [DependencyRepository],

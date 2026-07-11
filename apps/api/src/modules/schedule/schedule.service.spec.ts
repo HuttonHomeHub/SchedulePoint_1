@@ -6,6 +6,7 @@ import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
 
 import type { EngineResult } from './engine';
@@ -108,6 +109,7 @@ describe('ScheduleService.recalculate', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       schedule as unknown as ScheduleRepository,
+      { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       logger,
     );
@@ -257,6 +259,7 @@ describe('ScheduleService.summary', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       schedule as unknown as ScheduleRepository,
+      { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       logger,
     );

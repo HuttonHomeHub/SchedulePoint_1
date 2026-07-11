@@ -12,6 +12,7 @@ import {
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
 
 import { ActivitiesService } from './activities.service';
@@ -129,12 +130,14 @@ describe('ActivitiesService', () => {
       restoreBatch: vi.fn().mockResolvedValue({}),
     };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new ActivitiesService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       activities as unknown as ActivityRepository,
       lifecycle as unknown as HierarchyLifecycleService,
+      editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       logger,
     );

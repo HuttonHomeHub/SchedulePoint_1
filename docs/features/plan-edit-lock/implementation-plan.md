@@ -135,7 +135,10 @@ because the front-end still doesn't call it and editing stays flag-off.
 tx?)`; call it after the existing permission/scope checks in `ActivitiesService`
   (create/update/delete/restore/positions), `DependenciesService`
   (create/update/delete), and `ScheduleService.recalculate` (inside its advisory-
-  lock txn). Leave `updateProgress` and plan-metadata `update` ungated.
+  lock txn). Leave `updateProgress` and plan-metadata `update` ungated. **Ship it
+  behind `PLAN_EDIT_LOCK_ENFORCED` (default off)** so the gate is inert and cannot
+  423 the already-shipped, flag-on activities-table / dependency / recalculate flows
+  (which don't acquire a lock yet); ops enable it once M2/M3 acquire the pen.
 - **Complexity:** M
 - **Dependencies:** 1.3, 1.4.
 - **Risks:** subtle coupling / circular module deps → export the service via the

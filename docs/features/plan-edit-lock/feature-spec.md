@@ -333,6 +333,14 @@ holding the pen. `activity:update_progress` is deliberately **not** pen-gated.
 **423 Locked** is introduced specifically so lock-precondition failures are
 **distinct** from 409 optimistic conflicts on the wire and in the UI.
 
+**Staged rollout of enforcement.** The `assertHoldsPen` write-gate ships behind a
+server flag `PLAN_EDIT_LOCK_ENFORCED` (default **off**). The activities-table CRUD,
+dependency editor, and recalculate flows are already shipped and **flag-on** (only
+the TSLD canvas is behind `VITE_TSLD_EDITING`), and none acquire a lock yet — so
+enforcing the gate unconditionally would 423 live functionality. M1 therefore lands
+the full mechanism dormant; enforcement is flipped on only once the front end
+acquires the pen across every editing entry point (M2/M3).
+
 ## 3. Technical analysis
 
 | Area           | Impact | Notes                                                                                                                                                                                                  |

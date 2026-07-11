@@ -9,6 +9,7 @@ import {
   LockedError,
   NotFoundError,
 } from '../../common/errors/domain-errors';
+import type { AppConfigService } from '../../config/app-config.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanRepository } from '../plans/plan.repository';
@@ -85,10 +86,14 @@ describe('PlanEditLockService', () => {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
     };
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as PinoLogger;
+    // Enforcement ON so the assertHoldsPen tests exercise the gate (the staged
+    // rollout flag is covered separately below).
+    const config = { planEditLockEnforced: true } as unknown as AppConfigService;
     service = new PlanEditLockService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       repository as unknown as PlanLockRepository,
+      config,
       prisma as unknown as PrismaService,
       logger,
     );
@@ -308,6 +313,24 @@ describe('PlanEditLockService', () => {
       await service.assertHoldsPen(principal(ME, PLANNER), PLAN_ID, ORG_ID);
       expect(repository.writeLeaseToHolder).not.toHaveBeenCalled();
       expect(repository.renewOwnLease).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op (never reads the lock) when enforcement is disabled — the staged rollout', async () => {
+      const inertConfig = { planEditLockEnforced: false } as unknown as AppConfigService;
+      const inert = new PlanEditLockService(
+        organizations as unknown as OrganizationsService,
+        plans as unknown as PlanRepository,
+        repository as unknown as PlanLockRepository,
+        inertConfig,
+        prisma as unknown as PrismaService,
+        { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as PinoLogger,
+      );
+      // Even with nobody holding the pen, an unenforced gate must not reject.
+      repository.find.mockResolvedValue(lockRow({ holderUserId: OTHER }));
+      await expect(
+        inert.assertHoldsPen(principal(ME, PLANNER), PLAN_ID, ORG_ID),
+      ).resolves.toBeUndefined();
+      expect(repository.find).not.toHaveBeenCalled();
     });
   });
 });

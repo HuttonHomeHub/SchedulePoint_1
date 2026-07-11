@@ -38,6 +38,20 @@ export const envSchema = z
      * cannot ship. Empty in dev (the app is reached directly).
      */
     TRUSTED_PROXY_IPS: z.string().default(''),
+    /**
+     * When `true`, structural plan writes (activity/dependency create/update/
+     * delete/restore, positions batch, schedule recalculate) require the caller
+     * to hold the plan edit-lock (ADR-0028) and return **423** otherwise. Off by
+     * default: the lock *mechanism* ships inert so it never breaks the existing
+     * (flag-on) activities-table / dependency-editor / recalculate flows, which do
+     * not yet acquire a lock. Flip it on only once the front end acquires the pen
+     * across every editing entry point (edit-lock M2/M3). The progress path and
+     * reads are never gated regardless of this flag.
+     */
+    PLAN_EDIT_LOCK_ENFORCED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),

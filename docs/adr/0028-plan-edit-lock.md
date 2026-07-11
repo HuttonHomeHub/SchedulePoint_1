@@ -103,6 +103,15 @@ HANDOFF_GRACE_MS` (default 45 s) **or** the holder is inactive (last heartbeat
 8. **Propagation is by polling** (TanStack Query interval + refetch-on-focus) —
    no websockets/Redis in v1.
 
+9. **Staged rollout — the gate ships inert.** The `assertHoldsPen` write-gate is
+   guarded by a server flag `PLAN_EDIT_LOCK_ENFORCED` (default **off**). Enforcing
+   it unconditionally would 423 the _already-shipped, flag-on_ activities-table
+   CRUD, dependency editor, and recalculate flows, which do not acquire a lock yet
+   (only the TSLD canvas is behind `VITE_TSLD_EDITING`). So M1 lands the whole
+   mechanism (endpoints, lease, write-gate, tests) dormant; ops flip enforcement on
+   only once the front end acquires the pen across every editing entry point
+   (edit-lock M2/M3). This keeps `main` releasable with no user-visible change.
+
 ## Alternatives considered
 
 - **Lock columns on `Plan` (raw-SQL heartbeat bypassing `version`).** Every plan
@@ -139,6 +148,10 @@ HANDOFF_GRACE_MS` (default 45 s) **or** the holder is inactive (last heartbeat
   still gates production enablement.
 - **423 enters the API vocabulary.** Clients must branch on 423 vs 409 distinctly;
   the shared error `reason` union carries the specific lock condition.
+- **Enforcement is a one-way switch tied to front-end readiness.** Because the gate
+  ships behind `PLAN_EDIT_LOCK_ENFORCED` (off), turning it on is an ops action that
+  must not precede the front end acquiring the pen on every editing entry point —
+  otherwise the shipped activities-table/dependency/recalculate flows would 423.
 - **Undo/redo** (a separate Must-have) is unblocked but explicitly out of scope —
   the edit-lock is its precondition (a coherent per-user undo stack assumes a
   single writer), shipped independently.
