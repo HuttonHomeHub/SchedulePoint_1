@@ -72,8 +72,10 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name').fill('Contract Baseline');
   await dialog.getByRole('button', { name: 'Capture baseline' }).click();
-  await expect(page.getByRole('cell', { name: 'Contract Baseline' })).toBeVisible();
-  await expect(page.getByText('Active', { exact: true })).toBeVisible();
+  // The baseline name also appears in the row's action-button aria-labels ("… is active"),
+  // and "Active" renders both as the badge and the active-row button, so scope to the first.
+  await expect(page.getByRole('cell', { name: 'Contract Baseline' }).first()).toBeVisible();
+  await expect(page.getByText('Active', { exact: true }).first()).toBeVisible();
 
   // The activities table now shows the variance columns; the sole activity matches the
   // just-captured baseline, and the plan-level roll-up appears above the table.
@@ -84,7 +86,8 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   // Add a new activity after capture and recalculate → it reads as "Added" variance.
   await addActivity(page, 'Pour slab');
   await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect(page.getByRole('cell', { name: 'Added' })).toBeVisible();
+  // "Added" shows in all three variance columns (start/finish/float) for the new activity.
+  await expect(page.getByRole('cell', { name: 'Added' }).first()).toBeVisible();
 
   // The plan view with the baselines panel + variance column is accessible.
   expect(
