@@ -7,6 +7,7 @@ import {
   screenXOfDay,
   MILESTONE_RADIUS,
   type Point,
+  type Rect,
   type RenderActivity,
   type RenderEdge,
   type Size,
@@ -178,6 +179,43 @@ export function paintScene(
   }
 
   return [...visibleIds];
+}
+
+/**
+ * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):
+ * the **live** ghost (the bar being drawn/moved, solid fill + a selection outline) and/or a
+ * **pending** ghost (a dropped edit awaiting the authoritative recalc, a dashed outline that
+ * reads as "saving"). Both are plain screen rects the caller computed from the gesture; this
+ * layer never touches the base layer, so a gesture repaints only this cheap surface. Passing
+ * two `null`s clears it (gesture ended).
+ */
+export function paintInteractionLayer(
+  ctx: Ctx2D,
+  live: Rect | null,
+  pending: Rect | null,
+  size: Size,
+  palette: TsldPalette,
+  dpr = 1,
+): void {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size.width, size.height);
+
+  if (pending) {
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(pending.x + 0.5, pending.y + 0.5, pending.w - 1, pending.h - 1);
+    ctx.setLineDash([]);
+  }
+
+  if (live) {
+    ctx.fillStyle = palette.bar;
+    ctx.fillRect(live.x, live.y, live.w, live.h);
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+  }
 }
 
 /** The inclusive [minDay, maxDay] world-day extent of the computed activities (for the ruler/minimap). */

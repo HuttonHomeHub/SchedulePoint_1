@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { paintScene, type TsldPalette, type TsldScene } from './paint';
+import { paintInteractionLayer, paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, Viewport } from './render-model';
 
 const PALETTE: TsldPalette = {
@@ -151,5 +151,34 @@ describe('paintScene', () => {
     const visible = paintScene(ctx, scene, VIEW, SIZE, PALETTE);
     expect(visible).toEqual([]);
     expect(ctx.fillRect).not.toHaveBeenCalled();
+  });
+});
+
+describe('paintInteractionLayer', () => {
+  const GHOST = { x: 10, y: 10, w: 40, h: 18 };
+
+  it('clears and draws a live ghost with a fill + solid outline', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, GHOST, null, SIZE, PALETTE, 2);
+    expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
+    expect(ctx.clearRect).toHaveBeenCalled();
+    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws a pending ghost as a dashed outline with no fill', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, null, GHOST, SIZE, PALETTE);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    expect(ctx.fillRect).not.toHaveBeenCalled();
+  });
+
+  it('clears to nothing when idle (both null)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, null, null, SIZE, PALETTE);
+    expect(ctx.clearRect).toHaveBeenCalled();
+    expect(ctx.fillRect).not.toHaveBeenCalled();
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
   });
 });

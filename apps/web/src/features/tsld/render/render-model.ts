@@ -239,6 +239,78 @@ export function hitTest(
   return null;
 }
 
+/** Width of the grab-zone at each end of a bar, for dependency-draw (ADR-0026 D5). */
+export const EDGE_HANDLE_PX = 8;
+
+/** Where a screen point falls relative to the activities, for gesture routing. */
+export type HitZoneKind = 'empty' | 'body' | 'startHandle' | 'finishHandle';
+
+export interface HitZone {
+  kind: HitZoneKind;
+  /** The activity id for a non-empty zone. */
+  id?: string;
+}
+
+/**
+ * Classify a screen point for gesture routing (ADR-0026 D5): the topmost activity (if
+ * any) under it, and whether the point is on the bar **body** (→ reposition) or an end
+ * **grab-zone** (→ dependency-draw). Iterates topmost-first like {@link hitTest}; the end
+ * zones take precedence over the body and are capped at half the bar so they never
+ * overlap. `empty` (no activity under the point) routes to pan or create.
+ */
+export function classifyHit(
+  activities: readonly RenderActivity[],
+  point: Point,
+  view: Viewport,
+  dataDateIso: string,
+): HitZone {
+  for (let i = activities.length - 1; i >= 0; i -= 1) {
+    const activity = activities[i]!;
+    const rect = activityRect(activity, view, dataDateIso);
+    if (!rect) continue;
+    if (
+      point.x < rect.x ||
+      point.x > rect.x + rect.w ||
+      point.y < rect.y ||
+      point.y > rect.y + rect.h
+    ) {
+      continue;
+    }
+    const handleW = Math.min(EDGE_HANDLE_PX, rect.w / 2);
+    if (point.x <= rect.x + handleW) return { kind: 'startHandle', id: activity.id };
+    if (point.x >= rect.x + rect.w - handleW) return { kind: 'finishHandle', id: activity.id };
+    return { kind: 'body', id: activity.id };
+  }
+  return { kind: 'empty' };
+}
+
+/**
+ * The bar rect for a whole-day span `[leftDay, rightDay]` (inclusive, about the data
+ * date) at a lane — the geometry of a create/reposition **ghost**, matching
+ * {@link activityRect}'s convention (right edge at `rightDay + 1`).
+ */
+export function dayCellRect(
+  leftDay: number,
+  rightDay: number,
+  laneIndex: number,
+  view: Viewport,
+): Rect {
+  const x1 = screenXOfDay(leftDay, view);
+  const x2 = screenXOfDay(rightDay + 1, view);
+  const top = screenYOfLane(laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
+  return { x: x1, y: top, w: Math.max(2, x2 - x1), h: BAR_HEIGHT };
+}
+
+/** The whole day column at a screen x (floor of the fractional day offset). */
+export function dayColumnAt(x: number, view: Viewport): number {
+  return Math.floor(dayAtScreenX(x, view));
+}
+
+/** The lane index (≥ 0) containing a screen y. */
+export function laneRowAt(y: number, view: Viewport): number {
+  return Math.max(0, Math.floor(laneAtScreenY(y, view)));
+}
+
 /** Clamp a px-per-day value to the allowed zoom range. */
 export function clampPxPerDay(pxPerDay: number): number {
   return Math.max(MIN_PX_PER_DAY, Math.min(MAX_PX_PER_DAY, pxPerDay));
