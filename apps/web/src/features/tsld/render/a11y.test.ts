@@ -126,6 +126,20 @@ describe('chainNeighbour + announceChainStep', () => {
     expect(chainNeighbour('s1', deps, 'succ')).toBeNull();
   });
 
+  it('prefixes the neighbour code (cross-tier consistency with Tier 1)', () => {
+    const coded = [
+      edge({ predecessor: { id: 'p', code: 'A100', name: 'Survey' }, successor: ep('x', 'X') }),
+    ];
+    expect(chainNeighbour('x', coded, 'pred')).toEqual({
+      id: 'p',
+      name: 'A100 Survey',
+      driving: false,
+    });
+    expect(announceChainStep('pred', chainNeighbour('x', coded, 'pred'))).toBe(
+      'Predecessor: A100 Survey.',
+    );
+  });
+
   it('announces the neighbour, flagging a driving tie, and the empty case', () => {
     expect(announceChainStep('pred', chainNeighbour('x', deps, 'pred'))).toBe(
       'Predecessor: Permit, driving.',
