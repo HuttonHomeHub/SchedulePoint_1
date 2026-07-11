@@ -182,17 +182,36 @@ export function paintScene(
 }
 
 /**
+ * A dependency rubber-band in flight: a straight line from the source bar's grabbed edge
+ * (`from`) to the live pointer (`to`), plus the drop target's rect when the pointer is over a
+ * valid successor (drawn as a highlight so the drop is discoverable — ADR-0026 D5).
+ */
+export interface LinkOverlay {
+  from: Point;
+  to: Point;
+  targetRect: Rect | null;
+}
+
+/** The transient shapes drawn on the interaction layer for an in-progress edit. */
+export interface InteractionOverlay {
+  /** The bar being drawn/moved (solid fill + outline). */
+  live?: Rect | null;
+  /** A dropped edit awaiting the authoritative recalc (dashed "saving" outline). */
+  pending?: Rect | null;
+  /** A dependency being drawn (rubber-band + target highlight). */
+  link?: LinkOverlay | null;
+}
+
+/**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):
- * the **live** ghost (the bar being drawn/moved, solid fill + a selection outline) and/or a
- * **pending** ghost (a dropped edit awaiting the authoritative recalc, a dashed outline that
- * reads as "saving"). Both are plain screen rects the caller computed from the gesture; this
- * layer never touches the base layer, so a gesture repaints only this cheap surface. Passing
- * two `null`s clears it (gesture ended).
+ * the **live** ghost (the bar being drawn/moved), a **pending** ghost (a dropped edit awaiting
+ * the authoritative recalc, dashed), and/or a **link** rubber-band (dependency-draw, 2.3). All
+ * are plain screen shapes the caller computed from the gesture; this layer never touches the
+ * base layer, so a gesture repaints only this cheap surface. An empty overlay clears it.
  */
 export function paintInteractionLayer(
   ctx: Ctx2D,
-  live: Rect | null,
-  pending: Rect | null,
+  overlay: InteractionOverlay,
   size: Size,
   palette: TsldPalette,
   dpr = 1,
@@ -200,11 +219,32 @@ export function paintInteractionLayer(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
+  const { live, pending, link } = overlay;
+
   if (pending) {
     ctx.strokeStyle = palette.selection;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 3]);
     ctx.strokeRect(pending.x + 0.5, pending.y + 0.5, pending.w - 1, pending.h - 1);
+    ctx.setLineDash([]);
+  }
+
+  if (link) {
+    // Ring the valid drop target first, so the line draws over it.
+    if (link.targetRect) {
+      const t = link.targetRect;
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.strokeRect(t.x - 2, t.y - 2, t.w + 4, t.h + 4);
+    }
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(link.from.x, link.from.y);
+    ctx.lineTo(link.to.x, link.to.y);
+    ctx.stroke();
     ctx.setLineDash([]);
   }
 

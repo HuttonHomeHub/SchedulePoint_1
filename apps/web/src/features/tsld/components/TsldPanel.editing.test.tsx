@@ -153,12 +153,10 @@ describe('TsldPanel editing (M2, flag on)', () => {
   });
 
   it('on a rejected reposition (stale version) shows the conflict banner and does not announce a move', async () => {
-    const onReposition = vi
-      .fn()
-      .mockResolvedValue({
-        applied: false,
-        conflict: 'This plan changed — your move wasn’t applied.',
-      });
+    const onReposition = vi.fn().mockResolvedValue({
+      applied: false,
+      conflict: 'This plan changed — your move wasn’t applied.',
+    });
     const utils = render(
       <TsldPanel
         activities={[activity()]}
@@ -202,6 +200,94 @@ describe('TsldPanel editing (M2, flag on)', () => {
       expect(utils.container.querySelector('[role="option"][aria-selected="true"]')).not.toBeNull(),
     );
     expect(onReposition).not.toHaveBeenCalled();
+  });
+
+  it('draws a dependency by dragging from a bar edge to another bar → onLink (FS by default)', async () => {
+    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    const succ = activity({
+      id: 'a2',
+      name: 'Pour',
+      laneIndex: 1,
+      earlyStart: '2026-01-06',
+      earlyFinish: '2026-01-08',
+    });
+    const utils = render(
+      <TsldPanel
+        activities={[activity(), succ]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onLink={onLink}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    // Grab a1's finish handle (right end ≈ x78) and release over a2's body (lane 1 ≈ y82).
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    await waitFor(() =>
+      expect(onLink).toHaveBeenCalledWith({ predecessorId: 'a1', successorId: 'a2', type: 'FS' }),
+    );
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('Linked')),
+    );
+  });
+
+  it('picks SS when Shift is held during the link drag', async () => {
+    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    const succ = activity({
+      id: 'a2',
+      laneIndex: 1,
+      earlyStart: '2026-01-06',
+      earlyFinish: '2026-01-08',
+    });
+    const utils = render(
+      <TsldPanel
+        activities={[activity(), succ]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onLink={onLink}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas')!;
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1, shiftKey: true });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1, shiftKey: true });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1, shiftKey: true });
+    await waitFor(() =>
+      expect(onLink).toHaveBeenCalledWith(expect.objectContaining({ type: 'SS' })),
+    );
+  });
+
+  it('on a cycle/duplicate rejection shows the banner and does not announce a link', async () => {
+    const onLink = vi
+      .fn()
+      .mockResolvedValue({ applied: false, conflict: 'That link would create a cycle.' });
+    const succ = activity({
+      id: 'a2',
+      laneIndex: 1,
+      earlyStart: '2026-01-06',
+      earlyFinish: '2026-01-08',
+    });
+    const utils = render(
+      <TsldPanel
+        activities={[activity(), succ]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onLink={onLink}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas')!;
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    expect(await screen.findByRole('alert')).toHaveTextContent('create a cycle');
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Linked'));
   });
 
   it('cancels the create popover without calling onCreate', async () => {

@@ -1,3 +1,5 @@
+import type { DependencyType } from '@repo/types';
+
 import {
   dayColumnAt,
   laneRowAt,
@@ -15,8 +17,7 @@ import {
  * shell (`TsldCanvas`) feeds it events, paints the transient state, and hands each intent
  * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 D8).
  *
- * Slices: **create-by-drag** (2.1) and **reposition-in-time** (2.2). Dependency-draw (2.3)
- * extends the `EditIntent`/`GestureState` unions and the `pointerDown` routing likewise.
+ * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), and **dependency-draw** (2.3).
  */
 
 /** The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition. */
@@ -37,6 +38,24 @@ export interface GestureCtx {
   dataDate: string;
 }
 
+/** The keyboard modifiers held during a link drag, which pick the dependency type. */
+export interface Modifiers {
+  shift: boolean;
+  alt: boolean;
+}
+
+/**
+ * Map the held modifiers to a dependency type while drawing a link (ADR-0026 D5): plain drag
+ * is **FS** (finish→start, the overwhelmingly common case), **Shift** is **SS**, **Alt** is
+ * **FF**. **SF** has no chord — it's the rare inverse and is created through the existing
+ * dependency dialog instead. Shift wins if both are held (an arbitrary but stable tiebreak).
+ */
+export function modifiersToLinkType(mods: Modifiers | undefined): DependencyType {
+  if (mods?.shift) return 'SS';
+  if (mods?.alt) return 'FF';
+  return 'FS';
+}
+
 /** The grabbed activity's current geometry, supplied by the shell on a body pointer-down. */
 export interface BodyGrab {
   id: string;
@@ -47,9 +66,9 @@ export interface BodyGrab {
 }
 
 export type GestureEvent =
-  | { type: 'pointerDown'; point: Point; hit: HitZone; body?: BodyGrab }
-  | { type: 'pointerMove'; point: Point }
-  | { type: 'pointerUp' }
+  | { type: 'pointerDown'; point: Point; hit: HitZone; body?: BodyGrab; modifiers?: Modifiers }
+  | { type: 'pointerMove'; point: Point; hit?: HitZone; modifiers?: Modifiers }
+  | { type: 'pointerUp'; hit?: HitZone; modifiers?: Modifiers }
   | { type: 'escape' };
 
 /**
@@ -70,6 +89,15 @@ export type EditIntent =
       activityId: string;
       /** The new early-start day offset — imposed as an SNET constraint (ADR-0023). */
       startDay: number;
+    }
+  | {
+      kind: 'link';
+      /** The activity the drag started from (its edge handle). */
+      predecessorId: string;
+      /** The activity the drag was released over. */
+      successorId: string;
+      /** Chosen by the held modifiers at release (see {@link modifiersToLinkType}). */
+      type: DependencyType;
     };
 
 /** The live gesture. `idle` means the machine owns nothing — the canvas pans/selects (M1). */
@@ -89,6 +117,19 @@ export type GestureState =
       spanDays: number;
       laneIndex: number;
       currentStartDay: number;
+    }
+  | {
+      kind: 'linking';
+      /** The activity whose edge handle was grabbed (the link's predecessor). */
+      sourceId: string;
+      /** Which end the drag sprang from, so the shell anchors the rubber-band correctly. */
+      sourceHandle: 'startHandle' | 'finishHandle';
+      /** The live pointer position — the rubber-band's free end. */
+      point: Point;
+      /** The activity currently hovered as the drop target, or null (over empty/self). */
+      targetId: string | null;
+      /** The type the current modifiers would create, for a live affordance. */
+      type: DependencyType;
     };
 
 export const IDLE: GestureState = { kind: 'idle' };
@@ -106,8 +147,9 @@ export interface Reduction {
  * In `select` mode, a `pointerDown` on empty space returns `idle` (the canvas keeps its M1
  * pan/select path); on a bar **body** it starts a reposition ghost that tracks the pointer by
  * whole-day columns and commits an SNET move on release — or, if it never moved, selects the
- * bar. In `add-activity` mode a drag draws a create ghost. `escape` (or a release with no
- * active gesture) resets to `idle` and emits nothing.
+ * bar; on an **edge handle** it starts a dependency rubber-band that commits a `link` intent
+ * when released over another activity (type from the held modifiers). In `add-activity` mode a
+ * drag draws a create ghost. `escape` (or a release with no target) resets to `idle`, no intent.
  */
 export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx): Reduction {
   switch (event.type) {
@@ -116,6 +158,19 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const day = dayColumnAt(event.point.x, ctx.view);
         const laneIndex = laneRowAt(event.point.y, ctx.view);
         return { state: { kind: 'creating', originDay: day, laneIndex, currentDay: day } };
+      }
+      if ((event.hit.kind === 'startHandle' || event.hit.kind === 'finishHandle') && event.hit.id) {
+        // Grab an edge handle → start a dependency rubber-band from that activity.
+        return {
+          state: {
+            kind: 'linking',
+            sourceId: event.hit.id,
+            sourceHandle: event.hit.kind,
+            point: event.point,
+            targetId: null,
+            type: modifiersToLinkType(event.modifiers),
+          },
+        };
       }
       if (event.hit.kind === 'body' && event.body) {
         const { id, startDay, endDay, laneIndex } = event.body;
@@ -133,7 +188,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
           },
         };
       }
-      // select mode on empty / handle: the canvas pans/selects; link lands in 2.3.
+      // select mode on empty space: the canvas pans/selects (M1), no gesture owned here.
       return { state: IDLE };
     }
     case 'pointerMove': {
@@ -154,6 +209,16 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         )
           return { state };
         return { state: { ...state, currentStartDay, movedPastThreshold } };
+      }
+      if (state.kind === 'linking') {
+        // Track the free end + the hovered drop target (a different activity) + the live type.
+        const hovered = event.hit;
+        const targetId =
+          hovered && hovered.kind !== 'empty' && hovered.id && hovered.id !== state.sourceId
+            ? hovered.id
+            : null;
+        const type = event.modifiers ? modifiersToLinkType(event.modifiers) : state.type;
+        return { state: { ...state, point: event.point, targetId, type } };
       }
       return { state };
     }
@@ -178,6 +243,22 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             kind: 'reposition',
             activityId: state.activityId,
             startDay: state.currentStartDay,
+          },
+        };
+      }
+      if (state.kind === 'linking') {
+        // Prefer the hit under the release point; fall back to the last-hovered target.
+        const dropId =
+          event.hit && event.hit.kind !== 'empty' && event.hit.id ? event.hit.id : state.targetId;
+        // No target, or dropped back on the source → cancel with no link.
+        if (!dropId || dropId === state.sourceId) return { state: IDLE };
+        return {
+          state: IDLE,
+          intent: {
+            kind: 'link',
+            predecessorId: state.sourceId,
+            successorId: dropId,
+            type: event.modifiers ? modifiersToLinkType(event.modifiers) : state.type,
           },
         };
       }

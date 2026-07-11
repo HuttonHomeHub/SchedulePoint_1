@@ -290,6 +290,18 @@ export function classifyHit(
 }
 
 /**
+ * The screen point at a bar's start (left) or finish (right) edge, vertically centred — the
+ * anchor a dependency rubber-band springs from (ADR-0026 D5). Pure over the same rect geometry
+ * hit-testing uses, so the drawn line begins exactly where {@link classifyHit} reports the handle.
+ */
+export function edgeAnchor(rect: Rect, handle: 'startHandle' | 'finishHandle'): Point {
+  return {
+    x: handle === 'startHandle' ? rect.x : rect.x + rect.w,
+    y: rect.y + rect.h / 2,
+  };
+}
+
+/**
  * The bar rect for a whole-day span `[leftDay, rightDay]` (inclusive, about the data
  * date) at a lane — the geometry of a create/reposition **ghost**, matching
  * {@link activityRect}'s convention (right edge at `rightDay + 1`).

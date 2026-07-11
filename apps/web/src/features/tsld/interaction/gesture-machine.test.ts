@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { Viewport } from '../render/render-model';
 
-import { IDLE, reduce, type GestureCtx, type GestureState } from './gesture-machine';
+import {
+  IDLE,
+  modifiersToLinkType,
+  reduce,
+  type GestureCtx,
+  type GestureState,
+} from './gesture-machine';
 
 // pxPerDay 10, origin 0 → day = floor(x/10), lane = floor(y/28).
 const VIEW: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
@@ -142,5 +148,99 @@ describe('gesture-machine: reposition-in-time', () => {
       ctx('add-activity'),
     );
     expect(r.state).toMatchObject({ kind: 'creating' });
+  });
+});
+
+describe('gesture-machine: dependency-draw', () => {
+  it('maps modifiers to a dependency type (plain FS, Shift SS, Alt FF)', () => {
+    expect(modifiersToLinkType(undefined)).toBe('FS');
+    expect(modifiersToLinkType({ shift: false, alt: false })).toBe('FS');
+    expect(modifiersToLinkType({ shift: true, alt: false })).toBe('SS');
+    expect(modifiersToLinkType({ shift: false, alt: true })).toBe('FF');
+    expect(modifiersToLinkType({ shift: true, alt: true })).toBe('SS'); // shift wins the tiebreak
+  });
+
+  const grabHandle = (
+    kind: 'startHandle' | 'finishHandle',
+    modifiers?: { shift: boolean; alt: boolean },
+  ) =>
+    reduce(
+      IDLE,
+      {
+        type: 'pointerDown',
+        point: { x: 90, y: 12 },
+        hit: { kind, id: 'a' },
+        ...(modifiers ? { modifiers } : {}),
+      },
+      ctx('select'),
+    ).state;
+
+  it('starts a rubber-band from an edge handle in select mode', () => {
+    expect(grabHandle('finishHandle')).toEqual({
+      kind: 'linking',
+      sourceId: 'a',
+      sourceHandle: 'finishHandle',
+      point: { x: 90, y: 12 },
+      targetId: null,
+      type: 'FS',
+    });
+  });
+
+  it('tracks the hovered target and live modifier type as the pointer moves', () => {
+    const moved = reduce(
+      grabHandle('finishHandle'),
+      {
+        type: 'pointerMove',
+        point: { x: 200, y: 40 },
+        hit: { kind: 'body', id: 'b' },
+        modifiers: { shift: true, alt: false },
+      },
+      ctx('select'),
+    );
+    expect(moved.state).toMatchObject({ kind: 'linking', targetId: 'b', type: 'SS' });
+  });
+
+  it('ignores the source itself as a drop target while moving', () => {
+    const moved = reduce(
+      grabHandle('startHandle'),
+      { type: 'pointerMove', point: { x: 95, y: 12 }, hit: { kind: 'startHandle', id: 'a' } },
+      ctx('select'),
+    );
+    expect(moved.state).toMatchObject({ kind: 'linking', targetId: null });
+  });
+
+  it('commits a link intent on release over another activity (type from modifiers)', () => {
+    const up = reduce(
+      grabHandle('finishHandle'),
+      { type: 'pointerUp', hit: { kind: 'body', id: 'b' }, modifiers: { shift: false, alt: true } },
+      ctx('select'),
+    );
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toEqual({ kind: 'link', predecessorId: 'a', successorId: 'b', type: 'FF' });
+  });
+
+  it('cancels with no intent when released over empty space', () => {
+    const up = reduce(
+      grabHandle('finishHandle'),
+      { type: 'pointerUp', hit: { kind: 'empty' } },
+      ctx('select'),
+    );
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toBeUndefined();
+  });
+
+  it('cancels with no intent when released back on the source', () => {
+    const up = reduce(
+      grabHandle('finishHandle'),
+      { type: 'pointerUp', hit: { kind: 'finishHandle', id: 'a' } },
+      ctx('select'),
+    );
+    expect(up.intent).toBeUndefined();
+  });
+
+  it('cancels a link on escape', () => {
+    const r = reduce(grabHandle('finishHandle'), { type: 'escape' }, ctx('select'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
   });
 });

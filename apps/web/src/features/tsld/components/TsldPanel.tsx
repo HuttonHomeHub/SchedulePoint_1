@@ -1,4 +1,4 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type { ActivitySummary, DependencySummary, DependencyType } from '@repo/types';
 import { useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
@@ -107,6 +107,23 @@ export interface TsldRepositionOutcome {
   conflict: string | null;
 }
 
+/** A committed dependency-draw — predecessor → successor with the modifier-chosen type. */
+export interface TsldLinkInput {
+  predecessorId: string;
+  successorId: string;
+  type: DependencyType;
+}
+
+/**
+ * The outcome of a link. It **resolves** for both success and a domain conflict (a cycle or a
+ * duplicate — ADR-0021); a genuine failure rejects. `applied` says whether the link was created
+ * (so "Linked …" is announced only when true); `conflict` is the banner message on rejection.
+ */
+export interface TsldLinkOutcome {
+  applied: boolean;
+  conflict: string | null;
+}
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
@@ -121,6 +138,12 @@ export interface TsldPanelProps {
   /** Route-composed reposition handler (SNET PATCH + recalc). Resolves with a conflict message
    * when the move was refused (stale version) or dates couldn't recalc; rejects on real error. */
   onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
+  /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
+   * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
+  onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
+   * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). */
+  onOpenLogic?: (activity: ActivitySummary) => void;
 }
 
 interface PendingCreate {
@@ -141,9 +164,10 @@ interface PendingCreate {
  * **M2 (flagged):** when editing is enabled (`canEdit` + `onCreate` + `VITE_TSLD_EDITING`),
  * a toolbar adds an **Add activity** tool — drag on the timeline to draw a task, then name it
  * in an inline popover — and in **Select** mode a writer drags a bar's body sideways to move it
- * in time (an SNET reposition). Both show an instant optimistic ghost; the route owns the write
- * + authoritative recalc, and a stale-version 409 surfaces as a non-destructive conflict banner.
- * With editing off the surface is byte-for-byte the M1 read-only diagram.
+ * in time (an SNET reposition) or drags from a bar's **edge handle** to another bar to draw a
+ * dependency (modifier picks the type). Edits show an instant optimistic preview; the route owns
+ * the write + authoritative recalc, and a stale-version / cycle / duplicate conflict surfaces as
+ * a non-destructive banner. With editing off the surface is byte-for-byte the M1 read-only diagram.
  */
 export function TsldPanel({
   activities,
@@ -152,6 +176,8 @@ export function TsldPanel({
   canEdit = false,
   onCreate,
   onReposition,
+  onLink,
+  onOpenLogic,
 }: TsldPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = useId();
@@ -183,6 +209,16 @@ export function TsldPanel({
 
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
+    // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
+    // creating links, so link-draw introduces no pointer-only capability (WCAG 2.1.1).
+    if (event.key === 'Enter' && onOpenLogic) {
+      const current = activities.find((a) => a.id === selectedId);
+      if (current) {
+        event.preventDefault();
+        onOpenLogic(current);
+      }
+      return;
+    }
     const index = activities.findIndex((a) => a.id === selectedId);
     let next = index;
     if (event.key === 'ArrowDown') next = Math.min(activities.length - 1, index + 1);
@@ -234,6 +270,28 @@ export function TsldPanel({
           setPendingReposition(null);
           setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
         });
+      return;
+    }
+    if (intent.kind === 'link') {
+      if (!onLink) return;
+      setConflict(null);
+      const pred = activities.find((a) => a.id === intent.predecessorId);
+      const succ = activities.find((a) => a.id === intent.successorId);
+      void onLink({
+        predecessorId: intent.predecessorId,
+        successorId: intent.successorId,
+        type: intent.type,
+      })
+        .then((outcome) => {
+          if (outcome.conflict) setConflict(outcome.conflict);
+          // Announce only when the link was actually created (never on a cycle/duplicate reject).
+          if (outcome.applied) {
+            announce(`Linked “${pred?.name ?? 'activity'}” to “${succ?.name ?? 'activity'}”.`);
+          }
+        })
+        .catch((err: unknown) => {
+          setConflict(err instanceof Error ? err.message : 'Couldn’t create the link.');
+        });
     }
   };
 
@@ -272,7 +330,7 @@ export function TsldPanel({
             : editingEnabled && mode === 'add-activity'
               ? 'Drag on the timeline to add an activity. Esc cancels.'
               : editingEnabled
-                ? 'Drag a bar to move it; drag empty space to pan, scroll to zoom.'
+                ? 'Drag a bar to move it, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
                 : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
         </p>
         {editingEnabled ? (
@@ -330,6 +388,7 @@ export function TsldPanel({
               editing={editingEnabled}
               mode={mode}
               canReposition={onReposition !== undefined}
+              canLink={onLink !== undefined}
               onIntent={onIntent}
               onExitAddMode={() => setMode('select')}
               pending={

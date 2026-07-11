@@ -7,18 +7,28 @@ import {
   type EditIntent,
   type EditMode,
   type GestureState,
+  type Modifiers,
 } from '../interaction/gesture-machine';
-import { paintInteractionLayer, paintScene, type TsldScene } from '../render/paint';
+import {
+  paintInteractionLayer,
+  paintScene,
+  type InteractionOverlay,
+  type LinkOverlay,
+  type TsldScene,
+} from '../render/paint';
 import { resolveTsldPalette } from '../render/palette';
 import {
+  activityRect,
   classifyHit,
   dayCellRect,
   daysBetween,
   DEFAULT_VIEWPORT,
+  edgeAnchor,
   fitToContent,
   hitTest,
   pan,
   zoomAt,
+  type HitZone,
   type Point,
   type Rect,
   type RenderActivity,
@@ -51,6 +61,9 @@ export interface TsldCanvasProps {
   /** Whether a body-grab in select mode may start a reposition (i.e. a handler is wired). When
    * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
   canReposition?: boolean;
+  /** Whether an edge-handle grab may start a dependency-draw (i.e. a link handler is wired).
+   * When false, a handle press falls through to M1 select — no dangling rubber-band. */
+  canLink?: boolean;
   /** Called with a committed edit + the (container-clamped) anchor point for its popover. */
   onIntent?: (intent: EditIntent, anchor: Point) => void;
   /** Called when Esc is pressed while idle in add-activity mode (revert to Select). */
@@ -95,6 +108,22 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
   return null;
 }
 
+/** The live dependency rubber-band (anchor → pointer + target highlight), or null when not linking. */
+function liveLink(
+  state: GestureState,
+  view: Viewport,
+  activities: readonly RenderActivity[],
+  dataDate: string,
+): LinkOverlay | null {
+  if (state.kind !== 'linking') return null;
+  const source = activities.find((a) => a.id === state.sourceId);
+  const sourceRect = source && activityRect(source, view, dataDate);
+  if (!sourceRect) return null;
+  const target = state.targetId ? activities.find((a) => a.id === state.targetId) : undefined;
+  const targetRect = (target && activityRect(target, view, dataDate)) || null;
+  return { from: edgeAnchor(sourceRect, state.sourceHandle), to: state.point, targetRect };
+}
+
 /** Build the body-grab (current day span + lane) the machine needs to reposition an activity. */
 function bodyGrab(
   activities: readonly RenderActivity[],
@@ -131,6 +160,7 @@ export function TsldCanvas({
   editing = false,
   mode = 'select',
   canReposition = false,
+  canLink = false,
   onIntent,
   onExitAddMode,
   pending = null,
@@ -224,12 +254,18 @@ export function TsldCanvas({
       }
       const ictx = editing ? interactionCanvasRef.current?.getContext('2d') : null;
       if (ictx && interactionDirtyRef.current) {
-        const live = liveGhostRect(gestureRef.current, viewRef.current);
         const p = pendingRef.current;
-        const pendingRect = p
-          ? dayCellRect(p.startDay, p.endDay, p.laneIndex, viewRef.current)
-          : null;
-        paintInteractionLayer(ictx, live, pendingRect, size, palette, dpr);
+        const overlay: InteractionOverlay = {
+          live: liveGhostRect(gestureRef.current, viewRef.current),
+          pending: p ? dayCellRect(p.startDay, p.endDay, p.laneIndex, viewRef.current) : null,
+          link: liveLink(
+            gestureRef.current,
+            viewRef.current,
+            sceneRef.current.activities,
+            sceneRef.current.dataDate,
+          ),
+        };
+        paintInteractionLayer(ictx, overlay, size, palette, dpr);
         interactionDirtyRef.current = false;
       }
     };
@@ -299,6 +335,9 @@ export function TsldCanvas({
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
   const machineCtx = () => ({ mode, view: viewRef.current, dataDate });
+  const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
+  const classifyAt = (p: Point): HitZone =>
+    classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate);
 
   return (
     <div ref={containerRef} className="bg-card relative h-full w-full overflow-hidden">
@@ -318,7 +357,12 @@ export function TsldCanvas({
           canvasRef.current?.setPointerCapture?.(e.pointerId);
           if (editing) {
             const p = localPoint(e);
-            const hit = classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate);
+            const rawHit = classifyAt(p);
+            const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
+            // Downgrade a handle to a body hit when linking isn't wired, so it never starts a
+            // dangling rubber-band — it falls through to reposition (if wired) or M1 select.
+            const hit: HitZone =
+              isHandle && !canLink && rawHit.id ? { kind: 'body', id: rawHit.id } : rawHit;
             // A body grab in select mode needs the activity's current geometry to reposition it —
             // but only when a reposition handler is wired, else it falls through to M1 select.
             const body =
@@ -327,7 +371,13 @@ export function TsldCanvas({
                 : undefined;
             const { state } = reduce(
               gestureRef.current,
-              { type: 'pointerDown', point: p, hit, ...(body ? { body } : {}) },
+              {
+                type: 'pointerDown',
+                point: p,
+                hit,
+                modifiers: modifiersOf(e),
+                ...(body ? { body } : {}),
+              },
               machineCtx(),
             );
             gestureRef.current = state;
@@ -339,16 +389,31 @@ export function TsldCanvas({
         }}
         onPointerMove={(e) => {
           if (gestureActiveRef.current) {
+            const p = localPoint(e);
+            // Only a link drag needs the hovered target + live modifiers (a per-move hit-test);
+            // create/reposition track by point alone, so we skip the classify for them.
+            const linking = gestureRef.current.kind === 'linking';
             const { state } = reduce(
               gestureRef.current,
-              { type: 'pointerMove', point: localPoint(e) },
+              linking
+                ? { type: 'pointerMove', point: p, hit: classifyAt(p), modifiers: modifiersOf(e) }
+                : { type: 'pointerMove', point: p },
               machineCtx(),
             );
             gestureRef.current = state;
             interactionDirtyRef.current = true;
             return;
           }
-          if (!drag.current) return;
+          if (!drag.current) {
+            // Hover affordance: show a crosshair over an edge handle so the link grab-zone is
+            // discoverable. Only while editing + linking is available; one hit-test per idle move.
+            if (editing && mode === 'select' && canLink && canvasRef.current) {
+              const hit = classifyAt(localPoint(e));
+              const overHandle = hit.kind === 'startHandle' || hit.kind === 'finishHandle';
+              canvasRef.current.style.cursor = overHandle ? 'crosshair' : '';
+            }
+            return;
+          }
           const dx = e.clientX - drag.current.x;
           const dy = e.clientY - drag.current.y;
           if (Math.abs(dx) + Math.abs(dy) > CLICK_MOVE_THRESHOLD_PX) drag.current.moved = true;
@@ -368,9 +433,14 @@ export function TsldCanvas({
             // check until the surface has a real measured size (avoids a degenerate 1×1).
             const measured = width > 1 && height > 1;
             const outOfBounds = measured && (p.x < 0 || p.y < 0 || p.x > width || p.y > height);
+            const linking = gestureRef.current.kind === 'linking';
             const { state, intent, select } = reduce(
               gestureRef.current,
-              { type: outOfBounds ? 'escape' : 'pointerUp' },
+              outOfBounds
+                ? { type: 'escape' }
+                : linking
+                  ? { type: 'pointerUp', hit: classifyAt(p), modifiers: modifiersOf(e) }
+                  : { type: 'pointerUp' },
               machineCtx(),
             );
             gestureRef.current = state;

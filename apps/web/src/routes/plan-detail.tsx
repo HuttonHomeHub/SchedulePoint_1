@@ -15,7 +15,11 @@ import {
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
-import { DependencyEditor, usePlanDependencies } from '@/features/dependencies';
+import {
+  DependencyEditor,
+  useCreateDependency,
+  usePlanDependencies,
+} from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { RecalculateButton, ScheduleSummaryStrip, useRecalculate } from '@/features/schedule';
@@ -24,6 +28,8 @@ import {
   TsldPanel,
   type TsldCreateInput,
   type TsldCreateOutcome,
+  type TsldLinkInput,
+  type TsldLinkOutcome,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
 } from '@/features/tsld';
@@ -154,6 +160,37 @@ export function PlanDetailScreen(): React.ReactElement {
     }
   };
 
+  // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
+  // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
+  // engine rejects — surfaced non-destructively (nothing was created), never retried.
+  const createDependency = useCreateDependency(orgSlug);
+  const onTsldLink = async ({
+    predecessorId,
+    successorId,
+    type,
+  }: TsldLinkInput): Promise<TsldLinkOutcome> => {
+    try {
+      await createDependency.mutateAsync({ planId, predecessorId, successorId, type, lagDays: 0 });
+    } catch (err) {
+      if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
+        // A cycle/duplicate the engine refused — nothing was created; show the reason, don't retry.
+        return { applied: false, conflict: err.error.message };
+      }
+      throw err;
+    }
+    // The link landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    try {
+      await recalculate.mutateAsync();
+      return { applied: true, conflict: null };
+    } catch {
+      return {
+        applied: true,
+        conflict:
+          'Linked, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
+      };
+    }
+  };
+
   if (plan.isPending) {
     return (
       <main className="mx-auto w-full max-w-6xl flex-1 p-6">
@@ -269,6 +306,8 @@ export function PlanDetailScreen(): React.ReactElement {
             canEdit={canWrite}
             onCreate={onTsldCreate}
             onReposition={onTsldReposition}
+            onLink={onTsldLink}
+            onOpenLogic={setLogicActivity}
           />
         </div>
       </div>

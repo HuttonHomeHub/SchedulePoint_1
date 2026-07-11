@@ -159,7 +159,7 @@ describe('paintInteractionLayer', () => {
 
   it('clears and draws a live ghost with a fill + solid outline', () => {
     const ctx = mockCtx();
-    paintInteractionLayer(ctx, GHOST, null, SIZE, PALETTE, 2);
+    paintInteractionLayer(ctx, { live: GHOST }, SIZE, PALETTE, 2);
     expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
     expect(ctx.clearRect).toHaveBeenCalled();
     expect(ctx.fillRect).toHaveBeenCalledTimes(1);
@@ -168,15 +168,44 @@ describe('paintInteractionLayer', () => {
 
   it('draws a pending ghost as a dashed outline with no fill', () => {
     const ctx = mockCtx();
-    paintInteractionLayer(ctx, null, GHOST, SIZE, PALETTE);
+    paintInteractionLayer(ctx, { pending: GHOST }, SIZE, PALETTE);
     expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
     expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
     expect(ctx.fillRect).not.toHaveBeenCalled();
   });
 
-  it('clears to nothing when idle (both null)', () => {
+  it('draws a link rubber-band line, and rings the drop target when present', () => {
     const ctx = mockCtx();
-    paintInteractionLayer(ctx, null, null, SIZE, PALETTE);
+    paintInteractionLayer(
+      ctx,
+      { link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: GHOST } },
+      SIZE,
+      PALETTE,
+    );
+    // A dashed line from anchor to pointer…
+    expect(ctx.moveTo).toHaveBeenCalledWith(5, 5);
+    expect(ctx.lineTo).toHaveBeenCalledWith(90, 60);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([5, 3]);
+    expect(ctx.stroke).toHaveBeenCalled();
+    // …and a highlight ring around the valid target.
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws the link line but no target ring when over empty space', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(
+      ctx,
+      { link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: null } },
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.stroke).toHaveBeenCalled();
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('clears to nothing when idle (empty overlay)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, {}, SIZE, PALETTE);
     expect(ctx.clearRect).toHaveBeenCalled();
     expect(ctx.fillRect).not.toHaveBeenCalled();
     expect(ctx.strokeRect).not.toHaveBeenCalled();
