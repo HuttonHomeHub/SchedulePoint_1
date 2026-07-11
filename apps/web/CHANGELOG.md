@@ -1,5 +1,30 @@
 # @repo/web
 
+## 0.9.0
+
+### Minor Changes
+
+- [#31](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/31) [`fd8de38`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fd8de385fe7f84c11359871345470e07f8bbc3f7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add **Auto-arrange lanes** to the Time-Scaled Logic Diagram (M8 M4 4.3, ADR-0026, behind
+  `VITE_TSLD_EDITING`). A toolbar action repacks the diagram's activities into the **fewest lanes
+  with no time-overlap** using a pure, deterministic greedy first-fit packer, and persists the
+  result in one all-or-nothing batch write (no schedule recalculation — it changes only vertical
+  layout). Because a bulk reorder can move many bars and isn't undoable yet, it's guarded by a
+  confirm dialog; only the activities whose lane actually changes are written (the minimal diff),
+  an already-tidy diagram reports "nothing to move", and a concurrent edit is surfaced
+  non-destructively (the whole pack is refused, nothing moves).
+
+- [#31](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/31) [`fd8de38`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fd8de385fe7f84c11359871345470e07f8bbc3f7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make on-canvas bar dragging **two-dimensional** in the Time-Scaled Logic Diagram (M8 M4,
+  ADR-0026, behind `VITE_TSLD_EDITING`). A body drag now moves an activity **freely in both axes
+  at once**: horizontally to a new start day (an SNET constraint that recalculates the schedule —
+  the existing M2 move) **and** vertically to a new lane (`laneIndex`, layout only — no recalc).
+  Per-axis snapping gives a half-cell dead-zone, so a mostly-horizontal drag won't accidentally
+  change lanes (and vice-versa). A drop commits only the axes that actually changed as one
+  optimistically-locked write: a lane-only move is the cheap `{ laneIndex, version }` PATCH (no
+  recalc); a time move (with or without a lane change) is one PATCH carrying the SNET constraint
+  (and the lane) followed by a recalc. Keyboard users get the same reach: **`Alt+↑ / Alt+↓`** on
+  the focused activity in the parallel listbox nudges it one lane (WCAG 2.1.1). A stale-version
+  conflict is surfaced non-destructively and never re-sent.
+
 ## 0.8.0
 
 ### Minor Changes
