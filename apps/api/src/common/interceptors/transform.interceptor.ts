@@ -31,7 +31,10 @@ export class TransformInterceptor<T> implements NestInterceptor<
           return undefined;
         }
         if (value instanceof Paginated) {
-          return { data: value.data, meta: { ...value.meta } };
+          // `instanceof` narrows the generic meta to `any`; it is always an object
+          // (PageMeta or a bounded-list roll-up), rendered verbatim into the envelope.
+          const meta = value.meta as Record<string, unknown>;
+          return { data: value.data as unknown, meta: { ...meta } };
         }
         return { data: value };
       }),

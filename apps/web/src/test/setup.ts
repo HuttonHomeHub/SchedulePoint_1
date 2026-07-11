@@ -25,6 +25,34 @@ if (typeof HTMLDialogElement !== 'undefined') {
   }
 }
 
+// jsdom doesn't implement the 2D canvas context (getContext returns null and logs
+// "Not implemented"). Stub it with a no-op 2D context so canvas-backed components (the
+// TSLD painter) can be unit-tested — the painter only calls these drawing methods and
+// mutable style properties; it never reads pixels back.
+if (typeof HTMLCanvasElement !== 'undefined') {
+  const noop = (): void => undefined;
+  HTMLCanvasElement.prototype.getContext = function getContext(
+    contextId: string,
+  ): CanvasRenderingContext2D | null {
+    if (contextId !== '2d') return null;
+    return {
+      clearRect: noop,
+      fillRect: noop,
+      strokeRect: noop,
+      beginPath: noop,
+      moveTo: noop,
+      lineTo: noop,
+      stroke: noop,
+      fill: noop,
+      setTransform: noop,
+      setLineDash: noop,
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 1,
+    } as unknown as CanvasRenderingContext2D;
+  } as typeof HTMLCanvasElement.prototype.getContext;
+}
+
 afterEach(() => {
   cleanup();
 });

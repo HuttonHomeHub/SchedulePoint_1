@@ -1,17 +1,19 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { Link, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
+import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
-import { DependencyEditor } from '@/features/dependencies';
+import { DependencyEditor, usePlanDependencies } from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
+import { TsldPanel } from '@/features/tsld';
 import {
   canCalculateSchedule,
   canManageHierarchy,
@@ -40,10 +42,21 @@ export function PlanDetailScreen(): React.ReactElement {
   const project = useProject(orgSlug, plan.data?.projectId ?? '');
   const client = useClient(orgSlug, project.data?.clientId ?? '');
   // Shares the activities cache with the table below (same query key); used to
-  // populate the logic-editor's add picker.
+  // populate the logic-editor's add picker and the TSLD canvas.
   const activities = useActivities(orgSlug, planId);
+  // The plan's dependency edges — drawn as logic lines on the TSLD canvas.
+  const dependencies = usePlanDependencies(orgSlug, planId);
   // The org's calendars, for the plan calendar picker (read for every member).
   const calendars = useCalendars(orgSlug);
+  // Variance vs the plan's active baseline (M7). The route composes it and passes a
+  // per-activity map into the activities table, so that feature imports no baseline code.
+  const variance = useBaselineVariance(orgSlug, planId);
+  const varianceByActivityId = useMemo(() => {
+    if (!variance.data || variance.data.summary.baselineId === null) return undefined;
+    return new Map<string, BaselineVarianceRow>(
+      variance.data.rows.map((row) => [row.activityId, row]),
+    );
+  }, [variance.data]);
   const canManageLogic = canWrite; // dependency write = the hierarchy-writer roles
 
   if (plan.isPending) {
@@ -136,14 +149,45 @@ export function PlanDetailScreen(): React.ReactElement {
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       </div>
 
+      <div className="mt-6">
+        <h3 className="text-base font-medium">Baselines</h3>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Frozen snapshots of the schedule to compare against. The active baseline drives the
+          variance shown in the activities table.
+        </p>
+        <div className="mt-3">
+          <BaselinesPanel orgSlug={orgSlug} planId={planId} canManage={canWrite} />
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-lg font-medium">Logic diagram</h2>
+        <p className="text-muted-foreground mt-1 text-sm">
+          The Time-Scaled Logic Diagram: activities plotted on the timeline and connected by their
+          logic. Editing on the canvas arrives in a later release.
+        </p>
+        <div className="mt-3">
+          <TsldPanel
+            activities={activities.data ?? []}
+            dependencies={dependencies.data ?? []}
+            dataDate={plan.data.plannedStart}
+          />
+        </div>
+      </div>
+
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-medium">Activities</h2>
         {canWrite ? <CreateActivityButton orgSlug={orgSlug} planId={planId} /> : null}
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
-        The activities that make up this plan. The graphical Time-Scaled Logic Diagram will edit
-        these on a timeline in a later release.
+        The activities that make up this plan. Edit their details here; the logic diagram above
+        plots them on the timeline. On-canvas editing arrives in a later release.
       </p>
+      {variance.data ? (
+        <div className="mt-2">
+          <BaselineVarianceSummary summary={variance.data.summary} />
+        </div>
+      ) : null}
       <div className="mt-3">
         <ActivitiesTable
           orgSlug={orgSlug}
@@ -151,6 +195,7 @@ export function PlanDetailScreen(): React.ReactElement {
           canWrite={canWrite}
           canReportProgress={canProgress}
           onOpenLogic={setLogicActivity}
+          {...(varianceByActivityId ? { varianceByActivityId } : {})}
         />
       </div>
 

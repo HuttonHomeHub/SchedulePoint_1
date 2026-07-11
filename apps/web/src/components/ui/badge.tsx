@@ -4,11 +4,14 @@ import { cn } from '@/lib/utils';
 
 const badgeVariants = cva('inline-flex items-center rounded-full font-medium whitespace-nowrap', {
   variants: {
-    // Each pair uses a token validated as legible text on page surfaces (a
-    // `*-text` / `muted-foreground` token), never a solid surface tone — see the
-    // colour-token rule in docs/DESIGN_SYSTEM.md.
+    // Each pair uses a token validated as legible text ON THAT surface (a `*-text`
+    // or `*-foreground` token paired with its own surface), never a solid surface
+    // tone — see the colour-token rule in docs/DESIGN_SYSTEM.md. `muted-foreground`
+    // is tuned for the page background and only reaches 4.34:1 on the lighter
+    // `muted` fill, so the neutral pill uses `secondary-foreground` (the legible
+    // foreground for this surface) to clear WCAG AA on both themes.
     variant: {
-      neutral: 'bg-muted text-muted-foreground',
+      neutral: 'bg-muted text-secondary-foreground',
       critical: 'bg-destructive/10 text-destructive-text',
       warning: 'bg-warning/15 text-warning-text',
     },

@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
-import { activityKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
+import { activityKeys, baselineKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
 
 export { scheduleKeys };
 
@@ -36,8 +36,9 @@ export function useScheduleSummary(
 
 /**
  * Recalculate a plan's CPM schedule (Planner/Org Admin). On success, the API has
- * rewritten the engine-owned columns, so refetch both the summary and the
- * activities list to show the new dates, float and critical path.
+ * rewritten the engine-owned columns, so refetch the summary and the activities list to
+ * show the new dates, float and critical path — and the baseline variance, which is
+ * measured against those recomputed dates and would otherwise go stale.
  */
 export function useRecalculate(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
@@ -51,6 +52,7 @@ export function useRecalculate(orgSlug: string, planId: string) {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+        queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
       ]),
   });
 }

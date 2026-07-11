@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TSLD prototype-at-scale spike (M0)</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: system-ui, sans-serif;
+        background: #0b0d12;
+        color: #e6e6ea;
+      }
+      #hud {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 6px 10px;
+        border-radius: 6px;
+        white-space: pre;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">starting…</div>
+    <canvas id="c"></canvas>
+    <script type="module">
+      import { generateScene } from './scene.js';
+      import { createRenderer } from './renderer.js';
+
+      const params = new URLSearchParams(location.search);
+      const count = Number(params.get('count') ?? 500);
+      const canvas = document.getElementById('c');
+      const hud = document.getElementById('hud');
+
+      const scene = generateScene(count);
+      const r = createRenderer(canvas, scene);
+      r.resize();
+      addEventListener('resize', () => r.resize());
+
+      // Manual interaction (for eyeballing): drag to pan, wheel to zoom.
+      let dragging = false;
+      let lastX = 0;
+      let lastY = 0;
+      canvas.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        canvas.setPointerCapture(e.pointerId);
+      });
+      canvas.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        r.pan(e.clientX - lastX, e.clientY - lastY);
+        lastX = e.clientX;
+        lastY = e.clientY;
+      });
+      canvas.addEventListener('pointerup', () => (dragging = false));
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        r.zoomAt(e.clientX, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+      }, { passive: false });
+
+      // Live fps meter (for manual runs).
+      let frames = 0;
+      let t0 = performance.now();
+      function tick(ts) {
+        frames += 1;
+        if (ts - t0 >= 500) {
+          hud.textContent =
+            `activities: ${count}  deps: ${scene.deps.length}\n` +
+            `fps (rough): ${Math.round((frames * 1000) / (ts - t0))}  pxPerDay: ${r.view.pxPerDay.toFixed(1)}`;
+          frames = 0;
+          t0 = ts;
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      // Scripted benchmark hook the Playwright driver calls:
+      //   window.__bench(durationMs) -> Promise<stats>
+      window.__scene = { count, deps: scene.deps.length };
+      window.__bench = (durationMs) => r.bench(durationMs);
+    </script>
+  </body>
+</html>

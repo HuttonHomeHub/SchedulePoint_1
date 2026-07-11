@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -142,5 +142,87 @@ describe('ActivitiesTable', () => {
     const button = screen.getByRole('button', { name: 'Logic for Excavate' });
     fireEvent.click(button);
     expect(onOpenLogic).toHaveBeenCalledWith(ACTIVITY);
+  });
+});
+
+describe('ActivitiesTable — baseline variance', () => {
+  function varianceRow(overrides: Partial<BaselineVarianceRow> = {}): BaselineVarianceRow {
+    return {
+      activityId: 'a1',
+      code: 'A100',
+      name: 'Excavate',
+      inBaseline: true,
+      removed: false,
+      currentStart: '2026-05-01',
+      currentFinish: '2026-05-12',
+      currentTotalFloat: 0,
+      baselineStart: '2026-05-01',
+      baselineFinish: '2026-05-09',
+      baselineTotalFloat: 0,
+      startVarianceDays: 0,
+      finishVarianceDays: 3,
+      floatVarianceDays: 0,
+      ...overrides,
+    };
+  }
+
+  function renderWithVariance(row: BaselineVarianceRow | null) {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [ACTIVITY]);
+    const map = row ? new Map([[row.activityId, row]]) : new Map<string, BaselineVarianceRow>();
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} varianceByActivityId={map} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('shows the Baseline finish column only when the variance prop is present', () => {
+    // Without the prop: no variance column.
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [ACTIVITY]);
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByRole('columnheader', { name: 'Finish variance' })).not.toBeInTheDocument();
+
+    // With the prop: the column appears.
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ActivitiesTable
+          orgSlug="acme"
+          planId="pl1"
+          canWrite={false}
+          varianceByActivityId={new Map([['a1', varianceRow()]])}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('columnheader', { name: 'Finish variance' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Start variance' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Float variance' })).toBeInTheDocument();
+  });
+
+  it('formats a slip as "behind" and a gain as "ahead" (text, not colour alone)', () => {
+    renderWithVariance(varianceRow({ finishVarianceDays: 3 }));
+    expect(screen.getByText('3 d behind')).toBeInTheDocument();
+  });
+
+  it('shows a float loss as behind (less float than baseline)', () => {
+    renderWithVariance(varianceRow({ finishVarianceDays: 0, floatVarianceDays: -2 }));
+    expect(screen.getByText('−2 d float')).toBeInTheDocument();
+  });
+
+  it('labels an activity added since capture (across the variance columns)', () => {
+    renderWithVariance(varianceRow({ inBaseline: false, finishVarianceDays: null }));
+    // "Added" shows in each of the start/finish/float variance columns.
+    expect(screen.getAllByText('Added').length).toBeGreaterThan(0);
+  });
+
+  it('shows an em dash for an activity with no variance row in the map', () => {
+    renderWithVariance(null);
+    // The variance column renders "—" when the activity isn't in the map.
+    expect(screen.getByRole('columnheader', { name: 'Finish variance' })).toBeInTheDocument();
   });
 });

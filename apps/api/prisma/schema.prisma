@@ -147,6 +147,12 @@ model Organization {
   // CalendarException's is denormalised from its parent calendar (like Activity).
   calendars          Calendar[]
   calendarExceptions CalendarException[]
+  // Plan-of-record snapshots (M7, ADR-0025). Baseline's organization_id is
+  // denormalised from its plan; BaselineActivity's from its parent baseline — both
+  // copied by the service, never client input (the Activity pattern), so an org-scope
+  // / IDOR check and the cascade batch filter one indexed column.
+  baselines          Baseline[]
+  baselineActivities BaselineActivity[]
 
   @@map("organizations")
 }
@@ -387,6 +393,10 @@ model Plan {
   activities   Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
   dependencies ActivityDependency[]
+  // Plan-of-record snapshots captured from this plan (M7, ADR-0025). At most one is
+  // active at a time (partial unique in the migration). FK is RESTRICT; baseline
+  // soft-delete + cascade is service-owned (HierarchyLifecycleService).
+  baselines    Baseline[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -667,4 +677,132 @@ model CalendarException {
   @@index([calendarId, date])
   @@index([organizationId])
   @@map("calendar_exceptions")
+}
+
+// ---------------------------------------------------------------------------
+// Baselines — Baseline + BaselineActivity (M7, ADR-0025).
+//
+// A Baseline is a named, frozen snapshot of a plan's schedule — the "plan of
+// record" a planner compares the live schedule against (PROJECT_BRIEF §8/§11,
+// Journey 4). At most ONE baseline per plan is active at a time (the comparison
+// baseline); this is guaranteed by a DB partial unique, not just code.
+//
+// The snapshot is a self-contained COPY, not a reference (ADR-0025, Q1):
+// BaselineActivity duplicates each activity's identity + computed CPM dates, and
+// `source_activity_id` is a PLAIN correlation UUID with NO foreign key — so a
+// baseline survives the source activities' 90-day hard purge (PROJECT_BRIEF §13)
+// and stays a faithful historical record even if a live activity is edited or
+// deleted. Variance (live vs active baseline) is computed server-side in working
+// days on the plan's calendar (ADR-0024) — the baseline stores raw dates only.
+//
+// Both follow every house standard (UUID v7 PK, snake_case via @map, timestamptz
+// UTC, NOT NULL by default, soft delete + `delete_batch_id`, TEXT audit ids,
+// optimistic-locking `version`, scoped indexes) and the domain-hierarchy
+// conventions in docs/DATABASE.md. Baseline's organization_id is DENORMALISED from
+// its plan; BaselineActivity's from its parent baseline (copied by the service,
+// never client input — like Activity). There is no DB cascade: a baseline and its
+// snapshot rows soft-delete together under one `delete_batch_id`, and a
+// plan/project/client delete cascades to contained baselines the same way (the
+// HierarchyLifecycleService pattern).
+// ---------------------------------------------------------------------------
+
+model Baseline {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent plan (never client input). RESTRICT.
+  organizationId String  @map("organization_id") @db.Uuid
+  planId         String  @map("plan_id") @db.Uuid
+  name           String
+  // At most one active baseline per plan — the comparison baseline. Enforced by a
+  // PARTIAL unique (uq_baselines_plan_active ON (plan_id) WHERE is_active = true AND
+  // deleted_at IS NULL), raw SQL in the migration; the service flips it atomically
+  // under the plan write-lock. The plan's FIRST baseline is captured active.
+  isActive       Boolean @default(false) @map("is_active")
+
+  // Small denormalisations captured at freeze time so the list panel renders without
+  // loading snapshot rows. `captured_at` is the as-of instant; `data_date` is the
+  // plan's plannedStart at capture; `captured_project_finish` is the plan's latest
+  // inclusive finish at capture (both date-only, like the CPM columns, ADR-0023).
+  capturedAt            DateTime  @default(now()) @map("captured_at") @db.Timestamptz(3)
+  dataDate              DateTime? @map("data_date") @db.Date
+  capturedProjectFinish DateTime? @map("captured_project_finish") @db.Date
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  activities   BaselineActivity[]
+
+  // Baseline name is unique per PLAN among ACTIVE rows — partial unique
+  // (uq_baselines_plan_name ON (plan_id, name) WHERE deleted_at IS NULL), raw SQL in
+  // the migration. Backs the capture DUPLICATE_BASELINE (409) check; a soft-deleted
+  // name is free to reuse.
+  //
+  // (plan_id, created_at, id) covers the plan FK (leftmost prefix), the
+  // list-baselines-for-a-plan query and its deterministic cursor sort in one.
+  // organization_id is indexed on its own for its FK (RESTRICT) and org-scoped IDOR
+  // loads. The partial delete_batch_id index (raw SQL) backs batch restore.
+  @@index([planId, createdAt, id])
+  @@index([organizationId])
+  @@map("baselines")
+}
+
+// A BaselineActivity — one activity's frozen snapshot inside a baseline. A
+// self-contained copy (ADR-0025): it duplicates the activity's identity and its
+// captured CPM dates, and `source_activity_id` is a PLAIN correlation UUID (NO FK)
+// so the snapshot outlives edits/deletes/hard-purge of the live activity. Rows are
+// immutable after capture; they carry the full housekeeping set (matching
+// CalendarException) and soft-delete with their parent baseline under one
+// `delete_batch_id`.
+model BaselineActivity {
+  id               String @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent baseline (never client input). RESTRICT.
+  organizationId   String @map("organization_id") @db.Uuid
+  baselineId       String @map("baseline_id") @db.Uuid
+  // The activity this row was snapshotted from — a plain correlation id, NOT a
+  // foreign key (ADR-0025): the snapshot must survive the source activity's 90-day
+  // hard purge and stay faithful even if it is edited/deleted. Joined against live
+  // activities (on this id) to compute variance.
+  sourceActivityId String @map("source_activity_id") @db.Uuid
+
+  // Frozen identity (as captured).
+  code         String?
+  name         String
+  type         ActivityType @default(TASK)
+  durationDays Int          @map("duration_days")
+
+  // Frozen schedule (the captured CPM output, all date-only like the Activity
+  // columns, ADR-0023). `baseline_start`/`baseline_finish` are the captured
+  // early start/finish; `total_float` is unconstrained (negative float is valid).
+  baselineStart  DateTime? @map("baseline_start") @db.Date
+  baselineFinish DateTime? @map("baseline_finish") @db.Date
+  lateStart      DateTime? @map("late_start") @db.Date
+  lateFinish     DateTime? @map("late_finish") @db.Date
+  totalFloat     Int?      @map("total_float")
+  isCritical     Boolean   @default(false) @map("is_critical")
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  baseline     Baseline     @relation(fields: [baselineId], references: [id], onDelete: Restrict)
+
+  // (baseline_id, source_activity_id) is the variance join key AND covers the
+  // baseline_id FK / load-all-rows-for-a-baseline (leftmost prefix), so no separate
+  // baseline_id index is needed. organization_id is indexed on its own for its FK
+  // (RESTRICT) and org-scoped IDOR loads. The partial delete_batch_id index (raw SQL)
+  // backs batch restore alongside the parent baseline.
+  @@index([baselineId, sourceActivityId])
+  @@index([organizationId])
+  @@map("baseline_activities")
 }

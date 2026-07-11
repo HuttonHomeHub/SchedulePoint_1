@@ -14,7 +14,7 @@ import {
 } from '../schemas/activity-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { activityKeys } from '@/lib/query/hierarchy-keys';
+import { activityKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
 export { activityKeys };
 
@@ -74,8 +74,12 @@ export function useCreateActivity(orgSlug: string, planId: string) {
         method: 'POST',
         body: JSON.stringify(createBody(input)),
       }),
+    // Adding an activity introduces a new "Added" row in the baseline variance, so refresh it too.
     onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+        queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
+      ]),
   });
 }
 
@@ -129,7 +133,11 @@ export function useDeleteActivity(orgSlug: string, planId: string) {
   return useMutation({
     mutationFn: (activityId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/activities/${activityId}`, { method: 'DELETE' }),
+    // Removing an activity changes the baseline variance (it reads as "Removed" or drops out).
     onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+        queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
+      ]),
   });
 }

@@ -2,8 +2,10 @@
 export {
   usePredecessors,
   useSuccessors,
+  usePlanDependencies,
   predecessorsQueryOptions,
   successorsQueryOptions,
+  planDependenciesQueryOptions,
   dependencyKeys,
 } from './api/use-dependencies';
 export {

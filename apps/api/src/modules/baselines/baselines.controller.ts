@@ -1,0 +1,161 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
+} from '@nestjs/swagger';
+import type { PlanVarianceSummary } from '@repo/types';
+
+import type { Principal } from '../../common/auth/principal';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Paginated } from '../../common/dto/paginated';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ParseUuidPipe } from '../../common/validation/uuid';
+
+import { BaselinesService } from './baselines.service';
+import { BaselineDetailResponseDto, BaselineResponseDto } from './dto/baseline-response.dto';
+import { BaselineVarianceRowResponseDto } from './dto/baseline-variance-response.dto';
+import { CreateBaselineDto } from './dto/create-baseline.dto';
+
+/**
+ * Baselines HTTP surface, nested under a plan (ADR-0025). Every route resolves the org
+ * from `:orgSlug` against the caller's memberships (404 for non-members) and the plan
+ * from `:planId` within that org. Reading (list, get, variance) is open to any member;
+ * capturing, activating, and deleting a baseline are Planner + Org Admin.
+ */
+@ApiTags('baselines')
+@ApiCookieAuth('schedulepoint.session_token')
+@ApiUnauthorizedResponse({ description: 'No valid session.' })
+@ApiNotFoundResponse({
+  description: 'Organisation, plan or baseline not found (or the caller is not a member).',
+})
+@Controller({ path: 'organizations/:orgSlug/plans/:planId/baselines', version: '1' })
+export class BaselinesController {
+  constructor(private readonly service: BaselinesService) {}
+
+  @Get()
+  @ApiOperation({ summary: "List a plan's baselines (cursor-paginated, newest first)." })
+  @ApiOkResponse({ type: BaselineResponseDto, isArray: true })
+  async list(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Query() query: PaginationQueryDto,
+  ): Promise<Paginated<BaselineResponseDto>> {
+    const { items, meta } = await this.service.list(principal, orgSlug, planId, query);
+    return new Paginated(
+      items.map((b) => BaselineResponseDto.from(b, b.activityCount)),
+      meta,
+    );
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: "Capture a baseline of the plan's current schedule (Planner or Org Admin).",
+  })
+  @ApiCreatedResponse({ type: BaselineResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The plan has no computed schedule to freeze (SCHEDULE_NOT_CALCULATED), or an empty name.',
+  })
+  @ApiConflictResponse({
+    description: 'A baseline with this name already exists (DUPLICATE_BASELINE).',
+  })
+  async capture(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Body() dto: CreateBaselineDto,
+  ): Promise<BaselineResponseDto> {
+    const { baseline, activityCount } = await this.service.capture(principal, orgSlug, planId, dto);
+    return BaselineResponseDto.from(baseline, activityCount);
+  }
+
+  @Get('variance')
+  @ApiOperation({
+    summary: "Per-activity variance vs the plan's active baseline, plus a roll-up (any member).",
+    description:
+      'A bounded, plan-scoped list (no cursor pagination). Empty with meta.baselineId = null ' +
+      'when the plan has no active baseline. Variance is in working days on the plan calendar; ' +
+      'positive = current later than baseline (behind).',
+  })
+  @ApiOkResponse({ type: BaselineVarianceRowResponseDto, isArray: true })
+  async variance(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<Paginated<BaselineVarianceRowResponseDto, PlanVarianceSummary>> {
+    const { rows, summary } = await this.service.variance(principal, orgSlug, planId);
+    return new Paginated(rows, summary);
+  }
+
+  @Get(':baselineId')
+  @ApiOperation({ summary: 'Get a baseline and its frozen activity snapshots by id.' })
+  @ApiOkResponse({ type: BaselineDetailResponseDto })
+  async get(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('baselineId', ParseUuidPipe) baselineId: string,
+  ): Promise<BaselineDetailResponseDto> {
+    return BaselineDetailResponseDto.fromDetail(
+      await this.service.get(principal, orgSlug, planId, baselineId),
+    );
+  }
+
+  @Post(':baselineId/activate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Activate a baseline as the plan's comparison baseline (Planner or Org Admin).",
+  })
+  @ApiOkResponse({ type: BaselineResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  async activate(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('baselineId', ParseUuidPipe) baselineId: string,
+  ): Promise<BaselineResponseDto> {
+    const { baseline, activityCount } = await this.service.activate(
+      principal,
+      orgSlug,
+      planId,
+      baselineId,
+    );
+    return BaselineResponseDto.from(baseline, activityCount);
+  }
+
+  @Delete(':baselineId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a baseline and its snapshot rows (soft cascade).' })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  async remove(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('baselineId', ParseUuidPipe) baselineId: string,
+  ): Promise<void> {
+    await this.service.remove(principal, orgSlug, planId, baselineId);
+  }
+}
