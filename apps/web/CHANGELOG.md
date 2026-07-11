@@ -1,5 +1,43 @@
 # @repo/web
 
+## 0.7.0
+
+### Minor Changes
+
+- [#26](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/26) [`04fc100`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/04fc1003f87d08ad6e617dd8458051f5d3d6fd13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add on-canvas **create-by-drag** to the Time-Scaled Logic Diagram (M8 M2, ADR-0026), behind
+  the OFF-by-default `VITE_TSLD_EDITING` flag. When enabled for a writer (Planner/Org Admin),
+  the diagram gains an **Add activity** tool: drag on the timeline to draw a task (a click or
+  sub-day drag makes a 1-day task), then name it in an inline popover — `Enter` creates it,
+  `Esc` cancels with nothing persisted. The new activity is placed at the dropped day via an
+  SNET constraint and the schedule recalculates authoritatively (no client-side CPM); the drag
+  shows an instant ghost on a dedicated interaction layer so feedback never waits on the network.
+
+  Every gesture keeps a keyboard-operable equivalent (the create dialog/table), so nothing is
+  pointer-only. With the flag off — the default build — the diagram is byte-for-byte the M1
+  read-only surface.
+
+- [#26](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/26) [`04fc100`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/04fc1003f87d08ad6e617dd8458051f5d3d6fd13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add **dependency-draw** to the Time-Scaled Logic Diagram (M8 M2, ADR-0026), behind the
+  OFF-by-default `VITE_TSLD_EDITING` flag. In Select mode a writer drags from an activity bar's
+  start/finish **edge handle** to another bar to create a logic link: a rubber-band follows the
+  pointer, the valid drop target is highlighted, and modifiers pick the type — plain drag is
+  **FS**, **Shift** is **SS**, **Alt** is **FF** (the rarer **SF** stays in the dependency
+  dialog). On drop the link is created via the existing `POST /dependencies` and the schedule
+  recalculates authoritatively. A cycle or duplicate (ADR-0021) is surfaced as a non-destructive
+  conflict banner with the engine's reason — nothing is created and the draw is never retried. The
+  capability is keyboard-reachable too: pressing **Enter** on a focused activity in the diagram's
+  listbox opens its logic editor, so link-draw adds no pointer-only capability (WCAG 2.1.1).
+  Editing remains off in the default build.
+
+- [#26](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/26) [`04fc100`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/04fc1003f87d08ad6e617dd8458051f5d3d6fd13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add **reposition-in-time** to the Time-Scaled Logic Diagram (M8 M2, ADR-0026), behind the
+  OFF-by-default `VITE_TSLD_EDITING` flag. In Select mode a writer drags an activity bar's body
+  sideways to move it in time: the drag shows an instant ghost of the moved bar, and on drop the
+  new start is imposed as an **SNET constraint** via the existing activity update (carrying the
+  live `version` for optimistic locking) and the schedule recalculates authoritatively — the
+  engine still owns the working-day placement (a bar may settle a day or two off the ghost on a
+  non-working day). A press without moving simply selects the bar. If someone else changed the
+  plan first, the stale-`version` 409 surfaces as a non-destructive conflict banner and the move
+  is not re-sent. Editing remains off in the default build.
+
 ## 0.6.0
 
 ### Minor Changes
