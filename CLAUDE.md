@@ -284,6 +284,9 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0026** — TSLD canvas: Canvas 2D (layered, culled) with a WebGL escalation
   gate, the coordinate/viewport/hit-test/recalc model, and a parallel focusable DOM
   a11y layer (prototype-at-scale gate passed — draw ≤4ms p95 @ 2,000 activities).
+- **ADR-0027** — Per-package release tagging (`api-vX.Y.Z`/`web-vX.Y.Z`) & per-image
+  versions; supersedes ADR-0017's single-aggregate `vX.Y.Z` tag (which silently
+  skipped a web-only release once web caught up to api's version).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
