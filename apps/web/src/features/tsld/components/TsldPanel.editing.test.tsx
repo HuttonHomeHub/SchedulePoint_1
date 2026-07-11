@@ -251,6 +251,66 @@ describe('TsldPanel editing (M2, flag on)', () => {
     );
   });
 
+  function renderEditing(
+    onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null }),
+  ) {
+    render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+      />,
+    );
+    const listbox = screen.getByRole('listbox');
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // select the first activity
+    return { listbox, onReposition };
+  }
+
+  it('coalesces a held Alt+↓ burst into a single net-lane write (M5 5.2)', async () => {
+    const { listbox, onReposition } = renderEditing();
+    fireEvent.keyDown(listbox, { key: 'ArrowDown', altKey: true });
+    fireEvent.keyDown(listbox, { key: 'ArrowDown', altKey: true });
+    fireEvent.keyDown(listbox, { key: 'ArrowDown', altKey: true }); // net +3 lanes in one burst
+    await waitFor(() =>
+      expect(onReposition).toHaveBeenCalledWith({ activityId: 'a1', laneIndex: 3 }),
+    );
+    expect(onReposition).toHaveBeenCalledTimes(1); // one write, not three (no self-race)
+  });
+
+  it('nudges the start one day with Alt+→ (an SNET reposition, recalculates)', async () => {
+    const { listbox, onReposition } = renderEditing();
+    fireEvent.keyDown(listbox, { key: 'ArrowRight', altKey: true }); // earlyStart day 0 → day 1
+    await waitFor(() =>
+      expect(onReposition).toHaveBeenCalledWith({ activityId: 'a1', startDay: 1 }),
+    );
+  });
+
+  it('announces the lane boundary and issues no write at lane 0 (Alt+↑)', async () => {
+    const { listbox, onReposition } = renderEditing();
+    fireEvent.keyDown(listbox, { key: 'ArrowUp', altKey: true }); // already in the top lane
+    expect(announceSpy).toHaveBeenCalledWith('Already in the top lane.');
+    await new Promise((r) => setTimeout(r, 200)); // let any debounce elapse
+    expect(onReposition).not.toHaveBeenCalled();
+  });
+
+  it('opens the create popover pre-filled with n (keyboard create parity)', async () => {
+    const { listbox } = renderEditing();
+    fireEvent.keyDown(listbox, { key: 'n' });
+    expect(await screen.findByLabelText('New activity name')).toBeInTheDocument();
+  });
+
+  it('returns focus to the activity list when an n-opened create popover is closed', async () => {
+    const { listbox } = renderEditing();
+    fireEvent.keyDown(listbox, { key: 'n' });
+    const cancel = await screen.findByRole('button', { name: 'Cancel' });
+    fireEvent.click(cancel);
+    // Opened from the list via keyboard → focus returns there, not to the toolbar (WCAG 2.4.3).
+    expect(listbox).toHaveFocus();
+  });
+
   it('draws a dependency by dragging from a bar edge to another bar → onLink (FS by default)', async () => {
     const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     const succ = activity({

@@ -1,21 +1,28 @@
 import type { ActivitySummary, DependencySummary, DependencyType } from '@repo/types';
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent, EditMode } from '../interaction/gesture-machine';
+import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
+import {
+  announceChainStep,
+  chainNeighbour,
+  describeActivity,
+  summarizeLogic,
+} from '../render/a11y';
 import { packLanes } from '../render/auto-pack';
 import { daysBetween, type Point } from '../render/render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
 import { TsldCanvas, type PendingGhost } from './TsldCanvas';
+import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { RenderActivity, RenderEdge } from '@/features/tsld/render/render-model';
-import { formatCalendarDate } from '@/lib/format-date';
 
 /** Map the API shapes to the render model's minimal shapes. */
 function toRenderActivities(activities: readonly ActivitySummary[]): RenderActivity[] {
@@ -36,18 +43,6 @@ function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[]
     successorId: d.successor.id,
     isDriving: d.isDriving,
   }));
-}
-
-/** A screen-reader description of an activity's place in the schedule. */
-function describeActivity(a: ActivitySummary): string {
-  const name = a.code ? `${a.code} ${a.name}` : a.name;
-  if (a.earlyStart === null) return `${name}, not yet scheduled`;
-  const dates =
-    a.earlyFinish && a.earlyFinish !== a.earlyStart
-      ? `${formatCalendarDate(a.earlyStart)} to ${formatCalendarDate(a.earlyFinish)}`
-      : formatCalendarDate(a.earlyStart);
-  const flag = a.isCritical ? ', critical' : a.isNearCritical ? ', near-critical' : '';
-  return `${name}, ${dates}, lane ${a.laneIndex + 1}${flag}`;
 }
 
 /**
@@ -80,6 +75,10 @@ const LEGEND: ReadonlyArray<LegendItem> = [
   { label: 'Driving link', line: 'solid' },
   { label: 'Non-driving link', line: 'dashed' },
 ];
+
+/** Fixed screen anchor for the keyboard (`n`) create popover — a stable top-left corner, since a
+ * keyboard invocation has no pointer position (the drag/toolbar paths pass the real anchor). */
+const KEYBOARD_CREATE_ANCHOR: Point = { x: 24, y: 24 };
 
 /** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
 export interface TsldCreateInput {
@@ -217,9 +216,14 @@ export function TsldPanel({
   const [arrangeChanges, setArrangeChanges] = useState<{ id: string; laneIndex: number }[]>([]);
   const [arranging, setArranging] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
   const addActivityRef = useRef<HTMLButtonElement>(null);
+  const listboxRef = useRef<HTMLUListElement>(null);
+  // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
+  // Add-activity tool (drag/toolbar). Reset after each close.
+  const createReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const renderActivities = useMemo(() => toRenderActivities(activities), [activities]);
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
@@ -235,6 +239,36 @@ export function TsldPanel({
     }
   };
 
+  // Keep the focused activity's list position, so if it's deleted elsewhere (arriving via a
+  // refetch) we can move the ring to the nearest survivor rather than stranding keyboard focus.
+  const selectedIndexRef = useRef(0);
+  useEffect(() => {
+    if (selectedId === null) return;
+    const idx = activities.findIndex((a) => a.id === selectedId);
+    if (idx >= 0) {
+      selectedIndexRef.current = idx;
+      return;
+    }
+    // The selected bar vanished — reconcile selection to the nearest remaining activity.
+    const next = activities[Math.min(selectedIndexRef.current, activities.length - 1)];
+    setSelectedId(next ? next.id : null);
+    announce('Activity removed.');
+  }, [activities, selectedId, announce]);
+
+  // Coalesced keyboard nudge (M5 5.2) — a held Alt+arrow becomes one net write per burst, read at
+  // the live version, serialized, flushed on unmount, and race-free vs. an in-flight pointer drag.
+  // The full state machine + its correctness reasoning live in the hook (unit-tested there).
+  const pointerRepositionBusyRef = useRef(false);
+  const nudge = useCoalescedNudge({
+    onReposition,
+    activities,
+    dataDate,
+    setGhost: setPendingReposition,
+    setConflict,
+    announce,
+    isPointerBusy: () => pointerRepositionBusyRef.current,
+  });
+
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
@@ -247,28 +281,70 @@ export function TsldPanel({
       }
       return;
     }
-    // Alt+↑/↓ nudges the focused activity one lane — the keyboard equivalent of a vertical drag,
-    // so free-2D introduces no pointer-only capability (WCAG 2.1.1). Lane-only ⇒ no recalc.
+    // ? opens the keyboard-shortcuts help (discoverability, read — no flag).
+    if (event.key === '?') {
+      event.preventDefault();
+      setShowHelp(true);
+      return;
+    }
+    // [ / ] — driving-first chain navigation to the predecessor / successor (read — no flag).
+    // Selection follows (the canvas reveals + rings it); the announcement names the tie + driving,
+    // so driving/logic context is delivered exactly when a planner traces the path (M5 §2/§3).
+    if (event.key === '[' || event.key === ']') {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current) return;
+      const dir = event.key === '[' ? 'pred' : 'succ';
+      const neighbour = chainNeighbour(current.id, dependencies, dir);
+      if (neighbour) setSelectedId(neighbour.id);
+      announce(announceChainStep(dir, neighbour));
+      return;
+    }
+    // Space — Tier-2 "tell me more": logic ties + driving for the focused activity (read — no flag).
+    if (event.key === ' ') {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (current) announce(summarizeLogic(current.id, dependencies));
+      return;
+    }
+    // Alt+arrows nudge the focused activity — vertical = lane (no recalc), horizontal = start day
+    // (an SNET constraint, recalcs). The keyboard equivalent of a free-2D drag, coalesced so a held
+    // key is one net write (WCAG 2.1.1; no pointer-only capability). Behind the edit flag.
     if (
       editingEnabled &&
       onReposition &&
-      (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
-      event.altKey
+      event.altKey &&
+      (event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowLeft' ||
+        event.key === 'ArrowRight')
     ) {
       event.preventDefault();
       const current = activities.find((a) => a.id === selectedId);
       if (!current) return;
-      const laneIndex = Math.max(0, current.laneIndex + (event.key === 'ArrowDown' ? 1 : -1));
-      if (laneIndex === current.laneIndex) return; // already at lane 0 moving up — no-op
+      if (event.key === 'ArrowUp') nudge(current, 'lane', -1);
+      else if (event.key === 'ArrowDown') nudge(current, 'lane', 1);
+      else if (event.key === 'ArrowLeft') nudge(current, 'time', -1);
+      else nudge(current, 'time', 1);
+      return;
+    }
+    // n opens the create-activity popover pre-filled from the focused activity's lane + start —
+    // in-canvas keyboard parity for create (the activities-table dialog is the 2.1.1 alternative).
+    if (editingEnabled && (event.key === 'n' || event.key === 'N')) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      const startDay =
+        current?.earlyStart && dataDate ? daysBetween(dataDate, current.earlyStart) : 0;
       setConflict(null);
-      void onReposition({ activityId: current.id, laneIndex })
-        .then((outcome) => {
-          if (outcome.conflict) setConflict(outcome.conflict);
-          if (outcome.applied) announce(`Moved “${current.name}” to lane ${laneIndex + 1}.`);
-        })
-        .catch((err: unknown) => {
-          setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
-        });
+      createReturnFocusRef.current = listboxRef.current; // return focus to the list, not the toolbar
+      setPendingCreate({
+        startDay,
+        endDay: startDay,
+        laneIndex: current ? current.laneIndex : 0,
+        anchor: KEYBOARD_CREATE_ANCHOR,
+        saving: false,
+        error: null,
+      });
       return;
     }
     const index = activities.findIndex((a) => a.id === selectedId);
@@ -285,7 +361,9 @@ export function TsldPanel({
 
   const closeCreate = (): void => {
     setPendingCreate(null);
-    addActivityRef.current?.focus();
+    // Return focus to wherever create was invoked from (the listbox for `n`, else the tool).
+    (createReturnFocusRef.current ?? addActivityRef.current)?.focus();
+    createReturnFocusRef.current = null;
   };
 
   // Auto-arrange (M4 4.3): pack the drawn (dated) activities into the fewest non-overlapping lanes.
@@ -368,6 +446,8 @@ export function TsldPanel({
       const startDay = intent.startDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
+      // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
+      pointerRepositionBusyRef.current = true;
       void onReposition({
         activityId: intent.activityId,
         ...(intent.startDay !== undefined ? { startDay: intent.startDay } : {}),
@@ -377,21 +457,25 @@ export function TsldPanel({
           setPendingReposition(null);
           if (outcome.conflict) setConflict(outcome.conflict);
           // Announce "Moved" only when the move actually landed, so it never contradicts a
-          // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed.
+          // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed and,
+          // for any time change (SNET + recalc), that the dates will update — matching the keyboard
+          // nudge's wording so the same operation reads the same to AT users.
           if (outcome.applied) {
-            // A both-axes drop also moved in time (SNET + recalc) — tell AT users the dates will
-            // change, since the ghost's new column is the only sighted cue for that half.
             const timeChanged = intent.startDay !== undefined;
+            const laneChanged = intent.laneIndex !== undefined;
             announce(
-              intent.laneIndex !== undefined
+              laneChanged
                 ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
-                : `Moved “${activity.name}”.`,
+                : `Moved “${activity.name}”; dates will update.`,
             );
           }
         })
         .catch((err: unknown) => {
           setPendingReposition(null);
           setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+        })
+        .finally(() => {
+          pointerRepositionBusyRef.current = false;
         });
       return;
     }
@@ -475,6 +559,16 @@ export function TsldPanel({
             Fit to plan
           </Button>
         )}
+        {showDiagram ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowHelp(true)}
+            aria-haspopup="dialog"
+          >
+            Keyboard shortcuts
+          </Button>
+        ) : null}
       </div>
 
       {conflict ? (
@@ -569,6 +663,7 @@ export function TsldPanel({
               `sr-only` keeps the widget in the a11y tree and tab order.
             */}
             <ul
+              ref={listboxRef}
               id={listboxId}
               role="listbox"
               aria-label="Activities in the diagram"
@@ -609,6 +704,12 @@ export function TsldPanel({
         pendingLabel="Arranging…"
         confirmVariant="default"
         pending={arranging}
+      />
+
+      <TsldShortcutsHelp
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        editingEnabled={editingEnabled}
       />
     </section>
   );
