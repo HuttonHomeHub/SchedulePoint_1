@@ -10,6 +10,7 @@ import { AddDependencyDialog, type LinkDirection } from './AddDependencyDialog';
 import { EditDependencyDialog } from './EditDependencyDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
@@ -53,6 +54,20 @@ function DirectionTable({
       header: 'Lag',
       cellClassName: 'whitespace-nowrap tabular-nums',
       cell: (dep) => <span className="text-muted-foreground">{formatLag(dep.lagDays)}</span>,
+    },
+    {
+      // The engine-owned driving flag (M3), in text so it isn't canvas-only: a driving link is
+      // the binding tie that sets this activity's (or the successor's) start. The badge carries
+      // the meaning in words, never colour alone (WCAG 1.3.1/1.4.1); empty when non-driving.
+      header: 'Driving',
+      cell: (dep) =>
+        dep.isDriving ? (
+          <Badge variant="neutral">Driving</Badge>
+        ) : (
+          <span className="text-muted-foreground" aria-hidden="true">
+            —
+          </span>
+        ),
     },
   ];
   if (onEdit && onRemove) {

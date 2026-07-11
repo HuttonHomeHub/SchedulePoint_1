@@ -6,6 +6,7 @@ import type { EngineActivity, EngineEdge } from './types';
 
 const task = (id: string): EngineActivity => ({ id, durationDays: 1, type: 'TASK' });
 const fs = (predecessorId: string, successorId: string): EngineEdge => ({
+  id: `${predecessorId}-${successorId}-FS`,
   predecessorId,
   successorId,
   type: 'FS',

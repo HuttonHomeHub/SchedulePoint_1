@@ -87,6 +87,7 @@ export class ScheduleService {
           { dataDate, calendar },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
+        await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
         return output.summary;
       });
     } catch (error) {
@@ -208,6 +209,7 @@ function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
 /** Project a stored dependency row onto the engine's edge struct. */
 function toEngineEdge(row: ScheduleEdgeRow): EngineEdge {
   return {
+    id: row.id,
     predecessorId: row.predecessorId,
     successorId: row.successorId,
     type: row.type,

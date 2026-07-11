@@ -1,0 +1,20 @@
+-- Engine-owned CPM output on the schedule edge (TSLD M3 Task 3.1, ADR-0022).
+-- `is_driving` is true when this dependency is the binding relationship that determines
+-- its successor's early start (a "driving" logic tie in CPM/GPM). It is recomputed on
+-- every recalculate by the CPM engine's batched raw UPDATE — the analogue of the
+-- activity engine columns (early_start/is_critical/…). Like those, it is defaulted,
+-- NOT NULL, and never set from a user-facing write DTO; the batched write touches only
+-- engine columns (never version/updated_at/updated_by), so a recalc stays invisible to
+-- optimistic locking.
+--
+-- The DEFAULT false clause backfills every existing row to false in the same statement
+-- (rows read "not driving" until the plan is first calculated). Postgres adds a column
+-- with a constant DEFAULT as a metadata-only change (no table rewrite / no full-table
+-- lock), so this is a fast, safe ALTER on the current data volume.
+--
+-- No new index: the canvas reads `is_driving` as part of the already plan-scoped
+-- dependency load (WHERE organization_id / plan_id / deleted_at, served by the existing
+-- (plan_id, created_at, id) index) and never filters or sorts by it. An index on a
+-- low-cardinality boolean that no predicate targets would only cost writes for no read
+-- benefit, so none is warranted (docs/DATABASE.md: index real query patterns, not columns).
+ALTER TABLE "dependencies" ADD COLUMN "is_driving" BOOLEAN NOT NULL DEFAULT false;

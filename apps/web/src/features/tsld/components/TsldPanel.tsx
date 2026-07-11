@@ -32,6 +32,7 @@ function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[]
   return dependencies.map((d) => ({
     predecessorId: d.predecessor.id,
     successorId: d.successor.id,
+    isDriving: d.isDriving,
   }));
 }
 
@@ -53,7 +54,10 @@ function describeActivity(a: ActivitySummary): string {
  * never conveyed by colour alone (WCAG 1.4.1). Swatches read their colours from the same
  * design tokens the painter uses, so the key stays truthful across themes.
  */
-const LEGEND: ReadonlyArray<{ label: string; swatch: React.CSSProperties }> = [
+type LegendItem =
+  { label: string; swatch: React.CSSProperties } | { label: string; line: 'solid' | 'dashed' };
+
+const LEGEND: ReadonlyArray<LegendItem> = [
   {
     label: 'Critical',
     swatch: {
@@ -69,6 +73,10 @@ const LEGEND: ReadonlyArray<{ label: string; swatch: React.CSSProperties }> = [
     },
   },
   { label: 'On schedule', swatch: { backgroundColor: 'var(--color-primary)' } },
+  // Logic ties, matching the canvas: a driving link (heavier solid) sets its
+  // successor's start; a non-driving link (thin dashed) carries slack (M3).
+  { label: 'Driving link', line: 'solid' },
+  { label: 'Non-driving link', line: 'dashed' },
 ];
 
 /** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
@@ -374,11 +382,24 @@ export function TsldPanel({
         >
           {LEGEND.map((item) => (
             <li key={item.label} className="flex items-center gap-1.5">
-              <span
-                aria-hidden="true"
-                className="inline-block h-3 w-5 rounded-sm"
-                style={item.swatch}
-              />
+              {'line' in item ? (
+                <span aria-hidden="true" className="inline-flex h-3 w-5 items-center">
+                  <span
+                    className="w-full"
+                    style={{
+                      borderTopWidth: item.line === 'solid' ? 2 : 1.5,
+                      borderTopStyle: item.line,
+                      borderTopColor: 'var(--color-muted-foreground)',
+                    }}
+                  />
+                </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-3 w-5 rounded-sm"
+                  style={item.swatch}
+                />
+              )}
               {item.label}
             </li>
           ))}

@@ -42,6 +42,7 @@ function link(overrides: Partial<DependencySummary> = {}): DependencySummary {
     lagDays: 3,
     predecessor: { id: 'a1', code: 'A10', name: 'Excavate' },
     successor: { id: 'b1', code: 'B10', name: 'Pour slab' },
+    isDriving: false,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -91,6 +92,16 @@ describe('DependencyEditor', () => {
     expect(screen.getByText('Start → Start')).toBeInTheDocument();
     expect(screen.getByText('−2d')).toBeInTheDocument();
     expect(screen.getByText(/No predecessors/)).toBeInTheDocument();
+  });
+
+  it('marks a driving link in text so the cue is not canvas-only (M3, WCAG 1.3.1)', () => {
+    renderEditor(
+      [link({ isDriving: true })],
+      [link({ successor: { id: 'c1', code: null, name: 'Cure' } })],
+    );
+    // Exactly one row (the driving predecessor) carries a "Driving" badge cell; the
+    // non-driving successor's cell is an aria-hidden dash. (Column headers are not cells.)
+    expect(screen.getAllByRole('cell', { name: 'Driving' })).toHaveLength(1);
   });
 
   it('hides write affordances for a reader', () => {

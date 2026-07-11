@@ -281,6 +281,16 @@ with **TEXT** `created_by`/`updated_by`, optimistic-locking `version`, `delete_b
   disambiguate the back-relations (`Activity.predecessorLinks` are the edges where the
   activity is the predecessor; `Activity.successorLinks` where it is the successor). Two
   FKs to one table **require** named relations or Prisma errors.
+- **CPM output — engine-owned** (`is_driving`): a defaulted (`false`) **NOT NULL** boolean,
+  the edge-level analogue of the activity CPM columns above. It is `true` when this
+  dependency is the **binding** tie that determines its successor's early start (a
+  "driving" logic relationship in CPM/GPM). **Never accepted from a write DTO** — it is
+  recomputed on every recalculate by the CPM engine's batched raw `UPDATE`, which touches
+  engine columns alone (never `version`/`updated_at`/`updated_by`), so a recalc is
+  invisible to optimistic locking (ADR-0022). It reads `false` until the plan is first
+  calculated. **No index**: the canvas reads it as part of the already plan-scoped
+  dependency load and never filters or sorts by it, so an index on a low-cardinality
+  boolean would cost writes for no read benefit.
 - **Uniqueness is per `(predecessor, successor, type)`.** The partial unique index
   `uq_dependencies_pred_succ_type` (`WHERE deleted_at IS NULL`, raw SQL) allows a pair to
   hold up to four distinct-typed links — the **SS+FF overlap "ladder"** idiomatic to

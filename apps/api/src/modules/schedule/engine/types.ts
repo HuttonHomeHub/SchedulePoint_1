@@ -27,11 +27,25 @@ export interface EngineActivity {
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
 export interface EngineEdge {
+  /** The dependency's id, carried through so the engine can key its driving output. */
+  id: string;
   predecessorId: string;
   successorId: string;
   type: DependencyType;
   /** Signed lag in working days: positive is a delay, negative is a lead. */
   lagDays: number;
+}
+
+/**
+ * The engine's per-edge output: whether the edge is **driving** — i.e. its forward
+ * timing bound is exactly what set its successor's early start, so it is the binding
+ * logic tie (CPM/GPM "driver"). An edge with slack (a later predecessor could move
+ * without delaying the successor) is non-driving; when a constraint clamps the start
+ * above every incoming bound, none of the successor's edges drive.
+ */
+export interface EngineEdgeResult {
+  edgeId: string;
+  isDriving: boolean;
 }
 
 /**

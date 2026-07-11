@@ -86,13 +86,37 @@ describe('paintScene', () => {
     });
     const scene: TsldScene = {
       activities: [pred, succ],
-      edges: [{ predecessorId: 'p', successorId: 's' }],
+      edges: [{ predecessorId: 'p', successorId: 's', isDriving: true }],
       dataDate: DATA_DATE,
     };
     paintScene(ctx, scene, VIEW, SIZE, PALETTE);
     // The edge layer moves/lines to route the polyline and strokes it.
     expect(ctx.moveTo).toHaveBeenCalled();
     expect(ctx.stroke).toHaveBeenCalled();
+  });
+
+  it('encodes driving vs non-driving links without colour: heavier solid vs thin dashed (M3)', () => {
+    const ctx = mockCtx();
+    const pred = task({
+      id: 'p',
+      earlyStart: '2026-01-02',
+      earlyFinish: '2026-01-03',
+      laneIndex: 0,
+    });
+    const succ = task({
+      id: 's',
+      earlyStart: '2026-01-08',
+      earlyFinish: '2026-01-09',
+      laneIndex: 1,
+    });
+    const scene: TsldScene = {
+      activities: [pred, succ],
+      edges: [{ predecessorId: 'p', successorId: 's', isDriving: false }],
+      dataDate: DATA_DATE,
+    };
+    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+    // The non-driving pass sets a dash pattern; the driving pass would set a solid ([]).
+    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
   });
 
   it('outlines a critical bar with a non-colour cue (solid dash pattern)', () => {

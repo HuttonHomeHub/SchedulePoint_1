@@ -286,3 +286,30 @@ per-move cost. Deferred to keep Slice 2.3 focused; the ADR contract is otherwise
 **Consequences.** A user can attempt an illegal link and learn it's illegal only on
 drop. Tracked as a follow-up to add the client pre-check (reusing the canvas's existing
 `RenderEdge[]`) so the ring reflects legality before release.
+
+### 2026-07-11 — Driving-edge definition (TSLD M3)
+
+**Decision.** A dependency edge is **driving** iff its forward timing bound equals its
+successor's computed early start — i.e. it is (one of) the binding relationship(s) that
+set the successor's start. Computed in the engine from the forward-pass maps as a pure
+O(E) post-step (no change to the forward/backward passes), persisted per edge as the
+engine-owned `dependencies.is_driving` (ADR-0022 batched write; never touches
+`version`/`updated_at`), exposed as `DependencySummary.isDriving`.
+
+**Why.** Matches the CPM/GPM "driver" the TSLD promises ("drivers at a glance") and is
+derivable with no extra graph traversal. When a constraint clamps a successor's start
+above every incoming bound, no edge matches → none drives (the constraint drives),
+which is the correct read. Reading only the forward maps means the computed dates are
+unchanged, so the golden CPM suite still holds (parity preserved).
+
+**Consequences.** `is_driving` is recomputed on every recalculate and is false until the
+first calculation (or for any edge carrying slack). No new ADR — this is a local,
+reversible engine-output refinement within ADR-0022's contract; recorded here per the
+plan's "short ADR/DECISIONS entry" for the engine change.
+
+**Accessible representation.** The driving distinction is not colour-only on the canvas
+(heavier-solid vs thin-dashed) and is carried in **text** in the keyboard-accessible logic
+editor (a "Driving" column in the predecessors/successors table — the fuller conforming
+alternative). Folding a per-activity driving summary into the canvas's parallel listbox
+description (`describeActivity`, alongside the existing "critical" cue) is **deferred to M5**
+(accessibility hardening) — a tracked deferral, not a silent gap (CLAUDE.md §13).

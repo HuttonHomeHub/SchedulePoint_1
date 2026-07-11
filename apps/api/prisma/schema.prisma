@@ -534,6 +534,14 @@ model ActivityDependency {
   type    DependencyType @default(FS)
   lagDays Int            @default(0) @map("lag_days")
 
+  // CPM output — engine-owned (ADR-0022), recomputed each recalculate. True when this
+  // edge is the binding tie that determines its successor's early start (a "driving"
+  // logic relationship). Defaulted; NEVER accepted from a write DTO — written only by
+  // the CPM engine's batched raw UPDATE, which touches engine columns alone (never
+  // version/updated_at/updated_by), so a recalc is invisible to optimistic locking.
+  // Reads false until the plan is first calculated.
+  isDriving Boolean @default(false) @map("is_driving")
+
   // Housekeeping (as Activity): TEXT audit ids (Better Auth ids are TEXT — nullable),
   // optimistic-lock version, soft delete + restore-batch correlation.
   version       Int       @default(1)
