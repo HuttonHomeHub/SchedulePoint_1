@@ -19,6 +19,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
@@ -85,8 +86,15 @@ export class PlanActivitiesController {
   })
   @ApiOkResponse({ type: ActivityResponseDto, isArray: true })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({
+    description:
+      'The organisation or plan is not found, or a position names an id not in the plan.',
+  })
   @ApiConflictResponse({
     description: 'A stale version (or a row changed elsewhere) — the whole batch is rejected.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description: 'The same activity id appears more than once in the batch.',
   })
   async updatePositions(
     @CurrentUser() principal: Principal,

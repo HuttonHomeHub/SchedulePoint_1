@@ -233,34 +233,33 @@ export class ActivitiesService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      // Every id must be an active activity in THIS plan+org: a foreign/cross-plan id is
-      // indistinguishable from "not found". updateIfVersionMatches scopes only by id+version,
-      // so this set is the plan/org gate — read once inside the tx.
-      const inPlan = new Set(
-        (
-          await tx.activity.findMany({
-            where: { organizationId: organization.id, planId, deletedAt: null },
-            select: { id: true },
-          })
-        ).map((a) => a.id),
+      // One set-based UPDATE keyed by id+version and re-asserting plan/org/active scope: a stale
+      // or cross-plan/tenant id simply doesn't match and isn't written. All-or-nothing is the
+      // count check below — a shortfall rolls the whole (possibly partial) UPDATE back.
+      const updated = await this.activities.updateLanePositions(
+        organization.id,
+        planId,
+        dto.positions,
+        principal.userId,
+        tx,
       );
-      for (const id of ids) {
-        if (!inPlan.has(id)) throw new NotFoundError('Activity not found in this plan.');
-      }
-      // All-or-nothing: any stale version (or a row deleted mid-flight) rolls back the batch.
-      for (const p of dto.positions) {
-        const changed = await this.activities.updateIfVersionMatches(
-          p.id,
-          p.version,
-          { laneIndex: p.laneIndex },
-          principal.userId,
-          tx,
+      if (updated !== dto.positions.length) {
+        // Only on the cold failure path do we spend a query to say WHY: an id not in this
+        // plan (foreign/cross-plan/deleted → 404) vs a present-but-stale version (→ 409).
+        const inPlan = new Set(
+          (
+            await tx.activity.findMany({
+              where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+              select: { id: true },
+            })
+          ).map((a) => a.id),
         );
-        if (changed === 0) {
-          throw new ConflictError(
-            'This plan changed since you opened it — no lanes were moved. Refresh and try again.',
-          );
+        if (ids.some((id) => !inPlan.has(id))) {
+          throw new NotFoundError('Activity not found in this plan.');
         }
+        throw new ConflictError(
+          'This plan changed since you opened it — no lanes were moved. Refresh and try again.',
+        );
       }
     });
 

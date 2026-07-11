@@ -108,4 +108,45 @@ export class ActivityRepository {
     });
     return result.count;
   }
+
+  /**
+   * Batch lane-position write in ONE `unnest` statement (TSLD M4): move each `{id, laneIndex,
+   * version}` to its new lane, matching by id AND `version` (per-row optimistic lock) and
+   * re-asserting the plan/org/active scope in the WHERE — so a stale or cross-plan/cross-tenant
+   * id can never write. Bumps `version`/`updated_at`/`updated_by` (a user edit, unlike the
+   * engine's lock-bypassing write). Returns rows changed; the caller compares it to the batch
+   * size and, on a shortfall, rolls the transaction back — a partial move never persists. Mirrors
+   * {@link ScheduleRepository.writeResults}'s single-round-trip shape (avoids a 2,000-row loop
+   * exceeding Prisma's interactive-transaction timeout).
+   */
+  async updateLanePositions(
+    organizationId: string,
+    planId: string,
+    positions: readonly { id: string; laneIndex: number; version: number }[],
+    updatedBy: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (positions.length === 0) return 0;
+    const ids = positions.map((p) => p.id);
+    const laneIndexes = positions.map((p) => p.laneIndex);
+    const versions = positions.map((p) => p.version);
+
+    return db.$executeRaw`
+      UPDATE activities AS a
+      SET lane_index = v.lane_index,
+          version = a.version + 1,
+          updated_by = ${updatedBy}::text,
+          updated_at = now()
+      FROM unnest(
+        ${ids}::uuid[],
+        ${laneIndexes}::int[],
+        ${versions}::int[]
+      ) AS v(id, lane_index, version)
+      WHERE a.id = v.id
+        AND a.version = v.version
+        AND a.plan_id = ${planId}::uuid
+        AND a.organization_id = ${organizationId}::uuid
+        AND a.deleted_at IS NULL
+    `;
+  }
 }

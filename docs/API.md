@@ -85,6 +85,15 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
   unpaginated array; note the exemption at the endpoint. Revisit if the set can
   grow large.
 
+## Batch mutations
+
+- A batch write uses **`PATCH`** on the collection with an array body whose items each carry
+  their own `id` and optimistic-lock `version` — e.g.
+  `PATCH …/plans/:planId/activities/positions` with `{ positions: [{ id, laneIndex, version }] }`.
+  No verb-in-path (`:batchMove`) and no `POST` (which reads as "create a resource").
+- Batch writes are **all-or-nothing**: if any item fails its scope check (`404`) or version
+  check (`409`), the whole batch is rejected and nothing is written. Cap the array server-side.
+
 ## Validation & data types
 
 - Requests validated with `class-validator` DTOs; unknown properties rejected.
