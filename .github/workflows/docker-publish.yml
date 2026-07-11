@@ -2,6 +2,11 @@ name: Publish container images
 
 on:
   push:
+    # Legacy aggregate tags only. Per-app publishing (ADR-0027) goes through the
+    # Release workflow's `workflow_call` (which passes per-app versions/flags); a
+    # bare push of a prefixed `api-v*`/`web-v*` tag is deliberately NOT wired here,
+    # because `type=semver` can't parse the prefix and the matrix can't tell which
+    # app the tag is for — use `workflow_dispatch` for a one-off manual publish.
     tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
@@ -10,13 +15,34 @@ on:
         required: false
   # Called by the Release workflow when a version lands, so publishing is fully
   # automatic. The default GITHUB_TOKEN cannot make a tag push trigger a separate
-  # workflow, so Release invokes this reusable workflow directly instead.
+  # workflow, so Release invokes this reusable workflow directly instead. Each app
+  # is versioned independently (ADR-0027), so the caller passes a per-app version
+  # and a per-app publish flag; only the app(s) that released are built + pushed.
   workflow_call:
     inputs:
       version:
-        description: 'Release version to tag the images with (e.g. 0.2.1).'
+        description: 'Fallback version for both images (manual dispatch only).'
         required: false
         type: string
+      api_version:
+        description: 'Version tag for the api image (e.g. 0.7.0).'
+        required: false
+        type: string
+      web_version:
+        description: 'Version tag for the web image (e.g. 0.7.1).'
+        required: false
+        type: string
+      # Left un-defaulted on purpose: the push/dispatch events don't populate
+      # workflow_call inputs at all, so the "Resolve app release" step treats an
+      # empty flag as enabled (that bash fallback is the single source of truth).
+      publish_api:
+        description: 'Whether to build + push the api image.'
+        required: false
+        type: boolean
+      publish_web:
+        description: 'Whether to build + push the web image.'
+        required: false
+        type: boolean
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -41,12 +67,32 @@ jobs:
           - app: web
             dockerfile: apps/web/Dockerfile
     steps:
+      # Resolve this app's version + whether it should publish. On a manual tag
+      # push / dispatch the per-app inputs are empty, so an app defaults to
+      # enabled and falls back to `inputs.version` (or the tag-derived semver).
+      - name: Resolve app release
+        id: app
+        run: |
+          if [ "${{ matrix.app }}" = "api" ]; then
+            VERSION="${{ inputs.api_version }}"
+            ENABLED="${{ inputs.publish_api }}"
+          else
+            VERSION="${{ inputs.web_version }}"
+            ENABLED="${{ inputs.publish_web }}"
+          fi
+          [ -z "$ENABLED" ] && ENABLED=true
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v7
+        if: steps.app.outputs.enabled == 'true'
 
       - name: Set up Docker Buildx
+        if: steps.app.outputs.enabled == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
+        if: steps.app.outputs.enabled == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -55,14 +101,17 @@ jobs:
 
       - name: Extract metadata
         id: meta
+        if: steps.app.outputs.enabled == 'true'
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.app }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            # This app's own package version (ADR-0027), or the dispatch fallback.
+            type=raw,value=${{ steps.app.outputs.version }},enable=${{ steps.app.outputs.version != '' }}
             type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
-            type=raw,value=latest,enable=${{ inputs.version != '' }}
+            type=raw,value=latest,enable=${{ steps.app.outputs.version != '' || inputs.version != '' }}
             type=sha
             # On a branch/dispatch build (and on the release call, which inherits
             # the push-to-main context) this also tags the branch name, e.g.
@@ -70,6 +119,7 @@ jobs:
             type=ref,event=branch
 
       - name: Build and push
+        if: steps.app.outputs.enabled == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .

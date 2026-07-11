@@ -1,6 +1,8 @@
 # ADR-0017: Release tagging & image publishing via GitHub Actions
 
-- **Status:** Accepted
+- **Status:** Accepted; single-aggregate-tag scheme **superseded by ADR-0027**
+  (per-package tags). The rest — driving tagging/publishing from the workflow
+  rather than `changeset publish` or token-triggered tag pushes — still holds.
 - **Date:** 2026-07-09
 - **Deciders:** Engineering
 

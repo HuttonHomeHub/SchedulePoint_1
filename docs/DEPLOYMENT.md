@@ -14,8 +14,8 @@ flowchart TD
   C -- yes --> D[Open/update 'Version Packages' PR]
   D --> E[Maintainer merges version PR]
   E --> F[Versions bumped + CHANGELOG updated]
-  F --> G[Release job tags vX.Y.Z + invokes publish]
-  G --> H[Images pushed to ghcr.io with SemVer + sha tags]
+  F --> G[Release job tags api-vX.Y.Z / web-vX.Y.Z + invokes publish]
+  G --> H[Each released app's image pushed to ghcr.io with its own version + sha]
   H --> I[Promote images through environments]
   C -- no --> J[No release]
 ```
@@ -26,12 +26,15 @@ flowchart TD
   changeset (`pnpm changeset`) for user-visible changes.
 - The [`release`](../.github/workflows/release.yml) workflow maintains a
   "Version Packages" PR. Merging it bumps versions and writes `CHANGELOG.md`
-  entries; the workflow then creates the `vX.Y.Z` tag and invokes image
-  publishing directly. (It does **not** use `changeset publish` — that is npm-only
-  and no-ops on our private packages, so it never tags. And it publishes by
-  calling `docker-publish` as a reusable workflow rather than relying on the tag
-  push to trigger it, because a push made with the default `GITHUB_TOKEN` cannot
-  start another workflow.)
+  entries; the workflow then tags **each app that released independently** —
+  `api-vX.Y.Z` / `web-vX.Y.Z` — and invokes image publishing directly for those
+  apps (ADR-0027). Per-package tags are used because the two apps version on their
+  own cadence, and a single aggregate `vX.Y.Z` tag silently skipped a web-only
+  release once web caught up to api's version. (It does **not** use `changeset
+publish` — that is npm-only and no-ops on our private packages, so it never tags.
+  And it publishes by calling `docker-publish` as a reusable workflow rather than
+  relying on the tag push to trigger it, because a push made with the default
+  `GITHUB_TOKEN` cannot start another workflow.)
 
 ## Container images
 
@@ -41,9 +44,11 @@ flowchart TD
 - Published to **GitHub Container Registry** (GHCR paths are all-lowercase):
   - `ghcr.io/huttonhomehub/schedulepoint_1/api`
   - `ghcr.io/huttonhomehub/schedulepoint_1/web`
-- Tags: full SemVer + `latest` on a release, plus commit `sha` and the branch
-  name on manual/branch builds. Images include an **SBOM** and **build
-  provenance**.
+- Tags: each image carries **its own** app version + `latest` on a release, plus
+  commit `sha` and the branch name (e.g. `:main`) on manual/branch builds. Because
+  the two apps version independently (ADR-0027), a coordinated deploy should pin
+  `:main`/`:latest`/a git `sha`, or pin each app to its own version. Images include
+  an **SBOM** and **build provenance**.
 - Images are **immutable**: the same artifact is promoted across environments;
   we never rebuild per environment.
 - To run the published images locally, use

@@ -19,7 +19,10 @@ jobs:
       contents: write # push version commits and the vX.Y.Z tag
       pull-requests: write # open/update the "Version Packages" PR
     outputs:
-      version: ${{ steps.meta.outputs.version }}
+      api_version: ${{ steps.meta.outputs.api_version }}
+      web_version: ${{ steps.meta.outputs.web_version }}
+      publish_api: ${{ steps.meta.outputs.publish_api }}
+      publish_web: ${{ steps.meta.outputs.publish_web }}
       release: ${{ steps.meta.outputs.release }}
     steps:
       - uses: actions/checkout@v7
@@ -57,12 +60,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # A release lands when the "Version Packages" PR was just merged: no
-      # changesets remain AND the app version has no git tag yet. Packages do NOT
-      # always bump together — a changeset that touches only one (e.g. a web-only
-      # fix) bumps just that package — so the app version is the HIGHEST of the
-      # workspace package versions, not apps/api's alone. (Keying off apps/api
-      # meant a web-only release was silently skipped because api's version — and
-      # its tag — hadn't moved.)
+      # changesets remain AND a package's version has no git tag yet. Each app is
+      # tagged INDEPENDENTLY — `api-vX.Y.Z` / `web-vX.Y.Z` — because their versions
+      # bump on their own cadence (Changesets bumps only the packages a changeset
+      # names). A single aggregate `v{max}` tag could NOT represent a web-only bump
+      # once web caught up to api's version: `max(0.7.0, 0.7.0)` is `v0.7.0`, which
+      # api had already tagged, so the web release was silently skipped (ADR-0027).
+      # Per-package tags are monotonic per package, so that collision can't recur.
       #
       # NOTE: `hasChangesets` is a changesets/action@v1 output (camelCase). v2
       # renames it to `has-changesets`; update this expression when bumping the
@@ -70,38 +74,61 @@ jobs:
       - name: Determine release
         id: meta
         run: |
-          VERSION="$(node -p "['./apps/api/package.json','./apps/web/package.json'].map((p) => require(p).version).sort((a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); return (y[0] - x[0]) || (y[1] - x[1]) || (y[2] - x[2]); })[0]")"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ] \
-            && ! git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
+          API_VERSION="$(node -p "require('./apps/api/package.json').version")"
+          WEB_VERSION="$(node -p "require('./apps/web/package.json').version")"
+          echo "api_version=$API_VERSION" >> "$GITHUB_OUTPUT"
+          echo "web_version=$WEB_VERSION" >> "$GITHUB_OUTPUT"
+          PUBLISH_API=false
+          PUBLISH_WEB=false
+          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ]; then
+            git rev-parse "refs/tags/api-v$API_VERSION" >/dev/null 2>&1 || PUBLISH_API=true
+            git rev-parse "refs/tags/web-v$WEB_VERSION" >/dev/null 2>&1 || PUBLISH_WEB=true
+          fi
+          echo "publish_api=$PUBLISH_API" >> "$GITHUB_OUTPUT"
+          echo "publish_web=$PUBLISH_WEB" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH_API" = "true" ] || [ "$PUBLISH_WEB" = "true" ]; then
             echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "New version v$VERSION — tagging release."
+            echo "Releasing: api=$PUBLISH_API (v$API_VERSION), web=$PUBLISH_WEB (v$WEB_VERSION)."
           else
             echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "No release to tag (pending changesets, or v$VERSION already tagged)."
+            echo "No release to tag (pending changesets, or both app versions already tagged)."
           fi
 
-      - name: Tag release
+      - name: Configure git author
         if: steps.meta.outputs.release == 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git tag -a "v${{ steps.meta.outputs.version }}" -m "Release v${{ steps.meta.outputs.version }}"
-          git push origin "v${{ steps.meta.outputs.version }}"
 
-      # Publish a GitHub Release for the tag so it shows in the Releases tab.
-      - name: Create GitHub release
-        if: steps.meta.outputs.release == 'true'
+      # Tag + publish a GitHub Release for each app that just released, in
+      # independent steps so a transient failure tagging one app doesn't block the
+      # other's ready release. Only an app whose version has no tag yet is tagged
+      # (the gate above), so re-runs are idempotent.
+      - name: Tag api release
+        if: steps.meta.outputs.publish_api == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ steps.meta.outputs.version }}" \
-            --title "v${{ steps.meta.outputs.version }}" \
-            --generate-notes
+          tag="api-v${{ steps.meta.outputs.api_version }}"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          gh release create "$tag" --title "$tag" --generate-notes
+
+      - name: Tag web release
+        if: steps.meta.outputs.publish_web == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="web-v${{ steps.meta.outputs.web_version }}"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          gh release create "$tag" --title "$tag" --generate-notes
 
   # Build + push the container images for the release. Invoked directly (rather
   # than via the tag push above, which the default GITHUB_TOKEN cannot use to
-  # trigger another workflow) so publishing is fully automatic.
+  # trigger another workflow) so publishing is fully automatic. Each app's image
+  # is tagged with ITS OWN package version, and only the app(s) that released are
+  # (re)built — so an unreleased app's version tag never moves to drifted content.
   publish:
     name: Publish images
     needs: release
@@ -111,4 +138,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/docker-publish.yml
     with:
-      version: ${{ needs.release.outputs.version }}
+      api_version: ${{ needs.release.outputs.api_version }}
+      web_version: ${{ needs.release.outputs.web_version }}
+      publish_api: ${{ needs.release.outputs.publish_api == 'true' }}
+      publish_web: ${{ needs.release.outputs.publish_web == 'true' }}
