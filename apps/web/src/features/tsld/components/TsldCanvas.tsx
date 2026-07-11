@@ -48,11 +48,15 @@ export interface TsldCanvasProps {
   editing?: boolean;
   /** The active editing tool (only meaningful when `editing`). */
   mode?: EditMode;
+  /** Whether a body-grab in select mode may start a reposition (i.e. a handler is wired). When
+   * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
+  canReposition?: boolean;
   /** Called with a committed edit + the (container-clamped) anchor point for its popover. */
   onIntent?: (intent: EditIntent, anchor: Point) => void;
   /** Called when Esc is pressed while idle in add-activity mode (revert to Select). */
   onExitAddMode?: () => void;
-  /** A dropped create awaiting its name/commit — drawn as a pending ghost; suspends gestures. */
+  /** The active edit ghost drawn on the interaction layer — a dropped create awaiting its name,
+   * or the moved bar while a reposition is in flight. While set, canvas gestures are suspended. */
   pending?: PendingGhost | null;
 }
 
@@ -111,10 +115,11 @@ function bodyGrab(
  *
  * **M2:** when `editing` is on, a second, pointer-transparent **interaction canvas** sits on
  * top and paints the live/pending edit ghost, and pointer-downs are routed through the pure
- * {@link reduce gesture machine}: in `add-activity` mode a drag draws a create ghost and
- * emits a `create` intent on release; in `select` mode it stays the M1 pan/select path.
- * Committed edits go to `onIntent`; `TsldPanel` owns the mutation + recalc (ADR-0026 D8).
- * With `editing` off this is byte-for-byte the M1 read-only canvas.
+ * {@link reduce gesture machine}: in `add-activity` mode a drag draws a create ghost and emits
+ * a `create` intent on release; in `select` mode a drag on a bar body starts a reposition ghost
+ * that commits a `reposition` intent on drop (or selects the bar if it never moved), while empty
+ * space keeps the M1 pan/select path. Committed edits go to `onIntent`; `TsldPanel` owns the
+ * mutation + recalc (ADR-0026 D8). With `editing` off this is byte-for-byte the M1 read-only canvas.
  */
 export function TsldCanvas({
   activities,
@@ -125,6 +130,7 @@ export function TsldCanvas({
   fitSignal,
   editing = false,
   mode = 'select',
+  canReposition = false,
   onIntent,
   onExitAddMode,
   pending = null,
@@ -313,9 +319,10 @@ export function TsldCanvas({
           if (editing) {
             const p = localPoint(e);
             const hit = classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate);
-            // A body grab in select mode needs the activity's current geometry to reposition it.
+            // A body grab in select mode needs the activity's current geometry to reposition it —
+            // but only when a reposition handler is wired, else it falls through to M1 select.
             const body =
-              mode === 'select' && hit.kind === 'body' && hit.id
+              canReposition && mode === 'select' && hit.kind === 'body' && hit.id
                 ? bodyGrab(sceneRef.current.activities, hit.id, dataDate)
                 : undefined;
             const { state } = reduce(

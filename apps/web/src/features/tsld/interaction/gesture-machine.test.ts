@@ -80,6 +80,8 @@ describe('gesture-machine: reposition-in-time', () => {
       kind: 'repositioning',
       activityId: 'a',
       grabDay: 2,
+      grabX: 25,
+      movedPastThreshold: false,
       originStartDay: 2,
       spanDays: 3,
       laneIndex: 1,
@@ -102,6 +104,33 @@ describe('gesture-machine: reposition-in-time', () => {
   it('selects (does not reposition) when a bar is pressed without moving', () => {
     const up = reduce(grab(), { type: 'pointerUp' }, ctx('select'));
     expect(up.state).toEqual(IDLE);
+    expect(up.intent).toBeUndefined();
+    expect(up.select).toBe('a');
+  });
+
+  it('selects (does not reposition) when a sub-threshold jitter crosses a day at low zoom', () => {
+    // A near-minimum zoom where one day column is ~2px wide: a 3px click jitter crosses a day
+    // boundary but is under the 4px move threshold, so it must select, not commit an SNET move.
+    const lowZoom: GestureCtx = {
+      mode: 'select',
+      view: { pxPerDay: 2, originX: 0, originY: 0 },
+      dataDate: '2026-01-01',
+    };
+    const lowBody = { id: 'a', startDay: 5, endDay: 8, laneIndex: 0 };
+    const grabbed = reduce(
+      IDLE,
+      {
+        type: 'pointerDown',
+        point: { x: 11, y: 5 },
+        hit: { kind: 'body', id: 'a' },
+        body: lowBody,
+      },
+      lowZoom,
+    ).state;
+    const moved = reduce(grabbed, { type: 'pointerMove', point: { x: 14, y: 5 } }, lowZoom);
+    // The ghost tracks to the next day column, but the move stayed under the pixel threshold.
+    expect(moved.state).toMatchObject({ kind: 'repositioning', movedPastThreshold: false });
+    const up = reduce(moved.state, { type: 'pointerUp' }, lowZoom);
     expect(up.intent).toBeUndefined();
     expect(up.select).toBe('a');
   });

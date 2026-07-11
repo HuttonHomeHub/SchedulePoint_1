@@ -113,8 +113,12 @@ export function PlanDetailScreen(): React.ReactElement {
   }: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
     const plannedStart = plan.data?.plannedStart;
     const activity = (activities.data ?? []).find((a) => a.id === activityId);
-    if (!plannedStart || !activity) return { conflict: null };
+    if (!plannedStart || !activity) return { applied: false, conflict: null };
     try {
+      // A drag always imposes an SNET-at-new-start (ADR-0023), which by design overwrites any
+      // prior constraint (e.g. a MANDATORY_START) on that activity — moving a pinned bar
+      // re-pins it where it was dropped. The version check makes a concurrent edit 409 rather
+      // than clobber; the other fields are resent unchanged (laneIndex is omitted → untouched).
       await updateActivity.mutateAsync({
         activityId,
         version: activity.version,
@@ -128,18 +132,22 @@ export function PlanDetailScreen(): React.ReactElement {
       });
     } catch (err) {
       if (err instanceof ApiFetchError && err.status === 409) {
+        // Stale version — the move was NOT applied (nothing changed); never re-send.
         return {
+          applied: false,
           conflict:
             'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.',
         };
       }
       throw err;
     }
+    // The move landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
     try {
       await recalculate.mutateAsync();
-      return { conflict: null };
+      return { applied: true, conflict: null };
     } catch {
       return {
+        applied: true,
         conflict:
           'Moved, but the schedule couldn’t recalculate just now. Refresh to see updated dates.',
       };

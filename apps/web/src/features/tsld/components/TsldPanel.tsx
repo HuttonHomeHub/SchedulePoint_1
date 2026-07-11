@@ -7,7 +7,7 @@ import { daysBetween, type Point } from '../render/render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
-import { TsldCanvas } from './TsldCanvas';
+import { TsldCanvas, type PendingGhost } from './TsldCanvas';
 import { TsldToolbar } from './TsldToolbar';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -97,11 +97,13 @@ export interface TsldRepositionInput {
 }
 
 /**
- * The outcome of a reposition. It **resolves** for both success and an optimistic-lock (or
- * recalc) conflict — `conflict` carries the message to show in the banner (the move wasn't
- * applied, or dates couldn't recalc); a genuine failure rejects.
+ * The outcome of a reposition. It **resolves** for both success and a conflict; a genuine
+ * failure rejects. `applied` says whether the move actually landed — false for a stale-version
+ * 409 (nothing changed), true when it landed (even if the follow-up recalc then failed) — so
+ * the "Moved …" status is announced only when it's true. `conflict` is the banner message.
  */
 export interface TsldRepositionOutcome {
+  applied: boolean;
   conflict: string | null;
 }
 
@@ -138,8 +140,10 @@ interface PendingCreate {
  *
  * **M2 (flagged):** when editing is enabled (`canEdit` + `onCreate` + `VITE_TSLD_EDITING`),
  * a toolbar adds an **Add activity** tool — drag on the timeline to draw a task, then name it
- * in an inline popover; the route creates it (SNET-placed) and recalculates. With editing off
- * the surface is byte-for-byte the M1 read-only diagram.
+ * in an inline popover — and in **Select** mode a writer drags a bar's body sideways to move it
+ * in time (an SNET reposition). Both show an instant optimistic ghost; the route owns the write
+ * + authoritative recalc, and a stale-version 409 surfaces as a non-destructive conflict banner.
+ * With editing off the surface is byte-for-byte the M1 read-only diagram.
  */
 export function TsldPanel({
   activities,
@@ -157,11 +161,7 @@ export function TsldPanel({
   const [mode, setMode] = useState<EditMode>('select');
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
-  const [pendingReposition, setPendingReposition] = useState<{
-    startDay: number;
-    endDay: number;
-    laneIndex: number;
-  } | null>(null);
+  const [pendingReposition, setPendingReposition] = useState<PendingGhost | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
@@ -225,8 +225,10 @@ export function TsldPanel({
       void onReposition({ activityId: intent.activityId, startDay: intent.startDay })
         .then((outcome) => {
           setPendingReposition(null);
-          announce(`Moved “${activity.name}”.`);
           if (outcome.conflict) setConflict(outcome.conflict);
+          // Announce "Moved" only when the move actually landed, so it never contradicts a
+          // "wasn't applied" conflict banner (WCAG 4.1.3).
+          if (outcome.applied) announce(`Moved “${activity.name}”.`);
         })
         .catch((err: unknown) => {
           setPendingReposition(null);
@@ -327,6 +329,7 @@ export function TsldPanel({
               fitSignal={fitSignal}
               editing={editingEnabled}
               mode={mode}
+              canReposition={onReposition !== undefined}
               onIntent={onIntent}
               onExitAddMode={() => setMode('select')}
               pending={

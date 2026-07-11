@@ -1,6 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The M2 editing gate reads a build-time flag; force it on for these tests.
 vi.mock('../../../config/env', async (importOriginal) => {
@@ -8,7 +8,13 @@ vi.mock('../../../config/env', async (importOriginal) => {
   return { ...actual, TSLD_EDITING_ENABLED: true };
 });
 
+// Capture live-region announcements so we can assert on (or the absence of) status messages.
+const announceSpy = vi.fn();
+vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
+
 import { TsldPanel } from './TsldPanel';
+
+beforeEach(() => announceSpy.mockClear());
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -122,7 +128,7 @@ describe('TsldPanel editing (M2, flag on)', () => {
   });
 
   it('repositions a bar by dragging its body in select mode → onReposition', async () => {
-    const onReposition = vi.fn().mockResolvedValue({ conflict: null });
+    const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     const utils = render(
       <TsldPanel
         activities={[activity()]}
@@ -142,6 +148,60 @@ describe('TsldPanel editing (M2, flag on)', () => {
     await waitFor(() =>
       expect(onReposition).toHaveBeenCalledWith(expect.objectContaining({ activityId: 'a1' })),
     );
+    // A landed move announces success to the live region.
+    await waitFor(() => expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('Moved')));
+  });
+
+  it('on a rejected reposition (stale version) shows the conflict banner and does not announce a move', async () => {
+    const onReposition = vi
+      .fn()
+      .mockResolvedValue({
+        applied: false,
+        conflict: 'This plan changed — your move wasn’t applied.',
+      });
+    const utils = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+
+    // The conflict is surfaced in the alert banner…
+    expect(await screen.findByRole('alert')).toHaveTextContent('wasn’t applied');
+    // …and the live region never claims the (rejected) move landed (WCAG 4.1.3).
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Moved'));
+  });
+
+  it('selects (does not reposition) when a bar body is pressed without moving', async () => {
+    const onReposition = vi.fn();
+    const utils = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    // Press and release on the bar body without moving → select, never a reposition.
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
+    await waitFor(() =>
+      expect(utils.container.querySelector('[role="option"][aria-selected="true"]')).not.toBeNull(),
+    );
+    expect(onReposition).not.toHaveBeenCalled();
   });
 
   it('cancels the create popover without calling onCreate', async () => {

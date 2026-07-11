@@ -22,6 +22,14 @@ import {
 /** The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition. */
 export type EditMode = 'select' | 'add-activity';
 
+/**
+ * The minimum pointer travel (CSS px) that turns a body press into a real reposition rather
+ * than a select — the same threshold M1 uses to tell a click from a pan (`TsldCanvas`). Without
+ * it, at low zoom a day column can be ~2px wide, so ordinary click jitter would cross a day
+ * boundary and commit an unintended SNET move on release.
+ */
+export const REPOSITION_THRESHOLD_PX = 4;
+
 export interface GestureCtx {
   mode: EditMode;
   view: Viewport;
@@ -73,6 +81,10 @@ export type GestureState =
       activityId: string;
       /** The day column grabbed at pointer-down (the drag reference). */
       grabDay: number;
+      /** The screen x grabbed at pointer-down — for the pixel-distance select/move guard. */
+      grabX: number;
+      /** Whether the pointer has travelled past {@link REPOSITION_THRESHOLD_PX} since grab. */
+      movedPastThreshold: boolean;
       originStartDay: number;
       spanDays: number;
       laneIndex: number;
@@ -112,6 +124,8 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             kind: 'repositioning',
             activityId: id,
             grabDay: dayColumnAt(event.point.x, ctx.view),
+            grabX: event.point.x,
+            movedPastThreshold: false,
             originStartDay: startDay,
             spanDays: endDay - startDay,
             laneIndex,
@@ -129,10 +143,17 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         return { state: { ...state, currentDay } };
       }
       if (state.kind === 'repositioning') {
+        const movedPastThreshold =
+          state.movedPastThreshold ||
+          Math.abs(event.point.x - state.grabX) > REPOSITION_THRESHOLD_PX;
         const delta = dayColumnAt(event.point.x, ctx.view) - state.grabDay;
         const currentStartDay = state.originStartDay + delta;
-        if (currentStartDay === state.currentStartDay) return { state };
-        return { state: { ...state, currentStartDay } };
+        if (
+          currentStartDay === state.currentStartDay &&
+          movedPastThreshold === state.movedPastThreshold
+        )
+          return { state };
+        return { state: { ...state, currentStartDay, movedPastThreshold } };
       }
       return { state };
     }
@@ -146,7 +167,9 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         };
       }
       if (state.kind === 'repositioning') {
-        if (state.currentStartDay === state.originStartDay) {
+        // A press that never travelled past the pixel threshold — or that landed back on the
+        // origin day — is a select, not a move (guards click-jitter at low zoom, ADR-0026 D5).
+        if (!state.movedPastThreshold || state.currentStartDay === state.originStartDay) {
           return { state: IDLE, select: state.activityId };
         }
         return {
