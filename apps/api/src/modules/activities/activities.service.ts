@@ -23,6 +23,7 @@ import { ActivityRepository, type ActivityPatch } from './activity.repository';
 import type { CreateActivityDto } from './dto/create-activity.dto';
 import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import type { UpdateActivityDto } from './dto/update-activity.dto';
+import type { UpdatePositionsDto } from './dto/update-positions.dto';
 
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
 
@@ -204,6 +205,74 @@ export class ActivitiesService {
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
     return updated;
+  }
+
+  /**
+   * Batch lane-position write (TSLD M4): move one or more of a plan's activities to new lanes
+   * in a single **all-or-nothing** transaction. Every id must be an active activity in this
+   * plan+org (anti-IDOR) and still match its optimistic-lock `version`, or the whole batch is
+   * rejected (409) and nothing moves — the semantics a lane drag / auto-pack needs. Layout only:
+   * it sets `laneIndex` (a definition edit → `activity:update`, so `version` bumps as usual) and
+   * triggers no CPM recalculation (x = time is engine-owned; y = lane is stored).
+   */
+  async updatePositions(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    dto: UpdatePositionsDto,
+  ): Promise<Activity[]> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:update', organization.id);
+    await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
+
+    const ids = dto.positions.map((p) => p.id);
+    if (new Set(ids).size !== ids.length) {
+      throw new ValidationError('Each activity may appear at most once in a positions batch.', {
+        reason: 'DUPLICATE_POSITION_ID',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Every id must be an active activity in THIS plan+org: a foreign/cross-plan id is
+      // indistinguishable from "not found". updateIfVersionMatches scopes only by id+version,
+      // so this set is the plan/org gate — read once inside the tx.
+      const inPlan = new Set(
+        (
+          await tx.activity.findMany({
+            where: { organizationId: organization.id, planId, deletedAt: null },
+            select: { id: true },
+          })
+        ).map((a) => a.id),
+      );
+      for (const id of ids) {
+        if (!inPlan.has(id)) throw new NotFoundError('Activity not found in this plan.');
+      }
+      // All-or-nothing: any stale version (or a row deleted mid-flight) rolls back the batch.
+      for (const p of dto.positions) {
+        const changed = await this.activities.updateIfVersionMatches(
+          p.id,
+          p.version,
+          { laneIndex: p.laneIndex },
+          principal.userId,
+          tx,
+        );
+        if (changed === 0) {
+          throw new ConflictError(
+            'This plan changed since you opened it — no lanes were moved. Refresh and try again.',
+          );
+        }
+      }
+    });
+
+    this.logger.info(
+      { organizationId: organization.id, planId, userId: principal.userId, count: ids.length },
+      'activity lanes repositioned',
+    );
+
+    // Return the moved rows with their fresh versions so the client can reconcile optimistic state.
+    return this.prisma.activity.findMany({
+      where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+    });
   }
 
   /**

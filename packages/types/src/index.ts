@@ -222,6 +222,16 @@ export const DEPENDENCY_TYPES = ['FS', 'SS', 'FF', 'SF'] as const;
 
 export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
 
+/**
+ * One entry in a batch lane-position write (TSLD M4): move activity `id` to `laneIndex`,
+ * carrying the `version` it was read at for optimistic locking. The batch is all-or-nothing.
+ */
+export interface ActivityPositionInput {
+  id: string;
+  laneIndex: number;
+  version: number;
+}
+
 /** The minimal shape of a dependency's endpoint activity (for list rendering). */
 export interface DependencyEndpoint {
   id: string;
