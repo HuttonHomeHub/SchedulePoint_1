@@ -1,7 +1,14 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
+import { TSLD_EDITING_ENABLED } from '../../../config/env';
+import type { EditIntent, EditMode } from '../interaction/gesture-machine';
+import type { Point } from '../render/render-model';
+
+import { CreateActivityPopover } from './CreateActivityPopover';
+import { EditConflictBanner } from './EditConflictBanner';
 import { TsldCanvas } from './TsldCanvas';
+import { TsldToolbar } from './TsldToolbar';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -64,36 +71,67 @@ const LEGEND: ReadonlyArray<{ label: string; swatch: React.CSSProperties }> = [
   { label: 'On schedule', swatch: { backgroundColor: 'var(--color-primary)' } },
 ];
 
-/**
- * The Time-Scaled Logic Diagram (TSLD) panel (M8 M1, read-only — ADR-0026). Renders the
- * plan's computed schedule on a Canvas 2D surface (drag to pan, scroll to zoom, Fit to
- * frame). Because a `<canvas>` is opaque to assistive tech, the panel pairs it with a
- * **parallel focusable listbox** of the same activities: a keyboard/AT user tabs into the
- * diagram, arrows through activities (each announced with its dates/lane/criticality), and
- * selecting one rings it on the canvas — no capability is pointer-only (WCAG 2.2). The
- * activities table remains the fuller conforming alternative. Editing lands in M2.
- */
+/** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
+export interface TsldCreateInput {
+  name: string;
+  startDay: number;
+  endDay: number;
+  laneIndex: number;
+}
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
+  /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
+  canEdit?: boolean;
+  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 D8). Its presence + the
+   * flag + `canEdit` enable on-canvas editing. Rejects to surface a failure to the popover. */
+  onCreate?: (input: TsldCreateInput) => Promise<void>;
 }
 
+interface PendingCreate {
+  startDay: number;
+  endDay: number;
+  laneIndex: number;
+  anchor: Point;
+  saving: boolean;
+  error: string | null;
+}
+
+/**
+ * The Time-Scaled Logic Diagram (TSLD) panel (ADR-0026). Renders the plan's computed schedule
+ * on a Canvas 2D surface paired with a **parallel focusable listbox** (the canvas is
+ * `aria-hidden`; keyboard/AT users navigate the listbox, and selecting rings the bar). The
+ * activities table remains the fuller conforming alternative.
+ *
+ * **M2 (flagged):** when editing is enabled (`canEdit` + `onCreate` + `VITE_TSLD_EDITING`),
+ * a toolbar adds an **Add activity** tool — drag on the timeline to draw a task, then name it
+ * in an inline popover; the route creates it (SNET-placed) and recalculates. With editing off
+ * the surface is byte-for-byte the M1 read-only diagram.
+ */
 export function TsldPanel({
   activities,
   dependencies,
   dataDate,
+  canEdit = false,
+  onCreate,
 }: TsldPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
+  const [mode, setMode] = useState<EditMode>('select');
+  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
+  const [conflict, setConflict] = useState<string | null>(null);
 
   const renderActivities = useMemo(() => toRenderActivities(activities), [activities]);
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
   const isCalculated = activities.some((a) => a.earlyStart !== null);
+  const showDiagram = isCalculated && dataDate !== null;
+  const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
   const select = (id: string | null): void => {
     setSelectedId(id);
@@ -117,6 +155,28 @@ export function TsldPanel({
     if (target) select(target.id);
   };
 
+  const onIntent = (intent: EditIntent, anchor: Point): void => {
+    if (intent.kind === 'create') {
+      setConflict(null);
+      setPendingCreate({ ...intent, anchor, saving: false, error: null });
+    }
+  };
+
+  const commitCreate = (name: string): void => {
+    if (!pendingCreate || !onCreate) return;
+    const { startDay, endDay, laneIndex } = pendingCreate;
+    setPendingCreate((p) => (p ? { ...p, saving: true, error: null } : p));
+    void onCreate({ name, startDay, endDay, laneIndex })
+      .then(() => {
+        setPendingCreate(null);
+        announce(`Activity “${name}” added.`);
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Couldn’t add the activity.';
+        setPendingCreate((p) => (p ? { ...p, saving: false, error: message } : p));
+      });
+  };
+
   if (activities.length === 0) {
     return (
       <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
@@ -125,25 +185,38 @@ export function TsldPanel({
     );
   }
 
-  const showDiagram = isCalculated && dataDate !== null;
-
   return (
     <section aria-label="Time-scaled logic diagram" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-sm">
-          {isCalculated
-            ? 'Drag to pan, scroll to zoom. The critical path is highlighted.'
-            : 'Recalculate the schedule to plot the activities on the timeline.'}
+          {!isCalculated
+            ? 'Recalculate the schedule to plot the activities on the timeline.'
+            : editingEnabled && mode === 'add-activity'
+              ? 'Drag on the timeline to add an activity. Esc cancels.'
+              : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setFitSignal((n) => n + 1)}
-          disabled={!showDiagram}
-        >
-          Fit to plan
-        </Button>
+        {editingEnabled ? (
+          <TsldToolbar
+            mode={mode}
+            onModeChange={setMode}
+            onFit={() => setFitSignal((n) => n + 1)}
+            fitDisabled={!showDiagram}
+          />
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFitSignal((n) => n + 1)}
+            disabled={!showDiagram}
+          >
+            Fit to plan
+          </Button>
+        )}
       </div>
+
+      {conflict ? (
+        <EditConflictBanner message={conflict} onDismiss={() => setConflict(null)} />
+      ) : null}
 
       {showDiagram ? (
         <ul
@@ -164,7 +237,7 @@ export function TsldPanel({
       ) : null}
 
       <div className="border-border relative h-[480px] overflow-hidden rounded-lg border">
-        {showDiagram ? (
+        {showDiagram && dataDate ? (
           <>
             <TsldCanvas
               activities={renderActivities}
@@ -173,15 +246,37 @@ export function TsldPanel({
               selectedId={selectedId}
               onSelect={select}
               fitSignal={fitSignal}
+              editing={editingEnabled}
+              mode={mode}
+              onIntent={onIntent}
+              pending={
+                pendingCreate
+                  ? {
+                      startDay: pendingCreate.startDay,
+                      endDay: pendingCreate.endDay,
+                      laneIndex: pendingCreate.laneIndex,
+                    }
+                  : null
+              }
             />
+
+            {pendingCreate ? (
+              <CreateActivityPopover
+                x={pendingCreate.anchor.x}
+                y={pendingCreate.anchor.y}
+                saving={pendingCreate.saving}
+                error={pendingCreate.error}
+                onCommit={commitCreate}
+                onCancel={() => setPendingCreate(null)}
+              />
+            ) : null}
 
             {/*
               The accessible parallel representation: a focusable listbox mirroring the
               canvas (ADR-0026). Visually hidden — the canvas is the sighted view and rings
               the selection — but fully keyboard-operable and announced, so the diagram is
               never pointer-only. `aria-activedescendant` publishes the active option to AT;
-              `sr-only` keeps the widget in the a11y tree and tab order. It only renders when
-              the diagram does, so there is never an invisible-yet-focusable element.
+              `sr-only` keeps the widget in the a11y tree and tab order.
             */}
             <ul
               id={listboxId}

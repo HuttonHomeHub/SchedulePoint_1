@@ -5,15 +5,20 @@ import { useMemo, useState } from 'react';
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
+import {
+  ActivitiesTable,
+  CreateActivityButton,
+  useActivities,
+  useCreatePlacedActivity,
+} from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { DependencyEditor, usePlanDependencies } from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
-import { TsldPanel } from '@/features/tsld';
+import { RecalculateButton, ScheduleSummaryStrip, useRecalculate } from '@/features/schedule';
+import { addCalendarDays, TsldPanel, type TsldCreateInput } from '@/features/tsld';
 import {
   canCalculateSchedule,
   canManageHierarchy,
@@ -58,6 +63,25 @@ export function PlanDetailScreen(): React.ReactElement {
     );
   }, [variance.data]);
   const canManageLogic = canWrite; // dependency write = the hierarchy-writer roles
+
+  // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
+  // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
+  // with an SNET constraint, then the authoritative recalc places it.
+  const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
+  const recalculate = useRecalculate(orgSlug, planId);
+  const onTsldCreate = async (input: TsldCreateInput): Promise<void> => {
+    const plannedStart = plan.data?.plannedStart;
+    if (!plannedStart) return;
+    await createPlacedActivity.mutateAsync({
+      name: input.name,
+      type: 'TASK',
+      durationDays: input.endDay - input.startDay + 1,
+      laneIndex: input.laneIndex,
+      constraintType: 'SNET',
+      constraintDate: addCalendarDays(plannedStart, input.startDay),
+    });
+    await recalculate.mutateAsync();
+  };
 
   if (plan.isPending) {
     return (
@@ -171,6 +195,8 @@ export function PlanDetailScreen(): React.ReactElement {
             activities={activities.data ?? []}
             dependencies={dependencies.data ?? []}
             dataDate={plan.data.plannedStart}
+            canEdit={canWrite}
+            onCreate={onTsldCreate}
           />
         </div>
       </div>

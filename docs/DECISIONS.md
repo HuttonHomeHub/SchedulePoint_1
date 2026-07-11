@@ -240,3 +240,33 @@ costly.
 **Consequences.** Tracked in [TECH_DEBT.md](TECH_DEBT.md) and the
 [roadmap](ROADMAP.md); `docker-publish` targets GHCR so any container platform
 can consume the images.
+
+---
+
+### 2026-07-11 — TSLD editing gesture-routing policy (M2)
+
+**Decision.** On-canvas editing uses **one explicit "Add activity" mode** plus
+**hit-zone routing** for everything else inside the default Select mode: empty
+canvas → pan (M1, unchanged), bar body → reposition, bar end grab-zone →
+dependency-draw, click → select. Only create-by-drag genuinely competes with pan,
+so only it gets a mode toggle.
+
+**Why.** Smallest mode surface, zero regression to the M1 pan/zoom path, and
+discoverable affordances — see `docs/design/tsld-m2-editing.md` §1 and ADR-0026 D5.
+
+**Consequences.** Hit classification is a pure `classifyHit` helper shared by paint
+and pointer so they can't diverge; the gesture machine is a pure reducer. Revisit
+if a fuller tool palette proves more discoverable.
+
+### 2026-07-11 — Interim TSLD editing concurrency posture (M2)
+
+**Decision.** Until a plan edit-lock exists, on-canvas editing ships **behind the
+`VITE_TSLD_EDITING` flag (off by default)** and relies on **optimistic-locking
+`version` 409s surfaced as a non-destructive conflict banner** — never a silent
+overwrite.
+
+**Why.** No edit-lock yet; the flag + version-409 banner is the safe interim path
+(`docs/design/tsld-m2-editing.md` §3; plan risk "Editing ships before the edit-lock").
+
+**Consequences.** Editing is dark in the default build. The lock (or hardened
+concurrency) is the prerequisite to enabling the flag; tracked on the TSLD roadmap.

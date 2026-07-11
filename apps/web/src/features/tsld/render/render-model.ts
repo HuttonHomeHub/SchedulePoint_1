@@ -93,6 +93,11 @@ export function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((to - from) / MS_PER_DAY);
 }
 
+/** The calendar date `n` days after `iso` (`YYYY-MM-DD`), UTC-exact — inverse of {@link daysBetween}. */
+export function addCalendarDays(iso: string, n: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + n * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
 /** True for the two milestone activity types (drawn as a diamond, not a bar). */
 export function isMilestone(type: ActivityType): boolean {
   return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
