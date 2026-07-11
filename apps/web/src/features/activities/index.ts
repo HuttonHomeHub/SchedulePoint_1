@@ -2,11 +2,13 @@
 export {
   useActivities,
   useCreateActivity,
+  useCreatePlacedActivity,
   useUpdateActivity,
   useUpdateActivityProgress,
   useDeleteActivity,
   activitiesQueryOptions,
   activityKeys,
+  type PlacedActivityInput,
 } from './api/use-activities';
 export { ActivitiesTable } from './components/ActivitiesTable';
 export { CreateActivityButton } from './components/CreateActivityButton';

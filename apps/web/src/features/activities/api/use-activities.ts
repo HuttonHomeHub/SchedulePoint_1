@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, ActivityType, ConstraintType } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -75,6 +75,36 @@ export function useCreateActivity(orgSlug: string, planId: string) {
         body: JSON.stringify(createBody(input)),
       }),
     // Adding an activity introduces a new "Added" row in the baseline variance, so refresh it too.
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+        queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
+      ]),
+  });
+}
+
+/**
+ * A canvas-placed create: name + type + duration + **laneIndex** + an optional placement
+ * constraint. Reuses `POST /activities` but is shaped for the TSLD create-by-drag gesture
+ * (M2), which sets the lane and an SNET constraint the form UI doesn't expose.
+ */
+export interface PlacedActivityInput {
+  name: string;
+  type: ActivityType;
+  durationDays: number;
+  laneIndex: number;
+  constraintType?: ConstraintType;
+  constraintDate?: string;
+}
+
+export function useCreatePlacedActivity(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: PlacedActivityInput) =>
+      apiFetch<ActivitySummary>(`/organizations/${orgSlug}/plans/${planId}/activities`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),

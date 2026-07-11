@@ -7,6 +7,7 @@ import {
   screenXOfDay,
   MILESTONE_RADIUS,
   type Point,
+  type Rect,
   type RenderActivity,
   type RenderEdge,
   type Size,
@@ -35,7 +36,13 @@ export interface TsldScene {
   dataDate: string;
   /** The currently-selected activity id (drawn with a selection ring), if any. */
   selectedId?: string | null;
+  /** When true (editing + linking enabled), draw the persistent edge-handle affordance on the
+   * selected bar. Off for the read-only surface, keeping M1 byte-for-byte unchanged. */
+  showEdgeHandles?: boolean;
 }
+
+/** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
+const EDGE_HANDLE_MARK = 3;
 
 /** The minimal 2D-context surface the painter uses (kept small so it is easy to mock/test). */
 export type Ctx2D = Pick<
@@ -166,7 +173,11 @@ export function paintScene(
     }
   }
 
-  // Layer 4: the selection ring on the selected activity (if visible).
+  // Layer 4: the selection ring on the selected activity (if visible), plus — when editing
+  // enables link-draw — a persistent edge-handle mark at each end of the selected bar. That mark
+  // is the non-hover affordance advertising that the bar's ends are grabbable to draw a
+  // dependency (UX_STANDARDS: hover-only affordances need a non-hover equivalent); selection is
+  // keyboard-reachable via the listbox, so the cue isn't pointer-only either.
   if (scene.selectedId && visibleIds.has(scene.selectedId)) {
     const selected = byId.get(scene.selectedId);
     const rect = selected && activityRect(selected, view, scene.dataDate);
@@ -174,10 +185,99 @@ export function paintScene(
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 2;
       ctx.strokeRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);
+      if (scene.showEdgeHandles && selected && !isMilestone(selected.type)) {
+        const cy = rect.y + rect.h / 2;
+        ctx.fillStyle = palette.selection;
+        for (const cx of [rect.x, rect.x + rect.w]) {
+          ctx.fillRect(
+            cx - EDGE_HANDLE_MARK,
+            cy - EDGE_HANDLE_MARK,
+            EDGE_HANDLE_MARK * 2,
+            EDGE_HANDLE_MARK * 2,
+          );
+        }
+      }
     }
   }
 
   return [...visibleIds];
+}
+
+/**
+ * A dependency rubber-band in flight: a straight line from the source bar's grabbed edge
+ * (`from`) to the live pointer (`to`), plus the drop target's rect when the pointer is over a
+ * valid successor (drawn as a highlight so the drop is discoverable — ADR-0026 D5).
+ */
+export interface LinkOverlay {
+  from: Point;
+  to: Point;
+  targetRect: Rect | null;
+}
+
+/** The transient shapes drawn on the interaction layer for an in-progress edit. */
+export interface InteractionOverlay {
+  /** The bar being drawn/moved (solid fill + outline). */
+  live?: Rect | null;
+  /** A dropped edit awaiting the authoritative recalc (dashed "saving" outline). */
+  pending?: Rect | null;
+  /** A dependency being drawn (rubber-band + target highlight). */
+  link?: LinkOverlay | null;
+}
+
+/**
+ * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):
+ * the **live** ghost (the bar being drawn/moved), a **pending** ghost (a dropped edit awaiting
+ * the authoritative recalc, dashed), and/or a **link** rubber-band (dependency-draw, 2.3). All
+ * are plain screen shapes the caller computed from the gesture; this layer never touches the
+ * base layer, so a gesture repaints only this cheap surface. An empty overlay clears it.
+ */
+export function paintInteractionLayer(
+  ctx: Ctx2D,
+  overlay: InteractionOverlay,
+  size: Size,
+  palette: TsldPalette,
+  dpr = 1,
+): void {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size.width, size.height);
+
+  const { live, pending, link } = overlay;
+
+  if (pending) {
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(pending.x + 0.5, pending.y + 0.5, pending.w - 1, pending.h - 1);
+    ctx.setLineDash([]);
+  }
+
+  if (link) {
+    // Ring the valid drop target first, so the line draws over it.
+    if (link.targetRect) {
+      const t = link.targetRect;
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.strokeRect(t.x - 2, t.y - 2, t.w + 4, t.h + 4);
+    }
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(link.from.x, link.from.y);
+    ctx.lineTo(link.to.x, link.to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  if (live) {
+    ctx.fillStyle = palette.bar;
+    ctx.fillRect(live.x, live.y, live.w, live.h);
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+  }
 }
 
 /** The inclusive [minDay, maxDay] world-day extent of the computed activities (for the ruler/minimap). */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { paintScene, type TsldPalette, type TsldScene } from './paint';
+import { paintInteractionLayer, paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, Viewport } from './render-model';
 
 const PALETTE: TsldPalette = {
@@ -141,6 +141,26 @@ describe('paintScene', () => {
     expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
   });
 
+  it('marks the selected bar edges when edge handles are enabled, and not otherwise', () => {
+    const scene = (showEdgeHandles: boolean): TsldScene => ({
+      activities: [task({ id: 't' })],
+      edges: [],
+      dataDate: DATA_DATE,
+      selectedId: 't',
+      showEdgeHandles,
+    });
+    // Off (read-only surface): only the bar fill, no edge marks.
+    const plain = mockCtx();
+    paintScene(plain, scene(false), VIEW, SIZE, PALETTE);
+    expect(plain.fillRect).toHaveBeenCalledTimes(1);
+    // On: the bar fill plus two edge-handle marks (start + finish).
+    const editing = mockCtx();
+    paintScene(editing, scene(true), VIEW, SIZE, PALETTE);
+    expect(editing.fillRect).toHaveBeenCalledTimes(3);
+    // The selection ring is still a single strokeRect either way.
+    expect(editing.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
   it('culls off-screen activities (no fillRect, not in the visible set)', () => {
     const ctx = mockCtx();
     const scene: TsldScene = {
@@ -151,5 +171,63 @@ describe('paintScene', () => {
     const visible = paintScene(ctx, scene, VIEW, SIZE, PALETTE);
     expect(visible).toEqual([]);
     expect(ctx.fillRect).not.toHaveBeenCalled();
+  });
+});
+
+describe('paintInteractionLayer', () => {
+  const GHOST = { x: 10, y: 10, w: 40, h: 18 };
+
+  it('clears and draws a live ghost with a fill + solid outline', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { live: GHOST }, SIZE, PALETTE, 2);
+    expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
+    expect(ctx.clearRect).toHaveBeenCalled();
+    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws a pending ghost as a dashed outline with no fill', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { pending: GHOST }, SIZE, PALETTE);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    expect(ctx.fillRect).not.toHaveBeenCalled();
+  });
+
+  it('draws a link rubber-band line, and rings the drop target when present', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(
+      ctx,
+      { link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: GHOST } },
+      SIZE,
+      PALETTE,
+    );
+    // A dashed line from anchor to pointer…
+    expect(ctx.moveTo).toHaveBeenCalledWith(5, 5);
+    expect(ctx.lineTo).toHaveBeenCalledWith(90, 60);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([5, 3]);
+    expect(ctx.stroke).toHaveBeenCalled();
+    // …and a highlight ring around the valid target.
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws the link line but no target ring when over empty space', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(
+      ctx,
+      { link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: null } },
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.stroke).toHaveBeenCalled();
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('clears to nothing when idle (empty overlay)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, {}, SIZE, PALETTE);
+    expect(ctx.clearRect).toHaveBeenCalled();
+    expect(ctx.fillRect).not.toHaveBeenCalled();
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
   });
 });

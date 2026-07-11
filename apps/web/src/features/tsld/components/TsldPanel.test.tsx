@@ -67,6 +67,21 @@ describe('TsldPanel', () => {
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
   });
 
+  it('stays read-only (no editing toolbar) when the M2 flag is off, even for a writer', () => {
+    render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={() => Promise.resolve({ recalcConflict: null })}
+      />,
+    );
+    // VITE_TSLD_EDITING is unset in tests → editing gated off → M1 surface (plain Fit only).
+    expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
+  });
+
   it('selects an activity via keyboard (arrow keys) and marks it in the listbox', () => {
     render(
       <TsldPanel

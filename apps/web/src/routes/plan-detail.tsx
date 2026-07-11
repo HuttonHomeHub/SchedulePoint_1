@@ -5,21 +5,41 @@ import { useMemo, useState } from 'react';
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { ActivitiesTable, CreateActivityButton, useActivities } from '@/features/activities';
+import {
+  ActivitiesTable,
+  CreateActivityButton,
+  useActivities,
+  useCreatePlacedActivity,
+  useUpdateActivity,
+} from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
 import { useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
-import { DependencyEditor, usePlanDependencies } from '@/features/dependencies';
+import {
+  DependencyEditor,
+  useCreateDependency,
+  usePlanDependencies,
+} from '@/features/dependencies';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
-import { TsldPanel } from '@/features/tsld';
+import { RecalculateButton, ScheduleSummaryStrip, useRecalculate } from '@/features/schedule';
+import {
+  addCalendarDays,
+  TsldPanel,
+  type TsldCreateInput,
+  type TsldCreateOutcome,
+  type TsldLinkInput,
+  type TsldLinkOutcome,
+  type TsldRepositionInput,
+  type TsldRepositionOutcome,
+} from '@/features/tsld';
 import {
   canCalculateSchedule,
   canManageHierarchy,
   canReportProgress,
   useOrgRole,
 } from '@/hooks/use-org-role';
+import { ApiFetchError } from '@/lib/api/client';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -58,6 +78,126 @@ export function PlanDetailScreen(): React.ReactElement {
     );
   }, [variance.data]);
   const canManageLogic = canWrite; // dependency write = the hierarchy-writer roles
+
+  // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
+  // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
+  // with an SNET constraint, then the authoritative recalc places it.
+  const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
+  const recalculate = useRecalculate(orgSlug, planId);
+  const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
+    const plannedStart = plan.data?.plannedStart;
+    if (!plannedStart) return { recalcConflict: null };
+    // The create must land first (this throw keeps the popover open with the error). Only
+    // then recalc — a recalc failure is non-fatal: the row persisted, so we report the
+    // conflict without re-prompting (never a second POST). The next recalc reconciles dates.
+    await createPlacedActivity.mutateAsync({
+      name: input.name,
+      type: 'TASK',
+      durationDays: input.endDay - input.startDay + 1,
+      laneIndex: input.laneIndex,
+      constraintType: 'SNET',
+      constraintDate: addCalendarDays(plannedStart, input.startDay),
+    });
+    try {
+      await recalculate.mutateAsync();
+      return { recalcConflict: null };
+    } catch {
+      return {
+        recalcConflict:
+          'Activity added, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
+      };
+    }
+  };
+
+  // TSLD reposition-in-time (M2): a horizontal drag becomes an SNET constraint at the new
+  // start via the existing PATCH (carrying the live version for optimistic locking). A stale
+  // version → a non-destructive conflict message (the move isn't re-sent); then recalc.
+  const updateActivity = useUpdateActivity(orgSlug, planId);
+  const onTsldReposition = async ({
+    activityId,
+    startDay,
+  }: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
+    const plannedStart = plan.data?.plannedStart;
+    const activity = (activities.data ?? []).find((a) => a.id === activityId);
+    if (!plannedStart || !activity) return { applied: false, conflict: null };
+    try {
+      // A drag always imposes an SNET-at-new-start (ADR-0023), which by design overwrites any
+      // prior constraint (e.g. a MANDATORY_START) on that activity — moving a pinned bar
+      // re-pins it where it was dropped. The version check makes a concurrent edit 409 rather
+      // than clobber; the other fields are resent unchanged (laneIndex is omitted → untouched).
+      await updateActivity.mutateAsync({
+        activityId,
+        version: activity.version,
+        name: activity.name,
+        code: activity.code ?? undefined,
+        type: activity.type,
+        durationDays: activity.durationDays,
+        description: activity.description ?? undefined,
+        constraintType: 'SNET',
+        constraintDate: addCalendarDays(plannedStart, startDay),
+      });
+    } catch (err) {
+      if (err instanceof ApiFetchError && err.status === 409) {
+        // Stale version — the move was NOT applied (nothing changed); never re-send.
+        return {
+          applied: false,
+          conflict:
+            'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.',
+        };
+      }
+      throw err;
+    }
+    // The move landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    try {
+      await recalculate.mutateAsync();
+      return { applied: true, conflict: null };
+    } catch {
+      return {
+        applied: true,
+        conflict:
+          'Moved, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
+      };
+    }
+  };
+
+  // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
+  // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
+  // engine rejects — surfaced non-destructively (nothing was created), never retried.
+  const createDependency = useCreateDependency(orgSlug);
+  const onTsldLink = async ({
+    predecessorId,
+    successorId,
+    type,
+  }: TsldLinkInput): Promise<TsldLinkOutcome> => {
+    try {
+      await createDependency.mutateAsync({ planId, predecessorId, successorId, type, lagDays: 0 });
+    } catch (err) {
+      if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
+        // A cycle/duplicate the engine refused — nothing was created; show the reason, don't retry.
+        return { applied: false, conflict: err.error.message };
+      }
+      throw err;
+    }
+    // The link landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    try {
+      await recalculate.mutateAsync();
+      return { applied: true, conflict: null };
+    } catch {
+      return {
+        applied: true,
+        conflict:
+          'Linked, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
+      };
+    }
+  };
+
+  // The conflict banner's Refresh: re-pull the plan's server truth (diagram + variance) so a
+  // "changed elsewhere" 409 has a real recovery action, not just copy telling the user to refresh.
+  const onTsldRefresh = (): void => {
+    void activities.refetch();
+    void dependencies.refetch();
+    void variance.refetch();
+  };
 
   if (plan.isPending) {
     return (
@@ -164,13 +304,19 @@ export function PlanDetailScreen(): React.ReactElement {
         <h2 className="text-lg font-medium">Logic diagram</h2>
         <p className="text-muted-foreground mt-1 text-sm">
           The Time-Scaled Logic Diagram: activities plotted on the timeline and connected by their
-          logic. Editing on the canvas arrives in a later release.
+          logic.
         </p>
         <div className="mt-3">
           <TsldPanel
             activities={activities.data ?? []}
             dependencies={dependencies.data ?? []}
             dataDate={plan.data.plannedStart}
+            canEdit={canWrite}
+            onCreate={onTsldCreate}
+            onReposition={onTsldReposition}
+            onLink={onTsldLink}
+            onOpenLogic={setLogicActivity}
+            onRefresh={onTsldRefresh}
           />
         </div>
       </div>
@@ -181,7 +327,7 @@ export function PlanDetailScreen(): React.ReactElement {
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
         The activities that make up this plan. Edit their details here; the logic diagram above
-        plots them on the timeline. On-canvas editing arrives in a later release.
+        plots them on the timeline.
       </p>
       {variance.data ? (
         <div className="mt-2">

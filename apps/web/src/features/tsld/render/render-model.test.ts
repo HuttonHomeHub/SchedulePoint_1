@@ -3,14 +3,18 @@ import { describe, expect, it } from 'vitest';
 
 import {
   activityRect,
+  classifyHit,
   clampPxPerDay,
   cull,
   dayAtScreenX,
+  dayCellRect,
+  dayColumnAt,
   daysBetween,
   DEFAULT_VIEWPORT,
   dependencyPolyline,
   fitToContent,
   hitTest,
+  laneRowAt,
   isMilestone,
   LANE_HEIGHT,
   MAX_PX_PER_DAY,
@@ -192,6 +196,48 @@ describe('pan', () => {
     expect(panned.originX).toBe(115);
     expect(panned.originY).toBe(42);
     expect(panned.pxPerDay).toBe(VIEW.pxPerDay);
+  });
+});
+
+describe('classifyHit', () => {
+  // Default activity: day 0..4 at lane 0 → rect { x:100, y:55, w:50, h:18 } under VIEW.
+  it('routes the bar body, end grab-zones, and empty space (topmost first)', () => {
+    const acts = [activity()];
+    expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE)).toEqual({
+      kind: 'startHandle',
+      id: 'a1',
+    });
+    expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE)).toEqual({
+      kind: 'finishHandle',
+      id: 'a1',
+    });
+    expect(classifyHit(acts, { x: 120, y: 60 }, VIEW, DATA_DATE)).toEqual({
+      kind: 'body',
+      id: 'a1',
+    });
+    expect(classifyHit(acts, { x: 250, y: 60 }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
+    expect(classifyHit(acts, { x: 120, y: 200 }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
+  });
+
+  it('ignores activities without computed dates', () => {
+    const acts = [activity({ earlyStart: null, earlyFinish: null })];
+    expect(classifyHit(acts, { x: 120, y: 60 }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
+  });
+});
+
+describe('dayCellRect / dayColumnAt / laneRowAt (ghost + snap geometry)', () => {
+  it('dayCellRect spans [leftDay, rightDay] inclusive with a +1-day right edge', () => {
+    expect(dayCellRect(2, 4, 1, VIEW)).toEqual({ x: 120, y: 83, w: 30, h: 18 });
+  });
+
+  it('dayColumnAt floors to the whole day column', () => {
+    expect(dayColumnAt(127, VIEW)).toBe(2);
+    expect(dayColumnAt(100, VIEW)).toBe(0);
+  });
+
+  it('laneRowAt floors to the lane and clamps at zero', () => {
+    expect(laneRowAt(90, VIEW)).toBe(1);
+    expect(laneRowAt(40, VIEW)).toBe(0); // above lane 0 clamps to 0
   });
 });
 
