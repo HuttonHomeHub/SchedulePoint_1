@@ -1,6 +1,6 @@
 # ADR-0026: TSLD canvas — Canvas 2D rendering, coordinate/viewport model, interaction & accessibility architecture
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-10
 - **Deciders:** James Ewbank (with Claude Code — ui-architect)
 
@@ -343,6 +343,28 @@ performance spike** — the mitigation PROJECT_BRIEF §17 mandates:
 - **Definition of "done" for the gate.** A short measurement note (numbers, method,
   hardware) attached to the plan, and a go/no-go on Canvas 2D. This keeps the
   highest-risk decision **evidence-led**, not asserted.
+
+### 9a. Gate result — Canvas 2D confirmed (go)
+
+The spike was built and measured (`prototypes/tsld-spike/`, a throwaway harness — the
+minimal culled Canvas 2D renderer of Decision 1/4 over synthetic 500- and
+2,000-activity plans, ~4 deps each, under a scripted continuous pan/zoom sweep). Judged
+on the **portable** metric — per-frame CPU **draw time** for the culled viewport, since
+headless fps is rAF-throttled with no GPU compositor and only a floor:
+
+| Activities | Deps  | Draw median | Draw p95 | Frame budget     | Result   |
+| ---------- | ----- | ----------- | -------- | ---------------- | -------- |
+| 500        | 1,653 | 1.0 ms      | 1.6 ms   | ≤ 16 ms (60 fps) | **PASS** |
+| 2,000      | 6,846 | 3.3 ms      | 4.0 ms   | ≤ 16 ms (60 fps) | **PASS** |
+
+At the 2,000-activity ceiling a continuously-redrawn frame costs **4 ms p95** — ~4×
+under the 60 fps budget and far under the 45 fps budget — so draw is <5% of each frame
+interval (the rest is headless throttle). Culling keeps per-frame work bounded by the
+_visible_ set, not the total, so the total-count scaling lands in the cull/index cost,
+not the draw. **Decision: proceed on Canvas 2D; no WebGL escalation is warranted at the
+v1 ceiling.** The escalation gate above remains the documented fallback, and **final
+device-fps confirmation** (mid-tier laptop + iPad-class tablet, light/dark) is folded
+into M1 on real hardware — the one measurement the headless CI environment cannot make.
 
 ## Alternatives considered
 

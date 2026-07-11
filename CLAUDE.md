@@ -281,6 +281,9 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0025** — Baselines: snapshot-copy model (non-FK `source_activity_id`),
   one-active-per-plan invariant (partial unique + plan lock), and server-side
   working-day variance.
+- **ADR-0026** — TSLD canvas: Canvas 2D (layered, culled) with a WebGL escalation
+  gate, the coordinate/viewport/hit-test/recalc model, and a parallel focusable DOM
+  a11y layer (prototype-at-scale gate passed — draw ≤4ms p95 @ 2,000 activities).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
