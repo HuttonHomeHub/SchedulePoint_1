@@ -1,5 +1,59 @@
 # @repo/web
 
+## 0.6.0
+
+### Minor Changes
+
+- [#24](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/24) [`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Show per-activity baseline variance in the activities table (M7 Task D2, ADR-0025).
+  When a plan has an active baseline, the plan route fetches the variance read and passes a
+  per-activity map into the existing `ActivitiesTable` as an optional prop, which renders
+  **Start / Finish / Float variance** columns: "3 d behind" / "2 d ahead" / "On baseline"
+  (working days on the plan calendar; float flips the sign so lost float also reads as
+  behind), "Added" for an activity created since capture, "Removed" for a baselined activity
+  now gone, and "—" when not comparable. A plan-level **roll-up** ("vs. Contract Baseline:
+  worst slip 6 d · 3 activities behind · 1 added") sits above the table. Meaning is carried
+  by the text, not colour alone (WCAG 2.2); the tone colour only reinforces it. All variance
+  UI is absent when there is no active baseline. `features/activities` stays dependency-free — it takes a
+  shared `@repo/types` shape and the route composes it from the baselines feature (no
+  feature→feature import). A Playwright journey covers capture → active → variance visible
+  with an axe check. The stale `ROADMAP.md` is refreshed to reflect the delivered M0–M7
+  milestones and the candidate next steps.
+
+- [#24](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/24) [`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the baselines panel to the plan view (M7 Task D1, ADR-0025). A new
+  `features/baselines` surfaces a plan's baselines under the Schedule section: name, an
+  **Active** badge, when captured, the captured project finish, and the frozen activity
+  count. Planners/Org Admins get **Capture baseline** (a dialog that freezes the plan's
+  current computed schedule; a duplicate name or a never-calculated plan surface as
+  friendly inline messages with a "recalculate first" hint), plus per-row **Activate**
+  (exactly one active — activating one deactivates the rest server-side) and **Delete**
+  (with a warning when removing the active baseline). Everyone else reads. The shared API
+  client gains `apiFetchEnvelope` so the variance read can access the `{ data, meta }`
+  roll-up; the `baselineKeys` query keys and hooks (list/detail/variance/capture/activate/
+  delete) land here too. Empty/loading/error states and delete confirmation reuse the
+  shared DataTable/ConfirmDialog primitives.
+
+- [#24](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/24) [`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the Time-Scaled Logic Diagram (TSLD) canvas — read-only (M8, ADR-0026). The plan
+  detail's "Logic diagram" section now plots a plan's computed activities on a **Canvas 2D**
+  surface: task bars and milestone diamonds positioned by their early dates on a
+  time-scaled grid, dependency logic drawn as routed connectors, and the critical /
+  near-critical path highlighted — by a fill colour **paired with a solid / dashed outline**
+  (and a visible legend) so criticality is never conveyed by colour alone. The view is
+  **drag-to-pan, scroll-to-zoom** (cursor-anchored) with a **Fit to plan** control, and
+  repaints only dirty frames off a `requestAnimationFrame` loop so an idle diagram costs
+  nothing.
+
+  Because a `<canvas>` is opaque to assistive technology, the diagram is `aria-hidden` and
+  paired with a **parallel focusable listbox** of the same activities: a keyboard or
+  screen-reader user tabs into the diagram, arrows through activities (each announced with its
+  dates, lane and criticality) and selects one, which rings it on the canvas — no capability is
+  pointer-only (WCAG 2.2). The activities table remains the fuller conforming alternative.
+  On-canvas **editing** (create/move/draw logic) arrives in a later release.
+
+### Patch Changes
+
+- Updated dependencies [[`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883)]:
+  - @repo/types@0.6.0
+
 ## 0.5.1
 
 ### Patch Changes
