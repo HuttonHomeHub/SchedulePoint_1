@@ -15,14 +15,14 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     return value || fallback;
   };
   return {
-    background: token('--color-background', '#0b0d12'),
     gridLine: token('--color-border', '#2a2f3a'),
-    axisText: token('--color-muted-foreground', '#9aa0ac'),
     edge: token('--color-muted-foreground', '#7a8090'),
     bar: token('--color-primary', '#3b6fbf'),
-    barText: token('--color-primary-foreground', '#ffffff'),
     critical: token('--color-destructive', '#c83c3c'),
     nearCritical: token('--color-warning', '#d29628'),
+    // A foreground-contrast stroke used to outline critical/near-critical bars, so
+    // criticality is never conveyed by fill colour alone (WCAG 1.4.1).
+    outline: token('--color-foreground', '#e6e8ee'),
     selection: token('--color-ring', '#6ea8fe'),
   };
 }

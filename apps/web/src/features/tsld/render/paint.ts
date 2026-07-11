@@ -19,14 +19,13 @@ import {
  * colour strings.
  */
 export interface TsldPalette {
-  background: string;
   gridLine: string;
-  axisText: string;
   edge: string;
   bar: string;
-  barText: string;
   critical: string;
   nearCritical: string;
+  /** Foreground-contrast stroke outlining critical/near-critical bars (non-colour cue). */
+  outline: string;
   selection: string;
 }
 
@@ -49,24 +48,29 @@ export type Ctx2D = Pick<
   | 'lineTo'
   | 'stroke'
   | 'fill'
-  | 'fillText'
-  | 'save'
-  | 'restore'
   | 'setTransform'
+  | 'setLineDash'
 > & {
   fillStyle: string | CanvasGradient | CanvasPattern;
   strokeStyle: string | CanvasGradient | CanvasPattern;
   lineWidth: number;
-  font: string;
-  textBaseline: CanvasTextBaseline;
 };
-
-const SHOW_TEXT_MIN_PX_PER_DAY = 6;
 
 function barColour(activity: RenderActivity, palette: TsldPalette): string {
   if (activity.isCritical) return palette.critical;
   if (activity.isNearCritical) return palette.nearCritical;
   return palette.bar;
+}
+
+/**
+ * The dash pattern that encodes criticality without relying on colour (WCAG 1.4.1):
+ * a solid outline for critical, a dashed outline for near-critical, and `null` (no
+ * outline) otherwise. Paired with the fill colour and the panel's visible legend.
+ */
+function criticalDash(activity: RenderActivity): number[] | null {
+  if (activity.isCritical) return [];
+  if (activity.isNearCritical) return [3, 2];
+  return null;
 }
 
 function drawPolyline(ctx: Ctx2D, points: Point[]): void {
@@ -125,16 +129,13 @@ export function paintScene(
   }
   ctx.stroke();
 
-  // Layer 3: activity bars + milestone diamonds.
-  const showText = view.pxPerDay >= SHOW_TEXT_MIN_PX_PER_DAY;
-  if (showText) {
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-  }
+  // Layer 3: activity bars + milestone diamonds. Critical/near-critical activities also
+  // get a solid/dashed outline (a non-colour cue for criticality — WCAG 1.4.1).
   for (const id of visibleIds) {
     const activity = byId.get(id)!;
     const rect = activityRect(activity, view, scene.dataDate);
     if (!rect) continue;
+    const dash = criticalDash(activity);
     ctx.fillStyle = barColour(activity, palette);
     if (isMilestone(activity.type)) {
       // A diamond centred in the bounding box.
@@ -146,8 +147,22 @@ export function paintScene(
       ctx.lineTo(cx, cy + MILESTONE_RADIUS);
       ctx.lineTo(cx - MILESTONE_RADIUS, cy);
       ctx.fill();
+      if (dash) {
+        ctx.strokeStyle = palette.outline;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash(dash);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     } else {
       ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      if (dash) {
+        ctx.strokeStyle = palette.outline;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash(dash);
+        ctx.strokeRect(rect.x + 0.75, rect.y + 0.75, rect.w - 1.5, rect.h - 1.5);
+        ctx.setLineDash([]);
+      }
     }
   }
 

@@ -6,9 +6,11 @@ Add the Time-Scaled Logic Diagram (TSLD) canvas — read-only (M8, ADR-0026). Th
 detail's "Logic diagram" section now plots a plan's computed activities on a **Canvas 2D**
 surface: task bars and milestone diamonds positioned by their early dates on a
 time-scaled grid, dependency logic drawn as routed connectors, and the critical /
-near-critical path highlighted. The view is **drag-to-pan, scroll-to-zoom** (cursor-anchored)
-with a **Fit to plan** control, and repaints only dirty frames off a `requestAnimationFrame`
-loop so an idle diagram costs nothing.
+near-critical path highlighted — by a fill colour **paired with a solid / dashed outline**
+(and a visible legend) so criticality is never conveyed by colour alone. The view is
+**drag-to-pan, scroll-to-zoom** (cursor-anchored) with a **Fit to plan** control, and
+repaints only dirty frames off a `requestAnimationFrame` loop so an idle diagram costs
+nothing.
 
 Because a `<canvas>` is opaque to assistive technology, the diagram is `aria-hidden` and
 paired with a **parallel focusable listbox** of the same activities: a keyboard or

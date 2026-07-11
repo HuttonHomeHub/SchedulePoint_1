@@ -4,14 +4,12 @@ import { paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, Viewport } from './render-model';
 
 const PALETTE: TsldPalette = {
-  background: '#000',
   gridLine: '#111',
-  axisText: '#222',
   edge: '#333',
   bar: '#44f',
-  barText: '#fff',
   critical: '#f00',
   nearCritical: '#fa0',
+  outline: '#fff',
   selection: '#0af',
 };
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
@@ -28,15 +26,11 @@ function mockCtx() {
     lineTo: vi.fn(),
     stroke: vi.fn(),
     fill: vi.fn(),
-    fillText: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
     setTransform: vi.fn(),
+    setLineDash: vi.fn(),
     fillStyle: '',
     strokeStyle: '',
     lineWidth: 1,
-    font: '',
-    textBaseline: 'alphabetic' as CanvasTextBaseline,
   };
 }
 
@@ -99,6 +93,40 @@ describe('paintScene', () => {
     // The edge layer moves/lines to route the polyline and strokes it.
     expect(ctx.moveTo).toHaveBeenCalled();
     expect(ctx.stroke).toHaveBeenCalled();
+  });
+
+  it('outlines a critical bar with a non-colour cue (solid dash pattern)', () => {
+    const ctx = mockCtx();
+    const scene: TsldScene = {
+      activities: [task({ isCritical: true })],
+      edges: [],
+      dataDate: DATA_DATE,
+    };
+    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+    // The bar is filled and then outlined, and the dash is reset afterwards.
+    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([]); // solid for critical
+  });
+
+  it('outlines a near-critical bar with a dashed pattern', () => {
+    const ctx = mockCtx();
+    const scene: TsldScene = {
+      activities: [task({ isNearCritical: true })],
+      edges: [],
+      dataDate: DATA_DATE,
+    };
+    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([3, 2]);
+  });
+
+  it('does not outline a non-critical bar', () => {
+    const ctx = mockCtx();
+    const scene: TsldScene = { activities: [task()], edges: [], dataDate: DATA_DATE };
+    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+    expect(ctx.setLineDash).not.toHaveBeenCalled();
   });
 
   it('draws a selection ring on the selected activity', () => {

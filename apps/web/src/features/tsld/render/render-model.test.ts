@@ -7,7 +7,9 @@ import {
   cull,
   dayAtScreenX,
   daysBetween,
+  DEFAULT_VIEWPORT,
   dependencyPolyline,
+  fitToContent,
   hitTest,
   isMilestone,
   LANE_HEIGHT,
@@ -19,6 +21,7 @@ import {
   screenYOfLane,
   zoomAt,
   type RenderActivity,
+  type Size,
   type Viewport,
 } from './render-model';
 
@@ -189,5 +192,48 @@ describe('pan', () => {
     expect(panned.originX).toBe(115);
     expect(panned.originY).toBe(42);
     expect(panned.pxPerDay).toBe(VIEW.pxPerDay);
+  });
+});
+
+describe('DEFAULT_VIEWPORT', () => {
+  it('is a valid in-range viewport', () => {
+    expect(DEFAULT_VIEWPORT.pxPerDay).toBeGreaterThanOrEqual(MIN_PX_PER_DAY);
+    expect(DEFAULT_VIEWPORT.pxPerDay).toBeLessThanOrEqual(MAX_PX_PER_DAY);
+  });
+});
+
+describe('fitToContent', () => {
+  const SIZE: Size = { width: 832, height: 400 };
+
+  it('returns the default viewport when nothing is computed', () => {
+    const uncomputed = activity({ earlyStart: null, earlyFinish: null });
+    expect(fitToContent([uncomputed], SIZE, DATA_DATE)).toEqual(DEFAULT_VIEWPORT);
+    expect(fitToContent([], SIZE, DATA_DATE)).toEqual(DEFAULT_VIEWPORT);
+  });
+
+  it('frames content within the padding, clamping pxPerDay to the max zoom', () => {
+    // The default activity spans days 0–5; a generous surface would exceed the max zoom,
+    // so pxPerDay clamps and the earliest day (0) pins to the left padding.
+    const view = fitToContent([activity()], SIZE, DATA_DATE, 32);
+    expect(view.originY).toBe(32);
+    expect(view.pxPerDay).toBeLessThanOrEqual(MAX_PX_PER_DAY);
+    expect(view.originX).toBeCloseTo(32);
+  });
+
+  it('offsets originX so a later start day sits at the left padding', () => {
+    const view = fitToContent(
+      [activity({ earlyStart: '2026-01-11', earlyFinish: '2026-01-15' })],
+      SIZE,
+      DATA_DATE,
+      32,
+    );
+    // 2026-01-11 is day 10 from the data date, so the origin shifts left by 10 days.
+    expect(view.originX).toBeCloseTo(32 - 10 * view.pxPerDay);
+  });
+
+  it('clamps pxPerDay to the minimum when content is far wider than the surface', () => {
+    const narrow: Size = { width: 65, height: 400 };
+    const view = fitToContent([activity()], narrow, DATA_DATE, 32);
+    expect(view.pxPerDay).toBe(MIN_PX_PER_DAY);
   });
 });

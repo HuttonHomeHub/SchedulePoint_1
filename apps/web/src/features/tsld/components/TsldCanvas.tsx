@@ -16,6 +16,16 @@ import {
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
+export interface TsldCanvasProps {
+  activities: readonly RenderActivity[];
+  edges: readonly RenderEdge[];
+  dataDate: string;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  /** Bump to re-fit the viewport to the content (the toolbar's "Fit" button). */
+  fitSignal: number;
+}
+
 /**
  * The Canvas 2D TSLD painter (ADR-0026, M1 read-only). Draws the plan's computed
  * schedule from the pure render model on a single `<canvas>`, with cursor-anchored wheel
@@ -35,15 +45,7 @@ export function TsldCanvas({
   selectedId,
   onSelect,
   fitSignal,
-}: {
-  activities: readonly RenderActivity[];
-  edges: readonly RenderEdge[];
-  dataDate: string;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-  /** Bump to re-fit the viewport to the content (the toolbar's "Fit" button). */
-  fitSignal: number;
-}): React.ReactElement {
+}: TsldCanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<Viewport>(DEFAULT_VIEWPORT);
@@ -129,10 +131,26 @@ export function TsldCanvas({
       attributeFilter: ['class', 'data-theme'],
     });
 
+    // Cursor-anchored wheel zoom. Attached natively as a **non-passive** listener so it can
+    // `preventDefault` — a React `onWheel` prop is passive at the root and would let the
+    // gesture scroll the page instead of zooming the diagram.
+    const onWheel = (e: WheelEvent): void => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      viewRef.current = zoomAt(
+        viewRef.current,
+        e.clientX - rect.left,
+        e.deltaY < 0 ? 1.1 : 1 / 1.1,
+      );
+      dirtyRef.current = true;
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+
     return () => {
       cancelAnimationFrame(raf);
       ro?.disconnect();
       mo?.disconnect();
+      canvas.removeEventListener('wheel', onWheel);
     };
   }, []);
 
@@ -151,7 +169,7 @@ export function TsldCanvas({
         className="block cursor-grab touch-none active:cursor-grabbing"
         onPointerDown={(e) => {
           drag.current = { x: e.clientX, y: e.clientY, moved: false };
-          canvasRef.current?.setPointerCapture(e.pointerId);
+          canvasRef.current?.setPointerCapture?.(e.pointerId);
         }}
         onPointerMove={(e) => {
           if (!drag.current) return;
@@ -169,11 +187,6 @@ export function TsldCanvas({
           if (wasDrag) return;
           const p = localPoint(e);
           onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));
-        }}
-        onWheel={(e) => {
-          const p = localPoint(e);
-          viewRef.current = zoomAt(viewRef.current, p.x, e.deltaY < 0 ? 1.1 : 1 / 1.1);
-          dirtyRef.current = true;
         }}
       />
     </div>
