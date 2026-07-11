@@ -258,3 +258,41 @@ export function zoomAt(view: Viewport, anchorX: number, factor: number): Viewpor
 export function pan(view: Viewport, dx: number, dy: number): Viewport {
   return { ...view, originX: view.originX + dx, originY: view.originY + dy };
 }
+
+/** The default viewport before any content is framed (day zoom, small margin). */
+export const DEFAULT_VIEWPORT: Viewport = { pxPerDay: ZOOM_STOPS.week, originX: 40, originY: 40 };
+
+/**
+ * A viewport that frames every computed activity within `size`, with padding. Chooses a
+ * `pxPerDay` so the full day span fits horizontally (clamped to the zoom range) and pans
+ * so the earliest day / topmost lane sit just inside the top-left padding. Falls back to
+ * {@link DEFAULT_VIEWPORT} when nothing is computed yet.
+ */
+export function fitToContent(
+  activities: readonly RenderActivity[],
+  size: Size,
+  dataDateIso: string,
+  paddingPx = 32,
+): Viewport {
+  let minDay = Infinity;
+  let maxDay = -Infinity;
+  let maxLane = 0;
+  for (const a of activities) {
+    if (a.earlyStart === null) continue;
+    const start = daysBetween(dataDateIso, a.earlyStart);
+    const finish = a.earlyFinish === null ? start : daysBetween(dataDateIso, a.earlyFinish);
+    minDay = Math.min(minDay, start);
+    maxDay = Math.max(maxDay, finish + 1);
+    maxLane = Math.max(maxLane, a.laneIndex);
+  }
+  if (!Number.isFinite(minDay)) return DEFAULT_VIEWPORT;
+
+  const usableW = Math.max(1, size.width - paddingPx * 2);
+  const spanDays = Math.max(1, maxDay - minDay);
+  const pxPerDay = clampPxPerDay(usableW / spanDays);
+  return {
+    pxPerDay,
+    originX: paddingPx - minDay * pxPerDay,
+    originY: paddingPx,
+  };
+}

@@ -12,6 +12,22 @@ import { dependencyKeys } from '@/lib/query/hierarchy-keys';
 
 export { dependencyKeys };
 
+export function planDependenciesQueryOptions(orgSlug: string, planId: string) {
+  return queryOptions({
+    queryKey: dependencyKeys.byPlan(orgSlug, planId),
+    queryFn: () =>
+      apiFetch<DependencySummary[]>(`/organizations/${orgSlug}/plans/${planId}/dependencies`),
+  });
+}
+
+/** Every dependency (logic edge) in a plan — used by the TSLD canvas to draw the network. */
+export function usePlanDependencies(
+  orgSlug: string,
+  planId: string,
+): UseQueryResult<DependencySummary[]> {
+  return useQuery(planDependenciesQueryOptions(orgSlug, planId));
+}
+
 export function predecessorsQueryOptions(orgSlug: string, activityId: string) {
   return queryOptions({
     queryKey: dependencyKeys.predecessors(orgSlug, activityId),
