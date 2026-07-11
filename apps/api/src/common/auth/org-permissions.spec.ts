@@ -152,6 +152,32 @@ describe('permissionsForRole — calendar library (read vs write)', () => {
   });
 });
 
+describe('permissionsForRole — plan edit-lock (coordinate vs override)', () => {
+  it('grants acquire + request-control to Planner + Org Admin only', () => {
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      const perms = permissionsForRole(role);
+      expect(perms).not.toContain('plan:acquire_lock');
+      expect(perms).not.toContain('plan:request_control');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      const perms = permissionsForRole(role);
+      expect(perms).toContain('plan:acquire_lock');
+      expect(perms).toContain('plan:request_control');
+    }
+  });
+
+  it('grants immediate override to Org Admin only — a Planner must request + wait', () => {
+    for (const role of [
+      OrganizationRole.VIEWER,
+      OrganizationRole.CONTRIBUTOR,
+      OrganizationRole.PLANNER,
+    ]) {
+      expect(permissionsForRole(role)).not.toContain('plan:override_lock');
+    }
+    expect(permissionsForRole(OrganizationRole.ORG_ADMIN)).toContain('plan:override_lock');
+  });
+});
+
 describe('permissionsForRole — baselines (read/variance vs write)', () => {
   it('grants baseline:read to every member role', () => {
     for (const role of Object.values(OrganizationRole)) {

@@ -50,3 +50,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0024](0024-working-day-calendars.md)                      | Working-day calendars                     | Accepted |
 | [0025](0025-baselines-snapshot-and-variance.md)            | Baselines — snapshot & variance           | Accepted |
 | [0026](0026-tsld-canvas-rendering-and-architecture.md)     | TSLD canvas rendering & architecture      | Accepted |
+| [0027](0027-per-package-release-tagging.md)                | Per-package release tagging & versions    | Accepted |
+| [0028](0028-plan-edit-lock.md)                             | Single-editor plan edit-lock              | Accepted |

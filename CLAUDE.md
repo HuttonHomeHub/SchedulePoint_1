@@ -287,6 +287,11 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0027** — Per-package release tagging (`api-vX.Y.Z`/`web-vX.Y.Z`) & per-image
   versions; supersedes ADR-0017's single-aggregate `vX.Y.Z` tag (which silently
   skipped a web-only release once web caught up to api's version).
+- **ADR-0028** — Single-editor plan edit-lock: a `PlanLock` lease (heartbeat + TTL
+  - explicit release) with a 423 `LockedError` write-gate (`assertHoldsPen`),
+    graceful peer request→grace→take-over hand-off (Org-Admin immediate override),
+    serialised by the existing plan advisory lock; the third concurrency layer above
+    optimistic 409 and the advisory lock. Unblocks `VITE_TSLD_EDITING`.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

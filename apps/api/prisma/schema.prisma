@@ -153,6 +153,10 @@ model Organization {
   // / IDOR check and the cascade batch filter one indexed column.
   baselines          Baseline[]
   baselineActivities BaselineActivity[]
+  // Ephemeral per-plan edit-lock coordination rows (ADR-0028). organization_id is
+  // denormalised from the plan (copied by the service, never client input) purely as
+  // a scope tag for scoped reads/audit; the row itself is owned by its plan.
+  planLocks          PlanLock[]
 
   @@map("organizations")
 }
@@ -397,6 +401,11 @@ model Plan {
   // active at a time (partial unique in the migration). FK is RESTRICT; baseline
   // soft-delete + cascade is service-owned (HierarchyLifecycleService).
   baselines    Baseline[]
+  // The (optional) edit-lock row for this plan (ADR-0028). 1:1 — PlanLock's PK IS the
+  // plan id, so presence = someone holds the pen, absence = free. FK is ON DELETE
+  // CASCADE (the lock is ephemeral state owned by the plan, not a soft-deleted domain
+  // record), so a plan hard-purge removes it and is never blocked by a stale lock.
+  planLock     PlanLock?
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -813,4 +822,79 @@ model BaselineActivity {
   @@index([baselineId, sourceActivityId])
   @@index([organizationId])
   @@map("baseline_activities")
+}
+
+// ---------------------------------------------------------------------------
+// PlanLock — the single-editor edit-lock lease (ADR-0028).
+//
+// A deliberately SPARSE, ephemeral coordination row: PRESENCE = a Planner holds
+// the pen, ABSENCE = the plan is free. It is NOT a domain record and so breaks
+// from the hierarchy template on purpose — no soft delete, no `version`, no
+// `created_by`/`updated_by`, no `delete_batch_id`. It intentionally does NOT live
+// on `Plan`: frequent heartbeat writes must not touch `Plan.version`/`updated_at`
+// (they would masquerade as plan edits and collide with plan-metadata optimistic
+// locking — the same derived-vs-edited separation as ADR-0022's engine columns).
+//
+//   - PK IS `plan_id` (not a UUID v7 `id`) — this is the one-lock-per-plan
+//     invariant made physical: at most one row can exist per plan.
+//   - The `plan` FK is ON DELETE CASCADE — unlike every other child table's
+//     RESTRICT. Those are RESTRICT because they are soft-deleted domain records we
+//     must never let an accidental hard delete orphan. A lock is the opposite:
+//     transient state wholly OWNED/COMPOSED by its plan (DATABASE.md: "CASCADE only
+//     for true ownership/composition"), with nothing to preserve. Plans are
+//     soft-deleted in normal operation (the FK never fires; a stale lock is
+//     harmless and expires by TTL), so CASCADE only matters on a rare compliance
+//     HARD purge — where the lock must vanish with the plan and must never BLOCK
+//     the purge. Mirrors the Session/Account → User CASCADE precedent for
+//     library-managed ephemeral rows.
+//   - `organization_id` is denormalised from the plan (copied by the service inside
+//     the acquire transaction, NEVER from client input; invariant:
+//     lock.organization_id == plan.organization_id) as the tenant scope tag for
+//     scoped reads/audit. Its FK is RESTRICT to match every other denormalised-org
+//     table; in practice it is inert (plan → org is RESTRICT, so it fires first).
+//   - `holder_user_id` / `requested_by_user_id` are plain TEXT with NO FK — Better
+//     Auth ids are opaque TEXT (not UUID), and these are attribution stamps, so they
+//     follow the `created_by`/`updated_by`/`accepted_by_user_id` convention, NOT the
+//     structural OrgMember.user_id membership FK.
+//   - `requested_by_user_id` / `requested_at` hold at most one PENDING peer
+//     request-control (newest wins, Q-A). Cleared by the service on every holder
+//     change (acquire / take-over / release / hand-off) so a stale request never
+//     carries across a hand-off; "grace elapsed" is a pure `now() - requested_at`
+//     comparison — nothing to schedule or sweep.
+//   - An expired row (`expires_at < now()`) reads as free and is overwritten on the
+//     next acquire — no sweeper in v1.
+// ---------------------------------------------------------------------------
+model PlanLock {
+  // PK IS the plan id ⇒ one lock per plan (the invariant). No separate UUID v7 id.
+  planId         String @id @map("plan_id") @db.Uuid
+  // Denormalised tenant scope tag, copied from the plan (never client input).
+  organizationId String @map("organization_id") @db.Uuid
+  // Better Auth id = opaque TEXT (not UUID); attribution stamp, no FK (see header).
+  holderUserId   String @map("holder_user_id")
+
+  // The lease. `expires_at` = `heartbeat_at` + TTL; expiry is evaluated server-side
+  // against now(). All are instants → timestamptz UTC (not @db.Date).
+  acquiredAt  DateTime @map("acquired_at") @db.Timestamptz(3)
+  heartbeatAt DateTime @map("heartbeat_at") @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+
+  // Pending peer request-control (Q-A). Both null = no pending request. TEXT id, no FK.
+  requestedByUserId String?   @map("requested_by_user_id")
+  requestedAt       DateTime? @map("requested_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // plan FK is CASCADE (ephemeral composition); org FK is RESTRICT (scope tag,
+  // matches every sibling; inert because plan → org RESTRICT fires first).
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // The only non-PK index. Status read and heartbeat are single-row PK lookups on
+  // plan_id (the heartbeat's extra `holder_user_id` / `expires_at > now()` predicates
+  // filter the ONE PK-selected row for free — no index warranted, and one on a
+  // low-selectivity/volatile column would only cost writes). This index backs the
+  // organization_id FK and any org-scoped audit read of held locks.
+  @@index([organizationId])
+  @@map("plan_locks")
 }

@@ -410,6 +410,48 @@ AND deleted_at IS NULL`) guarantees **at most one active baseline per plan** —
   Capture reads its snapshot **inside the plan write-lock**, so it is never taken
   mid-recalculation.
 
+### PlanLock: the edit-lock lease
+
+The `plan_locks` table (ADR-0028) is the **single-editor "pen"** — the human-facing
+coordination layer above optimistic `version` (409) and the plan advisory lock. It
+is deliberately **not** a domain record, and departs from the hierarchy template on
+purpose (a future reader should not "fix" these into the standard shape):
+
+- **PK is `plan_id`, not a UUID v7 `id`.** The one-lock-per-plan invariant made
+  physical: **presence = someone holds the pen, absence = free.** No second table,
+  no partial unique — the PK _is_ the uniqueness.
+- **No soft-delete, no `version`, no `created_by`/`updated_by`, no
+  `delete_batch_id`.** It is ephemeral coordination state; the "gone" signal is
+  `expires_at < now()` (a lapsed lease reads as free and is overwritten on the next
+  acquire — **no sweeper** in v1). Frequent heartbeats deliberately live off `Plan`
+  so they never touch `Plan.version`/`updated_at` (the same derived-vs-edited
+  separation as ADR-0022's engine columns).
+- **The `plan_id` FK is the schema's only `ON DELETE CASCADE`** (every hierarchy
+  child is `RESTRICT`). Those are `RESTRICT` because they are soft-deleted domain
+  records an accidental hard delete must never orphan; a lock is the opposite —
+  transient state wholly owned/composed by its plan (DATABASE.md: "CASCADE only for
+  true ownership/composition"), with nothing to preserve. Plans soft-delete in
+  normal use so the FK never fires; `CASCADE` only matters on a rare hard purge,
+  where the lock must vanish with the plan and never **block** it. Mirrors the
+  `Session`/`Account → User` `CASCADE` precedent for library-managed ephemeral rows.
+- **`organization_id`** is denormalised from the plan (copied by the service inside
+  the acquire transaction, **never** client input; invariant
+  `lock.organization_id == plan.organization_id`) as the tenant scope tag, with a
+  `RESTRICT` FK like every sibling — inert in practice (plan → org `RESTRICT` fires
+  first). **`holder_user_id` / `requested_by_user_id`** are bare `TEXT` with **no
+  FK** — Better Auth ids are opaque TEXT attribution stamps, so they follow the
+  `created_by`/`accepted_by_user_id` convention, not the `OrgMember.user_id`
+  membership FK.
+- **`requested_by_user_id` / `requested_at`** hold at most one _pending_ peer
+  request-control (newest wins, ADR-0028 Q-A); the service clears them on every
+  holder change, and "grace elapsed" is a pure `now() − requested_at` comparison —
+  nothing to schedule or sweep.
+- **Indexes.** The PK covers both the status read and the heartbeat (a single-row
+  `UPDATE … WHERE plan_id AND holder_user_id AND expires_at > now()` — the extra
+  predicates filter the one PK-selected row for free). Only `@@index([organization_id])`
+  is added, backing the FK and org-scoped audit reads; nothing on
+  `holder_user_id`/`expires_at` (they would only add write cost on the hot path).
+
 ## Testing & performance
 
 - Integration tests run against a **real Postgres** (see [`TESTING.md`](TESTING.md)).
