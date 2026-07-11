@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent, EditMode } from '../interaction/gesture-machine';
+import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
   announceChainStep,
   chainNeighbour,
@@ -75,8 +76,9 @@ const LEGEND: ReadonlyArray<LegendItem> = [
   { label: 'Non-driving link', line: 'dashed' },
 ];
 
-/** Debounce (ms) that coalesces a held Alt+arrow key-repeat into one nudge write (M5 5.2 §4). */
-const NUDGE_DEBOUNCE_MS = 150;
+/** Fixed screen anchor for the keyboard (`n`) create popover — a stable top-left corner, since a
+ * keyboard invocation has no pointer position (the drag/toolbar paths pass the real anchor). */
+const KEYBOARD_CREATE_ANCHOR: Point = { x: 24, y: 24 };
 
 /** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
 export interface TsldCreateInput {
@@ -218,6 +220,10 @@ export function TsldPanel({
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
   const addActivityRef = useRef<HTMLButtonElement>(null);
+  const listboxRef = useRef<HTMLUListElement>(null);
+  // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
+  // Add-activity tool (drag/toolbar). Reset after each close.
+  const createReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const renderActivities = useMemo(() => toRenderActivities(activities), [activities]);
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
@@ -249,114 +255,19 @@ export function TsldPanel({
     announce('Activity removed.');
   }, [activities, selectedId, announce]);
 
-  // Coalesced keyboard nudge (M5 5.2): a held Alt+arrow fires OS key-repeat faster than a PATCH
-  // round-trip. Rather than one racing write per repeat (which self-inflicts stale-version 409s and,
-  // for time, a recalc per keystroke), accumulate the net lane/day delta with an optimistic ghost,
-  // debounce the commit, and serialize writes — so a burst becomes ONE minimal PATCH read at the
-  // live version (M5 §4). Refs (not state) hold the in-flight burst; the panel is keyed by plan.
-  const nudgeRef = useRef<{
-    activityId: string;
-    name: string;
-    span: number;
-    origLane: number;
-    origStartDay: number;
-    laneIndex: number;
-    startDay: number;
-  } | null>(null);
-  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const nudgeBusyRef = useRef(false);
-  useEffect(() => {
-    return () => {
-      if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
-    };
-  }, []);
-
-  const commitNudge = (): void => {
-    const s = nudgeRef.current;
-    if (!s || !onReposition) {
-      nudgeRef.current = null;
-      return;
-    }
-    // Serialize: don't read a version while the previous burst's write/invalidation is in flight.
-    if (nudgeBusyRef.current) {
-      nudgeTimerRef.current = setTimeout(commitNudge, 40);
-      return;
-    }
-    const laneChanged = s.laneIndex !== s.origLane;
-    const timeChanged = s.startDay !== s.origStartDay;
-    const finalLane = s.laneIndex;
-    const { activityId, name } = s;
-    nudgeRef.current = null;
-    if (!laneChanged && !timeChanged) {
-      setPendingReposition(null);
-      return;
-    }
-    nudgeBusyRef.current = true;
-    void onReposition({
-      activityId,
-      ...(timeChanged ? { startDay: s.startDay } : {}),
-      ...(laneChanged ? { laneIndex: s.laneIndex } : {}),
-    })
-      .then((outcome) => {
-        setPendingReposition(null);
-        if (outcome.conflict) setConflict(outcome.conflict);
-        if (outcome.applied) {
-          announce(
-            laneChanged
-              ? `Moved “${name}” to lane ${finalLane + 1}${timeChanged ? '; dates will update' : ''}.`
-              : `Moved “${name}”; dates will update.`,
-          );
-        }
-      })
-      .catch((err: unknown) => {
-        setPendingReposition(null);
-        setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
-      })
-      .finally(() => {
-        nudgeBusyRef.current = false;
-      });
-  };
-
-  const nudge = (activity: ActivitySummary, axis: 'lane' | 'time', delta: number): void => {
-    if (!onReposition || dataDate === null) return;
-    let s = nudgeRef.current;
-    if (!s || s.activityId !== activity.id) {
-      const origStartDay = activity.earlyStart ? daysBetween(dataDate, activity.earlyStart) : 0;
-      const span =
-        activity.earlyStart && activity.earlyFinish
-          ? daysBetween(activity.earlyStart, activity.earlyFinish)
-          : 0;
-      s = {
-        activityId: activity.id,
-        name: activity.name,
-        span,
-        origLane: activity.laneIndex,
-        origStartDay,
-        laneIndex: activity.laneIndex,
-        startDay: origStartDay,
-      };
-      nudgeRef.current = s;
-    }
-    if (axis === 'lane') {
-      const next = Math.max(0, s.laneIndex + delta);
-      if (next === s.laneIndex) {
-        announce('Already in the top lane.'); // lane boundary (#24b)
-        return;
-      }
-      s.laneIndex = next;
-    } else {
-      s.startDay += delta; // an SNET before the data date is legal; the engine clamps as needed
-    }
-    setConflict(null);
-    // Optimistic ghost tracks the burst for sighted users; AT hears the net result on commit.
-    setPendingReposition({
-      startDay: s.startDay,
-      endDay: s.startDay + s.span,
-      laneIndex: s.laneIndex,
-    });
-    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
-    nudgeTimerRef.current = setTimeout(commitNudge, NUDGE_DEBOUNCE_MS);
-  };
+  // Coalesced keyboard nudge (M5 5.2) — a held Alt+arrow becomes one net write per burst, read at
+  // the live version, serialized, flushed on unmount, and race-free vs. an in-flight pointer drag.
+  // The full state machine + its correctness reasoning live in the hook (unit-tested there).
+  const pointerRepositionBusyRef = useRef(false);
+  const nudge = useCoalescedNudge({
+    onReposition,
+    activities,
+    dataDate,
+    setGhost: setPendingReposition,
+    setConflict,
+    announce,
+    isPointerBusy: () => pointerRepositionBusyRef.current,
+  });
 
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
@@ -425,11 +336,12 @@ export function TsldPanel({
       const startDay =
         current?.earlyStart && dataDate ? daysBetween(dataDate, current.earlyStart) : 0;
       setConflict(null);
+      createReturnFocusRef.current = listboxRef.current; // return focus to the list, not the toolbar
       setPendingCreate({
         startDay,
         endDay: startDay,
         laneIndex: current ? current.laneIndex : 0,
-        anchor: { x: 24, y: 24 },
+        anchor: KEYBOARD_CREATE_ANCHOR,
         saving: false,
         error: null,
       });
@@ -449,7 +361,9 @@ export function TsldPanel({
 
   const closeCreate = (): void => {
     setPendingCreate(null);
-    addActivityRef.current?.focus();
+    // Return focus to wherever create was invoked from (the listbox for `n`, else the tool).
+    (createReturnFocusRef.current ?? addActivityRef.current)?.focus();
+    createReturnFocusRef.current = null;
   };
 
   // Auto-arrange (M4 4.3): pack the drawn (dated) activities into the fewest non-overlapping lanes.
@@ -532,6 +446,8 @@ export function TsldPanel({
       const startDay = intent.startDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
+      // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
+      pointerRepositionBusyRef.current = true;
       void onReposition({
         activityId: intent.activityId,
         ...(intent.startDay !== undefined ? { startDay: intent.startDay } : {}),
@@ -541,21 +457,25 @@ export function TsldPanel({
           setPendingReposition(null);
           if (outcome.conflict) setConflict(outcome.conflict);
           // Announce "Moved" only when the move actually landed, so it never contradicts a
-          // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed.
+          // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed and,
+          // for any time change (SNET + recalc), that the dates will update — matching the keyboard
+          // nudge's wording so the same operation reads the same to AT users.
           if (outcome.applied) {
-            // A both-axes drop also moved in time (SNET + recalc) — tell AT users the dates will
-            // change, since the ghost's new column is the only sighted cue for that half.
             const timeChanged = intent.startDay !== undefined;
+            const laneChanged = intent.laneIndex !== undefined;
             announce(
-              intent.laneIndex !== undefined
+              laneChanged
                 ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
-                : `Moved “${activity.name}”.`,
+                : `Moved “${activity.name}”; dates will update.`,
             );
           }
         })
         .catch((err: unknown) => {
           setPendingReposition(null);
           setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+        })
+        .finally(() => {
+          pointerRepositionBusyRef.current = false;
         });
       return;
     }
@@ -743,6 +663,7 @@ export function TsldPanel({
               `sr-only` keeps the widget in the a11y tree and tab order.
             */}
             <ul
+              ref={listboxRef}
               id={listboxId}
               role="listbox"
               aria-label="Activities in the diagram"
