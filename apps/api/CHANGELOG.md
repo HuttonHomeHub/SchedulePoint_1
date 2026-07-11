@@ -1,5 +1,72 @@
 # @repo/api
 
+## 0.7.0
+
+### Minor Changes
+
+- [#24](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/24) [`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the baseline schema and permissions (M7, ADR-0025). New `baselines` and
+  `baseline_activities` tables: a baseline is a named, frozen snapshot of a plan's
+  schedule (the plan of record), and each `baseline_activities` row is a **self-contained
+  copy** of an activity's identity and captured CPM dates — `source_activity_id` is a
+  plain correlation UUID with **no foreign key**, so a baseline survives the source
+  activities' 90-day hard purge and stays faithful even if a live activity is edited or
+  deleted. A partial unique `uq_baselines_plan_active` guarantees **at most one active
+  baseline per plan** in the database (not just in code); `uq_baselines_plan_name` keeps
+  names unique per plan among live rows; both tables carry soft delete + batch restore and
+  the documented scoped indexes (the `(baseline_id, source_activity_id)` index is the
+  variance join key). Adds the `baseline:read` / `baseline:create` / `baseline:activate` /
+  `baseline:delete` permissions (read for every member; write for Planner + Org Admin) and
+  the shared `@repo/types` `BaselineSummary` / `BaselineDetail` / `BaselineActivitySnapshot`
+  / `BaselineVarianceRow` / `PlanVarianceSummary` contracts. Schema and permissions only —
+  the baselines module, variance read model, and web surface land next.
+
+- [#24](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/24) [`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add baseline activate + delete with cascade (M7 Task B2, ADR-0025).
+  `POST …/baselines/:id/activate` (200) makes a baseline the plan's active comparison
+  baseline: under the plan write-lock it clears the current active row **before** setting
+  the target, so the one-active-per-plan partial unique is never momentarily violated;
+  it is idempotent and 404s if the baseline was deleted meanwhile. `DELETE …/baselines/:id`
+  (204) soft-cascades the baseline and its snapshot rows under one `delete_batch_id`;
+  deleting the active baseline simply leaves the plan with none active. Deny-by-default:
+  `baseline:activate` / `baseline:delete` (Planner + Org Admin). The
+  `HierarchyLifecycleService` now sweeps a plan's baselines (and their snapshot rows) into
+  the batch when a plan/project/client is deleted, and restores them with the plan — so a
+  baseline never dangles under a soft-deleted plan and comes back on restore with its active
+  flag intact.
+
+- [#24](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/24) [`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the baselines capture/list/get API (M7 Task B1, ADR-0025). A new plan-scoped
+  `baselines` module (controller → `BaselinesService` → `BaselineRepository`) exposes
+  `POST` (capture), `GET` (list, cursor-paginated newest-first) and `GET /:id` (with the
+  frozen activity snapshots) under `/api/v1/organizations/:orgSlug/plans/:planId/baselines`.
+  Capturing freezes the plan's currently-persisted computed activities as a self-contained
+  snapshot **under the plan write-lock** (the same advisory lock as recalculation, ADR-0022),
+  so a snapshot is never taken mid-recalculation; the batched `createMany` writes up to a
+  plan's worth of snapshot rows in one statement. The plan's **first** baseline is captured
+  active; later captures are inactive. Deny-by-default: reads need `baseline:read` (every
+  member), capture needs `baseline:create` (Planner + Org Admin); every route re-resolves the
+  org scope from the caller's memberships and the plan within it (anti-IDOR). Capturing an
+  empty or never-calculated plan is a `422 SCHEDULE_NOT_CALCULATED`; a duplicate name is a
+  `409 DUPLICATE_BASELINE`. Activate/delete and the variance read model land next.
+
+- [#24](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/24) [`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the baseline variance read model (M7 Task C1, ADR-0025).
+  `GET …/baselines/variance` joins the plan's live activities against the active baseline's
+  snapshot on `source_activity_id` and returns per-activity **start/finish/float variance in
+  working days** on the plan's calendar (reusing the engine's `workingDaysBetween` /
+  `buildWorkingDayCalendar`, ADR-0024), signed so **positive = current later than baseline
+  (behind)**, plus a `meta` roll-up (`PlanVarianceSummary`: active baseline id/name,
+  `capturedAt`, worst finish slip, and counts behind / added / removed). An activity added
+  after capture is `inBaseline: false`; a baselined activity no longer live is a `removed`
+  row; a plan with no active baseline returns an empty list with `meta.baselineId = null`.
+  The diff is a pure, exhaustively-unit-tested `computeVariance` helper. The read is bounded
+  and plan-scoped (no cursor pagination — one build of the calendar, an O(n) join), so it
+  stays within the M6/M7 performance budget; a CI smoke exercises it at 500 activities. The
+  shared `Paginated` envelope now carries a typed `meta` so a bounded list can return the
+  variance roll-up.
+
+### Patch Changes
+
+- Updated dependencies [[`300f386`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/300f38685578f1bc432c9b48051f58bc10c22883)]:
+  - @repo/types@0.6.0
+
 ## 0.6.0
 
 ### Minor Changes
