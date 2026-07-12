@@ -1,5 +1,7 @@
 import { Link, useNavigate, useParams, useRouterState } from '@tanstack/react-router';
+import { Menu } from 'lucide-react';
 
+import { useShell } from '@/components/layout/navigator/shell-context';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { useSession, useSignOut } from '@/features/auth';
@@ -25,10 +27,26 @@ export function AppHeader(): React.ReactElement {
   // The recycle bin is a writer surface (only writers can restore); non-writers
   // never see the entry point, though the API read itself is member-level.
   const canWrite = canManageHierarchy(useOrgRole(orgSlug ?? ''));
+  // Present only inside the persistent shell (VITE_NAV_TREE on); opens the rail as a
+  // drawer below `lg`, where the pinned rail is hidden.
+  const shell = useShell();
 
   return (
     <header className="border-border bg-background sticky top-0 z-10 border-b">
+      {/* Stays centred at `max-w-6xl` to match the still-centred route bodies; the
+          full-bleed shell alignment lands with the M3 view migration. */}
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
+        {shell && orgSlug ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-ml-2 lg:hidden"
+            aria-label="Show Project Explorer"
+            onClick={shell.openDrawer}
+          >
+            <Menu aria-hidden="true" className="size-5" />
+          </Button>
+        ) : null}
         <span className="shrink-0 font-semibold tracking-tight">SchedulePoint</span>
         <OrgSwitcher />
         {orgSlug ? (

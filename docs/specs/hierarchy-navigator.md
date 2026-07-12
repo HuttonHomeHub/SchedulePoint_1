@@ -156,23 +156,18 @@ for everyone; only the write-only surfaces they reach _from_ it differ.
   bar + rail stay mounted on **every** org-scoped route; navigation swaps only the
   main region. The rail is present app-wide (org-scoped routes), hidden only on
   public/auth and onboarding screens. Routes stay **addressable path routes**.
-
-**CRITICAL (answers change design or scope):**
-
-- **Q2 — Node decorators (child counts / plan status) in v1.** Showing "Client
-  (3)" counts or a plan-status dot requires **either** adding `projectCount`/
-  `planCount` to the list DTOs (a coordinated **API change**) **or** eager child
-  fetches (an N+1 that contradicts the locked lazy-load decision). **Recommended
-  default:** **no decorators in v1** — plain, icon-prefixed labels only; counts and
-  status dots are a cheap fast-follow **once** the list DTOs carry counts. This
-  keeps v1 to **zero backend change**.
-- **Q3 — What a non-leaf node's click does.** Clicking a **client**/**project**
-  node — does it (a) navigate to that node's existing page **and** toggle
-  expansion, or (b) only toggle expansion (only **plan** leaves navigate)?
-  **Recommended default:** **(a)** — the twist/chevron toggles expansion, and
-  activating the row navigates to that node's existing route (client → its
-  projects page, project → its plans page, plan → the workspace), matching the
-  routes that already exist and keeping the tree and page views consistent.
+- **Q2 — Node decorators (child counts / plan status) in v1: NO.** Plain,
+  icon-prefixed labels only — no counts, no status dots. Keeps v1 to **zero backend
+  change**; decorators are a cheap fast-follow once the list DTOs carry counts.
+- **Q3 — What a non-leaf node's click does: option (b) — folders expand only.**
+  Clicking a **client** or **project** row (or its chevron) **only toggles
+  expansion** — it does **not** navigate and does **not** change the main region.
+  Only a **plan** leaf, when activated, navigates (to that plan's workspace) and
+  loads its activities onto the canvas. This is the file-explorer model: folders
+  open the tree, the "file" (plan) opens in the workspace. **Consequence for v1:** a
+  client/project's _management_ page (rename, add child, recently-deleted) is
+  reached the way it is today — via the existing routes/pages, not the tree; those
+  become row context-menu actions in the future in-tree-CRUD phase.
 
 **Non-critical (defaults stated — proceeding):**
 
@@ -223,10 +218,13 @@ for everyone; only the write-only surfaces they reach _from_ it differ.
 > **US-3 — Open a node.** As a member, I want to click (or press Enter on) a node
 > to open it, so I can move around by pointing at where I want to be.
 >
-> - **Given** any node **when** I activate it **then** the app navigates to that
->   node's existing route (client → projects page, project → plans page, plan →
->   workspace) via a router link, so the URL remains the source of truth (Q3).
-> - **Given** I activate a node on a small screen **when** navigation starts
+> - **Given** a **client** or **project** node **when** I activate it (row or
+>   chevron) **then** it only toggles expansion — the main region is unchanged, no
+>   navigation occurs (Q3 = expand-only for folders).
+> - **Given** a **plan** leaf **when** I activate it (click or Enter) **then** the
+>   app navigates to that plan's workspace route via a router link and its
+>   activities load onto the canvas, so the URL remains the source of truth.
+> - **Given** I activate a plan on a small screen **when** navigation starts
 >   **then** the drawer closes.
 
 > **US-3b — Neutral welcome landing.** As a member, I want a helpful welcome state
