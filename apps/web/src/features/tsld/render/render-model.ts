@@ -62,7 +62,8 @@ export interface RenderActivity {
   isNearCritical: boolean;
   /** Which edge a set date constraint pins (start/finish), or null when unconstrained —
    * the painter marks that edge with a small pin. Pre-derived from `constraintType` at the
-   * seam so the render model stays free of constraint-kind logic (ADR-0026 D5). */
+   * mapping seam so the render model stays free of constraint-kind logic (ADR-0026 D8,
+   * module structure — the pure render model reads no domain enums). */
   constraint?: ConstraintAnchor | null;
 }
 

@@ -1,4 +1,9 @@
-import type { ActivitySummary, ConstraintType, PARKED_CONSTRAINT_TYPES } from '@repo/types';
+import {
+  isParkedConstraintType,
+  type ActivitySummary,
+  type ConstraintType,
+  type PARKED_CONSTRAINT_TYPES,
+} from '@repo/types';
 
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -50,6 +55,19 @@ export function constraintAnchor(type: ConstraintType): ConstraintAnchor {
   }
 }
 
+/**
+ * The bar edge an activity's constraint pins, or `null` when it has no **active**
+ * constraint. A constraint is active only when both the type and date are present —
+ * the single home for that "paired" rule, so the form, the table cell, and the canvas
+ * seam can't drift on what counts as a live constraint (mirrors the engine + the API).
+ */
+export function activeConstraintAnchor(
+  activity: Pick<ActivitySummary, 'constraintType' | 'constraintDate'>,
+): ConstraintAnchor | null {
+  if (!activity.constraintType || !activity.constraintDate) return null;
+  return constraintAnchor(activity.constraintType);
+}
+
 /** A constraint formatted for display: a compact `short` cell plus a spelled-out `full` label. */
 export interface ConstraintFormat {
   /** e.g. `"SNET · 01 May 2026"` — the shorthand kind and the date. */
@@ -71,9 +89,8 @@ export function formatConstraint(
   const { constraintType, constraintDate } = activity;
   if (!constraintType || !constraintDate) return null;
   const date = formatCalendarDate(constraintDate);
-  const label =
-    constraintType in PARKED_CONSTRAINT_LABELS
-      ? PARKED_CONSTRAINT_LABELS[constraintType as keyof typeof PARKED_CONSTRAINT_LABELS]
-      : CONSTRAINT_TYPE_LABELS[constraintType];
+  const label = isParkedConstraintType(constraintType)
+    ? PARKED_CONSTRAINT_LABELS[constraintType]
+    : CONSTRAINT_TYPE_LABELS[constraintType];
   return { short: `${constraintType} · ${date}`, full: `${label} ${date}` };
 }

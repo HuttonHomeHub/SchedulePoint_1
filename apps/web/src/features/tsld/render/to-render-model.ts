@@ -2,7 +2,7 @@ import type { ActivitySummary, DependencySummary } from '@repo/types';
 
 import type { RenderActivity, RenderEdge } from './render-model';
 
-import { constraintAnchor } from '@/lib/constraint-format';
+import { activeConstraintAnchor } from '@/lib/constraint-format';
 
 /**
  * The seam that maps the API shapes (`ActivitySummary` / `DependencySummary`) to the
@@ -19,7 +19,7 @@ export function toRenderActivities(activities: readonly ActivitySummary[]): Rend
     earlyFinish: a.earlyFinish,
     isCritical: a.isCritical,
     isNearCritical: a.isNearCritical,
-    constraint: a.constraintType && a.constraintDate ? constraintAnchor(a.constraintType) : null,
+    constraint: activeConstraintAnchor(a),
   }));
 }
 
