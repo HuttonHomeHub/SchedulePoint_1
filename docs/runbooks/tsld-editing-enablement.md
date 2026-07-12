@@ -47,11 +47,11 @@ Roll **back** in reverse: `VITE_TSLD_EDITING` off → `PLAN_EDIT_LOCK_ENFORCED` 
       edit keymap (`keyboard-edit`).
 - [x] **`Alt+←/→` does not navigate history — Chromium.** Automated in
       `keyboard-edit.spec.ts` (the time-nudge keys are `preventDefault`-ed).
-- [ ] **`Alt+←/→` does not navigate history — Firefox, Safari, Edge (MANUAL).**
+- [x] **`Alt+←/→` does not navigate history — Firefox, Safari, Edge (MANUAL).**
       `preventDefault` is the mitigation but browser-chrome accelerators are not
-      guaranteed suppressible everywhere. Manually confirm on each before enabling
-      `VITE_TSLD_EDITING` in a shared environment (TECH_DEBT #25a). If a browser
-      still navigates, treat it as a blocker for that browser.
+      guaranteed suppressible everywhere. Manually confirmed passing on each
+      (2026-07-12); the diagram keeps focus and does not navigate Back/Forward.
+      Closes the last pre-enablement gate (TECH_DEBT #25a).
 - [ ] **Heartbeat holder-profile round-trip removed at scale (advisory).** Done for
       the common beat (TECH_DEBT #26); re-confirm DB load is flat under many
       concurrent editors before broad enablement.
@@ -68,8 +68,10 @@ Roll **back** in reverse: `VITE_TSLD_EDITING` off → `PLAN_EDIT_LOCK_ENFORCED` 
 
 ## Known gaps at enablement
 
-- The cross-browser `Alt+←/→` sweep above is manual (TECH_DEBT #25a) — the only
-  remaining pre-enablement gate.
+- None blocking. The manual cross-browser `Alt+←/→` sweep (TECH_DEBT #25a) — the
+  last pre-enablement gate — was confirmed passing on Firefox, Safari, and Edge
+  (2026-07-12). The editing flags (`VITE_TSLD_EDITING`, then `PLAN_EDIT_LOCK_ENFORCED`
+  per ADR-0028 §9 ordering) can now be enabled in a shared environment.
 
 The single- and multi-actor pen journeys, the keyboard-edit journey, and the
 client-side link-legality pre-check all run on the `test:e2e:edit` harness.
