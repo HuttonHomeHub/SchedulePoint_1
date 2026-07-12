@@ -32,6 +32,16 @@ function principal(userId: string, permissions: Permission[]): Principal {
   return new Principal(userId, [{ organizationId: ORG_ID, role: 'PLANNER', permissions }]);
 }
 
+/** A principal carrying its own session profile (as the auth seam builds it). */
+function principalWithProfile(userId: string, permissions: Permission[]): Principal {
+  return new Principal(
+    userId,
+    [{ organizationId: ORG_ID, role: 'PLANNER', permissions }],
+    'Me Myself',
+    'me@example.com',
+  );
+}
+
 /** A lock row (Prisma shape) with sensible live defaults, overridable per test. */
 function lockRow(overrides: Partial<PlanLock> = {}): PlanLock {
   const now = Date.now();
@@ -218,6 +228,28 @@ describe('PlanEditLockService', () => {
         code: 'LOCKED',
         details: { reason: 'PLAN_EDIT_LOCK_LOST' },
       });
+    });
+
+    it('resolves the holder from the caller session — no users round-trip on the hot path (#26)', async () => {
+      repository.heartbeat.mockResolvedValue(lockRow({ holderUserId: ME }));
+      const s = await service.heartbeat(principalWithProfile(ME, PLANNER), SLUG, PLAN_ID);
+      // The holder IS the caller and there is no pending requester → nothing to resolve.
+      expect(repository.findActors).not.toHaveBeenCalled();
+      expect(s.holder).toEqual({ id: ME, name: 'Me Myself', email: 'me@example.com' });
+    });
+
+    it('still resolves a pending requester — but not the (self) holder (#26)', async () => {
+      repository.heartbeat.mockResolvedValue(
+        lockRow({ holderUserId: ME, requestedByUserId: OTHER }),
+      );
+      repository.findActors.mockResolvedValue(
+        new Map([[OTHER, { id: OTHER, name: 'Other', email: 'other@example.com' }]]),
+      );
+      const s = await service.heartbeat(principalWithProfile(ME, PLANNER), SLUG, PLAN_ID);
+      // Only the requester hits the DB; the self-holder is supplied from the session.
+      expect(repository.findActors).toHaveBeenCalledWith([OTHER], undefined);
+      expect(s.holder).toEqual({ id: ME, name: 'Me Myself', email: 'me@example.com' });
+      expect(s.requestedBy).toEqual({ id: OTHER, name: 'Other', email: 'other@example.com' });
     });
   });
 

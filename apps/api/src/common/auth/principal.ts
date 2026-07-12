@@ -47,11 +47,20 @@ export interface OrganizationMembership {
  * The authenticated user and their memberships. Immutable and request-scoped.
  * Authorisation is always evaluated against a specific organisation (resource
  * scope) — the defence against IDOR.
+ *
+ * `name`/`email` are the caller's own profile, already loaded by the auth seam's
+ * `getSession` (ADR-0003). They are carried so a service can render the caller as
+ * an actor without a second DB round-trip (e.g. the edit-lock heartbeat resolving
+ * its own holder). They are optional so foundation/test code can build a principal
+ * from id + memberships alone; treat them as best-effort display data, never as an
+ * authorisation input.
  */
 export class Principal {
   constructor(
     readonly userId: string,
     readonly memberships: readonly OrganizationMembership[],
+    readonly name?: string,
+    readonly email?: string,
   ) {}
 
   /** True if the principal belongs to the organisation. */
