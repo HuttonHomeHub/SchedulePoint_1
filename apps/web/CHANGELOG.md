@@ -1,5 +1,38 @@
 # @repo/web
 
+## 0.14.0
+
+### Minor Changes
+
+- [#43](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/43) [`85eb923`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/85eb9238f33c3ac9ddd64af34d76eaaddc9a1e52) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Introduce the persistent **app-shell** foundation (ADR-0029), behind `VITE_NAV_TREE`
+  (off by default). The authenticated layout becomes a mounted-once shell — top bar +
+  a **Project Explorer** rail + a single workspace region — so navigating between plans
+  swaps only the main region and the rail keeps its state. On `lg`+ the rail is pinned,
+  **collapsible and resizable** (a keyboard-operable splitter; width/collapsed state
+  persisted); below `lg` it is an off-canvas **drawer** opened from the header. With no
+  plan selected the workspace shows a neutral **welcome empty-state** ("Select a plan
+  from the Project Explorer", plus a getting-started hint for a brand-new org).
+
+  This is the M1 slice: the rail body is a placeholder — the accessible Client → Project
+  → Plan tree lands in M2. Flag-off is byte-for-byte today's layout. Adds a reusable
+  `Sheet` (off-canvas drawer) primitive on the native `<dialog>`. No API or database
+  change.
+
+- [#43](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/43) [`85eb923`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/85eb9238f33c3ac9ddd64af34d76eaaddc9a1e52) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Ship the **Project Explorer** navigator and turn the persistent app-shell **on by
+  default** (ADR-0029). The rail now hosts an accessible Client → Project → Plan tree:
+
+  - **Lazy drill-down** — expanding a client loads its projects, a project its plans,
+    one query per expanded node (reusing the existing hierarchy reads, so page CRUD
+    refreshes the tree for free). Nothing is fetched until you open it.
+  - **URL-projected selection + deep-linking** — the open plan is highlighted; landing
+    on a plan/project URL auto-reveals and scrolls its ancestor path into view.
+  - **Keyboard-first** — a WAI-ARIA `tree` with roving focus and the full APG keymap
+    (↑/↓, ←/→ to expand/collapse/move, Home/End, Enter/Space). Per the product
+    decision, **client/project rows only expand**; only a **plan** opens on the canvas.
+  - The shell (top bar + collapsible/resizable rail, drawer below `lg`, welcome
+    landing) is now the default navigation surface; set `VITE_NAV_TREE=false` for the
+    previous header-only layout (emergency rollback). No API or database change.
+
 ## 0.13.0
 
 ### Minor Changes
