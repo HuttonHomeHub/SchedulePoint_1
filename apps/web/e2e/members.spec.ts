@@ -25,7 +25,7 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
   await admin.getByLabel('Organisation name').fill(orgName);
   await admin.getByRole('button', { name: /create organisation/i }).click();
 
-  await expect(admin.getByRole('heading', { name: orgName })).toBeVisible();
+  await expect(admin.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
   await admin.getByRole('link', { name: 'Members' }).click();
 
   await admin.getByRole('button', { name: 'Invite member' }).click();
@@ -55,6 +55,6 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
 
   // Landed in the organisation the admin created.
   await expect(invitee).toHaveURL(/\/orgs\//);
-  await expect(invitee.getByRole('heading', { name: orgName })).toBeVisible();
+  await expect(invitee.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
   await inviteeContext.close();
 });

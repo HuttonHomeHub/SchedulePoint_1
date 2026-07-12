@@ -1,6 +1,6 @@
 # Feature Spec: Persistent hierarchy navigator
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Approved — implemented (M1 + M2 shipped; navigator on by default). M3 view-migration + C2 virtualization tracked as fast-follows.
 - **Author(s):** Feature Analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-12
 - **Tracking issue / epic:** _TBD_ — Epic "Domain hierarchy & navigation" (navigation UX)

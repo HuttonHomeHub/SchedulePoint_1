@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { NavigatorRail, NavigatorRailCollapsed } from './navigator-rail';
 
 describe('NavigatorRail', () => {
-  it('renders the Project Explorer landmark with a placeholder body', () => {
+  it('renders the Project Explorer landmark, hinting to pick an org when none is active', () => {
     render(<NavigatorRail />);
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
-    expect(screen.getByText(/project tree arrives soon/i)).toBeInTheDocument();
+    expect(screen.getByText(/select an organisation/i)).toBeInTheDocument();
   });
 
   it('shows a collapse control (pinned rail) that fires onCollapse', () => {

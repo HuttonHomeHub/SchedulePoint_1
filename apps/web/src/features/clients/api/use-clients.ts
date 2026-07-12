@@ -11,20 +11,17 @@ import type { ClientFormValues } from '../schemas/client-schemas';
 
 import { apiFetch } from '@/lib/api/client';
 import { clientKeys } from '@/lib/query/hierarchy-keys';
+import { clientsQueryOptions } from '@/lib/query/hierarchy-queries';
 
-export { clientKeys };
+// The list read-query lives in `lib` (shared) so the navigator rail can consume it
+// without a feature → feature import; re-exported here so existing call sites are
+// unchanged.
+export { clientKeys, clientsQueryOptions };
 
 /** Normalise a form's optional description: a blank field is sent as absent. */
 function descriptionField(description?: string): string | undefined {
   const trimmed = description?.trim();
   return trimmed ? trimmed : undefined;
-}
-
-export function clientsQueryOptions(orgSlug: string) {
-  return queryOptions({
-    queryKey: clientKeys.list(orgSlug),
-    queryFn: () => apiFetch<ClientSummary[]>(`/organizations/${orgSlug}/clients`),
-  });
 }
 
 export function useClients(orgSlug: string): UseQueryResult<ClientSummary[]> {

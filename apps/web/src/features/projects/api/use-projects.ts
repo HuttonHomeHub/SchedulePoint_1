@@ -1,18 +1,16 @@
 import type { ProjectSummary } from '@repo/types';
-import {
-  queryOptions,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import type { ProjectFormValues } from '../schemas/project-schemas';
 
 import { apiFetch } from '@/lib/api/client';
 import { projectKeys } from '@/lib/query/hierarchy-keys';
+import { projectQueryOptions, projectsQueryOptions } from '@/lib/query/hierarchy-queries';
 
-export { projectKeys };
+// The read-queries live in `lib` (shared) so the navigator rail can consume them
+// without a feature → feature import; re-exported here so existing call sites are
+// unchanged.
+export { projectKeys, projectQueryOptions, projectsQueryOptions };
 
 /** Normalise a form's optional description: a blank field is sent as absent. */
 function descriptionField(description?: string): string | undefined {
@@ -20,25 +18,9 @@ function descriptionField(description?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-export function projectQueryOptions(orgSlug: string, projectId: string) {
-  return queryOptions({
-    queryKey: projectKeys.detail(orgSlug, projectId),
-    queryFn: () => apiFetch<ProjectSummary>(`/organizations/${orgSlug}/projects/${projectId}`),
-    retry: false,
-  });
-}
-
 /** A single project — used by the project-detail screen (handles deep-links / 404). */
 export function useProject(orgSlug: string, projectId: string): UseQueryResult<ProjectSummary> {
   return useQuery(projectQueryOptions(orgSlug, projectId));
-}
-
-export function projectsQueryOptions(orgSlug: string, clientId: string) {
-  return queryOptions({
-    queryKey: projectKeys.listByClient(orgSlug, clientId),
-    queryFn: () =>
-      apiFetch<ProjectSummary[]>(`/organizations/${orgSlug}/clients/${clientId}/projects`),
-  });
 }
 
 export function useProjects(orgSlug: string, clientId: string): UseQueryResult<ProjectSummary[]> {

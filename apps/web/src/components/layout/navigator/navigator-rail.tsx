@@ -2,26 +2,32 @@ import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { HierarchyTree } from '@/features/navigator';
 
 /**
  * The **Project Explorer** rail — the persistent home of the Client → Project → Plan
- * tree. For M1 this is the shell region with its header + a placeholder body; the
- * real accessible tree lands in M2 (ADR-0029). Rendered once in {@link AppShell} (the
- * pinned rail on `lg`+ and the drawer below `lg`), so it survives route changes.
+ * tree (ADR-0029). Rendered once in {@link AppShell} (the pinned rail on `lg`+ and the
+ * drawer below `lg`), so it survives route changes. When an org is active it hosts the
+ * accessible {@link HierarchyTree}; otherwise a brief hint.
  *
  * `onCollapse` (pinned rail) and `onClose` (drawer) are mutually exclusive header
  * affordances — pass whichever fits the surface. `focusToggleOnMount` moves focus to
  * the header control when the rail (re)mounts after a user toggle, so keyboard/AT
- * users don't lose their place on collapse/expand.
+ * users don't lose their place on collapse/expand. `onNavigate` fires when a plan is
+ * opened (the drawer uses it to close).
  */
 export function NavigatorRail({
+  orgSlug,
   onCollapse,
   onClose,
+  onNavigate,
   focusToggleOnMount,
 }: {
-  onCollapse?: () => void;
-  onClose?: () => void;
-  focusToggleOnMount?: boolean;
+  orgSlug?: string | undefined;
+  onCollapse?: (() => void) | undefined;
+  onClose?: (() => void) | undefined;
+  onNavigate?: (() => void) | undefined;
+  focusToggleOnMount?: boolean | undefined;
 }): React.ReactElement {
   const toggleRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -52,8 +58,12 @@ export function NavigatorRail({
           </Button>
         ) : null}
       </div>
-      <div className="text-muted-foreground min-h-0 flex-1 overflow-y-auto p-4 text-sm">
-        <p>The project tree arrives soon.</p>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {orgSlug ? (
+          <HierarchyTree orgSlug={orgSlug} onNavigate={onNavigate} />
+        ) : (
+          <p className="text-muted-foreground p-4 text-sm">Select an organisation to browse.</p>
+        )}
       </div>
     </nav>
   );

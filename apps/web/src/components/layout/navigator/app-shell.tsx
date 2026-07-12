@@ -1,4 +1,4 @@
-import { Outlet } from '@tanstack/react-router';
+import { Outlet, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { NavigatorRail, NavigatorRailCollapsed } from './navigator-rail';
@@ -37,6 +37,8 @@ function ShellFrame(): React.ReactElement {
   const [interacted, setInteracted] = useState(false);
   const rail = useRailPrefs();
   const announce = useAnnounce();
+  const params = useParams({ strict: false });
+  const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
@@ -78,7 +80,11 @@ function ShellFrame(): React.ReactElement {
           ) : (
             <>
               <div className="hidden shrink-0 lg:block" style={{ width: rail.width }}>
-                <NavigatorRail onCollapse={collapse} focusToggleOnMount={interacted} />
+                <NavigatorRail
+                  orgSlug={orgSlug}
+                  onCollapse={collapse}
+                  focusToggleOnMount={interacted}
+                />
               </div>
               <RailResizer width={rail.width} onResize={rail.setWidth} />
             </>
@@ -93,7 +99,7 @@ function ShellFrame(): React.ReactElement {
 
       {/* Below lg: the rail as an off-canvas drawer. */}
       <Sheet open={drawerOpen} onClose={closeDrawer} title="Project Explorer">
-        <NavigatorRail onClose={closeDrawer} />
+        <NavigatorRail orgSlug={orgSlug} onClose={closeDrawer} onNavigate={closeDrawer} />
       </Sheet>
     </ShellContext.Provider>
   );

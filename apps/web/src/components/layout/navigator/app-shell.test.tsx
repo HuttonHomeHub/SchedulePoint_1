@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from './app-shell';
 
-// The workspace Outlet is external routing — stub it.
+// The workspace Outlet + route params are external routing — stub them (no active
+// org here, so the rail shows its fallback; the tree itself is tested separately).
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   Outlet: () => <div data-testid="workspace">workspace</div>,
+  useParams: () => ({}),
 }));
 
 // The real AppHeader pulls in session/org queries; the shell wiring is what we test,
