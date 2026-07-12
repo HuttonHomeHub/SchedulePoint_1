@@ -50,17 +50,25 @@ export function TsldViewControls({
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <div role="group" aria-label="Zoom" className="flex items-center gap-1">
-        {ZOOM_LEVELS.map((level) => (
-          <Button
-            key={level}
-            variant={zoomPreset === level ? 'default' : 'outline'}
-            size="sm"
-            aria-pressed={zoomPreset === level}
-            onClick={() => onZoomPreset(level)}
-          >
-            {ZOOM_LABELS[level]}
-          </Button>
-        ))}
+        {ZOOM_LEVELS.map((level) => {
+          const active = zoomPreset === level;
+          return (
+            <Button
+              key={level}
+              // Active preset uses `secondary` (near-black text on the light surface, ~16:1) rather
+              // than the primary fill, whose L=0.50 blue vs. its foreground sits right on the 4.5:1
+              // line and trips the WCAG contrast check for this 14px label (axe e2e). `font-semibold`
+              // + `aria-pressed` carry the selected state; inactive presets stay ghost.
+              variant={active ? 'secondary' : 'ghost'}
+              size="sm"
+              aria-pressed={active}
+              className={active ? 'font-semibold' : undefined}
+              onClick={() => onZoomPreset(level)}
+            >
+              {ZOOM_LABELS[level]}
+            </Button>
+          );
+        })}
         <Button
           variant="outline"
           size="icon"
