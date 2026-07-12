@@ -1,5 +1,60 @@
 # @repo/api
 
+## 0.10.0
+
+### Minor Changes
+
+- [#35](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/35) [`76b9041`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/76b9041c995eab9ee711082baf74dbd06cdb6263) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the server core of the single-editor **plan edit-lock** (ADR-0028) — the last precondition to
+  enabling the built TSLD editing surface. A new `PlanLock` lease (heartbeat + TTL with explicit
+  release; presence = held, absence = free) backs an `edit-lock` sub-resource under a plan:
+  GET status, POST acquire (with `takeover`), POST heartbeat, POST request, POST handoff, and DELETE
+  release. Lock-precondition failures return a new **423 Locked** (`code: "LOCKED"`), distinct from the
+  409 optimistic conflict, with a machine-readable `reason`
+  (`PLAN_EDIT_LOCK_REQUIRED | PLAN_EDIT_LOCK_HELD | PLAN_EDIT_LOCK_LOST`). The holder grain is the
+  **user** (re-entrant across tabs), and any Planner can **request control** of a live lock and take
+  over after a grace window — or immediately if the holder has gone inactive — while an Org Admin can
+  override immediately; acquire/request/hand-off/take-over serialise under the existing plan advisory
+  lock. New permissions `plan:acquire_lock` / `plan:request_control` (Planner + Org Admin) and
+  `plan:override_lock` (Org Admin). `@repo/types` gains the `PlanEditLockStatus` / `PlanEditLockActor`
+  contracts and the `PLAN_EDIT_LOCK_*` reason union. No UI yet and no endpoint is pen-gated in this
+  slice — inert until the front end and the write-gate land; `main` stays releasable.
+
+- [#35](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/35) [`76b9041`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/76b9041c995eab9ee711082baf74dbd06cdb6263) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the plan edit-lock **write-gate** (ADR-0028, M1 completion). Structural plan
+  writes — activity create/update/delete/restore, the positions batch, dependency
+  create/update/delete, and schedule recalculate — now assert the caller holds the
+  plan edit-lock and return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (for graph
+  writes and recalculate the check runs inside the plan advisory-lock transaction).
+  The Contributor progress path, all reads, and plan-metadata edits stay ungated,
+  and a holder sending a stale row `version` still gets the existing 409 — the two
+  are distinct.
+
+  The gate ships **behind a staged-rollout flag `PLAN_EDIT_LOCK_ENFORCED` (default
+  off)**: enforcing it unconditionally would 423 the already-shipped, flag-on
+  activities-table / dependency-editor / recalculate flows, which don't acquire a
+  lock yet. So the whole mechanism lands inert; enforcement is enabled only once the
+  front end acquires the pen across every editing entry point (edit-lock M2/M3).
+  `main` stays releasable with no user-visible change.
+
+### Patch Changes
+
+- [#37](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/37) [`ce59178`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ce591786a5e3db36db2b5e061eb2fb4941e05a6c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Harden the (flag-gated) TSLD on-canvas editing surface toward enablement — no
+  user-visible change, both editing flags remain off by default.
+
+  - **fix(web):** the coalesced keyboard-nudge now flushes a delta queued _behind_ an
+    in-flight write on unmount (previously a `!busyRef` guard could silently drop it).
+  - **perf(api):** the edit-lock heartbeat resolves the caller's own holder profile
+    from the session instead of a `users` query — the common beat issues zero extra
+    DB reads.
+  - **test:** a flag-on Playwright harness (`test:e2e:edit`, wired into CI) that serves
+    the app with the editing flags on and the API enforcing the lock, with pen-gating,
+    single-actor pen-lifecycle, and keyboard-edit journeys (the latter automating the
+    `Alt+←/→` history-suppression check on Chromium); plus a route-level `plan-detail`
+    gating/reposition-seam test. Operators: see
+    `docs/runbooks/tsld-editing-enablement.md` for the enablement procedure.
+
+- Updated dependencies [[`76b9041`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/76b9041c995eab9ee711082baf74dbd06cdb6263)]:
+  - @repo/types@0.7.0
+
 ## 0.9.0
 
 ### Minor Changes
