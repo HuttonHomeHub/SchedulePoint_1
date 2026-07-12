@@ -314,6 +314,15 @@ alternative). Folding a per-activity driving summary into the canvas's parallel 
 description (`describeActivity`, alongside the existing "critical" cue) is **deferred to M5**
 (accessibility hardening) — a tracked deferral, not a silent gap (CLAUDE.md §13).
 
+**Addendum (M3 close-out).** M3 and M4 shipped their engine/schema/DTO/canvas/endpoint/
+packer during the CPM + M2-editing slices; a survey confirmed only one live-refresh gap
+remained. `useRecalculate` now also invalidates `dependencyKeys.byPlan`, so the driving-arrow
+styling re-pulls after a **reposition-in-time / create-activity** edit (which recalc but don't
+otherwise touch the dependency cache — link mutations already invalidate it themselves). The
+server always recomputed/persisted `is_driving` correctly; this was purely a client-cache
+staleness fix. With it, TSLD **M3** (live critical path + driving arrows) and **M4** (layout
+persistence + auto-pack) are complete.
+
 ### 2026-07-11 — Free-2D bar drag over dominant-axis lock (TSLD M4)
 
 **Decision.** On the TSLD canvas a body drag moves a bar in **both axes at once** — dx → a
