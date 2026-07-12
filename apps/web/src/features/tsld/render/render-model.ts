@@ -1,4 +1,4 @@
-import type { ActivityType } from '@repo/types';
+import type { ActivityType, DependencyType } from '@repo/types';
 
 /**
  * The pure, renderer-agnostic TSLD render model (ADR-0026). It turns a plan's
@@ -63,6 +63,9 @@ export interface RenderActivity {
 /** A directed dependency edge (predecessor → successor) by activity id. */
 export interface RenderEdge {
   predecessorId: string;
+  /** The dependency type (FS/SS/FF/SF), carried so the link-draw legality pre-check can spot a
+   * same-`(predecessor, successor, type)` duplicate (ADR-0026 D5). */
+  type: DependencyType;
   successorId: string;
   /** Engine-owned: true when this edge drives its successor's start (M3). Drawn emphasised. */
   isDriving: boolean;

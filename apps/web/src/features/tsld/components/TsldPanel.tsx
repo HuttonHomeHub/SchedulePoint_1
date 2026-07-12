@@ -11,6 +11,7 @@ import {
   summarizeLogic,
 } from '../render/a11y';
 import { packLanes } from '../render/auto-pack';
+import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { daysBetween, type Point } from '../render/render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -41,6 +42,7 @@ function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[]
   return dependencies.map((d) => ({
     predecessorId: d.predecessor.id,
     successorId: d.successor.id,
+    type: d.type,
     isDriving: d.isDriving,
   }));
 }
@@ -484,6 +486,21 @@ export function TsldPanel({
       setConflict(null);
       const pred = activities.find((a) => a.id === intent.predecessorId);
       const succ = activities.find((a) => a.id === intent.successorId);
+      // Client-side legality pre-check (ADR-0026 D5): if the loaded graph already proves the link
+      // illegal (self/duplicate/cycle), surface it locally and skip the doomed POST. The server
+      // stays authoritative for anything the client can't yet see.
+      const illegal = linkLegality(
+        intent.predecessorId,
+        intent.successorId,
+        intent.type,
+        renderEdges,
+      );
+      if (illegal) {
+        const message = linkIllegalMessage(illegal, succ?.name ?? 'that activity');
+        setConflict(message);
+        announce(message);
+        return;
+      }
       void onLink({
         predecessorId: intent.predecessorId,
         successorId: intent.successorId,

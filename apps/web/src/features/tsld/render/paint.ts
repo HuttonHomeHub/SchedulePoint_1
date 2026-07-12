@@ -227,6 +227,9 @@ export interface LinkOverlay {
   from: Point;
   to: Point;
   targetRect: Rect | null;
+  /** Whether the hovered target is a legal drop (no self/duplicate/cycle, ADR-0026 D5). An illegal
+   * target rings in the critical colour with a dashed "can't drop" outline. Defaults to legal. */
+  targetLegal?: boolean;
 }
 
 /** The transient shapes drawn on the interaction layer for an in-progress edit. */
@@ -267,13 +270,17 @@ export function paintInteractionLayer(
   }
 
   if (link) {
-    // Ring the valid drop target first, so the line draws over it.
+    // Ring the drop target first, so the line draws over it. A legal target rings solid in the
+    // selection colour; an illegal one (self/duplicate/cycle) rings dashed in the critical colour
+    // so it reads as "can't drop here" before release — colour AND dash, not colour alone (D5).
     if (link.targetRect) {
       const t = link.targetRect;
-      ctx.strokeStyle = palette.selection;
+      const illegal = link.targetLegal === false;
+      ctx.strokeStyle = illegal ? palette.critical : palette.selection;
       ctx.lineWidth = 2;
-      ctx.setLineDash([]);
+      ctx.setLineDash(illegal ? [3, 3] : []);
       ctx.strokeRect(t.x - 2, t.y - 2, t.w + 4, t.h + 4);
+      ctx.setLineDash([]);
     }
     ctx.strokeStyle = palette.selection;
     ctx.lineWidth = 1.5;

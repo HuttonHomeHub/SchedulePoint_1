@@ -86,7 +86,7 @@ describe('paintScene', () => {
     });
     const scene: TsldScene = {
       activities: [pred, succ],
-      edges: [{ predecessorId: 'p', successorId: 's', isDriving: true }],
+      edges: [{ predecessorId: 'p', successorId: 's', type: 'FS', isDriving: true }],
       dataDate: DATA_DATE,
     };
     paintScene(ctx, scene, VIEW, SIZE, PALETTE);
@@ -111,7 +111,7 @@ describe('paintScene', () => {
     });
     const scene: TsldScene = {
       activities: [pred, succ],
-      edges: [{ predecessorId: 'p', successorId: 's', isDriving: false }],
+      edges: [{ predecessorId: 'p', successorId: 's', type: 'FS', isDriving: false }],
       dataDate: DATA_DATE,
     };
     paintScene(ctx, scene, VIEW, SIZE, PALETTE);
@@ -245,6 +245,34 @@ describe('paintInteractionLayer', () => {
     );
     expect(ctx.stroke).toHaveBeenCalled();
     expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('rings an ILLEGAL drop target with the "can’t drop" dash (D5 legality pre-check)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(
+      ctx,
+      {
+        link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: GHOST, targetLegal: false },
+      },
+      SIZE,
+      PALETTE,
+    );
+    // The illegal ring uses a distinct [3,3] dash — not colour alone (WCAG 1.4.1).
+    expect(ctx.setLineDash).toHaveBeenCalledWith([3, 3]);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
+  it('rings a LEGAL drop target solid (no "can’t drop" dash)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(
+      ctx,
+      {
+        link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: GHOST, targetLegal: true },
+      },
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.setLineDash).not.toHaveBeenCalledWith([3, 3]);
   });
 
   it('clears to nothing when idle (empty overlay)', () => {
