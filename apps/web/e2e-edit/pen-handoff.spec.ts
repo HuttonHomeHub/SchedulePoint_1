@@ -46,7 +46,7 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await signUp(a, 'Holder A', `holder-${stamp}@example.com`);
   await a.getByLabel('Organisation name').fill(orgName);
   await a.getByRole('button', { name: /create organisation/i }).click();
-  await expect(a.getByRole('heading', { name: orgName })).toBeVisible();
+  await expect(a.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
 
   await a.getByRole('link', { name: 'Members' }).click();
   await a.getByRole('button', { name: 'Invite member' }).click();
