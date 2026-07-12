@@ -219,6 +219,11 @@ sequenceDiagram
 - **Fluid by default:** relative units, flex/grid, `max-width` containers;
   avoid fixed pixel widths.
 - **Adaptive navigation:** the sidebar collapses to a drawer/sheet below `lg`.
+  The **persistent app-shell** (ADR-0029, behind `VITE_NAV_TREE`) realises this: a
+  Project Explorer rail lives in the `_authed` layout — pinned/collapsible/resizable
+  on `lg`+, an off-canvas drawer (the `Sheet` primitive) below `lg`. It mounts in the
+  layout route so it survives child-route swaps, and derives its active node and
+  ancestor expansion from the URL — never a competing selection store.
 - **A `useMediaQuery`/`useBreakpoint` hook** exposes breakpoints to logic when
   layout alone can't express a change.
 - Layouts, tables, and dialogs each have documented responsive behaviour in

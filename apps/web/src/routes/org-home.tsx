@@ -1,19 +1,34 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { NAV_TREE_ENABLED } from '@/config/env';
+import { clientsQueryOptions } from '@/features/clients';
 import { useOrganizations } from '@/features/organizations';
+import { WelcomeEmptyState } from '@/routes/welcome-empty-state';
 
 /**
- * The organisation home screen (`/orgs/$orgSlug`). For this slice it confirms the
- * active organisation and the user's role; clients, projects, plans, and member
- * management arrive in later slices.
+ * The organisation home screen (`/orgs/$orgSlug`). With the persistent shell on
+ * (`VITE_NAV_TREE`), this is the "no plan selected" landing and renders the neutral
+ * welcome empty-state. Flag-off keeps today's confirmation card.
  */
 export function OrgHomeScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
   const { data: organizations } = useOrganizations();
   const organization = organizations?.find((candidate) => candidate.slug === orgSlug);
+
+  // Owned here (the route tier) so WelcomeEmptyState stays presentational. Gated on the
+  // flag so the flag-off path fires no extra request (byte-for-byte today's behaviour).
+  const { data: clients } = useQuery({
+    ...clientsQueryOptions(orgSlug ?? ''),
+    enabled: NAV_TREE_ENABLED && Boolean(orgSlug),
+  });
+
+  if (NAV_TREE_ENABLED && orgSlug) {
+    return <WelcomeEmptyState orgSlug={orgSlug} isNewOrg={clients?.length === 0} />;
+  }
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 p-6">

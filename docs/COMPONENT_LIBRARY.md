@@ -20,11 +20,11 @@ Every reusable component must be:
 
 ## Component tiers
 
-| Tier                   | Location                                    | Contains                                              | May depend on                         |
-| ---------------------- | ------------------------------------------- | ----------------------------------------------------- | ------------------------------------- |
-| **Primitive**          | `components/ui/`                            | Design-system building blocks (Button, Input, Dialog) | tokens, Radix, `cn()`                 |
-| **Composite / layout** | `components/layout/`, feature `components/` | Assemblies (PageHeader, DataTable, BillCard)          | primitives                            |
-| **Route/page**         | `routes/`                                   | Screen composition + data                             | composites, primitives, feature hooks |
+| Tier                   | Location                                    | Contains                                                     | May depend on                         |
+| ---------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------------------------------------- |
+| **Primitive**          | `components/ui/`                            | Design-system building blocks (Button, Input, Dialog, Sheet) | tokens, native `<dialog>`, `cn()`     |
+| **Composite / layout** | `components/layout/`, feature `components/` | Assemblies (PageHeader, DataTable, BillCard)                 | primitives                            |
+| **Route/page**         | `routes/`                                   | Screen composition + data                                    | composites, primitives, feature hooks |
 
 Dependencies point **down** the tiers only. Primitives never import feature code.
 

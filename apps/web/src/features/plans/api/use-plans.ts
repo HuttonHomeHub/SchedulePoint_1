@@ -1,18 +1,16 @@
 import type { PlanSummary } from '@repo/types';
-import {
-  queryOptions,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import type { PlanFormValues } from '../schemas/plan-schemas';
 
 import { apiFetch } from '@/lib/api/client';
 import { planKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
+import { planQueryOptions, plansQueryOptions } from '@/lib/query/hierarchy-queries';
 
-export { planKeys };
+// The read-queries live in `lib` (shared) so the navigator rail can consume them
+// without a feature → feature import; re-exported here so existing call sites are
+// unchanged.
+export { planKeys, planQueryOptions, plansQueryOptions };
 
 /** A blank optional field is sent as absent. */
 function optional(value?: string): string | undefined {
@@ -39,23 +37,8 @@ function updateBody(input: PlanFormValues & { version: number }) {
   };
 }
 
-export function plansQueryOptions(orgSlug: string, projectId: string) {
-  return queryOptions({
-    queryKey: planKeys.listByProject(orgSlug, projectId),
-    queryFn: () => apiFetch<PlanSummary[]>(`/organizations/${orgSlug}/projects/${projectId}/plans`),
-  });
-}
-
 export function usePlans(orgSlug: string, projectId: string): UseQueryResult<PlanSummary[]> {
   return useQuery(plansQueryOptions(orgSlug, projectId));
-}
-
-export function planQueryOptions(orgSlug: string, planId: string) {
-  return queryOptions({
-    queryKey: planKeys.detail(orgSlug, planId),
-    queryFn: () => apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${planId}`),
-    retry: false,
-  });
 }
 
 /** A single plan — used by the plan-detail screen (handles deep-links / 404). */

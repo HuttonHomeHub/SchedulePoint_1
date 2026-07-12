@@ -40,7 +40,7 @@ test.describe('Authentication journey', () => {
 
     // Lands in the new organisation, which is now the active org in the switcher.
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
-    await expect(page.getByRole('heading', { name: orgName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
     await expect(page.getByLabel('Active organisation')).toHaveValue(orgSlug);
 
     await page.getByRole('button', { name: /sign out/i }).click();
@@ -54,6 +54,6 @@ test.describe('Authentication journey', () => {
     await page.getByRole('button', { name: /sign in/i }).click();
 
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
-    await expect(page.getByRole('heading', { name: orgName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
   });
 });

@@ -65,3 +65,13 @@ export const TSLD_EDITING_ENABLED = flagDefaultOn(import.meta.env.VITE_TSLD_EDIT
  * activities-table / dependency / recalculate flows.
  */
 export const PLAN_EDIT_LOCK_ENABLED = flagDefaultOn(import.meta.env.VITE_PLAN_EDIT_LOCK);
+
+/**
+ * The persistent app-shell + hierarchy navigator (ADR-0029). **ON by default** now
+ * that M1 (shell) and M2 (the accessible Client → Project → Plan tree) have landed
+ * with their journeys and a11y gates green — the mounted-once shell (top bar +
+ * collapsible/resizable Project Explorer rail + single workspace region) is the
+ * default navigation surface. Set `VITE_NAV_TREE=false` to fall back to the previous
+ * header-only layout, byte-for-byte (emergency rollback / opt-out).
+ */
+export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
