@@ -6,7 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRecalculate } from './use-schedule';
 
 import { apiFetch } from '@/lib/api/client';
-import { dependencyKeys } from '@/lib/query/hierarchy-keys';
+import {
+  activityKeys,
+  baselineKeys,
+  dependencyKeys,
+  scheduleKeys,
+} from '@/lib/query/hierarchy-keys';
 
 vi.mock('@/lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -31,9 +36,17 @@ describe('useRecalculate', () => {
 
     await result.current.mutateAsync();
 
-    // `isDriving` lives on the dependency query; a recalc rewrites it, so recalc must
-    // invalidate the dependency cache (else driving styling is stale after a reposition/create).
+    // A recalc rewrites the engine-owned columns across the whole plan, so it invalidates the
+    // summary, the activities list, the baseline variance, and the dependencies (where the M3
+    // `isDriving` flag lives — else driving styling is stale after a reposition/create).
     const invalidatedKeys = invalidate.mock.calls.map(([arg]) => JSON.stringify(arg?.queryKey));
-    expect(invalidatedKeys).toContain(JSON.stringify(dependencyKeys.byPlan('acme', 'p1')));
+    expect(invalidatedKeys).toEqual(
+      expect.arrayContaining([
+        JSON.stringify(scheduleKeys.summary('acme', 'p1')),
+        JSON.stringify(activityKeys.listByPlan('acme', 'p1')),
+        JSON.stringify(baselineKeys.variance('acme', 'p1')),
+        JSON.stringify(dependencyKeys.byPlan('acme', 'p1')),
+      ]),
+    );
   });
 });

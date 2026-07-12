@@ -217,7 +217,13 @@ export function TsldPanel({
   const [confirmArrange, setConfirmArrange] = useState(false);
   const [arrangeChanges, setArrangeChanges] = useState<{ id: string; laneIndex: number }[]>([]);
   const [arranging, setArranging] = useState(false);
-  const [conflict, setConflict] = useState<string | null>(null);
+  // A rejected-edit banner message. `refreshable` gates the "Refresh" action: most conflicts are a
+  // stale server truth (refetch reconciles), but the local link-draw pre-check verdict comes from
+  // the already-loaded graph, so Refresh can't change it — that path sets `refreshable: false`.
+  const [conflict, setConflict] = useState<{ message: string; refreshable: boolean } | null>(null);
+  const clearConflict = (): void => setConflict(null);
+  const showConflict = (message: string, refreshable = true): void =>
+    setConflict({ message, refreshable });
   const [showHelp, setShowHelp] = useState(false);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
@@ -266,7 +272,8 @@ export function TsldPanel({
     activities,
     dataDate,
     setGhost: setPendingReposition,
-    setConflict,
+    // A nudge conflict is a stale-version reject (refreshable); null clears the banner.
+    setConflict: (message) => (message === null ? clearConflict() : showConflict(message)),
     announce,
     isPointerBusy: () => pointerRepositionBusyRef.current,
   });
@@ -337,7 +344,7 @@ export function TsldPanel({
       const current = activities.find((a) => a.id === selectedId);
       const startDay =
         current?.earlyStart && dataDate ? daysBetween(dataDate, current.earlyStart) : 0;
-      setConflict(null);
+      clearConflict();
       createReturnFocusRef.current = listboxRef.current; // return focus to the list, not the toolbar
       setPendingCreate({
         startDay,
@@ -406,13 +413,13 @@ export function TsldPanel({
   // Confirm: persist exactly the changes shown to the user (the route owns the batch write).
   const runAutoArrange = (): void => {
     if (!onAutoArrange || arrangeChanges.length === 0) return;
-    setConflict(null);
+    clearConflict();
     setArranging(true);
     void onAutoArrange(arrangeChanges)
       .then((outcome) => {
         setArranging(false);
         setConfirmArrange(false);
-        if (outcome.conflict) setConflict(outcome.conflict);
+        if (outcome.conflict) showConflict(outcome.conflict);
         if (outcome.applied) {
           const n = arrangeChanges.length;
           announce(`Lanes auto-arranged; ${n} ${n === 1 ? 'activity' : 'activities'} moved.`);
@@ -421,7 +428,7 @@ export function TsldPanel({
       .catch((err: unknown) => {
         setArranging(false);
         setConfirmArrange(false);
-        setConflict(err instanceof Error ? err.message : 'Couldn’t auto-arrange the lanes.');
+        showConflict(err instanceof Error ? err.message : 'Couldn’t auto-arrange the lanes.');
       });
   };
 
@@ -429,14 +436,14 @@ export function TsldPanel({
     // Ignore a new gesture while a create popover or a reposition is already in flight.
     if (pendingCreate || pendingReposition) return;
     if (intent.kind === 'create') {
-      setConflict(null);
+      clearConflict();
       setPendingCreate({ ...intent, anchor, saving: false, error: null });
       return;
     }
     if (intent.kind === 'reposition') {
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !onReposition) return;
-      setConflict(null);
+      clearConflict();
       // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
       // activity's current geometry so the optimistic ghost sits at the resulting day+lane.
       const span =
@@ -457,7 +464,7 @@ export function TsldPanel({
       })
         .then((outcome) => {
           setPendingReposition(null);
-          if (outcome.conflict) setConflict(outcome.conflict);
+          if (outcome.conflict) showConflict(outcome.conflict);
           // Announce "Moved" only when the move actually landed, so it never contradicts a
           // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed and,
           // for any time change (SNET + recalc), that the dates will update — matching the keyboard
@@ -474,7 +481,7 @@ export function TsldPanel({
         })
         .catch((err: unknown) => {
           setPendingReposition(null);
-          setConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+          showConflict(err instanceof Error ? err.message : 'Couldn’t move the activity.');
         })
         .finally(() => {
           pointerRepositionBusyRef.current = false;
@@ -483,7 +490,7 @@ export function TsldPanel({
     }
     if (intent.kind === 'link') {
       if (!onLink) return;
-      setConflict(null);
+      clearConflict();
       const pred = activities.find((a) => a.id === intent.predecessorId);
       const succ = activities.find((a) => a.id === intent.successorId);
       // Client-side legality pre-check (ADR-0026 D5): if the loaded graph already proves the link
@@ -496,9 +503,11 @@ export function TsldPanel({
         renderEdges,
       );
       if (illegal) {
-        const message = linkIllegalMessage(illegal, succ?.name ?? 'that activity');
-        setConflict(message);
-        announce(message);
+        // Not refreshable — the verdict is from the loaded graph, so Refresh can't change it. The
+        // banner's `role="alert"` announces it (no extra `announce()` — that would double-speak).
+        // NB: `self` is currently unreachable via pointer (the gesture machine never targets the
+        // source), kept as a mirror of the server invariant for future entry points.
+        showConflict(linkIllegalMessage(illegal), false);
         return;
       }
       void onLink({
@@ -507,14 +516,14 @@ export function TsldPanel({
         type: intent.type,
       })
         .then((outcome) => {
-          if (outcome.conflict) setConflict(outcome.conflict);
+          if (outcome.conflict) showConflict(outcome.conflict);
           // Announce only when the link was actually created (never on a cycle/duplicate reject).
           if (outcome.applied) {
             announce(`Linked “${pred?.name ?? 'activity'}” to “${succ?.name ?? 'activity'}”.`);
           }
         })
         .catch((err: unknown) => {
-          setConflict(err instanceof Error ? err.message : 'Couldn’t create the link.');
+          showConflict(err instanceof Error ? err.message : 'Couldn’t create the link.');
         });
     }
   };
@@ -529,7 +538,7 @@ export function TsldPanel({
       .then((outcome) => {
         closeCreate();
         announce(`Activity “${name}” added.`);
-        if (outcome.recalcConflict) setConflict(outcome.recalcConflict);
+        if (outcome.recalcConflict) showConflict(outcome.recalcConflict);
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Couldn’t add the activity.';
@@ -590,13 +599,13 @@ export function TsldPanel({
 
       {conflict ? (
         <EditConflictBanner
-          message={conflict}
-          onDismiss={() => setConflict(null)}
-          {...(onRefresh
+          message={conflict.message}
+          onDismiss={() => clearConflict()}
+          {...(conflict.refreshable && onRefresh
             ? {
                 onRefresh: () => {
                   onRefresh();
-                  setConflict(null);
+                  clearConflict();
                 },
               }
             : {})}

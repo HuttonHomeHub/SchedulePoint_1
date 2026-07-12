@@ -272,6 +272,9 @@ describe('paintInteractionLayer', () => {
       SIZE,
       PALETTE,
     );
+    // A ring IS drawn for a legal target (guards against the branch being dropped)…
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    // …and it is solid, never the illegal [3,3] dash.
     expect(ctx.setLineDash).not.toHaveBeenCalledWith([3, 3]);
   });
 

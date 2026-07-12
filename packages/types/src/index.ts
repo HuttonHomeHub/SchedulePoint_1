@@ -223,6 +223,18 @@ export const DEPENDENCY_TYPES = ['FS', 'SS', 'FF', 'SF'] as const;
 export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
 
 /**
+ * Canonical dependency-conflict messages (ADR-0021), shared so the same rejection reads
+ * identically wherever it surfaces: the API throws them, and the web TSLD link-draw pre-check
+ * shows them locally before the write. One voice — the client pre-check and the server 409/422
+ * fallback are verbatim identical (UX_STANDARDS copy & tone).
+ */
+export const DEPENDENCY_CONFLICT_MESSAGES = {
+  SELF: 'A dependency cannot link an activity to itself.',
+  CYCLE: 'This dependency would create a cycle in the schedule.',
+  DUPLICATE: 'A dependency of this type already exists between these activities.',
+} as const;
+
+/**
  * One entry in a batch lane-position write (TSLD M4): move activity `id` to `laneIndex`,
  * carrying the `version` it was read at for optimistic locking. The batch is all-or-nothing.
  */

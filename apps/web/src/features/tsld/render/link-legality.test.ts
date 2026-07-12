@@ -1,3 +1,4 @@
+import { DEPENDENCY_CONFLICT_MESSAGES } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { linkIllegalMessage, linkLegality, type LegalityEdge } from './link-legality';
@@ -35,7 +36,7 @@ describe('linkLegality', () => {
     // a→b→c exists; drawing c→a closes a 3-cycle.
     const edges = [fs('a', 'b'), fs('b', 'c')];
     expect(linkLegality('c', 'a', 'FS', edges)).toBe('cycle');
-    // …but c→a's absence means a→c is still fine (no path c⇒a… wait: a already reaches c, so c→a cycles; a→(new)d is fine).
+    // A forward link to a brand-new node stays legal (no path back to the predecessor).
     expect(linkLegality('a', 'd', 'FS', edges)).toBeNull();
   });
 
@@ -49,9 +50,9 @@ describe('linkLegality', () => {
 });
 
 describe('linkIllegalMessage', () => {
-  it('names the successor for duplicate and cycle', () => {
-    expect(linkIllegalMessage('duplicate', 'Pour slab')).toContain('Pour slab');
-    expect(linkIllegalMessage('cycle', 'Pour slab')).toMatch(/circular/i);
-    expect(linkIllegalMessage('self', 'Pour slab')).toMatch(/itself/i);
+  it('returns the shared server strings verbatim (one voice)', () => {
+    expect(linkIllegalMessage('self')).toBe(DEPENDENCY_CONFLICT_MESSAGES.SELF);
+    expect(linkIllegalMessage('duplicate')).toBe(DEPENDENCY_CONFLICT_MESSAGES.DUPLICATE);
+    expect(linkIllegalMessage('cycle')).toBe(DEPENDENCY_CONFLICT_MESSAGES.CYCLE);
   });
 });

@@ -384,7 +384,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
     fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
     // The doomed POST is never made; the banner (and live region) explain why locally.
-    expect(await screen.findByRole('alert')).toHaveTextContent(/already has this link/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /already exists between these activities/i,
+    );
     expect(onLink).not.toHaveBeenCalled();
   });
 

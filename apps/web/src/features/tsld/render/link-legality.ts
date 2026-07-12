@@ -1,4 +1,4 @@
-import type { DependencyType } from '@repo/types';
+import { DEPENDENCY_CONFLICT_MESSAGES, type DependencyType } from '@repo/types';
 
 /**
  * Client-side link-draw legality pre-check (ADR-0026 D5). Pure, so the canvas can ring only
@@ -65,14 +65,18 @@ function canReach(from: string, to: string, edges: readonly LegalityEdge[]): boo
   return false;
 }
 
-/** Human-readable reason for the conflict banner + live-region announcement. */
-export function linkIllegalMessage(reason: LinkIllegalReason, successorName: string): string {
+/**
+ * The conflict-banner message for an illegal link — the **exact** string the server would return
+ * for the same rejection ({@link DEPENDENCY_CONFLICT_MESSAGES}), so the client pre-check and the
+ * server 409/422 fallback read identically (one voice, UX review).
+ */
+export function linkIllegalMessage(reason: LinkIllegalReason): string {
   switch (reason) {
     case 'self':
-      return 'An activity can’t depend on itself.';
+      return DEPENDENCY_CONFLICT_MESSAGES.SELF;
     case 'duplicate':
-      return `“${successorName}” already has this link.`;
+      return DEPENDENCY_CONFLICT_MESSAGES.DUPLICATE;
     case 'cycle':
-      return `Linking to “${successorName}” would create a circular dependency.`;
+      return DEPENDENCY_CONFLICT_MESSAGES.CYCLE;
   }
 }
