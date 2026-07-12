@@ -18,7 +18,9 @@ export function AuthedLayout(): React.ReactElement {
     <AnnouncerProvider>
       <div className="flex min-h-dvh flex-col">
         <AppHeader />
-        <Outlet />
+        <main className="flex flex-1 flex-col">
+          <Outlet />
+        </main>
       </div>
     </AnnouncerProvider>
   );

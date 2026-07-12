@@ -89,11 +89,11 @@ function ShellFrame(): React.ReactElement {
               <RailResizer width={rail.width} onResize={rail.setWidth} />
             </>
           )}
-          {/* The single workspace region. Routes render their own <main> here for now;
-              M3 migrates them to drop their per-page chrome. */}
-          <div className="flex min-w-0 flex-1 flex-col">
+          {/* The single workspace region — the one <main> for the page; routed screens
+              render their content into it (M3). */}
+          <main className="flex min-w-0 flex-1 flex-col">
             <Outlet />
-          </div>
+          </main>
         </div>
       </div>
 

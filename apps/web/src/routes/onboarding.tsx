@@ -9,7 +9,7 @@ export function OnboardingScreen(): React.ReactElement {
   const router = useRouter();
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center p-6">
+    <div className="mx-auto flex max-w-lg flex-1 flex-col justify-center p-6">
       <Card>
         <CardHeader>
           <CardTitle>Create your organisation</CardTitle>
@@ -30,6 +30,6 @@ export function OnboardingScreen(): React.ReactElement {
           />
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }

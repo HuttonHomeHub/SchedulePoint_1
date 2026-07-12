@@ -23,15 +23,15 @@ export function ProjectDetailScreen(): React.ReactElement {
 
   if (project.isPending) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
         <Spinner label="Loading project…" />
-      </main>
+      </div>
     );
   }
 
   if (project.isError) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
         <Breadcrumbs
           items={[
             { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -49,7 +49,7 @@ export function ProjectDetailScreen(): React.ReactElement {
             Back to clients
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -64,7 +64,7 @@ export function ProjectDetailScreen(): React.ReactElement {
   ];
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <Breadcrumbs items={crumbs} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -79,6 +79,6 @@ export function ProjectDetailScreen(): React.ReactElement {
       <div className="mt-3">
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
       </div>
-    </main>
+    </div>
   );
 }
