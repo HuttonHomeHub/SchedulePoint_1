@@ -1,7 +1,7 @@
 # Implementation Plan: Persistent hierarchy navigator
 
 - **Feature spec:** [`docs/specs/hierarchy-navigator.md`](../specs/hierarchy-navigator.md)
-- **Status:** Approved — implemented (M1 + M2 shipped; navigator on by default). M3 view-migration + C2 virtualization tracked as fast-follows.
+- **Status:** Approved — implemented (M1 + M2 shipped; navigator on by default). C2 virtualization + M3 view-migration shipped.
 - **Owner:** _TBD_
 - **Related ADR:** ADR-0029 — Persistent app-shell + hierarchy navigator (must be accepted before/with build)
 

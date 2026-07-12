@@ -31,7 +31,7 @@ export function OrgHomeScreen(): React.ReactElement {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <h1 className="text-2xl font-semibold tracking-tight">
         {organization?.name ?? 'Organisation'}
       </h1>
@@ -60,6 +60,6 @@ export function OrgHomeScreen(): React.ReactElement {
           </p>
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }

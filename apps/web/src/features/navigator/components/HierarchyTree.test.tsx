@@ -5,6 +5,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HierarchyTree } from './HierarchyTree';
 
+// The virtualizer measures a scroll element, which jsdom reports as 0×0 (so it would
+// window every row out). It is battle-tested and exercised end-to-end by the Playwright
+// journeys; here we stub it to a pass-through that renders every row, so this suite
+// tests the component's own logic (rendering, keyboard, selection, deep-link).
+vi.mock('@tanstack/react-virtual', () => ({
+  defaultRangeExtractor: (range: { startIndex: number; endIndex: number }) =>
+    Array.from({ length: range.endIndex - range.startIndex + 1 }, (_, i) => range.startIndex + i),
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 28,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({
+        index,
+        key: index,
+        start: index * 28,
+        size: 28,
+      })),
+    scrollToIndex: () => {},
+  }),
+}));
+
 const navigate = vi.fn();
 let params: Record<string, string> = {};
 

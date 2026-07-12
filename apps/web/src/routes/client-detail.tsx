@@ -16,15 +16,15 @@ export function ClientDetailScreen(): React.ReactElement {
 
   if (client.isPending) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
         <Spinner label="Loading client…" />
-      </main>
+      </div>
     );
   }
 
   if (client.isError) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
         <Breadcrumbs
           items={[
             { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -42,12 +42,12 @@ export function ClientDetailScreen(): React.ReactElement {
             Back to clients
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <Breadcrumbs
         items={[
           { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -67,6 +67,6 @@ export function ClientDetailScreen(): React.ReactElement {
       <div className="mt-3">
         <ProjectsTable orgSlug={orgSlug} clientId={clientId} canWrite={canWrite} />
       </div>
-    </main>
+    </div>
   );
 }

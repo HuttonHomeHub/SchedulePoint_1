@@ -19,7 +19,7 @@ export function WelcomeEmptyState({
   isNewOrg: boolean;
 }): React.ReactElement {
   return (
-    <main className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden p-6">
+    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden p-6">
       <ScheduleBackdrop />
       <Card className="relative z-10 max-w-md text-center">
         <CardHeader className="items-center gap-2">
@@ -58,7 +58,7 @@ export function WelcomeEmptyState({
           )}
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }
 

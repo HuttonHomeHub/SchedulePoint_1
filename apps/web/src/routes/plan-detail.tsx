@@ -294,15 +294,15 @@ export function PlanDetailScreen(): React.ReactElement {
 
   if (plan.isPending) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
         <Spinner label="Loading plan…" />
-      </main>
+      </div>
     );
   }
 
   if (plan.isError) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
         <Breadcrumbs
           items={[
             { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -320,7 +320,7 @@ export function PlanDetailScreen(): React.ReactElement {
             Back to clients
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -340,7 +340,7 @@ export function PlanDetailScreen(): React.ReactElement {
   ];
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <Breadcrumbs items={crumbs} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">{plan.data.name}</h1>
@@ -470,6 +470,6 @@ export function PlanDetailScreen(): React.ReactElement {
           plan={plan.data}
         />
       ) : null}
-    </main>
+    </div>
   );
 }

@@ -11,7 +11,7 @@ export function ClientsScreen(): React.ReactElement {
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <Breadcrumbs items={[{ label: 'Clients' }]} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
@@ -20,6 +20,6 @@ export function ClientsScreen(): React.ReactElement {
       <div className="mt-6">
         <ClientsTable orgSlug={orgSlug} canWrite={canWrite} />
       </div>
-    </main>
+    </div>
   );
 }

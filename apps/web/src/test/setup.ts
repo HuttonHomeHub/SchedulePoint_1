@@ -53,6 +53,22 @@ if (typeof HTMLCanvasElement !== 'undefined') {
   } as typeof HTMLCanvasElement.prototype.getContext;
 }
 
+// jsdom implements neither ResizeObserver nor Element.scrollTo, which the navigator
+// tree's virtualizer (@tanstack/react-virtual) relies on. Stub them: the observer
+// delivers one measurement (from getBoundingClientRect) on observe so the virtualizer
+// sizes its viewport and renders the windowed rows; scrollToIndex becomes a no-op.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    constructor(_callback: ResizeObserverCallback) {}
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
+}
+if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = function scrollTo(): void {};
+}
+
 afterEach(() => {
   cleanup();
 });
