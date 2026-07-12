@@ -9,6 +9,7 @@ import {
   type GestureState,
   type Modifiers,
 } from '../interaction/gesture-machine';
+import { linkLegality } from '../render/link-legality';
 import {
   paintInteractionLayer,
   paintScene,
@@ -110,12 +111,14 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
   return null;
 }
 
-/** The live dependency rubber-band (anchor → pointer + target highlight), or null when not linking. */
+/** The live dependency rubber-band (anchor → pointer + target highlight), or null when not linking.
+ * When a target is hovered, its ring reflects link legality (ADR-0026 D5) computed from `edges`. */
 function liveLink(
   state: GestureState,
   view: Viewport,
   activities: readonly RenderActivity[],
   dataDate: string,
+  edges: readonly RenderEdge[],
 ): LinkOverlay | null {
   if (state.kind !== 'linking') return null;
   const source = activities.find((a) => a.id === state.sourceId);
@@ -123,7 +126,16 @@ function liveLink(
   if (!sourceRect) return null;
   const target = state.targetId ? activities.find((a) => a.id === state.targetId) : undefined;
   const targetRect = (target && activityRect(target, view, dataDate)) || null;
-  return { from: edgeAnchor(sourceRect, state.sourceHandle), to: state.point, targetRect };
+  const targetLegal =
+    state.targetId === null
+      ? true
+      : linkLegality(state.sourceId, state.targetId, state.type, edges) === null;
+  return {
+    from: edgeAnchor(sourceRect, state.sourceHandle),
+    to: state.point,
+    targetRect,
+    targetLegal,
+  };
 }
 
 /** Build the body-grab (current day span + lane) the machine needs to reposition an activity. */
@@ -299,6 +311,7 @@ export function TsldCanvas({
             viewRef.current,
             sceneRef.current.activities,
             sceneRef.current.dataDate,
+            sceneRef.current.edges,
           ),
         };
         paintInteractionLayer(ictx, overlay, size, palette, dpr);

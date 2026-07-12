@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Activity } from '@prisma/client';
-import type { PageMeta } from '@repo/types';
+import { DEPENDENCY_CONFLICT_MESSAGES, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -142,7 +142,7 @@ export class DependenciesService {
 
     // A link cannot join an activity to itself (also a DB CHECK, defence-in-depth).
     if (dto.predecessorId === dto.successorId) {
-      throw new ValidationError('A dependency cannot link an activity to itself.', {
+      throw new ValidationError(DEPENDENCY_CONFLICT_MESSAGES.SELF, {
         reason: DEPENDENCY_CONFLICT.SELF_DEPENDENCY,
       });
     }
@@ -162,7 +162,7 @@ export class DependenciesService {
         await this.editLock.assertHoldsPen(principal, plan.id, organization.id, tx);
         const edges = await this.dependencies.findActiveEdgesByPlan(organization.id, plan.id, tx);
         if (wouldCreateCycle(edges, dto.predecessorId, dto.successorId)) {
-          throw new ConflictError('This dependency would create a cycle in the schedule.', {
+          throw new ConflictError(DEPENDENCY_CONFLICT_MESSAGES.CYCLE, {
             reason: DEPENDENCY_CONFLICT.CYCLE_DETECTED,
           });
         }
@@ -282,12 +282,9 @@ export class DependenciesService {
   /** A Prisma unique-violation from the partial (pred, succ, type) index → 409. */
   private mapWriteError(error: unknown): unknown {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return new ConflictError(
-        'A dependency of this type already exists between these activities.',
-        {
-          reason: DEPENDENCY_CONFLICT.DUPLICATE_DEPENDENCY,
-        },
-      );
+      return new ConflictError(DEPENDENCY_CONFLICT_MESSAGES.DUPLICATE, {
+        reason: DEPENDENCY_CONFLICT.DUPLICATE_DEPENDENCY,
+      });
     }
     return error;
   }

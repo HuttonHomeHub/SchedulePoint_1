@@ -8,7 +8,12 @@ import {
 } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
-import { activityKeys, baselineKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
+import {
+  activityKeys,
+  baselineKeys,
+  dependencyKeys,
+  scheduleKeys,
+} from '@/lib/query/hierarchy-keys';
 
 export { scheduleKeys };
 
@@ -37,8 +42,12 @@ export function useScheduleSummary(
 /**
  * Recalculate a plan's CPM schedule (Planner/Org Admin). On success, the API has
  * rewritten the engine-owned columns, so refetch the summary and the activities list to
- * show the new dates, float and critical path — and the baseline variance, which is
- * measured against those recomputed dates and would otherwise go stale.
+ * show the new dates, float and critical path — the baseline variance, which is
+ * measured against those recomputed dates and would otherwise go stale — and the
+ * dependencies, whose engine-owned `isDriving` flag the recalc also rewrites (M3). The
+ * dependency refetch is what keeps the driving-arrow styling live after a
+ * reposition-in-time or create edit, which recalc but don't otherwise touch the
+ * dependency cache (link mutations invalidate it themselves).
  */
 export function useRecalculate(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
@@ -53,6 +62,7 @@ export function useRecalculate(orgSlug: string, planId: string) {
         queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
+        queryClient.invalidateQueries({ queryKey: dependencyKeys.byPlan(orgSlug, planId) }),
       ]),
   });
 }

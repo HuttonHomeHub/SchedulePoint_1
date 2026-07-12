@@ -344,6 +344,52 @@ describe('TsldPanel editing (M2, flag on)', () => {
     );
   });
 
+  it('short-circuits an illegal (duplicate) link on drop — no POST, banner explains (D5 pre-check)', async () => {
+    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    const succ = activity({
+      id: 'a2',
+      name: 'Pour',
+      laneIndex: 1,
+      earlyStart: '2026-01-06',
+      earlyFinish: '2026-01-08',
+    });
+    // An a1→a2 FS edge already exists, so drawing it again is a duplicate the client can pre-empt.
+    const existing: DependencySummary[] = [
+      {
+        id: 'e1',
+        planId: 'p1',
+        type: 'FS',
+        lagDays: 0,
+        isDriving: false,
+        version: 1,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+        predecessor: { id: 'a1', code: null, name: 'Survey' },
+        successor: { id: 'a2', code: null, name: 'Pour' },
+      },
+    ];
+    const utils = render(
+      <TsldPanel
+        activities={[activity(), succ]}
+        dependencies={existing}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onLink={onLink}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    // The doomed POST is never made; the banner (and live region) explain why locally.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /already exists between these activities/i,
+    );
+    expect(onLink).not.toHaveBeenCalled();
+  });
+
   it('picks SS when Shift is held during the link drag', async () => {
     const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     const succ = activity({

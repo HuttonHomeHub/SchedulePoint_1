@@ -44,8 +44,12 @@ Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
   honours them; add the activity-form UI + near-critical shading to complete the loop.
 - **Notes.** Attach notes to any entity (client/project/plan/activity) — the weekly
   progress journey.
-- **The TSLD graphical canvas** — the flagship primary editing surface (design-first:
-  Canvas 2D vs WebGL is an ADR; layout/lane persistence). Large, multi-milestone.
+- **The TSLD graphical canvas** — the flagship primary editing surface (ADR-0026).
+  **M1–M4 delivered** (read render; on-canvas create/move/link/relane; live critical
+  path + driving-vs-non-driving arrows with a non-colour encoding; lane persistence +
+  auto-pack) — the editing parts behind `VITE_TSLD_EDITING` (staged-off, see the
+  enablement runbook). Remaining: M5 accessibility hardening polish and the deferred
+  per-activity driving summary in the parallel listbox.
 - **Gantt view** — the secondary tabular projection of the same model.
 - **Plan edit-lock** (single-editor hand-off) — **delivered** (ADR-0028): the server
   lease + 423 write-gate and the web "pen" ship behind `PLAN_EDIT_LOCK_ENFORCED` /
