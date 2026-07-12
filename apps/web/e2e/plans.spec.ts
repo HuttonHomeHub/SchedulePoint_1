@@ -26,7 +26,7 @@ test('a user can create a plan and open its detail (accessible)', async ({ page 
 
   // Client → project.
   await page.getByRole('link', { name: 'Clients', exact: true }).click();
-  await page.getByRole('button', { name: 'New client' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Northgate');
   await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
   await page.getByRole('link', { name: 'Northgate' }).click();

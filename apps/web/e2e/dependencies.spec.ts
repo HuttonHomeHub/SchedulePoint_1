@@ -26,7 +26,7 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
 
   await page.getByRole('link', { name: 'Clients', exact: true }).click();
-  await page.getByRole('button', { name: 'New client' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Northgate');
   await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
   await page.getByRole('link', { name: 'Northgate' }).click();
@@ -77,7 +77,7 @@ test('a planner adds a dependency, is stopped from making a loop, and removes it
   await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
 
   await page.getByRole('link', { name: 'Clients', exact: true }).click();
-  await page.getByRole('button', { name: 'New client' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Northgate');
   await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
   await page.getByRole('link', { name: 'Northgate' }).click();

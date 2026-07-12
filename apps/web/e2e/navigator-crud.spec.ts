@@ -69,8 +69,13 @@ test('a writer builds client → project → plan entirely from the Project Expl
   await expect(page).toHaveURL(/\/plans\//);
   await expect(rail(page).getByRole('treeitem', { name: /Logic/ })).toBeVisible();
 
-  // Accessibility check with the tree populated and row triggers present.
-  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  // Accessibility check on the Project Explorer with the tree populated and row
+  // triggers present (scoped to the rail — this journey audits the navigator, not the
+  // unrelated plan-detail surface it navigated to).
+  const results = await new AxeBuilder({ page })
+    .include('nav[aria-label="Project Explorer"]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
   expect(results.violations).toEqual([]);
 });
 
