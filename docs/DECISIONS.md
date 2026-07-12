@@ -439,3 +439,25 @@ peer today, so a partial banner would have shown dead affordances; the component
 landed with the controls. What remains M3 is only the multi-actor Playwright hand-off journey
 (TECH_DEBT #27). The row-6 grace countdown is an aria-hidden advisory; per-action announcements use
 the banner's own `role="status"` live region as the single source (no duplicate `useAnnounce`).
+
+## TSLD editing + edit-lock pen: web flags default ON (2026-07-12)
+
+With every pre-enablement gate green — the flag-on Playwright harness (`test:e2e:edit`),
+the a11y sign-off, and the manual cross-browser `Alt+←/→` history-suppression sweep
+(Firefox/Safari/Edge, TECH_DEBT #25a) — the two **web** feature flags now **default ON**
+in the shipped bundle (`apps/web/src/config/env.ts`): `VITE_TSLD_EDITING` (on-canvas
+create/move/link/relane) and `VITE_PLAN_EDIT_LOCK` (the edit-lock "pen"). A new
+`flagDefaultOn` reader treats them as enabled unless explicitly set to `false`/`0`
+(rollback / opt-out).
+
+The server-side write-gate `PLAN_EDIT_LOCK_ENFORCED` **stays default-off** — the single
+deliberate ops switch, enabled only after a bundle with the pen on is live (ADR-0028 §9
+ordering; enabling it ahead of the web bundle would 423 the shipped
+activities-table / dependency / recalculate flows). This is the ADR-§9-faithful path:
+default flips step 1 (pen) and step 3 (canvas) on; step 2 (enforcement) remains config.
+
+Testing split: the existing `playwright.config.ts` suite is pinned **flags-off**
+(`VITE_TSLD_EDITING=false VITE_PLAN_EDIT_LOCK=false`) as the read-only / role-only
+baseline regression net; the flags-on editing surface keeps its own `playwright.edit.config.ts`
+harness. Recorded as an addendum to **ADR-0028 §9** (no new ADR — the model is unchanged;
+only the web defaults flipped).

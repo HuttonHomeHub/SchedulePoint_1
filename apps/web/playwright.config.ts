@@ -52,6 +52,12 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
+            // This is the FLAGS-OFF baseline suite: it pins the editing flags off
+            // so the read-only TSLD surface and the role-only (no-pen) editing
+            // journeys stay covered even though both now default ON in the shipped
+            // bundle (apps/web/src/config/env.ts, 2026-07-12). The flags-ON editing
+            // surface has its own harness, playwright.edit.config.ts (test:e2e:edit).
+            env: { VITE_TSLD_EDITING: 'false', VITE_PLAN_EDIT_LOCK: 'false' },
           },
         ],
       }),
