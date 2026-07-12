@@ -185,6 +185,90 @@ describe('paintScene', () => {
     expect(editing.strokeRect).toHaveBeenCalledTimes(1);
   });
 
+  // The pin is a triangle whose tip (the last lineTo) sits on the constrained edge.
+  const pinTipX = (ctx: ReturnType<typeof mockCtx>): number => {
+    const calls = ctx.lineTo.mock.calls;
+    return calls[calls.length - 1]![0] as number;
+  };
+
+  it('draws a constraint pin on the START edge for a start-anchored constraint', () => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      { activities: [task({ constraint: 'start' })], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fill).toHaveBeenCalledTimes(1); // the pin (a plain bar body is a fillRect)
+    // A 4-day task starting 2 Jan at pxPerDay 12, originX 60: start edge left of the finish edge.
+    expect(pinTipX(ctx)).toBeCloseTo(72); // rect.x = originX + 1 day * 12
+  });
+
+  it('draws the pin on the FINISH edge for a finish-anchored constraint (a different edge)', () => {
+    const start = mockCtx();
+    paintScene(
+      start,
+      { activities: [task({ constraint: 'start' })], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const finish = mockCtx();
+    paintScene(
+      finish,
+      { activities: [task({ constraint: 'finish' })], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The finish pin sits to the right of the start pin — the branch really uses the anchor.
+    expect(pinTipX(finish)).toBeGreaterThan(pinTipX(start));
+  });
+
+  it('marks a constrained milestone at its centre (an extra fill beyond the diamond)', () => {
+    const plain = mockCtx();
+    paintScene(
+      plain,
+      {
+        activities: [task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02' })],
+        edges: [],
+        dataDate: DATA_DATE,
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(plain.fill).toHaveBeenCalledTimes(1); // just the diamond
+    const pinned = mockCtx();
+    paintScene(
+      pinned,
+      {
+        activities: [
+          task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02', constraint: 'finish' }),
+        ],
+        edges: [],
+        dataDate: DATA_DATE,
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(pinned.fill).toHaveBeenCalledTimes(2); // diamond + pin
+  });
+
+  it('leaves an unconstrained bar plain (no pin, so no path fill)', () => {
+    const plain = mockCtx();
+    paintScene(
+      plain,
+      { activities: [task()], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(plain.fill).not.toHaveBeenCalled();
+  });
+
   it('culls off-screen activities (no fillRect, not in the visible set)', () => {
     const ctx = mockCtx();
     const scene: TsldScene = {

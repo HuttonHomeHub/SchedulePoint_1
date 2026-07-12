@@ -1,5 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { ActivitySummary } from '@repo/types';
+import {
+  SELECTABLE_CONSTRAINT_TYPES,
+  isParkedConstraintType,
+  type ActivitySummary,
+} from '@repo/types';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -7,7 +11,6 @@ import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
-  CONSTRAINT_TYPES,
   CONSTRAINT_TYPE_LABELS,
   activityFormSchema,
   isMilestoneType,
@@ -20,6 +23,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
 /**
  * Create-or-edit dialog for an activity DEFINITION (Planner/Org Admin). Progress
@@ -84,6 +88,11 @@ export function ActivityFormDialog({
 
   const type = useWatch({ control, name: 'type' });
   const constraintType = useWatch({ control, name: 'constraintType' });
+  // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off
+  // option so opening the form never coerces it (US-2). Derived from the live field value, so
+  // it appears when a parked value is selected and disappears once the planner changes away.
+  const parkedValue =
+    constraintType && isParkedConstraintType(constraintType) ? constraintType : null;
 
   const onSubmit = handleSubmit((values) => {
     if (isEdit) {
@@ -166,16 +175,33 @@ export function ActivityFormDialog({
           <Select
             id="activity-constraint-type"
             aria-invalid={errors.constraintType ? true : undefined}
-            aria-describedby={errors.constraintType ? 'activity-constraint-type-error' : undefined}
+            aria-describedby={
+              errors.constraintType
+                ? 'activity-constraint-help activity-constraint-type-error'
+                : 'activity-constraint-help'
+            }
             {...register('constraintType')}
           >
             <option value="">None</option>
-            {CONSTRAINT_TYPES.map((value) => (
+            {/* Only the six kinds the scheduler applies exactly as labelled (the engine parks
+                MANDATORY_* — see @repo/types SELECTABLE_CONSTRAINT_TYPES), so a planner never
+                sets a constraint that behaves differently than it reads. */}
+            {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
               <option key={value} value={value}>
                 {CONSTRAINT_TYPE_LABELS[value]}
               </option>
             ))}
+            {/* An activity that already carries a parked value keeps it as an honest, labelled
+                option so opening the form never silently changes it; it drops out once the
+                planner picks something else. Driven by the live field value, not the original. */}
+            {parkedValue ? (
+              <option value={parkedValue}>{PARKED_CONSTRAINT_LABELS[parkedValue]}</option>
+            ) : null}
           </Select>
+          <p id="activity-constraint-help" className="text-muted-foreground text-sm">
+            Pins the activity’s start or finish to a date. Only constraints the scheduler applies
+            exactly as named are listed (an existing value keeps its own label).
+          </p>
           {errors.constraintType?.message ? (
             <p id="activity-constraint-type-error" className="text-destructive-text text-sm">
               {errors.constraintType.message}

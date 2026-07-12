@@ -175,6 +175,28 @@ export type ConstraintType =
   'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO' | 'MANDATORY_START' | 'MANDATORY_FINISH';
 
 /**
+ * The **six** constraint kinds the CPM engine honours exactly as labelled — its
+ * `ModerateConstraint` set. Keep in lock-step with the engine's `normaliseConstraint`
+ * (`apps/api/src/modules/schedule/engine/constraints.ts`): those there map 1:1 to a
+ * moderate kind, whereas the two `MANDATORY_*` kinds are **parked** (silently applied
+ * as `MSO`/`MFO`, ADR-0023 §6). The web form offers only these for a new/changed
+ * constraint, so it never sets a type that behaves differently than it reads
+ * (`MANDATORY_*` stay valid enum values — imports/other tools may set them — but are
+ * not newly selectable).
+ */
+export const SELECTABLE_CONSTRAINT_TYPES = ['SNET', 'SNLT', 'FNET', 'FNLT', 'MSO', 'MFO'] as const;
+
+/** The two constraint kinds the engine parks as their moderate equivalents (ADR-0023 §6). */
+export const PARKED_CONSTRAINT_TYPES = ['MANDATORY_START', 'MANDATORY_FINISH'] as const;
+
+/** True for a constraint kind the engine parks (applies as `MSO`/`MFO`, not as labelled). */
+export function isParkedConstraintType(
+  type: ConstraintType,
+): type is (typeof PARKED_CONSTRAINT_TYPES)[number] {
+  return type === 'MANDATORY_START' || type === 'MANDATORY_FINISH';
+}
+
+/**
  * An activity — the leaf of the Org → Client → Project → Plan → Activity
  * hierarchy and the atomic unit of a schedule. The CPM output fields
  * (early/late dates, total float, critical flags) are **engine-owned**: null/false

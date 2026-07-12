@@ -13,6 +13,7 @@ import {
 import { packLanes } from '../render/auto-pack';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { daysBetween, type Point } from '../render/render-model';
+import { toRenderActivities, toRenderEdges } from '../render/to-render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
@@ -23,29 +24,6 @@ import { TsldToolbar } from './TsldToolbar';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import type { RenderActivity, RenderEdge } from '@/features/tsld/render/render-model';
-
-/** Map the API shapes to the render model's minimal shapes. */
-function toRenderActivities(activities: readonly ActivitySummary[]): RenderActivity[] {
-  return activities.map((a) => ({
-    id: a.id,
-    type: a.type,
-    laneIndex: a.laneIndex,
-    earlyStart: a.earlyStart,
-    earlyFinish: a.earlyFinish,
-    isCritical: a.isCritical,
-    isNearCritical: a.isNearCritical,
-  }));
-}
-
-function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[] {
-  return dependencies.map((d) => ({
-    predecessorId: d.predecessor.id,
-    successorId: d.successor.id,
-    type: d.type,
-    isDriving: d.isDriving,
-  }));
-}
 
 /**
  * The visible key for the diagram, mirroring the canvas exactly: each activity class is a
@@ -54,7 +32,9 @@ function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[]
  * design tokens the painter uses, so the key stays truthful across themes.
  */
 type LegendItem =
-  { label: string; swatch: React.CSSProperties } | { label: string; line: 'solid' | 'dashed' };
+  | { label: string; swatch: React.CSSProperties }
+  | { label: string; line: 'solid' | 'dashed' }
+  | { label: string; pin: true };
 
 const LEGEND: ReadonlyArray<LegendItem> = [
   {
@@ -72,6 +52,9 @@ const LEGEND: ReadonlyArray<LegendItem> = [
     },
   },
   { label: 'On schedule', swatch: { backgroundColor: 'var(--color-primary)' } },
+  // A set date constraint marks its pinned edge with a small pin, matching the canvas (a
+  // shape cue, not colour — WCAG 1.4.1).
+  { label: 'Constraint', pin: true },
   // Logic ties, matching the canvas: a driving link (heavier solid) sets its
   // successor's start; a non-driving link (thin dashed) carries slack (M3).
   { label: 'Driving link', line: 'solid' },
@@ -619,7 +602,22 @@ export function TsldPanel({
         >
           {LEGEND.map((item) => (
             <li key={item.label} className="flex items-center gap-1.5">
-              {'line' in item ? (
+              {'pin' in item ? (
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-3 w-5 items-center justify-center"
+                >
+                  <span
+                    style={{
+                      width: 0,
+                      height: 0,
+                      borderLeft: '4px solid transparent',
+                      borderRight: '4px solid transparent',
+                      borderTop: '5px solid var(--color-muted-foreground)',
+                    }}
+                  />
+                </span>
+              ) : 'line' in item ? (
                 <span aria-hidden="true" className="inline-flex h-3 w-5 items-center">
                   <span
                     className="w-full"

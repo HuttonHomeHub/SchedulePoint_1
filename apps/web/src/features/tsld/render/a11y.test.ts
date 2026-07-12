@@ -79,6 +79,22 @@ describe('describeActivity (Tier 1)', () => {
     );
   });
 
+  it('spells out a set date constraint (the spoken equivalent of the canvas pin)', () => {
+    expect(
+      describeActivity(activity({ constraintType: 'SNET', constraintDate: '2026-02-01' })),
+    ).toContain(', Start no earlier than 01 Feb 2026');
+    // A parked value is spoken honestly (how the engine applies it), matching the pin + table.
+    expect(
+      describeActivity(
+        activity({ constraintType: 'MANDATORY_START', constraintDate: '2026-02-01' }),
+      ),
+    ).toContain(', Mandatory start — applied as Must start on 01 Feb 2026');
+    // No clause when the pair is incomplete (no active constraint).
+    expect(
+      describeActivity(activity({ constraintType: 'SNET', constraintDate: null })),
+    ).not.toContain('Start no earlier');
+  });
+
   it('states plain float, singular for one day, and omits float when uncomputed', () => {
     expect(describeActivity(activity({ totalFloat: 1 }))).toContain(', 1 day float');
     expect(describeActivity(activity({ totalFloat: null }))).toBe(

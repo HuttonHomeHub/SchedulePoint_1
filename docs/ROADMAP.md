@@ -35,13 +35,17 @@ keep `main` releasable.
 - **M7 — Baselines.** Named plan-of-record snapshots (snapshot-copy model), one active
   baseline per plan, server-side working-day variance, web baselines panel + variance
   columns (ADR-0025).
+- **Date constraints (web).** The activity form now offers only the six constraint types
+  the engine honours as-labelled (parked `MANDATORY_*` no longer newly selectable; a
+  legacy value is shown honestly, never silently coerced); a set constraint is surfaced
+  in the activities table and as a pin on the TSLD canvas, and "parked constraints" is
+  explained in the schedule summary. No API/engine change (ADR-0023 §6 already governs
+  the semantics; near-critical shading shipped in M6).
 
 ## Next (candidate order — not yet committed)
 
 Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
 
-- **Date constraints (web).** Constraint fields exist in the schema/API and the engine
-  honours them; add the activity-form UI + near-critical shading to complete the loop.
 - **Notes.** Attach notes to any entity (client/project/plan/activity) — the weekly
   progress journey.
 - **The TSLD graphical canvas** — the flagship primary editing surface (ADR-0026).

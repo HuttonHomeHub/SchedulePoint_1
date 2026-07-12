@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityFormDialog } from './ActivityFormDialog';
@@ -90,6 +90,61 @@ describe('ActivityFormDialog', () => {
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
     expect(body).toMatchObject({ constraintType: 'SNET', constraintDate: '2026-06-01' });
+  });
+
+  it('offers only the six honoured constraint types (no parked MANDATORY_*)', () => {
+    renderDialog();
+    const select = screen.getByLabelText('Constraint (optional)');
+    const values = within(select)
+      .getAllByRole('option')
+      .map((o) => (o as HTMLOptionElement).value);
+    expect(values).toEqual(['', 'SNET', 'SNLT', 'FNET', 'FNLT', 'MSO', 'MFO']);
+    expect(values).not.toContain('MANDATORY_START');
+    expect(values).not.toContain('MANDATORY_FINISH');
+    // The field explains itself (G3).
+    expect(
+      screen.getByText(/Only constraints the scheduler applies exactly as named/),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a legacy parked value honestly and round-trips it on a no-op save (no silent coercion)', async () => {
+    const parked: ActivitySummary = {
+      ...ACTIVITY,
+      constraintType: 'MANDATORY_START',
+      constraintDate: '2026-05-01',
+    };
+    renderDialog({ activity: parked });
+    const select = screen.getByLabelText('Constraint (optional)');
+    // The current value is shown as an honest, pre-selected option (not silently changed to MSO).
+    expect(select).toHaveValue('MANDATORY_START');
+    expect(
+      within(select).getByRole('option', { name: 'Mandatory start — applied as Must start on' }),
+    ).toBeInTheDocument();
+    // Save without touching the constraint → the stored value round-trips unchanged.
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string)).toMatchObject({
+      version: 4,
+      constraintType: 'MANDATORY_START',
+      constraintDate: '2026-05-01',
+    });
+  });
+
+  it('drops the parked option once the planner switches to a honoured type', () => {
+    const parked: ActivitySummary = {
+      ...ACTIVITY,
+      constraintType: 'MANDATORY_FINISH',
+      constraintDate: '2026-05-01',
+    };
+    renderDialog({ activity: parked });
+    const select = screen.getByLabelText('Constraint (optional)');
+    expect(within(select).getAllByRole('option')).toHaveLength(8); // None + 6 + the parked one
+    fireEvent.change(select, { target: { value: 'FNLT' } });
+    // The honest legacy option disappears — the planner can't re-pick a parked type.
+    expect(within(select).getAllByRole('option')).toHaveLength(7); // None + 6
+    expect(
+      within(select).queryByRole('option', { name: /Mandatory finish/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('seeds edit mode and clears the constraint by sending nulls with the version', async () => {

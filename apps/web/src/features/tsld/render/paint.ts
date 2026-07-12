@@ -44,6 +44,10 @@ export interface TsldScene {
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
 const EDGE_HANDLE_MARK = 3;
 
+/** Width / height (px) of the little triangular pin marking a bar's constrained edge. */
+const CONSTRAINT_PIN_W = 7;
+const CONSTRAINT_PIN_H = 5;
+
 /** The minimal 2D-context surface the painter uses (kept small so it is easy to mock/test). */
 export type Ctx2D = Pick<
   CanvasRenderingContext2D,
@@ -83,6 +87,21 @@ function criticalDash(activity: RenderActivity): number[] | null {
 function drawPolyline(ctx: Ctx2D, points: Point[]): void {
   ctx.moveTo(points[0]!.x, points[0]!.y);
   for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i]!.x, points[i]!.y);
+}
+
+/**
+ * A small downward triangular pin sitting just above a bar's constrained edge (its tip
+ * touching the top of the bar). A **shape** cue — not colour — so a set constraint reads
+ * without relying on hue (WCAG 1.4.1); the panel's legend names it, and the parallel
+ * listbox spells the constraint out for AT.
+ */
+function drawConstraintPin(ctx: Ctx2D, edgeX: number, barTop: number, palette: TsldPalette): void {
+  ctx.fillStyle = palette.edge;
+  ctx.beginPath();
+  ctx.moveTo(edgeX - CONSTRAINT_PIN_W / 2, barTop - CONSTRAINT_PIN_H);
+  ctx.lineTo(edgeX + CONSTRAINT_PIN_W / 2, barTop - CONSTRAINT_PIN_H);
+  ctx.lineTo(edgeX, barTop);
+  ctx.fill();
 }
 
 /**
@@ -185,6 +204,17 @@ export function paintScene(
         ctx.strokeRect(rect.x + 0.75, rect.y + 0.75, rect.w - 1.5, rect.h - 1.5);
         ctx.setLineDash([]);
       }
+    }
+    // A set date constraint pins the bar's start or finish edge — mark that edge (a milestone,
+    // having no width, is marked at its centre). A cheap per-bar shape, drawn only for the
+    // constrained + visible activities, so it stays within the draw budget (ADR-0026).
+    if (activity.constraint) {
+      const edgeX = isMilestone(activity.type)
+        ? rect.x + rect.w / 2
+        : activity.constraint === 'finish'
+          ? rect.x + rect.w
+          : rect.x;
+      drawConstraintPin(ctx, edgeX, rect.y, palette);
     }
   }
 
