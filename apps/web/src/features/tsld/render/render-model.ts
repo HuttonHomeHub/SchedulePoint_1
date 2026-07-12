@@ -1,5 +1,7 @@
 import type { ActivityType, DependencyType } from '@repo/types';
 
+import type { ConstraintAnchor } from '@/lib/constraint-format';
+
 /**
  * The pure, renderer-agnostic TSLD render model (ADR-0026). It turns a plan's
  * computed schedule into screen geometry — **x = time** (derived from CPM dates about
@@ -58,6 +60,11 @@ export interface RenderActivity {
   earlyFinish: string | null;
   isCritical: boolean;
   isNearCritical: boolean;
+  /** Which edge a set date constraint pins (start/finish), or null when unconstrained —
+   * the painter marks that edge with a small pin. Pre-derived from `constraintType` at the
+   * mapping seam so the render model stays free of constraint-kind logic (ADR-0026 D8,
+   * module structure — the pure render model reads no domain enums). */
+  constraint?: ConstraintAnchor | null;
 }
 
 /** A directed dependency edge (predecessor → successor) by activity id. */

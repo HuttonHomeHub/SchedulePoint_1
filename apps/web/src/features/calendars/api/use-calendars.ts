@@ -52,6 +52,8 @@ export function calendarQueryOptions(orgSlug: string, calendarId: string) {
   return queryOptions({
     queryKey: calendarKeys.detail(orgSlug, calendarId),
     queryFn: () => apiFetch<CalendarDetail>(`/organizations/${orgSlug}/calendars/${calendarId}`),
+    // Don't fire for an absent id (e.g. a plan with no calendar) — avoids a bad `/calendars/` GET.
+    enabled: Boolean(calendarId),
     retry: false,
   });
 }

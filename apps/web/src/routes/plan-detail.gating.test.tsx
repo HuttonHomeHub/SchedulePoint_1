@@ -77,7 +77,10 @@ vi.mock('@/features/projects', () => ({
   useProject: () => query({ clientId: 'c1', name: 'Proj' }),
 }));
 vi.mock('@/features/clients', () => ({ useClient: () => query({ name: 'Client' }) }));
-vi.mock('@/features/calendars', () => ({ useCalendars: () => query([]) }));
+vi.mock('@/features/calendars', () => ({
+  useCalendars: () => query([]),
+  useCalendar: () => query(undefined),
+}));
 
 vi.mock('@/features/baselines', () => ({
   useBaselineVariance: () => query(undefined),

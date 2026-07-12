@@ -1,6 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
@@ -104,6 +104,24 @@ describe('ActivitiesTable', () => {
   it('shows an empty state when there are no activities', () => {
     renderTable(true, []);
     expect(screen.getByText(/No activities yet/)).toBeInTheDocument();
+  });
+
+  it('surfaces a set constraint as text plus a spelled-out label for AT', () => {
+    renderTable(false, [{ ...ACTIVITY, constraintType: 'SNET', constraintDate: '2026-05-01' }]);
+    // Visible shorthand carries the meaning in text (not colour); the sr-only full label
+    // spells it out for screen readers (a robust accessible name, not aria-label on a span).
+    expect(screen.getByText('SNET · 01 May 2026')).toBeInTheDocument();
+    expect(screen.getByText('Start no earlier than 01 May 2026')).toBeInTheDocument();
+  });
+
+  it('shows an em dash in the Constraint cell when an activity has none', () => {
+    renderTable(false); // the unconstrained ACTIVITY
+    expect(screen.queryByText(/SNET|SNLT|FNET|FNLT|MSO|MFO/)).not.toBeInTheDocument();
+    // Scope the em-dash assertion to the Constraint column (index 5: Code, Name, Type,
+    // Duration, Progress, Constraint) so it exercises that cell, not another null column.
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    const cells = within(rows[rows.length - 1]!).getAllByRole('cell');
+    expect(cells[5]).toHaveTextContent('—');
   });
 
   it('shows computed dates, float and a Critical badge for a calculated activity', () => {

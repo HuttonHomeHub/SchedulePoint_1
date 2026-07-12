@@ -1,5 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 
+import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -34,7 +35,10 @@ export function describeActivity(a: ActivitySummary): string {
       : a.isNearCritical
         ? `, near-critical, ${days(a.totalFloat)}`
         : `, ${days(a.totalFloat)}`;
-  return `${name}, ${dates}, lane ${a.laneIndex + 1}${floatPart}`;
+  // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
+  const constraint = formatConstraint(a);
+  const constraintPart = constraint ? `, ${constraint.full}` : '';
+  return `${name}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}`;
 }
 
 /**

@@ -75,11 +75,12 @@ describe('TsldPanel', () => {
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
   });
 
-  it('shows a legend distinguishing driving from non-driving links (M3)', () => {
+  it('shows a legend distinguishing driving from non-driving links (M3) and the constraint pin', () => {
     render(<TsldPanel activities={[activity()]} dependencies={NO_DEPS} dataDate="2026-01-01" />);
     const legend = screen.getByRole('list', { name: 'Legend' });
     expect(legend).toHaveTextContent('Driving link');
     expect(legend).toHaveTextContent('Non-driving link');
+    expect(legend).toHaveTextContent('Constraint');
   });
 
   it('stays read-only (no editing toolbar) when the M2 flag is off, even for a writer', () => {
@@ -95,6 +96,24 @@ describe('TsldPanel', () => {
     // VITE_TSLD_EDITING is unset in tests → editing gated off → M1 surface (plain Fit only).
     expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
+  });
+
+  it('round-trips a zoom-preset click through the canvas back to the control (aria-pressed)', () => {
+    render(
+      <TsldPanel
+        activities={[activity(), activity({ id: 'a2', code: 'A200', name: 'Pour slab' })]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+      />,
+    );
+    // Week is the default preset; clicking Year commands the real canvas, whose rAF loop reports
+    // the new stop back via onZoomStopChange → the control re-renders with Year pressed. No mocks:
+    // this exercises the whole viewport/command seam (TsldViewControls → TsldCanvas → back).
+    const year = screen.getByRole('button', { name: 'Year' });
+    expect(year).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(year);
+    expect(screen.getByRole('button', { name: 'Year' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('selects an activity via keyboard (arrow keys) and marks it in the listbox', () => {

@@ -35,21 +35,28 @@ keep `main` releasable.
 - **M7 — Baselines.** Named plan-of-record snapshots (snapshot-copy model), one active
   baseline per plan, server-side working-day variance, web baselines panel + variance
   columns (ADR-0025).
+- **Date constraints (web).** The activity form now offers only the six constraint types
+  the engine honours as-labelled (parked `MANDATORY_*` no longer newly selectable; a
+  legacy value is shown honestly, never silently coerced); a set constraint is surfaced
+  in the activities table and as a pin on the TSLD canvas, and "parked constraints" is
+  explained in the schedule summary. No API/engine change (ADR-0023 §6 already governs
+  the semantics; near-critical shading shipped in M6).
 
 ## Next (candidate order — not yet committed)
 
 Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
 
-- **Date constraints (web).** Constraint fields exist in the schema/API and the engine
-  honours them; add the activity-form UI + near-critical shading to complete the loop.
 - **Notes.** Attach notes to any entity (client/project/plan/activity) — the weekly
   progress journey.
 - **The TSLD graphical canvas** — the flagship primary editing surface (ADR-0026).
   **M1–M4 delivered** (read render; on-canvas create/move/link/relane; live critical
   path + driving-vs-non-driving arrows with a non-colour encoding; lane persistence +
   auto-pack). **On-canvas editing is now ON by default** (2026-07-12): `VITE_TSLD_EDITING`
-  defaults on (with `=false` as opt-out), all pre-enablement gates green. Remaining:
-  the deferred per-activity driving summary in the parallel listbox.
+  defaults on (with `=false` as opt-out), all pre-enablement gates green. The canvas also
+  now reads as a time-scaled document — an **adaptive date ruler** (year→month→day), **zoom
+  presets** (Day…Year) + zoom −/+, a **TODAY** marker, **non-working-day shading** (weekends
+  - calendar holidays), and five **layer toggles** (2026-07-12). Remaining: the deferred
+    per-activity driving summary in the parallel listbox.
 - **Gantt view** — the secondary tabular projection of the same model.
 - **Plan edit-lock** (single-editor hand-off) — **delivered & enabled** (ADR-0028): the
   server lease + 423 write-gate and the web "pen". The web pen (`VITE_PLAN_EDIT_LOCK`)

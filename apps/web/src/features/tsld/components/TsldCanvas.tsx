@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useImperativeHandle, useRef } from 'react';
 
 import {
   IDLE,
@@ -16,6 +16,7 @@ import {
   type InteractionOverlay,
   type LinkOverlay,
   type TsldScene,
+  type TsldViewToggles,
 } from '../render/paint';
 import { resolveTsldPalette } from '../render/palette';
 import {
@@ -37,7 +38,22 @@ import {
   type RenderEdge,
   type Size,
   type Viewport,
+  type ZoomLevel,
 } from '../render/render-model';
+import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
+
+/** Imperative commands the toolbar issues to the canvas (kept ref-authoritative — ADR-0026 D3). */
+export interface TsldCanvasHandle {
+  /** Reframe to a zoom preset's scale, centre-anchored. */
+  zoomToPreset: (level: ZoomLevel) => void;
+  /** Zoom in/out by a factor about the centre (the button equivalent of wheel zoom). */
+  stepZoom: (factor: number) => void;
+}
+
+/** Height (px) of the sticky date-ruler band across the top of the canvas. The drawing canvas sits
+ * below it, so a canvas-relative y maps to a container y by adding this (used to place the create
+ * popover, which is positioned against the outer container). */
+export const RULER_HEIGHT = 40;
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
@@ -73,6 +89,18 @@ export interface TsldCanvasProps {
   /** The active edit ghost drawn on the interaction layer — a dropped create awaiting its name,
    * or the moved bar while a reposition is in flight. While set, canvas gestures are suspended. */
   pending?: PendingGhost | null;
+  /** Which optional view layers to draw (grid variants / today / non-working). Defaults to all on. */
+  view?: TsldViewToggles;
+  /** Predicate built from the plan calendar (mask + holiday exceptions): is this day offset worked?
+   * Null/absent → no non-working shading. Must be referentially stable (memoised) to avoid repaints. */
+  isWorkingDay?: ((dayOffset: number) => boolean) | null;
+  /** Day offset (from `dataDate`) of "today", or null when it isn't placeable. */
+  todayOffset?: number | null;
+  /** Imperative handle so the toolbar can command zoom presets / steps (ADR-0026 D3 seam). */
+  controlRef?: React.Ref<TsldCanvasHandle>;
+  /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
+   * so the toolbar can reflect the active preset without per-frame React state. */
+  onZoomStopChange?: (level: ZoomLevel) => void;
 }
 
 /** Approximate popover footprint (w-56 + fields) used to keep it inside the canvas. */
@@ -152,6 +180,37 @@ function bodyGrab(
 }
 
 /**
+ * Reconcile one ruler row's label pool against a tick list: reuse/create absolutely-positioned
+ * spans, position each at its band start (year/month bands clamp their label to the left edge so
+ * the current period stays visible — "sticky"), and hide the surplus. No per-frame allocation
+ * after warm-up, and no React — the whole ruler updates imperatively from the rAF loop (ADR-0026 D3).
+ */
+function syncRulerRow(
+  row: HTMLDivElement,
+  pool: HTMLSpanElement[],
+  ticks: { x: number; label: string }[],
+  clampLeft: boolean,
+): void {
+  for (let i = 0; i < ticks.length; i += 1) {
+    let node = pool[i];
+    if (!node) {
+      node = document.createElement('span');
+      node.style.position = 'absolute';
+      node.style.left = '0';
+      node.style.whiteSpace = 'nowrap';
+      node.style.paddingInline = '3px';
+      row.appendChild(node);
+      pool[i] = node;
+    }
+    const left = clampLeft ? Math.max(0, ticks[i]!.x) : ticks[i]!.x;
+    node.style.transform = `translateX(${left}px)`;
+    node.textContent = ticks[i]!.label;
+    node.style.display = '';
+  }
+  for (let i = ticks.length; i < pool.length; i += 1) pool[i]!.style.display = 'none';
+}
+
+/**
  * The Canvas 2D TSLD painter (ADR-0026). Draws the plan's computed schedule from the pure
  * render model, with cursor-anchored wheel zoom and drag-to-pan; the canvas is
  * **`aria-hidden`** (assistive tech uses the parallel representation in {@link TsldPanel}).
@@ -178,6 +237,11 @@ export function TsldCanvas({
   onIntent,
   onExitAddMode,
   pending = null,
+  view,
+  isWorkingDay = null,
+  todayOffset = null,
+  controlRef,
+  onZoomStopChange,
 }: TsldCanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -202,7 +266,35 @@ export function TsldCanvas({
   });
 
   const showEdgeHandles = editing && canLink;
-  const sceneRef = useRef<TsldScene>({ activities, edges, dataDate, selectedId, showEdgeHandles });
+  const sceneRef = useRef<TsldScene>({
+    activities,
+    edges,
+    dataDate,
+    selectedId,
+    showEdgeHandles,
+    view,
+    isWorkingDay,
+    todayOffset,
+  });
+
+  // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
+  // no per-frame setState). Row containers + reusable element pools live in refs; `rulerSyncRef`
+  // snapshots the last synced view so the loop reconciles only when the viewport actually moved.
+  const rulerYearsRef = useRef<HTMLDivElement>(null);
+  const rulerMonthsRef = useRef<HTMLDivElement>(null);
+  const rulerDaysRef = useRef<HTMLDivElement>(null);
+  const rulerPoolRef = useRef<{
+    years: HTMLSpanElement[];
+    months: HTMLSpanElement[];
+    days: HTMLSpanElement[];
+  }>({ years: [], months: [], days: [] });
+  const rulerSyncRef = useRef({ pxPerDay: 0, originX: 0, width: 0 });
+  // Coarse active-preset feedback: report only when the zoom STOP changes, never per frame.
+  const lastStopRef = useRef<ZoomLevel | null>(null);
+  const onZoomStopChangeRef = useRef(onZoomStopChange);
+  useEffect(() => {
+    onZoomStopChangeRef.current = onZoomStopChange;
+  });
 
   useEffect(() => {
     fittedRef.current = false;
@@ -210,10 +302,49 @@ export function TsldCanvas({
   }, [fitSignal, dataDate]);
 
   useEffect(() => {
-    sceneRef.current = { activities, edges, dataDate, selectedId, showEdgeHandles };
+    sceneRef.current = {
+      activities,
+      edges,
+      dataDate,
+      selectedId,
+      showEdgeHandles,
+      view,
+      isWorkingDay,
+      todayOffset,
+    };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
-  }, [activities, edges, dataDate, selectedId, showEdgeHandles]);
+  }, [activities, edges, dataDate, selectedId, showEdgeHandles, view, isWorkingDay, todayOffset]);
+
+  // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
+  // sites only). Kept off the per-frame path since pan never changes pxPerDay.
+  const reportZoomStop = (): void => {
+    const level = presetOf(viewRef.current.pxPerDay);
+    if (level !== lastStopRef.current) {
+      lastStopRef.current = level;
+      onZoomStopChangeRef.current?.(level);
+    }
+  };
+
+  useImperativeHandle(
+    controlRef,
+    () => ({
+      zoomToPreset: (level: ZoomLevel) => {
+        viewRef.current = zoomToPreset(viewRef.current, sizeRef.current, level);
+        dirtyRef.current = true;
+        interactionDirtyRef.current = true;
+        reportZoomStop();
+      },
+      stepZoom: (factor: number) => {
+        viewRef.current = stepZoom(viewRef.current, sizeRef.current, factor);
+        dirtyRef.current = true;
+        interactionDirtyRef.current = true;
+        reportZoomStop();
+      },
+    }),
+    // Stable — reads live state through refs.
+    [],
+  );
 
   // Focus-follows-viewport (M5, WCAG 2.4.7/2.4.11): when the selection changes — e.g. keyboard
   // navigation or chain-nav to an off-screen bar — pan the minimum distance so the selected bar's
@@ -264,7 +395,11 @@ export function TsldCanvas({
 
     const measure = (): void => {
       const rect = container.getBoundingClientRect();
-      const size = { width: Math.max(1, rect.width), height: Math.max(1, rect.height) };
+      // The canvas sits below the ruler band, so its drawable height is the container minus the ruler.
+      const size = {
+        width: Math.max(1, rect.width),
+        height: Math.max(1, rect.height - RULER_HEIGHT),
+      };
       if (size.width !== sizeRef.current.width || size.height !== sizeRef.current.height) {
         sizeRef.current = size;
         const dpr = getDpr();
@@ -281,6 +416,25 @@ export function TsldCanvas({
       }
     };
 
+    const syncRuler = (): void => {
+      const years = rulerYearsRef.current;
+      const months = rulerMonthsRef.current;
+      const days = rulerDaysRef.current;
+      if (!years || !months || !days) return;
+      const v = viewRef.current;
+      const s = sizeRef.current;
+      const last = rulerSyncRef.current;
+      // Only re-tile when the viewport actually moved (pan changes originX every frame; idle skips).
+      if (v.pxPerDay === last.pxPerDay && v.originX === last.originX && s.width === last.width)
+        return;
+      rulerSyncRef.current = { pxPerDay: v.pxPerDay, originX: v.originX, width: s.width };
+      const model = rulerTicks(v, s, sceneRef.current.dataDate);
+      const pools = rulerPoolRef.current;
+      syncRulerRow(years, pools.years, model.years, true);
+      syncRulerRow(months, pools.months, model.months, true);
+      syncRulerRow(days, pools.days, model.days, false);
+    };
+
     const frame = (): void => {
       raf = requestAnimationFrame(frame);
       const ctx = canvas.getContext('2d');
@@ -295,11 +449,15 @@ export function TsldCanvas({
         fittedRef.current = true;
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
+        reportZoomStop();
       }
       if (dirtyRef.current) {
         paintScene(ctx, sceneRef.current, viewRef.current, size, palette, dpr);
         dirtyRef.current = false;
       }
+      // Keep the date ruler pixel-synced to the same viewport snapshot the painter just used, so the
+      // labels and the bars can never disagree. Early-returns unless the viewport actually moved.
+      syncRuler();
       const ictx = editing ? interactionCanvasRef.current?.getContext('2d') : null;
       if (ictx && interactionDirtyRef.current) {
         const p = pendingRef.current;
@@ -348,6 +506,7 @@ export function TsldCanvas({
       );
       dirtyRef.current = true;
       interactionDirtyRef.current = true;
+      reportZoomStop();
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
@@ -390,10 +549,31 @@ export function TsldCanvas({
 
   return (
     <div ref={containerRef} className="bg-card relative h-full w-full overflow-hidden">
+      {/* The sticky date ruler: a DOM band updated imperatively from the rAF loop (aria-hidden — the
+          canvas already has the parallel a11y listbox; pointer-events-none so pan/zoom fall through). */}
+      <div
+        aria-hidden="true"
+        data-testid="tsld-ruler"
+        className="bg-card text-muted-foreground border-border pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden border-b text-xs leading-none"
+        // RULER_HEIGHT is a raw px value (not a Tailwind class) because the canvas-sizing math in
+        // measure() needs the exact same number — one source of truth for the CSS + JS.
+        style={{ height: RULER_HEIGHT }}
+      >
+        <div
+          ref={rulerYearsRef}
+          className="text-foreground/70 absolute inset-x-0 top-0 h-3 font-medium"
+        />
+        <div
+          ref={rulerMonthsRef}
+          className="text-foreground/90 absolute inset-x-0 top-3 h-3.5 font-medium"
+        />
+        <div ref={rulerDaysRef} className="absolute inset-x-0 bottom-0 h-3.5" />
+      </div>
       <canvas
         ref={canvasRef}
         aria-hidden="true"
-        className={`absolute inset-0 block touch-none ${
+        style={{ top: RULER_HEIGHT }}
+        className={`absolute inset-x-0 block touch-none ${
           editing && mode === 'add-activity'
             ? 'cursor-crosshair'
             : 'cursor-grab active:cursor-grabbing'
@@ -507,7 +687,8 @@ export function TsldCanvas({
         <canvas
           ref={interactionCanvasRef}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
+          style={{ top: RULER_HEIGHT }}
+          className="pointer-events-none absolute inset-x-0"
         />
       ) : null}
     </div>

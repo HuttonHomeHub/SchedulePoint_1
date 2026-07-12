@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
   criticality,
@@ -128,6 +129,29 @@ export function ActivitiesTable({
       header: 'Progress',
       cellClassName: 'tabular-nums',
       cell: (activity) => <span className="text-muted-foreground">{formatProgress(activity)}</span>,
+    },
+    // A set date constraint (the definition a planner enters), so it's visible without opening
+    // each row. The shorthand ("SNET · 01 May 2026") carries the meaning in text (never colour,
+    // WCAG 1.4.1); the full label is the accessible name. Hidden below `lg` like the late-date
+    // columns to keep narrow screens legible — the edit dialog still shows it there.
+    {
+      header: 'Constraint',
+      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+      cell: (activity) => {
+        const constraint = formatConstraint(activity);
+        // `aria-label` on a plain span (role generic) isn't reliably honoured; instead show the
+        // shorthand visually (aria-hidden) with the spelled-out label in an sr-only node — the
+        // same visible-glyph + hidden-text pattern the diagram legend uses. `title` = hover.
+        return constraint ? (
+          <span className="text-muted-foreground" title={constraint.full}>
+            <span aria-hidden="true">{constraint.short}</span>
+            <span className="sr-only">{constraint.full}</span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
     },
     // Engine-owned computed columns (M6, read-only). Null renders as an em dash
     // until the plan is recalculated. Late dates hide first on narrow screens.

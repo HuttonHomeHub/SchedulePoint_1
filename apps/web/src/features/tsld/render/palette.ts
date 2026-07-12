@@ -24,5 +24,8 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // criticality is never conveyed by fill colour alone (WCAG 1.4.1).
     outline: token('--color-foreground', '#e6e8ee'),
     selection: token('--color-ring', '#6ea8fe'),
+    // A muted wash for non-working columns and the destructive hue for the today marker.
+    nonWorking: token('--color-muted', '#20242d'),
+    today: token('--color-destructive', '#c83c3c'),
   };
 }

@@ -1,5 +1,15 @@
-import type { ActivityStatus, ActivityType, ConstraintType } from '@repo/types';
+import {
+  PARKED_CONSTRAINT_TYPES,
+  SELECTABLE_CONSTRAINT_TYPES,
+  type ActivityStatus,
+  type ActivityType,
+  type ConstraintType,
+} from '@repo/types';
 import { z } from 'zod';
+
+// The constraint labels live in the shared lib so the form, the table, and the TSLD
+// canvas read constraints in one voice; re-exported here for existing form importers.
+export { CONSTRAINT_TYPE_LABELS } from '@/lib/constraint-format';
 
 /**
  * Human labels for the activity type. Exhaustive `Record<ActivityType, …>` so a
@@ -25,19 +35,14 @@ export function isMilestoneType(type: ActivityType): boolean {
   return MILESTONE_TYPES.includes(type);
 }
 
-/** Human labels for schedule constraints (with the planning-tool shorthand). */
-export const CONSTRAINT_TYPE_LABELS: Record<ConstraintType, string> = {
-  SNET: 'Start no earlier than',
-  SNLT: 'Start no later than',
-  FNET: 'Finish no earlier than',
-  FNLT: 'Finish no later than',
-  MSO: 'Must start on',
-  MFO: 'Must finish on',
-  MANDATORY_START: 'Mandatory start',
-  MANDATORY_FINISH: 'Mandatory finish',
-};
-
-export const CONSTRAINT_TYPES = Object.keys(CONSTRAINT_TYPE_LABELS) as [
+/**
+ * Every constraint kind the form's Zod schema accepts — the six honoured
+ * ({@link SELECTABLE_CONSTRAINT_TYPES}) plus the two parked `MANDATORY_*`, so a
+ * legacy/imported parked value round-trips unchanged through an edit. The **selector**
+ * offers only the honoured six (plus an honest one-off option for a present parked
+ * value); this fuller set is just the validation allow-list.
+ */
+export const CONSTRAINT_TYPES = [...SELECTABLE_CONSTRAINT_TYPES, ...PARKED_CONSTRAINT_TYPES] as [
   ConstraintType,
   ...ConstraintType[],
 ];

@@ -4,12 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { formatCalendarDate } from '@/lib/format-date';
 
-/** One labelled figure in the strip. */
-function Stat({ label, value }: { label: string; value: React.ReactNode }): React.ReactElement {
+/** One labelled figure in the strip. `hintId` links an explanatory footnote for AT. */
+function Stat({
+  label,
+  value,
+  hintId,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hintId?: string;
+}): React.ReactElement {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="text-sm font-medium tabular-nums">{value}</dd>
+      <dd className="text-sm font-medium tabular-nums" aria-describedby={hintId}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -69,15 +79,27 @@ export function ScheduleSummaryStrip({
   }
 
   return shell(
-    <dl className="flex flex-wrap gap-x-8 gap-y-3">
-      <Stat label="Data date" value={formatCalendarDate(dataDate)} />
-      <Stat label="Project finish" value={formatCalendarDate(projectFinish)} />
-      <Stat label="Activities" value={activityCount} />
-      <Stat label="Critical" value={criticalCount} />
-      <Stat label="Near-critical" value={nearCriticalCount} />
+    <div className="flex flex-col gap-2">
+      <dl className="flex flex-wrap gap-x-8 gap-y-3">
+        <Stat label="Data date" value={formatCalendarDate(dataDate)} />
+        <Stat label="Project finish" value={formatCalendarDate(projectFinish)} />
+        <Stat label="Activities" value={activityCount} />
+        <Stat label="Critical" value={criticalCount} />
+        <Stat label="Near-critical" value={nearCriticalCount} />
+        {parkedConstraintCount > 0 ? (
+          <Stat
+            label="Parked constraints"
+            value={parkedConstraintCount}
+            hintId="parked-constraints-hint"
+          />
+        ) : null}
+      </dl>
       {parkedConstraintCount > 0 ? (
-        <Stat label="Parked constraints" value={parkedConstraintCount} />
+        <p id="parked-constraints-hint" className="text-muted-foreground text-xs">
+          Parked constraints are mandatory constraints the scheduler applies as Must start on / Must
+          finish on.
+        </p>
       ) : null}
-    </dl>,
+    </div>,
   );
 }

@@ -461,3 +461,118 @@ Testing split: the existing `playwright.config.ts` suite is pinned **flags-off**
 baseline regression net; the flags-on editing surface keeps its own `playwright.edit.config.ts`
 harness. Recorded as an addendum to **ADR-0028 §9** (no new ADR — the model is unchanged;
 only the web defaults flipped).
+
+## Informative TSLD canvas — the viewport/command/ruler seam (2026-07-12)
+
+**Context.** The "Informative TSLD canvas" slice (spec
+`docs/specs/tsld-informative-canvas.md`, plan `docs/plans/tsld-informative-canvas.md`,
+Task B1) adds a multi-row time-scale ruler, zoom presets + zoom −/+, layer toggles, a
+TODAY marker and non-working shading — all client-only, within **ADR-0026**. The one
+non-obvious architecture point is the seam between a **ref-authoritative viewport**
+(ADR-0026 D3: `viewRef` mutated directly on pan/wheel with **no per-frame `setState`**,
+repainted by the existing rAF `frame()` loop off `dirtyRef`/`interactionDirtyRef`) and
+three new things that must react to that viewport: a DOM ruler that stays pixel-synced to
+the bars, a toolbar that **commands** zoom, and a toolbar that **reflects** the active
+zoom preset. This entry records that seam. **No new ADR** — it refines, not changes,
+ADR-0026 D3/D7 and its "ruler labels are DOM chrome" note.
+
+**Decisions.**
+
+- **View state (zoom preset + 5 layer toggles) is LOCAL component state in `TsldPanel`,
+  not URL.** This supersedes the spec's Q2 default and drops plan Task A3 (the URL search
+  schema). `mode`/`fitSignal` already live as `TsldPanel` `useState`; the preset and the
+  five toggles join them and pass down as props (`viewToggles`, and the active preset for
+  the segmented control). _Why:_ the product owner chose it — the view is a transient,
+  per-session reading preference, not a shareable document coordinate; keeping it out of
+  the router avoids search-param churn/re-render on every toggle and removes a Zod
+  parse/round-trip surface for no user-visible gain at this stage. _Consequence:_ the
+  configured view is **not** deep-linkable or reload-stable; if shareability is later
+  wanted, promoting these to URL search params (ADR-0004) is a localised `TsldPanel` +
+  route change. The **live pan/zoom viewport stays ref-authoritative** regardless (it was
+  never a candidate for either state home).
+
+- **The ruler is a DOM overlay rendered _inside_ `TsldCanvas`'s host (`containerRef`),
+  updated imperatively from the existing rAF `frame()` loop off the same `viewRef` /
+  `sizeRef` the painter reads — never from lagged React state.** It sits last in the host
+  (a top band, `aria-hidden`, `pointer-events-none` so pan/zoom/click pass through to the
+  canvas beneath). Two-tier update, both driven from `frame()`:
+  - **Pan (frequent, per-frame): a single pixel-exact `translateX`.** Because `pan()` only
+    adds to `originX` at constant `pxPerDay`, every tick's screen x shifts by the _same_
+    origin delta; so `bandContainer.style.transform = translateX(originX − buildOriginX)`
+    is exact, not approximate — one style write per frame, no re-tile, no allocation.
+    (Vertical pan / `originY` never affects the ruler; only `originX`/`pxPerDay` do.)
+  - **Zoom / resize / pan-past-buffer (infrequent): re-tile.** A `rulerBuildRef` snapshots
+    `{ pxPerDay, originX, width, height }` at the last build. Each frame compares the live
+    `viewRef`/`sizeRef` against it: if `pxPerDay` changed (granularity keyed off `pxPerDay`
+    changes the day/month/year rows), or the surface resized, or `|originX − buildOriginX|`
+    exceeded the pre-tiled off-screen buffer, it rebuilds the tick DOM from the pure
+    `rulerTicks(view, size)` (over the visible day span + buffer only — O(visible), never
+    O(plan)), resets the transform to 0, and re-snapshots. Ticks are reconciled against a
+    reusable element **pool** (update `textContent`/`left`/`width`, hide surplus) so re-tile
+    allocates nothing steady-state. _Why imperative, not a throttled `setState`:_ reading
+    `viewRef`/`sizeRef` inside the same `frame()` iteration that calls `paintScene`
+    guarantees the ruler and the bars are drawn from **one** viewport snapshot per frame —
+    they can never desync, even on a fast fling — and it keeps ADR-0026 D3's zero-`setState`
+    rule intact for the whole interactive surface (mirroring the canvas painter exactly). A
+    declarative ruler with `setState`-on-re-tile was considered and rejected: it re-renders
+    on every wheel tick and risks a one-frame bar/ruler skew if a commit lands a frame late.
+
+- **The toolbar commands zoom through a small imperative handle on `TsldCanvas`** (React 19
+  `ref` prop + `useImperativeHandle`), not lifted state or a viewport callback:
+  `zoomToPreset(level)` and `stepZoom(factor)`. Each calls the pure, centre-anchored
+  `zoomToPreset`/`stepZoom` (render-model), assigns the result to `viewRef.current`, and
+  sets `dirtyRef`/`interactionDirtyRef` — the same mutate-ref-and-mark-dirty path pan/wheel
+  already use. **Fit stays on the existing `fitSignal` prop** (it already re-fits on
+  `dataDate` change too — no reason to churn it). _Why a handle:_ a zoom command is a
+  one-shot side-effect on a ref-authoritative object; there is no React state to lift, and
+  lifting the viewport into state to let the toolbar compute the new view is exactly the
+  per-frame-`setState` path ADR-0026 D3 forbids. The handle keeps the mutation inside the
+  canvas, off React's render path.
+
+- **The toolbar's active-preset (`aria-pressed`) is fed back by a coarse
+  `onZoomStopChange(level)` callback that fires only when `presetOf(pxPerDay)` crosses a
+  band boundary — never per frame.** `presetOf` maps a continuous `pxPerDay` to the single
+  owning zoom band (boundaries at the geometric midpoints between `ZOOM_STOPS`), so exactly
+  one preset is always lit and it changes only on a crossing. A `lastStopRef` holds the
+  last-reported band; the crossing check runs **only at the discrete sites that change
+  `pxPerDay`** — the wheel handler, `zoomToPreset`, `stepZoom`, and the fit block — not in
+  the general per-frame loop (pan never changes `pxPerDay`, so the frequent path never
+  touches it). On a crossing it updates `lastStopRef` and calls `onZoomStopChange`, which
+  flips one small piece of `TsldPanel` state. _Tradeoff:_ nearest-band-owns means the
+  control shows the closest scale even mid-wheel (stable, minimal `setState`) rather than
+  going un-pressed between stops (truthful but flickery); the stable reading was chosen and
+  matches the spec's C1 "derive pressed state from `presetOf` with a tolerance" risk note.
+
+- **The new per-frame paint inputs enter via `sceneRef`, not new per-frame plumbing.**
+  `TsldScene` gains `view: TsldViewToggles` (`{ dayGrid, monthGrid, yearGrid, today,
+nonWorking }`), an optional `isWorkingDay: (dayOffset: number) => boolean` predicate (or
+  `null` when the plan has no calendar), and `todayOffset: number | null`. These join the
+  existing `sceneRef`-rebuild `useEffect` (which already marks dirty on prop change), so
+  they are read once per paint off the ref with zero added per-frame allocation. The
+  predicate is built at the mapping seam in `TsldPanel` (from the already-loaded
+  `CalendarSummary` mask, plus `useCalendar` exceptions in Phase 2) and **must be
+  `useMemo`-stable** (keyed on `calendarId` + exceptions) — an inline closure would re-run
+  the effect and repaint every render. The render-model core stays calendar-agnostic
+  (ADR-0024); `paintScene` calls the predicate only inside its existing culled visible-day
+  grid loop (O(visible columns), one batched wash pass **below** the gridlines) and draws
+  the today line above bars/below selection. `todayOffset` is `daysBetween(dataDate,
+localTodayIso)` computed once in `TsldPanel`.
+
+**Exact seam shape `TsldCanvas` exposes:**
+
+- Props (all optional; absent ⇒ today's read-only surface, byte-for-byte): `viewToggles:
+TsldViewToggles`, `isWorkingDay?: ((dayOffset: number) => boolean) | null`, `todayOffset?:
+number | null`, `onZoomStopChange?: (level: ZoomLevel) => void`.
+- Imperative handle (via `ref`): `interface TsldCanvasHandle { zoomToPreset(level:
+ZoomLevel): void; stepZoom(factor: number): void; }`.
+- Unchanged: `fitSignal` still drives Fit; `viewRef` stays the sole viewport authority.
+
+**Risk to editing gestures — checked, none.** The gesture machine reads the viewport only
+through `machineCtx()` → `viewRef.current`, and all ghost geometry is derived from the live
+`viewRef` each interaction frame (`liveGhostRect`/`dayCellRect` take `view`), never cached in
+screen px. So a zoom command or ruler update — which only ever _mutate `viewRef.current` and
+set dirty_, exactly as pan/wheel already do — cannot desync an in-flight gesture: the ghost
+simply re-derives at the new scale on the next interaction frame. The viewport is never moved
+out of its ref, so ADR-0026 D3 holds and the M2/M4/M5 gesture, hit-test and focus-follow paths
+are untouched. **No new ADR** (ADR-0026 governs the rendering/viewport/a11y architecture; this
+records the readability-layer seam within it).
