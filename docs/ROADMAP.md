@@ -52,8 +52,11 @@ Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
   **M1–M4 delivered** (read render; on-canvas create/move/link/relane; live critical
   path + driving-vs-non-driving arrows with a non-colour encoding; lane persistence +
   auto-pack). **On-canvas editing is now ON by default** (2026-07-12): `VITE_TSLD_EDITING`
-  defaults on (with `=false` as opt-out), all pre-enablement gates green. Remaining:
-  the deferred per-activity driving summary in the parallel listbox.
+  defaults on (with `=false` as opt-out), all pre-enablement gates green. The canvas also
+  now reads as a time-scaled document — an **adaptive date ruler** (year→month→day), **zoom
+  presets** (Day…Year) + zoom −/+, a **TODAY** marker, **non-working-day shading** (weekends
+  - calendar holidays), and five **layer toggles** (2026-07-12). Remaining: the deferred
+    per-activity driving summary in the parallel listbox.
 - **Gantt view** — the secondary tabular projection of the same model.
 - **Plan edit-lock** (single-editor hand-off) — **delivered & enabled** (ADR-0028): the
   server lease + 423 write-gate and the web "pen". The web pen (`VITE_PLAN_EDIT_LOCK`)

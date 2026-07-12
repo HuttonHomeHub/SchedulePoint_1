@@ -12,14 +12,17 @@ import {
 } from '../render/a11y';
 import { packLanes } from '../render/auto-pack';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
-import { daysBetween, type Point } from '../render/render-model';
+import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from '../render/paint';
+import { daysBetween, type Point, type ZoomLevel } from '../render/render-model';
+import { isWorkingDay, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges } from '../render/to-render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
-import { TsldCanvas, type PendingGhost } from './TsldCanvas';
+import { TsldCanvas, type PendingGhost, type TsldCanvasHandle } from './TsldCanvas';
 import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
+import { TsldViewControls } from './TsldViewControls';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -34,7 +37,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 type LegendItem =
   | { label: string; swatch: React.CSSProperties }
   | { label: string; line: 'solid' | 'dashed' }
-  | { label: string; pin: true };
+  | { label: string; pin: true }
+  | { label: string; today: true };
 
 const LEGEND: ReadonlyArray<LegendItem> = [
   {
@@ -55,6 +59,13 @@ const LEGEND: ReadonlyArray<LegendItem> = [
   // A set date constraint marks its pinned edge with a small pin, matching the canvas (a
   // shape cue, not colour — WCAG 1.4.1).
   { label: 'Constraint', pin: true },
+  // Non-working (weekend/holiday) columns are washed in the muted tone; today is a dashed
+  // vertical in the destructive tone. Both toggleable in the view controls.
+  {
+    label: 'Non-working',
+    swatch: { backgroundColor: 'var(--color-muted)', border: '1px solid var(--color-border)' },
+  },
+  { label: 'Today', today: true },
   // Logic ties, matching the canvas: a driving link (heavier solid) sets its
   // successor's start; a non-driving link (thin dashed) carries slack (M3).
   { label: 'Driving link', line: 'solid' },
@@ -149,6 +160,12 @@ export interface TsldPanelProps {
   /** Refetch the plan's server truth (activities/links/variance). Wired to the conflict banner's
    * Refresh so the "this changed elsewhere" cases have a real recovery action, not just copy. */
   onRefresh?: () => void;
+  /** The plan's working-day calendar (weekly mask + holiday exceptions), for the non-working
+   * shading. Null/absent → no shading. The route resolves it from the plan's calendar. */
+  calendar?: WorkingDayCalendar | null;
+  /** Today as a calendar day (`YYYY-MM-DD`), for the TODAY marker. The route passes it (floored
+   * to the local day) so the component does no wall-clock math. */
+  todayIso?: string;
 }
 
 interface PendingCreate {
@@ -185,6 +202,8 @@ export function TsldPanel({
   onAutoArrange,
   onOpenLogic,
   onRefresh,
+  calendar = null,
+  todayIso,
 }: TsldPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = useId();
@@ -221,6 +240,30 @@ export function TsldPanel({
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   const showDiagram = isCalculated && dataDate !== null;
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
+
+  // View controls (read-only or editing): the active zoom preset (reflected from the canvas's
+  // coarse stop-crossing callback) and the layer toggles, held in local state per the product
+  // owner's decision (not URL). The canvas is commanded imperatively via `canvasControlRef`.
+  const [zoomPreset, setZoomPreset] = useState<ZoomLevel>('week');
+  const [viewToggles, setViewToggles] = useState<TsldViewToggles>(DEFAULT_VIEW_TOGGLES);
+  const canvasControlRef = useRef<TsldCanvasHandle>(null);
+  const toggleView = (key: keyof TsldViewToggles): void =>
+    setViewToggles((v) => ({ ...v, [key]: !v[key] }));
+
+  // The non-working predicate + today marker offset, derived from the plan calendar / today. The
+  // predicate is memoised (referentially stable) so it doesn't re-trigger the canvas scene effect
+  // every render (ADR-0026 D3 / ui-architect note); both are null when their inputs are absent.
+  const workingDayPredicate = useMemo(
+    () =>
+      calendar && dataDate
+        ? (dayOffset: number) => isWorkingDay(dayOffset, dataDate, calendar)
+        : null,
+    [calendar, dataDate],
+  );
+  const todayOffset = useMemo(
+    () => (dataDate && todayIso ? daysBetween(dataDate, todayIso) : null),
+    [dataDate, todayIso],
+  );
 
   const select = (id: string | null): void => {
     setSelectedId(id);
@@ -553,21 +596,10 @@ export function TsldPanel({
           <TsldToolbar
             mode={mode}
             onModeChange={setMode}
-            onFit={() => setFitSignal((n) => n + 1)}
-            fitDisabled={!showDiagram}
             {...(onAutoArrange ? { onAutoArrange: openAutoArrange } : {})}
             addActivityRef={addActivityRef}
           />
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFitSignal((n) => n + 1)}
-            disabled={!showDiagram}
-          >
-            Fit to plan
-          </Button>
-        )}
+        ) : null}
         {showDiagram ? (
           <Button
             variant="ghost"
@@ -579,6 +611,19 @@ export function TsldPanel({
           </Button>
         ) : null}
       </div>
+
+      {/* Always-available view controls (read-only or editing): zoom, Fit, and layer toggles. */}
+      {showDiagram ? (
+        <TsldViewControls
+          zoomPreset={zoomPreset}
+          onZoomPreset={(level) => canvasControlRef.current?.zoomToPreset(level)}
+          onZoomStep={(factor) => canvasControlRef.current?.stepZoom(factor)}
+          onFit={() => setFitSignal((n) => n + 1)}
+          fitDisabled={!showDiagram}
+          toggles={viewToggles}
+          onToggle={toggleView}
+        />
+      ) : null}
 
       {conflict ? (
         <EditConflictBanner
@@ -614,6 +659,17 @@ export function TsldPanel({
                       borderLeft: '4px solid transparent',
                       borderRight: '4px solid transparent',
                       borderTop: '5px solid var(--color-muted-foreground)',
+                    }}
+                  />
+                </span>
+              ) : 'today' in item ? (
+                <span aria-hidden="true" className="inline-flex h-3 w-5 justify-center">
+                  <span
+                    className="h-full"
+                    style={{
+                      borderLeftWidth: 1.5,
+                      borderLeftStyle: 'dashed',
+                      borderLeftColor: 'var(--color-destructive)',
                     }}
                   />
                 </span>
@@ -657,6 +713,11 @@ export function TsldPanel({
               canLink={onLink !== undefined}
               onIntent={onIntent}
               onExitAddMode={() => setMode('select')}
+              view={viewToggles}
+              isWorkingDay={workingDayPredicate}
+              todayOffset={todayOffset}
+              controlRef={canvasControlRef}
+              onZoomStopChange={setZoomPreset}
               pending={
                 pendingCreate
                   ? {

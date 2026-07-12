@@ -13,6 +13,12 @@ import {
   type Size,
   type Viewport,
 } from './render-model';
+import { calendarBoundaries } from './time-scale';
+
+/** Below this px-per-day the per-day gridlines would merge into a solid block, so they're culled. */
+const DAY_GRID_MIN_PX = 6;
+/** Below this px-per-day non-working columns are sub-pixel; the wash is culled (and would be costly). */
+const NON_WORKING_MIN_PX = 3;
 
 /**
  * The palette the painter draws with — resolved from the app's semantic design tokens
@@ -28,7 +34,29 @@ export interface TsldPalette {
   /** Foreground-contrast stroke outlining critical/near-critical bars (non-colour cue). */
   outline: string;
   selection: string;
+  /** Muted wash over non-working (weekend/holiday) day columns. */
+  nonWorking: string;
+  /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
+  today: string;
 }
+
+/** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
+export interface TsldViewToggles {
+  dayGrid: boolean;
+  monthGrid: boolean;
+  yearGrid: boolean;
+  today: boolean;
+  nonWorking: boolean;
+}
+
+/** All view layers on — the default before the user toggles anything. */
+export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
+  dayGrid: true,
+  monthGrid: true,
+  yearGrid: true,
+  today: true,
+  nonWorking: true,
+};
 
 export interface TsldScene {
   activities: readonly RenderActivity[];
@@ -39,6 +67,13 @@ export interface TsldScene {
   /** When true (editing + linking enabled), draw the persistent edge-handle affordance on the
    * selected bar. Off for the read-only surface, keeping M1 byte-for-byte unchanged. */
   showEdgeHandles?: boolean;
+  /** Which optional layers to draw (grid variants / today / non-working). Defaults to all on. */
+  view?: TsldViewToggles | undefined;
+  /** Predicate: is the day at this offset (from `dataDate`) worked? Null → no calendar, so the
+   * non-working layer draws nothing. Built once from the plan calendar (mask + holiday exceptions). */
+  isWorkingDay?: ((dayOffset: number) => boolean) | null | undefined;
+  /** Day offset (from `dataDate`) of "today", or null when today is outside a schedulable range. */
+  todayOffset?: number | null | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -127,17 +162,39 @@ export function paintScene(
 
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const visibleIds = new Set(cull(scene.activities, view, size, scene.dataDate));
+  const toggles = scene.view ?? DEFAULT_VIEW_TOGGLES;
+  const firstDay = Math.floor((0 - view.originX) / view.pxPerDay);
+  const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay);
 
-  // Layer 1: weekly time-axis gridlines (cheap; the ruler labels are DOM chrome).
+  // Layer 0: non-working (weekend/holiday) column wash, beneath the grid. Only when the plan has a
+  // calendar (`isWorkingDay` present) and the toggle is on, and only once columns are wide enough
+  // to read — at coarse zoom the columns are sub-pixel, so it's culled (and avoids a long loop).
+  if (toggles.nonWorking && scene.isWorkingDay && view.pxPerDay >= NON_WORKING_MIN_PX) {
+    ctx.fillStyle = palette.nonWorking;
+    for (let d = firstDay; d <= lastDay; d += 1) {
+      if (scene.isWorkingDay(d)) continue;
+      ctx.fillRect(screenXOfDay(d, view), 0, view.pxPerDay, size.height);
+    }
+  }
+
+  // Layer 1: time-axis gridlines — day / month / year variants, each gated by its toggle. Batched
+  // into one stroke. Day lines are culled below `DAY_GRID_MIN_PX` (else a solid block); month/year
+  // boundaries come from the cheap integer-rollover `calendarBoundaries` (no per-day Date parsing).
   ctx.strokeStyle = palette.gridLine;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  const firstDay = Math.floor((0 - view.originX) / view.pxPerDay);
-  const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay);
-  for (let d = firstDay - (((firstDay % 7) + 7) % 7); d <= lastDay; d += 7) {
+  const gridLine = (d: number): void => {
     const x = Math.round(screenXOfDay(d, view)) + 0.5;
     ctx.moveTo(x, 0);
     ctx.lineTo(x, size.height);
+  };
+  if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
+    for (let d = firstDay; d <= lastDay; d += 1) gridLine(d);
+  }
+  if (toggles.monthGrid || toggles.yearGrid) {
+    const { months, years } = calendarBoundaries(firstDay, lastDay, scene.dataDate);
+    if (toggles.monthGrid) for (const d of months) gridLine(d);
+    if (toggles.yearGrid) for (const d of years) gridLine(d);
   }
   ctx.stroke();
 
@@ -215,6 +272,23 @@ export function paintScene(
           ? rect.x + rect.w
           : rect.x;
       drawConstraintPin(ctx, edgeX, rect.y, palette);
+    }
+  }
+
+  // Layer 3.5: the TODAY marker — a dashed vertical in the destructive hue, above the bars and
+  // below the selection ring. Dashed (not colour alone) and named in the panel legend. Drawn only
+  // when the toggle is on, today maps to a day offset, and that column is on-screen.
+  if (toggles.today && scene.todayOffset != null) {
+    const x = Math.round(screenXOfDay(scene.todayOffset, view)) + 0.5;
+    if (x >= 0 && x <= size.width) {
+      ctx.strokeStyle = palette.today;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, size.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 

@@ -16,7 +16,7 @@ import {
 } from '@/features/activities';
 import { useSession } from '@/features/auth';
 import { BaselinesPanel, BaselineVarianceSummary, useBaselineVariance } from '@/features/baselines';
-import { useCalendars } from '@/features/calendars';
+import { useCalendar, useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import {
   DependencyEditor,
@@ -93,6 +93,24 @@ export function PlanDetailScreen(): React.ReactElement {
   const dependencies = usePlanDependencies(orgSlug, planId);
   // The org's calendars, for the plan calendar picker (read for every member).
   const calendars = useCalendars(orgSlug);
+  // The plan's working-day calendar (mask + holiday exceptions) drives the TSLD's non-working
+  // shading. The mask comes from the already-loaded list; the exceptions from the (cached) detail.
+  const planCalendarId = plan.data?.calendarId ?? null;
+  const calendarDetail = useCalendar(orgSlug, planCalendarId ?? '');
+  const tsldCalendar = useMemo(() => {
+    const mask =
+      calendars.data?.find((c) => c.id === planCalendarId)?.workingWeekdays ??
+      calendarDetail.data?.workingWeekdays;
+    if (mask == null) return null;
+    const exceptions = new Map<string, boolean>(
+      (calendarDetail.data?.exceptions ?? []).map((e) => [e.date, e.isWorking]),
+    );
+    return { workingWeekdays: mask, exceptions };
+  }, [calendars.data, calendarDetail.data, planCalendarId]);
+  // Today as a local calendar day (`YYYY-MM-DD`), for the TSLD's "today" marker — resolved here so
+  // the diagram does no wall-clock math.
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   // Variance vs the plan's active baseline (M7). The route composes it and passes a
   // per-activity map into the activities table, so that feature imports no baseline code.
   const variance = useBaselineVariance(orgSlug, planId);
@@ -402,6 +420,8 @@ export function PlanDetailScreen(): React.ReactElement {
             onAutoArrange={onTsldAutoArrange}
             onOpenLogic={setLogicActivity}
             onRefresh={onTsldRefresh}
+            calendar={tsldCalendar}
+            todayIso={todayIso}
           />
         </div>
       </div>

@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button';
 export interface TsldToolbarProps {
   mode: EditMode;
   onModeChange: (mode: EditMode) => void;
-  onFit: () => void;
-  fitDisabled?: boolean;
   /** Open the auto-arrange confirm dialog (M4 4.3). Absent → the action isn't offered. */
   onAutoArrange?: () => void;
   /** Focus target for returning focus after the create popover closes. */
@@ -19,13 +17,12 @@ export interface TsldToolbarProps {
  * The editing toolbar for the TSLD (M2, shown only when editing is enabled — §4 of the M2
  * design). A two-button segmented control chooses the tool: **Select** (M1 pan/select +
  * hit-zone reposition/link) or **Add activity** (drag to draw). Each button carries
- * `aria-pressed` so the current tool is announced. The **Fit** control lives here too.
+ * `aria-pressed` so the current tool is announced. View controls (zoom, Fit, layer toggles)
+ * live in the always-available {@link TsldViewControls}, not here.
  */
 export function TsldToolbar({
   mode,
   onModeChange,
-  onFit,
-  fitDisabled = false,
   onAutoArrange,
   addActivityRef,
 }: TsldToolbarProps): React.ReactElement {
@@ -52,9 +49,6 @@ export function TsldToolbar({
           Add activity
         </Button>
       </div>
-      <Button variant="outline" size="sm" onClick={onFit} disabled={fitDisabled}>
-        Fit to plan
-      </Button>
       {onAutoArrange ? (
         <Button variant="outline" size="sm" onClick={onAutoArrange}>
           <AlignVerticalSpaceAround aria-hidden="true" className="size-4" />

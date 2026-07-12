@@ -1,6 +1,6 @@
 # Feature Spec: Informative TSLD canvas (readability + view-control upgrade)
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Approved (2026-07-12) — implemented
 - **Author(s):** Feature Analyst / Claude
 - **Date:** 2026-07-12
 - **Tracking issue / epic:** _tbd_

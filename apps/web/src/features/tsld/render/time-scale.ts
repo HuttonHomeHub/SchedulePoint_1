@@ -134,6 +134,47 @@ export function rulerTicks(view: Viewport, size: Size, dataDate: string): RulerM
   return { years, months, days };
 }
 
+/** Days in month `m` (1–12) of year `y`, Gregorian (UTC-agnostic — pure arithmetic). */
+function daysInMonth(y: number, m: number): number {
+  if (m === 2) return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28;
+  return m === 4 || m === 6 || m === 9 || m === 11 ? 30 : 31;
+}
+
+/**
+ * The day offsets (from the data date) that begin a month / a year within `[firstDay, lastDay]`.
+ * Used to draw the month/year gridlines. Parses a single anchor date then walks by **integer date
+ * rollover** — no per-day `Date` parsing — so it stays cheap on the per-frame paint path even over
+ * a wide (many-day) viewport.
+ */
+export function calendarBoundaries(
+  firstDay: number,
+  lastDay: number,
+  dataDate: string,
+): { months: number[]; years: number[] } {
+  const anchor = new Date(`${addCalendarDays(dataDate, firstDay)}T00:00:00Z`);
+  let y = anchor.getUTCFullYear();
+  let m = anchor.getUTCMonth() + 1;
+  let d = anchor.getUTCDate();
+  const months: number[] = [];
+  const years: number[] = [];
+  for (let off = firstDay; off <= lastDay; off += 1) {
+    if (d === 1) {
+      months.push(off);
+      if (m === 1) years.push(off);
+    }
+    d += 1;
+    if (d > daysInMonth(y, m)) {
+      d = 1;
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+    }
+  }
+  return { months, years };
+}
+
 /**
  * A plan's working-day calendar resolved for the client: the weekly {@link WorkingWeekdays}
  * mask plus a map of dated overrides (`YYYY-MM-DD` → is-working) from the calendar's exceptions

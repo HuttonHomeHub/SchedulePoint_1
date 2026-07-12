@@ -1,7 +1,7 @@
 # Implementation Plan: Informative TSLD canvas (readability + view-control upgrade)
 
 - **Feature spec:** [`docs/specs/tsld-informative-canvas.md`](../specs/tsld-informative-canvas.md)
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Approved (2026-07-12) — implemented
 - **Owner:** _tbd_
 
 ## Breakdown

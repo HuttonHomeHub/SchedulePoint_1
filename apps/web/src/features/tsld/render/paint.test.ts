@@ -11,7 +11,18 @@ const PALETTE: TsldPalette = {
   nearCritical: '#fa0',
   outline: '#fff',
   selection: '#0af',
+  nonWorking: '#222',
+  today: '#f00',
 };
+
+/** All view layers on, matching the default scene. */
+const ALL_ON = {
+  dayGrid: true,
+  monthGrid: true,
+  yearGrid: true,
+  today: true,
+  nonWorking: true,
+} as const;
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
 const SIZE = { width: 800, height: 400 };
 const DATA_DATE = '2026-01-01';
@@ -267,6 +278,81 @@ describe('paintScene', () => {
       PALETTE,
     );
     expect(plain.fill).not.toHaveBeenCalled();
+  });
+
+  it('washes non-working columns only when a calendar is present, the toggle is on, and zoomed in', () => {
+    const scene = (over: Partial<TsldScene>): TsldScene => ({
+      activities: [],
+      edges: [],
+      dataDate: DATA_DATE,
+      view: ALL_ON,
+      ...over,
+    });
+    const isWorkingDay = (d: number): boolean => ((d % 7) + 7) % 7 < 5; // 5 worked / 2 not
+    // On: a fill per visible non-working column (no bars here, so all fillRects are the wash).
+    const on = mockCtx();
+    paintScene(on, scene({ isWorkingDay }), VIEW, SIZE, PALETTE);
+    expect(on.fillRect).toHaveBeenCalled();
+    // No calendar → nothing to shade.
+    const noCal = mockCtx();
+    paintScene(noCal, scene({}), VIEW, SIZE, PALETTE);
+    expect(noCal.fillRect).not.toHaveBeenCalled();
+    // Toggle off → nothing.
+    const off = mockCtx();
+    paintScene(
+      off,
+      scene({ isWorkingDay, view: { ...ALL_ON, nonWorking: false } }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(off.fillRect).not.toHaveBeenCalled();
+    // Coarse zoom (sub-pixel columns) → culled.
+    const coarse = mockCtx();
+    paintScene(coarse, scene({ isWorkingDay }), { ...VIEW, pxPerDay: 1 }, SIZE, PALETTE);
+    expect(coarse.fillRect).not.toHaveBeenCalled();
+  });
+
+  it('draws the TODAY marker (dashed) only when on, mapped, and on-screen', () => {
+    const base: TsldScene = { activities: [], edges: [], dataDate: DATA_DATE, view: ALL_ON };
+    // On-screen today → a dashed vertical (the only [4,3] dash in an edge-less scene).
+    const shown = mockCtx();
+    paintScene(shown, { ...base, todayOffset: 5 }, VIEW, SIZE, PALETTE);
+    expect(shown.setLineDash).toHaveBeenCalledWith([4, 3]);
+    expect(shown.stroke).toHaveBeenCalled();
+    // Toggle off → no today dash.
+    const off = mockCtx();
+    paintScene(
+      off,
+      { ...base, todayOffset: 5, view: { ...ALL_ON, today: false } },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(off.setLineDash).not.toHaveBeenCalledWith([4, 3]);
+    // Off-screen (far future) → not drawn.
+    const far = mockCtx();
+    paintScene(far, { ...base, todayOffset: 100000 }, VIEW, SIZE, PALETTE);
+    expect(far.setLineDash).not.toHaveBeenCalledWith([4, 3]);
+    // No today offset → not drawn.
+    const none = mockCtx();
+    paintScene(none, base, VIEW, SIZE, PALETTE);
+    expect(none.setLineDash).not.toHaveBeenCalledWith([4, 3]);
+  });
+
+  it('culls per-day gridlines at coarse zoom but keeps month/year lines', () => {
+    // At 1px/day the day grid is culled; month + year boundary lines still stroke.
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      { activities: [], edges: [], dataDate: DATA_DATE, view: ALL_ON },
+      { ...VIEW, pxPerDay: 1 },
+      SIZE,
+      PALETTE,
+    );
+    // Month/year boundaries over a ~800-day span still produce gridline moveTo calls.
+    expect(ctx.moveTo).toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalled();
   });
 
   it('culls off-screen activities (no fillRect, not in the visible set)', () => {
