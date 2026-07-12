@@ -3,6 +3,7 @@ import { WorkingWeekdays } from '@repo/types';
 import {
   addCalendarDays,
   clampPxPerDay,
+  daysBetween,
   screenXOfDay,
   ZOOM_STOPS,
   zoomAt,
@@ -113,22 +114,34 @@ export function rulerTicks(view: Viewport, size: Size, dataDate: string): RulerM
   const years: RulerTick[] = [];
   const months: RulerTick[] = [];
   const days: RulerTick[] = [];
-  let lastYear = '';
-  let lastMonth = '';
 
-  for (let d = firstDay; d <= lastDay; d += 1) {
-    const iso = addCalendarDays(dataDate, d);
-    const x = screenXOfDay(d, view);
-    if (showDays) days.push({ x, label: String(Number(iso.slice(8, 10))) });
-    const monthKey = iso.slice(0, 7);
-    if (showMonths && monthKey !== lastMonth) {
-      lastMonth = monthKey;
-      months.push({ x, label: MONTHS_SHORT[Number(iso.slice(5, 7)) - 1]! });
+  // Parse the anchor date ONCE, then walk by integer date rollover — no per-day `Date`/ISO parsing
+  // (that blew the ADR-0026 draw budget at coarse zoom, where thousands of days are visible). A
+  // screen-x is computed only for a tick we actually emit.
+  const anchor = new Date(`${addCalendarDays(dataDate, firstDay)}T00:00:00Z`);
+  let y = anchor.getUTCFullYear();
+  let m = anchor.getUTCMonth() + 1;
+  let d = anchor.getUTCDate();
+  for (let off = firstDay; off <= lastDay; off += 1) {
+    // The first visible column seeds the *current* month/year label (pinned left, "sticky"), then
+    // each month/year boundary adds the next — so the year/month in view is always labelled, not
+    // only when a Jan-1 / 1st-of-month happens to be on screen.
+    const first = off === firstDay;
+    if (showDays) days.push({ x: screenXOfDay(off, view), label: String(d) });
+    if (showMonths && (first || d === 1)) {
+      months.push({ x: screenXOfDay(off, view), label: MONTHS_SHORT[m - 1]! });
     }
-    const yearKey = iso.slice(0, 4);
-    if (yearKey !== lastYear) {
-      lastYear = yearKey;
-      years.push({ x, label: yearKey });
+    if (first || (d === 1 && m === 1)) {
+      years.push({ x: screenXOfDay(off, view), label: String(y) });
+    }
+    d += 1;
+    if (d > daysInMonth(y, m)) {
+      d = 1;
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
     }
   }
   return { years, months, days };
@@ -187,17 +200,39 @@ export interface WorkingDayCalendar {
 }
 
 /**
- * Whether the day at `dayOffset` from the data date is worked. A dated exception overrides the
- * weekly mask (ADR-0024); otherwise the mask's bit for that weekday decides. Non-working days
- * are the ones the canvas shades.
+ * Build a **fast** working-day predicate for a plan calendar, keyed by day offset. All the `Date`
+ * work happens once here (the reference weekday + re-keying the exceptions by offset); the returned
+ * closure then does zero `Date` allocation per call — just an integer-modulo weekday and a Map
+ * lookup — so it's safe to call once per visible day on the per-frame canvas paint path (ADR-0026
+ * draw budget). A dated exception overrides the weekly mask (ADR-0024).
+ */
+export function makeWorkingDayPredicate(
+  dataDate: string,
+  calendar: WorkingDayCalendar,
+): (dayOffset: number) => boolean {
+  const refWeekday = weekdayIndex(dataDate); // weekday of day offset 0 — one parse
+  const byOffset = new Map<number, boolean>();
+  for (const [iso, working] of calendar.exceptions) {
+    byOffset.set(daysBetween(dataDate, iso), working);
+  }
+  const mask = calendar.workingWeekdays;
+  return (dayOffset: number): boolean => {
+    const override = byOffset.get(dayOffset);
+    if (override !== undefined) return override;
+    const weekday = (((refWeekday + dayOffset) % 7) + 7) % 7;
+    return WorkingWeekdays.has(mask, weekday);
+  };
+}
+
+/**
+ * Whether the day at `dayOffset` from the data date is worked — a one-off check that delegates to
+ * {@link makeWorkingDayPredicate}. For the per-frame paint path, build the predicate once (see
+ * `TsldPanel`) rather than calling this per day.
  */
 export function isWorkingDay(
   dayOffset: number,
   dataDate: string,
   calendar: WorkingDayCalendar,
 ): boolean {
-  const iso = addCalendarDays(dataDate, dayOffset);
-  const override = calendar.exceptions.get(iso);
-  if (override !== undefined) return override;
-  return WorkingWeekdays.has(calendar.workingWeekdays, weekdayIndex(iso));
+  return makeWorkingDayPredicate(dataDate, calendar)(dayOffset);
 }

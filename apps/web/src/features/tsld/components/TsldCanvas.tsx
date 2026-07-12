@@ -50,8 +50,10 @@ export interface TsldCanvasHandle {
   stepZoom: (factor: number) => void;
 }
 
-/** Height (px) of the sticky date-ruler band across the top of the canvas. */
-const RULER_HEIGHT = 40;
+/** Height (px) of the sticky date-ruler band across the top of the canvas. The drawing canvas sits
+ * below it, so a canvas-relative y maps to a container y by adding this (used to place the create
+ * popover, which is positioned against the outer container). */
+export const RULER_HEIGHT = 40;
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
@@ -551,7 +553,10 @@ export function TsldCanvas({
           canvas already has the parallel a11y listbox; pointer-events-none so pan/zoom fall through). */}
       <div
         aria-hidden="true"
-        className="bg-card text-muted-foreground border-border pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden border-b text-[11px] leading-none"
+        data-testid="tsld-ruler"
+        className="bg-card text-muted-foreground border-border pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden border-b text-xs leading-none"
+        // RULER_HEIGHT is a raw px value (not a Tailwind class) because the canvas-sizing math in
+        // measure() needs the exact same number — one source of truth for the CSS + JS.
         style={{ height: RULER_HEIGHT }}
       >
         <div

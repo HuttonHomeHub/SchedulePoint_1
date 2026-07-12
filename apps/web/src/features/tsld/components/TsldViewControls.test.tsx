@@ -55,22 +55,10 @@ describe('TsldViewControls', () => {
     expect(onToggle).toHaveBeenCalledWith('today');
   });
 
-  it('fits on demand and disables Fit when asked', () => {
+  it('fits on demand', () => {
     const onFit = vi.fn();
-    const { rerender } = renderControls({ onFit });
+    renderControls({ onFit });
     fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
     expect(onFit).toHaveBeenCalledTimes(1);
-    rerender(
-      <TsldViewControls
-        zoomPreset="week"
-        onZoomPreset={vi.fn()}
-        onZoomStep={vi.fn()}
-        onFit={onFit}
-        fitDisabled
-        toggles={DEFAULT_VIEW_TOGGLES}
-        onToggle={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeDisabled();
   });
 });

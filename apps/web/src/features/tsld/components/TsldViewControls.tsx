@@ -29,7 +29,6 @@ export interface TsldViewControlsProps {
   onZoomPreset: (level: ZoomLevel) => void;
   onZoomStep: (factor: number) => void;
   onFit: () => void;
-  fitDisabled?: boolean;
   toggles: TsldViewToggles;
   onToggle: (key: keyof TsldViewToggles) => void;
 }
@@ -45,7 +44,6 @@ export function TsldViewControls({
   onZoomPreset,
   onZoomStep,
   onFit,
-  fitDisabled = false,
   toggles,
   onToggle,
 }: TsldViewControlsProps): React.ReactElement {
@@ -65,25 +63,26 @@ export function TsldViewControls({
         ))}
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           aria-label="Zoom out"
           onClick={() => onZoomStep(1 / 1.3)}
         >
           <Minus aria-hidden="true" className="size-4" />
         </Button>
-        <Button variant="outline" size="sm" aria-label="Zoom in" onClick={() => onZoomStep(1.3)}>
+        <Button variant="outline" size="icon" aria-label="Zoom in" onClick={() => onZoomStep(1.3)}>
           <Plus aria-hidden="true" className="size-4" />
         </Button>
       </div>
 
-      <Button variant="outline" size="sm" onClick={onFit} disabled={fitDisabled}>
+      <Button variant="outline" size="sm" onClick={onFit}>
         Fit to plan
       </Button>
 
-      <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1 border-0 p-0">
+      <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1 border-0 p-0">
         <legend className="sr-only">Diagram layers</legend>
         {TOGGLES.map(({ key, label }) => (
-          <label key={key} className="flex items-center gap-1.5 text-sm">
+          // `py-1` + `min-h-6` gives each label a ≥24px hit target (WCAG 2.2 SC 2.5.8, AA).
+          <label key={key} className="flex min-h-6 items-center gap-1.5 py-1 text-sm">
             <input
               type="checkbox"
               className="accent-primary size-4"

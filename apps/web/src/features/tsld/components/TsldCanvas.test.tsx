@@ -1,7 +1,8 @@
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TsldCanvas } from './TsldCanvas';
+import { TsldCanvas, type TsldCanvasHandle } from './TsldCanvas';
 
 import type { RenderActivity } from '@/features/tsld/render/render-model';
 
@@ -59,5 +60,48 @@ describe('TsldCanvas', () => {
     fireEvent.pointerMove(canvas, { clientX: 40, clientY: 0, pointerId: 1 });
     fireEvent.pointerUp(canvas, { clientX: 40, clientY: 0, pointerId: 1 });
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('populates the aria-hidden date ruler with year + month labels for the data date', async () => {
+    const { container } = render(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-03-16"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+      />,
+    );
+    const ruler = container.querySelector('[data-testid="tsld-ruler"]');
+    expect(ruler).toHaveAttribute('aria-hidden', 'true'); // never in the a11y tree
+    // The rAF loop fills the ruler DOM from the viewport; the current year/month are labelled.
+    await waitFor(() => expect(ruler?.textContent).toContain('2026'));
+    expect(ruler?.textContent).toContain('Mar');
+  });
+
+  it('exposes an imperative zoom handle that reports the active preset only on a stop change', () => {
+    const controlRef = createRef<TsldCanvasHandle>();
+    const onZoomStopChange = vi.fn();
+    render(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        controlRef={controlRef}
+        onZoomStopChange={onZoomStopChange}
+      />,
+    );
+    act(() => controlRef.current!.zoomToPreset('day'));
+    expect(onZoomStopChange).toHaveBeenLastCalledWith('day');
+    act(() => controlRef.current!.zoomToPreset('year'));
+    expect(onZoomStopChange).toHaveBeenLastCalledWith('year');
+    // A second command to the SAME preset does not re-fire (coarse, stop-boundary only).
+    const callsBefore = onZoomStopChange.mock.calls.length;
+    act(() => controlRef.current!.zoomToPreset('year'));
+    expect(onZoomStopChange.mock.calls.length).toBe(callsBefore);
   });
 });

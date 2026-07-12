@@ -98,6 +98,24 @@ describe('TsldPanel', () => {
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
   });
 
+  it('round-trips a zoom-preset click through the canvas back to the control (aria-pressed)', () => {
+    render(
+      <TsldPanel
+        activities={[activity(), activity({ id: 'a2', code: 'A200', name: 'Pour slab' })]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+      />,
+    );
+    // Week is the default preset; clicking Year commands the real canvas, whose rAF loop reports
+    // the new stop back via onZoomStopChange → the control re-renders with Year pressed. No mocks:
+    // this exercises the whole viewport/command seam (TsldViewControls → TsldCanvas → back).
+    const year = screen.getByRole('button', { name: 'Year' });
+    expect(year).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(year);
+    expect(screen.getByRole('button', { name: 'Year' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('selects an activity via keyboard (arrow keys) and marks it in the listbox', () => {
     render(
       <TsldPanel

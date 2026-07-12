@@ -14,12 +14,12 @@ import { packLanes } from '../render/auto-pack';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from '../render/paint';
 import { daysBetween, type Point, type ZoomLevel } from '../render/render-model';
-import { isWorkingDay, type WorkingDayCalendar } from '../render/time-scale';
+import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges } from '../render/to-render-model';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
-import { TsldCanvas, type PendingGhost, type TsldCanvasHandle } from './TsldCanvas';
+import { RULER_HEIGHT, TsldCanvas, type PendingGhost, type TsldCanvasHandle } from './TsldCanvas';
 import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
@@ -254,10 +254,7 @@ export function TsldPanel({
   // predicate is memoised (referentially stable) so it doesn't re-trigger the canvas scene effect
   // every render (ADR-0026 D3 / ui-architect note); both are null when their inputs are absent.
   const workingDayPredicate = useMemo(
-    () =>
-      calendar && dataDate
-        ? (dayOffset: number) => isWorkingDay(dayOffset, dataDate, calendar)
-        : null,
+    () => (calendar && dataDate ? makeWorkingDayPredicate(dataDate, calendar) : null),
     [calendar, dataDate],
   );
   const todayOffset = useMemo(
@@ -619,7 +616,6 @@ export function TsldPanel({
           onZoomPreset={(level) => canvasControlRef.current?.zoomToPreset(level)}
           onZoomStep={(factor) => canvasControlRef.current?.stepZoom(factor)}
           onFit={() => setFitSignal((n) => n + 1)}
-          fitDisabled={!showDiagram}
           toggles={viewToggles}
           onToggle={toggleView}
         />
@@ -732,7 +728,10 @@ export function TsldPanel({
             {pendingCreate ? (
               <CreateActivityPopover
                 x={pendingCreate.anchor.x}
-                y={pendingCreate.anchor.y}
+                // The anchor is canvas-relative; the popover is positioned against the outer
+                // container, which the ruler band offsets by RULER_HEIGHT — add it back so the
+                // popover lands at the drop point, not RULER_HEIGHT above it.
+                y={pendingCreate.anchor.y + RULER_HEIGHT}
                 saving={pendingCreate.saving}
                 error={pendingCreate.error}
                 onCommit={commitCreate}
