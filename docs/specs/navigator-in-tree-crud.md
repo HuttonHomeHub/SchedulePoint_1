@@ -5,8 +5,8 @@ Navigator in-tree CRUD (Project Explorer — Phase 2). NO application code at th
 
 # Feature Spec: Navigator in-tree CRUD (Project Explorer — Phase 2)
 
-- **Status:** Approved — implemented behind `VITE_NAV_TREE_CRUD` (off by default);
-  Playwright journeys + default-on flip pending. CQ-1 & CQ-2 approved as recommended.
+- **Status:** Shipped — `VITE_NAV_TREE_CRUD` on by default; specialist reviews
+  addressed and flag-on Playwright journeys added. CQ-1 & CQ-2 approved as recommended.
 - **Author(s):** Feature Analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-12
 - **Tracking issue / epic:** _TBD_ — Epic "Domain hierarchy & navigation" (navigation UX)

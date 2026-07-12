@@ -28,15 +28,6 @@ function flagDefaultOn(value: string | undefined): boolean {
 }
 
 /**
- * Reads a boolean `VITE_` flag that defaults **OFF**: disabled unless the operator
- * explicitly opts in with `"true"`/`"1"`. Used while a feature is still being built
- * up behind a flag so `main` stays releasable (flag-off = the prior behaviour).
- */
-function flagDefaultOff(value: string | undefined): boolean {
-  return value === 'true' || value === '1';
-}
-
-/**
  * On-canvas TSLD structural editing (M2). **ON by default** (2026-07-12) now that
  * every pre-enablement gate is green — see below. Set `VITE_TSLD_EDITING=false` to
  * fall back to the M1 read-only surface, byte-for-byte (rollback / opt-out).
@@ -86,12 +77,13 @@ export const PLAN_EDIT_LOCK_ENABLED = flagDefaultOn(import.meta.env.VITE_PLAN_ED
 export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
 
 /**
- * In-tree CRUD for the Project Explorer (ADR-0029 Phase 2). **OFF by default**
- * while the create/rename/delete affordances are built up slice by slice; set
- * `VITE_NAV_TREE_CRUD=true` to opt in. Flag-off is exactly today's navigation-only
- * tree (no context menu, no "⋯" trigger, no root "New client" control), so `main`
- * stays releasable throughout the rollout. Gated additionally by write RBAC — even
- * on, Contributors/Viewers see a read-only tree. Flipped default-on in the final
- * rollout task once every journey + a11y gate is green.
+ * In-tree CRUD for the Project Explorer (ADR-0029 Phase 2). **ON by default**
+ * (2026-07-12) now that the create/rename/delete affordances, the specialist-review
+ * a11y fixes, and the flag-on Playwright journeys (`e2e/navigator-crud.spec.ts`) are
+ * all green. Writers (Planner/Org Admin) get the row context menu (⋯ button,
+ * right-click, ContextMenu/Shift+F10 key, touch long-press) and the rail-header
+ * "New client" control; Contributors/Viewers keep a read-only tree (additional write
+ * RBAC gate). Set `VITE_NAV_TREE_CRUD=false` to fall back to the navigation-only tree,
+ * byte-for-byte (rollback / opt-out).
  */
-export const NAV_TREE_CRUD_ENABLED = flagDefaultOff(import.meta.env.VITE_NAV_TREE_CRUD);
+export const NAV_TREE_CRUD_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE_CRUD);

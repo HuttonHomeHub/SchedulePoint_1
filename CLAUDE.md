@@ -185,7 +185,11 @@ documents (keep them authoritative):
 Essentials: feature-first structure; server state in TanStack Query; URL state
 in the router (TanStack Router); minimal client state; forms via RHF + Zod;
 styling via semantic tokens + Tailwind v4 + shadcn/ui + CVA. **Mobile-first,
-theme-aware (light/dark/system), and no one-off component styling — ever.**
+theme-aware (light/dark/system), and no one-off component styling — ever.** The
+authenticated app is a **persistent app-shell** with a Client → Project → Plan
+**Project Explorer** navigator (ADR-0029); row actions use the hand-rolled APG
+`Menu` primitive (`components/ui/menu.tsx`) — never hover-only (see
+[`docs/UX_STANDARDS.md`](docs/UX_STANDARDS.md) "Row / node actions").
 
 ### Backend architecture & standards
 

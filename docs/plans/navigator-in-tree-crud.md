@@ -6,10 +6,10 @@ Navigator in-tree CRUD (Project Explorer — Phase 2). Thin vertical slices; mai
 # Implementation Plan: Navigator in-tree CRUD (Project Explorer — Phase 2)
 
 - **Feature spec:** [`docs/specs/navigator-in-tree-crud.md`](../specs/navigator-in-tree-crud.md)
-- **Status:** Approved — Features A+B+C implemented behind `VITE_NAV_TREE_CRUD` (off
-  by default); Feature D (Playwright journeys + default-on flip) pending. CQ-1 (Menu
-  primitive + coordinator seam recorded as an ADR-0029 extension in `DECISIONS.md`) and
-  CQ-2 (root "New client" in the rail header) both approved.
+- **Status:** Shipped — all features (A+B+C+D) delivered; `VITE_NAV_TREE_CRUD` is
+  **on by default** (specialist-review a11y fixes + flag-on Playwright journeys green).
+  CQ-1 (Menu primitive + coordinator seam recorded as an ADR-0029 extension in
+  `DECISIONS.md`) and CQ-2 (root "New client" in the rail header) both approved.
 - **Owner:** _TBD_
 - **Related ADR:** ADR-0029 (this is its named Phase 2 — extension, **no new ADR**; `Menu` primitive recorded in `DECISIONS.md`/`COMPONENT_LIBRARY.md`)
 
