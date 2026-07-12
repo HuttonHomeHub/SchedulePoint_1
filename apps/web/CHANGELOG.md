@@ -1,5 +1,61 @@
 # @repo/web
 
+## 0.11.0
+
+### Minor Changes
+
+- [#35](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/35) [`76b9041`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/76b9041c995eab9ee711082baf74dbd06cdb6263) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the plan edit-lock **web "pen" layer** (edit-lock M2, ADR-0028), behind a new
+  `VITE_PLAN_EDIT_LOCK` flag (default **off** — ships inert). When enabled, the plan
+  screen shows a single **"who holds the pen"** banner: a Planner clicks **Start
+  editing** to take an exclusive edit-lock (a background heartbeat keeps it alive,
+  released on Stop / navigation / tab-close), and the on-canvas schedule editing
+  affordances — the TSLD canvas, activity create/edit/delete, the positions batch,
+  the dependency editor, and Recalculate — become live only while holding it.
+  Everyone else sees who's editing (and, per their role, can **request control**,
+  **take over** once the holder goes idle / a grace window elapses, or — as an Org
+  Admin — take over immediately via a confirm); the Contributor progress path and
+  plan-metadata edits are never pen-gated. A **423 `LOCKED`** response drops the
+  surface to read-only with distinct copy, separate from the 409 "changed elsewhere"
+  conflict. With the flag off, nothing polls or changes — current behaviour
+  byte-for-byte. Enable `VITE_PLAN_EDIT_LOCK` **before** the backend's
+  `PLAN_EDIT_LOCK_ENFORCED` (ADR-0028 §9 rollout ordering).
+
+### Patch Changes
+
+- [#38](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/38) [`bd3b2d1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd3b2d117521090618fa76a4d7163849de661318) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix stale driving-arrow styling on the TSLD canvas after a recalculate. The CPM
+  recalculate rewrites each dependency's engine-owned `isDriving` flag, but
+  `useRecalculate` only invalidated the schedule summary, activities and baseline
+  variance — not the dependency query where `isDriving` lives. So after a
+  reposition-in-time or create-activity edit (which recalc but don't otherwise touch
+  the dependency cache), the driving-vs-non-driving arrows could render stale until a
+  manual refresh. `useRecalculate` now also invalidates the plan's dependency query,
+  closing the last gap in TSLD M3 (live critical path + driving arrows).
+
+- [#37](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/37) [`ce59178`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ce591786a5e3db36db2b5e061eb2fb4941e05a6c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Harden the (flag-gated) TSLD on-canvas editing surface toward enablement — no
+  user-visible change, both editing flags remain off by default.
+
+  - **fix(web):** the coalesced keyboard-nudge now flushes a delta queued _behind_ an
+    in-flight write on unmount (previously a `!busyRef` guard could silently drop it).
+  - **perf(api):** the edit-lock heartbeat resolves the caller's own holder profile
+    from the session instead of a `users` query — the common beat issues zero extra
+    DB reads.
+  - **test:** a flag-on Playwright harness (`test:e2e:edit`, wired into CI) that serves
+    the app with the editing flags on and the API enforcing the lock, with pen-gating,
+    single-actor pen-lifecycle, and keyboard-edit journeys (the latter automating the
+    `Alt+←/→` history-suppression check on Chromium); plus a route-level `plan-detail`
+    gating/reposition-seam test. Operators: see
+    `docs/runbooks/tsld-editing-enablement.md` for the enablement procedure.
+
+- [#38](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/38) [`bd3b2d1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd3b2d117521090618fa76a4d7163849de661318) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add a client-side link-legality pre-check to the TSLD dependency-draw (flag-gated
+  editing, `VITE_TSLD_EDITING`). While drawing a dependency, the hovered target now
+  rings by legality — a legal drop rings solid; a self-link, duplicate, or cycle rings
+  dashed in the critical colour (colour and dash, not colour alone) — and an illegal
+  drop the loaded graph already proves invalid is refused locally with an explanation
+  (no round-trip to the server, which stays authoritative). Closes the ADR-0026 D5
+  "live legality feedback" follow-up.
+- Updated dependencies [[`76b9041`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/76b9041c995eab9ee711082baf74dbd06cdb6263)]:
+  - @repo/types@0.7.0
+
 ## 0.10.0
 
 ### Minor Changes
