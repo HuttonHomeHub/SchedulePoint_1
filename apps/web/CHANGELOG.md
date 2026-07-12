@@ -1,5 +1,23 @@
 # @repo/web
 
+## 0.14.1
+
+### Patch Changes
+
+- [#45](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/45) [`6587054`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/65870545a9a6c2b37d544f4a6ef952d016ea067b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Virtualize the Project Explorer tree (ADR-0029, C2). The flattened visible rows are
+  now windowed with `@tanstack/react-virtual`, so the rail stays cheap at org scale
+  (hundreds of plans). ARIA `setsize`/`posinset` come from the full model and the
+  focused/selected node is always kept rendered, so roving-tabindex keyboard navigation
+  and deep-link selection still reach any node even when it is scrolled out of view. No
+  visible behaviour change for small trees.
+
+- [#45](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/45) [`6587054`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/65870545a9a6c2b37d544f4a6ef952d016ea067b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Compose the shell's workspace region as a single `<main>` (ADR-0029, M3). The routed
+  screens (clients, projects, plans, the plan workspace, members, calendars, baselines,
+  recently-deleted, onboarding, and the welcome landing) now render their content into
+  the shell's one main region instead of each owning a `<main>` of its own — removing
+  per-page landmark duplication so the top bar + rail are truly composed once. Purely
+  structural: each view's content and layout are unchanged.
+
 ## 0.14.0
 
 ### Minor Changes
