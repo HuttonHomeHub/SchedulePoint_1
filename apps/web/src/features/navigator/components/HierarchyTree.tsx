@@ -19,11 +19,15 @@ const STATE_LABEL: Record<'loading' | 'empty' | 'error', string> = {
   error: 'Couldn’t load',
 };
 
-/** Root-level empty copy is friendlier than a bare "Nothing here yet". */
+/**
+ * Per-level empty copy (kept deliberately distinct from the pages' own "No … yet"
+ * empty states so nothing double-matches in tests/AT).
+ */
 function emptyLabel(row: VisibleRow): string {
   if (row.type !== 'empty') return STATE_LABEL[row.type as 'loading' | 'error'];
-  if (row.parentId === null) return 'No clients yet';
-  return 'Empty';
+  if (row.level <= 1) return 'No clients';
+  if (row.level === 2) return 'No projects';
+  return 'No plans';
 }
 
 /**
