@@ -233,8 +233,9 @@ describe('PlanEditLockService', () => {
     it('resolves the holder from the caller session — no users round-trip on the hot path (#26)', async () => {
       repository.heartbeat.mockResolvedValue(lockRow({ holderUserId: ME }));
       const s = await service.heartbeat(principalWithProfile(ME, PLANNER), SLUG, PLAN_ID);
-      // The holder IS the caller and there is no pending requester → nothing to resolve.
-      expect(repository.findActors).not.toHaveBeenCalled();
+      // The holder IS the caller and there is no pending requester → nothing to resolve:
+      // findActors is called with an empty id list, which it short-circuits to zero queries.
+      expect(repository.findActors).toHaveBeenCalledWith([], undefined);
       expect(s.holder).toEqual({ id: ME, name: 'Me Myself', email: 'me@example.com' });
     });
 

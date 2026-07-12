@@ -391,9 +391,9 @@ export class PlanEditLockService {
     const idsToResolve = [holderId, requesterId].filter(
       (x): x is string => x !== null && !(self !== null && x === principal.userId),
     );
-    const actors = idsToResolve.length
-      ? await this.repository.findActors(idsToResolve, db)
-      : new Map<string, PlanEditLockActor>();
+    // `findActors` short-circuits an empty id list to an empty Map (no query), so the
+    // common self-holder / no-requester heartbeat issues zero `users` reads.
+    const actors = await this.repository.findActors(idsToResolve, db);
     if (self) actors.set(principal.userId, self);
 
     return {

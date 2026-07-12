@@ -274,4 +274,31 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
     expect(onWriteRejected).toHaveBeenCalledTimes(1);
     expect(outcome).toEqual({ applied: false, conflict: null });
   });
+
+  it('a 409 on a lane move surfaces the stale-plan conflict (not applied)', async () => {
+    h.pen = pen({ penManaged: true, holdsPen: true });
+    h.repositionLane.mockRejectedValue(
+      new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
+    );
+    renderScreen();
+    const onReposition = h.tsld.props?.onReposition as (
+      i: unknown,
+    ) => Promise<{ applied: boolean; conflict: string | null }>;
+    const outcome = await onReposition({ activityId: 'a1', laneIndex: 2 });
+    expect(outcome.applied).toBe(false);
+    expect(outcome.conflict).toMatch(/changed since you opened/i);
+  });
+
+  it('a day change that lands but fails to recalc is applied with a non-fatal conflict', async () => {
+    h.pen = pen({ penManaged: true, holdsPen: true });
+    h.recalculate.mockRejectedValue(new Error('recalc down'));
+    renderScreen();
+    const onReposition = h.tsld.props?.onReposition as (
+      i: unknown,
+    ) => Promise<{ applied: boolean; conflict: string | null }>;
+    const outcome = await onReposition({ activityId: 'a1', startDay: 5 });
+    expect(h.updateActivity).toHaveBeenCalledTimes(1);
+    expect(outcome.applied).toBe(true); // the move persisted…
+    expect(outcome.conflict).toMatch(/couldn.t recalculate/i); // …dates stay stale until next recalc
+  });
 });

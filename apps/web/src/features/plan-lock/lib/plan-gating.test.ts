@@ -90,5 +90,45 @@ describe('derivePlanGating', () => {
       expect(g.canEditSchedule).toBe(false);
       expect(g.canRecalc).toBe(false);
     });
+
+    it('gates canEditSchedule and canRecalc by their OWN role capability, independently', () => {
+      // A (hypothetical) role that may write but not calculate, holding the pen.
+      const writeNoCalc = derivePlanGating({
+        penManaged: true,
+        holdsPen: true,
+        canWrite: true,
+        canProgress: false,
+        canCalculate: false,
+      });
+      expect(writeNoCalc.canEditSchedule).toBe(true);
+      expect(writeNoCalc.canRecalc).toBe(false);
+
+      // …and the reverse: calculate but not write — the two are not coupled.
+      const calcNoWrite = derivePlanGating({
+        penManaged: true,
+        holdsPen: true,
+        canWrite: false,
+        canProgress: false,
+        canCalculate: true,
+      });
+      expect(calcNoWrite.canEditSchedule).toBe(false);
+      expect(calcNoWrite.canRecalc).toBe(true);
+    });
+  });
+
+  it('pen off + no role capability → everything false (plain passthrough)', () => {
+    const g = derivePlanGating({
+      penManaged: false,
+      holdsPen: false,
+      canWrite: false,
+      canProgress: false,
+      canCalculate: false,
+    });
+    expect(g).toEqual({
+      canEditSchedule: false,
+      canRecalc: false,
+      canProgress: false,
+      penReadOnly: false,
+    });
   });
 });

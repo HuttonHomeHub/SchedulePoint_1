@@ -177,4 +177,31 @@ describe('useCoalescedNudge', () => {
     });
     expect(onReposition).toHaveBeenNthCalledWith(2, { activityId: 'a1', laneIndex: 2 });
   });
+
+  it('flushes the queued delta on unmount even if the in-flight write REJECTS (#25c)', async () => {
+    let rejectFirst: () => void = () => {};
+    const onReposition = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise((_resolve, reject) => (rejectFirst = () => reject(new Error('boom')))),
+      )
+      .mockResolvedValue({ applied: true, conflict: null });
+    const deps = makeDeps({ onReposition });
+    const a = deps.activities[0]!;
+    const { result, unmount } = renderHook(() => useCoalescedNudge(deps));
+
+    act(() => result.current(a, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    act(() => result.current(a, 'lane', 1)); // burst 2 queued behind the in-flight write
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    act(() => unmount());
+
+    // The in-flight write fails — the cleanup still flushes the queued target
+    // (`inFlight.then(flushFinal, flushFinal)` handles both settle outcomes).
+    await act(async () => {
+      rejectFirst();
+      await Promise.resolve();
+    });
+    expect(onReposition).toHaveBeenNthCalledWith(2, { activityId: 'a1', laneIndex: 2 });
+  });
 });
