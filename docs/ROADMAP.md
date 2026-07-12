@@ -50,6 +50,12 @@ Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
 - **Plan edit-lock** (single-editor hand-off) — **delivered** (ADR-0028): the server
   lease + 423 write-gate and the web "pen" ship behind `PLAN_EDIT_LOCK_ENFORCED` /
   `VITE_PLAN_EDIT_LOCK` (staged-off), unblocking on-canvas editing enablement.
+- **Editing enablement hardening** — **delivered**: a flag-on E2E harness
+  (`test:e2e:edit`, in CI) proving the editing surface + pen end-to-end, route-level
+  gating coverage, and an operator runbook
+  ([`docs/runbooks/tsld-editing-enablement.md`](runbooks/tsld-editing-enablement.md)).
+  Flipping the flags on remains an ops action gated on the manual cross-browser
+  `Alt+←/→` check (TECH_DEBT #25a) and the M3 multi-actor hand-off journey.
 - **Undo/redo**, **export** (PDF/CSV), and **resources** (library + assignments) —
   all Must/Should-have per the brief.
 

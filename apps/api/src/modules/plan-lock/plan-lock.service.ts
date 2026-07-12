@@ -356,6 +356,17 @@ export class PlanEditLockService {
     return actors.get(id) ?? { id, name: 'Unknown user', email: '' };
   }
 
+  /**
+   * The caller as an actor from their own session profile (no DB round-trip), or
+   * `null` if the principal doesn't carry one (foundation/test path). Lets
+   * {@link buildStatus} skip resolving the holder on the hot self/heartbeat path
+   * where the holder is always the caller (#26).
+   */
+  private selfActor(principal: Principal): PlanEditLockActor | null {
+    if (principal.name === undefined || principal.email === undefined) return null;
+    return { id: principal.userId, name: principal.name, email: principal.email };
+  }
+
   private async buildStatus(
     planId: string,
     organizationId: string,
@@ -371,10 +382,19 @@ export class PlanEditLockService {
 
     const holderId = row ? row.holderUserId : null;
     const requesterId = liveHeld && row ? row.requestedByUserId : null;
-    const actors = await this.repository.findActors(
-      [holderId, requesterId].filter((x): x is string => x !== null),
-      db,
+
+    // The caller's own profile came free with the session, so don't re-fetch it: on
+    // the heartbeat/self path the holder IS the caller, and the common case has no
+    // pending requester — resolving nothing (#26). Only ids we can't supply locally
+    // hit the DB.
+    const self = this.selfActor(principal);
+    const idsToResolve = [holderId, requesterId].filter(
+      (x): x is string => x !== null && !(self !== null && x === principal.userId),
     );
+    // `findActors` short-circuits an empty id list to an empty Map (no query), so the
+    // common self-holder / no-requester heartbeat issues zero `users` reads.
+    const actors = await this.repository.findActors(idsToResolve, db);
+    if (self) actors.set(principal.userId, self);
 
     return {
       planId,

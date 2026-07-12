@@ -143,4 +143,65 @@ describe('useCoalescedNudge', () => {
     act(() => unmount());
     expect(deps.onReposition).toHaveBeenCalledWith({ activityId: 'a1', laneIndex: 1 });
   });
+
+  it('flushes a delta queued behind an in-flight write on unmount (#25c)', async () => {
+    let resolveFirst: () => void = () => {};
+    const onReposition = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise((r) => (resolveFirst = () => r({ applied: true, conflict: null }))),
+      )
+      .mockResolvedValue({ applied: true, conflict: null });
+    const deps = makeDeps({ onReposition });
+    const a = deps.activities[0]!;
+    const { result, unmount } = renderHook(() => useCoalescedNudge(deps));
+
+    // Burst 1: +1 lane → commit fires; the write is in flight (unresolved).
+    act(() => result.current(a, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(onReposition).toHaveBeenNthCalledWith(1, { activityId: 'a1', laneIndex: 1 });
+
+    // Burst 2 while burst 1 is STILL in flight: the target advances to lane 2, commit serializes.
+    act(() => result.current(a, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(onReposition).toHaveBeenCalledTimes(1); // queued behind the in-flight write
+
+    // Unmount now — a write is in flight AND lane 2 is queued. The old `!busyRef` guard dropped it.
+    act(() => unmount());
+    expect(onReposition).toHaveBeenCalledTimes(1); // nothing sent yet — awaiting the in-flight write
+
+    // Resolve the in-flight write → the queued absolute target (lane 2) is flushed on unmount.
+    await act(async () => {
+      resolveFirst();
+      await Promise.resolve();
+    });
+    expect(onReposition).toHaveBeenNthCalledWith(2, { activityId: 'a1', laneIndex: 2 });
+  });
+
+  it('flushes the queued delta on unmount even if the in-flight write REJECTS (#25c)', async () => {
+    let rejectFirst: () => void = () => {};
+    const onReposition = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise((_resolve, reject) => (rejectFirst = () => reject(new Error('boom')))),
+      )
+      .mockResolvedValue({ applied: true, conflict: null });
+    const deps = makeDeps({ onReposition });
+    const a = deps.activities[0]!;
+    const { result, unmount } = renderHook(() => useCoalescedNudge(deps));
+
+    act(() => result.current(a, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    act(() => result.current(a, 'lane', 1)); // burst 2 queued behind the in-flight write
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    act(() => unmount());
+
+    // The in-flight write fails — the cleanup still flushes the queued target
+    // (`inFlight.then(flushFinal, flushFinal)` handles both settle outcomes).
+    await act(async () => {
+      rejectFirst();
+      await Promise.resolve();
+    });
+    expect(onReposition).toHaveBeenNthCalledWith(2, { activityId: 'a1', laneIndex: 2 });
+  });
 });

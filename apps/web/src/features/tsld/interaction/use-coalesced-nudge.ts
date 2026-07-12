@@ -19,6 +19,29 @@ interface NudgeTarget {
   startDay: number;
 }
 
+/**
+ * Diff the absolute target against the *live persisted* row → the minimal PATCH, or `null` when
+ * props have already caught up (no write needed) or the activity has vanished. Pure so both the
+ * serialized `commit` and the unmount flush share identical semantics.
+ */
+function buildReposition(
+  t: NudgeTarget,
+  activities: readonly ActivitySummary[],
+  dataDate: string,
+): TsldRepositionInput | null {
+  const persisted = activities.find((a) => a.id === t.activityId);
+  if (!persisted) return null; // the activity was deleted elsewhere — nothing to write
+  const persistedStart = persisted.earlyStart ? daysBetween(dataDate, persisted.earlyStart) : 0;
+  const laneChanged = t.laneIndex !== persisted.laneIndex;
+  const timeChanged = t.startDay !== persistedStart;
+  if (!laneChanged && !timeChanged) return null; // props caught up to the target — no-op
+  return {
+    activityId: t.activityId,
+    ...(timeChanged ? { startDay: t.startDay } : {}),
+    ...(laneChanged ? { laneIndex: t.laneIndex } : {}),
+  };
+}
+
 export interface CoalescedNudgeDeps {
   onReposition: ((input: TsldRepositionInput) => Promise<TsldEditOutcome>) | undefined;
   activities: readonly ActivitySummary[];
@@ -61,6 +84,9 @@ export function useCoalescedNudge(
   const targetRef = useRef<NudgeTarget | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const busyRef = useRef(false);
+  // The in-flight write's settled chain (or null when idle). The unmount flush awaits it so a delta
+  // queued *behind* an in-flight write isn't dropped (#25c).
+  const inFlightRef = useRef<Promise<void> | null>(null);
   const mountedRef = useRef(true);
 
   const commit = (): void => {
@@ -76,29 +102,18 @@ export function useCoalescedNudge(
       timerRef.current = setTimeout(commit, SERIALIZE_RETRY_MS);
       return;
     }
-    const persisted = activities.find((a) => a.id === t.activityId);
-    if (!persisted) {
+    const input = buildReposition(t, activities, dataDate);
+    if (!input) {
       targetRef.current = null;
       setGhost(null);
-      return; // the activity was deleted elsewhere — nothing to write
+      return; // deleted elsewhere, or props caught up — no write needed
     }
-    const persistedLane = persisted.laneIndex;
-    const persistedStart = persisted.earlyStart ? daysBetween(dataDate, persisted.earlyStart) : 0;
-    const laneChanged = t.laneIndex !== persistedLane;
-    const timeChanged = t.startDay !== persistedStart;
-    if (!laneChanged && !timeChanged) {
-      targetRef.current = null;
-      setGhost(null);
-      return; // props have caught up to the target — no write needed
-    }
+    const laneChanged = input.laneIndex !== undefined;
+    const timeChanged = input.startDay !== undefined;
     const finalLane = t.laneIndex;
     const { name } = t;
     busyRef.current = true;
-    void onReposition({
-      activityId: t.activityId,
-      ...(timeChanged ? { startDay: t.startDay } : {}),
-      ...(laneChanged ? { laneIndex: t.laneIndex } : {}),
-    })
+    inFlightRef.current = onReposition(input)
       .then((outcome) => {
         if (!mountedRef.current) return;
         setGhost(null);
@@ -126,6 +141,7 @@ export function useCoalescedNudge(
       })
       .finally(() => {
         busyRef.current = false;
+        inFlightRef.current = null;
       });
   };
 
@@ -134,11 +150,24 @@ export function useCoalescedNudge(
     return () => {
       mountedRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (!targetRef.current) return;
       // Flush a queued nudge so a pending edit isn't silently dropped on unmount / plan switch.
-      if (targetRef.current && !busyRef.current) commit();
+      // `flushFinal` is a best-effort absolute write that touches no React state (safe post-unmount).
+      const flushFinal = (): void => {
+        const t = targetRef.current;
+        const { onReposition, activities, dataDate } = depsRef.current;
+        if (!t || !onReposition || dataDate === null) return;
+        const input = buildReposition(t, activities, dataDate);
+        targetRef.current = null;
+        if (input) void onReposition(input).catch(() => {});
+      };
+      // A write is still in flight AND a further burst queued more delta: await the in-flight write,
+      // THEN flush the queued net target. Previously the `!busyRef` guard dropped it (#25c).
+      const inFlight = inFlightRef.current;
+      if (busyRef.current && inFlight) void inFlight.then(flushFinal, flushFinal);
+      else flushFinal();
     };
-    // commit reads deps live via depsRef, so the empty deps array is correct (no stale closure).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // All mutable state is in refs read live via depsRef, so the empty deps array is correct.
   }, []);
 
   return (activity, axis, delta) => {

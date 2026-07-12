@@ -35,11 +35,14 @@ function flag(value: string | undefined): boolean {
  * `VITE_PLAN_EDIT_LOCK` (and, at the API, `PLAN_EDIT_LOCK_ENFORCED`) alongside
  * this flag — see ADR-0028 §9 for the rollout ordering.
  *
- * PRE-ENABLEMENT GATE (M5 5.2, a11y sign-off): before setting VITE_TSLD_EDITING
- * true outside dev/test, manually confirm in Chrome, Firefox, Safari and Edge
- * that the `Alt+←/→` time-nudge does NOT trigger native Back/Forward history
- * navigation (preventDefault is the mitigation, but browser-chrome accelerators
- * aren't guaranteed suppressible everywhere). Tracked in docs/TECH_DEBT.md #25.
+ * PRE-ENABLEMENT GATE (M5 5.2, a11y sign-off): the `Alt+←/→` time-nudge must NOT
+ * trigger native Back/Forward history navigation (preventDefault is the mitigation,
+ * but browser-chrome accelerators aren't guaranteed suppressible everywhere). This
+ * is now asserted automatically on **Chromium** by the flag-on Playwright suite
+ * (`keyboard-edit.spec.ts` via `pnpm --filter @repo/web test:e2e:edit`); the
+ * **Firefox / Safari / Edge** sweep stays a MANUAL check before enabling this flag
+ * in a shared environment (docs/TECH_DEBT.md #25a). Full procedure:
+ * docs/runbooks/tsld-editing-enablement.md.
  */
 export const TSLD_EDITING_ENABLED = flag(import.meta.env.VITE_TSLD_EDITING);
 

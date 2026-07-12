@@ -136,15 +136,26 @@ jobs:
 
       # Playwright starts the API and web dev servers itself (see
       # apps/web/playwright.config.ts) and drives the full stack in a browser.
+      # This run serves the app FLAG-OFF (read-only surface, pen inert).
       - name: Web end-to-end tests
         run: pnpm --filter @repo/web test:e2e
+
+      # Flag-ON editing journeys: a second Playwright run (playwright.edit.config.ts)
+      # serving the app with VITE_TSLD_EDITING + VITE_PLAN_EDIT_LOCK on and the API
+      # enforcing the lock (PLAN_EDIT_LOCK_ENFORCED=true), so on-canvas editing and the
+      # pen are really exercised (TECH_DEBT #25b/#27b). It runs after the flag-off run
+      # tears down its servers, reusing the same ports.
+      - name: Web end-to-end tests (editing flags on)
+        run: pnpm --filter @repo/web test:e2e:edit
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: |
+            apps/web/playwright-report/
+            apps/web/playwright-report-edit/
           if-no-files-found: ignore
           retention-days: 7
 

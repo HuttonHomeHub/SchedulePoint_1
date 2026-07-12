@@ -52,6 +52,10 @@ export class AuthContextService {
         role: membership.role,
         permissions: permissionsForRole(membership.role),
       })),
+      // Carry the caller's own profile (already loaded above) so services can render
+      // the caller as an actor without re-querying the users table.
+      session.user.name,
+      session.user.email,
     );
   }
 }

@@ -23,7 +23,12 @@ import {
   useCreateDependency,
   usePlanDependencies,
 } from '@/features/dependencies';
-import { EditLockBanner, PenReadOnlyNote, usePlanPen } from '@/features/plan-lock';
+import {
+  derivePlanGating,
+  EditLockBanner,
+  PenReadOnlyNote,
+  usePlanPen,
+} from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanFormDialog, usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { RecalculateButton, ScheduleSummaryStrip, useRecalculate } from '@/features/schedule';
@@ -65,14 +70,16 @@ export function PlanDetailScreen(): React.ReactElement {
   const canWrite = canManageHierarchy(role); // role only — plan metadata + baselines
   // The on-canvas schedule model (activities/dependencies/positions/recalculate) is
   // additionally pen-gated: a Planner must hold the pen to edit it (spec §3.1 / ADR-0028).
-  const canEditSchedule = pen.penManaged ? canWrite && pen.holdsPen : canWrite;
-  const canProgress = canReportProgress(role); // Contributor progress path — never pen-gated
-  const canCalculate = canCalculateSchedule(role);
-  const canRecalc = pen.penManaged ? canCalculate && pen.holdsPen : canCalculate;
-  // A would-be editor (role allows it) who doesn't currently hold the pen — the
-  // Activities/Logic sections sit far below the banner, so hint locally why their
-  // edit affordances are gone (UX review).
-  const penReadOnly = pen.penManaged && canWrite && !pen.holdsPen;
+  // The gate matrix is derived by the pure `derivePlanGating` (unit-tested exhaustively);
+  // `canProgress` (Contributor path) is deliberately never pen-gated (Q-C), and a would-be
+  // editor without the pen gets `penReadOnly` so the far-below sections hint why (UX review).
+  const { canEditSchedule, canRecalc, canProgress, penReadOnly } = derivePlanGating({
+    penManaged: pen.penManaged,
+    holdsPen: pen.holdsPen,
+    canWrite,
+    canProgress: canReportProgress(role),
+    canCalculate: canCalculateSchedule(role),
+  });
   const [editing, setEditing] = useState(false);
   const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
 
