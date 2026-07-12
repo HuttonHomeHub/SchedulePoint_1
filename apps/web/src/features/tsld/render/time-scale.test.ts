@@ -9,6 +9,7 @@ import {
   type Viewport,
 } from './render-model';
 import {
+  calendarBoundaries,
   canZoom,
   isAtPreset,
   isWorkingDay,
@@ -106,6 +107,29 @@ describe('rulerTicks', () => {
     const view: Viewport = { pxPerDay: ZOOM_STOPS.day, originX: 5, originY: 0 };
     const r = rulerTicks(view, SIZE, DATA_DATE);
     expect(r.days[0]!.x).toBeLessThan(0);
+  });
+});
+
+describe('calendarBoundaries', () => {
+  it('finds month starts (and year starts among them) via integer rollover, incl. a year boundary', () => {
+    // From 2025-12-30, day offsets: 0=Dec30, 2=Jan1(2026, month+year start), 33=Feb1, 61=Mar1.
+    const { months, years } = calendarBoundaries(0, 65, '2025-12-30');
+    expect(months).toContain(2); // 2026-01-01
+    expect(months).toContain(33); // 2026-02-01
+    expect(months).toContain(61); // 2026-03-01 (2026 is not a leap year → Feb has 28 days)
+    expect(years).toEqual([2]); // only the Jan-1 boundary is also a year start
+  });
+
+  it('handles a leap-year February correctly (29 days)', () => {
+    // 2024 is a leap year: from 2024-02-01 (offset 0), Mar 1 is 29 days later (offset 29).
+    const { months } = calendarBoundaries(0, 40, '2024-02-01');
+    expect(months).toContain(0); // Feb 1
+    expect(months).toContain(29); // Mar 1 — proves Feb had 29 days
+  });
+
+  it('returns empty rows when the span contains no boundary', () => {
+    // Mid-month span with no 1st-of-month: 2026-03-10 (offset 0) .. 2026-03-14 (offset 4).
+    expect(calendarBoundaries(0, 4, '2026-03-10')).toEqual({ months: [], years: [] });
   });
 });
 
