@@ -10,6 +10,39 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-12 — Navigator in-tree CRUD: `Menu` primitive + shell-layer coordinator seam (ADR-0029 Phase 2)
+
+**Decision.** In-tree create/rename/delete for the Project Explorer (ADR-0029's
+named Phase 2, spec `docs/specs/navigator-in-tree-crud.md`) is built as an
+**extension within ADR-0029 — no new ADR** — introducing two reusable pieces:
+(1) a hand-rolled **`Menu`/`MenuItem`** design-system primitive
+(`apps/web/src/components/ui/menu.tsx`) implementing the WAI-ARIA APG "Menu Button"
+pattern on semantic HTML (portal-rendered, roving focus, Esc/click-away/Tab
+dismissal, focus-return to the trigger) — **no new npm dependency**, mirroring the
+`Dialog` focus conventions; and (2) a **`NavigatorCrud` coordinator** in the
+composition layer (`apps/web/src/components/layout/navigator/`) that owns the
+create/rename/delete dialogs and mutations. The shared tree emits CRUD **intents**
+through a feature-local `NavigatorCrudContext` seam, so `features/navigator` never
+imports a sibling feature (the coordinator is the single place that imports
+clients/projects/plans) — honouring "features → shared, never sideways".
+
+**Why.** The read-only navigator (Phase 1) forced writers out to a management page
+and back to shape the hierarchy — the exact context-loss the navigator exists to
+remove. ADR-0029 pre-designed the RBAC seam and explicitly named context-menu CRUD,
+and this adds **no endpoint, data-model, or cross-cutting-standard change** (it
+reuses the existing endpoints, form dialogs, `ConfirmDialog` cascade copy, mutation
+hooks, optimistic locking, and soft-delete/Recently-Deleted flow), so it does not
+clear the ADR bar. The only genuinely new artifact is the `Menu` primitive, hence
+this log entry + its addition to the component inventory.
+
+**Consequences.** Expansion state was **lifted to the shell** (shared by both rails
+and the coordinator) so a freshly-created child can be revealed via `expandPath`;
+selection remains a pure projection of the URL (ADR-0029), so a new **plan**
+navigates (deep-link reveal selects it) while new **folders** are revealed by
+expansion, not force-selected. Ships behind `VITE_NAV_TREE_CRUD` (off by default)
+and additionally gated by write RBAC. Playwright journeys + the default-on flip
+land as a separate, clearly-scoped follow-up once every a11y/journey gate is green.
+
 ### 2026-07-10 — Activity dependencies: `dependency:*` permission set + link cascade behaviour
 
 **Decision.** For the M4 dependencies slice (ADR-0021, spec

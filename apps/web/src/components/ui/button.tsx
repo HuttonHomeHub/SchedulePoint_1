@@ -19,6 +19,9 @@ const buttonVariants = cva(
         sm: 'h-9 px-3',
         lg: 'h-11 px-6',
         icon: 'size-10',
+        // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose
+        // rows are 28px). Pair with a larger non-pointer target (long-press / keyboard).
+        'icon-sm': 'size-7',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

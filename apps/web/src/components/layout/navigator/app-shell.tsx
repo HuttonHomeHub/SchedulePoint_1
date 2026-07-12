@@ -1,6 +1,7 @@
 import { Outlet, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { NavigatorCrud } from './navigator-crud';
 import { NavigatorRail, NavigatorRailCollapsed } from './navigator-rail';
 import { RailResizer } from './rail-resizer';
 import { ShellContext } from './shell-context';
@@ -9,6 +10,9 @@ import { useRailPrefs } from './use-rail-prefs';
 import { AppHeader } from '@/components/layout/app-header';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
+import { NAV_TREE_CRUD_ENABLED } from '@/config/env';
+import { useExpansionState } from '@/features/navigator';
+import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
 /** `lg` breakpoint (64rem) as a media query — the pinned rail takes over at/above it. */
 const LG_QUERY = '(min-width: 64rem)';
@@ -40,6 +44,14 @@ function ShellFrame(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
 
+  // Shared, per-org expansion (ADR-0029 Phase 2): both rails and the CRUD coordinator
+  // read one set, so revealing a freshly-created node works and pinned/drawer agree.
+  const expansion = useExpansionState(orgSlug ?? '');
+  // In-tree CRUD is gated by the flag *and* write RBAC — Contributors/Viewers keep a
+  // read-only tree. The API re-checks; this is UX only.
+  const role = useOrgRole(orgSlug ?? '');
+  const canWrite = NAV_TREE_CRUD_ENABLED && canManageHierarchy(role);
+
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const shell = useMemo(() => ({ openDrawer }), [openDrawer]);
@@ -70,37 +82,45 @@ function ShellFrame(): React.ReactElement {
 
   return (
     <ShellContext.Provider value={shell}>
-      <div className="flex min-h-dvh flex-col">
-        <AppHeader />
-        <div className="flex min-h-0 flex-1">
-          {rail.collapsed ? (
-            <div className="hidden shrink-0 lg:block">
-              <NavigatorRailCollapsed onExpand={expand} focusToggleOnMount={interacted} />
-            </div>
-          ) : (
-            <>
-              <div className="hidden shrink-0 lg:block" style={{ width: rail.width }}>
-                <NavigatorRail
-                  orgSlug={orgSlug}
-                  onCollapse={collapse}
-                  focusToggleOnMount={interacted}
-                />
+      <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
+        <div className="flex min-h-dvh flex-col">
+          <AppHeader />
+          <div className="flex min-h-0 flex-1">
+            {rail.collapsed ? (
+              <div className="hidden shrink-0 lg:block">
+                <NavigatorRailCollapsed onExpand={expand} focusToggleOnMount={interacted} />
               </div>
-              <RailResizer width={rail.width} onResize={rail.setWidth} />
-            </>
-          )}
-          {/* The single workspace region — the one <main> for the page; routed screens
-              render their content into it (M3). */}
-          <main className="flex min-w-0 flex-1 flex-col">
-            <Outlet />
-          </main>
+            ) : (
+              <>
+                <div className="hidden shrink-0 lg:block" style={{ width: rail.width }}>
+                  <NavigatorRail
+                    orgSlug={orgSlug}
+                    expansion={expansion}
+                    onCollapse={collapse}
+                    focusToggleOnMount={interacted}
+                  />
+                </div>
+                <RailResizer width={rail.width} onResize={rail.setWidth} />
+              </>
+            )}
+            {/* The single workspace region — the one <main> for the page; routed screens
+                render their content into it (M3). */}
+            <main className="flex min-w-0 flex-1 flex-col">
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
 
-      {/* Below lg: the rail as an off-canvas drawer. */}
-      <Sheet open={drawerOpen} onClose={closeDrawer} title="Project Explorer">
-        <NavigatorRail orgSlug={orgSlug} onClose={closeDrawer} onNavigate={closeDrawer} />
-      </Sheet>
+        {/* Below lg: the rail as an off-canvas drawer. */}
+        <Sheet open={drawerOpen} onClose={closeDrawer} title="Project Explorer">
+          <NavigatorRail
+            orgSlug={orgSlug}
+            expansion={expansion}
+            onClose={closeDrawer}
+            onNavigate={closeDrawer}
+          />
+        </Sheet>
+      </NavigatorCrud>
     </ShellContext.Provider>
   );
 }

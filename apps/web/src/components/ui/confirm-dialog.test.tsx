@@ -41,6 +41,10 @@ describe('ConfirmDialog', () => {
       />,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong.');
-    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+    const confirm = screen.getByRole('button', { name: 'Deleting…' });
+    // `aria-disabled` (not native `disabled`) so the button keeps focus while busy.
+    expect(confirm).toHaveAttribute('aria-disabled', 'true');
+    expect(confirm).not.toBeDisabled();
+    expect(confirm).toHaveAttribute('aria-busy', 'true');
   });
 });
