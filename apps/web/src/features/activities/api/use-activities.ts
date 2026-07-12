@@ -4,6 +4,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query';
 
@@ -17,6 +18,38 @@ import { apiFetch } from '@/lib/api/client';
 import { activityKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
 export { activityKeys };
+
+/**
+ * The list-plus-detail invalidation a **single-activity** write settles into: the plan's
+ * activities list (dates/lane/version moved) and that one activity's detail. Returned so the
+ * mutation's `onSettled` can await it (#24e — the shared shape across update/reposition/progress).
+ */
+function invalidateActivity(
+  queryClient: QueryClient,
+  orgSlug: string,
+  planId: string,
+  activityId: string,
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+    queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, activityId) }),
+  ]);
+}
+
+/**
+ * The list-plus-baseline-variance invalidation a **create/delete** settles into: the variance set
+ * itself changed (a new "Added"/"Removed" row), so it is refreshed alongside the activities list.
+ */
+function invalidatePlanActivities(
+  queryClient: QueryClient,
+  orgSlug: string,
+  planId: string,
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+    queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
+  ]);
+}
 
 /** A blank optional field is sent as absent. */
 function optional(value?: string): string | undefined {
@@ -78,11 +111,7 @@ export function useCreateActivity(orgSlug: string, planId: string) {
         body: JSON.stringify(createBody(input)),
       }),
     // Adding an activity introduces a new "Added" row in the baseline variance, so refresh it too.
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
-      ]),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }
 
@@ -108,11 +137,7 @@ export function useCreatePlacedActivity(orgSlug: string, planId: string) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
-      ]),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }
 
@@ -127,10 +152,7 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
         body: JSON.stringify(updateBody(input)),
       }),
     onSettled: (_data, _error, input) =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, input.activityId) }),
-      ]),
+      invalidateActivity(queryClient, orgSlug, planId, input.activityId),
   });
 }
 
@@ -149,10 +171,7 @@ export function useRepositionLane(orgSlug: string, planId: string) {
         body: JSON.stringify({ laneIndex: input.laneIndex, version: input.version }),
       }),
     onSettled: (_data, _error, input) =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, input.activityId) }),
-      ]),
+      invalidateActivity(queryClient, orgSlug, planId, input.activityId),
   });
 }
 
@@ -200,10 +219,7 @@ export function useUpdateActivityProgress(orgSlug: string, planId: string) {
         },
       ),
     onSettled: (_data, _error, input) =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, input.activityId) }),
-      ]),
+      invalidateActivity(queryClient, orgSlug, planId, input.activityId),
   });
 }
 
@@ -213,10 +229,6 @@ export function useDeleteActivity(orgSlug: string, planId: string) {
     mutationFn: (activityId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/activities/${activityId}`, { method: 'DELETE' }),
     // Removing an activity changes the baseline variance (it reads as "Removed" or drops out).
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
-      ]),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }
