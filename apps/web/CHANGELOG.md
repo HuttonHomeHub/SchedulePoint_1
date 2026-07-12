@@ -1,5 +1,50 @@
 # @repo/web
 
+## 0.13.0
+
+### Minor Changes
+
+- [#41](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/41) [`32e843f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/32e843f4136460aa403c26ef45ac4496c82d1f6b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Close the "date constraints" loop in the UI. The activity form's constraint
+  selector now offers only the **six** kinds the CPM engine honours exactly as
+  labelled (`SNET`/`SNLT`/`FNET`/`FNLT`/`MSO`/`MFO`); the two `MANDATORY_*` kinds —
+  which the engine silently parks as their moderate equivalents (ADR-0023 §6) — are
+  no longer newly selectable, so a planner can't set a constraint that behaves
+  differently than it reads. An activity that already carries a parked value keeps it
+  as an honest, spelled-out option ("Mandatory start — applied as Must start on") and
+  is **never silently changed** on open.
+
+  A set constraint is now visible without opening each row: a text **Constraint**
+  column in the activities table (`"SNET · 01 May 2026"`, with the full label as its
+  accessible name), a small **pin** on the constrained edge of a bar on the TSLD
+  canvas (a shape cue, not colour — with a legend entry and a spoken equivalent in the
+  diagram's accessible listbox), and an explanation of the "Parked constraints" figure
+  in the schedule summary.
+
+  `@repo/types` gains `SELECTABLE_CONSTRAINT_TYPES` / `PARKED_CONSTRAINT_TYPES` /
+  `isParkedConstraintType` (the honoured-as-labelled set, mirroring the engine). No
+  API, database, or engine change — the constraint write path, optimistic locking, and
+  pen gating are untouched.
+
+- [#41](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/41) [`32e843f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/32e843f4136460aa403c26ef45ac4496c82d1f6b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the TSLD canvas read like a time-scaled document. The diagram now has a sticky,
+  **adaptive date ruler** across the top (year → month → day bands that re-scale as you
+  zoom), **zoom presets** (Day / Week / Month / Quarter / Year) with zoom −/+ alongside
+  Fit, a **TODAY** marker, **non-working-day shading** (weekends _and_ the plan
+  calendar's holiday exceptions), and five **layer toggles** (day / month / year grid,
+  today, non-working) to declutter. All view controls are available whether or not
+  you're editing, and every control is a real, labelled, keyboard-operable button or
+  checkbox.
+
+  Entirely client-side and within the existing canvas architecture (ADR-0026): the
+  ruler is a DOM overlay updated imperatively from the render loop so the viewport
+  stays ref-authoritative (no per-frame React state), the new paint layers are culled
+  and batched to hold the draw budget, and the accessible parallel listbox is
+  unchanged. No API, database, or schedule-engine change.
+
+### Patch Changes
+
+- Updated dependencies [[`32e843f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/32e843f4136460aa403c26ef45ac4496c82d1f6b)]:
+  - @repo/types@0.8.0
+
 ## 0.12.0
 
 ### Minor Changes

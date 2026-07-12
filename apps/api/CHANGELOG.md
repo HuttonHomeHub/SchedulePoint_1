@@ -1,5 +1,12 @@
 # @repo/api
 
+## 0.10.1
+
+### Patch Changes
+
+- Updated dependencies [[`32e843f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/32e843f4136460aa403c26ef45ac4496c82d1f6b)]:
+  - @repo/types@0.8.0
+
 ## 0.10.0
 
 ### Minor Changes
