@@ -1,8 +1,16 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
+
+// This file exercises the M1 read-only surface, so it pins the editing flag OFF
+// (it now defaults ON in the shipped bundle — config/env.ts). The flags-ON editing
+// surface is covered by TsldPanel.editing.test.tsx, which mocks this flag true.
+vi.mock('../../../config/env', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, TSLD_EDITING_ENABLED: false };
+});
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {

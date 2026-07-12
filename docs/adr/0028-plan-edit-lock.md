@@ -112,6 +112,20 @@ HANDOFF_GRACE_MS` (default 45 s) **or** the holder is inactive (last heartbeat
    only once the front end acquires the pen across every editing entry point
    (edit-lock M2/M3). This keeps `main` releasable with no user-visible change.
 
+   > **Update (2026-07-12) — web flags flipped ON by default.** All pre-enablement
+   > gates are green (flag-on Playwright harness; a11y sign-off; the manual
+   > cross-browser `Alt+←/→` history-suppression sweep passed on Firefox/Safari/Edge,
+   > TECH_DEBT #25a). The two **web** flags — `VITE_PLAN_EDIT_LOCK` (pen) and
+   > `VITE_TSLD_EDITING` (on-canvas editing) — now **default ON** in the shipped
+   > bundle (`apps/web/src/config/env.ts`), with `=false` as the opt-out/rollback.
+   > The server-side `PLAN_EDIT_LOCK_ENFORCED` **stays default-off** and remains the
+   > single deliberate ops switch: enable it only once a bundle with the pen on is
+   > live (so users are already acquiring the pen), never ahead of the web bundle.
+   > The ordering below is unchanged — only its first step is now the default.
+   > A CI baseline suite (`playwright.config.ts`) pins both web flags off to keep the
+   > read-only / role-only paths covered; the flags-on surface is covered by
+   > `playwright.edit.config.ts`.
+
 ## Alternatives considered
 
 - **Lock columns on `Plan` (raw-SQL heartbeat bypassing `version`).** Every plan
@@ -143,9 +157,10 @@ HANDOFF_GRACE_MS` (default 45 s) **or** the holder is inactive (last heartbeat
   lock / coordination 423 lease), cleanly separated. Reviewers and future authors
   must keep them distinct — a 423 is _not_ a 409.
 - **`VITE_TSLD_EDITING`'s concurrency precondition is removed**, unblocking the
-  built editing surface. This ADR does **not** by itself flip the flag: the
-  separate a11y pre-enablement gate (Alt+←/→ cross-browser check, TECH_DEBT #25)
-  still gates production enablement.
+  built editing surface. The ADR did not by itself flip the flag; the a11y
+  pre-enablement gate (Alt+←/→ cross-browser check, TECH_DEBT #25a) has since
+  passed, and as of 2026-07-12 the web flag (with `VITE_PLAN_EDIT_LOCK`) defaults ON
+  — see the Update note under decision 9.
 - **423 enters the API vocabulary.** Clients must branch on 423 vs 409 distinctly;
   the shared error `reason` union carries the specific lock condition.
 - **Enforcement is a one-way switch tied to front-end readiness.** Because the gate

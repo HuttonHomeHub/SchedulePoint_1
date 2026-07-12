@@ -47,19 +47,20 @@ Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
 - **The TSLD graphical canvas** — the flagship primary editing surface (ADR-0026).
   **M1–M4 delivered** (read render; on-canvas create/move/link/relane; live critical
   path + driving-vs-non-driving arrows with a non-colour encoding; lane persistence +
-  auto-pack) — the editing parts behind `VITE_TSLD_EDITING` (staged-off, see the
-  enablement runbook). Remaining: M5 accessibility hardening polish and the deferred
-  per-activity driving summary in the parallel listbox.
+  auto-pack). **On-canvas editing is now ON by default** (2026-07-12): `VITE_TSLD_EDITING`
+  defaults on (with `=false` as opt-out), all pre-enablement gates green. Remaining:
+  the deferred per-activity driving summary in the parallel listbox.
 - **Gantt view** — the secondary tabular projection of the same model.
-- **Plan edit-lock** (single-editor hand-off) — **delivered** (ADR-0028): the server
-  lease + 423 write-gate and the web "pen" ship behind `PLAN_EDIT_LOCK_ENFORCED` /
-  `VITE_PLAN_EDIT_LOCK` (staged-off), unblocking on-canvas editing enablement.
+- **Plan edit-lock** (single-editor hand-off) — **delivered & enabled** (ADR-0028): the
+  server lease + 423 write-gate and the web "pen". The web pen (`VITE_PLAN_EDIT_LOCK`)
+  now defaults **on**; server enforcement (`PLAN_EDIT_LOCK_ENFORCED`) stays the one
+  deliberate ops switch, enabled after the pen bundle is live (ADR-0028 §9).
 - **Editing enablement hardening** — **delivered**: a flag-on E2E harness
-  (`test:e2e:edit`, in CI) proving the editing surface + pen end-to-end, route-level
-  gating coverage, and an operator runbook
+  (`test:e2e:edit`, in CI) proving the editing surface + pen end-to-end, a flags-off
+  baseline suite, route-level gating coverage, and an operator runbook
   ([`docs/runbooks/tsld-editing-enablement.md`](runbooks/tsld-editing-enablement.md)).
-  Flipping the flags on remains an ops action gated on the manual cross-browser
-  `Alt+←/→` check (TECH_DEBT #25a) and the M3 multi-actor hand-off journey.
+  The web flags are now on by default (the manual cross-browser `Alt+←/→` check,
+  TECH_DEBT #25a, passed); enabling API enforcement is the remaining ops action.
 - **Undo/redo**, **export** (PDF/CSV), and **resources** (library + assignments) —
   all Must/Should-have per the brief.
 
