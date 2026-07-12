@@ -68,7 +68,8 @@ Roll **back** in reverse: `VITE_TSLD_EDITING` off → `PLAN_EDIT_LOCK_ENFORCED` 
 
 ## Known gaps at enablement
 
-- The **multi-actor hand-off** Playwright journey lands with TSLD M3 (TECH_DEBT
-  #27b); until then the hand-off is covered at the unit/route level plus the
-  single-actor browser journey.
-- The cross-browser `Alt+←/→` sweep above is manual (TECH_DEBT #25a).
+- The cross-browser `Alt+←/→` sweep above is manual (TECH_DEBT #25a) — the only
+  remaining pre-enablement gate.
+
+The single- and multi-actor pen journeys, the keyboard-edit journey, and the
+client-side link-legality pre-check all run on the `test:e2e:edit` harness.

@@ -287,6 +287,14 @@ per-move cost. Deferred to keep Slice 2.3 focused; the ADR contract is otherwise
 drop. Tracked as a follow-up to add the client pre-check (reusing the canvas's existing
 `RenderEdge[]`) so the ring reflects legality before release.
 
+**Addendum (follow-up delivered).** The client pre-check now ships (`render/link-legality.ts`):
+a pure `linkLegality(pred, succ, type, edges)` mirrors the server invariants (self / duplicate
+per `(pred,succ,type)` / cycle via successor→predecessor reachability, ADR-0021). During a draw
+the hovered target rings by legality — legal solid, illegal dashed in the critical colour (colour
+AND dash, WCAG 1.4.1) — and an illegal drop is short-circuited locally (banner + live region, no
+doomed POST). `RenderEdge` gained `type` for the duplicate check. The server stays authoritative;
+the pre-check only pre-empts drops the loaded graph already proves illegal.
+
 ### 2026-07-11 — Driving-edge definition (TSLD M3)
 
 **Decision.** A dependency edge is **driving** iff its forward timing bound equals its
