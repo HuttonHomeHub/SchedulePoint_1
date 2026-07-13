@@ -512,6 +512,10 @@ export function TsldCanvas({
         interactionDirtyRef.current = true;
         reportZoomStop();
       }
+      // Snapshot before the paint clears it: everything that moves the selection anchor (pan, zoom,
+      // resize, selection change) also sets `dirtyRef`, so we recompute the anchor only on those
+      // frames — never on the many idle frames of a held selection (perf review).
+      const movedThisFrame = dirtyRef.current;
       if (dirtyRef.current) {
         paintScene(ctx, sceneRef.current, viewRef.current, size, palette, dpr);
         dirtyRef.current = false;
@@ -544,9 +548,10 @@ export function TsldCanvas({
       }
       // Publish the selected activity's live viewport anchor for the floating selection bar (ADR-0031):
       // the selected bar's top edge + horizontal centre in viewport px, or null when it has no drawn
-      // position or is scrolled off the surface. Off the per-frame React path (ADR-0026 D3); only one
-      // `getBoundingClientRect` per frame, and only while a bar is actually selected + a consumer wired.
-      if (selectionAnchorRef) {
+      // position or is scrolled off the surface. Off the per-frame React path (ADR-0026 D3); the one
+      // `getBoundingClientRect` runs only on a moved frame (the anchor is otherwise unchanged), so it
+      // never interleaves a layout read with an idle-frame ruler write, and only while wired.
+      if (selectionAnchorRef && movedThisFrame) {
         const scene = sceneRef.current;
         const selected = scene.selectedId
           ? scene.activities.find((a) => a.id === scene.selectedId)

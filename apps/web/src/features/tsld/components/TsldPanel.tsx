@@ -1,5 +1,5 @@
 import type { ActivitySummary, ActivityType, DependencySummary, DependencyType } from '@repo/types';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { CANVAS_AUTHORING_ENABLED, TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent } from '../interaction/gesture-machine';
@@ -247,6 +247,9 @@ export function TsldPanel({
   // <body> (they're placed back on the tool to draw again).
   const addActivityRef = useRef<HTMLButtonElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
+  // Where the floating selection bar hands focus back when it hides/unmounts while focused (so a
+  // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
+  const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
   // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -803,10 +806,15 @@ export function TsldPanel({
         )}
       </div>
 
-      {/* The floating object-actions bar over the selected bar (ADR-0031, Fork-2). Portaled; renders
-          nothing until an activity is selected, and only when the host wired the object actions. */}
+      {/* The floating object-actions bar over the selected bar (ADR-0031, Fork-2). Rendered inline
+          (DOM-adjacent to the listbox for Tab order); renders nothing until an activity is selected,
+          and only when the host wired the object actions. */}
       {showDiagram && selectionActionsWired ? (
-        <SelectionActionsBar anchorRef={selectionAnchorRef} ctx={selectionCtx} />
+        <SelectionActionsBar
+          anchorRef={selectionAnchorRef}
+          context={selectionCtx}
+          restoreFocus={restoreSelectionFocus}
+        />
       ) : null}
 
       <ConfirmDialog
