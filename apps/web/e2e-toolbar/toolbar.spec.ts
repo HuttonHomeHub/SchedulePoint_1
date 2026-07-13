@@ -78,18 +78,21 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(baselines).toBeVisible();
   await baselines.getByRole('button', { name: 'Close dialog' }).click();
 
-  // Expand the collapsed activities panel from its bar; the docked table appears with the rows, and
-  // focus lands on the reciprocal Collapse control (never stranded — WCAG 2.4.3).
-  await page.getByRole('button', { name: 'Expand activities panel' }).click();
+  // Adding activities opened the panel, so it's expanded here with the rows docked. Collapse it from
+  // its header control; focus lands on the reciprocal Expand control (never stranded — WCAG 2.4.3)
+  // and the rows disappear.
   const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
-  await expect(collapse).toBeFocused();
+  await expect(collapse).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
-
-  // Collapsing hands focus back to the Expand control on the collapsed bar (the point of the hand-off).
   await collapse.click();
   const expand = page.getByRole('button', { name: 'Expand activities panel' });
   await expect(expand).toBeFocused();
   await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeHidden();
+
+  // Re-expand from the collapsed bar; focus returns to the Collapse control and the rows are back.
+  await expand.click();
+  await expect(collapse).toBeFocused();
+  await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
 
   // The toolbar is one roving-tabindex APG widget: a single tab stop, arrows move between controls.
   await toolbar.getByRole('button', { name: 'Fit to plan' }).focus();
