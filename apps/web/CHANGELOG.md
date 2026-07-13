@@ -1,5 +1,73 @@
 # @repo/web
 
+## 0.18.0
+
+### Minor Changes
+
+- [#58](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/58) [`3e12e97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3e12e9757f21eb754ec876fec3a81016b1979334) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first plan authoring on by default (ADR-0032)
+
+  `VITE_CANVAS_AUTHORING` now defaults **on** (M1–M5 shipped with green a11y/ux/perf/e2e gates). A
+  planner builds a plan directly on the TSLD canvas: a blank draw-ready canvas on a new plan, an inline
+  timeline start-date, unified auto-recalculation after any structural edit, on-canvas activity types
+  (Task + Start/Finish milestone via the Add split-button), and a two-click Link tool in place of
+  edge-drag. It requires the toolbar + workspace flags (both default-on); turning either off disables
+  authoring too. Set `VITE_CANVAS_AUTHORING=false` to roll back to table-first authoring + edge-drag
+  linking, byte-for-byte.
+
+- [#56](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/56) [`265d7e2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/265d7e22af2f4d8a3b07a294cb351cebbc6c6b07) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first authoring — blank draw-ready canvas (ADR-0032, M0–M1)
+
+  Behind the new `VITE_CANVAS_AUTHORING` flag (default-off; layered on `VITE_CANVAS_TOOLBAR`):
+
+  - **M0:** the flag + ADR-0032 + the flag-on Playwright scaffold (`test:e2e:authoring`).
+  - **M1:** a brand-new plan opens on an interactive, **blank draw-ready canvas** — the `TsldPanel`
+    render gate is relaxed so the canvas mounts whenever there's a timeline anchor
+    (`dataDate = plannedStart ?? today`), not only after a recalculation; uncalculated bars simply
+    don't paint. Drawing the first activity on a start-less plan silently pins `plannedStart` to
+    today (the canvas anchor) before the create, so the schedule dates stay coherent.
+
+  Flag-off keeps today's table-first behaviour byte-for-byte. Frontend only; no API/DB change.
+
+- [#56](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/56) [`265d7e2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/265d7e22af2f4d8a3b07a294cb351cebbc6c6b07) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first authoring — inline timeline start-date control (ADR-0032, M2)
+
+  Behind `VITE_CANVAS_AUTHORING`: an inline start-date control in the toolbar's Frame group reads and
+  (pen-gated) writes the plan's `plannedStart` — the canvas day-zero origin — so a planner sets/adjusts
+  the timeline start next to the canvas instead of opening the Edit-plan dialog. A writer edits it via a
+  native date input; a read-only viewer sees the date as a focusable static read-out. Changing it
+  re-anchors the timeline. Uses the `useSetPlanStart` targeted PATCH.
+
+- [#56](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/56) [`265d7e2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/265d7e22af2f4d8a3b07a294cb351cebbc6c6b07) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first authoring — unified auto-recalculate (ADR-0032, M3)
+
+  Behind `VITE_CANVAS_AUTHORING`: after any structural edit — from the canvas **or** the activities
+  table — the CPM schedule recalculates automatically, so the canvas plots new/changed rows without a
+  manual Recalculate (the original pain of adding via the table). A plan-scoped `usePlanAutoRecalc`
+  coalescer (trailing ~500 ms debounce + single-flight) drives it: the workspace model watches the
+  activity/dependency count for creates/deletes (any surface) and the canvas edit callbacks `notify()`
+  for repositions; the manual Recalculate button becomes a `flush()`. Guarded on role + pen + a start
+  date. The recalculate endpoint and ADR-0022's engine-owned batched write are unchanged — only the
+  client cadence. Flag-off keeps the per-edit inline recalc byte-for-byte.
+
+- [#56](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/56) [`265d7e2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/265d7e22af2f4d8a3b07a294cb351cebbc6c6b07) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first authoring — Add split-button + on-canvas milestones (ADR-0032, M4)
+
+  Behind `VITE_CANVAS_AUTHORING` (default-off): the plain "Add activity" toggle becomes an APG
+  menu-button **Add split-button** that arms the draw kind — **Task**, **Start milestone**, or
+  **Finish milestone** — so planners create milestones directly on the canvas. A milestone draw
+  collapses to a zero-duration point at the click; the workspace maps the chosen kind to a
+  zero-duration create. While adding, the button reads "Adding {kind}" and offers "Stop adding".
+
+  Flag-off the toolbar keeps the plain Add toggle byte-for-byte. Frontend only; no API/DB change.
+
+- [#56](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/56) [`265d7e2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/265d7e22af2f4d8a3b07a294cb351cebbc6c6b07) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first authoring — two-click Link tool replacing edge-drag (ADR-0032, M5)
+
+  Behind `VITE_CANVAS_AUTHORING` (default-off): a new `'link'` edit mode is the canvas-first way to
+  draw dependencies — click a predecessor, then a successor — with the dependency kind (**FS / SS /
+  FF**) chosen from a toolbar selector instead of a keyboard chord. The picked predecessor rings on
+  the interaction layer while the tool waits for the second click; Escape drops the pick, a second
+  Escape leaves the tool. The flag suppresses the edge-handle rubber-band affordance so edge-drag is
+  replaced, not duplicated.
+
+  Flag-off the edge-drag linking path (Shift = SS, Alt = FF) is unchanged byte-for-byte. Frontend
+  only; no API/DB change.
+
 ## 0.17.0
 
 ### Minor Changes
