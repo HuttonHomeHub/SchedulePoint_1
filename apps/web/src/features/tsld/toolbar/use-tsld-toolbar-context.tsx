@@ -10,6 +10,7 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import { useSetPlanStart } from '@/features/plans';
 import { ScheduleSummaryStrip } from '@/features/schedule';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
@@ -140,14 +141,18 @@ export function useTsldToolbarContext({
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 
-      // Object / plan actions
+      // Object / plan actions. With canvas-first authoring on, the manual button flushes the shared
+      // auto-recalc coalescer (ADR-0032 M3) so it and the debounced auto-recalcs are one path;
+      // flag-off it's the standalone recalc command, byte-for-byte.
       canRecalc,
-      recalcPending: recalc.isPending,
+      recalcPending: CANVAS_AUTHORING_ENABLED ? model.autoRecalc.isPending : recalc.isPending,
       recalculate: () =>
-        recalc.run({
-          onSuccess: () => announce('Schedule recalculated.'),
-          onError: (message) => announce(message),
-        }),
+        CANVAS_AUTHORING_ENABLED
+          ? model.autoRecalc.flush()
+          : recalc.run({
+              onSuccess: () => announce('Schedule recalculated.'),
+              onError: (message) => announce(message),
+            }),
       openBaselines: () => openDialog('baselines'),
       openCalendar: () => openDialog('calendar'),
       openPlanDetails: () => openDialog('details'),
@@ -182,6 +187,7 @@ export function useTsldToolbarContext({
       canWrite,
       setEditing,
       recalc,
+      model.autoRecalc,
       announce,
       openDialog,
       legendContent,

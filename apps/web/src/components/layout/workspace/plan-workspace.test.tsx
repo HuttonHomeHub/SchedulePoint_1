@@ -98,6 +98,7 @@ vi.mock('@/features/dependencies', () => ({
 
 vi.mock('@/features/schedule', () => ({
   useRecalculate: () => ({ mutateAsync: vi.fn() }),
+  usePlanAutoRecalc: () => ({ notify: vi.fn(), flush: vi.fn(), isPending: false }),
   RecalculateButton: () => <div data-testid="recalculate" />,
   ScheduleSummaryStrip: () => <div data-testid="summary-strip" />,
 }));

@@ -1,6 +1,7 @@
 import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import {
   useActivities,
@@ -17,7 +18,7 @@ import { useCreateDependency, usePlanDependencies } from '@/features/dependencie
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
 import { usePlan, useSetPlanStart } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { useRecalculate } from '@/features/schedule';
+import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
 import {
   addCalendarDays,
   type TsldCreateInput,
@@ -105,6 +106,36 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   }, [variance.data]);
   const canManageLogic = canEditSchedule; // dependency write is pen-gated schedule editing
 
+  // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
+  // the canvas *or* the activities table — triggers a coalesced recalculation, so the canvas plots
+  // new/changed rows without a manual Recalculate. Enabled only when a recalc could succeed (role +
+  // pen + a start date); guarded live at fire time. Recalc failures announce (rare). The manual
+  // button becomes `flush()`. Flag-off: this stays inert and the callbacks keep their inline recalc.
+  const announce = useAnnounce();
+  const autoRecalc = usePlanAutoRecalc(orgSlug, planId, {
+    enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
+    onMessage: announce,
+  });
+  // Create/delete of an activity or dependency (any surface — canvas, table, logic editor) changes
+  // the structure size; the canvas edit callbacks also `notify()` explicitly for repositions (no
+  // size change). Coalesced + single-flight, so overlapping notifies collapse to one recalc. Skip
+  // the first observed size so opening a plan never fires a gratuitous recalc.
+  const structureSizeRef = useRef<string | null>(null);
+  const activityCount = activities.data?.length ?? 0;
+  const dependencyCount = dependencies.data?.length ?? 0;
+  useEffect(() => {
+    if (!CANVAS_AUTHORING_ENABLED) return;
+    const key = `${activityCount}:${dependencyCount}`;
+    if (structureSizeRef.current === null) {
+      structureSizeRef.current = key;
+      return;
+    }
+    if (structureSizeRef.current !== key) {
+      structureSizeRef.current = key;
+      autoRecalc.notify();
+    }
+  }, [activityCount, dependencyCount, autoRecalc]);
+
   // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
   // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
   // with an SNET constraint, then the authoritative recalc places it.
@@ -136,6 +167,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       constraintType: 'SNET',
       constraintDate: addCalendarDays(plannedStart, input.startDay),
     });
+    // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
+    // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
+    // await + recalc-conflict semantics byte-for-byte.
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { recalcConflict: null };
+    }
     try {
       await recalculate.mutateAsync();
       return { recalcConflict: null };
@@ -205,6 +243,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The move landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { applied: true, conflict: null };
+    }
     try {
       await recalculate.mutateAsync();
       return { applied: true, conflict: null };
@@ -237,6 +279,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The link landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { applied: true, conflict: null };
+    }
     try {
       await recalculate.mutateAsync();
       return { applied: true, conflict: null };
@@ -311,6 +357,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canProgress,
     canManageLogic,
     penReadOnly,
+    // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it; inert flag-off.
+    autoRecalc,
     // Local UI state
     editing,
     setEditing,

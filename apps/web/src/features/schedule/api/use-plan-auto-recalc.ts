@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useRecalculateCommand } from './use-schedule';
 
@@ -105,5 +105,10 @@ export function usePlanAutoRecalc(
     };
   }, []);
 
-  return { notify, flush, isPending: recalc.isPending };
+  // Stable identity except when `isPending` flips, so a consumer can safely depend on it (the toolbar
+  // context memo) without churning every render (notify/flush are already stable).
+  return useMemo(
+    () => ({ notify, flush, isPending: recalc.isPending }),
+    [notify, flush, recalc.isPending],
+  );
 }
