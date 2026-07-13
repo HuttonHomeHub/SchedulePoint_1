@@ -42,6 +42,7 @@ import {
   type ZoomLevel,
 } from '../render/render-model';
 import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
+import type { SelectionAnchor } from '../toolbar/selection-actions';
 
 import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 
@@ -109,6 +110,10 @@ export interface TsldCanvasProps {
   /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
    * so the toolbar can reflect the active preset without per-frame React state. */
   onZoomStopChange?: (level: ZoomLevel) => void;
+  /** When set, the loop writes the selected activity's live viewport geometry here every frame (or
+   * `null` when it has no drawn position / is off-screen / the surface is hidden), so the floating
+   * {@link SelectionActionsBar} can follow the canvas without per-frame React state (ADR-0026 D3). */
+  selectionAnchorRef?: React.RefObject<SelectionAnchor | null>;
 }
 
 /** Approximate popover footprint (w-56 + fields) used to keep it inside the canvas. */
@@ -265,6 +270,7 @@ export function TsldCanvas({
   todayOffset = null,
   controlRef,
   onZoomStopChange,
+  selectionAnchorRef,
 }: TsldCanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -486,7 +492,12 @@ export function TsldCanvas({
       // is showing, so the diagram pane is `display:none`, or the canvas is scrolled off-screen):
       // otherwise the loop keeps painting an unseen canvas every frame (TECH_DEBT #30d). Visibility
       // comes from the IntersectionObserver below; where that API is absent (jsdom) it stays visible.
-      if (!visibleRef.current) return;
+      if (!visibleRef.current) {
+        // The floating selection bar is portaled to <body>, so it must hide when the surface is
+        // hidden (e.g. the below-`md` Activities pane is showing) — clear its anchor.
+        if (selectionAnchorRef) selectionAnchorRef.current = null;
+        return;
+      }
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       const size = sizeRef.current;
@@ -530,6 +541,35 @@ export function TsldCanvas({
         };
         paintInteractionLayer(ictx, overlay, size, palette, dpr);
         interactionDirtyRef.current = false;
+      }
+      // Publish the selected activity's live viewport anchor for the floating selection bar (ADR-0031):
+      // the selected bar's top edge + horizontal centre in viewport px, or null when it has no drawn
+      // position or is scrolled off the surface. Off the per-frame React path (ADR-0026 D3); only one
+      // `getBoundingClientRect` per frame, and only while a bar is actually selected + a consumer wired.
+      if (selectionAnchorRef) {
+        const scene = sceneRef.current;
+        const selected = scene.selectedId
+          ? scene.activities.find((a) => a.id === scene.selectedId)
+          : undefined;
+        const rect =
+          selected && selected.earlyStart !== null
+            ? activityRect(selected, viewRef.current, scene.dataDate)
+            : null;
+        const onSurface =
+          rect !== null &&
+          rect.x + rect.w > 0 &&
+          rect.x < size.width &&
+          rect.y + rect.h > 0 &&
+          rect.y < size.height;
+        if (rect && onSurface) {
+          const box = canvas.getBoundingClientRect();
+          selectionAnchorRef.current = {
+            top: box.top + rect.y,
+            centerX: box.left + rect.x + rect.w / 2,
+          };
+        } else {
+          selectionAnchorRef.current = null;
+        }
       }
     };
 
@@ -616,7 +656,7 @@ export function TsldCanvas({
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
     };
-  }, [editing]);
+  }, [editing, selectionAnchorRef]);
 
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const localPoint = (e: React.PointerEvent | React.MouseEvent): Point => {

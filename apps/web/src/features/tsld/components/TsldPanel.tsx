@@ -15,6 +15,11 @@ import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { daysBetween, type Point } from '../render/render-model';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges } from '../render/to-render-model';
+import {
+  SelectionActionsBar,
+  type SelectionActionContext,
+  type SelectionAnchor,
+} from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -115,8 +120,15 @@ export interface TsldPanelProps {
     changes: readonly { id: string; laneIndex: number }[],
   ) => Promise<TsldEditOutcome>;
   /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
-   * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). */
+   * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). Also the read action
+   * on the floating {@link SelectionActionsBar}. */
   onOpenLogic?: (activity: ActivitySummary) => void;
+  /** Open the edit dialog for an activity — the **floating selection bar**'s Edit action (ADR-0031).
+   * The host owns the dialog so this feature imports no other feature (ADR-0026 D8); its presence
+   * (with {@link onDeleteActivity}) mounts the bar over the selected bar. */
+  onEditActivity?: (activity: ActivitySummary) => void;
+  /** Delete an activity (host-owned confirm) — the floating selection bar's Delete action (ADR-0031). */
+  onDeleteActivity?: (activity: ActivitySummary) => void;
   /** Refetch the plan's server truth (activities/links/variance). Wired to the conflict banner's
    * Refresh so the "this changed elsewhere" cases have a real recovery action, not just copy. */
   onRefresh?: () => void;
@@ -174,6 +186,8 @@ export function TsldPanel({
   onLink,
   onAutoArrange,
   onOpenLogic,
+  onEditActivity,
+  onDeleteActivity,
   onRefresh,
   calendar = null,
   todayIso,
@@ -191,6 +205,9 @@ export function TsldPanel({
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The selected activity's live viewport geometry, written by the canvas each frame and read by the
+  // floating selection bar to follow pan/zoom without per-frame React state (ADR-0026 D3 / ADR-0031).
+  const selectionAnchorRef = useRef<SelectionAnchor | null>(null);
   // Canvas UI state (mode/toggles/zoom/fit/help): externally-owned when the workspace toolbar
   // drives the canvas (ADR-0031), else owned here (flag-off / legacy — unchanged). The hook is
   // always called (rules of hooks); its result is ignored when `canvasUi` is supplied.
@@ -251,6 +268,25 @@ export function TsldPanel({
   // bars simply don't paint (`paint.ts` skips `earlyStart === null`).
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
+
+  // The floating selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
+  // (open-logic + edit + delete). Its mutating actions are pen-gated as a set via `canEditSchedule`,
+  // mirroring the main toolbar's `authoringEnabled` (role + pen). Read actions stay available. The
+  // context is null when nothing's selected or the host didn't opt in — the bar then renders nothing.
+  const selectionActionsWired =
+    onOpenLogic !== undefined && onEditActivity !== undefined && onDeleteActivity !== undefined;
+  const selectionCtx = useMemo<SelectionActionContext | null>(() => {
+    if (!onOpenLogic || !onEditActivity || !onDeleteActivity) return null;
+    const activity = selectedId ? activities.find((a) => a.id === selectedId) : undefined;
+    if (!activity) return null;
+    return {
+      targetName: activity.name,
+      canEditSchedule: canEdit,
+      onOpenLogic: () => onOpenLogic(activity),
+      onEdit: () => onEditActivity(activity),
+      onDelete: () => onDeleteActivity(activity),
+    };
+  }, [selectedId, activities, canEdit, onOpenLogic, onEditActivity, onDeleteActivity]);
 
   // View controls (read-only or editing) — zoom preset (reflected from the canvas's coarse
   // stop-crossing callback) + layer toggles + the imperative canvas handle — now live in the
@@ -702,6 +738,7 @@ export function TsldPanel({
               todayOffset={todayOffset}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
+              {...(selectionActionsWired ? { selectionAnchorRef } : {})}
               pending={
                 pendingCreate
                   ? {
@@ -765,6 +802,12 @@ export function TsldPanel({
           </div>
         )}
       </div>
+
+      {/* The floating object-actions bar over the selected bar (ADR-0031, Fork-2). Portaled; renders
+          nothing until an activity is selected, and only when the host wired the object actions. */}
+      {showDiagram && selectionActionsWired ? (
+        <SelectionActionsBar anchorRef={selectionAnchorRef} ctx={selectionCtx} />
+      ) : null}
 
       <ConfirmDialog
         open={confirmArrange}

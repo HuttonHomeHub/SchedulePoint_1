@@ -1,4 +1,5 @@
-import { Pin, SquarePen, Trash2, Waypoints } from 'lucide-react';
+import { SquarePen, Trash2, Waypoints } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
@@ -6,8 +7,8 @@ import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar
 
 /**
  * The context for the **floating selection-actions** bar (ADR-0031, Fork-2 default): the commands
- * that act on the currently-selected activity. Read actions (open logic) are always available;
- * mutating actions (edit / set constraint / delete) are pen-gated as a set via `canEditSchedule`.
+ * that act on the currently-selected activity. The read action (open logic) is always available;
+ * the mutating actions (edit / delete) are pen-gated as a set via `canEditSchedule`.
  */
 export interface SelectionActionContext {
   /** The selected activity's display name — for the bar's accessible name + action labels. */
@@ -16,7 +17,6 @@ export interface SelectionActionContext {
   canEditSchedule: boolean;
   onOpenLogic: () => void;
   onEdit: () => void;
-  onSetConstraint: () => void;
   onDelete: () => void;
 }
 
@@ -46,21 +46,10 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       onActivate: (ctx) => ctx.onEdit(),
     },
     {
-      id: 'set-constraint',
-      group: 'object',
-      tier: 1,
-      order: 2,
-      label: 'Set constraint',
-      icon: <Pin className="size-4" />,
-      penGated: true,
-      disabledReason: () => PEN_REASON,
-      onActivate: (ctx) => ctx.onSetConstraint(),
-    },
-    {
       id: 'delete',
       group: 'object',
       tier: 1,
-      order: 3,
+      order: 2,
       label: 'Delete activity',
       icon: <Trash2 className="size-4" />,
       penGated: true,
@@ -85,25 +74,57 @@ const BAR_OFFSET = 44;
  * selected it appears just above the selected bar with its object actions, so they're where the
  * user's attention already is and the main toolbar stays stable. It is a normal `role="toolbar"`
  * (roving tabindex, pen-gated set) rendered in a portal; it does **not** auto-focus, so the canvas's
- * parallel listbox keeps its `aria-activedescendant` — the user Tabs to it when they want it. Pass
- * `ctx = null` (nothing selected) to render nothing.
+ * parallel listbox keeps its `aria-activedescendant` — the user Tabs to it when they want it.
+ *
+ * Position tracks the canvas imperatively: the canvas writes the selection's live viewport geometry
+ * to `anchorRef` every frame (ADR-0026 D3 — no per-frame React state), and this bar reads it on its
+ * own rAF to move the portal node, so it follows pan/zoom without re-rendering the toolbar. When the
+ * anchor is `null` (nothing drawn there, or the canvas is off-screen) the bar hides itself. Pass
+ * `ctx = null` (nothing selected) to render nothing at all.
  */
 export function SelectionActionsBar({
-  anchor,
+  anchorRef,
   ctx,
 }: {
-  anchor: SelectionAnchor | null;
+  anchorRef: React.RefObject<SelectionAnchor | null>;
   ctx: SelectionActionContext | null;
 }): React.ReactElement | null {
-  if (!anchor || !ctx) return null;
+  const barRef = useRef<HTMLDivElement>(null);
 
-  // Prefer above the selection; if it would clip the top, drop below the bar.
-  const above = anchor.top - BAR_OFFSET;
-  const top = above < 8 ? anchor.top + 28 : above;
+  // Follow the canvas by reading the anchor ref each frame and moving the portal node — never
+  // re-rendering the toolbar (its content only changes when the selection does). Runs only while
+  // something is selected (the effect is keyed on `ctx`), and stops on deselect/unmount.
+  useEffect(() => {
+    if (!ctx) return;
+    let raf = 0;
+    const place = (): void => {
+      raf = requestAnimationFrame(place);
+      const el = barRef.current;
+      if (!el) return;
+      const anchor = anchorRef.current;
+      if (!anchor) {
+        // Selected but nothing to point at (scrolled off / hidden pane) — hide, but keep it mounted
+        // so it reappears the moment the selection is back on-screen.
+        if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden';
+        return;
+      }
+      // Prefer above the selection; if it would clip the top, drop below the bar.
+      const above = anchor.top - BAR_OFFSET;
+      const top = above < 8 ? anchor.top + 28 : above;
+      el.style.visibility = 'visible';
+      el.style.top = `${top}px`;
+      el.style.left = `${anchor.centerX}px`;
+    };
+    place();
+    return () => cancelAnimationFrame(raf);
+  }, [ctx, anchorRef]);
+
+  if (!ctx) return null;
 
   return createPortal(
     <div
-      style={{ position: 'fixed', top, left: anchor.centerX, transform: 'translateX(-50%)' }}
+      ref={barRef}
+      style={{ position: 'fixed', top: 0, left: 0, transform: 'translateX(-50%)' }}
       className="border-border bg-popover z-40 rounded-md border p-1 shadow-md"
     >
       <Toolbar

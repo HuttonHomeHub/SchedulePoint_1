@@ -84,9 +84,11 @@ vi.mock('@/features/activities', () => ({
   useUpdateActivity: () => ({ mutateAsync: vi.fn() }),
   useRepositionLane: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
+  useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: ({ canWrite }: { canWrite: boolean }) => (
     <div data-testid="activities-table" data-can-write={String(canWrite)} />
   ),
+  ActivityFormDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));
 
