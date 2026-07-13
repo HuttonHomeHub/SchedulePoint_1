@@ -68,8 +68,11 @@ function ShellFrame(): React.ReactElement {
     announce('Project Explorer expanded.');
   }, [rail, announce]);
 
-  // Close the drawer once the viewport reaches `lg`+, where the pinned rail is shown —
-  // otherwise a modal drawer lingers behind it (duplicate landmark + stuck focus trap).
+  // Close the drawer once the viewport reaches `lg`+, where the pinned rail is shown — otherwise a
+  // modal drawer lingers behind it (duplicate landmark + stuck focus trap). This is a *transition
+  // side-effect* (close on a breakpoint crossing), not a render value, so a `matchMedia` change
+  // listener is the right tool here — the shared `useMediaQuery` hook returns a render boolean and
+  // would push the close into a setState-in-effect (TECH_DEBT #30a: intentionally left as-is).
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
     const mql = window.matchMedia(LG_QUERY);

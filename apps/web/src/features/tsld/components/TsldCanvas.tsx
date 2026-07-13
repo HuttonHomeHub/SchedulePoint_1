@@ -273,6 +273,11 @@ export function TsldCanvas({
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
   const dirtyRef = useRef(true);
   const fittedRef = useRef(false);
+  // Whether the surface is on-screen (an IntersectionObserver drives it below). When it's hidden —
+  // the below-`md` Activities pane showing, so the diagram pane is `display:none` — the rAF loop
+  // skips its paint/measure work (TECH_DEBT #30d). Defaults visible; where IntersectionObserver is
+  // absent (jsdom) it stays visible, so the render path is unchanged under test.
+  const visibleRef = useRef(true);
 
   // Live gesture + pending ghost drive the interaction layer; read by the rAF loop, so both
   // live in refs (per-frame writes must not go through setState — ADR-0026 D3).
@@ -477,6 +482,11 @@ export function TsldCanvas({
 
     const frame = (): void => {
       raf = requestAnimationFrame(frame);
+      // Skip all paint/measure work while the surface is hidden (e.g. the below-`md` Activities pane
+      // is showing, so the diagram pane is `display:none`, or the canvas is scrolled off-screen):
+      // otherwise the loop keeps painting an unseen canvas every frame (TECH_DEBT #30d). Visibility
+      // comes from the IntersectionObserver below; where that API is absent (jsdom) it stays visible.
+      if (!visibleRef.current) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       const size = sizeRef.current;
@@ -528,6 +538,21 @@ export function TsldCanvas({
 
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
     ro?.observe(container);
+
+    // Pause the render loop when the surface is off-screen (hidden pane / scrolled away), and re-arm
+    // a repaint the moment it returns (TECH_DEBT #30d). No-op where IntersectionObserver is absent.
+    const io =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(([entry]) => {
+            const visible = entry?.isIntersecting ?? true;
+            visibleRef.current = visible;
+            if (visible) {
+              dirtyRef.current = true;
+              interactionDirtyRef.current = true;
+            }
+          })
+        : null;
+    io?.observe(container);
 
     const mo =
       typeof MutationObserver !== 'undefined'
@@ -586,6 +611,7 @@ export function TsldCanvas({
     return () => {
       cancelAnimationFrame(raf);
       ro?.disconnect();
+      io?.disconnect();
       mo?.disconnect();
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
