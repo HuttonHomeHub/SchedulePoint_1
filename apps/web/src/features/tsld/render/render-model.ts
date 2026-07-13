@@ -21,6 +21,20 @@ export const BAR_HEIGHT = 18;
 /** Half-diagonal of a milestone diamond, in CSS px. */
 export const MILESTONE_RADIUS = 7;
 
+// ── On-canvas activity labels (ADR-0026 D1) ────────────────────────────────────────────
+/** Below this px-per-day, bars are too narrow for legible text — labels are culled (LOD gate). */
+export const LABEL_MIN_PX_PER_DAY = 4;
+/** A bar must be at least this wide (px) to hold an inside label; narrower bars try a beside label. */
+export const LABEL_INSIDE_MIN_PX = 24;
+/** Horizontal padding (px) inside a bar before/after inside-label text. */
+export const LABEL_PAD_PX = 3;
+/** Gap (px) between a bar's right edge and a beside label. */
+export const LABEL_GAP_PX = 4;
+/** Minimum clear room (px) to the same-lane neighbour before a beside label is worth drawing. */
+export const LABEL_BESIDE_MIN_PX = 24;
+/** The fixed label font. Constant so the width memo can key by text alone (font-stable). */
+export const LABEL_FONT = "11px system-ui, -apple-system, 'Segoe UI', sans-serif";
+
 /**
  * Discrete zoom stops → pixels per day. A continuous slider interpolates between them;
  * each stop also fixes the ruler's tick granularity (owned by the painter, M1b).
@@ -55,6 +69,10 @@ export interface RenderActivity {
   id: string;
   type: ActivityType;
   laneIndex: number;
+  /** The on-canvas bar label (`{code} {name} · {n}d`), pre-built at the mapping seam from the
+   * shared `activityBarLabel` so the render model does no domain string logic and the visible
+   * label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). */
+  label: string;
   /** Inclusive computed dates (`YYYY-MM-DD`), or null until the plan is recalculated. */
   earlyStart: string | null;
   earlyFinish: string | null;
@@ -165,6 +183,48 @@ export function activityRect(
   const x1 = screenXOfDay(startDay, view);
   const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
   return { x: x1, y: top, w: Math.max(2, x2 - x1), h: BAR_HEIGHT };
+}
+
+/**
+ * Where an activity's label should sit (ADR-0026 D1): **inside** a task bar wide enough to hold
+ * text; **beside** (to the right) for a narrow bar or a milestone when the same-lane neighbour
+ * leaves clear room; else **none** (suppressed). Pure — the painter supplies the measured bar
+ * width and the pre-computed room to the next same-lane bar, and truncation fits the actual text.
+ */
+export function labelPlacement(args: {
+  barWidth: number;
+  isMilestone: boolean;
+  besideRoomPx: number;
+}): 'inside' | 'beside' | 'none' {
+  if (!args.isMilestone && args.barWidth >= LABEL_INSIDE_MIN_PX) return 'inside';
+  if (args.besideRoomPx >= LABEL_BESIDE_MIN_PX) return 'beside';
+  return 'none';
+}
+
+/**
+ * Fit `text` into `maxPx` using `measure` (a width function), appending an ellipsis when it must
+ * trim. Returns the full text when it fits, the empty string when not even the ellipsis fits, else
+ * the longest prefix (trailing space trimmed) plus the ellipsis. Text width is monotonic in prefix
+ * length, so a binary search finds the fit in O(log n) measurements.
+ */
+export function truncateToWidth(
+  text: string,
+  maxPx: number,
+  measure: (s: string) => number,
+  ellipsis = '…',
+): string {
+  if (maxPx <= 0 || text.length === 0) return '';
+  if (measure(text) <= maxPx) return text;
+  if (measure(ellipsis) > maxPx) return '';
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measure(text.slice(0, mid) + ellipsis) <= maxPx) lo = mid;
+    else hi = mid - 1;
+  }
+  const kept = text.slice(0, lo).trimEnd();
+  return kept ? kept + ellipsis : ellipsis;
 }
 
 /** Whether two screen-space rectangles overlap (used for viewport culling). */

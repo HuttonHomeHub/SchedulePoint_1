@@ -21,6 +21,7 @@ const TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }> = [
   { key: 'yearGrid', label: 'Year grid' },
   { key: 'today', label: 'Today' },
   { key: 'nonWorking', label: 'Non-working' },
+  { key: 'labels', label: 'Labels' },
 ];
 
 export interface TsldViewControlsProps {

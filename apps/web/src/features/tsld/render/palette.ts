@@ -27,5 +27,11 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // A muted wash for non-working columns and the destructive hue for the today marker.
     nonWorking: token('--color-muted', '#20242d'),
     today: token('--color-destructive', '#c83c3c'),
+    // Label text: inside-bar text uses each fill's paired *-foreground token (so it contrasts on
+    // that fill in both themes); beside-bar text uses the page foreground over the canvas ground.
+    labelInside: token('--color-primary-foreground', '#ffffff'),
+    labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
+    labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
+    labelBeside: token('--color-foreground', '#e6e8ee'),
   };
 }

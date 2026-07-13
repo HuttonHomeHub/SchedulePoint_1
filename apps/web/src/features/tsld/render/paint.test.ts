@@ -13,6 +13,10 @@ const PALETTE: TsldPalette = {
   selection: '#0af',
   nonWorking: '#222',
   today: '#f00',
+  labelInside: '#fff',
+  labelInsideCritical: '#fff',
+  labelInsideNearCritical: '#000',
+  labelBeside: '#eee',
 };
 
 /** All view layers on, matching the default scene. */
@@ -22,6 +26,7 @@ const ALL_ON = {
   yearGrid: true,
   today: true,
   nonWorking: true,
+  labels: true,
 } as const;
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
 const SIZE = { width: 800, height: 400 };
@@ -39,9 +44,15 @@ function mockCtx() {
     fill: vi.fn(),
     setTransform: vi.fn(),
     setLineDash: vi.fn(),
+    fillText: vi.fn(),
+    // Deterministic width so truncation/placement tests are stable: ~6px per glyph.
+    measureText: vi.fn((s: string) => ({ width: s.length * 6 }) as TextMetrics),
     fillStyle: '',
     strokeStyle: '',
     lineWidth: 1,
+    font: '',
+    textBaseline: 'alphabetic' as CanvasTextBaseline,
+    textAlign: 'start' as CanvasTextAlign,
   };
 }
 
@@ -50,6 +61,7 @@ function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
     id: 't',
     type: 'TASK',
     laneIndex: 0,
+    label: 't',
     earlyStart: '2026-01-02',
     earlyFinish: '2026-01-05',
     isCritical: false,
@@ -454,5 +466,130 @@ describe('paintInteractionLayer', () => {
     expect(ctx.clearRect).toHaveBeenCalled();
     expect(ctx.fillRect).not.toHaveBeenCalled();
     expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+});
+
+describe('paintScene — activity labels (Layer 3.6)', () => {
+  const wide = () => task({ id: 'w', label: 'A1020 Erect steel · 4d' });
+
+  it('draws an inside label on a wide task bar, setting the label font once', () => {
+    const ctx = mockCtx();
+    paintScene(ctx, { activities: [wide()], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    // A non-empty label font (the fixed LABEL_FONT) is set before any glyph is drawn.
+    expect(ctx.font).not.toBe('');
+    // The drawn text is the label (or a truncation of it) starting with the code.
+    const drawn = ctx.fillText.mock.calls[0]![0] as string;
+    expect(drawn.startsWith('A1020')).toBe(true);
+  });
+
+  it('draws nothing when the labels toggle is off', () => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      { activities: [wide()], edges: [], dataDate: DATA_DATE, view: { ...ALL_ON, labels: false } },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fillText).not.toHaveBeenCalled();
+  });
+
+  it('suppresses labels below the legibility zoom threshold', () => {
+    const ctx = mockCtx();
+    // pxPerDay 1 is below LABEL_MIN_PX_PER_DAY (4) — no labels drawn.
+    const zoomedOut: Viewport = { ...VIEW, pxPerDay: 1 };
+    paintScene(
+      ctx,
+      { activities: [wide()], edges: [], dataDate: DATA_DATE },
+      zoomedOut,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fillText).not.toHaveBeenCalled();
+  });
+
+  it('truncates an inside label that does not fit the bar (ends with an ellipsis)', () => {
+    const ctx = mockCtx();
+    // A 3-day bar is 36px wide — wide enough to place the label inside, but far narrower than the
+    // full label (22 glyphs × 6px), so it must truncate with an ellipsis.
+    const narrow = task({ id: 'n', label: 'A1020 Erect steel · 3d', earlyFinish: '2026-01-04' });
+    paintScene(ctx, { activities: [narrow], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    const drawn = ctx.fillText.mock.calls[0]![0] as string;
+    expect(drawn.endsWith('…')).toBe(true);
+  });
+
+  // A zero-width milestone (a diamond, not a bar) can never hold text inside, so its label — when
+  // drawn — sits BESIDE the diamond, to the right, using the beside palette colour.
+  const milestone = (over: Partial<RenderActivity> = {}): RenderActivity =>
+    task({
+      type: 'FINISH_MILESTONE',
+      label: 'M1 Handover',
+      earlyStart: '2026-01-02',
+      earlyFinish: '2026-01-02',
+      ...over,
+    });
+
+  it('draws a milestone label BESIDE the diamond (to its right) with the beside colour', () => {
+    const ctx = mockCtx();
+    // Alone in its lane → unbounded room to the right → the full label is placed beside, untruncated.
+    paintScene(
+      ctx,
+      { activities: [milestone()], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    const [text, x] = ctx.fillText.mock.calls[0]!;
+    expect(text).toBe('M1 Handover');
+    // The diamond is centred on day-offset 1 (cx=72, radius 7): its bounding box is x 65–79. The
+    // label sits to the right of that edge (beside, never inside/over it), in the beside colour.
+    expect(x as number).toBeGreaterThan(79);
+    expect(ctx.fillStyle).toBe(PALETTE.labelBeside);
+  });
+
+  it('suppresses a label whose same-lane neighbour leaves too little room (placement "none")', () => {
+    const ctx = mockCtx();
+    // Two same-lane milestones two days apart: the LEFT one has < LABEL_BESIDE_MIN_PX of clear
+    // room before the right diamond, so its label is suppressed; only the right (unbounded room)
+    // draws. One fillText, not two — proving the "none" branch fired for the crowded bar.
+    const left = milestone({ id: 'l' });
+    const right = milestone({
+      id: 'r',
+      label: 'M2 Done',
+      earlyStart: '2026-01-04',
+      earlyFinish: '2026-01-04',
+    });
+    paintScene(
+      ctx,
+      { activities: [left, right], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    // Only the right diamond's label drew — the left ('M1 Handover') was suppressed by its neighbour.
+    expect(ctx.fillText.mock.calls[0]![0]).toBe('M2 Done');
+  });
+
+  it('truncates a beside label when the neighbour leaves only partial room', () => {
+    const ctx = mockCtx();
+    // Neighbour four days right (x=120): ~32px of clear room beside the left diamond — enough to
+    // place a beside label (≥ LABEL_BESIDE_MIN_PX) but far too narrow for the 66px label, so it
+    // truncates with an ellipsis; the right diamond (unbounded room) draws its label in full.
+    const left = milestone({ id: 'l' });
+    const right = milestone({ id: 'r', earlyStart: '2026-01-06', earlyFinish: '2026-01-06' });
+    paintScene(
+      ctx,
+      { activities: [left, right], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fillText).toHaveBeenCalledTimes(2);
+    // Lane rows are x-sorted, so the crowded left diamond is drawn first — and truncated.
+    expect((ctx.fillText.mock.calls[0]![0] as string).endsWith('…')).toBe(true);
   });
 });

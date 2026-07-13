@@ -10,6 +10,45 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-13 — On-canvas TSLD activity labels (extension within ADR-0026 D1)
+
+**Decision.** The TSLD canvas now draws each activity's label (`{code} {name} · {n}d`) directly
+on the diagram (spec `docs/specs/tsld-activity-labels.md`), realising the on-canvas text ADR-0026
+D1 named-and-budgeted ("text is the dominant cost, and is budgeted") and deferred. It is an
+**extension within ADR-0026 — no new ADR** (ui-architect confirmed: it changes no
+coordinate/viewport/state/interaction/a11y decision, adds no dependency or data model, and the
+DOM-overlay alternative is the very option ADR-0026 rejected). Key choices:
+
+- **Canvas `fillText`, not a DOM overlay.** Activity labels have independent x's, move on both
+  axes, and are far more numerous than the ruler's pooled labels (whose one-`translateX`/frame
+  trick doesn't generalise) — canvas text folds into the single O(visible) base-layer repaint.
+- **One shared identity builder.** `activityLabel(a)` (`code name`) in `render/a11y.ts` feeds
+  `describeActivity`, `chainNeighbour`, **and** the bar label (`activityBarLabel` = identity +
+  ` · Nd`), so the visible label and the accessible name never disagree on _which_ activity a bar
+  is (WCAG 2.5.3). Duration is supplementary visual detail; the identity stays the shared prefix.
+- **Adaptive placement, culled + LOD-gated.** Inside a wide-enough bar (truncated + ellipsised to
+  fit — no clip needed), beside a short bar/milestone when the same-lane neighbour leaves room,
+  else suppressed; hidden below `LABEL_MIN_PX_PER_DAY`. The visible set is bucketed by lane and
+  x-sorted **once per frame** (O(v log v)) for the beside-neighbour x — never a per-label scan.
+- **Contrast by paired tokens.** Inside text uses each fill's `*-foreground` token
+  (`--color-primary/destructive/warning-foreground`); beside text uses `--color-foreground`. A
+  new `render/measure.ts` memoises `measureText` widths (font-stable, keyed by text) so a label
+  measures at most once ever.
+
+**Consequences.** A sixth **"Labels"** view toggle (default on) joins the five existing ones; the
+render model gains a pre-built `label: string` at the `to-render-model.ts` seam (stays enum-free).
+The four label text tokens are recorded in `docs/DESIGN_SYSTEM.md`. Perf re-verified honestly on
+the ADR-0026 real-Chromium spike **after correcting its label path** (the harness had drawn a bare
+`fillText` on 2–6-char labels — it never exercised truncation, the width cache, or lane placement;
+it now measures realistic `{code} {name} · {n}d` labels through the same code the painter runs):
+**p95 9.4ms draw at 2,000 activities** (median 6ms), versus a **3.6ms** labels-off baseline in the
+same harness — comfortably inside the ADR-0026 60fps CPU draw budget (≤16ms) with ~40% headroom.
+(The earlier "3.9ms" figure was the labels-off draw mislabelled as with-labels; it is corrected
+here.) The painter also computes each visible activity's screen rect **once per frame** (shared by
+the bar/label/selection layers) to keep that headroom. No backend, schema, or auth change.
+Single-locale LTR text is a documented v1 limitation (the shared builder is the future bidi/locale
+seam).
+
 ### 2026-07-12 — Navigator in-tree CRUD: `Menu` primitive + shell-layer coordinator seam (ADR-0029 Phase 2)
 
 **Decision.** In-tree create/rename/delete for the Project Explorer (ADR-0029's

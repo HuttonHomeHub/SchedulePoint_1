@@ -64,7 +64,11 @@ Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
   defaults on (with `=false` as opt-out), all pre-enablement gates green. The canvas also
   now reads as a time-scaled document — an **adaptive date ruler** (year→month→day), **zoom
   presets** (Day…Year) + zoom −/+, a **TODAY** marker, **non-working-day shading** (weekends
-  - calendar holidays), and five **layer toggles** (2026-07-12). Remaining: the deferred
+  - calendar holidays), **six** **layer toggles**, and **on-canvas activity labels**
+    (`{code} {name} · {n}d`, adaptive inside/beside placement, culled + LOD-gated, a shared
+    identity builder keeping the visible label consistent with the accessible name — 2026-07-13,
+    ADR-0026 D1; perf re-verified on the corrected spike at p95 9.4ms draw @ 2,000 activities,
+    inside the ≤16ms 60fps budget). Remaining: the deferred
     per-activity driving summary in the parallel listbox.
 - **Gantt view** — the secondary tabular projection of the same model.
 - **Plan edit-lock** (single-editor hand-off) — **delivered & enabled** (ADR-0028): the

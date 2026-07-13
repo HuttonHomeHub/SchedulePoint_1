@@ -235,6 +235,15 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
 - **Dashboards** — a responsive grid of cards/KPIs/charts with consistent
   spacing and a clear scan order (most important top-left); each widget handles
   its own loading/empty/error state independently.
+- **TSLD canvas text (labels)** — the Canvas 2D painter resolves its label
+  colours from existing semantic tokens (no new CSS variables): text **inside** a
+  bar uses that fill's paired `*-foreground` token (`--color-primary-foreground`
+  over the on-schedule fill, `--color-destructive-foreground` over critical,
+  `--color-warning-foreground` over near-critical) so it meets contrast in both
+  themes; text **beside** a bar uses `--color-foreground` over the canvas ground.
+  When adding on-canvas text, always pair it with the fill's `*-foreground` token
+  rather than picking a raw colour, and keep the identity consistent with the
+  activity's accessible name (one shared builder — WCAG 2.5.3).
 
 ---
 
