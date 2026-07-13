@@ -60,8 +60,15 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Turn the editing surface + pen layer on in the browser bundle.
-            env: { VITE_TSLD_EDITING: 'true', VITE_PLAN_EDIT_LOCK: 'true' },
+            // Turn the editing surface + pen layer on in the browser bundle. Pin the
+            // canvas-first workspace OFF: these editing journeys drive the legacy plan
+            // page (Edit plan button, stacked activities section); the workspace-on
+            // editing path is covered by playwright.workspace.config.ts.
+            env: {
+              VITE_TSLD_EDITING: 'true',
+              VITE_PLAN_EDIT_LOCK: 'true',
+              VITE_CANVAS_WORKSPACE: 'false',
+            },
           },
         ],
       }),
