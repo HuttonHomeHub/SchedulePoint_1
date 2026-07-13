@@ -63,6 +63,34 @@ describe('Menu', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('a `selected` item becomes a radio menu item conveying its checked state to AT', () => {
+    render(
+      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Type">
+        <MenuItem onSelect={vi.fn()} selected>
+          Task
+        </MenuItem>
+        <MenuItem onSelect={vi.fn()} selected={false}>
+          Milestone
+        </MenuItem>
+      </Menu>,
+    );
+    // No plain menuitems — both are single-choice radios…
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+    const radios = screen.getAllByRole('menuitemradio');
+    expect(radios).toHaveLength(2);
+    // …and the armed one is announced checked, the other unchecked.
+    expect(screen.getByRole('menuitemradio', { name: 'Task' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'Milestone' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    // Radio items still take roving focus (the container queries both roles).
+    expect(radios[0]).toHaveFocus();
+  });
+
   it('Escape closes and returns focus to the trigger', () => {
     const restore = createRef<HTMLButtonElement>();
     const onClose = vi.fn();

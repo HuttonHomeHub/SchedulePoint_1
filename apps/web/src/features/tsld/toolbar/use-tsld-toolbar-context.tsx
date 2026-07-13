@@ -166,7 +166,9 @@ export function useTsldToolbarContext({
       recalcPending: CANVAS_AUTHORING_ENABLED ? model.autoRecalc.isPending : recalc.isPending,
       recalculate: () =>
         CANVAS_AUTHORING_ENABLED
-          ? model.autoRecalc.flush()
+          ? // A manual flush is an explicit action, so it confirms — unlike the silent auto-recalcs
+            // (ux review); errors already surface via the coalescer's onMessage → announce.
+            model.autoRecalc.flush(() => announce('Schedule recalculated.'))
           : recalc.run({
               onSuccess: () => announce('Schedule recalculated.'),
               onError: (message) => announce(message),

@@ -55,7 +55,7 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
   const linkType = toolbar.getByRole('button', { name: 'Link type: FS' });
   await expect(linkType).toBeVisible();
   await linkType.click();
-  await page.getByRole('menuitem', { name: /Start → Start/ }).click();
+  await page.getByRole('menuitemradio', { name: /Start → Start/ }).click();
   await expect(toolbar.getByRole('button', { name: 'Link type: SS' })).toBeVisible();
 
   // The canvas-first authoring workspace is accessible.

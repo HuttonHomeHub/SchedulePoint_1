@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import {
@@ -106,5 +106,8 @@ export function useRecalculateCommand(orgSlug: string, planId: string) {
     },
     [recalculate],
   );
-  return { isPending: recalculate.isPending, run };
+  // Memoise the returned command so its identity only changes when `isPending` flips — callers put it
+  // in memo dep arrays (the TSLD toolbar context), and an unmemoised literal here defeats their
+  // stability guarantee, churning the `<Toolbar>` measure cycle on every unrelated render (perf review).
+  return useMemo(() => ({ isPending: recalculate.isPending, run }), [recalculate.isPending, run]);
 }

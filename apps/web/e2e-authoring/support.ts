@@ -63,7 +63,7 @@ export async function drawActivity(
   pos: { x: number; y: number },
 ): Promise<void> {
   await page.getByRole('button', { name: /^Add/ }).click();
-  await page.getByRole('menuitem', { name: kind }).click();
+  await page.getByRole('menuitemradio', { name: kind }).click();
   await canvas(page).click({ position: pos });
   const form = page.getByRole('form', { name: 'Name the new activity' });
   await form.getByRole('textbox', { name: 'New activity name' }).fill(name);

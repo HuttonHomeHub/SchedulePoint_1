@@ -16,6 +16,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
 import { CompactPenStatus, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
@@ -99,10 +100,24 @@ export function ToolbarPlanWorkspace({
     [panel, effectiveMax],
   );
 
+  // Canvas-first authoring makes the empty canvas an *interactive, drawable* surface, so it must not
+  // be shown while the activities/dependencies are still loading — an empty array then reads as a
+  // genuinely blank plan and invites a draw into data that's about to arrive (ux review). Until they
+  // resolve, show a loading placeholder distinct from the empty state. (Flag-off the empty canvas is
+  // inert, so this window is harmless and we keep the byte-for-byte render.)
+  const canvasLoading =
+    CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
+
   // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
   // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so
   // selection/viewport state never leaks across a plan→plan nav.
-  const canvas = (
+  const canvas = canvasLoading ? (
+    <div
+      role="status"
+      aria-label="Loading the plan…"
+      className="bg-muted/40 h-full min-h-0 flex-1 animate-pulse rounded-md"
+    />
+  ) : (
     <TsldPanel
       key={model.planId}
       fill

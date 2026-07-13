@@ -93,8 +93,8 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       const setCreateType = vi.fn();
       renderToolbar(ctx({ setCreateType }));
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-      // The three draw kinds are offered as menu items…
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Start milestone' }));
+      // The three draw kinds are offered as single-choice (radio) menu items…
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Start milestone' }));
       expect(setCreateType).toHaveBeenCalledWith('START_MILESTONE');
     });
 
@@ -167,7 +167,7 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
         />,
       );
       fireEvent.click(screen.getByRole('button', { name: 'Link type: FS' }));
-      fireEvent.click(screen.getByRole('menuitem', { name: /Start → Start/ }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Start → Start/ }));
       expect(setLinkType).toHaveBeenCalledWith('SS');
     });
   });

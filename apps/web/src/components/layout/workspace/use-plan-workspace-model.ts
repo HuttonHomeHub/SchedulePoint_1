@@ -117,25 +117,43 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
     onMessage: announce,
   });
-  // Create/delete of an activity or dependency (any surface — canvas, table, logic editor) changes
-  // the structure size; the canvas edit callbacks also `notify()` explicitly for repositions (no
-  // size change). Coalesced + single-flight, so overlapping notifies collapse to one recalc. Skip
-  // the first observed size so opening a plan never fires a gratuitous recalc.
+  // Any structural edit — from the canvas, the activities table, or the logic editor — should
+  // auto-recalc. Watching only the row *count* misses in-place edits that change the schedule
+  // without adding/removing a row (a duration or constraint edit from the table — ux review), so we
+  // key on a **scheduling-input signature**: each activity's duration/type/constraint and each
+  // dependency's type/lag. Crucially this excludes the engine-*computed* fields (early/late dates,
+  // floats, critical) that a recalc writes back, so a settled recalc never re-triggers `notify()` —
+  // no loop. Layout-only `laneIndex` is excluded too (a lane move needs no recalc; the canvas path
+  // already skips it). The canvas reposition/link callbacks still `notify()` explicitly, which just
+  // coalesces with this. Baseline is taken on the first *loaded* (non-pending) observation, so
+  // opening a plan never fires a gratuitous recalc.
+  const structureSignature = useMemo(() => {
+    const acts = (activities.data ?? [])
+      .map(
+        (a) =>
+          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}`,
+      )
+      .sort()
+      .join('|');
+    const deps = (dependencies.data ?? [])
+      .map((d) => `${d.id}:${d.type}:${d.lagDays}`)
+      .sort()
+      .join('|');
+    return `${acts}##${deps}`;
+  }, [activities.data, dependencies.data]);
   const structureSizeRef = useRef<string | null>(null);
-  const activityCount = activities.data?.length ?? 0;
-  const dependencyCount = dependencies.data?.length ?? 0;
   useEffect(() => {
     if (!CANVAS_AUTHORING_ENABLED) return;
-    const key = `${activityCount}:${dependencyCount}`;
+    if (activities.isPending || dependencies.isPending) return; // wait for a real loaded baseline
     if (structureSizeRef.current === null) {
-      structureSizeRef.current = key;
+      structureSizeRef.current = structureSignature;
       return;
     }
-    if (structureSizeRef.current !== key) {
-      structureSizeRef.current = key;
+    if (structureSizeRef.current !== structureSignature) {
+      structureSizeRef.current = structureSignature;
       autoRecalc.notify();
     }
-  }, [activityCount, dependencyCount, autoRecalc]);
+  }, [structureSignature, activities.isPending, dependencies.isPending, autoRecalc]);
 
   // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
   // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
@@ -150,12 +168,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       // today. The first draw silently pins `plannedStart` to that anchor (Critical Q1) so the SNET
       // dates are coherent, then proceeds. Flag-off keeps today's no-op (needs a start first).
       if (!CANVAS_AUTHORING_ENABLED || !plan.data) return { recalcConflict: null };
-      const updated = await setPlanStart.mutateAsync({
-        planId,
-        version: plan.data.version,
-        plannedStart: todayIso,
-      });
+      let updated;
+      try {
+        updated = await setPlanStart.mutateAsync({
+          planId,
+          version: plan.data.version,
+          plannedStart: todayIso,
+        });
+      } catch {
+        // Curated message (not a raw API string) so the create popover shows something readable; the
+        // row wasn't created, so the draw is simply retryable.
+        throw new Error(
+          'Couldn’t set the timeline start for the first activity. Please try again.',
+        );
+      }
       plannedStart = updated.plannedStart ?? todayIso;
+      // The start moved as a side effect of drawing — announce it so a screen-reader user knows a
+      // plan-level field changed (sighted users see the toolbar's start field populate).
+      announce('Timeline start set to today.');
     }
     // The create must land first (this throw keeps the popover open with the error). Only
     // then recalc — a recalc failure is non-fatal: the row persisted, so we report the

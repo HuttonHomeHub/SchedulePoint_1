@@ -1,4 +1,4 @@
-import type { ActivityType, DependencyType } from '@repo/types';
+import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   CalendarClock,
@@ -16,19 +16,19 @@ import {
   SlidersHorizontal,
   Spline,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
-import { Menu, MenuItem } from '@/components/ui/menu';
+import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import type { ToolbarItemRenderApi } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
@@ -52,10 +52,11 @@ const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }>
 
 /**
  * The inline **timeline start-date** control (ADR-0032 M2) — the plan's `plannedStart`, the canvas
- * day-zero origin. A writer edits it via a native date input (pen-gated: `setPlannedStart` is null
- * for read-only viewers, who instead see the date as a focusable static read-out so it still holds a
- * roving-tabindex stop). Changing it re-anchors the timeline. Both variants spread `itemProps` on
- * their single focusable control per the toolbar contract.
+ * day-zero origin. A writer edits it via a native date input; a read-only viewer (`setPlannedStart`
+ * null) sees the date as a static read-out. Changing it re-anchors the timeline. The two are
+ * registered as separate toolbar items so the read-out is `presentational` — a non-interactive date
+ * is not a roving-tabindex stop (a11y review), mirroring the finish-chip. The writer input spreads
+ * `itemProps` on its single focusable control; the read-out spreads them on the (inert) span.
  */
 function TimelineStartControl({
   ctx,
@@ -94,15 +95,10 @@ function TimelineStartControl({
 }
 
 /** The activity kinds the canvas-first Add split-button offers, in menu order (ADR-0032 M4). Only the
- * three planners draw directly — hammock / level-of-effort are derived, not point-and-draw. */
-const ADD_ACTIVITY_TYPES: ReadonlyArray<{ type: ActivityType; label: string }> = [
-  { type: 'TASK', label: 'Task' },
-  { type: 'START_MILESTONE', label: 'Start milestone' },
-  { type: 'FINISH_MILESTONE', label: 'Finish milestone' },
-];
-const ADD_ACTIVITY_TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  ADD_ACTIVITY_TYPES.map(({ type, label }) => [type, label]),
-);
+ * three planners draw directly — hammock / level-of-effort are derived, not point-and-draw. Labels
+ * reuse the canonical {@link ACTIVITY_TYPE_LABELS} so the toolbar copy can't drift from the rest of
+ * the app (e.g. under localisation). */
+const ADD_ACTIVITY_TYPES = ['TASK', 'START_MILESTONE', 'FINISH_MILESTONE'] as const;
 const ADD_DISABLED_REASON = 'Start editing to add activities';
 
 /**
@@ -121,18 +117,9 @@ function AddActivityControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState({ x: 0, y: 0 });
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
-
-  const openMenu = (): void => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    setAnchor({ x: rect?.left ?? 0, y: rect?.bottom ?? 0 });
-    setOpen(true);
-  };
-
-  const activeLabel = ADD_ACTIVITY_TYPE_LABELS[ctx.createType] ?? 'Task';
+  const activeLabel = ACTIVITY_TYPE_LABELS[ctx.createType];
   return (
     <>
       <button
@@ -144,9 +131,7 @@ function AddActivityControl({
         aria-disabled={disabled || undefined}
         title={disabled ? ADD_DISABLED_REASON : undefined}
         onClick={() => {
-          if (disabled) return;
-          if (open) setOpen(false);
-          else openMenu();
+          if (!disabled) toggle();
         }}
         className={cn(toolbarControlVariants({ active: ctx.isAddingActivity || open, disabled }))}
       >
@@ -156,18 +141,22 @@ function AddActivityControl({
       </button>
       <Menu
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={close}
         anchor={anchor}
         label="Add activity type"
         restoreFocusRef={triggerRef}
       >
-        {ADD_ACTIVITY_TYPES.map(({ type, label }) => (
-          <MenuItem key={type} onSelect={() => ctx.setCreateType(type)}>
+        {ADD_ACTIVITY_TYPES.map((type) => (
+          <MenuItem
+            key={type}
+            selected={ctx.createType === type}
+            onSelect={() => ctx.setCreateType(type)}
+          >
             <Check
               aria-hidden="true"
               className={cn('size-4', ctx.createType === type ? 'opacity-100' : 'opacity-0')}
             />
-            {label}
+            {ACTIVITY_TYPE_LABELS[type]}
           </MenuItem>
         ))}
         {ctx.isAddingActivity ? (
@@ -189,12 +178,18 @@ const LINK_TYPES: ReadonlyArray<{ type: DependencyType; label: string }> = [
   { type: 'SS', label: 'Start → Start' },
   { type: 'FF', label: 'Finish → Finish' },
 ];
+/** Long names for accessible labels (the compact button shows the FS/SS/FF code only). */
+const LINK_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  LINK_TYPES.map(({ type, label }) => [type, label]),
+);
 
 /**
  * The Link tool's **dependency-type selector** (ADR-0032 M5) — a compact menu-button showing the
  * armed FS/SS/FF code, opening a `Menu` to switch it. Only shown while the Link tool is active. One
  * focusable control (spreads `itemProps`) per the toolbar contract.
  */
+const LINK_DISABLED_REASON = 'Start editing to change the link type';
+
 function LinkTypeControl({
   ctx,
   api,
@@ -202,17 +197,8 @@ function LinkTypeControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState({ x: 0, y: 0 });
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
-
-  const openMenu = (): void => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    setAnchor({ x: rect?.left ?? 0, y: rect?.bottom ?? 0 });
-    setOpen(true);
-  };
-
   return (
     <>
       <button
@@ -223,10 +209,9 @@ function LinkTypeControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         aria-label={`Link type: ${ctx.linkType}`}
+        title={disabled ? LINK_DISABLED_REASON : `Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
         onClick={() => {
-          if (disabled) return;
-          if (open) setOpen(false);
-          else openMenu();
+          if (!disabled) toggle();
         }}
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
@@ -235,13 +220,17 @@ function LinkTypeControl({
       </button>
       <Menu
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={close}
         anchor={anchor}
         label="Link type"
         restoreFocusRef={triggerRef}
       >
         {LINK_TYPES.map(({ type, label }) => (
-          <MenuItem key={type} onSelect={() => ctx.setLinkType(type)}>
+          <MenuItem
+            key={type}
+            selected={ctx.linkType === type}
+            onSelect={() => ctx.setLinkType(type)}
+          >
             <Check
               aria-hidden="true"
               className={cn('size-4', ctx.linkType === type ? 'opacity-100' : 'opacity-0')}
@@ -290,13 +279,25 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate -----------------------------------------------------------------
     // Inline timeline start-date (ADR-0032 M2) — leftmost in the Frame group; canvas-first only.
+    // Split by editability so the read-only variant is a *presentational* read-out (a11y review):
+    // a static date shouldn't be a roving-tabindex stop (the same rule the finish-chip follows).
     {
       id: 'timeline-start',
       group: 'frame',
       tier: 1,
       order: -1,
       label: 'Timeline start',
-      isVisible: () => CANVAS_AUTHORING_ENABLED,
+      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.setPlannedStart !== null,
+      render: (ctx, api) => <TimelineStartControl ctx={ctx} itemProps={api.itemProps} />,
+    },
+    {
+      id: 'timeline-start-readonly',
+      group: 'frame',
+      tier: 1,
+      order: -1,
+      label: 'Timeline start',
+      presentational: true,
+      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.setPlannedStart === null,
       render: (ctx, api) => <TimelineStartControl ctx={ctx} itemProps={api.itemProps} />,
     },
     ...ZOOM_LEVELS.map((level, i): ToolbarItem<TsldToolbarContext> => ({
@@ -434,6 +435,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 2,
       label: 'Link type',
       penGated: true,
+      disabledReason: () => LINK_DISABLED_REASON,
       isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.canLink && ctx.isLinking,
       render: (ctx, api) => <LinkTypeControl ctx={ctx} api={api} />,
     },

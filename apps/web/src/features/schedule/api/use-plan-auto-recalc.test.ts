@@ -55,6 +55,26 @@ describe('usePlanAutoRecalc', () => {
     expect(recalcMock.run).toHaveBeenCalledTimes(1);
   });
 
+  it('flush(onSuccess) confirms once when the manual recalc succeeds', () => {
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+    act(() => result.current.flush(onSuccess));
+    expect(recalcMock.run).toHaveBeenCalledTimes(1);
+    expect(onSuccess).not.toHaveBeenCalled(); // not until the recalc actually resolves
+    act(() => recalcMock.run.mock.calls[0]![0]?.onSuccess?.());
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('flush(onSuccess) does not confirm when the manual recalc fails', () => {
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() =>
+      usePlanAutoRecalc('acme', 'p1', { enabled: true, onMessage: vi.fn() }),
+    );
+    act(() => result.current.flush(onSuccess));
+    act(() => recalcMock.run.mock.calls[0]![0]?.onError?.('boom'));
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
   it('does nothing when disabled (no start date / no pen)', () => {
     const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: false }));
     act(() => {

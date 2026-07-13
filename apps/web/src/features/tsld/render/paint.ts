@@ -461,12 +461,15 @@ export function paintInteractionLayer(
   const { live, pending, link, linkPick } = overlay;
 
   if (linkPick) {
-    // The picked predecessor waiting for the second click (M5): a solid selection-colour ring, so
-    // the "now click a successor" step reads without a rubber-band. Drawn first (below any ghost).
+    // The picked predecessor waiting for the second click (M5): a **dashed** selection-colour ring —
+    // dash (not just colour) sets it apart from the plain solid selection ring, since the picked
+    // predecessor and the current selection are independent and can ring different bars at once
+    // (a11y review). Drawn first (below any ghost).
     ctx.strokeStyle = palette.selection;
     ctx.lineWidth = 2;
-    ctx.setLineDash([]);
+    ctx.setLineDash([5, 3]);
     ctx.strokeRect(linkPick.x - 2, linkPick.y - 2, linkPick.w + 4, linkPick.h + 4);
+    ctx.setLineDash([]);
   }
 
   if (pending) {

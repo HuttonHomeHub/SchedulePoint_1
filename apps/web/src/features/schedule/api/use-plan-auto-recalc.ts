@@ -8,8 +8,13 @@ export const AUTO_RECALC_DEBOUNCE_MS = 500;
 export interface PlanAutoRecalc {
   /** Request a coalesced recalculation after a structural edit — trailing-debounced + single-flight. */
   notify: () => void;
-  /** Recalculate now (the manual Recalculate button's "force"): cancels the debounce and fires. */
-  flush: () => void;
+  /**
+   * Recalculate now (the manual Recalculate button's "force"): cancels the debounce and fires.
+   * `onSuccess` (optional) fires once when the resulting recalc completes — so the *explicit* manual
+   * action can confirm ("Schedule recalculated.") without the silent auto-triggered path announcing
+   * on every debounced edit.
+   */
+  flush: (onSuccess?: () => void) => void;
   /** True while a recalculation POST is in flight (drives the manual button's busy state). */
   isPending: boolean;
 }
@@ -42,6 +47,9 @@ export function usePlanAutoRecalc(
   const inFlightRef = useRef(false);
   const queuedRef = useRef(false);
   const mountedRef = useRef(true);
+  // A one-shot success callback for a manual flush (the Recalculate button), fired once when the
+  // resulting recalc succeeds — survives the queue if the flush lands during an in-flight run.
+  const manualSuccessRef = useRef<(() => void) | null>(null);
   // The queued single-flight re-run calls `fire` again; go through a ref so `fire`'s closure never
   // references itself (stale-closure-safe, and satisfies react-hooks).
   const fireRef = useRef<() => void>(() => {});
@@ -50,6 +58,7 @@ export function usePlanAutoRecalc(
     const { enabled, onMessage } = optsRef.current;
     if (!enabled) {
       queuedRef.current = false;
+      manualSuccessRef.current = null; // never announce success for a recalc that can't run
       return;
     }
     if (inFlightRef.current) {
@@ -63,8 +72,14 @@ export function usePlanAutoRecalc(
       if (queuedRef.current && mountedRef.current) fireRef.current();
     };
     recalcRef.current.run({
-      onSuccess: drain,
+      onSuccess: () => {
+        const announce = manualSuccessRef.current;
+        manualSuccessRef.current = null;
+        announce?.();
+        drain();
+      },
       onError: (message) => {
+        manualSuccessRef.current = null; // a failed manual flush must not later announce success
         onMessage?.(message);
         drain();
       },
@@ -84,13 +99,17 @@ export function usePlanAutoRecalc(
     timerRef.current = setTimeout(fire, AUTO_RECALC_DEBOUNCE_MS);
   }, [fire]);
 
-  const flush = useCallback((): void => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    fire();
-  }, [fire]);
+  const flush = useCallback(
+    (onSuccess?: () => void): void => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (onSuccess) manualSuccessRef.current = onSuccess;
+      fire();
+    },
+    [fire],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
