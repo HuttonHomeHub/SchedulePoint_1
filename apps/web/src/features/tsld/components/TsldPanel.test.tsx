@@ -7,9 +7,12 @@ import { TsldPanel } from './TsldPanel';
 // This file exercises the M1 read-only surface, so it pins the editing flag OFF
 // (it now defaults ON in the shipped bundle — config/env.ts). The flags-ON editing
 // surface is covered by TsldPanel.editing.test.tsx, which mocks this flag true.
+// Canvas-first authoring also defaults ON now (it mounts a drawable canvas in place of
+// the empty/recalc-prompt states), so pin it OFF too; its behaviour is covered by
+// TsldPanel.authoring.test.tsx.
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: false };
+  return { ...actual, TSLD_EDITING_ENABLED: false, CANVAS_AUTHORING_ENABLED: false };
 });
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
