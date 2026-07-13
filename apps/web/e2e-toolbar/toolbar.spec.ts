@@ -52,11 +52,12 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await addActivity(page, 'Pour slab');
   await page.getByRole('button', { name: 'Recalculate' }).click();
 
-  // With activities computed, the frame controls + the pinned Project-finish chip light up in the
-  // toolbar (they are `hasDiagram`-gated), and the canvas now plots the activities in its labelled
-  // diagram region with a focusable option each (the parallel a11y layer).
+  // With activities computed, the `hasDiagram`-gated controls light up: the pinned Project-finish
+  // chip and the `View▾` lens popover (both `render` items, always inline — unlike the width-
+  // demotable Fit/scale buttons, which can slide into the `⋯` overflow on a narrow bar). The canvas
+  // now plots the activities in its labelled diagram region with a focusable option each.
   const toolbar = page.getByRole('toolbar', { name: 'Plan toolbar' });
-  await expect(toolbar.getByRole('button', { name: 'Fit to plan' })).toBeVisible();
+  await expect(toolbar.getByRole('button', { name: 'View' })).toBeVisible();
   await expect(toolbar.getByText('Finish')).toBeVisible();
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();
@@ -94,10 +95,13 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(collapse).toBeFocused();
   await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
 
-  // The toolbar is one roving-tabindex APG widget: a single tab stop, arrows move between controls.
-  await toolbar.getByRole('button', { name: 'Fit to plan' }).focus();
+  // The toolbar is one roving-tabindex APG widget: arrows move focus between controls. Drive it from
+  // the pinned View trigger (a stable, never-demoted target) — ArrowRight moves focus off it.
+  const viewTrigger = toolbar.getByRole('button', { name: 'View' });
+  await viewTrigger.focus();
+  await expect(viewTrigger).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(toolbar.getByRole('button', { name: 'Fit to plan' })).not.toBeFocused();
+  await expect(viewTrigger).not.toBeFocused();
 
   // The canvas-maximal toolbar workspace is accessible.
   expect(
