@@ -45,3 +45,28 @@ export async function startEditing(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Start editing' }).click();
   await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
 }
+
+/** The interactive base canvas of the TSLD diagram region (aria-hidden, so located by element). */
+export function canvas(page: Page): ReturnType<Page['locator']> {
+  return page.locator('section[aria-label="Time-scaled logic diagram"] canvas').first();
+}
+
+/**
+ * Draw an activity of the given kind on the canvas via the Add split-button (ADR-0032 M4): open the
+ * `Add▾` menu, pick the kind (which arms add mode), click the canvas at `pos`, then name + commit in
+ * the drop popover. A milestone places on the single click; a task's click is a 1-day span.
+ */
+export async function drawActivity(
+  page: Page,
+  kind: 'Task' | 'Start milestone' | 'Finish milestone',
+  name: string,
+  pos: { x: number; y: number },
+): Promise<void> {
+  await page.getByRole('button', { name: /^Add/ }).click();
+  await page.getByRole('menuitem', { name: kind }).click();
+  await canvas(page).click({ position: pos });
+  const form = page.getByRole('form', { name: 'Name the new activity' });
+  await form.getByRole('textbox', { name: 'New activity name' }).fill(name);
+  await form.getByRole('button', { name: 'Add' }).click();
+  await expect(form).toBeHidden();
+}
