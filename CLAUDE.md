@@ -304,6 +304,11 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   (rail + activity panel), a header overflow menu, a responsive single-pane toggle,
   and a viewport-preserve amendment to ADR-0026's canvas resize; refines ADR-0029's
   single workspace region (behind `VITE_CANVAS_WORKSPACE`).
+- **ADR-0031** — TSLD toolbar-item registry & command taxonomy: a declarative
+  `ToolbarItem` registry feeding one APG `<Toolbar>`, a compiler-enforced 7-group
+  taxonomy, three prominence tiers with responsive overflow, and pen-gated authoring
+  as a group state (replacing the ADR-0028 `EditLockBanner` card); refines ADR-0030
+  (behind `VITE_CANVAS_TOOLBAR`).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

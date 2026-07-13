@@ -60,9 +60,12 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             // Canvas-first workspace ON, plus the editing surface + pen layer so the
-            // Planner journey exercises the real edit affordances.
+            // Planner journey exercises the real edit affordances. VITE_CANVAS_TOOLBAR is pinned
+            // OFF: it now defaults ON (ADR-0031), and this suite asserts the ADR-0030 layout
+            // specifically — the toolbar layout has its own suite (playwright.toolbar.config.ts).
             env: {
               VITE_CANVAS_WORKSPACE: 'true',
+              VITE_CANVAS_TOOLBAR: 'false',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
             },

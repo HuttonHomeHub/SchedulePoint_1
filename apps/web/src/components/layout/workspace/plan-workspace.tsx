@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
 import { PlanActionsMenu } from './plan-actions-menu';
 import { PlanDialogs } from './plan-dialogs';
+import { ToolbarPlanWorkspace } from './plan-workspace-toolbar';
 import {
   CANVAS_MIN_HEIGHT,
   PANEL_MAX_HEIGHT,
@@ -10,10 +11,12 @@ import {
   useActivityPanelPrefs,
 } from './use-activity-panel-prefs';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
+import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { useMediaQuery } from '@/components/ui/use-media-query';
+import { CANVAS_TOOLBAR_ENABLED } from '@/config/env';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
@@ -22,8 +25,6 @@ import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the split; below it, one pane via the view toggle. */
 const MD_QUERY = '(min-width: 48rem)';
-
-type WorkspacePane = 'diagram' | 'activities';
 
 /**
  * The canvas-first plan workspace (ADR-0030): opened in the app-shell's workspace region
@@ -43,7 +44,25 @@ type WorkspacePane = 'diagram' | 'activities';
  * height with a table). Both panes stay mounted and are toggled with `hidden`, so switching
  * preserves the canvas viewport and the table scroll.
  */
+/**
+ * The plan workspace surface. `VITE_CANVAS_TOOLBAR` (ADR-0031) selects the canvas-maximal,
+ * toolbar-hosted {@link ToolbarPlanWorkspace}; flag-off keeps the ADR-0030 layout below, byte-for-byte.
+ */
 export function PlanWorkspace({
+  model,
+  plan,
+}: {
+  model: PlanWorkspaceModel;
+  plan: LoadedPlan;
+}): React.ReactElement {
+  return CANVAS_TOOLBAR_ENABLED ? (
+    <ToolbarPlanWorkspace model={model} plan={plan} />
+  ) : (
+    <Adr0030PlanWorkspace model={model} plan={plan} />
+  );
+}
+
+function Adr0030PlanWorkspace({
   model,
   plan,
 }: {
@@ -174,84 +193,6 @@ export function PlanWorkspace({
       )}
 
       <PlanDialogs model={model} plan={plan} />
-    </div>
-  );
-}
-
-/**
- * The mobile (below `md`) view switch: a **`radiogroup`** choosing whether the single pane shows
- * the **Diagram** (canvas) or the **Activities** table — mutually-exclusive single-select, so
- * radios (roving `tabindex`, Arrow/Home/End) convey "one of a set" to AT better than toggle
- * buttons. Rendered only below `md`, where the vertical split can't give both surfaces useful
- * height. Because the toggle *is* the control the user acts on, focus stays on it across a switch
- * (never stranded in the pane being hidden).
- */
-function WorkspaceViewToggle({
-  value,
-  onChange,
-}: {
-  value: WorkspacePane;
-  onChange: (value: WorkspacePane) => void;
-}): React.ReactElement {
-  const OPTIONS: { value: WorkspacePane; label: string }[] = [
-    { value: 'diagram', label: 'Diagram' },
-    { value: 'activities', label: 'Activities' },
-  ];
-  const refs = useRef<Partial<Record<WorkspacePane, HTMLButtonElement | null>>>({});
-  const move = (next: WorkspacePane): void => {
-    onChange(next);
-    refs.current[next]?.focus();
-  };
-  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
-    const idx = OPTIONS.findIndex((o) => o.value === value);
-    switch (event.key) {
-      case 'ArrowRight':
-      case 'ArrowDown':
-        move(OPTIONS[(idx + 1) % OPTIONS.length]!.value);
-        break;
-      case 'ArrowLeft':
-      case 'ArrowUp':
-        move(OPTIONS[(idx - 1 + OPTIONS.length) % OPTIONS.length]!.value);
-        break;
-      case 'Home':
-        move(OPTIONS[0]!.value);
-        break;
-      case 'End':
-        move(OPTIONS[OPTIONS.length - 1]!.value);
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-  };
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Workspace view"
-      className="border-border flex shrink-0 gap-1 border-b p-2"
-    >
-      {OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          ref={(el) => {
-            refs.current[option.value] = el;
-          }}
-          type="button"
-          role="radio"
-          aria-checked={value === option.value}
-          tabIndex={value === option.value ? 0 : -1}
-          onClick={() => onChange(option.value)}
-          onKeyDown={onKeyDown}
-          className={cn(
-            'focus-visible:ring-ring min-h-11 flex-1 rounded-md px-3 py-1.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
-            value === option.value
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
     </div>
   );
 }

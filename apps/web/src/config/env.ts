@@ -110,3 +110,18 @@ export const NAV_TREE_CRUD_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE
  * byte-for-byte (emergency rollback / opt-out).
  */
 export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_WORKSPACE);
+
+/**
+ * Canvas-maximal chrome reclaim + the future-proof Toolbar architecture (ADR-0031, spec
+ * `docs/specs/canvas-toolbar-architecture.md`). **ON by default** (2026-07-13) now that the M5
+ * quality gates are green — the a11y (3 WCAG 2.2 AA blockers), ux, perf and component review
+ * findings are folded in, the flag-on Playwright journey (`e2e-toolbar/toolbar.spec.ts` via
+ * `pnpm --filter @repo/web test:e2e:toolbar`) is wired into CI, and the 597 unit tests pass. When
+ * on, the plan workspace collapses the ADR-0030 stacked chrome bands into a slim header + a single
+ * registry-driven `Toolbar` row over a full-height canvas (activities panel collapsed by default,
+ * Diagram/Activities pane switch below `md`), moving secondary info into `View`/`Summary`/`Legend`
+ * popovers and the `⋯` overflow. Layers on {@link CANVAS_WORKSPACE_ENABLED} (ADR-0030) — meaningful
+ * only when the canvas-first workspace is on. Set `VITE_CANVAS_TOOLBAR=false` to fall back to the
+ * ADR-0030 workspace, byte-for-byte (emergency rollback / opt-out). Remaining fast-follows: TECH_DEBT #31.
+ */
+export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TOOLBAR);

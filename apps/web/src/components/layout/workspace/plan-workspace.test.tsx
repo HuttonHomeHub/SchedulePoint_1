@@ -20,6 +20,9 @@ const h = vi.hoisted(() => ({
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_WORKSPACE_ENABLED: true,
+  // This suite asserts the ADR-0030 layout; the toolbar flag now defaults ON (ADR-0031), so pin it
+  // off here (the toolbar layout has its own suite, plan-workspace-toolbar.test.tsx).
+  CANVAS_TOOLBAR_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
