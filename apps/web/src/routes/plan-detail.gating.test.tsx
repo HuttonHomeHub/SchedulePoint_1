@@ -34,6 +34,14 @@ const h = vi.hoisted(() => ({
   recalculate: vi.fn(),
 }));
 
+// This suite validates pen-gating + the reposition seams against the ADR-0030 workspace layout;
+// the toolbar layout now defaults ON (ADR-0031) but has its own suite, so pin it off here (keeping
+// the ADR-0030 fallback path — still the rollback target — under test).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  CANVAS_TOOLBAR_ENABLED: false,
+}));
+
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme', planId: 'p1' }),

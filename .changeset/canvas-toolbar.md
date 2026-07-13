@@ -26,4 +26,5 @@ unrelated re-render no longer churns the toolbar's `ResizeObserver`, one CVA for
 control surface, and the accessibility fixes (presentational finish chip, disabled-overflow focus
 ring, popover close-on-blur).
 
-Frontend only; still dark behind the flag pending the product-owner sign-off to flip default-on.
+Frontend only. **ON by default** (`VITE_CANVAS_TOOLBAR`); set it to `false` to fall back to the
+ADR-0030 workspace byte-for-byte (emergency rollback / opt-out). Remaining fast-follows: TECH_DEBT #31.
