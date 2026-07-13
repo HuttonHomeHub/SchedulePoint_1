@@ -23,7 +23,9 @@ export function ActivityBottomPanel({
   onCollapse,
 }: {
   model: PlanWorkspaceModel;
-  onCollapse: () => void;
+  /** Collapse the panel to its handle. Omitted on the mobile single-pane view (the view toggle
+   * switches away from Activities instead), where no collapse control is shown. */
+  onCollapse?: () => void;
 }): React.ReactElement {
   return (
     <section

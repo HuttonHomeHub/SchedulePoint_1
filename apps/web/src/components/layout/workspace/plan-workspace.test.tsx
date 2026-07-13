@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * M1 integration for the canvas-first {@link PlanWorkspace} (ADR-0030) via the real
@@ -221,6 +221,58 @@ describe('PlanWorkspace — bottom panel resize/collapse (M2)', () => {
     const expand = screen.getByRole('button', { name: 'Expand activities panel' });
 
     fireEvent.click(expand);
+    expect(screen.getByTestId('activities-table')).toBeInTheDocument();
+  });
+});
+
+describe('PlanWorkspace — responsive single-pane (M4, below md)', () => {
+  beforeEach(() => {
+    // Force the below-md branch: matchMedia reports the `min-width: md` query as not matching.
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  });
+  afterEach(() => {
+    // Restore jsdom's default (undefined) so other suites keep the desktop fallback.
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it('shows the Diagram/Activities view toggle and no split resizer below md', () => {
+    renderScreen();
+    const group = screen.getByRole('group', { name: 'Workspace view' });
+    expect(group).toBeInTheDocument();
+    // Diagram is selected by default (canvas-first); Activities is not.
+    expect(screen.getByRole('button', { name: 'Diagram' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Activities' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    // No vertical split on mobile → no resizer.
+    expect(
+      screen.queryByRole('separator', { name: 'Resize activities panel' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('switches the selected pane when the toggle is used', () => {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Activities' }));
+    expect(screen.getByRole('button', { name: 'Activities' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Diagram' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    // Both panes stay mounted (toggled with `hidden`), so the canvas keeps its state.
+    expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
     expect(screen.getByTestId('activities-table')).toBeInTheDocument();
   });
 });

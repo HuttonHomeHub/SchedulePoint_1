@@ -12,10 +12,17 @@ import {
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { PanelResizer } from '@/components/ui/panel-resizer';
+import { useMediaQuery } from '@/components/ui/use-media-query';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
+import { cn } from '@/lib/utils';
+
+/** The `md` breakpoint (48rem) — at/above it the split; below it, one pane via the view toggle. */
+const MD_QUERY = '(min-width: 48rem)';
+
+type WorkspacePane = 'diagram' | 'activities';
 
 /**
  * The canvas-first plan workspace (ADR-0030): opened in the app-shell's workspace region
@@ -28,7 +35,12 @@ import { TsldPanel } from '@/features/tsld';
  * the rail uses) with its height persisted ({@link useActivityPanelPrefs}); the panel's height
  * is clamped at render against the live workspace height so the canvas always keeps at least
  * {@link CANVAS_MIN_HEIGHT}. The header's lower-frequency chrome (Edit / Baselines / Calendar)
- * lives in the {@link PlanActionsMenu} overflow. **M4** adds the responsive single-pane toggle.
+ * lives in the {@link PlanActionsMenu} overflow.
+ *
+ * **Responsive (below `md`):** the vertical split gives way to a **Diagram / Activities view
+ * toggle** showing one pane at a time (the canvas can't usefully share a phone's height with a
+ * table). Both panes stay mounted and are toggled with `hidden`, so switching preserves the
+ * canvas viewport and the table scroll.
  */
 export function PlanWorkspace({
   model,
@@ -37,6 +49,8 @@ export function PlanWorkspace({
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
 }): React.ReactElement {
+  const isWide = useMediaQuery(MD_QUERY, true);
+  const [pane, setPane] = useState<WorkspacePane>('diagram');
   const panel = useActivityPanelPrefs();
   // Measure the workspace body (below the header) so the panel's max reserves the canvas.
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -67,56 +81,121 @@ export function PlanWorkspace({
     [panel, effectiveMax],
   );
 
+  // The canvas is built once and placed in whichever layout is active, so it isn't described
+  // twice. Remount per plan so selection/viewport state never leaks across a plan→plan nav.
+  const canvas = (
+    <TsldPanel
+      key={model.planId}
+      fill
+      activities={model.activities.data ?? []}
+      dependencies={model.dependencies.data ?? []}
+      dataDate={plan.plannedStart}
+      canEdit={model.canEditSchedule}
+      onCreate={model.onTsldCreate}
+      onReposition={model.onTsldReposition}
+      onLink={model.onTsldLink}
+      onAutoArrange={model.onTsldAutoArrange}
+      onOpenLogic={model.setLogicActivity}
+      onRefresh={model.onTsldRefresh}
+      calendar={model.tsldCalendar}
+      todayIso={model.todayIso}
+    />
+  );
+  const penNote = model.penReadOnly ? <PenReadOnlyNote /> : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PlanHeaderBar model={model} plan={plan} />
 
-      <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Canvas region — fills the height left by the panel. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-3 pb-2">
-          {model.penReadOnly ? <PenReadOnlyNote /> : null}
-          <TsldPanel
-            // Remount per plan so selection/viewport state never leaks across a same-route
-            // plan→plan navigation (mirrors the legacy layout).
-            key={model.planId}
-            fill
-            activities={model.activities.data ?? []}
-            dependencies={model.dependencies.data ?? []}
-            dataDate={plan.plannedStart}
-            canEdit={model.canEditSchedule}
-            onCreate={model.onTsldCreate}
-            onReposition={model.onTsldReposition}
-            onLink={model.onTsldLink}
-            onAutoArrange={model.onTsldAutoArrange}
-            onOpenLogic={model.setLogicActivity}
-            onRefresh={model.onTsldRefresh}
-            calendar={model.tsldCalendar}
-            todayIso={model.todayIso}
-          />
-        </div>
+      {isWide ? (
+        <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* Canvas region — fills the height left by the panel. */}
+          <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-3 pb-2">
+            {penNote}
+            {canvas}
+          </div>
 
-        {panel.collapsed ? (
-          <ActivityPanelCollapsedBar onExpand={panel.expand} />
-        ) : (
-          <>
-            <PanelResizer
-              orientation="horizontal"
-              size={panelHeight}
-              min={PANEL_MIN_OPEN}
-              max={effectiveMax}
-              label="Resize activities panel"
-              onResize={onResize}
-              pointerToSize={pointerToSize}
-              className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-            />
-            <div style={{ height: panelHeight }} className="shrink-0">
-              <ActivityBottomPanel model={model} onCollapse={panel.collapse} />
-            </div>
-          </>
-        )}
-      </div>
+          {panel.collapsed ? (
+            <ActivityPanelCollapsedBar onExpand={panel.expand} />
+          ) : (
+            <>
+              <PanelResizer
+                orientation="horizontal"
+                size={panelHeight}
+                min={PANEL_MIN_OPEN}
+                max={effectiveMax}
+                label="Resize activities panel"
+                onResize={onResize}
+                pointerToSize={pointerToSize}
+                className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+              />
+              <div style={{ height: panelHeight }} className="shrink-0">
+                <ActivityBottomPanel model={model} onCollapse={panel.collapse} />
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <WorkspaceViewToggle value={pane} onChange={setPane} />
+          <div
+            className={cn(
+              'min-h-0 flex-1 flex-col gap-2 px-4 pt-3 pb-2',
+              pane === 'diagram' ? 'flex' : 'hidden',
+            )}
+          >
+            {penNote}
+            {canvas}
+          </div>
+          <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
+            <ActivityBottomPanel model={model} />
+          </div>
+        </div>
+      )}
 
       <PlanDialogs model={model} plan={plan} />
+    </div>
+  );
+}
+
+/**
+ * The mobile (below `md`) view switch: a two-option segmented control choosing whether the
+ * single pane shows the **Diagram** (canvas) or the **Activities** table. Rendered only below
+ * `md`, where the vertical split can't give both surfaces useful height.
+ */
+function WorkspaceViewToggle({
+  value,
+  onChange,
+}: {
+  value: WorkspacePane;
+  onChange: (value: WorkspacePane) => void;
+}): React.ReactElement {
+  const OPTIONS: { value: WorkspacePane; label: string }[] = [
+    { value: 'diagram', label: 'Diagram' },
+    { value: 'activities', label: 'Activities' },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Workspace view"
+      className="border-border flex shrink-0 gap-1 border-b p-2"
+    >
+      {OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'min-h-9 flex-1 rounded-md px-3 py-1.5 text-sm font-medium',
+            value === option.value
+              ? 'bg-accent text-accent-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
