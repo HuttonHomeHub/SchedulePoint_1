@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
+import { PlanActionsMenu } from './plan-actions-menu';
 import { PlanDialogs } from './plan-dialogs';
 import {
   CANVAS_MIN_HEIGHT,
@@ -10,11 +11,9 @@ import {
 } from './use-activity-panel-prefs';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
-import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
-import { BaselinesPanel } from '@/features/baselines';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
-import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
+import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
 
@@ -28,8 +27,8 @@ import { TsldPanel } from '@/features/tsld';
  * The bottom panel is resized via the shared {@link PanelResizer} (the same splitter primitive
  * the rail uses) with its height persisted ({@link useActivityPanelPrefs}); the panel's height
  * is clamped at render against the live workspace height so the canvas always keeps at least
- * {@link CANVAS_MIN_HEIGHT}. **M3** consolidates the header chrome into an overflow menu; **M4**
- * adds the responsive single-pane toggle.
+ * {@link CANVAS_MIN_HEIGHT}. The header's lower-frequency chrome (Edit / Baselines / Calendar)
+ * lives in the {@link PlanActionsMenu} overflow. **M4** adds the responsive single-pane toggle.
  */
 export function PlanWorkspace({
   model,
@@ -124,9 +123,9 @@ export function PlanWorkspace({
 
 /**
  * The workspace header: plan identity + the primary schedule controls (Recalculate, the pen
- * banner, the summary strip), with baselines + calendar behind a disclosure to keep it slim.
- * **M3 consolidates the disclosure into an overflow `Menu`** (spec re-homing table); for now a
- * native `<details>` keeps every capability reachable and accessible without new UI.
+ * banner, the summary strip). The lower-frequency chrome — Edit plan, Baselines, Calendar —
+ * lives in the {@link PlanActionsMenu} overflow so the header stays slim and canvas-first
+ * (ADR-0030 spec re-homing table).
  */
 function PlanHeaderBar({
   model,
@@ -147,11 +146,7 @@ function PlanHeaderBar({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={model.canRecalc} />
-          {model.canWrite ? (
-            <Button variant="outline" size="sm" onClick={() => model.setEditing(true)}>
-              Edit plan
-            </Button>
-          ) : null}
+          <PlanActionsMenu model={model} plan={plan} />
         </div>
       </div>
 
@@ -161,22 +156,6 @@ function PlanHeaderBar({
         {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
       />
       <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
-
-      <details className="group">
-        <summary className="text-muted-foreground hover:text-foreground w-fit cursor-pointer text-sm select-none">
-          Baselines &amp; calendar
-        </summary>
-        <div className="mt-3 flex flex-col gap-4">
-          <PlanCalendarPicker
-            orgSlug={orgSlug}
-            plan={plan}
-            calendars={model.calendars.data ?? []}
-            calendarsLoading={model.calendars.isPending}
-            canEdit={model.canWrite}
-          />
-          <BaselinesPanel orgSlug={orgSlug} planId={planId} canManage={model.canWrite} />
-        </div>
-      </details>
     </header>
   );
 }

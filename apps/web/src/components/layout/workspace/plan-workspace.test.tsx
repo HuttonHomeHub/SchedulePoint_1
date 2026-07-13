@@ -158,11 +158,10 @@ describe('PlanWorkspace (flag on) — canvas-first layout', () => {
     expect(screen.getByTestId('recalculate')).toBeInTheDocument();
     expect(screen.getByTestId('summary-strip')).toBeInTheDocument();
     expect(screen.getByTestId('edit-lock-banner')).toBeInTheDocument();
-    // Baselines + calendar are reachable (behind the header disclosure, still in the DOM).
-    expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('calendar-picker')).toBeInTheDocument();
-    // Edit plan is available to a writer.
-    expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument();
+    // Lower-frequency chrome moved to the overflow menu (M3): baselines/calendar/edit are not
+    // in the header itself, but the actions button is.
+    expect(screen.getByRole('button', { name: 'Plan actions' })).toBeInTheDocument();
+    expect(screen.queryByTestId('baselines-panel')).not.toBeInTheDocument();
     // The legacy stacked page's section headings are gone (this is the workspace, not that page).
     expect(screen.queryByRole('heading', { name: 'Logic diagram' })).not.toBeInTheDocument();
   });
@@ -173,6 +172,29 @@ describe('PlanWorkspace (flag on) — canvas-first layout', () => {
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('false');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('false');
     expect(screen.queryByTestId('create-activity')).not.toBeInTheDocument();
+  });
+});
+
+describe('PlanWorkspace — header overflow menu (M3)', () => {
+  it('consolidates Edit / Baselines / Calendar and opens Baselines in a dialog', () => {
+    h.role = 'PLANNER';
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
+    // A writer sees all three actions.
+    expect(screen.getByRole('menuitem', { name: /Edit plan/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Calendar/ })).toBeInTheDocument();
+    // Choosing Baselines opens the dialog holding the (re-homed) panel.
+    fireEvent.click(screen.getByRole('menuitem', { name: /Baselines/ }));
+    expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
+  });
+
+  it('hides Edit plan for a non-writer but keeps Baselines + Calendar', () => {
+    h.role = 'VIEWER';
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
+    expect(screen.queryByRole('menuitem', { name: /Edit plan/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Baselines/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Calendar/ })).toBeInTheDocument();
   });
 });
 
