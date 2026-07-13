@@ -50,9 +50,16 @@ export function ConfirmDialog({
           </Button>
           <Button
             variant={confirmVariant}
-            disabled={pending}
+            // Use `aria-disabled` (not the native `disabled`) so the button keeps focus
+            // while the mutation is in flight — a natively-disabled button is blurred to
+            // <body> the instant `pending` flips, losing the user's place (SC 2.4.3). The
+            // handler is guarded so a busy button can't re-fire.
+            aria-disabled={pending}
             aria-busy={pending}
-            onClick={onConfirm}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            onClick={() => {
+              if (!pending) onConfirm();
+            }}
           >
             {pending ? pendingLabel : confirmLabel}
           </Button>

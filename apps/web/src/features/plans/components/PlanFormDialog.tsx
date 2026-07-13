@@ -29,12 +29,15 @@ export function PlanFormDialog({
   open,
   onClose,
   plan,
+  onCreated,
 }: {
   orgSlug: string;
   projectId: string;
   open: boolean;
   onClose: () => void;
   plan?: PlanSummary;
+  /** Called with the new plan after a successful create (for post-create orientation). */
+  onCreated?: (created: PlanSummary) => void;
 }): React.ReactElement {
   const isEdit = plan !== undefined;
   const create = useCreatePlan(orgSlug, projectId);
@@ -78,8 +81,9 @@ export function PlanFormDialog({
       );
     } else {
       create.mutate(values, {
-        onSuccess: () => {
+        onSuccess: (created) => {
           announce(`Plan “${values.name}” created.`);
+          onCreated?.(created);
           onClose();
         },
       });

@@ -1,8 +1,18 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from './app-shell';
+
+/** The shell reads the org role via a query (RBAC gate), so it needs a client. */
+function renderShell(): ReturnType<typeof render> {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <AppShell />
+    </QueryClientProvider>,
+  );
+}
 
 // The workspace Outlet + route params are external routing — stub them (no active
 // org here, so the rail shows its fallback; the tree itself is tested separately).
@@ -32,13 +42,13 @@ beforeEach(() => localStorage.clear());
 
 describe('AppShell', () => {
   it('mounts the workspace outlet and the pinned Project Explorer rail', () => {
-    render(<AppShell />);
+    renderShell();
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
   });
 
   it('collapses and expands the pinned rail, moving focus to the acting control', () => {
-    render(<AppShell />);
+    renderShell();
     fireEvent.click(screen.getByRole('button', { name: 'Collapse Project Explorer' }));
 
     const show = screen.getByRole('button', { name: 'Show Project Explorer' });
@@ -52,7 +62,7 @@ describe('AppShell', () => {
   });
 
   it('opens the rail as a drawer from the header toggle and closes it', () => {
-    render(<AppShell />);
+    renderShell();
     fireEvent.click(screen.getByRole('button', { name: 'Open Explorer Drawer' }));
 
     const drawer = screen.getByRole('dialog', { name: 'Project Explorer' });

@@ -3,31 +3,12 @@ import { Link, useRouter } from '@tanstack/react-router';
 import { useAcceptInvitation, useInvitationPreview } from '../api/use-invitations';
 import { ROLE_LABELS } from '../schemas/invite-schemas';
 
+import { InviteShell } from './InviteShell';
+
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { useSession } from '@/features/auth';
-
-function Shell({
-  children,
-  busy = false,
-}: {
-  children: React.ReactNode;
-  busy?: boolean;
-}): React.ReactElement {
-  // A polite live region so screen-reader users hear the outcome when the
-  // invitation resolves (loading → not-found / wrong-account / ready-to-join),
-  // which is the page's key decision point (SC 4.1.3).
-  return (
-    <main
-      className="flex min-h-dvh items-center justify-center p-4"
-      aria-live="polite"
-      aria-busy={busy}
-    >
-      <Card className="w-full max-w-md">{children}</Card>
-    </main>
-  );
-}
 
 /** Invitee-facing accept flow: preview the invite, then accept as the right user. */
 export function AcceptInvitationCard({ token }: { token: string }): React.ReactElement {
@@ -38,24 +19,24 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
 
   if (preview.isPending || session.isPending) {
     return (
-      <Shell busy>
+      <InviteShell busy>
         <CardContent className="flex justify-center p-10">
           <Spinner label="Loading invitation…" />
         </CardContent>
-      </Shell>
+      </InviteShell>
     );
   }
 
   if (preview.isError || !preview.data) {
     return (
-      <Shell>
+      <InviteShell>
         <CardHeader>
           <CardTitle>Invitation not found</CardTitle>
           <CardDescription>
             This invitation link is invalid or has already been used.
           </CardDescription>
         </CardHeader>
-      </Shell>
+      </InviteShell>
     );
   }
 
@@ -65,14 +46,14 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
   // stored status so the render stays pure.
   if (invite.status !== 'PENDING') {
     return (
-      <Shell>
+      <InviteShell>
         <CardHeader>
           <CardTitle>This invitation is no longer valid</CardTitle>
           <CardDescription>
             It may have expired or already been used. Ask for a new one.
           </CardDescription>
         </CardHeader>
-      </Shell>
+      </InviteShell>
     );
   }
 
@@ -80,7 +61,7 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
 
   if (!user) {
     return (
-      <Shell>
+      <InviteShell>
         <CardHeader>
           <CardTitle>Join {invite.organizationName}</CardTitle>
           <CardDescription>
@@ -100,13 +81,13 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
             Create an account
           </Link>
         </CardContent>
-      </Shell>
+      </InviteShell>
     );
   }
 
   if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
     return (
-      <Shell>
+      <InviteShell>
         <CardHeader>
           <CardTitle>Wrong account</CardTitle>
           <CardDescription>
@@ -114,12 +95,12 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
             out and use the invited account.
           </CardDescription>
         </CardHeader>
-      </Shell>
+      </InviteShell>
     );
   }
 
   return (
-    <Shell>
+    <InviteShell>
       <CardHeader>
         <CardTitle>Join {invite.organizationName}</CardTitle>
         <CardDescription>You&rsquo;ve been invited as {roleLabel}.</CardDescription>
@@ -147,6 +128,6 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
           {accept.isPending ? 'Joining…' : `Accept and join`}
         </Button>
       </CardContent>
-    </Shell>
+    </InviteShell>
   );
 }

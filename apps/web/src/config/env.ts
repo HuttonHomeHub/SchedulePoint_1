@@ -75,3 +75,15 @@ export const PLAN_EDIT_LOCK_ENABLED = flagDefaultOn(import.meta.env.VITE_PLAN_ED
  * header-only layout, byte-for-byte (emergency rollback / opt-out).
  */
 export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
+
+/**
+ * In-tree CRUD for the Project Explorer (ADR-0029 Phase 2). **ON by default**
+ * (2026-07-12) now that the create/rename/delete affordances, the specialist-review
+ * a11y fixes, and the flag-on Playwright journeys (`e2e/navigator-crud.spec.ts`) are
+ * all green. Writers (Planner/Org Admin) get the row context menu (⋯ button,
+ * right-click, ContextMenu/Shift+F10 key, touch long-press) and the rail-header
+ * "New client" control; Contributors/Viewers keep a read-only tree (additional write
+ * RBAC gate). Set `VITE_NAV_TREE_CRUD=false` to fall back to the navigation-only tree,
+ * byte-for-byte (rollback / opt-out).
+ */
+export const NAV_TREE_CRUD_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE_CRUD);

@@ -63,6 +63,12 @@ a bug:
   feasible.
 - **Navigation:** never trap the user; provide a way back from every screen;
   external links open predictably and are marked.
+- **Row / node actions:** dense list and tree rows expose their actions through a
+  context menu (the `Menu` primitive, WAI-ARIA APG Menu Button) reachable **four
+  ways** — a hover-revealed "⋯" button, right-click, the keyboard (ContextMenu /
+  Shift+F10 on the focused row), and touch long-press — **never hover-only**. The
+  menu roves focus with the arrow keys and returns focus to the trigger on
+  Esc/Tab/selection.
 
 ## Content & tone
 

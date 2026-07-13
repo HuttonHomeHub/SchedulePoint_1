@@ -42,6 +42,15 @@ keep `main` releasable.
   explained in the schedule summary. No API/engine change (ADR-0023 §6 already governs
   the semantics; near-critical shading shipped in M6).
 
+- **Project Explorer (web).** A persistent app-shell with a collapsible/resizable
+  Client → Project → Plan navigator rail — an accessible, virtualized ARIA tree with
+  deep-link reveal — replacing click-through navigation (ADR-0029). **In-tree CRUD is
+  now ON by default** (2026-07-12): writers create/rename/soft-delete directly from a
+  row context menu (⋯ button, right-click, ContextMenu/Shift+F10 key, touch long-press)
+  plus a rail-header "New client", reusing the existing form/confirm dialogs and the
+  soft-delete/Recently-Deleted flow via a hand-rolled APG `Menu` primitive and a
+  shell-layer CRUD coordinator (no backend change).
+
 ## Next (candidate order — not yet committed)
 
 Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:

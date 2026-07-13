@@ -41,7 +41,7 @@ test('a deleted client cascade is shown and restored from the recycle bin (acces
 
   // Build a client → project → plan.
   await navLink(page, 'Clients').click();
-  await page.getByRole('button', { name: 'New client' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Northgate');
   await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
   await page.getByRole('link', { name: 'Northgate' }).click();
@@ -89,7 +89,7 @@ test('a directly-deleted plan can be restored from the recycle bin', async ({ pa
   await onboard(page, 'binplan');
 
   await navLink(page, 'Clients').click();
-  await page.getByRole('button', { name: 'New client' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Acme');
   await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
   await page.getByRole('link', { name: 'Acme' }).click();

@@ -22,12 +22,15 @@ export function ProjectFormDialog({
   open,
   onClose,
   project,
+  onCreated,
 }: {
   orgSlug: string;
   clientId: string;
   open: boolean;
   onClose: () => void;
   project?: ProjectSummary;
+  /** Called with the new project after a successful create (for post-create orientation). */
+  onCreated?: (created: ProjectSummary) => void;
 }): React.ReactElement {
   const isEdit = project !== undefined;
   const create = useCreateProject(orgSlug, clientId);
@@ -66,8 +69,9 @@ export function ProjectFormDialog({
       );
     } else {
       create.mutate(values, {
-        onSuccess: () => {
+        onSuccess: (created) => {
           announce(`Project “${values.name}” created.`);
+          onCreated?.(created);
           onClose();
         },
       });

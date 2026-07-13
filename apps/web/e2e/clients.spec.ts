@@ -36,7 +36,7 @@ test('a user can create a client and a project under it (accessible)', async ({ 
   expect(results.violations).toEqual([]);
 
   // Create a client.
-  await page.getByRole('button', { name: 'New client' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
   const clientDialog = page.getByRole('dialog');
   await clientDialog.getByLabel('Name').fill('Northgate');
   await clientDialog.getByRole('button', { name: 'Create client' }).click();

@@ -22,11 +22,14 @@ export function ClientFormDialog({
   open,
   onClose,
   client,
+  onCreated,
 }: {
   orgSlug: string;
   open: boolean;
   onClose: () => void;
   client?: ClientSummary;
+  /** Called with the new client after a successful create (for post-create orientation). */
+  onCreated?: (created: ClientSummary) => void;
 }): React.ReactElement {
   const isEdit = client !== undefined;
   const create = useCreateClient(orgSlug);
@@ -66,8 +69,9 @@ export function ClientFormDialog({
       );
     } else {
       create.mutate(values, {
-        onSuccess: () => {
+        onSuccess: (created) => {
           announce(`Client “${values.name}” created.`);
+          onCreated?.(created);
           onClose();
         },
       });

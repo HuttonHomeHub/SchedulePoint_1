@@ -12,7 +12,7 @@ import {
   type VisibleRow,
 } from '../lib/tree-model';
 
-import { useExpansionState } from './use-expansion-state';
+import { type UseExpansionState } from './use-expansion-state';
 
 import {
   clientsQueryOptions,
@@ -49,11 +49,14 @@ export interface HierarchyTree {
  * contracts so page CRUD invalidations refresh the tree for free. Selection is a pure
  * projection of the URL; a deep-linked project/plan resolves and auto-reveals its
  * ancestor path. Returns the flattened visible rows + expansion actions for the view.
+ *
+ * Expansion is passed in (owned by the shell, ADR-0029 Phase 2) so the CRUD
+ * coordinator can `expandPath` to reveal a freshly-created child, and both rail
+ * instances (pinned + drawer) share one expansion set.
  */
-export function useHierarchyTree(orgSlug: string): HierarchyTree {
+export function useHierarchyTree(orgSlug: string, expansion: UseExpansionState): HierarchyTree {
   const params = useParams({ strict: false });
   const selection = selectionFromParams(params);
-  const expansion = useExpansionState(orgSlug);
   const { expanded, expandPath } = expansion;
 
   // Roots: the org's clients.

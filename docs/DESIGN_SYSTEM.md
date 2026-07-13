@@ -197,9 +197,12 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   from tokens; current item marked `aria-current="page"`.
 - **Sidebars** — persistent on `lg+`, collapsible to a drawer/sheet below;
   keyboard navigable; remembers collapsed state.
-- **Dialogs / sheets** — Radix modal semantics: focus trap, `Esc` to close,
-  focus return, labelled by title, scroll-locked. Sheets for side panels;
-  dialogs centered. Destructive confirmations use an AlertDialog.
+- **Dialogs / sheets** — the hand-rolled `Dialog`/`Sheet` primitives on the
+  native `<dialog>` element (no Radix): focus trap, `Esc` to close, focus return,
+  labelled by title, inert backdrop. Sheets for side panels; dialogs centered.
+  Destructive confirmations use `ConfirmDialog` (`role="alertdialog"`), whose
+  busy confirm button uses `aria-disabled` (not native `disabled`) so it keeps
+  focus during the mutation.
 - **Notifications (toasts)** — single toaster; variants
   `info | success | warning | error`; polite live region; auto-dismiss
   (persist errors); optional action; never the sole channel for critical info.
@@ -209,8 +212,12 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   collapse middle items on small screens.
 - **Tabs** — Radix tabs; roving focus; arrow-key navigation; panels labelled by
   their tab. Don't use tabs to hide critical primary actions.
-- **Menus (dropdown/context/command)** — Radix menus; typeahead, arrow keys,
-  `Esc`; a shared Command palette pattern for power users.
+- **Menus (dropdown/context)** — the hand-rolled `Menu`/`MenuItem` primitive
+  (`components/ui/menu.tsx`), WAI-ARIA APG "Menu Button" on semantic HTML (no
+  Radix): portal-rendered and anchored to a trigger or pointer point, roving
+  arrow-key focus, `Esc`/`Tab`/click-away dismissal, and focus-return to the
+  trigger. Used for the Project Explorer row-actions (context) menu. A shared
+  Command palette pattern for power users remains a future addition.
 - **Pagination** — shared control paired with the DataTable; disabled
   prev/next at bounds; announces page changes; keyboard operable.
 - **Search** — labelled input with a leading search icon, debounced, clearable;

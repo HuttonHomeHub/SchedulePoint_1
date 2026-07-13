@@ -1,8 +1,8 @@
-import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Plus, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { HierarchyTree } from '@/features/navigator';
+import { HierarchyTree, useNavigatorCrud, type UseExpansionState } from '@/features/navigator';
 
 /**
  * The **Project Explorer** rail — the persistent home of the Client → Project → Plan
@@ -18,18 +18,21 @@ import { HierarchyTree } from '@/features/navigator';
  */
 export function NavigatorRail({
   orgSlug,
+  expansion,
   onCollapse,
   onClose,
   onNavigate,
   focusToggleOnMount,
 }: {
   orgSlug?: string | undefined;
+  expansion?: UseExpansionState | undefined;
   onCollapse?: (() => void) | undefined;
   onClose?: (() => void) | undefined;
   onNavigate?: (() => void) | undefined;
   focusToggleOnMount?: boolean | undefined;
 }): React.ReactElement {
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const crud = useNavigatorCrud();
   useEffect(() => {
     if (focusToggleOnMount) toggleRef.current?.focus();
   }, [focusToggleOnMount]);
@@ -39,28 +42,47 @@ export function NavigatorRail({
       aria-label="Project Explorer"
       className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-full min-h-0 flex-col border-r"
     >
-      <div className="border-sidebar-border flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
+      <div className="border-sidebar-border flex h-12 shrink-0 items-center justify-between gap-1 border-b px-4">
         <span className="text-sm font-semibold tracking-tight">Project Explorer</span>
-        {onCollapse ? (
-          <Button
-            ref={toggleRef}
-            variant="ghost"
-            size="icon"
-            aria-label="Collapse Project Explorer"
-            onClick={onCollapse}
-          >
-            <PanelLeftClose aria-hidden="true" className="size-4" />
-          </Button>
-        ) : null}
-        {onClose ? (
-          <Button variant="ghost" size="icon" aria-label="Close Project Explorer" onClick={onClose}>
-            <X aria-hidden="true" className="size-4" />
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-1">
+          {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
+              a "New client" entry point here; hidden for non-writers and flag-off. */}
+          {orgSlug && crud.canWrite ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="New client"
+              onClick={crud.onCreateClient}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+            </Button>
+          ) : null}
+          {onCollapse ? (
+            <Button
+              ref={toggleRef}
+              variant="ghost"
+              size="icon"
+              aria-label="Collapse Project Explorer"
+              onClick={onCollapse}
+            >
+              <PanelLeftClose aria-hidden="true" className="size-4" />
+            </Button>
+          ) : null}
+          {onClose ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Close Project Explorer"
+              onClick={onClose}
+            >
+              <X aria-hidden="true" className="size-4" />
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {orgSlug ? (
-          <HierarchyTree orgSlug={orgSlug} onNavigate={onNavigate} />
+          <HierarchyTree orgSlug={orgSlug} expansion={expansion} onNavigate={onNavigate} />
         ) : (
           <p className="text-muted-foreground p-4 text-sm">Select an organisation to browse.</p>
         )}
