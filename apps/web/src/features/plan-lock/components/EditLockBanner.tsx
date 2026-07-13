@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-
 import type { PlanPen } from '../api/use-plan-edit-lock';
 import { lockCopy } from '../lib/lock-copy';
-import { type LockTone, resolveLockView } from '../lib/lock-view';
+import { type LockTone } from '../lib/lock-view';
+import { usePenLockView } from '../lib/use-pen-lock-view';
 
 import { EditLockControls } from './EditLockControls';
 
@@ -48,44 +47,12 @@ export function EditLockBanner({
   currentUserId,
   now,
 }: EditLockBannerProps): React.ReactElement | null {
-  // A requester the holder chose to "Keep editing" past — hides the prompt until a
-  // different requester appears (a purely local, transient dismissal).
-  const [dismissedRequestId, setDismissedRequestId] = useState<string | null>(null);
-  // Live clock for the aria-hidden asides. Fixed when `now` is passed (tests);
-  // otherwise ticks once a second while the pen layer is active.
-  const [tick, setTick] = useState(() => now ?? Date.now());
-  const bannerRef = useRef<HTMLDivElement>(null);
-  const justActedRef = useRef(false);
+  // All the delicate hand-off orchestration (view resolution, tick, focus return, lost-control
+  // scroll, the Keep-editing dismissal) lives in one shared hook so the compact toolbar pen-status
+  // renders identically (ADR-0031). This card is just the presentation.
+  const { penManaged, view, containerRef, controlsProps } = usePenLockView(pen, currentUserId, now);
 
-  useEffect(() => {
-    if (now !== undefined || !pen.penManaged) return;
-    const id = setInterval(() => setTick(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [now, pen.penManaged]);
-
-  const effectiveNow = now ?? tick;
-  const view = pen.penManaged
-    ? resolveLockView(pen.status, pen.lostControl, currentUserId, dismissedRequestId, effectiveNow)
-    : null;
-  const signature = view ? `${view.tone}:${view.actions.join('|')}` : 'none';
-
-  // After the user's own action changes the view (their button unmounted), pull
-  // focus back to the banner container rather than letting it fall to <body>.
-  useEffect(() => {
-    if (justActedRef.current) {
-      justActedRef.current = false;
-      bannerRef.current?.focus();
-    }
-  }, [signature]);
-
-  // Surface a lost-pen event wherever the user is working, not just at the top.
-  useEffect(() => {
-    if (pen.lostControl && typeof bannerRef.current?.scrollIntoView === 'function') {
-      bannerRef.current.scrollIntoView({ block: 'center' });
-    }
-  }, [pen.lostControl]);
-
-  if (!pen.penManaged) return null;
+  if (!penManaged) return null;
 
   if (!view) {
     // Status still loading — a placeholder (not silence) so gated affordances that
@@ -98,16 +65,10 @@ export function EditLockBanner({
   }
 
   const tone = TONE_STYLES[view.tone];
-  const act =
-    (fn: () => void): (() => void) =>
-    () => {
-      justActedRef.current = true;
-      fn();
-    };
 
   return (
     <div
-      ref={bannerRef}
+      ref={containerRef}
       tabIndex={-1}
       role="status"
       aria-live="polite"
@@ -127,24 +88,7 @@ export function EditLockBanner({
           </span>
         ) : null}
       </p>
-      <EditLockControls
-        actions={view.actions}
-        holder={pen.status?.holder ?? null}
-        isPending={pen.isPending}
-        onStart={act(pen.startEditing)}
-        onStop={act(pen.stopEditing)}
-        onRequest={act(pen.requestControl)}
-        // Peer take-over and admin override are the SAME server call — `acquire({takeover:true})`;
-        // the server decides immediate (override) vs post-grace (peer). The controls differ only in
-        // affordance (direct button vs confirm dialog), not in the request. Intentional, not a dup.
-        onTakeOver={act(pen.takeOver)}
-        onOverride={act(pen.takeOver)}
-        onHandover={act(pen.handoff)}
-        onKeep={act(() => {
-          if (pen.status?.requestedBy) setDismissedRequestId(pen.status.requestedBy.id);
-        })}
-        onDismiss={act(pen.dismissLost)}
-      />
+      <EditLockControls {...controlsProps} />
     </div>
   );
 }
