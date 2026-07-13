@@ -33,7 +33,22 @@ export function PlanDetailScreen(): React.ReactElement {
   const planQuery = model.plan;
 
   if (planQuery.isPending) {
-    return (
+    // A workspace-shaped skeleton (header + canvas + panel) on the canvas-first path so the load
+    // → loaded transition doesn't jump from a small centred box to a full-bleed column (ADR-0030).
+    return CANVAS_WORKSPACE_ENABLED ? (
+      <div className="flex min-h-0 flex-1 flex-col" aria-busy="true">
+        <div className="border-border flex flex-col gap-2 border-b px-4 py-3">
+          <div className="bg-muted h-3 w-56 animate-pulse rounded" />
+          <div className="bg-muted h-6 w-64 animate-pulse rounded" />
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <Spinner label="Loading plan…" />
+        </div>
+        <div className="border-border h-40 shrink-0 border-t px-4 py-3">
+          <div className="bg-muted h-4 w-32 animate-pulse rounded" />
+        </div>
+      </div>
+    ) : (
       <div className="mx-auto w-full max-w-6xl flex-1 p-6">
         <Spinner label="Loading plan…" />
       </div>

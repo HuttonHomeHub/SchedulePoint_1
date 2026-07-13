@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -52,6 +52,20 @@ export function PanelResizer({
   className,
 }: PanelResizerProps): React.ReactElement {
   const draggingRef = useRef(false);
+  // Pointer moves fire faster than paint (120Hz+ on some devices); coalesce them to at most one
+  // `onResize` per animation frame. Each `onResize` re-renders the caller and writes the persisted
+  // size, so throttling keeps a drag smooth (ADR-0030 perf review). The keyboard path stays
+  // immediate (discrete steps).
+  const rafRef = useRef<number | null>(null);
+  const pendingSizeRef = useRef<number | null>(null);
+
+  const flush = useCallback(() => {
+    rafRef.current = null;
+    if (pendingSizeRef.current !== null) {
+      onResize(pendingSizeRef.current);
+      pendingSizeRef.current = null;
+    }
+  }, [onResize]);
 
   const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     draggingRef.current = true;
@@ -60,17 +74,36 @@ export function PanelResizer({
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (draggingRef.current) onResize(pointerToSize(event));
+      if (!draggingRef.current) return;
+      pendingSizeRef.current = pointerToSize(event);
+      if (rafRef.current === null) rafRef.current = requestAnimationFrame(flush);
     },
-    [onResize, pointerToSize],
+    [pointerToSize, flush],
   );
 
-  const stopDragging = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    draggingRef.current = false;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }, []);
+  const stopDragging = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      draggingRef.current = false;
+      // Apply the final position immediately (don't wait a frame) and drop any queued move.
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      flush();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    },
+    [flush],
+  );
+
+  // Cancel a queued frame if the splitter unmounts mid-drag.
+  useEffect(
+    () => () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    },
+    [],
+  );
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {

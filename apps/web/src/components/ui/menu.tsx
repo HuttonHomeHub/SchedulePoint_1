@@ -186,7 +186,10 @@ export function MenuItem({
       }}
       className={cn(
         'flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none',
-        'focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground',
+        // A visible focus ring for the roving-focus item — `bg-accent` alone is ~1.09:1 on the
+        // popover surface (fails WCAG 1.4.11); `ring` clears the 3:1 non-text floor (~4.9:1).
+        'focus:bg-accent focus:text-accent-foreground focus:ring-ring focus:ring-2 focus:ring-inset',
+        'hover:bg-accent hover:text-accent-foreground',
         destructive && 'text-destructive-text',
       )}
     >

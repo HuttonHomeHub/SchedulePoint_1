@@ -1,4 +1,4 @@
-import { CalendarDays, Layers, MoreHorizontal, SquarePen } from 'lucide-react';
+import { CalendarDays, Info, Layers, MoreHorizontal, SquarePen } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
@@ -7,16 +7,18 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Menu, MenuItem } from '@/components/ui/menu';
 import { BaselinesPanel } from '@/features/baselines';
-import { PlanCalendarPicker } from '@/features/plans';
+import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
+import { formatCalendarDate } from '@/lib/format-date';
 
-type PlanDialog = 'baselines' | 'calendar' | null;
+type PlanDialog = 'details' | 'baselines' | 'calendar' | null;
 
 /**
  * The plan workspace's header **overflow menu** (ADR-0030, spec re-homing table): the
- * lower-frequency plan chrome — Edit plan, Baselines, Calendar — consolidated behind a "⋯"
- * button so the header stays slim and canvas-first, replacing M1's interim `<details>`
- * disclosure. Uses the shared APG `Menu` primitive; Baselines and Calendar open in the shared
- * modal `Dialog` (the panels are unchanged, just re-homed).
+ * lower-frequency plan chrome — Plan details, Edit plan, Baselines, Calendar — consolidated
+ * behind a "⋯" button so the header stays slim and canvas-first, replacing M1's interim
+ * `<details>` disclosure. Uses the shared APG `Menu` primitive; the sub-panels open in the shared
+ * modal `Dialog`. **Plan details** is a read surface available to every role, so a non-writer can
+ * still read the plan's description/planned-start (the header only shows name + status).
  */
 export function PlanActionsMenu({
   model,
@@ -58,9 +60,12 @@ export function PlanActionsMenu({
         label="Plan actions"
         restoreFocusRef={triggerRef}
       >
+        <MenuItem onSelect={() => setDialog('details')}>
+          <Info aria-hidden="true" className="size-4" /> Plan details…
+        </MenuItem>
         {model.canWrite ? (
           <MenuItem onSelect={() => model.setEditing(true)}>
-            <SquarePen aria-hidden="true" className="size-4" /> Edit plan
+            <SquarePen aria-hidden="true" className="size-4" /> Edit plan…
           </MenuItem>
         ) : null}
         <MenuItem onSelect={() => setDialog('baselines')}>
@@ -70,6 +75,21 @@ export function PlanActionsMenu({
           <CalendarDays aria-hidden="true" className="size-4" /> Calendar…
         </MenuItem>
       </Menu>
+
+      <Dialog open={dialog === 'details'} onClose={() => setDialog(null)} title="Plan details">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+          <dt className="text-muted-foreground">Status</dt>
+          <dd>{PLAN_STATUS_LABELS[plan.status]}</dd>
+          <dt className="text-muted-foreground">Planned start</dt>
+          <dd>{formatCalendarDate(plan.plannedStart)}</dd>
+          {plan.description ? (
+            <>
+              <dt className="text-muted-foreground">Description</dt>
+              <dd className="whitespace-pre-wrap">{plan.description}</dd>
+            </>
+          ) : null}
+        </dl>
+      </Dialog>
 
       <Dialog
         open={dialog === 'baselines'}

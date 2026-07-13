@@ -27,6 +27,7 @@ import { TsldViewControls } from './TsldViewControls';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { cn } from '@/lib/utils';
 
 /**
  * The visible key for the diagram, mirroring the canvas exactly: each activity class is a
@@ -242,6 +243,14 @@ export function TsldPanel({
 
   const renderActivities = useMemo(() => toRenderActivities(activities), [activities]);
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
+  // The listbox option text (Tier-1 `describeActivity`) is memoised by activity, keyed on
+  // `activities` only — NOT on selection or unrelated parent re-renders. Without this, any parent
+  // render (e.g. every pointermove while dragging the workspace's activity-panel resizer) re-ran
+  // `describeActivity` for every row, which measured ~1.3s at 2,000 activities (ADR-0030 perf).
+  const optionDescriptions = useMemo(
+    () => new Map(activities.map((a) => [a.id, describeActivity(a)])),
+    [activities],
+  );
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   const showDiagram = isCalculated && dataDate !== null;
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
@@ -576,7 +585,14 @@ export function TsldPanel({
 
   if (activities.length === 0) {
     return (
-      <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+      <div
+        className={cn(
+          'border-border text-muted-foreground flex items-center justify-center rounded-lg border border-dashed p-8 text-center text-sm',
+          // In the canvas-first workspace the region is tall; fill it and centre the message
+          // rather than leaving a small box pinned to the top (ADR-0030). Boxed otherwise.
+          fill ? 'h-full min-h-[240px]' : '',
+        )}
+      >
         No activities to diagram yet. Add activities to this plan to see the logic diagram.
       </div>
     );
@@ -780,7 +796,7 @@ export function TsldPanel({
                   role="option"
                   aria-selected={a.id === selectedId}
                 >
-                  {describeActivity(a)}
+                  {optionDescriptions.get(a.id)}
                 </li>
               ))}
             </ul>

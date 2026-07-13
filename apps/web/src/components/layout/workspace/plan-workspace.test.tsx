@@ -172,15 +172,19 @@ describe('PlanWorkspace (flag on) — canvas-first layout', () => {
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('false');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('false');
     expect(screen.queryByTestId('create-activity')).not.toBeInTheDocument();
+    // The pen read-only note is consolidated to exactly ONE surface (ADR-0030 US-4), not
+    // repeated above both the canvas and the table as the legacy page did.
+    expect(screen.getAllByText(/read-only/i)).toHaveLength(1);
   });
 });
 
 describe('PlanWorkspace — header overflow menu (M3)', () => {
-  it('consolidates Edit / Baselines / Calendar and opens Baselines in a dialog', () => {
+  it('consolidates Plan details / Edit / Baselines / Calendar and opens Baselines in a dialog', () => {
     h.role = 'PLANNER';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
-    // A writer sees all three actions.
+    // A writer sees all four actions.
+    expect(screen.getByRole('menuitem', { name: /Plan details/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Edit plan/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Calendar/ })).toBeInTheDocument();
     // Choosing Baselines opens the dialog holding the (re-homed) panel.
@@ -188,11 +192,20 @@ describe('PlanWorkspace — header overflow menu (M3)', () => {
     expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
   });
 
-  it('hides Edit plan for a non-writer but keeps Baselines + Calendar', () => {
+  it('opens Calendar in a dialog', () => {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Calendar/ }));
+    expect(screen.getByTestId('calendar-picker')).toBeInTheDocument();
+  });
+
+  it('hides Edit plan for a non-writer but keeps Plan details / Baselines / Calendar', () => {
     h.role = 'VIEWER';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
     expect(screen.queryByRole('menuitem', { name: /Edit plan/ })).not.toBeInTheDocument();
+    // A read-only role can still read the plan's details/description here — no capability lost.
+    expect(screen.getByRole('menuitem', { name: /Plan details/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Baselines/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Calendar/ })).toBeInTheDocument();
   });
@@ -244,14 +257,13 @@ describe('PlanWorkspace — responsive single-pane (M4, below md)', () => {
     delete (window as { matchMedia?: unknown }).matchMedia;
   });
 
-  it('shows the Diagram/Activities view toggle and no split resizer below md', () => {
+  it('shows the Diagram/Activities view radiogroup and no split resizer below md', () => {
     renderScreen();
-    const group = screen.getByRole('group', { name: 'Workspace view' });
-    expect(group).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Workspace view' })).toBeInTheDocument();
     // Diagram is selected by default (canvas-first); Activities is not.
-    expect(screen.getByRole('button', { name: 'Diagram' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Activities' })).toHaveAttribute(
-      'aria-pressed',
+    expect(screen.getByRole('radio', { name: 'Diagram' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Activities' })).toHaveAttribute(
+      'aria-checked',
       'false',
     );
     // No vertical split on mobile → no resizer.
@@ -260,17 +272,14 @@ describe('PlanWorkspace — responsive single-pane (M4, below md)', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('switches the selected pane when the toggle is used', () => {
+  it('switches the selected pane when a radio is chosen', () => {
     renderScreen();
-    fireEvent.click(screen.getByRole('button', { name: 'Activities' }));
-    expect(screen.getByRole('button', { name: 'Activities' })).toHaveAttribute(
-      'aria-pressed',
+    fireEvent.click(screen.getByRole('radio', { name: 'Activities' }));
+    expect(screen.getByRole('radio', { name: 'Activities' })).toHaveAttribute(
+      'aria-checked',
       'true',
     );
-    expect(screen.getByRole('button', { name: 'Diagram' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    expect(screen.getByRole('radio', { name: 'Diagram' })).toHaveAttribute('aria-checked', 'false');
     // Both panes stay mounted (toggled with `hidden`), so the canvas keeps its state.
     expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
     expect(screen.getByTestId('activities-table')).toBeInTheDocument();

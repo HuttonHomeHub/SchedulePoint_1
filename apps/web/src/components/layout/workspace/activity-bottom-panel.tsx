@@ -1,32 +1,41 @@
 import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Button } from '@/components/ui/button';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { BaselineVarianceSummary } from '@/features/baselines';
-import { PenReadOnlyNote } from '@/features/plan-lock';
 
 /**
  * The activity list docked at the bottom of the canvas-first {@link PlanWorkspace}
  * (ADR-0030). It fills the height its container gives it and scrolls internally, so the
  * canvas above keeps the rest. The workspace owns the drag-resizer (the shared
- * resizable-panel primitive) and the panel's height; this component is the panel *content*,
- * with a collapse control in its header.
+ * resizable-panel primitive) and the panel's height; this component is the panel *content*.
  *
  * Reuses the same `ActivitiesTable` (computed columns, variance, progress editor, CRUD,
  * virtualization) the stacked page used, driven off the shared model so behaviour is
- * identical to the legacy layout.
+ * identical to the legacy layout. The pen read-only note is **not** shown here — the
+ * workspace shows a single consolidated note above the whole body (ADR-0030 US-4).
  */
 export function ActivityBottomPanel({
   model,
   onCollapse,
+  focusCollapseOnMount = false,
 }: {
   model: PlanWorkspaceModel;
   /** Collapse the panel to its handle. Omitted on the mobile single-pane view (the view toggle
    * switches away from Activities instead), where no collapse control is shown. */
   onCollapse?: () => void;
+  /** After a user *expand*, the panel remounts — move focus onto the collapse control so a
+   * keyboard/AT user isn't dropped to `<body>` (mirrors the rail's toggle focus). */
+  focusCollapseOnMount?: boolean;
 }): React.ReactElement {
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (focusCollapseOnMount) collapseRef.current?.focus();
+  }, [focusCollapseOnMount]);
+
   return (
     <section
       aria-label="Activities"
@@ -43,21 +52,19 @@ export function ActivityBottomPanel({
           {model.canEditSchedule ? (
             <CreateActivityButton orgSlug={model.orgSlug} planId={model.planId} />
           ) : null}
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Collapse activities panel"
-            onClick={onCollapse}
-          >
-            <PanelBottomClose aria-hidden="true" className="size-4" />
-          </Button>
+          {onCollapse ? (
+            <Button
+              ref={collapseRef}
+              variant="ghost"
+              size="icon"
+              aria-label="Collapse activities panel"
+              onClick={onCollapse}
+            >
+              <PanelBottomClose aria-hidden="true" className="size-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
-      {model.penReadOnly ? (
-        <div className="px-4 pb-2">
-          <PenReadOnlyNote />
-        </div>
-      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         <ActivitiesTable
           orgSlug={model.orgSlug}
@@ -77,17 +84,31 @@ export function ActivityBottomPanel({
 /**
  * The collapsed activity panel: a slim bar pinned to the bottom with a single control to
  * reopen it — so the activity list is never more than one click away (mirrors the collapsed
- * rail's affordance).
+ * rail's affordance). On a user *collapse* it takes focus so the keyboard user lands on the
+ * expand control rather than `<body>`.
  */
 export function ActivityPanelCollapsedBar({
   onExpand,
+  focusExpandOnMount = false,
 }: {
   onExpand: () => void;
+  focusExpandOnMount?: boolean;
 }): React.ReactElement {
+  const expandRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (focusExpandOnMount) expandRef.current?.focus();
+  }, [focusExpandOnMount]);
+
   return (
     <div className="border-border flex h-9 shrink-0 items-center justify-between gap-2 border-t px-4">
       <span className="text-sm font-medium">Activities</span>
-      <Button variant="ghost" size="icon" aria-label="Expand activities panel" onClick={onExpand}>
+      <Button
+        ref={expandRef}
+        variant="ghost"
+        size="icon"
+        aria-label="Expand activities panel"
+        onClick={onExpand}
+      >
         <PanelBottomOpen aria-hidden="true" className="size-4" />
       </Button>
     </div>
