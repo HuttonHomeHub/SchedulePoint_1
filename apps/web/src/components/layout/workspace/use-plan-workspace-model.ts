@@ -1,6 +1,7 @@
 import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { useMemo, useState } from 'react';
 
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import {
   useActivities,
   useCreatePlacedActivity,
@@ -14,7 +15,7 @@ import { useCalendar, useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { useCreateDependency, usePlanDependencies } from '@/features/dependencies';
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
-import { usePlan } from '@/features/plans';
+import { usePlan, useSetPlanStart } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { useRecalculate } from '@/features/schedule';
 import {
@@ -109,9 +110,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // with an SNET constraint, then the authoritative recalc places it.
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
+  const setPlanStart = useSetPlanStart(orgSlug);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
-    const plannedStart = plan.data?.plannedStart;
-    if (!plannedStart) return { recalcConflict: null };
+    let plannedStart = plan.data?.plannedStart ?? null;
+    if (!plannedStart) {
+      // Canvas-first authoring (ADR-0032): a start-less plan is drawable — the canvas anchors to
+      // today. The first draw silently pins `plannedStart` to that anchor (Critical Q1) so the SNET
+      // dates are coherent, then proceeds. Flag-off keeps today's no-op (needs a start first).
+      if (!CANVAS_AUTHORING_ENABLED || !plan.data) return { recalcConflict: null };
+      const updated = await setPlanStart.mutateAsync({
+        planId,
+        version: plan.data.version,
+        plannedStart: todayIso,
+      });
+      plannedStart = updated.plannedStart ?? todayIso;
+    }
     // The create must land first (this throw keeps the popover open with the error). Only
     // then recalc — a recalc failure is non-fatal: the row persisted, so we report the
     // conflict without re-prompting (never a second POST). The next recalc reconciles dates.

@@ -309,6 +309,11 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   taxonomy, three prominence tiers with responsive overflow, and pen-gated authoring
   as a group state (replacing the ADR-0028 `EditLockBanner` card); refines ADR-0030
   (behind `VITE_CANVAS_TOOLBAR`).
+- **ADR-0032** — Canvas-first plan authoring: a live empty canvas (render when a
+  timeline anchor exists), first-draw pins `plannedStart` to today, unified coalesced
+  client-side auto-recalc, on-canvas activity types (Add split-button + milestones),
+  and a two-click Link tool-mode replacing the edge-drag; frontend-only, amends
+  ADR-0022/0023/0026/0031 (behind `VITE_CANVAS_AUTHORING`).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

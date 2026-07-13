@@ -99,6 +99,30 @@ export function useSetPlanCalendar(orgSlug: string) {
   });
 }
 
+/**
+ * Set (or clear) a plan's `plannedStart` — the timeline origin the TSLD canvas anchors to
+ * (ADR-0023/0032) — as a targeted PATCH of just `plannedStart` + `version`, so the canvas-first
+ * inline start-date control (and the first-draw-sets-start path) don't need the whole plan form.
+ * `null` clears it. Mirrors {@link useSetPlanCalendar}: the returned plan is written straight into
+ * the detail cache so the caller sees the new `plannedStart` **and the fresh `version`** at once,
+ * and the schedule summary is invalidated so a later recalculation reflects the new origin.
+ */
+export function useSetPlanStart(orgSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { planId: string; version: number; plannedStart: string | null }) =>
+      apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ plannedStart: input.plannedStart, version: input.version }),
+      }),
+    onSuccess: (updated, input) => {
+      queryClient.setQueryData(planKeys.detail(orgSlug, input.planId), updated);
+    },
+    onSettled: (_data, _error, input) =>
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
+  });
+}
+
 export function useDeletePlan(orgSlug: string, projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

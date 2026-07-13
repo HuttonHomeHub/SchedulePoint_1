@@ -6,6 +6,7 @@ export {
   useUpdatePlan,
   useDeletePlan,
   useSetPlanCalendar,
+  useSetPlanStart,
   plansQueryOptions,
   planQueryOptions,
   planKeys,

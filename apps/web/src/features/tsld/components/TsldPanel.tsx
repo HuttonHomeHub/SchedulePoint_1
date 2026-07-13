@@ -1,7 +1,7 @@
 import type { ActivitySummary, DependencySummary, DependencyType } from '@repo/types';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { TSLD_EDITING_ENABLED } from '../../../config/env';
+import { CANVAS_AUTHORING_ENABLED, TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent } from '../interaction/gesture-machine';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
@@ -164,7 +164,7 @@ interface PendingCreate {
 export function TsldPanel({
   activities,
   dependencies,
-  dataDate,
+  dataDate: dataDateProp,
   canEdit = false,
   onCreate,
   onReposition,
@@ -178,6 +178,12 @@ export function TsldPanel({
   chromeless = false,
   canvasUi,
 }: TsldPanelProps): React.ReactElement {
+  // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
+  // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
+  // first activity on a blank plan. Flag-off (or once a start is set) this is exactly the prop, so
+  // the legacy path is byte-for-byte unchanged. The first structural write pins `plannedStart` to
+  // this anchor (the workspace's `onTsldCreate`), keeping the persisted dates coherent.
+  const dataDate = dataDateProp ?? (CANVAS_AUTHORING_ENABLED ? (todayIso ?? null) : null);
   const announce = useAnnounce();
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
@@ -234,7 +240,11 @@ export function TsldPanel({
     [activities],
   );
   const isCalculated = activities.some((a) => a.earlyStart !== null);
-  const showDiagram = isCalculated && dataDate !== null;
+  // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
+  // computed schedule (`isCalculated`), but canvas-first authoring (ADR-0032) mounts a **blank,
+  // draw-ready** canvas before any recalc so the first activity can be placed on it; uncalculated
+  // bars simply don't paint (`paint.ts` skips `earlyStart === null`).
+  const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
   // View controls (read-only or editing) — zoom preset (reflected from the canvas's coarse
@@ -572,7 +582,10 @@ export function TsldPanel({
       });
   };
 
-  if (activities.length === 0) {
+  // Canvas-first authoring (ADR-0032) mounts a blank, draw-ready canvas on an empty plan (there's a
+  // timeline anchor via `dataDate`), so skip the empty-state note in that case and fall through to
+  // the interactive canvas below. Flag-off — or with no anchor — keep today's empty-state note.
+  if (activities.length === 0 && !(CANVAS_AUTHORING_ENABLED && showDiagram)) {
     return (
       <div
         className={cn(
