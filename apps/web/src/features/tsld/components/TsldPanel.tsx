@@ -166,6 +166,10 @@ export interface TsldPanelProps {
   /** Today as a calendar day (`YYYY-MM-DD`), for the TODAY marker. The route passes it (floored
    * to the local day) so the component does no wall-clock math. */
   todayIso?: string;
+  /** Fill the available height instead of the default fixed 480px box. When set, the canvas
+   * container is `h-full` (with a min-height floor) so the diagram fills the workspace region —
+   * used by the canvas-first `PlanWorkspace` (ADR-0030). Default (unset) keeps today's boxed look. */
+  fill?: boolean;
 }
 
 interface PendingCreate {
@@ -204,6 +208,7 @@ export function TsldPanel({
   onRefresh,
   calendar = null,
   todayIso,
+  fill = false,
 }: TsldPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = useId();
@@ -578,7 +583,10 @@ export function TsldPanel({
   }
 
   return (
-    <section aria-label="Time-scaled logic diagram" className="flex flex-col gap-2">
+    <section
+      aria-label="Time-scaled logic diagram"
+      className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'flex flex-col gap-2'}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-sm">
           {!isCalculated
@@ -693,7 +701,13 @@ export function TsldPanel({
         </ul>
       ) : null}
 
-      <div className="border-border relative h-[480px] overflow-hidden rounded-lg border">
+      <div
+        className={
+          fill
+            ? 'border-border relative min-h-[240px] flex-1 overflow-hidden rounded-lg border'
+            : 'border-border relative h-[480px] overflow-hidden rounded-lg border'
+        }
+      >
         {showDiagram && dataDate ? (
           <>
             <TsldCanvas

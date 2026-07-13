@@ -110,8 +110,13 @@ does not "jump" during a resize.
 
 #### Feature: Bottom panel resize/collapse + canvas viewport-preserve
 
-> **Description:** a horizontal splitter and prefs hook (mirroring the rail) plus the
-> canvas resize amendment so dragging doesn't reset the viewport.
+> **Description:** a horizontal splitter and prefs hook plus the canvas resize amendment
+> so dragging doesn't reset the viewport. **Per product-owner steer (2026-07-13): extract
+> a single, orientation-aware resizable-panel primitive rather than copy the rail's — the
+> existing Project Explorer rail (`RailResizer` + `use-rail-prefs`) refactors onto the
+> shared primitive too, so both the rail (vertical splitter / width) and the activity panel
+> (horizontal splitter / height) share one implementation.** The rail's public behaviour
+> and tests must stay green through the refactor.
 > **Complexity:** L
 > **Dependencies:** M1.
 > **Risks:** (1) canvas re-fit on every resize tick → viewport jump (addressed in 2.1);
