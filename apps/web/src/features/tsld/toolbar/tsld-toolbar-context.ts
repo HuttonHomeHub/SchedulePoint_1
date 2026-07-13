@@ -39,6 +39,8 @@ export interface TsldToolbarContext {
   // --- Object / plan actions (group 5) ------------------------------------------------------
   /** Whether the plan can be recalculated now (role + pen; from the model). */
   canRecalc: boolean;
+  /** True while a recalculation POST is in flight (drives the busy/disabled state). */
+  recalcPending: boolean;
   recalculate: () => void;
   openBaselines: () => void;
   openCalendar: () => void;

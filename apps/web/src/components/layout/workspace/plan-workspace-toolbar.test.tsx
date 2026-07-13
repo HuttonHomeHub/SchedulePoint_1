@@ -95,6 +95,7 @@ vi.mock('@/features/schedule', () => ({
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculate: () => ({ mutate: vi.fn(), isPending: false }),
+  useRecalculateCommand: () => ({ isPending: false, run: vi.fn() }),
   useScheduleSummary: () => query({ projectFinish: '2026-08-01' }),
 }));
 

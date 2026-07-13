@@ -155,6 +155,14 @@ jobs:
       - name: Web end-to-end tests (canvas workspace flag on)
         run: pnpm --filter @repo/web test:e2e:workspace
 
+      # Flag-ON canvas-maximal toolbar journey (playwright.toolbar.config.ts) serving the app with
+      # VITE_CANVAS_TOOLBAR on (layered on VITE_CANVAS_WORKSPACE + the editing flags + enforced pen),
+      # so the toolbar-hosted workspace — slim header + one command toolbar over a chromeless canvas,
+      # activities panel collapsed by default — is exercised end to end (ADR-0031). Runs last, after
+      # the prior runs tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (canvas toolbar flag on)
+        run: pnpm --filter @repo/web test:e2e:toolbar
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -164,6 +172,7 @@ jobs:
             apps/web/playwright-report/
             apps/web/playwright-report-edit/
             apps/web/playwright-report-workspace/
+            apps/web/playwright-report-toolbar/
           if-no-files-found: ignore
           retention-days: 7
 

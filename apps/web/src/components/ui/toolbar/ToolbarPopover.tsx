@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ToolbarItemRenderApi } from './toolbar-registry';
+import { toolbarControlVariants } from './toolbar-styles';
 
 import { cn } from '@/lib/utils';
 
@@ -59,10 +60,14 @@ export function ToolbarPopover({
     if (restoreFocus) triggerRef.current?.focus();
   };
 
-  // While open: move focus into the panel; Escape / outside-pointer close it.
+  // While open: move focus into the panel; Escape / outside-pointer close it, and — since the panel
+  // may hold no focusable content (Summary/Legend are static) — **Tab out of it closes it too**,
+  // rather than leaving an open panel behind while focus lands elsewhere in DOM order (WCAG 2.4.3 /
+  // 2.4.7). `focusout` with `relatedTarget` outside both panel and trigger is that "focus left" signal.
   useEffect(() => {
     if (!open) return;
-    panelRef.current?.focus();
+    const panel = panelRef.current;
+    panel?.focus();
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation();
@@ -80,11 +85,19 @@ export function ToolbarPopover({
         close(false);
       }
     };
+    const onFocusOut = (event: FocusEvent): void => {
+      const next = event.relatedTarget as Node | null;
+      if (next && (panelRef.current?.contains(next) || triggerRef.current?.contains(next))) return;
+      // Focus left the panel entirely (Tab/Shift-Tab or programmatic) — close without stealing it back.
+      setOpen(false);
+    };
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointer, true);
+    panel?.addEventListener('focusout', onFocusOut);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointer, true);
+      panel?.removeEventListener('focusout', onFocusOut);
     };
   }, [open]);
 
@@ -102,11 +115,7 @@ export function ToolbarPopover({
           if (open) close(false);
           else openPanel();
         }}
-        className={cn(
-          'text-foreground hover:bg-accent/60 focus-visible:ring-ring inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset',
-          open && 'bg-accent text-accent-foreground',
-          disabled && 'cursor-default opacity-50',
-        )}
+        className={cn(toolbarControlVariants({ active: open, disabled: disabled === true }))}
       >
         {icon ? (
           <span aria-hidden="true" className="inline-flex shrink-0 items-center">

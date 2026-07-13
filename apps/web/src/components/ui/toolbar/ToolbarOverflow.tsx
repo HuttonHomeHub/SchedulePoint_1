@@ -2,9 +2,9 @@ import { MoreHorizontal } from 'lucide-react';
 import { forwardRef, useRef, useState, type Ref } from 'react';
 
 import type { ResolvedToolbarItem } from './toolbar-registry';
+import { toolbarControlVariants } from './toolbar-styles';
 
 import { Menu, MenuItem } from '@/components/ui/menu';
-import { cn } from '@/lib/utils';
 
 /**
  * The toolbar's **overflow** — a `⋯` trigger (a roving-tabindex member of the {@link Toolbar}) that
@@ -56,9 +56,7 @@ function ToolbarOverflowInner<Ctx>(
         onKeyDown={onKeyDown}
         onFocus={onFocus}
         onClick={() => (open ? setOpen(false) : openMenu())}
-        className={cn(
-          'text-foreground hover:bg-accent/60 focus-visible:ring-ring inline-flex min-h-9 items-center rounded-md px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset',
-        )}
+        className={toolbarControlVariants({ active: open })}
       >
         <MoreHorizontal aria-hidden="true" className="size-4" />
       </button>
@@ -88,7 +86,9 @@ function ToolbarOverflowInner<Ctx>(
               aria-disabled="true"
               tabIndex={-1}
               {...(r.disabledReason ? { title: r.disabledReason } : {})}
-              className="text-muted-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm opacity-60"
+              // Still an arrow-key stop in the menu, so it needs a visible focus ring like MenuItem —
+              // `opacity-60` alone leaves a keyboard user unsure where focus is (WCAG 2.4.7).
+              className="text-muted-foreground focus:ring-ring flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm opacity-60 outline-none focus:ring-2 focus:ring-inset"
             >
               {r.item.icon ? (
                 <span aria-hidden="true" className="inline-flex shrink-0 items-center">

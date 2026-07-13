@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TsldCanvasHandle } from '../components/TsldCanvas';
 import type { EditMode } from '../interaction/gesture-machine';
@@ -48,19 +48,35 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   const requestFit = useCallback((): void => setFitSignal((n) => n + 1), []);
   const requestAutoArrange = useCallback((): void => setAutoArrangeSignal((n) => n + 1), []);
 
-  return {
-    mode,
-    setMode,
-    viewToggles,
-    toggleView,
-    zoomPreset,
-    setZoomPreset,
-    fitSignal,
-    requestFit,
-    autoArrangeSignal,
-    requestAutoArrange,
-    showHelp,
-    setShowHelp,
-    canvasControlRef,
-  };
+  // Memoised on its own values (setters/ref are stable), so the object's identity only changes when
+  // the canvas view-state actually changes — an unrelated parent re-render (e.g. an activity-panel
+  // drag) never churns the downstream toolbar context / `<Toolbar>` remeasure (perf, ADR-0031).
+  return useMemo(
+    () => ({
+      mode,
+      setMode,
+      viewToggles,
+      toggleView,
+      zoomPreset,
+      setZoomPreset,
+      fitSignal,
+      requestFit,
+      autoArrangeSignal,
+      requestAutoArrange,
+      showHelp,
+      setShowHelp,
+      canvasControlRef,
+    }),
+    [
+      mode,
+      viewToggles,
+      toggleView,
+      zoomPreset,
+      fitSignal,
+      requestFit,
+      autoArrangeSignal,
+      requestAutoArrange,
+      showHelp,
+    ],
+  );
 }

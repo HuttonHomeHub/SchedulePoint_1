@@ -17,7 +17,7 @@ import type { ReactNode } from 'react';
  * an existing group, it can't invent one. Reserved groups (find/history) may hold only stubs today.
  */
 export const TOOLBAR_GROUPS = [
-  'frame', // 1 · frame/navigate — scale, zoom, fit, today
+  'frame', // 1 · frame/navigate — scale, zoom, fit (today-recenter reserved)
   'lens', // 2 · lens/display — view toggles, view-mode switch (reserved)
   'find', // 3 · find/focus — filter, critical-only (reserved)
   'tools', // 4 · tools/author — add activity, link (pen-gated)
@@ -49,13 +49,15 @@ export interface ToolbarItemRenderApi {
   /**
    * Spread these onto the item's single focusable control so it joins the toolbar's roving-tabindex
    * model (APG). Carries the managed `tabIndex`, the marker attributes the toolbar queries, and the
-   * focus sync. A `render` item MUST spread this on exactly one focusable element.
+   * focus sync. An interactive `render` item MUST spread this on exactly one focusable element. For a
+   * {@link ToolbarItem.presentational} item (a non-interactive read-out) the toolbar omits the
+   * focusable marker + `onFocus` and pins `tabIndex: -1`, so the item does **not** take a roving stop.
    */
   itemProps: {
     tabIndex: number;
-    'data-toolbar-focusable': '';
     'data-toolbar-item': string;
-    onFocus: () => void;
+    'data-toolbar-focusable'?: '';
+    onFocus?: () => void;
   };
 }
 
@@ -91,6 +93,13 @@ export interface ToolbarItem<Ctx> {
   disabledReason?: (ctx: Ctx) => string | undefined;
   /** Plain-button activation. Mutually exclusive with {@link render}. */
   onActivate?: (ctx: Ctx) => void;
+  /**
+   * A non-interactive **read-out** (e.g. the pinned Project-finish figure): rendered inline in its
+   * group but **excluded from the roving-tabindex order** — not a Tab/Arrow stop, since there's
+   * nothing to operate. Its `render` still receives `itemProps` (to spread `data-toolbar-item`) but
+   * without the focusable marker / `onFocus`, and with `tabIndex: -1`. Must be a `render` item.
+   */
+  presentational?: boolean;
   /** Escape hatch for non-button controls (segmented scale, Project-finish chip, Tier-2 popovers). */
   render?: (ctx: Ctx, api: ToolbarItemRenderApi) => ReactNode;
 }

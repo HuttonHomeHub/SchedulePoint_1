@@ -65,7 +65,7 @@ describe('Toolbar (APG primitive)', () => {
     render(<Toolbar items={makeItems()} context={{ count: 2 }} label="Plan toolbar" />);
     const tb = screen.getByRole('toolbar', { name: 'Plan toolbar' });
     expect(tb).toHaveAttribute('aria-orientation', 'horizontal');
-    expect(within(tb).getByRole('group', { name: 'View' })).toBeInTheDocument();
+    expect(within(tb).getByRole('group', { name: 'Navigate' })).toBeInTheDocument();
     expect(within(tb).getByRole('group', { name: 'Author' })).toBeInTheDocument();
   });
 
@@ -145,6 +145,32 @@ describe('Toolbar (APG primitive)', () => {
     fit.focus();
     fireEvent.keyDown(fit, { key: 'End' });
     expect(chip).toHaveFocus();
+  });
+
+  it('renders a presentational read-out inline but never as a roving stop', () => {
+    const items = defineToolbar<Ctx>([
+      { id: 'fit', group: 'frame', tier: 1, order: 0, label: 'fit', onActivate: () => {} },
+      {
+        id: 'finish',
+        group: 'object',
+        tier: 1,
+        order: 0,
+        label: 'Project finish',
+        presentational: true,
+        render: (c, api) => <span {...api.itemProps}>Finish {c.count}</span>,
+      },
+    ]);
+    render(<Toolbar items={items} context={{ count: 3 }} label="T" />);
+    const readout = screen.getByText(/Finish 3/);
+    // Inline (rendered), but not focusable: no marker, pinned tabindex -1.
+    expect(readout).toBeInTheDocument();
+    expect(readout).toHaveAttribute('tabindex', '-1');
+    expect(readout).not.toHaveAttribute('data-toolbar-focusable');
+    // End jumps to the *last operable* control — the sole button, skipping the read-out.
+    const fit = screen.getByRole('button', { name: 'fit' });
+    fit.focus();
+    fireEvent.keyDown(fit, { key: 'End' });
+    expect(fit).toHaveFocus();
   });
 
   it('has no axe violations', async () => {

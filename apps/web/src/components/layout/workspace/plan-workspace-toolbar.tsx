@@ -9,11 +9,13 @@ import {
   useActivityPanelPrefs,
 } from './use-activity-panel-prefs';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
+import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Dialog } from '@/components/ui/dialog';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar } from '@/components/ui/toolbar';
+import { useMediaQuery } from '@/components/ui/use-media-query';
 import { BaselinesPanel } from '@/features/baselines';
 import { CompactPenStatus, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
@@ -25,6 +27,10 @@ import {
   type PlanDialogKind,
 } from '@/features/tsld/toolbar/use-tsld-toolbar-context';
 import { formatCalendarDate } from '@/lib/format-date';
+import { cn } from '@/lib/utils';
+
+/** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
+const MD_QUERY = '(min-width: 48rem)';
 
 /**
  * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — the `VITE_CANVAS_TOOLBAR`
@@ -47,6 +53,13 @@ export function ToolbarPlanWorkspace({
   const [dialog, setDialog] = useState<PlanDialogKind | null>(null);
   const ctx = useTsldToolbarContext({ model, plan, canvasUi, openDialog: setDialog });
   const items = useMemo(() => buildTsldToolbarItems(), []);
+
+  // Below `md` the vertical split can't give the canvas and the table useful height at once, so
+  // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
+  // squeezing the canvas to its minimum on a phone. Both stay mounted (toggled with `hidden`) so
+  // switching preserves the canvas viewport and the table scroll.
+  const isWide = useMediaQuery(MD_QUERY, true);
+  const [pane, setPane] = useState<WorkspacePane>('diagram');
 
   // Activities panel: collapsed by default on this surface (drag up / Expand to reveal). Collapse
   // is session-local here; the resizer still persists the height via the shared prefs.
@@ -84,6 +97,30 @@ export function ToolbarPlanWorkspace({
   const onResize = useCallback(
     (next: number) => panel.setSize(Math.min(next, effectiveMax)),
     [panel, effectiveMax],
+  );
+
+  // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
+  // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so
+  // selection/viewport state never leaks across a plan→plan nav.
+  const canvas = (
+    <TsldPanel
+      key={model.planId}
+      fill
+      chromeless
+      canvasUi={canvasUi}
+      activities={model.activities.data ?? []}
+      dependencies={model.dependencies.data ?? []}
+      dataDate={plan.plannedStart}
+      canEdit={model.canEditSchedule}
+      onCreate={model.onTsldCreate}
+      onReposition={model.onTsldReposition}
+      onLink={model.onTsldLink}
+      onAutoArrange={model.onTsldAutoArrange}
+      onOpenLogic={model.setLogicActivity}
+      onRefresh={model.onTsldRefresh}
+      calendar={model.tsldCalendar}
+      todayIso={model.todayIso}
+    />
   );
 
   const crumbs: Crumb[] = [
@@ -136,48 +173,48 @@ export function ToolbarPlanWorkspace({
       ) : null}
 
       <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Full-height chromeless canvas — the toolbar hosts its controls. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
-          <TsldPanel
-            key={model.planId}
-            fill
-            chromeless
-            canvasUi={canvasUi}
-            activities={model.activities.data ?? []}
-            dependencies={model.dependencies.data ?? []}
-            dataDate={plan.plannedStart}
-            canEdit={model.canEditSchedule}
-            onCreate={model.onTsldCreate}
-            onReposition={model.onTsldReposition}
-            onLink={model.onTsldLink}
-            onAutoArrange={model.onTsldAutoArrange}
-            onOpenLogic={model.setLogicActivity}
-            onRefresh={model.onTsldRefresh}
-            calendar={model.tsldCalendar}
-            todayIso={model.todayIso}
-          />
-        </div>
+        {isWide ? (
+          <>
+            {/* Full-height chromeless canvas — the toolbar hosts its controls. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">{canvas}</div>
 
-        {collapsed ? (
-          <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
+            {collapsed ? (
+              <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
+            ) : (
+              <>
+                <PanelResizer
+                  orientation="horizontal"
+                  size={panelHeight}
+                  min={PANEL_MIN_OPEN}
+                  max={effectiveMax}
+                  label="Resize activities panel"
+                  onResize={onResize}
+                  pointerToSize={pointerToSize}
+                  className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                />
+                <div style={{ height: panelHeight }} className="shrink-0">
+                  <ActivityBottomPanel
+                    model={model}
+                    onCollapse={collapse}
+                    focusCollapseOnMount={interacted}
+                  />
+                </div>
+              </>
+            )}
+          </>
         ) : (
           <>
-            <PanelResizer
-              orientation="horizontal"
-              size={panelHeight}
-              min={PANEL_MIN_OPEN}
-              max={effectiveMax}
-              label="Resize activities panel"
-              onResize={onResize}
-              pointerToSize={pointerToSize}
-              className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-            />
-            <div style={{ height: panelHeight }} className="shrink-0">
-              <ActivityBottomPanel
-                model={model}
-                onCollapse={collapse}
-                focusCollapseOnMount={interacted}
-              />
+            <WorkspaceViewToggle value={pane} onChange={setPane} />
+            <div
+              className={cn(
+                'min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2',
+                pane === 'diagram' ? 'flex' : 'hidden',
+              )}
+            >
+              {canvas}
+            </div>
+            <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
+              <ActivityBottomPanel model={model} />
             </div>
           </>
         )}

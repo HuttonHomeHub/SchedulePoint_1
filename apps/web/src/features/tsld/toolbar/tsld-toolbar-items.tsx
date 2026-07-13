@@ -18,6 +18,7 @@ import { ZOOM_LEVELS } from '../render/time-scale';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
+import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 
 const ZOOM_LABELS: Record<string, string> = {
@@ -62,9 +63,13 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
  * The TSLD command registry (ADR-0031) — every current canvas control expressed as a
  * {@link ToolbarItem} over the {@link TsldToolbarContext}, grouped by the fixed 7-group taxonomy.
  * The abstraction is validated by porting the *real* controls (scale/zoom/fit, view toggles,
- * add-activity, recalculate, baselines/calendar/plan-details, legend, summary + finish chip) onto
- * it — reserved slots (view-mode switch, filter, undo/redo, link/milestone/auto-arrange, export)
- * are registered as hidden stubs so they're promotable later without a taxonomy change.
+ * add-activity, auto-arrange, recalculate, baselines/calendar/plan-details, legend, summary + finish
+ * chip) onto it — reserved slots (today-recenter, view-mode switch, filter, undo/redo) are registered
+ * as hidden stubs so they're promotable later without a taxonomy change.
+ *
+ * NB the `today` reserved stub is a viewport **recenter** command, distinct from the "Today line"
+ * display toggle in `View▾` (which only shows/hides the marker) — that toggle is the only "today"
+ * capability the source layout shipped; a recenter command is future work (ADR-0031 §3).
  */
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   return defineToolbar<TsldToolbarContext>([
@@ -108,6 +113,17 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <Maximize2 className="size-4" />,
       isVisible: (ctx) => ctx.hasDiagram,
       onActivate: (ctx) => ctx.fit(),
+    },
+    // today-recenter slot — reserved (only the "Today line" *toggle* ships, in `View▾`). Registered
+    // hidden so a viewport-recenter command is promotable later without a taxonomy change.
+    {
+      id: 'today',
+      group: 'frame',
+      tier: 1,
+      order: 13,
+      label: 'Recenter on today',
+      isVisible: () => false,
+      onActivate: () => {},
     },
 
     // --- 2 · Lens / display -------------------------------------------------------------------
@@ -184,12 +200,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 1,
       order: 0,
       label: 'Project finish',
+      // A read-out, not a control: rendered inline but never a roving-tabindex stop (a11y review —
+      // a focusable-but-inert stop breaks the APG toolbar contract and can be nameless mid-load).
+      presentational: true,
       isVisible: (ctx) => ctx.hasDiagram,
       render: (ctx, api) => (
-        <span
-          {...api.itemProps}
-          className="text-muted-foreground focus-visible:ring-ring inline-flex min-h-9 items-center rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
-        >
+        <span {...api.itemProps} className={toolbarControlVariants({ tone: 'info' })}>
           {ctx.projectFinishContent}
         </span>
       ),
@@ -218,7 +234,15 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 2,
       label: 'Recalculate',
       icon: <RefreshCw className="size-4" />,
-      isEnabled: (ctx) => ctx.canRecalc,
+      isEnabled: (ctx) => ctx.canRecalc && !ctx.recalcPending,
+      // Explain the disabled state like the sibling authoring commands do, rather than a silent grey:
+      // in-flight (busy) vs. no pen (identical underlying cause to Add activity).
+      disabledReason: (ctx) =>
+        ctx.recalcPending
+          ? 'Recalculating…'
+          : ctx.canRecalc
+            ? undefined
+            : 'Start editing to recalculate',
       onActivate: (ctx) => ctx.recalculate(),
     },
     {

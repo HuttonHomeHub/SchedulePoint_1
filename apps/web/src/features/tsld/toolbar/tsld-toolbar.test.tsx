@@ -35,6 +35,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     canAutoArrange: false,
     requestAutoArrange: vi.fn(),
     canRecalc: true,
+    recalcPending: false,
     recalculate: spies.recalculate,
     openBaselines: spies.openBaselines,
     openCalendar: spies.openCalendar,

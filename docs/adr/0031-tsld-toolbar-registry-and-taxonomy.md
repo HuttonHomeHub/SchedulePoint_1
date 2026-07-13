@@ -90,9 +90,9 @@ promotable later without a taxonomy change, and explicitly _not_ lock-in:
 
 ### 3. Three prominence tiers + a responsive overflow rule
 
-Every item declares a tier: **T1** always-visible inline (scale, zoom, Fit, Today, the
-view-mode slot, `+ Add Activity`, Recalculate, the pinned Project-finish chip, pen
-status); **T2** labelled popovers (`View▾`, `Summary▾`, `Legend▾`, `Filter▾`); **T3**
+Every item declares a tier: **T1** always-visible inline (scale, zoom, Fit, the view-mode
+slot, `+ Add Activity`, Recalculate, the pinned Project-finish chip, pen status); **T2**
+labelled popovers (`View▾`, `Summary▾`, `Legend▾`, `Filter▾`); **T3**
 overflow `⋯` (Baselines, Calendar, Plan details, Export, shortcuts). When Tier-1 items
 no longer fit, the lowest-priority ones **demote into the overflow by tier-then-`order`**,
 measured by a single `ResizeObserver` (memoised partitions + hysteresis to avoid thrash).

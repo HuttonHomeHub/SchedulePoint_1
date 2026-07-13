@@ -1,5 +1,7 @@
 import { forwardRef } from 'react';
 
+import { toolbarControlVariants } from './toolbar-styles';
+
 import { cn } from '@/lib/utils';
 
 /**
@@ -62,9 +64,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         onKeyDown={onKeyDown}
         onFocus={onFocus}
         className={cn(
-          'focus-visible:ring-ring inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset',
-          pressed ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/60',
-          disabled && 'cursor-default opacity-50',
+          toolbarControlVariants({ active: pressed === true, disabled: disabled === true }),
           className,
         )}
       >

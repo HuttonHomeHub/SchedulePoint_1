@@ -11,11 +11,14 @@ import type {
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
 import { ScheduleSummaryStrip } from '@/features/schedule';
-import { useRecalculate, useScheduleSummary } from '@/features/schedule/api/use-schedule';
+import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The pinned Tier-1 Project-finish chip (product-owner decision #1) — the number planners glance
- * at most, kept inline even though the rest of the summary moves into `Summary▾`. */
+ * at most, kept inline even though the rest of the summary moves into `Summary▾`. Loading shows a
+ * subtle placeholder so the chip's slot doesn't flicker in/out; a not-yet-calculated plan or a load
+ * error renders nothing here (the full states live in the `Summary▾` popover, which reuses the same
+ * `ScheduleSummaryStrip` — so the chip stays a glance, never a second error surface). */
 function ProjectFinishChip({
   orgSlug,
   planId,
@@ -24,6 +27,13 @@ function ProjectFinishChip({
   planId: string;
 }): React.ReactElement | null {
   const summary = useScheduleSummary(orgSlug, planId);
+  if (summary.isPending) {
+    return (
+      <span className="text-muted-foreground" aria-hidden="true">
+        Finish …
+      </span>
+    );
+  }
   const finish = summary.data?.projectFinish ?? null;
   if (finish === null) return null;
   return (
@@ -57,7 +67,7 @@ export function useTsldToolbarContext({
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
-  const recalc = useRecalculate(orgSlug, planId);
+  const recalc = useRecalculateCommand(orgSlug, planId);
 
   const activities = model.activities.data ?? [];
   const hasDiagram =
@@ -75,46 +85,85 @@ export function useTsldToolbarContext({
   );
   const legendContent = useMemo(() => <TsldLegend />, []);
 
-  return {
-    // Frame — the canvas is commanded imperatively via the shared control handle.
-    zoomPreset: canvasUi.zoomPreset,
-    setZoomPreset: (level) => canvasUi.canvasControlRef.current?.zoomToPreset(level),
-    stepZoom: (factor) => canvasUi.canvasControlRef.current?.stepZoom(factor),
-    fit: canvasUi.requestFit,
+  const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
+  const {
+    zoomPreset,
+    canvasControlRef,
+    requestFit,
+    viewToggles,
+    toggleView,
+    mode,
+    setMode,
+    requestAutoArrange,
+    setShowHelp,
+  } = canvasUi;
 
-    // Lens
-    viewToggles: canvasUi.viewToggles,
-    toggleView: canvasUi.toggleView,
+  // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
+  // drag, the 15s pen poll) doesn't hand `<Toolbar>` a fresh context and churn its resolve →
+  // partition → measure → ResizeObserver cycle (perf review, ADR-0031). Behaviour is unchanged —
+  // only identity is stabilised.
+  return useMemo(
+    () => ({
+      // Frame — the canvas is commanded imperatively via the shared control handle.
+      zoomPreset,
+      setZoomPreset: (level) => canvasControlRef.current?.zoomToPreset(level),
+      stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
+      fit: requestFit,
 
-    // Tools (pen-gated as a set at the toolbar via authoringEnabled)
-    isAddingActivity: canvasUi.mode === 'add-activity',
-    toggleAddActivity: () =>
-      canvasUi.setMode((m) => (m === 'add-activity' ? 'select' : 'add-activity')),
-    canAutoArrange: model.canEditSchedule,
-    requestAutoArrange: canvasUi.requestAutoArrange,
+      // Lens
+      viewToggles,
+      toggleView,
 
-    // Object / plan actions
-    canRecalc: model.canRecalc,
-    recalculate: () => {
-      if (recalc.isPending) return;
-      recalc.mutate(undefined, {
-        onSuccess: () => announce('Schedule recalculated.'),
-        onError: () => announce('Couldn’t recalculate the schedule. Please try again.'),
-      });
-    },
-    openBaselines: () => openDialog('baselines'),
-    openCalendar: () => openDialog('calendar'),
-    openPlanDetails: () => openDialog('details'),
-    editPlan: model.canWrite ? () => model.setEditing(true) : null,
+      // Tools (pen-gated as a set at the toolbar via authoringEnabled)
+      isAddingActivity: mode === 'add-activity',
+      toggleAddActivity: () => setMode((m) => (m === 'add-activity' ? 'select' : 'add-activity')),
+      canAutoArrange: canEditSchedule,
+      requestAutoArrange,
 
-    // Help
-    openShortcuts: () => canvasUi.setShowHelp(true),
-    legendContent,
+      // Object / plan actions
+      canRecalc,
+      recalcPending: recalc.isPending,
+      recalculate: () =>
+        recalc.run({
+          onSuccess: () => announce('Schedule recalculated.'),
+          onError: (message) => announce(message),
+        }),
+      openBaselines: () => openDialog('baselines'),
+      openCalendar: () => openDialog('calendar'),
+      openPlanDetails: () => openDialog('details'),
+      editPlan: canWrite ? () => setEditing(true) : null,
 
-    // Summary popover + pinned finish chip
-    summaryContent,
-    projectFinishContent,
+      // Help
+      openShortcuts: () => setShowHelp(true),
+      legendContent,
 
-    hasDiagram,
-  };
+      // Summary popover + pinned finish chip
+      summaryContent,
+      projectFinishContent,
+
+      hasDiagram,
+    }),
+    [
+      zoomPreset,
+      canvasControlRef,
+      requestFit,
+      viewToggles,
+      toggleView,
+      mode,
+      setMode,
+      requestAutoArrange,
+      setShowHelp,
+      canRecalc,
+      canEditSchedule,
+      canWrite,
+      setEditing,
+      recalc,
+      announce,
+      openDialog,
+      legendContent,
+      summaryContent,
+      projectFinishContent,
+      hasDiagram,
+    ],
+  );
 }

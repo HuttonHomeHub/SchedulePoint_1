@@ -37,7 +37,9 @@ export interface ToolbarProps<Ctx> {
 }
 
 const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
-  frame: 'View',
+  // "Navigate", not "View": the Lens group holds the `View▾` display-toggles popover, so naming this
+  // group "View" too would announce two unrelated "View"s to AT (UX review, ADR-0031).
+  frame: 'Navigate',
   lens: 'Display',
   find: 'Find',
   tools: 'Author',
@@ -105,15 +107,22 @@ export function Toolbar<Ctx>({
     setOverflowedIds((prev) => (sameSet(prev, next) ? prev : next));
   }, [bar, demotable]);
 
-  // Measure synchronously after layout, and on every container resize (one observer).
+  // Re-measure synchronously after layout whenever the resolved items change, keeping the ref current.
+  const measureRef = useRef(measure);
   useLayoutEffect(() => {
+    measureRef.current = measure;
     measure();
+  }, [measure]);
+
+  // Attach the ResizeObserver **once** on mount, reading the latest `measure` via the ref, so an
+  // unrelated parent re-render never tears down and rebuilds the observer (perf review, ADR-0031).
+  useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measure());
+    const ro = new ResizeObserver(() => measureRef.current());
     ro.observe(container);
     return () => ro.disconnect();
-  }, [measure]);
+  }, []);
 
   // The inline bar items (pinned render items + non-overflowed buttons), in canonical order.
   const inlineBar = useMemo(
@@ -128,9 +137,13 @@ export function Toolbar<Ctx>({
     [staticOverflow, demotable, overflowedIds],
   );
 
-  // The ordered list of focusable ids (inline items, then ⋯) that roving tabindex walks.
+  // The ordered list of focusable ids (interactive inline items, then ⋯) that roving tabindex walks.
+  // Presentational read-outs (the finish chip) are inline but never a stop — nothing to operate.
   const focusableIds = useMemo(
-    () => [...inlineBar.map((r) => r.item.id), ...(overflowItems.length ? [OVERFLOW_ID] : [])],
+    () => [
+      ...inlineBar.filter((r) => !r.item.presentational).map((r) => r.item.id),
+      ...(overflowItems.length ? [OVERFLOW_ID] : []),
+    ],
     [inlineBar, overflowItems.length],
   );
 
@@ -218,12 +231,14 @@ export function Toolbar<Ctx>({
                 {r.item.render(context, {
                   disabled: !r.enabled,
                   active: r.active,
-                  itemProps: {
-                    tabIndex: tabIndexFor(r.item.id),
-                    'data-toolbar-focusable': '',
-                    'data-toolbar-item': r.item.id,
-                    onFocus: () => setActiveId(r.item.id),
-                  },
+                  itemProps: r.item.presentational
+                    ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
+                    : {
+                        tabIndex: tabIndexFor(r.item.id),
+                        'data-toolbar-focusable': '',
+                        'data-toolbar-item': r.item.id,
+                        onFocus: () => setActiveId(r.item.id),
+                      },
                 })}
               </span>
             ) : (
