@@ -1,5 +1,48 @@
 # @repo/web
 
+## 0.15.0
+
+### Minor Changes
+
+- [#47](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/47) [`8cc3a68`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8cc3a68d18d2458231089de8f5abf46d6dc817af) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): turn Project Explorer in-tree CRUD on by default
+
+  `VITE_NAV_TREE_CRUD` now defaults **on** — the row context menu (create/rename/
+  soft-delete via the ⋯ button, right-click, ContextMenu/Shift+F10 key, and touch
+  long-press) and the rail-header "New client" control are live for writers
+  (Planner/Org Admin); Contributors/Viewers keep a read-only tree. Adds the flag-on
+  Playwright journeys (create client→project→plan from the rail, rename, and
+  cascade-delete → Recently Deleted) with an accessibility pass. Set
+  `VITE_NAV_TREE_CRUD=false` to fall back to the navigation-only tree.
+
+- [#47](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/47) [`8cc3a68`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8cc3a68d18d2458231089de8f5abf46d6dc817af) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): in-tree CRUD for the Project Explorer (ADR-0029 Phase 2)
+
+  Planners and Org Admins can create, rename, and soft-delete clients, projects,
+  and plans directly from the Project Explorer rail — via a per-row "⋯" button,
+  right-click, or the ContextMenu/Shift+F10 key — plus a "New client" control in
+  the rail header for the empty-org case. It reuses the existing form dialogs,
+  `ConfirmDialog` (with kind-appropriate cascade copy), mutation hooks, optimistic
+  locking, and the soft-delete/Recently-Deleted flow; there is no backend change.
+
+  Introduces a hand-rolled, tokenised `Menu`/`MenuItem` design-system primitive
+  (WAI-ARIA APG Menu Button — no new dependency) and a shell-layer `NavigatorCrud`
+  coordinator that owns the dialogs, so the shared tree emits CRUD intents without a
+  `feature → feature` import (an extension within ADR-0029; recorded in
+  `docs/DECISIONS.md`). Selection stays a pure projection of the URL, so a new plan
+  navigates + reveals while new folders are revealed by expansion.
+
+  Ships behind `VITE_NAV_TREE_CRUD` (off by default) and additionally gated by write
+  RBAC, so Contributors/Viewers keep a read-only tree.
+
+### Patch Changes
+
+- [#47](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/47) [`8cc3a68`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8cc3a68d18d2458231089de8f5abf46d6dc817af) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): give the public accept-invite page a single `main` landmark
+
+  Promote the invitation-accept card's centered layout into a shared
+  `InviteShell` (mirroring `AuthShell`) and route the no-token empty state
+  through it, so every branch of the accept-invite flow renders exactly one
+  `main` landmark instead of the route and the card each defining their own
+  (WCAG 2.2 — 1.3.1 Info and Relationships).
+
 ## 0.14.1
 
 ### Patch Changes
