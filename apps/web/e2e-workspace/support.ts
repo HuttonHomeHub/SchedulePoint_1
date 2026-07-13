@@ -13,7 +13,9 @@ import { expect, type Page } from '@playwright/test';
 
 /** Sign up + create an organisation; returns the org slug. */
 export async function onboard(page: Page, stamp: number): Promise<string> {
-  const orgSlug = `ws-co-${stamp}`;
+  // The org slug is derived from the name by slugifying it, so keep the two in step
+  // (name "Workspace Co <stamp>" → slug "workspace-co-<stamp>").
+  const orgSlug = `workspace-co-${stamp}`;
   await page.goto('/sign-up');
   await page.getByLabel('Full name').fill('Workspace Tester');
   await page.getByLabel('Email').fill(`ws-${stamp}@example.com`);
