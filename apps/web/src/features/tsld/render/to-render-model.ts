@@ -1,5 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 
+import { activityBarLabel } from './a11y';
 import type { RenderActivity, RenderEdge } from './render-model';
 
 import { activeConstraintAnchor } from '@/lib/constraint-format';
@@ -20,6 +21,7 @@ export function toRenderActivities(activities: readonly ActivitySummary[]): Rend
     isCritical: a.isCritical,
     isNearCritical: a.isNearCritical,
     constraint: activeConstraintAnchor(a),
+    label: activityBarLabel(a),
   }));
 }
 

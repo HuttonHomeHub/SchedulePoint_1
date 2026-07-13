@@ -57,7 +57,15 @@ export default defineConfig({
             // journeys stay covered even though both now default ON in the shipped
             // bundle (apps/web/src/config/env.ts, 2026-07-12). The flags-ON editing
             // surface has its own harness, playwright.edit.config.ts (test:e2e:edit).
-            env: { VITE_TSLD_EDITING: 'false', VITE_PLAN_EDIT_LOCK: 'false' },
+            // VITE_CANVAS_WORKSPACE is likewise pinned OFF here so these plan-surface
+            // journeys keep exercising the legacy stacked plan-detail page (the flag-off
+            // fallback); the canvas-first workspace (now default ON, ADR-0030) has its
+            // own harness, playwright.workspace.config.ts (test:e2e:workspace).
+            env: {
+              VITE_TSLD_EDITING: 'false',
+              VITE_PLAN_EDIT_LOCK: 'false',
+              VITE_CANVAS_WORKSPACE: 'false',
+            },
           },
         ],
       }),

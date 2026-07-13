@@ -148,6 +148,13 @@ jobs:
       - name: Web end-to-end tests (editing flags on)
         run: pnpm --filter @repo/web test:e2e:edit
 
+      # Flag-ON canvas-first workspace journey (playwright.workspace.config.ts) serving the app
+      # with VITE_CANVAS_WORKSPACE on (plus the editing flags + enforced pen), so the canvas-first
+      # plan surface — canvas + drag-resizable bottom activity panel + overflow menu — is exercised
+      # end to end (ADR-0030). Runs after the prior runs tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (canvas workspace flag on)
+        run: pnpm --filter @repo/web test:e2e:workspace
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -156,6 +163,7 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/web/playwright-report-edit/
+            apps/web/playwright-report-workspace/
           if-no-files-found: ignore
           retention-days: 7
 

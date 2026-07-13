@@ -8,6 +8,30 @@
 const LANE_HEIGHT = 26; // px per lane at 1× (matches the ADR's y = laneIndex × LANE_HEIGHT)
 const BAR_H = 16;
 
+// Label placement constants — mirror the production painter (render-model.ts) so the spike
+// exercises the same inside/beside/none decision + truncation the shipped Layer 3.6 does.
+const LABEL_MIN_PX_PER_DAY = 4;
+const LABEL_INSIDE_MIN_PX = 24;
+const LABEL_PAD_PX = 3;
+const LABEL_GAP_PX = 4;
+const LABEL_BESIDE_MIN_PX = 24;
+
+/** Binary-search truncation with an ellipsis — a faithful copy of render-model.ts's truncateToWidth. */
+function truncateToWidth(text, maxPx, measure, ellipsis = '…') {
+  if (maxPx <= 0 || text.length === 0) return '';
+  if (measure(text) <= maxPx) return text;
+  if (measure(ellipsis) > maxPx) return '';
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measure(text.slice(0, mid) + ellipsis) <= maxPx) lo = mid;
+    else hi = mid - 1;
+  }
+  const kept = text.slice(0, lo).trimEnd();
+  return kept ? kept + ellipsis : ellipsis;
+}
+
 /** Build a spatial bucket index by day so culling is O(visible), not O(count). */
 function indexByDay(activities) {
   const byStartDay = new Map();
@@ -23,6 +47,9 @@ export function createRenderer(canvas, scene) {
   const ctx = canvas.getContext('2d');
   const byDay = indexByDay(scene.activities);
   const activityById = new Map(scene.activities.map((a) => [a.id, a]));
+  // Module-scoped (per-renderer) label-width cache — mirrors paint.ts's createMeasureCache: a
+  // given string's width is measured via ctx.measureText at most once ever (font is fixed).
+  const labelWidths = new Map();
 
   // Viewport: pxPerDay (zoom) + pan origin in screen px. World→screen is affine.
   const view = { pxPerDay: 8, panX: 40, panY: 40 };
@@ -59,7 +86,6 @@ export function createRenderer(canvas, scene) {
     const lastDay = Math.ceil(dayAtX(cssW)) + 1;
     const firstLane = Math.max(0, Math.floor((0 - view.panY) / LANE_HEIGHT));
     const lastLane = Math.ceil((cssH - view.panY) / LANE_HEIGHT);
-    const showText = view.pxPerDay >= 6; // text only when bars are wide enough
 
     // Layer 1: time-axis gridlines (weekly), cheap.
     ctx.strokeStyle = 'rgba(120,120,140,0.15)';
@@ -107,10 +133,6 @@ export function createRenderer(canvas, scene) {
     ctx.stroke();
 
     // Layer 3: activity bars (colour by criticality — token-ish colours for the spike).
-    if (showText) {
-      ctx.font = '11px system-ui, sans-serif';
-      ctx.textBaseline = 'middle';
-    }
     for (const a of visible) {
       const x = worldX(a.startDay);
       const y = worldY(a.lane);
@@ -121,9 +143,51 @@ export function createRenderer(canvas, scene) {
           ? 'rgba(210,150,40,0.9)'
           : 'rgba(70,110,190,0.9)';
       ctx.fillRect(x, y, w, BAR_H);
-      if (showText && w > 18) {
-        ctx.fillStyle = 'white';
-        ctx.fillText(a.label, x + 3, y + BAR_H / 2);
+    }
+
+    // Layer 3.6: activity labels — a faithful copy of the shipped painter's Layer 3.6 (paint.ts):
+    // lane-bucket the visible set, x-sort each lane, compute the same-lane right-neighbour gap, pick
+    // inside/beside/none, then memoised measureText + binary-search truncation. This is the load-
+    // bearing text cost the ADR-0026 draw budget is judged on — measured here on realistic labels.
+    if (view.pxPerDay >= LABEL_MIN_PX_PER_DAY) {
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      const measure = (s) => {
+        const hit = labelWidths.get(s);
+        if (hit !== undefined) return hit;
+        const m = ctx.measureText(s).width;
+        labelWidths.set(s, m);
+        return m;
+      };
+      const lanes = new Map();
+      for (const a of visible) {
+        const rect = { x: worldX(a.startDay), w: Math.max(2, a.duration * view.pxPerDay) };
+        const row = lanes.get(a.lane);
+        if (row) row.push({ a, rect });
+        else lanes.set(a.lane, [{ a, rect }]);
+      }
+      for (const row of lanes.values()) {
+        row.sort((p, q) => p.rect.x - q.rect.x);
+        for (let i = 0; i < row.length; i += 1) {
+          const { a, rect } = row[i];
+          const nextLeftX = i + 1 < row.length ? row[i + 1].rect.x : Infinity;
+          const besideRoomPx = nextLeftX - (rect.x + rect.w) - LABEL_GAP_PX;
+          const cy = worldY(a.lane) + BAR_H / 2;
+          if (rect.w >= LABEL_INSIDE_MIN_PX) {
+            const text = truncateToWidth(a.label, rect.w - LABEL_PAD_PX * 2, measure);
+            if (!text) continue;
+            ctx.fillStyle = 'white';
+            ctx.fillText(text, rect.x + LABEL_PAD_PX, cy);
+          } else if (besideRoomPx >= LABEL_BESIDE_MIN_PX) {
+            const startX = rect.x + rect.w + LABEL_GAP_PX;
+            const maxPx = (nextLeftX === Infinity ? cssW : nextLeftX) - startX - LABEL_PAD_PX;
+            const text = truncateToWidth(a.label, maxPx, measure);
+            if (!text) continue;
+            ctx.fillStyle = 'rgba(230,232,238,0.95)';
+            ctx.fillText(text, startX, cy);
+          }
+        }
       }
     }
 

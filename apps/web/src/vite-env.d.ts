@@ -9,4 +9,6 @@ interface ImportMetaEnv {
   readonly VITE_NAV_TREE?: string;
   /** In-tree CRUD for the Project Explorer (ADR-0029 Phase 2). On by default; "false"/"0" disables it. */
   readonly VITE_NAV_TREE_CRUD?: string;
+  /** Canvas-first plan workspace (ADR-0030). "true"/"1" enables it; off by default. */
+  readonly VITE_CANVAS_WORKSPACE?: string;
 }

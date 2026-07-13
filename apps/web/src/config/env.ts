@@ -28,6 +28,17 @@ function flagDefaultOn(value: string | undefined): boolean {
 }
 
 /**
+ * Reads a boolean `VITE_` flag that defaults **OFF**: enabled only when the operator
+ * explicitly opts in with `"true"`/`"1"`. Used for in-progress features whose quality
+ * gates (a11y, e2e, perf) are not yet green — the feature ships dark on `main` and is
+ * turned on per-environment during rollout, then flipped default-on once cleared
+ * (how `VITE_NAV_TREE` / `VITE_TSLD_EDITING` each began).
+ */
+export function flagDefaultOff(value: string | undefined): boolean {
+  return value === 'true' || value === '1';
+}
+
+/**
  * On-canvas TSLD structural editing (M2). **ON by default** (2026-07-12) now that
  * every pre-enablement gate is green — see below. Set `VITE_TSLD_EDITING=false` to
  * fall back to the M1 read-only surface, byte-for-byte (rollback / opt-out).
@@ -87,3 +98,15 @@ export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
  * byte-for-byte (rollback / opt-out).
  */
 export const NAV_TREE_CRUD_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE_CRUD);
+
+/**
+ * Canvas-first plan workspace (ADR-0030, spec `docs/specs/canvas-first-plan-workspace.md`).
+ * **ON by default** now that the M5 quality gates are green — the a11y/ux/perf review findings
+ * are folded in, the flag-on Playwright journey (`e2e-workspace/workspace.spec.ts` via
+ * `pnpm --filter @repo/web test:e2e:workspace`) is wired into CI, and the 538 unit tests pass.
+ * When on, opening a plan renders the TSLD canvas as the primary workspace surface (filling the
+ * shell's workspace region) with the activity table as a draggable, collapsible bottom panel.
+ * Set `VITE_CANVAS_WORKSPACE=false` to fall back to the legacy long stacked plan-detail page,
+ * byte-for-byte (emergency rollback / opt-out).
+ */
+export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_WORKSPACE);

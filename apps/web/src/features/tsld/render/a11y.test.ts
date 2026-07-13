@@ -1,7 +1,14 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { announceChainStep, chainNeighbour, describeActivity, summarizeLogic } from './a11y';
+import {
+  activityBarLabel,
+  activityLabel,
+  announceChainStep,
+  chainNeighbour,
+  describeActivity,
+  summarizeLogic,
+} from './a11y';
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -33,6 +40,33 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   };
 }
 
+describe('activityLabel / activityBarLabel (shared identity)', () => {
+  it('prefixes the code when set, else uses the name alone', () => {
+    expect(activityLabel(activity({ code: 'A1020', name: 'Erect steel' }))).toBe(
+      'A1020 Erect steel',
+    );
+    expect(activityLabel(activity({ code: null, name: 'Erect steel' }))).toBe('Erect steel');
+  });
+
+  it('appends the working-day duration for a task, but not for a zero-duration milestone', () => {
+    expect(
+      activityBarLabel(activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 })),
+    ).toBe('A1020 Erect steel · 5d');
+    expect(
+      activityBarLabel(
+        activity({ code: 'M1', name: 'Handover', type: 'FINISH_MILESTONE', durationDays: 0 }),
+      ),
+    ).toBe('M1 Handover');
+  });
+
+  it('keeps the identity a leading substring of both the bar label and the accessible name (label-in-name)', () => {
+    const a = activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 });
+    const identity = activityLabel(a);
+    expect(activityBarLabel(a).startsWith(identity)).toBe(true);
+    expect(describeActivity(a).startsWith(identity)).toBe(true);
+  });
+});
+
 function edge(
   over: Partial<DependencySummary> & Pick<DependencySummary, 'predecessor' | 'successor'>,
 ): DependencySummary {
@@ -51,13 +85,22 @@ function edge(
 const ep = (id: string, name: string) => ({ id, code: null, name });
 
 describe('describeActivity (Tier 1)', () => {
-  it('names an uncomputed activity as not scheduled and nothing more', () => {
-    expect(describeActivity(activity({ earlyStart: null }))).toBe('Excavate, not yet scheduled');
+  it('names an uncomputed activity with its duration, as not scheduled, and nothing more', () => {
+    expect(describeActivity(activity({ earlyStart: null }))).toBe(
+      'Excavate, 3 working days, not yet scheduled',
+    );
   });
 
-  it('prefixes the code and gives a date range + lane (1-based)', () => {
+  it('prefixes the code and gives duration + a date range + lane (1-based)', () => {
     expect(describeActivity(activity({ code: 'A100', laneIndex: 2 }))).toBe(
-      'A100 Excavate, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float',
+      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float',
+    );
+  });
+
+  it('speaks the working-day duration (singular for one day) and omits it for a zero-duration milestone', () => {
+    expect(describeActivity(activity({ durationDays: 1 }))).toContain('Excavate, 1 working day,');
+    expect(describeActivity(activity({ type: 'FINISH_MILESTONE', durationDays: 0 }))).not.toContain(
+      'working day',
     );
   });
 
@@ -98,7 +141,7 @@ describe('describeActivity (Tier 1)', () => {
   it('states plain float, singular for one day, and omits float when uncomputed', () => {
     expect(describeActivity(activity({ totalFloat: 1 }))).toContain(', 1 day float');
     expect(describeActivity(activity({ totalFloat: null }))).toBe(
-      'Excavate, 01 Jan 2026 to 03 Jan 2026, lane 1',
+      'Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1',
     );
   });
 });

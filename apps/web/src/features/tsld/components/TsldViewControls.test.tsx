@@ -39,12 +39,13 @@ describe('TsldViewControls', () => {
     expect(onZoomStep.mock.calls[1]![0]).toBeLessThan(1); // out
   });
 
-  it('renders the five layer toggles as labelled checkboxes reflecting state', () => {
+  it('renders the six layer toggles as labelled checkboxes reflecting state', () => {
     renderControls({ toggles: { ...DEFAULT_VIEW_TOGGLES, nonWorking: false } });
-    for (const label of ['Day grid', 'Month grid', 'Year grid', 'Today', 'Non-working']) {
+    for (const label of ['Day grid', 'Month grid', 'Year grid', 'Today', 'Non-working', 'Labels']) {
       expect(screen.getByRole('checkbox', { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole('checkbox', { name: 'Day grid' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Labels' })).toBeChecked(); // default on
     expect(screen.getByRole('checkbox', { name: 'Non-working' })).not.toBeChecked();
   });
 

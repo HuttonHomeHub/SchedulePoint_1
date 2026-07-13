@@ -11,6 +11,7 @@ const ACTIVITIES: RenderActivity[] = [
     id: 'a1',
     type: 'TASK',
     laneIndex: 0,
+    label: 'a1',
     earlyStart: '2026-01-02',
     earlyFinish: '2026-01-05',
     isCritical: true,

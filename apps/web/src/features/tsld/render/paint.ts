@@ -1,10 +1,17 @@
+import { createMeasureCache } from './measure';
 import {
   activityRect,
   cull,
   daysBetween,
   dependencyPolyline,
   isMilestone,
+  labelPlacement,
   screenXOfDay,
+  truncateToWidth,
+  LABEL_FONT,
+  LABEL_GAP_PX,
+  LABEL_MIN_PX_PER_DAY,
+  LABEL_PAD_PX,
   MILESTONE_RADIUS,
   type Point,
   type Rect,
@@ -14,6 +21,12 @@ import {
   type Viewport,
 } from './render-model';
 import { calendarBoundaries } from './time-scale';
+
+/**
+ * Session-lived width memo for label text (font is fixed, so keyed by string alone). Held at
+ * module scope so it persists across frames and canvas instances — a given label measures once.
+ */
+const labelWidths = createMeasureCache();
 
 /** Below this px-per-day the per-day gridlines would merge into a solid block, so they're culled. */
 const DAY_GRID_MIN_PX = 6;
@@ -38,6 +51,12 @@ export interface TsldPalette {
   nonWorking: string;
   /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
   today: string;
+  // Label text colours (ADR-0026 D1). Inside-bar text uses the fill's paired *-foreground token so
+  // it contrasts against that fill in both themes; beside text uses the page foreground.
+  labelInside: string;
+  labelInsideCritical: string;
+  labelInsideNearCritical: string;
+  labelBeside: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -47,6 +66,8 @@ export interface TsldViewToggles {
   yearGrid: boolean;
   today: boolean;
   nonWorking: boolean;
+  /** On-canvas activity labels (`{code} {name} · {n}d`). */
+  labels: boolean;
 }
 
 /** All view layers on — the default before the user toggles anything. */
@@ -56,6 +77,7 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   yearGrid: true,
   today: true,
   nonWorking: true,
+  labels: true,
 };
 
 export interface TsldScene {
@@ -96,10 +118,15 @@ export type Ctx2D = Pick<
   | 'fill'
   | 'setTransform'
   | 'setLineDash'
+  | 'fillText'
+  | 'measureText'
 > & {
   fillStyle: string | CanvasGradient | CanvasPattern;
   strokeStyle: string | CanvasGradient | CanvasPattern;
   lineWidth: number;
+  font: string;
+  textBaseline: CanvasTextBaseline;
+  textAlign: CanvasTextAlign;
 };
 
 function barColour(activity: RenderActivity, palette: TsldPalette): string {
@@ -227,12 +254,22 @@ export function paintScene(
     ctx.lineWidth = 1;
   }
 
+  // Each visible activity's screen rect is computed once here and reused by the bar, label, and
+  // selection layers below, rather than recomputed per layer — each recompute re-parses the
+  // activity's ISO dates (two Date.parse calls), so a shared map keeps the per-frame draw within
+  // the ADR-0026 budget. Insertion follows `visibleIds`, so bar draw order (z-order) is unchanged.
+  const rects = new Map<string, Rect>();
+  for (const id of visibleIds) {
+    const activity = byId.get(id);
+    if (!activity) continue;
+    const rect = activityRect(activity, view, scene.dataDate);
+    if (rect) rects.set(id, rect);
+  }
+
   // Layer 3: activity bars + milestone diamonds. Critical/near-critical activities also
   // get a solid/dashed outline (a non-colour cue for criticality — WCAG 1.4.1).
-  for (const id of visibleIds) {
+  for (const [id, rect] of rects) {
     const activity = byId.get(id)!;
-    const rect = activityRect(activity, view, scene.dataDate);
-    if (!rect) continue;
     const dash = criticalDash(activity);
     ctx.fillStyle = barColour(activity, palette);
     if (isMilestone(activity.type)) {
@@ -276,8 +313,9 @@ export function paintScene(
   }
 
   // Layer 3.5: the TODAY marker — a dashed vertical in the destructive hue, above the bars and
-  // below the selection ring. Dashed (not colour alone) and named in the panel legend. Drawn only
-  // when the toggle is on, today maps to a day offset, and that column is on-screen.
+  // below the labels + selection ring. Dashed (not colour alone) and named in the panel legend.
+  // Drawn only when the toggle is on, today maps to a day offset, and that column is on-screen.
+  // Painted before the labels so label text stays legible over the dashed line, not under it.
   if (toggles.today && scene.todayOffset != null) {
     const x = Math.round(screenXOfDay(scene.todayOffset, view)) + 0.5;
     if (x >= 0 && x <= size.width) {
@@ -292,6 +330,60 @@ export function paintScene(
     }
   }
 
+  // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting
+  // (ADR-0026 D1). Gated by the toggle and a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
+  // a wide-enough task bar (truncated + ellipsised to fit, so no clip needed), beside a short bar or
+  // milestone when the same-lane neighbour leaves clear room, else suppressed. The visible set is
+  // bucketed by lane and x-sorted once (O(v log v)) so each label's right-neighbour is known without
+  // a per-label scan; widths are memoised (font fixed) so a label measures at most once ever.
+  if ((toggles.labels ?? true) && view.pxPerDay >= LABEL_MIN_PX_PER_DAY) {
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    const measure = (s: string): number => labelWidths.measure(s, (t) => ctx.measureText(t).width);
+
+    const lanes = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
+    for (const [id, rect] of rects) {
+      const activity = byId.get(id)!;
+      const row = lanes.get(activity.laneIndex);
+      if (row) row.push({ activity, rect });
+      else lanes.set(activity.laneIndex, [{ activity, rect }]);
+    }
+
+    for (const row of lanes.values()) {
+      row.sort((a, b) => a.rect.x - b.rect.x);
+      for (let i = 0; i < row.length; i += 1) {
+        const { activity, rect } = row[i]!;
+        const nextLeftX = i + 1 < row.length ? row[i + 1]!.rect.x : Infinity;
+        const besideRoomPx = nextLeftX - (rect.x + rect.w) - LABEL_GAP_PX;
+        const placement = labelPlacement({
+          barWidth: rect.w,
+          isMilestone: isMilestone(activity.type),
+          besideRoomPx,
+        });
+        if (placement === 'none') continue;
+        const cy = rect.y + rect.h / 2;
+        if (placement === 'inside') {
+          const text = truncateToWidth(activity.label, rect.w - LABEL_PAD_PX * 2, measure);
+          if (!text) continue;
+          ctx.fillStyle = activity.isCritical
+            ? palette.labelInsideCritical
+            : activity.isNearCritical
+              ? palette.labelInsideNearCritical
+              : palette.labelInside;
+          ctx.fillText(text, rect.x + LABEL_PAD_PX, cy);
+        } else {
+          const startX = rect.x + rect.w + LABEL_GAP_PX;
+          const maxPx = (nextLeftX === Infinity ? size.width : nextLeftX) - startX - LABEL_PAD_PX;
+          const text = truncateToWidth(activity.label, maxPx, measure);
+          if (!text) continue;
+          ctx.fillStyle = palette.labelBeside;
+          ctx.fillText(text, startX, cy);
+        }
+      }
+    }
+  }
+
   // Layer 4: the selection ring on the selected activity (if visible), plus — when editing
   // enables link-draw — a persistent edge-handle mark at each end of the selected bar. That mark
   // is the non-hover affordance advertising that the bar's ends are grabbable to draw a
@@ -299,8 +391,8 @@ export function paintScene(
   // keyboard-reachable via the listbox, so the cue isn't pointer-only either.
   if (scene.selectedId && visibleIds.has(scene.selectedId)) {
     const selected = byId.get(scene.selectedId);
-    const rect = selected && activityRect(selected, view, scene.dataDate);
-    if (rect) {
+    const rect = rects.get(scene.selectedId);
+    if (selected && rect) {
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 2;
       ctx.strokeRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);

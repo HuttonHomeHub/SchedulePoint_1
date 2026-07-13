@@ -138,6 +138,55 @@ secret manager — never baked into images or committed. See
   rates. **Rollback = redeploy the previous image tag** (plus any compensating
   migration).
 
+## Deploying a release to a self-hosted host (Docker Compose / Dockge)
+
+**Publishing an image is not the same as deploying it.** A release builds and
+pushes `web`/`api` images to GHCR automatically, but a running host keeps serving
+whatever image it already pulled until you tell it to pull the new one. A release
+that no host pulls simply never reaches users.
+
+The reference stack (`docker-compose.release.yml`, and the production Dockge
+stack) selects images by a tag from the environment:
+
+```yaml
+web:
+  image: ghcr.io/huttonhomehub/schedulepoint_1/web:${WEB_IMAGE_TAG:-latest}
+api:
+  image: ghcr.io/huttonhomehub/schedulepoint_1/api:${API_IMAGE_TAG:-latest}
+```
+
+Two ways to run it:
+
+- **Track `latest` (recommended for a single production line).** Set
+  `WEB_IMAGE_TAG=latest` and `API_IMAGE_TAG=latest` in the stack `.env` (or omit
+  them — the compose defaults to `latest`). Every release moves `web:latest` /
+  `api:latest` to the newest of _that_ image (the two version independently, so
+  each `latest` tracks its own app — ADR-0027). To ship a release you then just
+  **pull + recreate** (below); no tag editing.
+- **Pin explicit versions** (for staged/coordinated rollouts or easy rollback):
+  set `WEB_IMAGE_TAG=0.15.0`, `API_IMAGE_TAG=0.10.1`, etc. Bump the pin per
+  release. `latest` is ignored.
+
+**Redeploy steps (both approaches need the pull):**
+
+1. In **Dockge**, open the stack and click **Update** — it runs
+   `docker compose pull` then `docker compose up -d`. From the host CLI in the
+   stack directory the equivalent is:
+   ```bash
+   docker compose pull        # fetch the new image (or the moved :latest)
+   docker compose up -d        # recreate only the containers whose image changed
+   docker compose ps           # confirm versions + health
+   ```
+2. **A plain restart is a no-op.** `restart`/`up` without a `pull` re-uses the
+   cached image — so restarting a `latest` stack does **not** pick up a new
+   release. Always pull.
+3. The **API self-migrates** on startup (`prisma migrate deploy`, ADR-0018), so a
+   version bump applies pending DB migrations automatically before it serves.
+4. Hard-refresh the browser (Ctrl/Cmd-F5) to drop the cached old web bundle.
+
+**Rollback:** pin the previous version tag and Update (plus any compensating
+migration) — see _Runtime health & rollout_.
+
 ## Pre-release checklist
 
 - [ ] CI green on `main` (lint, typecheck, unit, e2e)

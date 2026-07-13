@@ -15,15 +15,47 @@ function days(n: number): string {
 }
 
 /**
+ * The activity's identity — `{code} {name}` when a code is set, else the name. This is the
+ * single source both the on-canvas bar label and the accessible name (`describeActivity`,
+ * `chainNeighbour`) build on, so the visible label and the spoken/AT name can never disagree
+ * on *which* activity a bar is (WCAG 2.5.3 label-in-name). Kept as a leading substring of both.
+ */
+export function activityLabel(a: { code: string | null; name: string }): string {
+  return a.code ? `${a.code} ${a.name}` : a.name;
+}
+
+/**
+ * The full on-canvas bar label: the {@link activityLabel} identity plus the working-day
+ * duration for a real task (`… · 5d`); a milestone (zero duration) carries the identity only.
+ * The duration is supplementary *visual* detail — the identity stays the shared,
+ * accessible-name-consistent prefix, so this remains label-in-name-safe.
+ */
+export function activityBarLabel(a: {
+  code: string | null;
+  name: string;
+  durationDays: number;
+}): string {
+  const identity = activityLabel(a);
+  return a.durationDays > 0 ? `${identity} · ${a.durationDays}d` : identity;
+}
+
+/**
  * **Tier 1** — the one lean sentence spoken on every navigation keystroke:
- * `{code name}, {start}–{finish}, lane N, {float|critical}`. Float is added where it informs:
- * `critical` already implies zero float (so just "critical"); `near-critical` states the days;
- * otherwise the plain float; float is omitted when uncomputed (null). An unscheduled activity
- * says so and nothing more.
+ * `{code name}, {n working days}, {start}–{finish}, lane N, {float|critical}`. The working-day
+ * duration is spoken because it is the same datum the on-canvas bar label shows (`· Nd`) and is
+ * *not* derivable from the spoken calendar dates — working days skip weekends/holidays (WCAG
+ * 1.1.1). Float is added where it informs: `critical` already implies zero float (so just
+ * "critical"); `near-critical` states the days; otherwise the plain float; float is omitted when
+ * uncomputed (null). A zero-duration milestone carries no duration clause; an unscheduled activity
+ * says its duration and that it is not scheduled, nothing more.
  */
 export function describeActivity(a: ActivitySummary): string {
-  const name = a.code ? `${a.code} ${a.name}` : a.name;
-  if (a.earlyStart === null) return `${name}, not yet scheduled`;
+  const name = activityLabel(a);
+  const duration =
+    a.durationDays > 0
+      ? `, ${a.durationDays} working ${a.durationDays === 1 ? 'day' : 'days'}`
+      : '';
+  if (a.earlyStart === null) return `${name}${duration}, not yet scheduled`;
   const dates =
     a.earlyFinish && a.earlyFinish !== a.earlyStart
       ? `${formatCalendarDate(a.earlyStart)} to ${formatCalendarDate(a.earlyFinish)}`
@@ -38,7 +70,7 @@ export function describeActivity(a: ActivitySummary): string {
   // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
   const constraint = formatConstraint(a);
   const constraintPart = constraint ? `, ${constraint.full}` : '';
-  return `${name}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}`;
+  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}`;
 }
 
 /**
@@ -82,8 +114,8 @@ export function chainNeighbour(
   if (edges.length === 0) return null;
   const chosen = edges.find((d) => d.isDriving) ?? edges[0]!;
   const endpoint = direction === 'pred' ? chosen.predecessor : chosen.successor;
-  // Prefix the code like Tier-1 describeActivity, so the neighbour reads consistently across tiers.
-  const name = endpoint.code ? `${endpoint.code} ${endpoint.name}` : endpoint.name;
+  // Same identity builder as Tier-1 describeActivity, so the neighbour reads consistently.
+  const name = activityLabel(endpoint);
   return { id: endpoint.id, name, driving: chosen.isDriving };
 }
 

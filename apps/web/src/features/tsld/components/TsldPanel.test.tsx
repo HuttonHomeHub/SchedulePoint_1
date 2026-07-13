@@ -50,6 +50,23 @@ describe('TsldPanel', () => {
     expect(screen.getByText(/No activities to diagram yet/)).toBeInTheDocument();
   });
 
+  it('fills its container height in fill mode (canvas-first workspace), boxed otherwise', () => {
+    const a = activity();
+    const { rerender } = render(
+      <TsldPanel activities={[a]} dependencies={NO_DEPS} dataDate="2026-01-01" />,
+    );
+    // Default: the fixed 480px box, not a fill.
+    expect(
+      screen.getByRole('region', { name: 'Time-scaled logic diagram' }).className,
+    ).not.toContain('h-full');
+
+    rerender(<TsldPanel activities={[a]} dependencies={NO_DEPS} dataDate="2026-01-01" fill />);
+    // fill: the section fills the height its workspace region gives it.
+    expect(screen.getByRole('region', { name: 'Time-scaled logic diagram' }).className).toContain(
+      'h-full',
+    );
+  });
+
   it('prompts to recalculate when the schedule is not yet computed', () => {
     const uncomputed = activity({ earlyStart: null, earlyFinish: null });
     render(<TsldPanel activities={[uncomputed]} dependencies={NO_DEPS} dataDate="2026-01-01" />);

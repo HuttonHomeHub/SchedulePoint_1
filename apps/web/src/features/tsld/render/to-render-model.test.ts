@@ -46,6 +46,13 @@ describe('toRenderActivities', () => {
     });
   });
 
+  it('pre-builds the on-canvas label (code + name + duration) at the seam', () => {
+    expect(
+      toRenderActivities([activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 })])[0]!
+        .label,
+    ).toBe('A1020 Erect steel · 5d');
+  });
+
   it('derives the constraint anchor from the kind — only when type AND date are both present', () => {
     // Start-anchored kind → 'start'.
     expect(

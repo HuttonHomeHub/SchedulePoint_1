@@ -6,6 +6,10 @@ import {
   classifyHit,
   clampPxPerDay,
   cull,
+  labelPlacement,
+  truncateToWidth,
+  LABEL_INSIDE_MIN_PX,
+  LABEL_BESIDE_MIN_PX,
   dayAtScreenX,
   dayCellRect,
   dayColumnAt,
@@ -37,6 +41,7 @@ function activity(overrides: Partial<RenderActivity> = {}): RenderActivity {
     id: 'a1',
     type: 'TASK',
     laneIndex: 0,
+    label: 'a1',
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-05',
     isCritical: false,
@@ -281,5 +286,61 @@ describe('fitToContent', () => {
     const narrow: Size = { width: 65, height: 400 };
     const view = fitToContent([activity()], narrow, DATA_DATE, 32);
     expect(view.pxPerDay).toBe(MIN_PX_PER_DAY);
+  });
+});
+
+describe('labelPlacement', () => {
+  it('places inside a wide-enough task bar', () => {
+    expect(
+      labelPlacement({ barWidth: LABEL_INSIDE_MIN_PX, isMilestone: false, besideRoomPx: 0 }),
+    ).toBe('inside');
+  });
+
+  it('falls back to beside when the bar is too narrow but the neighbour leaves room', () => {
+    expect(
+      labelPlacement({
+        barWidth: LABEL_INSIDE_MIN_PX - 1,
+        isMilestone: false,
+        besideRoomPx: LABEL_BESIDE_MIN_PX,
+      }),
+    ).toBe('beside');
+  });
+
+  it('never places a label inside a milestone (no width) — beside when there is room, else none', () => {
+    expect(labelPlacement({ barWidth: 14, isMilestone: true, besideRoomPx: 100 })).toBe('beside');
+    expect(labelPlacement({ barWidth: 14, isMilestone: true, besideRoomPx: 4 })).toBe('none');
+  });
+
+  it('suppresses when the bar is narrow and the neighbour is too close', () => {
+    expect(
+      labelPlacement({ barWidth: 10, isMilestone: false, besideRoomPx: LABEL_BESIDE_MIN_PX - 1 }),
+    ).toBe('none');
+  });
+});
+
+describe('truncateToWidth', () => {
+  // Deterministic stub: 5px per glyph, so widths are text length × 5.
+  const measure = (s: string): number => s.length * 5;
+
+  it('returns the full text when it fits', () => {
+    expect(truncateToWidth('Erect steel', 200, measure)).toBe('Erect steel');
+  });
+
+  it('returns an empty string when not even the ellipsis fits', () => {
+    expect(truncateToWidth('Erect steel', 3, measure)).toBe('');
+  });
+
+  it('trims to the longest prefix + ellipsis and drops a trailing space', () => {
+    // '…' is 5px; budget 40px fits 8 glyphs total → 7 chars + ellipsis. 'Erect s' → trim → 'Erect'.
+    const out = truncateToWidth('Erect steel', 40, measure);
+    expect(out.endsWith('…')).toBe(true);
+    expect(out.length).toBeLessThan('Erect steel'.length);
+    expect(measure(out)).toBeLessThanOrEqual(40);
+    expect(out).not.toContain(' …'); // trailing space trimmed before the ellipsis
+  });
+
+  it('handles empty text and non-positive width', () => {
+    expect(truncateToWidth('', 100, measure)).toBe('');
+    expect(truncateToWidth('x', 0, measure)).toBe('');
   });
 });
