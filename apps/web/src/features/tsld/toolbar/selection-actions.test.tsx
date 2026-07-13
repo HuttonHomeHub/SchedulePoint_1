@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { axe } from 'vitest-axe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { SelectionActionsBar, type SelectionActionContext } from './selection-actions';
 

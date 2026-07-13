@@ -2,7 +2,7 @@ import type { ActivitySummary, DependencySummary, DependencyType } from '@repo/t
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { TSLD_EDITING_ENABLED } from '../../../config/env';
-import type { EditIntent, EditMode } from '../interaction/gesture-machine';
+import type { EditIntent } from '../interaction/gesture-machine';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
   announceChainStep,
@@ -12,14 +12,15 @@ import {
 } from '../render/a11y';
 import { packLanes } from '../render/auto-pack';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
-import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from '../render/paint';
-import { daysBetween, type Point, type ZoomLevel } from '../render/render-model';
+import { daysBetween, type Point } from '../render/render-model';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges } from '../render/to-render-model';
+import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
-import { RULER_HEIGHT, TsldCanvas, type PendingGhost, type TsldCanvasHandle } from './TsldCanvas';
+import { RULER_HEIGHT, TsldCanvas, type PendingGhost } from './TsldCanvas';
+import { TsldLegend } from './TsldLegend';
 import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
@@ -28,50 +29,6 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-
-/**
- * The visible key for the diagram, mirroring the canvas exactly: each activity class is a
- * fill colour **paired with an outline style** (solid / dashed / none) so criticality is
- * never conveyed by colour alone (WCAG 1.4.1). Swatches read their colours from the same
- * design tokens the painter uses, so the key stays truthful across themes.
- */
-type LegendItem =
-  | { label: string; swatch: React.CSSProperties }
-  | { label: string; line: 'solid' | 'dashed' }
-  | { label: string; pin: true }
-  | { label: string; today: true };
-
-const LEGEND: ReadonlyArray<LegendItem> = [
-  {
-    label: 'Critical',
-    swatch: {
-      backgroundColor: 'var(--color-destructive)',
-      border: '1.5px solid var(--color-foreground)',
-    },
-  },
-  {
-    label: 'Near-critical',
-    swatch: {
-      backgroundColor: 'var(--color-warning)',
-      border: '1.5px dashed var(--color-foreground)',
-    },
-  },
-  { label: 'On schedule', swatch: { backgroundColor: 'var(--color-primary)' } },
-  // A set date constraint marks its pinned edge with a small pin, matching the canvas (a
-  // shape cue, not colour — WCAG 1.4.1).
-  { label: 'Constraint', pin: true },
-  // Non-working (weekend/holiday) columns are washed in the muted tone; today is a dashed
-  // vertical in the destructive tone. Both toggleable in the view controls.
-  {
-    label: 'Non-working',
-    swatch: { backgroundColor: 'var(--color-muted)', border: '1px solid var(--color-border)' },
-  },
-  { label: 'Today', today: true },
-  // Logic ties, matching the canvas: a driving link (heavier solid) sets its
-  // successor's start; a non-driving link (thin dashed) carries slack (M3).
-  { label: 'Driving link', line: 'solid' },
-  { label: 'Non-driving link', line: 'dashed' },
-];
 
 /** Fixed screen anchor for the keyboard (`n`) create popover — a stable top-left corner, since a
  * keyboard invocation has no pointer position (the drag/toolbar paths pass the real anchor). */
@@ -171,6 +128,14 @@ export interface TsldPanelProps {
    * container is `h-full` (with a min-height floor) so the diagram fills the workspace region —
    * used by the canvas-first `PlanWorkspace` (ADR-0030). Default (unset) keeps today's boxed look. */
   fill?: boolean;
+  /** **Chromeless** (ADR-0031): drop the panel's own hint line, editing/view toolbars, legend and
+   * shortcuts button, leaving just the canvas + parallel listbox + inline editing surfaces (create
+   * popover, conflict banner, auto-arrange + help dialogs). The canvas-first toolbar hosts those
+   * controls instead. Default (unset) keeps the self-contained chrome for the flag-off / legacy path. */
+  chromeless?: boolean;
+  /** Externally-owned canvas UI state (mode/toggles/zoom/fit/help), so the workspace toolbar and the
+   * canvas share one source of truth (ADR-0031). Absent → the panel owns it (unchanged behaviour). */
+  canvasUi?: TsldCanvasUiState;
 }
 
 interface PendingCreate {
@@ -210,13 +175,31 @@ export function TsldPanel({
   calendar = null,
   todayIso,
   fill = false,
+  chromeless = false,
+  canvasUi,
 }: TsldPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [fitSignal, setFitSignal] = useState(0);
-  const [mode, setMode] = useState<EditMode>('select');
+  // Canvas UI state (mode/toggles/zoom/fit/help): externally-owned when the workspace toolbar
+  // drives the canvas (ADR-0031), else owned here (flag-off / legacy — unchanged). The hook is
+  // always called (rules of hooks); its result is ignored when `canvasUi` is supplied.
+  const ownCanvasUi = useTsldCanvasUiState();
+  const {
+    mode,
+    setMode,
+    viewToggles,
+    toggleView,
+    zoomPreset,
+    setZoomPreset,
+    fitSignal,
+    requestFit,
+    autoArrangeSignal,
+    showHelp,
+    setShowHelp,
+    canvasControlRef,
+  } = canvasUi ?? ownCanvasUi;
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
   const [pendingReposition, setPendingReposition] = useState<PendingGhost | null>(null);
@@ -232,7 +215,6 @@ export function TsldPanel({
   const clearConflict = (): void => setConflict(null);
   const showConflict = (message: string, refreshable = true): void =>
     setConflict({ message, refreshable });
-  const [showHelp, setShowHelp] = useState(false);
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
   const addActivityRef = useRef<HTMLButtonElement>(null);
@@ -255,14 +237,9 @@ export function TsldPanel({
   const showDiagram = isCalculated && dataDate !== null;
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
-  // View controls (read-only or editing): the active zoom preset (reflected from the canvas's
-  // coarse stop-crossing callback) and the layer toggles, held in local state per the product
-  // owner's decision (not URL). The canvas is commanded imperatively via `canvasControlRef`.
-  const [zoomPreset, setZoomPreset] = useState<ZoomLevel>('week');
-  const [viewToggles, setViewToggles] = useState<TsldViewToggles>(DEFAULT_VIEW_TOGGLES);
-  const canvasControlRef = useRef<TsldCanvasHandle>(null);
-  const toggleView = (key: keyof TsldViewToggles): void =>
-    setViewToggles((v) => ({ ...v, [key]: !v[key] }));
+  // View controls (read-only or editing) — zoom preset (reflected from the canvas's coarse
+  // stop-crossing callback) + layer toggles + the imperative canvas handle — now live in the
+  // shared {@link useTsldCanvasUiState} above so the canvas-first toolbar can drive them (ADR-0031).
 
   // The non-working predicate + today marker offset, derived from the plan calendar / today. The
   // predicate is memoised (referentially stable) so it doesn't re-trigger the canvas scene effect
@@ -469,6 +446,18 @@ export function TsldPanel({
       });
   };
 
+  // When chromeless, the workspace toolbar triggers auto-arrange by bumping `autoArrangeSignal`
+  // (the on-canvas TsldToolbar button is gone). Open the same confirm flow on each bump; the ref
+  // skips the initial value so a fresh mount never auto-opens (ADR-0031).
+  const arrangeSignalSeen = useRef(autoArrangeSignal);
+  useEffect(() => {
+    if (autoArrangeSignal === arrangeSignalSeen.current) return;
+    arrangeSignalSeen.current = autoArrangeSignal;
+    openAutoArrange();
+    // openAutoArrange reads current activities at call time; re-run only on a new signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoArrangeSignal]);
+
   const onIntent = (intent: EditIntent, anchor: Point): void => {
     // Ignore a new gesture while a create popover or a reposition is already in flight.
     if (pendingCreate || pendingReposition) return;
@@ -603,43 +592,46 @@ export function TsldPanel({
       aria-label="Time-scaled logic diagram"
       className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'flex flex-col gap-2'}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground text-sm">
-          {!isCalculated
-            ? 'Recalculate the schedule to plot the activities on the timeline.'
-            : editingEnabled && mode === 'add-activity'
-              ? 'Drag on the timeline to add an activity. Esc cancels.'
-              : editingEnabled
-                ? 'Drag a bar to move it in time or to another lane, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
-                : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
-        </p>
-        {editingEnabled ? (
-          <TsldToolbar
-            mode={mode}
-            onModeChange={setMode}
-            {...(onAutoArrange ? { onAutoArrange: openAutoArrange } : {})}
-            addActivityRef={addActivityRef}
-          />
-        ) : null}
-        {showDiagram ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHelp(true)}
-            aria-haspopup="dialog"
-          >
-            Keyboard shortcuts
-          </Button>
-        ) : null}
-      </div>
+      {chromeless ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground text-sm">
+            {!isCalculated
+              ? 'Recalculate the schedule to plot the activities on the timeline.'
+              : editingEnabled && mode === 'add-activity'
+                ? 'Drag on the timeline to add an activity. Esc cancels.'
+                : editingEnabled
+                  ? 'Drag a bar to move it in time or to another lane, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
+                  : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
+          </p>
+          {editingEnabled ? (
+            <TsldToolbar
+              mode={mode}
+              onModeChange={setMode}
+              {...(onAutoArrange ? { onAutoArrange: openAutoArrange } : {})}
+              addActivityRef={addActivityRef}
+            />
+          ) : null}
+          {showDiagram ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowHelp(true)}
+              aria-haspopup="dialog"
+            >
+              Keyboard shortcuts
+            </Button>
+          ) : null}
+        </div>
+      )}
 
-      {/* Always-available view controls (read-only or editing): zoom, Fit, and layer toggles. */}
-      {showDiagram ? (
+      {/* Always-available view controls (read-only or editing): zoom, Fit, and layer toggles.
+          Hosted by the workspace toolbar instead when chromeless (ADR-0031). */}
+      {!chromeless && showDiagram ? (
         <TsldViewControls
           zoomPreset={zoomPreset}
           onZoomPreset={(level) => canvasControlRef.current?.zoomToPreset(level)}
           onZoomStep={(factor) => canvasControlRef.current?.stepZoom(factor)}
-          onFit={() => setFitSignal((n) => n + 1)}
+          onFit={requestFit}
           toggles={viewToggles}
           onToggle={toggleView}
         />
@@ -660,62 +652,7 @@ export function TsldPanel({
         />
       ) : null}
 
-      {showDiagram ? (
-        <ul
-          aria-label="Legend"
-          className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs"
-        >
-          {LEGEND.map((item) => (
-            <li key={item.label} className="flex items-center gap-1.5">
-              {'pin' in item ? (
-                <span
-                  aria-hidden="true"
-                  className="inline-flex h-3 w-5 items-center justify-center"
-                >
-                  <span
-                    style={{
-                      width: 0,
-                      height: 0,
-                      borderLeft: '4px solid transparent',
-                      borderRight: '4px solid transparent',
-                      borderTop: '5px solid var(--color-muted-foreground)',
-                    }}
-                  />
-                </span>
-              ) : 'today' in item ? (
-                <span aria-hidden="true" className="inline-flex h-3 w-5 justify-center">
-                  <span
-                    className="h-full"
-                    style={{
-                      borderLeftWidth: 1.5,
-                      borderLeftStyle: 'dashed',
-                      borderLeftColor: 'var(--color-destructive)',
-                    }}
-                  />
-                </span>
-              ) : 'line' in item ? (
-                <span aria-hidden="true" className="inline-flex h-3 w-5 items-center">
-                  <span
-                    className="w-full"
-                    style={{
-                      borderTopWidth: item.line === 'solid' ? 2 : 1.5,
-                      borderTopStyle: item.line,
-                      borderTopColor: 'var(--color-muted-foreground)',
-                    }}
-                  />
-                </span>
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="inline-block h-3 w-5 rounded-sm"
-                  style={item.swatch}
-                />
-              )}
-              {item.label}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {!chromeless && showDiagram ? <TsldLegend /> : null}
 
       <div
         className={

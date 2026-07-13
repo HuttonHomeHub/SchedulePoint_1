@@ -31,6 +31,10 @@ export interface TsldToolbarContext {
   isAddingActivity: boolean;
   /** Enter/leave add-activity mode (pen-gated at the toolbar level via `authoringEnabled`). */
   toggleAddActivity: () => void;
+  /** Whether the auto-arrange-lanes action is offered (editing + an `onAutoArrange` handler). */
+  canAutoArrange: boolean;
+  /** Open the auto-arrange confirm flow on the canvas (pen-gated). */
+  requestAutoArrange: () => void;
 
   // --- Object / plan actions (group 5) ------------------------------------------------------
   /** Whether the plan can be recalculated now (role + pen; from the model). */

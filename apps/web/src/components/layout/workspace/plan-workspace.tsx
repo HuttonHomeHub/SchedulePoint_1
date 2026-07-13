@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
 import { PlanActionsMenu } from './plan-actions-menu';
 import { PlanDialogs } from './plan-dialogs';
+import { ToolbarPlanWorkspace } from './plan-workspace-toolbar';
 import {
   CANVAS_MIN_HEIGHT,
   PANEL_MAX_HEIGHT,
@@ -14,6 +15,7 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { useMediaQuery } from '@/components/ui/use-media-query';
+import { CANVAS_TOOLBAR_ENABLED } from '@/config/env';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
@@ -43,7 +45,25 @@ type WorkspacePane = 'diagram' | 'activities';
  * height with a table). Both panes stay mounted and are toggled with `hidden`, so switching
  * preserves the canvas viewport and the table scroll.
  */
+/**
+ * The plan workspace surface. `VITE_CANVAS_TOOLBAR` (ADR-0031) selects the canvas-maximal,
+ * toolbar-hosted {@link ToolbarPlanWorkspace}; flag-off keeps the ADR-0030 layout below, byte-for-byte.
+ */
 export function PlanWorkspace({
+  model,
+  plan,
+}: {
+  model: PlanWorkspaceModel;
+  plan: LoadedPlan;
+}): React.ReactElement {
+  return CANVAS_TOOLBAR_ENABLED ? (
+    <ToolbarPlanWorkspace model={model} plan={plan} />
+  ) : (
+    <Adr0030PlanWorkspace model={model} plan={plan} />
+  );
+}
+
+function Adr0030PlanWorkspace({
   model,
   plan,
 }: {

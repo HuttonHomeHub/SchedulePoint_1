@@ -1,4 +1,5 @@
 import {
+  AlignVerticalSpaceAround,
   CalendarDays,
   Info,
   Keyboard,
@@ -162,6 +163,18 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       disabledReason: () => 'Start editing to add activities',
       isActive: (ctx) => ctx.isAddingActivity,
       onActivate: (ctx) => ctx.toggleAddActivity(),
+    },
+    {
+      id: 'auto-arrange',
+      group: 'tools',
+      tier: 3,
+      order: 1,
+      label: 'Auto-arrange lanes',
+      icon: <AlignVerticalSpaceAround className="size-4" />,
+      penGated: true,
+      disabledReason: () => 'Start editing to auto-arrange',
+      isVisible: (ctx) => ctx.canAutoArrange,
+      onActivate: (ctx) => ctx.requestAutoArrange(),
     },
 
     // --- 5 · Object / plan actions ------------------------------------------------------------

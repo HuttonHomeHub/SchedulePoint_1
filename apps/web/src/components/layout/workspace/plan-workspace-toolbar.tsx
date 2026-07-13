@@ -1,0 +1,229 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
+import { PlanDialogs } from './plan-dialogs';
+import {
+  CANVAS_MIN_HEIGHT,
+  PANEL_MAX_HEIGHT,
+  PANEL_MIN_OPEN,
+  useActivityPanelPrefs,
+} from './use-activity-panel-prefs';
+import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
+
+import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
+import { Dialog } from '@/components/ui/dialog';
+import { PanelResizer } from '@/components/ui/panel-resizer';
+import { Toolbar } from '@/components/ui/toolbar';
+import { BaselinesPanel } from '@/features/baselines';
+import { CompactPenStatus, PenReadOnlyNote } from '@/features/plan-lock';
+import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
+import { TsldPanel } from '@/features/tsld';
+import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
+import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
+import {
+  useTsldToolbarContext,
+  type PlanDialogKind,
+} from '@/features/tsld/toolbar/use-tsld-toolbar-context';
+import { formatCalendarDate } from '@/lib/format-date';
+
+/**
+ * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — the `VITE_CANVAS_TOOLBAR`
+ * evolution of {@link PlanWorkspace}. It collapses the ADR-0030 chrome bands into a **slim header**
+ * (breadcrumb + plan identity + compact pen status) plus **one registry-driven `<Toolbar>` row**,
+ * over a **full-height chromeless canvas** with the activities panel **collapsed by default** — so
+ * the canvas gets the room. Every former band (view toggles, legend, summary, plan actions,
+ * shortcuts) is one click away in the toolbar's popovers / `⋯` overflow. Flag-off keeps the
+ * ADR-0030 layout untouched.
+ */
+export function ToolbarPlanWorkspace({
+  model,
+  plan,
+}: {
+  model: PlanWorkspaceModel;
+  plan: LoadedPlan;
+}): React.ReactElement {
+  // One shared canvas UI state drives both the chromeless canvas and the toolbar (ADR-0031).
+  const canvasUi = useTsldCanvasUiState();
+  const [dialog, setDialog] = useState<PlanDialogKind | null>(null);
+  const ctx = useTsldToolbarContext({ model, plan, canvasUi, openDialog: setDialog });
+  const items = useMemo(() => buildTsldToolbarItems(), []);
+
+  // Activities panel: collapsed by default on this surface (drag up / Expand to reveal). Collapse
+  // is session-local here; the resizer still persists the height via the shared prefs.
+  const panel = useActivityPanelPrefs();
+  const [collapsed, setCollapsed] = useState(true);
+  const [interacted, setInteracted] = useState(false);
+  const collapse = useCallback(() => {
+    setInteracted(true);
+    setCollapsed(true);
+  }, []);
+  const expand = useCallback(() => {
+    setInteracted(true);
+    setCollapsed(false);
+  }, []);
+
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState(0);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setBodyHeight(el.getBoundingClientRect().height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const effectiveMax = Math.min(
+    PANEL_MAX_HEIGHT,
+    Math.max(PANEL_MIN_OPEN, bodyHeight - CANVAS_MIN_HEIGHT),
+  );
+  const panelHeight = Math.min(panel.size, effectiveMax);
+  const pointerToSize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      (bodyRef.current?.getBoundingClientRect().bottom ?? 0) - event.clientY,
+    [],
+  );
+  const onResize = useCallback(
+    (next: number) => panel.setSize(Math.min(next, effectiveMax)),
+    [panel, effectiveMax],
+  );
+
+  const crumbs: Crumb[] = [
+    { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug: model.orgSlug } },
+    {
+      label: model.client.data?.name ?? 'Client',
+      to: '/orgs/$orgSlug/clients/$clientId',
+      params: { orgSlug: model.orgSlug, clientId: model.project.data?.clientId ?? '' },
+    },
+    {
+      label: model.project.data?.name ?? 'Project',
+      to: '/orgs/$orgSlug/projects/$projectId',
+      params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+    },
+  ];
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Slim header: two lines — breadcrumb, then identity + compact pen status. */}
+      <header className="border-border flex flex-col gap-1.5 border-b px-4 py-2">
+        <Breadcrumbs items={crumbs} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <h1 className="truncate text-lg font-semibold tracking-tight">{plan.name}</h1>
+            <span className="text-muted-foreground shrink-0 text-sm">
+              {PLAN_STATUS_LABELS[plan.status]}
+            </span>
+          </div>
+          <CompactPenStatus
+            pen={model.pen}
+            {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+          />
+        </div>
+      </header>
+
+      {/* The single command surface (ADR-0031). Authoring group flips as a set on the pen. */}
+      <div className="border-border border-b px-2 py-1">
+        <Toolbar
+          items={items}
+          context={ctx}
+          label="Plan toolbar"
+          authoringEnabled={model.canEditSchedule}
+        />
+      </div>
+
+      {model.penReadOnly ? (
+        <div className="px-4 pt-2">
+          <PenReadOnlyNote />
+        </div>
+      ) : null}
+
+      <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Full-height chromeless canvas — the toolbar hosts its controls. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
+          <TsldPanel
+            key={model.planId}
+            fill
+            chromeless
+            canvasUi={canvasUi}
+            activities={model.activities.data ?? []}
+            dependencies={model.dependencies.data ?? []}
+            dataDate={plan.plannedStart}
+            canEdit={model.canEditSchedule}
+            onCreate={model.onTsldCreate}
+            onReposition={model.onTsldReposition}
+            onLink={model.onTsldLink}
+            onAutoArrange={model.onTsldAutoArrange}
+            onOpenLogic={model.setLogicActivity}
+            onRefresh={model.onTsldRefresh}
+            calendar={model.tsldCalendar}
+            todayIso={model.todayIso}
+          />
+        </div>
+
+        {collapsed ? (
+          <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
+        ) : (
+          <>
+            <PanelResizer
+              orientation="horizontal"
+              size={panelHeight}
+              min={PANEL_MIN_OPEN}
+              max={effectiveMax}
+              label="Resize activities panel"
+              onResize={onResize}
+              pointerToSize={pointerToSize}
+              className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+            />
+            <div style={{ height: panelHeight }} className="shrink-0">
+              <ActivityBottomPanel
+                model={model}
+                onCollapse={collapse}
+                focusCollapseOnMount={interacted}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Plan-chrome dialogs the toolbar overflow opens. */}
+      <Dialog open={dialog === 'details'} onClose={() => setDialog(null)} title="Plan details">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+          <dt className="text-muted-foreground">Status</dt>
+          <dd>{PLAN_STATUS_LABELS[plan.status]}</dd>
+          <dt className="text-muted-foreground">Planned start</dt>
+          <dd>{formatCalendarDate(plan.plannedStart)}</dd>
+          {plan.description ? (
+            <>
+              <dt className="text-muted-foreground">Description</dt>
+              <dd className="whitespace-pre-wrap">{plan.description}</dd>
+            </>
+          ) : null}
+        </dl>
+      </Dialog>
+      <Dialog
+        open={dialog === 'baselines'}
+        onClose={() => setDialog(null)}
+        title="Baselines"
+        description="Frozen snapshots of the schedule to compare against. The active baseline drives the variance shown in the activities table."
+        size="lg"
+      >
+        <BaselinesPanel orgSlug={model.orgSlug} planId={model.planId} canManage={model.canWrite} />
+      </Dialog>
+      <Dialog
+        open={dialog === 'calendar'}
+        onClose={() => setDialog(null)}
+        title="Working-day calendar"
+        description="The calendar that sets which days are working days (and holidays) for this plan's schedule."
+      >
+        <PlanCalendarPicker
+          orgSlug={model.orgSlug}
+          plan={plan}
+          calendars={model.calendars.data ?? []}
+          calendarsLoading={model.calendars.isPending}
+          canEdit={model.canWrite}
+        />
+      </Dialog>
+
+      {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
+      <PlanDialogs model={model} plan={plan} />
+    </div>
+  );
+}
