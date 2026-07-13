@@ -1,5 +1,101 @@
 # @repo/web
 
+## 0.16.0
+
+### Minor Changes
+
+- [#52](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/52) [`e4e6a3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4e6a3b8c6b750d52e3695fc199dafe44a298b3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): make the canvas-first plan workspace the default plan surface (ADR-0030)
+
+  Flip `VITE_CANVAS_WORKSPACE` **on by default** now that the M5 quality gates are green
+  (a11y/ux/perf review findings folded in, the flag-on Playwright journey wired into CI, 538
+  unit tests passing). Opening a plan now renders the TSLD canvas as the primary workspace
+  surface with the activity table as a draggable, collapsible bottom panel, replacing the legacy
+  long stacked plan-detail page. The old page remains as the flag-off fallback — set
+  `VITE_CANVAS_WORKSPACE=false` for an emergency rollback. The flag-off Playwright suites are
+  pinned to `VITE_CANVAS_WORKSPACE=false` so the legacy fallback stays covered too.
+
+- [#52](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/52) [`e4e6a3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4e6a3b8c6b750d52e3695fc199dafe44a298b3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first plan workspace — M1 scaffold behind `VITE_CANVAS_WORKSPACE` (ADR-0030)
+
+  Introduces the layout skeleton for opening a plan directly in the app-shell workspace with
+  the TSLD canvas as the primary surface (ADR-0030, spec `docs/specs/canvas-first-plan-workspace.md`).
+  **Off by default** behind the new `VITE_CANVAS_WORKSPACE` flag — flag-off keeps today's stacked
+  plan-detail page byte-for-byte, so this ships dark.
+
+  With the flag on, the plan surface becomes a `PlanWorkspace`: a slim header (plan identity,
+  Recalculate, the edit-lock pen banner and schedule summary, with baselines + calendar behind a
+  disclosure), the TSLD canvas filling the workspace height (`TsldPanel` gains a `fill` mode), and
+  the activity table docked as a bottom panel (static height in M1; a draggable, collapsible
+  resizer lands in M2). The route-composed orchestration (queries, gating, TSLD edit callbacks) is
+  extracted into a shared `usePlanWorkspaceModel` hook so both the legacy page and the workspace
+  render identical behaviour — the flag only chooses the layout.
+
+- [#52](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/52) [`e4e6a3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4e6a3b8c6b750d52e3695fc199dafe44a298b3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first plan workspace — M2 resizable/collapsible activity panel (ADR-0030)
+
+  With `VITE_CANVAS_WORKSPACE` on, the bottom activity panel can now be **dragged up/down to
+  resize** and **collapsed to a handle** (pointer + keyboard), with its height and collapsed state
+  persisted. The panel's height is clamped against the live workspace height so the canvas always
+  keeps a minimum, and the canvas no longer **jumps/re-fits** while the panel is dragged (the TSLD
+  canvas preserves its viewport across a surface resize; explicit Fit and a data-date change still
+  re-frame).
+
+  Per the product-owner steer, this extracts a single **orientation-aware resizable-panel
+  primitive** — `PanelResizer` (a WAI-ARIA window splitter) + `useResizablePanelPrefs` (clamp +
+  persist + reset-on-corrupt) — and **refactors the Project Explorer rail onto it**, so the rail
+  (vertical splitter → width) and the activity panel (horizontal splitter → height) share one
+  implementation. No behaviour change to the rail. Frontend only; still off by default.
+
+- [#52](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/52) [`e4e6a3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4e6a3b8c6b750d52e3695fc199dafe44a298b3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first plan workspace — M3 header overflow menu (ADR-0030)
+
+  Consolidate the plan workspace header's lower-frequency chrome — **Edit plan, Baselines,
+  Calendar** — into a single "⋯" **overflow menu** (the shared WAI-ARIA APG `Menu` primitive),
+  replacing M1's interim `<details>` disclosure. Baselines and Calendar now open in the shared
+  modal `Dialog`; Edit plan is shown to writers only. The header stays slim and canvas-first:
+  plan identity + Recalculate + the pen banner + the schedule summary. Still off by default
+  behind `VITE_CANVAS_WORKSPACE`; frontend only.
+
+- [#52](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/52) [`e4e6a3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4e6a3b8c6b750d52e3695fc199dafe44a298b3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): canvas-first plan workspace — M4 responsive single-pane (ADR-0030)
+
+  Make the canvas-first workspace usable on narrow viewports. At/above `md` it keeps the vertical
+  split (canvas + drag-resizable activity panel); **below `md` it switches to a Diagram / Activities
+  segmented view toggle** showing one pane at a time — the canvas can't usefully share a phone's
+  height with a table. Both panes stay mounted and are toggled with `hidden`, so switching preserves
+  the canvas viewport and the table scroll. Adds a small reusable `useMediaQuery` hook (structure-
+  changing queries only; pure styling stays on Tailwind `md:`/`lg:`). Still off by default behind
+  `VITE_CANVAS_WORKSPACE`; frontend only.
+
+- [#52](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/52) [`e4e6a3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4e6a3b8c6b750d52e3695fc199dafe44a298b3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): canvas-first plan workspace — M5 review fixes (a11y/perf/ux) (ADR-0030)
+
+  Fold in the blocking findings from the accessibility, UX and performance reviews of the canvas-
+  first workspace (still off by default behind `VITE_CANVAS_WORKSPACE`; frontend only):
+
+  - **a11y** — the mobile Diagram/Activities view toggle is now a proper `radiogroup` of two
+    `radio`s with roving `tabIndex`, arrow/Home/End keys and a 44px target; on collapse/expand the
+    panel moves focus onto the reciprocal control instead of dropping to `<body>`; menu items get a
+    visible `focus:` ring (WCAG 1.4.11); a single consolidated pen read-only note replaces the two
+    duplicated notes.
+  - **perf** — `formatCalendarDate`/`formatTimestamp` reuse module-scope `Intl.DateTimeFormat`
+    singletons instead of constructing a formatter per call; the activity listbox descriptions are
+    memoized; the panel resizer coalesces pointer moves onto a single `requestAnimationFrame`.
+  - **ux** — a "Plan details…" read surface (available to every role) exposes the status/planned-
+    start/description the slim header omits; the loading state renders a workspace-shaped skeleton so
+    the load→loaded transition doesn't jump; header breadcrumbs restored.
+
+- [#52](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/52) [`e4e6a3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4e6a3b8c6b750d52e3695fc199dafe44a298b3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): on-canvas activity labels for the TSLD
+
+  The Time-Scaled Logic Diagram now draws each activity's label
+  (`{code} {name} · {n}d`) directly on the canvas, so a planner can read which
+  activity each bar is without selecting it — realising the on-canvas text
+  ADR-0026 D1 budgeted for. Labels place adaptively (inside a wide-enough bar,
+  truncated + ellipsised; beside a short bar or milestone when the lane leaves
+  room; suppressed when zoomed too far out), are culled to the visible viewport,
+  and are drawn in the Canvas 2D painter (no DOM overlay). A sixth "Labels" view
+  toggle (default on) hides them for a denser diagram.
+
+  The visible label and the accessible name build on one shared identity builder
+  so they can't disagree (WCAG 2.5.3); inside text uses each fill's paired
+  `*-foreground` token for contrast in both themes. Re-verified within the
+  ADR-0026 draw budget (p95 3.9ms at 2,000 activities). No backend change.
+
 ## 0.15.0
 
 ### Minor Changes
