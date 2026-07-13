@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
+import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import {
   CANVAS_MIN_HEIGHT,
@@ -12,14 +13,12 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
-import { Dialog } from '@/components/ui/dialog';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
-import { BaselinesPanel } from '@/features/baselines';
 import { CompactPenStatus, PenReadOnlyNote } from '@/features/plan-lock';
-import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
+import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { TsldPanel } from '@/features/tsld';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
@@ -27,7 +26,6 @@ import {
   useTsldToolbarContext,
   type PlanDialogKind,
 } from '@/features/tsld/toolbar/use-tsld-toolbar-context';
-import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
@@ -235,44 +233,13 @@ export function ToolbarPlanWorkspace({
         )}
       </div>
 
-      {/* Plan-chrome dialogs the toolbar overflow opens. */}
-      <Dialog open={dialog === 'details'} onClose={() => setDialog(null)} title="Plan details">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Status</dt>
-          <dd>{PLAN_STATUS_LABELS[plan.status]}</dd>
-          <dt className="text-muted-foreground">Planned start</dt>
-          <dd>{formatCalendarDate(plan.plannedStart)}</dd>
-          {plan.description ? (
-            <>
-              <dt className="text-muted-foreground">Description</dt>
-              <dd className="whitespace-pre-wrap">{plan.description}</dd>
-            </>
-          ) : null}
-        </dl>
-      </Dialog>
-      <Dialog
-        open={dialog === 'baselines'}
+      {/* Plan-chrome dialogs the toolbar overflow opens (shared with the ADR-0030 header menu). */}
+      <PlanChromeDialogs
+        dialog={dialog}
         onClose={() => setDialog(null)}
-        title="Baselines"
-        description="Frozen snapshots of the schedule to compare against. The active baseline drives the variance shown in the activities table."
-        size="lg"
-      >
-        <BaselinesPanel orgSlug={model.orgSlug} planId={model.planId} canManage={model.canWrite} />
-      </Dialog>
-      <Dialog
-        open={dialog === 'calendar'}
-        onClose={() => setDialog(null)}
-        title="Working-day calendar"
-        description="The calendar that sets which days are working days (and holidays) for this plan's schedule."
-      >
-        <PlanCalendarPicker
-          orgSlug={model.orgSlug}
-          plan={plan}
-          calendars={model.calendars.data ?? []}
-          calendarsLoading={model.calendars.isPending}
-          canEdit={model.canWrite}
-        />
-      </Dialog>
+        model={model}
+        plan={plan}
+      />
 
       {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
       <PlanDialogs model={model} plan={plan} />

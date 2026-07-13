@@ -38,7 +38,10 @@ export function ActivityBottomPanel({
 
   return (
     <section
-      aria-label="Activities"
+      // "Activities panel", not "Activities": the inner DataTable's scroll region is already named
+      // "Activities", so a bare match would announce two identical landmarks (axe landmark-unique,
+      // TECH_DEBT #30h). The visible <h2> stays "Activities".
+      aria-label="Activities panel"
       className="border-border flex h-full min-h-0 flex-col border-t"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
