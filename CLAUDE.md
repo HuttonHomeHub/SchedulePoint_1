@@ -296,6 +296,14 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
     graceful peer request→grace→take-over hand-off (Org-Admin immediate override),
     serialised by the existing plan advisory lock; the third concurrency layer above
     optimistic 409 and the advisory lock. Unblocks `VITE_TSLD_EDITING`.
+- **ADR-0029** — Persistent app-shell & hierarchy navigator: evolve `_authed` into
+  a mounted-once shell (top bar + Project Explorer rail + single workspace region),
+  URL-derived selection, and a hand-rolled ARIA `tree` with lazy-load + virtualization.
+- **ADR-0030** — Canvas-first plan workspace: the TSLD canvas as the primary
+  workspace surface with a shared orientation-aware resizable-panel primitive
+  (rail + activity panel), a header overflow menu, a responsive single-pane toggle,
+  and a viewport-preserve amendment to ADR-0026's canvas resize; refines ADR-0029's
+  single workspace region (behind `VITE_CANVAS_WORKSPACE`).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
