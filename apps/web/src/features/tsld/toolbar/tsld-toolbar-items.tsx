@@ -1,5 +1,6 @@
 import {
   AlignVerticalSpaceAround,
+  CalendarClock,
   CalendarDays,
   Info,
   Keyboard,
@@ -17,9 +18,12 @@ import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
+import type { ToolbarItemRenderApi } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { formatCalendarDate } from '@/lib/format-date';
 
 const ZOOM_LABELS: Record<string, string> = {
   day: 'Day',
@@ -38,6 +42,49 @@ const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }>
   { key: 'nonWorking', label: 'Non-working' },
   { key: 'labels', label: 'Labels' },
 ];
+
+/**
+ * The inline **timeline start-date** control (ADR-0032 M2) — the plan's `plannedStart`, the canvas
+ * day-zero origin. A writer edits it via a native date input (pen-gated: `setPlannedStart` is null
+ * for read-only viewers, who instead see the date as a focusable static read-out so it still holds a
+ * roving-tabindex stop). Changing it re-anchors the timeline. Both variants spread `itemProps` on
+ * their single focusable control per the toolbar contract.
+ */
+function TimelineStartControl({
+  ctx,
+  itemProps,
+}: {
+  ctx: TsldToolbarContext;
+  itemProps: ToolbarItemRenderApi['itemProps'];
+}): React.ReactElement {
+  const display = ctx.plannedStart ? formatCalendarDate(ctx.plannedStart) : 'Not set';
+  if (!ctx.setPlannedStart) {
+    return (
+      <span
+        {...itemProps}
+        aria-label={`Timeline start: ${display}`}
+        className={toolbarControlVariants({ tone: 'info' })}
+      >
+        <CalendarClock aria-hidden="true" className="mr-1.5 size-4" />
+        {display}
+      </span>
+    );
+  }
+  const setPlannedStart = ctx.setPlannedStart;
+  return (
+    <label className={toolbarControlVariants({ tone: 'control' })}>
+      <CalendarClock aria-hidden="true" className="size-4" />
+      <span className="sr-only">Timeline start</span>
+      <input
+        {...itemProps}
+        type="date"
+        value={ctx.plannedStart ?? ''}
+        onChange={(event) => setPlannedStart(event.target.value)}
+        className="bg-transparent text-sm outline-none"
+      />
+    </label>
+  );
+}
 
 /** The checkbox body of the `View▾` popover — the display toggles, driven off the context. */
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
@@ -74,6 +121,16 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate -----------------------------------------------------------------
+    // Inline timeline start-date (ADR-0032 M2) — leftmost in the Frame group; canvas-first only.
+    {
+      id: 'timeline-start',
+      group: 'frame',
+      tier: 1,
+      order: -1,
+      label: 'Timeline start',
+      isVisible: () => CANVAS_AUTHORING_ENABLED,
+      render: (ctx, api) => <TimelineStartControl ctx={ctx} itemProps={api.itemProps} />,
+    },
     ...ZOOM_LEVELS.map((level, i): ToolbarItem<TsldToolbarContext> => ({
       id: `scale-${level}`,
       group: 'frame',

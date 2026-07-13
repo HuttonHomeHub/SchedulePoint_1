@@ -10,6 +10,7 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
+import { useSetPlanStart } from '@/features/plans';
 import { ScheduleSummaryStrip } from '@/features/schedule';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -68,6 +69,7 @@ export function useTsldToolbarContext({
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
   const recalc = useRecalculateCommand(orgSlug, planId);
+  const setStart = useSetPlanStart(orgSlug);
 
   const activities = model.activities.data ?? [];
   const hasDiagram =
@@ -109,6 +111,24 @@ export function useTsldToolbarContext({
       setZoomPreset: (level) => canvasControlRef.current?.zoomToPreset(level),
       stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
       fit: requestFit,
+      // Inline timeline start (ADR-0032 M2): read + (pen-gated) write `plannedStart`. Read-only
+      // viewers get a null setter so the control renders the date as static text (Critical Q3).
+      plannedStart: plan.plannedStart,
+      setPlannedStart: canEditSchedule
+        ? (iso: string) =>
+            setStart.mutate(
+              { planId, version: plan.version, plannedStart: iso || null },
+              {
+                onSuccess: () =>
+                  announce(
+                    iso
+                      ? `Timeline start set to ${formatCalendarDate(iso)}.`
+                      : 'Timeline start cleared.',
+                  ),
+                onError: () => announce('Couldn’t update the timeline start. Please try again.'),
+              },
+            )
+        : null,
 
       // Lens
       viewToggles,
@@ -147,6 +167,10 @@ export function useTsldToolbarContext({
       zoomPreset,
       canvasControlRef,
       requestFit,
+      plan.plannedStart,
+      plan.version,
+      setStart,
+      planId,
       viewToggles,
       toggleView,
       mode,

@@ -28,6 +28,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     setZoomPreset: spies.setZoomPreset,
     stepZoom: spies.stepZoom,
     fit: spies.fit,
+    plannedStart: '2026-01-01',
+    setPlannedStart: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: spies.toggleView,
     isAddingActivity: false,

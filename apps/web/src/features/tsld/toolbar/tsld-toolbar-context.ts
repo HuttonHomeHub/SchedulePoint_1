@@ -21,6 +21,12 @@ export interface TsldToolbarContext {
   setZoomPreset: (level: ZoomLevel) => void;
   stepZoom: (factor: number) => void;
   fit: () => void;
+  /** The plan's timeline start (`plannedStart`) — the canvas day-zero origin; null when unset. The
+   * inline start-date control reads it (ADR-0032 M2). */
+  plannedStart: string | null;
+  /** Set the timeline start (targeted PATCH). Pen-gated (`canEditSchedule`, Critical Q3): `null`
+   * when the viewer can't edit the schedule, so the control renders the date as static text. */
+  setPlannedStart: ((iso: string) => void) | null;
 
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
