@@ -26,12 +26,13 @@ test('a planner works a plan in the canvas-first workspace', async ({ page }) =>
   await onboard(page, stamp);
   await openNewPlan(page);
 
-  // The plan opens as the workspace, not the legacy page: the canvas is the primary surface and
-  // the activities table is a docked bottom section (its own labelled region), side by side.
-  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  // The plan opens as the workspace, not the legacy page: the canvas is the primary surface with
+  // the activities table docked as its own labelled bottom region below it. On a fresh plan the
+  // canvas shows its empty-state prompt (the labelled diagram region only appears once activities
+  // exist), so assert that + the bottom panel to prove the canvas-first layout mounted.
   const activities = page.getByRole('region', { name: 'Activities' });
-  await expect(diagram).toBeVisible();
   await expect(activities).toBeVisible();
+  await expect(page.getByText(/No activities to diagram yet/i)).toBeVisible();
 
   // The slim header omits status/description; the overflow "Plan details" exposes them to any role.
   await openPlanActions(page);
@@ -48,6 +49,11 @@ test('a planner works a plan in the canvas-first workspace', async ({ page }) =>
   await addActivity(page, 'Pour slab');
   await page.getByRole('button', { name: 'Recalculate' }).click();
   await expect(page.getByText('Project finish')).toBeVisible();
+
+  // With activities present the canvas now plots them: the labelled diagram region appears with a
+  // focusable option per activity (the parallel a11y layer).
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  await expect(diagram).toBeVisible();
 
   // Collapse the activities panel from its header control; focus lands on the expand control of
   // the collapsed bar (never stranded on the removed panel — the whole point of the focus hand-off).
