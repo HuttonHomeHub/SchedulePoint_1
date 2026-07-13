@@ -110,3 +110,16 @@ export const NAV_TREE_CRUD_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE
  * byte-for-byte (emergency rollback / opt-out).
  */
 export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_WORKSPACE);
+
+/**
+ * Canvas-maximal chrome reclaim + the future-proof Toolbar architecture (ADR-0031, spec
+ * `docs/specs/canvas-toolbar-architecture.md`). **OFF by default** while it's built behind the
+ * flag: when on, the plan workspace collapses today's stacked chrome bands into a slim header +
+ * a single registry-driven `Toolbar` row over a full-height canvas (activities panel collapsed by
+ * default), moving secondary info into `View`/`Summary`/`Legend`/`Filter` popovers and the `⋯`
+ * overflow. Layers on top of {@link CANVAS_WORKSPACE_ENABLED} (ADR-0030) — meaningful only when
+ * the canvas-first workspace is on. Flag-off keeps the ADR-0030 workspace exactly as shipped, so
+ * `main` stays releasable during the rollout. Set `VITE_CANVAS_TOOLBAR=true` to preview; it flips
+ * default-on once the a11y/e2e/perf gates are green (M5).
+ */
+export const CANVAS_TOOLBAR_ENABLED = flagDefaultOff(import.meta.env.VITE_CANVAS_TOOLBAR);

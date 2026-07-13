@@ -11,4 +11,6 @@ interface ImportMetaEnv {
   readonly VITE_NAV_TREE_CRUD?: string;
   /** Canvas-first plan workspace (ADR-0030). "true"/"1" enables it; off by default. */
   readonly VITE_CANVAS_WORKSPACE?: string;
+  /** Canvas-maximal chrome reclaim + toolbar architecture (ADR-0031). "true"/"1" enables it; off by default. */
+  readonly VITE_CANVAS_TOOLBAR?: string;
 }
