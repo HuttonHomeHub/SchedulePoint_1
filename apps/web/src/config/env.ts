@@ -127,15 +127,16 @@ export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
 export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TOOLBAR);
 
 /**
- * Canvas-first plan authoring (ADR-0032, spec `docs/specs/canvas-first-authoring.md`). **OFF by
- * default** while it's built behind the flag: when on, a planner builds a plan directly on the TSLD
- * canvas — a blank draw-ready canvas on a new plan (anchored to `plannedStart ?? today`), an inline
- * start-date control, unified auto-recalculation after any structural edit, on-canvas activity types
- * (Task + Start/Finish milestone), and a two-click Link tool replacing the edge-drag gesture. Layers
- * on {@link CANVAS_TOOLBAR_ENABLED} (ADR-0031) — the Add/Link/start-date controls live in that
- * toolbar. Frontend only; no backend/DB/API change. Flag-off keeps today's behaviour byte-for-byte
- * (table-first authoring, manual recalc). Set `VITE_CANVAS_AUTHORING=true` to preview; it flips
- * default-on per milestone once each slice's a11y/e2e/perf gates are green.
+ * Canvas-first plan authoring (ADR-0032, spec `docs/specs/canvas-first-authoring.md`). **ON by
+ * default** now that M1–M5 shipped and their quality gates are green — the a11y/ux/component/perf
+ * review findings are folded in, the flag-on Playwright journey (`e2e-authoring/authoring.spec.ts`
+ * via `pnpm --filter @repo/web test:e2e:authoring`) is wired into CI, and the unit suite passes.
+ * When on, a planner builds a plan directly on the TSLD canvas — a blank draw-ready canvas on a new
+ * plan (anchored to `plannedStart ?? today`), an inline start-date control, unified auto-recalculation
+ * after any structural edit, on-canvas activity types (Task + Start/Finish milestone), and a two-click
+ * Link tool replacing the edge-drag gesture. Frontend only; no backend/DB/API change. Set
+ * `VITE_CANVAS_AUTHORING=false` to fall back to table-first authoring + manual recalc + edge-drag
+ * linking, byte-for-byte (emergency rollback / opt-out).
  *
  * **Precondition enforced, not just documented:** authoring is meaningful ONLY inside the
  * toolbar-hosted, canvas-first workspace — the Add/Link/start-date controls live in that `Toolbar`,
@@ -145,6 +146,6 @@ export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_
  * either host off turns authoring off too (and edge-drag returns, byte-for-byte).
  */
 export const CANVAS_AUTHORING_ENABLED =
-  flagDefaultOff(import.meta.env.VITE_CANVAS_AUTHORING) &&
+  flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING) &&
   CANVAS_TOOLBAR_ENABLED &&
   CANVAS_WORKSPACE_ENABLED;

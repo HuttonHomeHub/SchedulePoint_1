@@ -40,6 +40,9 @@ const h = vi.hoisted(() => ({
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_TOOLBAR_ENABLED: false,
+  // These seams assert the flag-off reposition→inline-recalc path; authoring (now default-on) routes
+  // recalc through the coalescer instead, so pin it off here (the coalescer has its own unit tests).
+  CANVAS_AUTHORING_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({

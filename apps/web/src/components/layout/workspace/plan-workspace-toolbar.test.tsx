@@ -18,6 +18,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_WORKSPACE_ENABLED: true,
   CANVAS_TOOLBAR_ENABLED: true,
+  // This suite asserts the ADR-0031 toolbar *layout*, not authoring; pin the (now default-on)
+  // authoring flag off so the plain Add toggle + inert empty canvas are the subject. Authoring is
+  // covered by the tsld-toolbar-authoring / TsldPanel.authoring suites + the flag-on e2e journey.
+  CANVAS_AUTHORING_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({

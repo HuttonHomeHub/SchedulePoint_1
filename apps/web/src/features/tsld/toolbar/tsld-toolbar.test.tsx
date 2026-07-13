@@ -8,6 +8,14 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
+// This suite covers the **flag-off** registry (plain Add toggle, no timeline-start / Link tool). Now
+// that `VITE_CANVAS_AUTHORING` defaults on, pin it off here; the flag-on registry is covered by
+// `tsld-toolbar-authoring.test.tsx`.
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  CANVAS_AUTHORING_ENABLED: false,
+}));
+
 const spies = {
   setZoomPreset: vi.fn(),
   stepZoom: vi.fn(),

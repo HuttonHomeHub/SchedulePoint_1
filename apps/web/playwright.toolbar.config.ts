@@ -51,10 +51,14 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Canvas-first workspace + the toolbar layer ON, plus the editing surface + pen.
+            // Canvas-first workspace + the toolbar layer ON, plus the editing surface + pen. Authoring
+            // (ADR-0032) now defaults ON and layers on these flags, but this suite asserts the ADR-0031
+            // toolbar layout (plain Add toggle, edge-drag), so pin it OFF — authoring has its own
+            // flag-on suite (playwright.authoring.config.ts).
             env: {
               VITE_CANVAS_WORKSPACE: 'true',
               VITE_CANVAS_TOOLBAR: 'true',
+              VITE_CANVAS_AUTHORING: 'false',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
             },
