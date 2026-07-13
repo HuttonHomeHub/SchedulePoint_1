@@ -9,7 +9,13 @@ export { RecalculateButton } from './components/RecalculateButton';
 export {
   useScheduleSummary,
   useRecalculate,
+  useRecalculateCommand,
   scheduleKeys,
   scheduleSummaryQueryOptions,
   PLAN_START_REQUIRED,
 } from './api/use-schedule';
+export {
+  usePlanAutoRecalc,
+  AUTO_RECALC_DEBOUNCE_MS,
+  type PlanAutoRecalc,
+} from './api/use-plan-auto-recalc';
