@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -173,5 +173,32 @@ describe('PlanWorkspace (flag on) — canvas-first layout', () => {
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('false');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('false');
     expect(screen.queryByTestId('create-activity')).not.toBeInTheDocument();
+  });
+});
+
+describe('PlanWorkspace — bottom panel resize/collapse (M2)', () => {
+  it('exposes a horizontal splitter to resize the activity panel', () => {
+    renderScreen();
+    const separator = screen.getByRole('separator', { name: 'Resize activities panel' });
+    expect(separator).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(separator).toHaveAttribute('tabindex', '0');
+  });
+
+  it('collapses to a handle and expands again, swapping the table for the collapsed bar', () => {
+    renderScreen();
+    // Expanded by default: the table + resizer are present.
+    expect(screen.getByTestId('activities-table')).toBeInTheDocument();
+    expect(screen.getByRole('separator', { name: 'Resize activities panel' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+    // Collapsed: the table + resizer are gone; only the expand handle remains.
+    expect(screen.queryByTestId('activities-table')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('separator', { name: 'Resize activities panel' }),
+    ).not.toBeInTheDocument();
+    const expand = screen.getByRole('button', { name: 'Expand activities panel' });
+
+    fireEvent.click(expand);
+    expect(screen.getByTestId('activities-table')).toBeInTheDocument();
   });
 });

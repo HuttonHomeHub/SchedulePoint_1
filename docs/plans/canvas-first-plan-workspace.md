@@ -136,6 +136,11 @@ does not "jump" during a resize.
   triggers; only remove the resize-driven re-fit.
 - **Testing:** unit/interaction test: after a simulated resize the viewport (pan/pxPerDay)
   is unchanged; `fitSignal` still re-fits; first mount fits. Assert draw within budget.
+  **Note (M2):** the jsdom test setup stubs `ResizeObserver` as a **no-op** (its callback
+  never fires), so a resize cannot be driven in a unit test — the no-jump-on-drag assertion
+  moves to the **M5 Playwright** interaction gate (drag the panel; assert the canvas viewport
+  is stable). The code change (drop the resize-driven `fittedRef=false`; keep mount + `fitSignal`
+  fits) is landed and covered by review + the existing mount-fit tests.
 - **Development steps:**
   1. In `measure()`, on size change: resize backing store + set dirty, but do **not** set
      `fittedRef.current = false`.

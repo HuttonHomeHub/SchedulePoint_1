@@ -1,28 +1,35 @@
-import { ActivityBottomPanel } from './activity-bottom-panel';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
 import { PlanDialogs } from './plan-dialogs';
+import {
+  CANVAS_MIN_HEIGHT,
+  PANEL_MAX_HEIGHT,
+  PANEL_MIN_OPEN,
+  useActivityPanelPrefs,
+} from './use-activity-panel-prefs';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Button } from '@/components/ui/button';
+import { PanelResizer } from '@/components/ui/panel-resizer';
 import { BaselinesPanel } from '@/features/baselines';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
 
-/** M1 static height for the bottom activity panel. M2 replaces this with the resizable splitter. */
-const PANEL_STATIC_HEIGHT = 'h-72';
-
 /**
  * The canvas-first plan workspace (ADR-0030): opened in the app-shell's workspace region
  * next to the Project Explorer, with the **TSLD canvas as the primary surface** filling the
- * available height and the **activity table docked as a bottom panel**. Replaces the legacy
- * long-scrolling plan-detail page (kept as the flag-off fallback, `VITE_CANVAS_WORKSPACE`).
+ * available height and the **activity table docked as a drag-resizable, collapsible bottom
+ * panel**. Replaces the legacy long-scrolling plan-detail page (kept as the flag-off fallback,
+ * `VITE_CANVAS_WORKSPACE`).
  *
- * **M1** lands the layout skeleton: a slim header (plan identity + Recalculate + pen banner +
- * summary, with baselines/calendar behind a disclosure), the full-height canvas, and a
- * *static-height* bottom activity panel. Later milestones make the panel drag-resizable/
- * collapsible (M2), consolidate the header chrome into an overflow menu (M3), and add the
- * responsive single-pane toggle (M4).
+ * The bottom panel is resized via the shared {@link PanelResizer} (the same splitter primitive
+ * the rail uses) with its height persisted ({@link useActivityPanelPrefs}); the panel's height
+ * is clamped at render against the live workspace height so the canvas always keeps at least
+ * {@link CANVAS_MIN_HEIGHT}. **M3** consolidates the header chrome into an overflow menu; **M4**
+ * adds the responsive single-pane toggle.
  */
 export function PlanWorkspace({
   model,
@@ -31,36 +38,83 @@ export function PlanWorkspace({
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
 }): React.ReactElement {
+  const panel = useActivityPanelPrefs();
+  // Measure the workspace body (below the header) so the panel's max reserves the canvas.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState(0);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setBodyHeight(el.getBoundingClientRect().height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Effective max height = whatever leaves the canvas its minimum, bounded by the static cap.
+  const effectiveMax = Math.min(
+    PANEL_MAX_HEIGHT,
+    Math.max(PANEL_MIN_OPEN, bodyHeight - CANVAS_MIN_HEIGHT),
+  );
+  const panelHeight = Math.min(panel.size, effectiveMax);
+
+  // A bottom-docked panel grows as the pointer moves up: height = the body's bottom edge − Y.
+  const pointerToSize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      (bodyRef.current?.getBoundingClientRect().bottom ?? 0) - event.clientY,
+    [],
+  );
+  const onResize = useCallback(
+    (next: number) => panel.setSize(Math.min(next, effectiveMax)),
+    [panel, effectiveMax],
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PlanHeaderBar model={model} plan={plan} />
 
-      {/* Canvas region — fills the height left by the header and the bottom panel. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-3 pb-2">
-        {model.penReadOnly ? <PenReadOnlyNote /> : null}
-        <TsldPanel
-          // Remount per plan so selection/viewport state never leaks across a same-route
-          // plan→plan navigation (mirrors the legacy layout).
-          key={model.planId}
-          fill
-          activities={model.activities.data ?? []}
-          dependencies={model.dependencies.data ?? []}
-          dataDate={plan.plannedStart}
-          canEdit={model.canEditSchedule}
-          onCreate={model.onTsldCreate}
-          onReposition={model.onTsldReposition}
-          onLink={model.onTsldLink}
-          onAutoArrange={model.onTsldAutoArrange}
-          onOpenLogic={model.setLogicActivity}
-          onRefresh={model.onTsldRefresh}
-          calendar={model.tsldCalendar}
-          todayIso={model.todayIso}
-        />
-      </div>
+      <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Canvas region — fills the height left by the panel. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-3 pb-2">
+          {model.penReadOnly ? <PenReadOnlyNote /> : null}
+          <TsldPanel
+            // Remount per plan so selection/viewport state never leaks across a same-route
+            // plan→plan navigation (mirrors the legacy layout).
+            key={model.planId}
+            fill
+            activities={model.activities.data ?? []}
+            dependencies={model.dependencies.data ?? []}
+            dataDate={plan.plannedStart}
+            canEdit={model.canEditSchedule}
+            onCreate={model.onTsldCreate}
+            onReposition={model.onTsldReposition}
+            onLink={model.onTsldLink}
+            onAutoArrange={model.onTsldAutoArrange}
+            onOpenLogic={model.setLogicActivity}
+            onRefresh={model.onTsldRefresh}
+            calendar={model.tsldCalendar}
+            todayIso={model.todayIso}
+          />
+        </div>
 
-      {/* Bottom activity panel — static height in M1; M2 makes it drag-resizable/collapsible. */}
-      <div className={`${PANEL_STATIC_HEIGHT} shrink-0`}>
-        <ActivityBottomPanel model={model} />
+        {panel.collapsed ? (
+          <ActivityPanelCollapsedBar onExpand={panel.expand} />
+        ) : (
+          <>
+            <PanelResizer
+              orientation="horizontal"
+              size={panelHeight}
+              min={PANEL_MIN_OPEN}
+              max={effectiveMax}
+              label="Resize activities panel"
+              onResize={onResize}
+              pointerToSize={pointerToSize}
+              className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+            />
+            <div style={{ height: panelHeight }} className="shrink-0">
+              <ActivityBottomPanel model={model} onCollapse={panel.collapse} />
+            </div>
+          </>
+        )}
       </div>
 
       <PlanDialogs model={model} plan={plan} />

@@ -410,7 +410,11 @@ export function TsldCanvas({
           c.style.width = `${size.width}px`;
           c.style.height = `${size.height}px`;
         }
-        fittedRef.current = false; // re-frame content when the surface resizes
+        // Preserve the current viewport (pan + pxPerDay) across a surface resize — only the
+        // backing store grows/shrinks and we repaint. Re-fitting here made the diagram "jump"
+        // on every tick of a container resize (e.g. dragging the activity panel up/down —
+        // ADR-0030). Explicit Fit and a dataDate change still re-frame via `fitSignal` (above);
+        // mount fits once because `fittedRef` starts false.
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
       }

@@ -58,7 +58,7 @@ describe('useRailPrefs', () => {
   });
 
   it('clamps an out-of-range persisted width on read', () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ collapsed: false, width: 5000 }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ collapsed: false, size: 5000 }));
     const { result } = renderHook(() => useRailPrefs());
     expect(result.current.width).toBe(RAIL_MAX_WIDTH);
   });

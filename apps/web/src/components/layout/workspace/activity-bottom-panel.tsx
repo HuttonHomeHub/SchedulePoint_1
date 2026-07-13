@@ -1,5 +1,8 @@
+import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
+
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { Button } from '@/components/ui/button';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { BaselineVarianceSummary } from '@/features/baselines';
 import { PenReadOnlyNote } from '@/features/plan-lock';
@@ -7,15 +10,21 @@ import { PenReadOnlyNote } from '@/features/plan-lock';
 /**
  * The activity list docked at the bottom of the canvas-first {@link PlanWorkspace}
  * (ADR-0030). It fills the height its container gives it and scrolls internally, so the
- * canvas above keeps the rest. **M1: static height.** M2 wraps it in a draggable,
- * collapsible resizer (the shared resizable-panel primitive) — this component stays the
- * panel *content* either way.
+ * canvas above keeps the rest. The workspace owns the drag-resizer (the shared
+ * resizable-panel primitive) and the panel's height; this component is the panel *content*,
+ * with a collapse control in its header.
  *
  * Reuses the same `ActivitiesTable` (computed columns, variance, progress editor, CRUD,
  * virtualization) the stacked page used, driven off the shared model so behaviour is
  * identical to the legacy layout.
  */
-export function ActivityBottomPanel({ model }: { model: PlanWorkspaceModel }): React.ReactElement {
+export function ActivityBottomPanel({
+  model,
+  onCollapse,
+}: {
+  model: PlanWorkspaceModel;
+  onCollapse: () => void;
+}): React.ReactElement {
   return (
     <section
       aria-label="Activities"
@@ -28,9 +37,19 @@ export function ActivityBottomPanel({ model }: { model: PlanWorkspaceModel }): R
             <BaselineVarianceSummary summary={model.variance.data.summary} />
           ) : null}
         </div>
-        {model.canEditSchedule ? (
-          <CreateActivityButton orgSlug={model.orgSlug} planId={model.planId} />
-        ) : null}
+        <div className="flex items-center gap-2">
+          {model.canEditSchedule ? (
+            <CreateActivityButton orgSlug={model.orgSlug} planId={model.planId} />
+          ) : null}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Collapse activities panel"
+            onClick={onCollapse}
+          >
+            <PanelBottomClose aria-hidden="true" className="size-4" />
+          </Button>
+        </div>
       </div>
       {model.penReadOnly ? (
         <div className="px-4 pb-2">
@@ -50,5 +69,25 @@ export function ActivityBottomPanel({ model }: { model: PlanWorkspaceModel }): R
         />
       </div>
     </section>
+  );
+}
+
+/**
+ * The collapsed activity panel: a slim bar pinned to the bottom with a single control to
+ * reopen it — so the activity list is never more than one click away (mirrors the collapsed
+ * rail's affordance).
+ */
+export function ActivityPanelCollapsedBar({
+  onExpand,
+}: {
+  onExpand: () => void;
+}): React.ReactElement {
+  return (
+    <div className="border-border flex h-9 shrink-0 items-center justify-between gap-2 border-t px-4">
+      <span className="text-sm font-medium">Activities</span>
+      <Button variant="ghost" size="icon" aria-label="Expand activities panel" onClick={onExpand}>
+        <PanelBottomOpen aria-hidden="true" className="size-4" />
+      </Button>
+    </div>
   );
 }
