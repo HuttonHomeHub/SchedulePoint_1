@@ -49,13 +49,58 @@ describe('gesture-machine: create-by-drag', () => {
     const dragged: GestureState = { kind: 'creating', originDay: 6, laneIndex: 1, currentDay: 2 };
     const r = reduce(dragged, { type: 'pointerUp' }, ctx('add-activity'));
     expect(r.state).toEqual(IDLE);
-    expect(r.intent).toEqual({ kind: 'create', startDay: 2, endDay: 6, laneIndex: 1 });
+    expect(r.intent).toEqual({
+      kind: 'create',
+      type: 'TASK',
+      startDay: 2,
+      endDay: 6,
+      laneIndex: 1,
+    });
   });
 
   it('commits a 1-day task for a click (origin === current)', () => {
     const clicked: GestureState = { kind: 'creating', originDay: 3, laneIndex: 0, currentDay: 3 };
     const r = reduce(clicked, { type: 'pointerUp' }, ctx('add-activity'));
-    expect(r.intent).toEqual({ kind: 'create', startDay: 3, endDay: 3, laneIndex: 0 });
+    expect(r.intent).toEqual({
+      kind: 'create',
+      type: 'TASK',
+      startDay: 3,
+      endDay: 3,
+      laneIndex: 0,
+    });
+  });
+
+  it('carries the ctx createType onto the intent (ADR-0032 M4)', () => {
+    const clicked: GestureState = { kind: 'creating', originDay: 3, laneIndex: 0, currentDay: 3 };
+    const r = reduce(
+      clicked,
+      { type: 'pointerUp' },
+      {
+        ...ctx('add-activity'),
+        createType: 'START_MILESTONE',
+      },
+    );
+    expect(r.intent).toMatchObject({ kind: 'create', type: 'START_MILESTONE' });
+  });
+
+  it('collapses a milestone draw to a zero-length point at the origin day', () => {
+    // A milestone has no duration — a drag from day 6 back to day 2 still pins a single point (day 6).
+    const dragged: GestureState = { kind: 'creating', originDay: 6, laneIndex: 1, currentDay: 2 };
+    const r = reduce(
+      dragged,
+      { type: 'pointerUp' },
+      {
+        ...ctx('add-activity'),
+        createType: 'FINISH_MILESTONE',
+      },
+    );
+    expect(r.intent).toEqual({
+      kind: 'create',
+      type: 'FINISH_MILESTONE',
+      startDay: 6,
+      endDay: 6,
+      laneIndex: 1,
+    });
   });
 
   it('cancels an in-flight create on escape with no intent', () => {

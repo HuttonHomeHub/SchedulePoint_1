@@ -1,4 +1,4 @@
-import type { DependencyType } from '@repo/types';
+import type { ActivityType, DependencyType } from '@repo/types';
 
 import {
   dayColumnAt,
@@ -38,6 +38,18 @@ export interface GestureCtx {
   view: Viewport;
   /** The plan's data date (day 0), for world↔screen day mapping. */
   dataDate: string;
+  /**
+   * The activity type the `add-activity` tool draws (ADR-0032 M4). `TASK` (the default) is drawn by
+   * dragging a span; a milestone (`START_MILESTONE`/`FINISH_MILESTONE`) is zero-duration, so its
+   * create collapses to a single day at the press point regardless of drag. Absent ⇒ `TASK` (the
+   * flag-off / pre-M4 behaviour, byte-for-byte).
+   */
+  createType?: ActivityType;
+}
+
+/** True for the zero-duration milestone types, which place as a point rather than a span. */
+function isMilestoneType(type: ActivityType): boolean {
+  return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
 }
 
 /** The keyboard modifiers held during a link drag, which pick the dependency type. */
@@ -82,7 +94,9 @@ export type GestureEvent =
 export type EditIntent =
   | {
       kind: 'create';
-      /** Inclusive whole-day span about the data date; `startDay === endDay` is a 1-day task. */
+      /** The activity type to create (ADR-0032 M4). Milestones collapse to a point (`startDay === endDay`). */
+      type: ActivityType;
+      /** Inclusive whole-day span about the data date; `startDay === endDay` is a 1-day task / a milestone. */
       startDay: number;
       endDay: number;
       laneIndex: number;
@@ -253,11 +267,18 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
     }
     case 'pointerUp': {
       if (state.kind === 'creating') {
-        const startDay = Math.min(state.originDay, state.currentDay);
-        const endDay = Math.max(state.originDay, state.currentDay);
+        const type = ctx.createType ?? 'TASK';
+        // A milestone is a point: collapse to the press day, ignoring any drag span (a drag in
+        // milestone mode is treated as a click — ADR-0032 M4). A task spans the dragged days.
+        const startDay = isMilestoneType(type)
+          ? state.originDay
+          : Math.min(state.originDay, state.currentDay);
+        const endDay = isMilestoneType(type)
+          ? state.originDay
+          : Math.max(state.originDay, state.currentDay);
         return {
           state: IDLE,
-          intent: { kind: 'create', startDay, endDay, laneIndex: state.laneIndex },
+          intent: { kind: 'create', type, startDay, endDay, laneIndex: state.laneIndex },
         };
       }
       if (state.kind === 'repositioning') {

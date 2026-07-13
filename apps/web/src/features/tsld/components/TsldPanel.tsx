@@ -1,4 +1,4 @@
-import type { ActivitySummary, DependencySummary, DependencyType } from '@repo/types';
+import type { ActivitySummary, ActivityType, DependencySummary, DependencyType } from '@repo/types';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { CANVAS_AUTHORING_ENABLED, TSLD_EDITING_ENABLED } from '../../../config/env';
@@ -37,6 +37,8 @@ const KEYBOARD_CREATE_ANCHOR: Point = { x: 24, y: 24 };
 /** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
 export interface TsldCreateInput {
   name: string;
+  /** The activity type to create (ADR-0032 M4); TASK unless the add tool selected a milestone. */
+  type: ActivityType;
   startDay: number;
   endDay: number;
   laneIndex: number;
@@ -139,6 +141,7 @@ export interface TsldPanelProps {
 }
 
 interface PendingCreate {
+  type: ActivityType;
   startDay: number;
   endDay: number;
   laneIndex: number;
@@ -205,6 +208,7 @@ export function TsldPanel({
     showHelp,
     setShowHelp,
     canvasControlRef,
+    createType,
   } = canvasUi ?? ownCanvasUi;
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
@@ -371,6 +375,7 @@ export function TsldPanel({
       clearConflict();
       createReturnFocusRef.current = listboxRef.current; // return focus to the list, not the toolbar
       setPendingCreate({
+        type: createType ?? 'TASK',
         startDay,
         endDay: startDay,
         laneIndex: current ? current.laneIndex : 0,
@@ -566,11 +571,11 @@ export function TsldPanel({
 
   const commitCreate = (name: string): void => {
     if (!pendingCreate || !onCreate) return;
-    const { startDay, endDay, laneIndex } = pendingCreate;
+    const { type, startDay, endDay, laneIndex } = pendingCreate;
     setPendingCreate((p) => (p ? { ...p, saving: true, error: null } : p));
     // onCreate resolves iff the row persisted → close and never re-POST. A recalc conflict is
     // non-fatal (row kept) and shown in the banner; only a create failure keeps the popover.
-    void onCreate({ name, startDay, endDay, laneIndex })
+    void onCreate({ name, type, startDay, endDay, laneIndex })
       .then((outcome) => {
         closeCreate();
         announce(`Activity “${name}” added.`);
@@ -685,6 +690,7 @@ export function TsldPanel({
               fitSignal={fitSignal}
               editing={editingEnabled}
               mode={mode}
+              createType={createType}
               canReposition={onReposition !== undefined}
               canLink={onLink !== undefined}
               onIntent={onIntent}

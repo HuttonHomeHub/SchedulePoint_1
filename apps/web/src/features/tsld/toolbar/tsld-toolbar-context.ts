@@ -1,3 +1,4 @@
+import type { ActivityType } from '@repo/types';
 import type { ReactNode } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -37,6 +38,11 @@ export interface TsldToolbarContext {
   isAddingActivity: boolean;
   /** Enter/leave add-activity mode (pen-gated at the toolbar level via `authoringEnabled`). */
   toggleAddActivity: () => void;
+  /** The activity kind the next canvas draw creates — Task / Start- / Finish-milestone (ADR-0032
+   * M4). The Add split-button reads it for its pressed sub-item and label. */
+  createType: ActivityType;
+  /** Pick the activity kind the next draw creates (also enters add mode). */
+  setCreateType: (type: ActivityType) => void;
   /** Whether the auto-arrange-lanes action is offered (editing + an `onAutoArrange` handler). */
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */

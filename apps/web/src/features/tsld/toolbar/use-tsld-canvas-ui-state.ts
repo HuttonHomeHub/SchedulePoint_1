@@ -1,3 +1,4 @@
+import type { ActivityType } from '@repo/types';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TsldCanvasHandle } from '../components/TsldCanvas';
@@ -30,6 +31,13 @@ export interface TsldCanvasUiState {
   showHelp: boolean;
   setShowHelp: React.Dispatch<React.SetStateAction<boolean>>;
   canvasControlRef: React.RefObject<TsldCanvasHandle | null>;
+  /**
+   * The activity kind the next canvas draw creates (canvas-first authoring, ADR-0032). Driven by the
+   * toolbar's Add split-button; the canvas reads it to collapse milestone draws to a zero-duration
+   * point. Defaults to `'TASK'` so flag-off behaviour is unchanged.
+   */
+  createType: ActivityType;
+  setCreateType: React.Dispatch<React.SetStateAction<ActivityType>>;
 }
 
 export function useTsldCanvasUiState(): TsldCanvasUiState {
@@ -39,6 +47,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   const [fitSignal, setFitSignal] = useState(0);
   const [autoArrangeSignal, setAutoArrangeSignal] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const [createType, setCreateType] = useState<ActivityType>('TASK');
   const canvasControlRef = useRef<TsldCanvasHandle>(null);
 
   const toggleView = useCallback(
@@ -66,6 +75,8 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       showHelp,
       setShowHelp,
       canvasControlRef,
+      createType,
+      setCreateType,
     }),
     [
       mode,
@@ -77,6 +88,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       autoArrangeSignal,
       requestAutoArrange,
       showHelp,
+      createType,
     ],
   );
 }

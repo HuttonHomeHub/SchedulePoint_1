@@ -99,6 +99,8 @@ export function useTsldToolbarContext({
     setMode,
     requestAutoArrange,
     setShowHelp,
+    createType,
+    setCreateType,
   } = canvasUi;
 
   // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
@@ -138,6 +140,13 @@ export function useTsldToolbarContext({
       // Tools (pen-gated as a set at the toolbar via authoringEnabled)
       isAddingActivity: mode === 'add-activity',
       toggleAddActivity: () => setMode((m) => (m === 'add-activity' ? 'select' : 'add-activity')),
+      // The Add split-button's per-type choice (ADR-0032 M4): pick the kind the next draw creates and
+      // arm add mode in one gesture (a picked type always means "draw one now").
+      createType,
+      setCreateType: (type) => {
+        setCreateType(type);
+        setMode('add-activity');
+      },
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 
@@ -180,6 +189,8 @@ export function useTsldToolbarContext({
       toggleView,
       mode,
       setMode,
+      createType,
+      setCreateType,
       requestAutoArrange,
       setShowHelp,
       canRecalc,

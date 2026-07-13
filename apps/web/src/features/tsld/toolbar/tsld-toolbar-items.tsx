@@ -1,7 +1,10 @@
+import type { ActivityType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   CalendarClock,
   CalendarDays,
+  Check,
+  ChevronDown,
   Info,
   Keyboard,
   Layers,
@@ -12,18 +15,21 @@ import {
   RefreshCw,
   SlidersHorizontal,
 } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
+import { Menu, MenuItem } from '@/components/ui/menu';
 import type { ToolbarItemRenderApi } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
+import { cn } from '@/lib/utils';
 
 const ZOOM_LABELS: Record<string, string> = {
   day: 'Day',
@@ -83,6 +89,94 @@ function TimelineStartControl({
         className="bg-transparent text-sm outline-none"
       />
     </label>
+  );
+}
+
+/** The activity kinds the canvas-first Add split-button offers, in menu order (ADR-0032 M4). Only the
+ * three planners draw directly — hammock / level-of-effort are derived, not point-and-draw. */
+const ADD_ACTIVITY_TYPES: ReadonlyArray<{ type: ActivityType; label: string }> = [
+  { type: 'TASK', label: 'Task' },
+  { type: 'START_MILESTONE', label: 'Start milestone' },
+  { type: 'FINISH_MILESTONE', label: 'Finish milestone' },
+];
+const ADD_ACTIVITY_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  ADD_ACTIVITY_TYPES.map(({ type, label }) => [type, label]),
+);
+const ADD_DISABLED_REASON = 'Start editing to add activities';
+
+/**
+ * The **Add split-button** (ADR-0032 M4) — the canvas-first replacement for the plain "Add activity"
+ * toggle. An APG menu-button: the trigger arms/labels the current draw kind and opens a `Menu` to
+ * pick Task / Start-milestone / Finish-milestone; picking one arms add-mode with that kind (the
+ * canvas then collapses milestone draws to a zero-duration point). While adding, the menu also offers
+ * "Stop adding" so the mode is leaveable from the toolbar, not only via Escape on the canvas. Pen-gated
+ * as one focusable control (spreads `itemProps`), so it stays a single roving-tabindex stop and the
+ * whole authoring group disables together when the pen isn't held.
+ */
+function AddActivityControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState({ x: 0, y: 0 });
+  const disabled = api.disabled;
+
+  const openMenu = (): void => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    setAnchor({ x: rect?.left ?? 0, y: rect?.bottom ?? 0 });
+    setOpen(true);
+  };
+
+  const activeLabel = ADD_ACTIVITY_TYPE_LABELS[ctx.createType] ?? 'Task';
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        title={disabled ? ADD_DISABLED_REASON : undefined}
+        onClick={() => {
+          if (disabled) return;
+          if (open) setOpen(false);
+          else openMenu();
+        }}
+        className={cn(toolbarControlVariants({ active: ctx.isAddingActivity || open, disabled }))}
+      >
+        <Plus aria-hidden="true" className="size-4" />
+        <span className="truncate">{ctx.isAddingActivity ? `Adding ${activeLabel}` : 'Add'}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={anchor}
+        label="Add activity type"
+        restoreFocusRef={triggerRef}
+      >
+        {ADD_ACTIVITY_TYPES.map(({ type, label }) => (
+          <MenuItem key={type} onSelect={() => ctx.setCreateType(type)}>
+            <Check
+              aria-hidden="true"
+              className={cn('size-4', ctx.createType === type ? 'opacity-100' : 'opacity-0')}
+            />
+            {label}
+          </MenuItem>
+        ))}
+        {ctx.isAddingActivity ? (
+          <MenuItem onSelect={() => ctx.toggleAddActivity()}>
+            <span aria-hidden="true" className="size-4" />
+            Stop adding
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </>
   );
 }
 
@@ -225,6 +319,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     },
 
     // --- 4 · Tools / author (pen-gated) -------------------------------------------------------
+    // Add activity — a plain toggle button flag-off (byte-for-byte unchanged); flag-on the canvas-first
+    // Add split-button (ADR-0032 M4), a menu-button that also picks the draw kind (task / milestone).
     {
       id: 'add-activity',
       group: 'tools',
@@ -233,9 +329,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Add activity',
       icon: <Plus className="size-4" />,
       penGated: true,
-      disabledReason: () => 'Start editing to add activities',
-      isActive: (ctx) => ctx.isAddingActivity,
-      onActivate: (ctx) => ctx.toggleAddActivity(),
+      disabledReason: () => ADD_DISABLED_REASON,
+      ...(CANVAS_AUTHORING_ENABLED
+        ? { render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} /> }
+        : {
+            isActive: (ctx) => ctx.isAddingActivity,
+            onActivate: (ctx) => ctx.toggleAddActivity(),
+          }),
     },
     {
       id: 'auto-arrange',

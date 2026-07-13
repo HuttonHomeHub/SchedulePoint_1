@@ -9,6 +9,7 @@ import {
   useUpdateActivity,
   useRepositionLane,
   useBatchPositions,
+  isMilestoneType,
 } from '@/features/activities';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
@@ -159,10 +160,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // The create must land first (this throw keeps the popover open with the error). Only
     // then recalc — a recalc failure is non-fatal: the row persisted, so we report the
     // conflict without re-prompting (never a second POST). The next recalc reconciles dates.
+    // The draw kind (ADR-0032 M4): a task spans its dragged days; a milestone is a zero-duration
+    // point (the canvas already collapsed the drag to a single day, and the API rejects a non-zero
+    // milestone duration). An SNET at the start day pins placement; recalc then lands the dates.
     await createPlacedActivity.mutateAsync({
       name: input.name,
-      type: 'TASK',
-      durationDays: input.endDay - input.startDay + 1,
+      type: input.type,
+      durationDays: isMilestoneType(input.type) ? 0 : input.endDay - input.startDay + 1,
       laneIndex: input.laneIndex,
       constraintType: 'SNET',
       constraintDate: addCalendarDays(plannedStart, input.startDay),

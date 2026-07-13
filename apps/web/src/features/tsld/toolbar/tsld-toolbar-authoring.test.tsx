@@ -29,6 +29,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     toggleView: vi.fn(),
     isAddingActivity: false,
     toggleAddActivity: vi.fn(),
+    createType: 'TASK',
+    setCreateType: vi.fn(),
     canAutoArrange: false,
     requestAutoArrange: vi.fn(),
     canRecalc: true,
@@ -79,5 +81,56 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
   it('shows "Not set" when the plan has no start date yet', () => {
     renderToolbar(ctx({ plannedStart: null, setPlannedStart: null }));
     expect(screen.getByLabelText('Timeline start: Not set')).toBeInTheDocument();
+  });
+
+  describe('Add split-button (M4)', () => {
+    it('opens a type menu and arms the picked kind', () => {
+      const setCreateType = vi.fn();
+      renderToolbar(ctx({ setCreateType }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      // The three draw kinds are offered as menu items…
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Start milestone' }));
+      expect(setCreateType).toHaveBeenCalledWith('START_MILESTONE');
+    });
+
+    it('labels the button with the armed kind while adding', () => {
+      renderToolbar(ctx({ isAddingActivity: true, createType: 'FINISH_MILESTONE' }));
+      expect(screen.getByRole('button', { name: /Adding Finish milestone/ })).toBeInTheDocument();
+    });
+
+    it('offers "Stop adding" only while in add mode', () => {
+      const toggleAddActivity = vi.fn();
+      const { rerender } = renderToolbar(ctx({ isAddingActivity: true, toggleAddActivity }));
+      fireEvent.click(screen.getByRole('button', { name: /Adding/ }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Stop adding' }));
+      expect(toggleAddActivity).toHaveBeenCalledOnce();
+
+      rerender(
+        <Toolbar
+          items={buildTsldToolbarItems()}
+          context={ctx({ isAddingActivity: false })}
+          label="Plan toolbar"
+          authoringEnabled
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      expect(screen.queryByRole('menuitem', { name: 'Stop adding' })).not.toBeInTheDocument();
+    });
+
+    it('disables the split-button when the pen is not held (authoring off)', () => {
+      render(
+        <Toolbar
+          items={buildTsldToolbarItems()}
+          context={ctx()}
+          label="Plan toolbar"
+          authoringEnabled={false}
+        />,
+      );
+      const addButton = screen.getByRole('button', { name: 'Add' });
+      expect(addButton).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(addButton);
+      // A disabled trigger never opens the menu.
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
   });
 });

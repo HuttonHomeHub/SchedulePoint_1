@@ -34,6 +34,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     toggleView: spies.toggleView,
     isAddingActivity: false,
     toggleAddActivity: spies.toggleAddActivity,
+    createType: 'TASK',
+    setCreateType: vi.fn(),
     canAutoArrange: false,
     requestAutoArrange: vi.fn(),
     canRecalc: true,

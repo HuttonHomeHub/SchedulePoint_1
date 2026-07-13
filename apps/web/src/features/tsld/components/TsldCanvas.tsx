@@ -1,3 +1,4 @@
+import type { ActivityType } from '@repo/types';
 import { useEffect, useImperativeHandle, useRef } from 'react';
 
 import {
@@ -76,6 +77,9 @@ export interface TsldCanvasProps {
   editing?: boolean;
   /** The active editing tool (only meaningful when `editing`). */
   mode?: EditMode;
+  /** The activity type the add-activity tool draws (ADR-0032 M4); absent ⇒ TASK. Milestones place
+   * as a point on a single click. */
+  createType?: ActivityType;
   /** Whether a body-grab in select mode may start a reposition (i.e. a handler is wired). When
    * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
   canReposition?: boolean;
@@ -232,6 +236,7 @@ export function TsldCanvas({
   fitSignal,
   editing = false,
   mode = 'select',
+  createType,
   canReposition = false,
   canLink = false,
   onIntent,
@@ -546,7 +551,12 @@ export function TsldCanvas({
     const rect = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
-  const machineCtx = () => ({ mode, view: viewRef.current, dataDate });
+  const machineCtx = () => ({
+    mode,
+    view: viewRef.current,
+    dataDate,
+    ...(createType ? { createType } : {}),
+  });
   const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
   const classifyAt = (p: Point): HitZone =>
     classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate);
