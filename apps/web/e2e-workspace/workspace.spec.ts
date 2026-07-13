@@ -62,11 +62,13 @@ test('a planner works a plan in the canvas-first workspace', async ({ page }) =>
   await expect(expand).toBeFocused();
   await expect(activities).toBeHidden();
 
-  // Re-expand; focus returns to the collapse control so the keyboard user stays on the panel.
+  // Re-expand; focus returns to the collapse control so the keyboard user stays on the panel, and
+  // the activity rows are back. (The panel's `region` name collides with the DataTable's own scroll
+  // region — both "Activities" — so assert a row rather than the ambiguous landmark.)
   await expand.click();
   const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
   await expect(collapse).toBeFocused();
-  await expect(page.getByRole('region', { name: 'Activities' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
 
   // The panel is a real WAI-ARIA window splitter: keyboard-resizable, and resizing keeps the
   // canvas mounted (no jump / remount — the split just re-proportions).
