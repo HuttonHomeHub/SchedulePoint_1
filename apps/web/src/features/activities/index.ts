@@ -20,4 +20,5 @@ export {
   ACTIVITY_TYPE_LABELS,
   ACTIVITY_STATUS_LABELS,
   CONSTRAINT_TYPE_LABELS,
+  isMilestoneType,
 } from './schemas/activity-schemas';

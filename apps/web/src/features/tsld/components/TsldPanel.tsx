@@ -1,7 +1,7 @@
-import type { ActivitySummary, DependencySummary, DependencyType } from '@repo/types';
+import type { ActivitySummary, ActivityType, DependencySummary, DependencyType } from '@repo/types';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { TSLD_EDITING_ENABLED } from '../../../config/env';
+import { CANVAS_AUTHORING_ENABLED, TSLD_EDITING_ENABLED } from '../../../config/env';
 import type { EditIntent } from '../interaction/gesture-machine';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
@@ -37,6 +37,8 @@ const KEYBOARD_CREATE_ANCHOR: Point = { x: 24, y: 24 };
 /** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
 export interface TsldCreateInput {
   name: string;
+  /** The activity type to create (ADR-0032 M4); TASK unless the add tool selected a milestone. */
+  type: ActivityType;
   startDay: number;
   endDay: number;
   laneIndex: number;
@@ -139,6 +141,7 @@ export interface TsldPanelProps {
 }
 
 interface PendingCreate {
+  type: ActivityType;
   startDay: number;
   endDay: number;
   laneIndex: number;
@@ -164,7 +167,7 @@ interface PendingCreate {
 export function TsldPanel({
   activities,
   dependencies,
-  dataDate,
+  dataDate: dataDateProp,
   canEdit = false,
   onCreate,
   onReposition,
@@ -178,6 +181,12 @@ export function TsldPanel({
   chromeless = false,
   canvasUi,
 }: TsldPanelProps): React.ReactElement {
+  // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
+  // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
+  // first activity on a blank plan. Flag-off (or once a start is set) this is exactly the prop, so
+  // the legacy path is byte-for-byte unchanged. The first structural write pins `plannedStart` to
+  // this anchor (the workspace's `onTsldCreate`), keeping the persisted dates coherent.
+  const dataDate = dataDateProp ?? (CANVAS_AUTHORING_ENABLED ? (todayIso ?? null) : null);
   const announce = useAnnounce();
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
@@ -199,6 +208,8 @@ export function TsldPanel({
     showHelp,
     setShowHelp,
     canvasControlRef,
+    createType,
+    linkType,
   } = canvasUi ?? ownCanvasUi;
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
@@ -234,7 +245,11 @@ export function TsldPanel({
     [activities],
   );
   const isCalculated = activities.some((a) => a.earlyStart !== null);
-  const showDiagram = isCalculated && dataDate !== null;
+  // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
+  // computed schedule (`isCalculated`), but canvas-first authoring (ADR-0032) mounts a **blank,
+  // draw-ready** canvas before any recalc so the first activity can be placed on it; uncalculated
+  // bars simply don't paint (`paint.ts` skips `earlyStart === null`).
+  const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
   // View controls (read-only or editing) — zoom preset (reflected from the canvas's coarse
@@ -361,6 +376,7 @@ export function TsldPanel({
       clearConflict();
       createReturnFocusRef.current = listboxRef.current; // return focus to the list, not the toolbar
       setPendingCreate({
+        type: createType ?? 'TASK',
         startDay,
         endDay: startDay,
         laneIndex: current ? current.laneIndex : 0,
@@ -556,11 +572,11 @@ export function TsldPanel({
 
   const commitCreate = (name: string): void => {
     if (!pendingCreate || !onCreate) return;
-    const { startDay, endDay, laneIndex } = pendingCreate;
+    const { type, startDay, endDay, laneIndex } = pendingCreate;
     setPendingCreate((p) => (p ? { ...p, saving: true, error: null } : p));
     // onCreate resolves iff the row persisted → close and never re-POST. A recalc conflict is
     // non-fatal (row kept) and shown in the banner; only a create failure keeps the popover.
-    void onCreate({ name, startDay, endDay, laneIndex })
+    void onCreate({ name, type, startDay, endDay, laneIndex })
       .then((outcome) => {
         closeCreate();
         announce(`Activity “${name}” added.`);
@@ -572,7 +588,10 @@ export function TsldPanel({
       });
   };
 
-  if (activities.length === 0) {
+  // Canvas-first authoring (ADR-0032) mounts a blank, draw-ready canvas on an empty plan (there's a
+  // timeline anchor via `dataDate`), so skip the empty-state note in that case and fall through to
+  // the interactive canvas below. Flag-off — or with no anchor — keep today's empty-state note.
+  if (activities.length === 0 && !(CANVAS_AUTHORING_ENABLED && showDiagram)) {
     return (
       <div
         className={cn(
@@ -672,6 +691,8 @@ export function TsldPanel({
               fitSignal={fitSignal}
               editing={editingEnabled}
               mode={mode}
+              createType={createType}
+              linkType={linkType}
               canReposition={onReposition !== undefined}
               canLink={onLink !== undefined}
               onIntent={onIntent}

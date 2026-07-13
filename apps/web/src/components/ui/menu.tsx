@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
@@ -44,10 +44,41 @@ function clampAnchor({ x, y }: MenuAnchor): { left: number; top: number } {
   };
 }
 
-/** The focusable menu items currently in the menu, in DOM order. */
+/** The focusable menu items currently in the menu, in DOM order (plain + radio items). */
 function itemsOf(container: HTMLElement | null): HTMLButtonElement[] {
   if (!container) return [];
-  return Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+  return Array.from(
+    container.querySelectorAll<HTMLButtonElement>('[role="menuitem"],[role="menuitemradio"]'),
+  );
+}
+
+/**
+ * The trigger-side state a **menu button** needs: an open flag, the viewport anchor computed from the
+ * trigger's rect, and open/close/toggle helpers. Extracted so the toolbar's menu-buttons (the Add
+ * split-button, the Link-type selector, …) share one implementation instead of re-deriving the
+ * ref + `getBoundingClientRect()` + `useState` dance each time (component review, ADR-0032). Pair it
+ * with {@link Menu}: spread nothing special on the trigger beyond `ref={triggerRef}` and wire
+ * `onClick={toggle}`; pass `open`/`anchor`/`onClose={close}`/`restoreFocusRef={triggerRef}` to `Menu`.
+ */
+export function useMenuTrigger(): {
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+  open: boolean;
+  anchor: MenuAnchor;
+  openMenu: () => void;
+  close: () => void;
+  toggle: () => void;
+} {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<MenuAnchor>({ x: 0, y: 0 });
+  const openMenu = (): void => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    setAnchor({ x: rect?.left ?? 0, y: rect?.bottom ?? 0 });
+    setOpen(true);
+  };
+  const close = (): void => setOpen(false);
+  const toggle = (): void => (open ? close() : openMenu());
+  return { triggerRef, open, anchor, openMenu, close, toggle };
 }
 
 export function Menu({
@@ -164,21 +195,29 @@ export function Menu({
  * (roving focus is driven by {@link Menu}); selecting it runs `onSelect` and then
  * closes the menu, restoring focus to the trigger. `destructive` tints the item
  * for delete-style actions.
+ *
+ * When `selected` is provided the item becomes a **radio** menu item
+ * (`role="menuitemradio"` + `aria-checked`) so a screen reader announces which
+ * option in a single-choice group is currently active — the visual check on its
+ * own (an `aria-hidden` icon) conveys nothing to AT (component/a11y review).
  */
 export function MenuItem({
   onSelect,
   destructive = false,
+  selected,
   children,
 }: {
   onSelect: () => void;
   destructive?: boolean;
+  selected?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const close = useContext(MenuCloseContext);
   return (
     <button
       type="button"
-      role="menuitem"
+      role={selected === undefined ? 'menuitem' : 'menuitemradio'}
+      {...(selected === undefined ? {} : { 'aria-checked': selected })}
       tabIndex={-1}
       onClick={() => {
         onSelect();

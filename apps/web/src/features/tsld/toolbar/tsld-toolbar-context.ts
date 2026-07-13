@@ -1,3 +1,4 @@
+import type { ActivityType, DependencyType } from '@repo/types';
 import type { ReactNode } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -21,6 +22,12 @@ export interface TsldToolbarContext {
   setZoomPreset: (level: ZoomLevel) => void;
   stepZoom: (factor: number) => void;
   fit: () => void;
+  /** The plan's timeline start (`plannedStart`) — the canvas day-zero origin; null when unset. The
+   * inline start-date control reads it (ADR-0032 M2). */
+  plannedStart: string | null;
+  /** Set the timeline start (targeted PATCH). Pen-gated (`canEditSchedule`, Critical Q3): `null`
+   * when the viewer can't edit the schedule, so the control renders the date as static text. */
+  setPlannedStart: ((iso: string) => void) | null;
 
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
@@ -31,6 +38,22 @@ export interface TsldToolbarContext {
   isAddingActivity: boolean;
   /** Enter/leave add-activity mode (pen-gated at the toolbar level via `authoringEnabled`). */
   toggleAddActivity: () => void;
+  /** The activity kind the next canvas draw creates — Task / Start- / Finish-milestone (ADR-0032
+   * M4). The Add split-button reads it for its pressed sub-item and label. */
+  createType: ActivityType;
+  /** Pick the activity kind the next draw creates (also enters add mode). */
+  setCreateType: (type: ActivityType) => void;
+  /** Whether the two-click Link tool is offered (canvas-first authoring + a link handler wired,
+   * ADR-0032 M5). False ⇒ the Link tool + its type selector are hidden. */
+  canLink: boolean;
+  /** True when the current edit mode is the two-click Link tool (drives the tool's pressed state). */
+  isLinking: boolean;
+  /** Enter/leave the Link tool (pen-gated). */
+  toggleLinkMode: () => void;
+  /** The dependency kind the Link tool creates — FS / SS / FF (SF is dialog-only, ADR-0026 D5). */
+  linkType: DependencyType;
+  /** Pick the dependency kind the Link tool creates. */
+  setLinkType: (type: DependencyType) => void;
   /** Whether the auto-arrange-lanes action is offered (editing + an `onAutoArrange` handler). */
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */

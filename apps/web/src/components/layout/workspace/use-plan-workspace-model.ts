@@ -1,12 +1,15 @@
 import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAnnounce } from '@/components/ui/announcer';
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import {
   useActivities,
   useCreatePlacedActivity,
   useUpdateActivity,
   useRepositionLane,
   useBatchPositions,
+  isMilestoneType,
 } from '@/features/activities';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
@@ -14,9 +17,9 @@ import { useCalendar, useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { useCreateDependency, usePlanDependencies } from '@/features/dependencies';
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
-import { usePlan } from '@/features/plans';
+import { usePlan, useSetPlanStart } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { useRecalculate } from '@/features/schedule';
+import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
 import {
   addCalendarDays,
   type TsldCreateInput,
@@ -104,25 +107,107 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   }, [variance.data]);
   const canManageLogic = canEditSchedule; // dependency write is pen-gated schedule editing
 
+  // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
+  // the canvas *or* the activities table — triggers a coalesced recalculation, so the canvas plots
+  // new/changed rows without a manual Recalculate. Enabled only when a recalc could succeed (role +
+  // pen + a start date); guarded live at fire time. Recalc failures announce (rare). The manual
+  // button becomes `flush()`. Flag-off: this stays inert and the callbacks keep their inline recalc.
+  const announce = useAnnounce();
+  const autoRecalc = usePlanAutoRecalc(orgSlug, planId, {
+    enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
+    onMessage: announce,
+  });
+  // Any structural edit — from the canvas, the activities table, or the logic editor — should
+  // auto-recalc. Watching only the row *count* misses in-place edits that change the schedule
+  // without adding/removing a row (a duration or constraint edit from the table — ux review), so we
+  // key on a **scheduling-input signature**: each activity's duration/type/constraint and each
+  // dependency's type/lag. Crucially this excludes the engine-*computed* fields (early/late dates,
+  // floats, critical) that a recalc writes back, so a settled recalc never re-triggers `notify()` —
+  // no loop. Layout-only `laneIndex` is excluded too (a lane move needs no recalc; the canvas path
+  // already skips it). The canvas reposition/link callbacks still `notify()` explicitly, which just
+  // coalesces with this. Baseline is taken on the first *loaded* (non-pending) observation, so
+  // opening a plan never fires a gratuitous recalc.
+  const structureSignature = useMemo(() => {
+    const acts = (activities.data ?? [])
+      .map(
+        (a) =>
+          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}`,
+      )
+      .sort()
+      .join('|');
+    const deps = (dependencies.data ?? [])
+      .map((d) => `${d.id}:${d.type}:${d.lagDays}`)
+      .sort()
+      .join('|');
+    return `${acts}##${deps}`;
+  }, [activities.data, dependencies.data]);
+  const structureSizeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!CANVAS_AUTHORING_ENABLED) return;
+    if (activities.isPending || dependencies.isPending) return; // wait for a real loaded baseline
+    if (structureSizeRef.current === null) {
+      structureSizeRef.current = structureSignature;
+      return;
+    }
+    if (structureSizeRef.current !== structureSignature) {
+      structureSizeRef.current = structureSignature;
+      autoRecalc.notify();
+    }
+  }, [structureSignature, activities.isPending, dependencies.isPending, autoRecalc]);
+
   // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
   // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
   // with an SNET constraint, then the authoritative recalc places it.
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
+  const setPlanStart = useSetPlanStart(orgSlug);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
-    const plannedStart = plan.data?.plannedStart;
-    if (!plannedStart) return { recalcConflict: null };
+    let plannedStart = plan.data?.plannedStart ?? null;
+    if (!plannedStart) {
+      // Canvas-first authoring (ADR-0032): a start-less plan is drawable — the canvas anchors to
+      // today. The first draw silently pins `plannedStart` to that anchor (Critical Q1) so the SNET
+      // dates are coherent, then proceeds. Flag-off keeps today's no-op (needs a start first).
+      if (!CANVAS_AUTHORING_ENABLED || !plan.data) return { recalcConflict: null };
+      let updated;
+      try {
+        updated = await setPlanStart.mutateAsync({
+          planId,
+          version: plan.data.version,
+          plannedStart: todayIso,
+        });
+      } catch {
+        // Curated message (not a raw API string) so the create popover shows something readable; the
+        // row wasn't created, so the draw is simply retryable.
+        throw new Error(
+          'Couldn’t set the timeline start for the first activity. Please try again.',
+        );
+      }
+      plannedStart = updated.plannedStart ?? todayIso;
+      // The start moved as a side effect of drawing — announce it so a screen-reader user knows a
+      // plan-level field changed (sighted users see the toolbar's start field populate).
+      announce('Timeline start set to today.');
+    }
     // The create must land first (this throw keeps the popover open with the error). Only
     // then recalc — a recalc failure is non-fatal: the row persisted, so we report the
     // conflict without re-prompting (never a second POST). The next recalc reconciles dates.
+    // The draw kind (ADR-0032 M4): a task spans its dragged days; a milestone is a zero-duration
+    // point (the canvas already collapsed the drag to a single day, and the API rejects a non-zero
+    // milestone duration). An SNET at the start day pins placement; recalc then lands the dates.
     await createPlacedActivity.mutateAsync({
       name: input.name,
-      type: 'TASK',
-      durationDays: input.endDay - input.startDay + 1,
+      type: input.type,
+      durationDays: isMilestoneType(input.type) ? 0 : input.endDay - input.startDay + 1,
       laneIndex: input.laneIndex,
       constraintType: 'SNET',
       constraintDate: addCalendarDays(plannedStart, input.startDay),
     });
+    // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
+    // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
+    // await + recalc-conflict semantics byte-for-byte.
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { recalcConflict: null };
+    }
     try {
       await recalculate.mutateAsync();
       return { recalcConflict: null };
@@ -192,6 +277,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The move landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { applied: true, conflict: null };
+    }
     try {
       await recalculate.mutateAsync();
       return { applied: true, conflict: null };
@@ -224,6 +313,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The link landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { applied: true, conflict: null };
+    }
     try {
       await recalculate.mutateAsync();
       return { applied: true, conflict: null };
@@ -298,6 +391,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canProgress,
     canManageLogic,
     penReadOnly,
+    // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it; inert flag-off.
+    autoRecalc,
     // Local UI state
     editing,
     setEditing,

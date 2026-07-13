@@ -18,7 +18,10 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
 const EDIT_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Alt + ↑ / ↓', action: 'Move the activity up / down one lane' },
   { keys: 'Alt + ← / →', action: 'Nudge the start one day earlier / later (recalculates)' },
-  { keys: 'n', action: 'Create an activity in the focused lane and start' },
+  {
+    keys: 'n',
+    action: 'Create an activity in the focused lane and start (uses the armed Add type)',
+  },
 ];
 
 function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactElement {

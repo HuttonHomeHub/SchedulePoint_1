@@ -10,6 +10,8 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { useSetPlanStart } from '@/features/plans';
 import { ScheduleSummaryStrip } from '@/features/schedule';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -68,6 +70,7 @@ export function useTsldToolbarContext({
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
   const recalc = useRecalculateCommand(orgSlug, planId);
+  const setStart = useSetPlanStart(orgSlug);
 
   const activities = model.activities.data ?? [];
   const hasDiagram =
@@ -96,6 +99,10 @@ export function useTsldToolbarContext({
     setMode,
     requestAutoArrange,
     setShowHelp,
+    createType,
+    setCreateType,
+    linkType,
+    setLinkType,
   } = canvasUi;
 
   // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
@@ -109,6 +116,24 @@ export function useTsldToolbarContext({
       setZoomPreset: (level) => canvasControlRef.current?.zoomToPreset(level),
       stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
       fit: requestFit,
+      // Inline timeline start (ADR-0032 M2): read + (pen-gated) write `plannedStart`. Read-only
+      // viewers get a null setter so the control renders the date as static text (Critical Q3).
+      plannedStart: plan.plannedStart,
+      setPlannedStart: canEditSchedule
+        ? (iso: string) =>
+            setStart.mutate(
+              { planId, version: plan.version, plannedStart: iso || null },
+              {
+                onSuccess: () =>
+                  announce(
+                    iso
+                      ? `Timeline start set to ${formatCalendarDate(iso)}.`
+                      : 'Timeline start cleared.',
+                  ),
+                onError: () => announce('Couldn’t update the timeline start. Please try again.'),
+              },
+            )
+        : null,
 
       // Lens
       viewToggles,
@@ -117,17 +142,37 @@ export function useTsldToolbarContext({
       // Tools (pen-gated as a set at the toolbar via authoringEnabled)
       isAddingActivity: mode === 'add-activity',
       toggleAddActivity: () => setMode((m) => (m === 'add-activity' ? 'select' : 'add-activity')),
+      // The Add split-button's per-type choice (ADR-0032 M4): pick the kind the next draw creates and
+      // arm add mode in one gesture (a picked type always means "draw one now").
+      createType,
+      setCreateType: (type) => {
+        setCreateType(type);
+        setMode('add-activity');
+      },
+      // Two-click Link tool (ADR-0032 M5): a mode toggle + a persistent FS/SS/FF type. Offered to
+      // schedule-editors; pen-gated as a set with the other authoring tools.
+      canLink: canEditSchedule,
+      isLinking: mode === 'link',
+      toggleLinkMode: () => setMode((m) => (m === 'link' ? 'select' : 'link')),
+      linkType,
+      setLinkType,
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 
-      // Object / plan actions
+      // Object / plan actions. With canvas-first authoring on, the manual button flushes the shared
+      // auto-recalc coalescer (ADR-0032 M3) so it and the debounced auto-recalcs are one path;
+      // flag-off it's the standalone recalc command, byte-for-byte.
       canRecalc,
-      recalcPending: recalc.isPending,
+      recalcPending: CANVAS_AUTHORING_ENABLED ? model.autoRecalc.isPending : recalc.isPending,
       recalculate: () =>
-        recalc.run({
-          onSuccess: () => announce('Schedule recalculated.'),
-          onError: (message) => announce(message),
-        }),
+        CANVAS_AUTHORING_ENABLED
+          ? // A manual flush is an explicit action, so it confirms — unlike the silent auto-recalcs
+            // (ux review); errors already surface via the coalescer's onMessage → announce.
+            model.autoRecalc.flush(() => announce('Schedule recalculated.'))
+          : recalc.run({
+              onSuccess: () => announce('Schedule recalculated.'),
+              onError: (message) => announce(message),
+            }),
       openBaselines: () => openDialog('baselines'),
       openCalendar: () => openDialog('calendar'),
       openPlanDetails: () => openDialog('details'),
@@ -147,10 +192,18 @@ export function useTsldToolbarContext({
       zoomPreset,
       canvasControlRef,
       requestFit,
+      plan.plannedStart,
+      plan.version,
+      setStart,
+      planId,
       viewToggles,
       toggleView,
       mode,
       setMode,
+      createType,
+      setCreateType,
+      linkType,
+      setLinkType,
       requestAutoArrange,
       setShowHelp,
       canRecalc,
@@ -158,6 +211,7 @@ export function useTsldToolbarContext({
       canWrite,
       setEditing,
       recalc,
+      model.autoRecalc,
       announce,
       openDialog,
       legendContent,

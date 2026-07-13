@@ -1,4 +1,4 @@
-import type { DependencyType } from '@repo/types';
+import type { ActivityType, DependencyType } from '@repo/types';
 
 import {
   dayColumnAt,
@@ -22,8 +22,12 @@ import {
  * and **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once).
  */
 
-/** The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition. */
-export type EditMode = 'select' | 'add-activity';
+/**
+ * The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition;
+ * `add-activity` draws bars; `link` is the two-click dependency tool (ADR-0032 M5): click a
+ * predecessor, then a successor — replacing the flag-off edge-drag rubber-band.
+ */
+export type EditMode = 'select' | 'add-activity' | 'link';
 
 /**
  * The minimum pointer travel (CSS px) that turns a body press into a real reposition rather
@@ -38,6 +42,23 @@ export interface GestureCtx {
   view: Viewport;
   /** The plan's data date (day 0), for world↔screen day mapping. */
   dataDate: string;
+  /**
+   * The activity type the `add-activity` tool draws (ADR-0032 M4). `TASK` (the default) is drawn by
+   * dragging a span; a milestone (`START_MILESTONE`/`FINISH_MILESTONE`) is zero-duration, so its
+   * create collapses to a single day at the press point regardless of drag. Absent ⇒ `TASK` (the
+   * flag-off / pre-M4 behaviour, byte-for-byte).
+   */
+  createType?: ActivityType;
+  /**
+   * The dependency type the two-click `link` tool creates (ADR-0032 M5) — chosen from a toolbar
+   * control rather than a keyboard chord. Absent ⇒ `FS` (the overwhelmingly common case).
+   */
+  linkType?: DependencyType;
+}
+
+/** True for the zero-duration milestone types, which place as a point rather than a span. */
+function isMilestoneType(type: ActivityType): boolean {
+  return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
 }
 
 /** The keyboard modifiers held during a link drag, which pick the dependency type. */
@@ -71,6 +92,8 @@ export type GestureEvent =
   | { type: 'pointerDown'; point: Point; hit: HitZone; body?: BodyGrab; modifiers?: Modifiers }
   | { type: 'pointerMove'; point: Point; hit?: HitZone; modifiers?: Modifiers }
   | { type: 'pointerUp'; hit?: HitZone; modifiers?: Modifiers }
+  /** A discrete click (press-release without a drag) — the two-click `link` tool's input (M5). */
+  | { type: 'click'; hit: HitZone }
   | { type: 'escape' };
 
 /**
@@ -82,7 +105,9 @@ export type GestureEvent =
 export type EditIntent =
   | {
       kind: 'create';
-      /** Inclusive whole-day span about the data date; `startDay === endDay` is a 1-day task. */
+      /** The activity type to create (ADR-0032 M4). Milestones collapse to a point (`startDay === endDay`). */
+      type: ActivityType;
+      /** Inclusive whole-day span about the data date; `startDay === endDay` is a 1-day task / a milestone. */
       startDay: number;
       endDay: number;
       laneIndex: number;
@@ -144,6 +169,12 @@ export type GestureState =
       targetId: string | null;
       /** The type the current modifiers would create, for a live affordance. */
       type: DependencyType;
+    }
+  | {
+      /** The two-click `link` tool (M5) after the first click: a predecessor is picked and the next
+       * click on another activity commits the link. Persists between clicks (it isn't a drag). */
+      kind: 'linkPicking';
+      predecessorId: string;
     };
 
 export const IDLE: GestureState = { kind: 'idle' };
@@ -253,11 +284,18 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
     }
     case 'pointerUp': {
       if (state.kind === 'creating') {
-        const startDay = Math.min(state.originDay, state.currentDay);
-        const endDay = Math.max(state.originDay, state.currentDay);
+        const type = ctx.createType ?? 'TASK';
+        // A milestone is a point: collapse to the press day, ignoring any drag span (a drag in
+        // milestone mode is treated as a click — ADR-0032 M4). A task spans the dragged days.
+        const startDay = isMilestoneType(type)
+          ? state.originDay
+          : Math.min(state.originDay, state.currentDay);
+        const endDay = isMilestoneType(type)
+          ? state.originDay
+          : Math.max(state.originDay, state.currentDay);
         return {
           state: IDLE,
-          intent: { kind: 'create', startDay, endDay, laneIndex: state.laneIndex },
+          intent: { kind: 'create', type, startDay, endDay, laneIndex: state.laneIndex },
         };
       }
       if (state.kind === 'repositioning') {
@@ -297,6 +335,29 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         };
       }
       return { state: IDLE };
+    }
+    case 'click': {
+      // The two-click `link` tool (M5). Only meaningful in link mode; any other mode ignores it
+      // (the canvas routes non-link clicks to selection, unchanged). First body click picks the
+      // predecessor; the second body click on a *different* activity commits the link with the
+      // tool-selected type. A click on empty space, or back on the predecessor, cancels the pick.
+      if (ctx.mode !== 'link') return { state };
+      const bodyId = event.hit.kind === 'body' ? event.hit.id : undefined;
+      if (state.kind === 'linkPicking') {
+        if (bodyId && bodyId !== state.predecessorId) {
+          return {
+            state: IDLE,
+            intent: {
+              kind: 'link',
+              predecessorId: state.predecessorId,
+              successorId: bodyId,
+              type: ctx.linkType ?? 'FS',
+            },
+          };
+        }
+        return { state: IDLE };
+      }
+      return bodyId ? { state: { kind: 'linkPicking', predecessorId: bodyId } } : { state };
     }
     case 'escape':
       return { state: IDLE };

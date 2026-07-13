@@ -125,3 +125,26 @@ export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  * ADR-0030 workspace, byte-for-byte (emergency rollback / opt-out). Remaining fast-follows: TECH_DEBT #31.
  */
 export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TOOLBAR);
+
+/**
+ * Canvas-first plan authoring (ADR-0032, spec `docs/specs/canvas-first-authoring.md`). **OFF by
+ * default** while it's built behind the flag: when on, a planner builds a plan directly on the TSLD
+ * canvas — a blank draw-ready canvas on a new plan (anchored to `plannedStart ?? today`), an inline
+ * start-date control, unified auto-recalculation after any structural edit, on-canvas activity types
+ * (Task + Start/Finish milestone), and a two-click Link tool replacing the edge-drag gesture. Layers
+ * on {@link CANVAS_TOOLBAR_ENABLED} (ADR-0031) — the Add/Link/start-date controls live in that
+ * toolbar. Frontend only; no backend/DB/API change. Flag-off keeps today's behaviour byte-for-byte
+ * (table-first authoring, manual recalc). Set `VITE_CANVAS_AUTHORING=true` to preview; it flips
+ * default-on per milestone once each slice's a11y/e2e/perf gates are green.
+ *
+ * **Precondition enforced, not just documented:** authoring is meaningful ONLY inside the
+ * toolbar-hosted, canvas-first workspace — the Add/Link/start-date controls live in that `Toolbar`,
+ * and authoring **suppresses the edge-drag link gesture**. If authoring were on while the toolbar or
+ * workspace were off, edge-drag would be gone with no Link tool to replace it — a dead end for
+ * on-canvas dependency creation (a11y review). So this flag is gated on both host flags: turning
+ * either host off turns authoring off too (and edge-drag returns, byte-for-byte).
+ */
+export const CANVAS_AUTHORING_ENABLED =
+  flagDefaultOff(import.meta.env.VITE_CANVAS_AUTHORING) &&
+  CANVAS_TOOLBAR_ENABLED &&
+  CANVAS_WORKSPACE_ENABLED;

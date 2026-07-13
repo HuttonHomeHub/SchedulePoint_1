@@ -1,3 +1,4 @@
+import type { ActivityType, DependencyType } from '@repo/types';
 import { useEffect, useImperativeHandle, useRef } from 'react';
 
 import {
@@ -42,6 +43,8 @@ import {
 } from '../render/render-model';
 import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
 
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+
 /** Imperative commands the toolbar issues to the canvas (kept ref-authoritative — ADR-0026 D3). */
 export interface TsldCanvasHandle {
   /** Reframe to a zoom preset's scale, centre-anchored. */
@@ -76,6 +79,11 @@ export interface TsldCanvasProps {
   editing?: boolean;
   /** The active editing tool (only meaningful when `editing`). */
   mode?: EditMode;
+  /** The activity type the add-activity tool draws (ADR-0032 M4); absent ⇒ TASK. Milestones place
+   * as a point on a single click. */
+  createType?: ActivityType;
+  /** The dependency type the two-click `link` tool creates (ADR-0032 M5); absent ⇒ FS. */
+  linkType?: DependencyType;
   /** Whether a body-grab in select mode may start a reposition (i.e. a handler is wired). When
    * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
   canReposition?: boolean;
@@ -166,6 +174,19 @@ function liveLink(
   };
 }
 
+/** The picked-predecessor rect while the two-click `link` tool waits for the second click (M5), or
+ * null when not mid-pick — drawn as a highlight ring so the "now click the successor" step reads. */
+function linkPickRect(
+  state: GestureState,
+  view: Viewport,
+  activities: readonly RenderActivity[],
+  dataDate: string,
+): Rect | null {
+  if (state.kind !== 'linkPicking') return null;
+  const source = activities.find((a) => a.id === state.predecessorId);
+  return (source && activityRect(source, view, dataDate)) || null;
+}
+
 /** Build the body-grab (current day span + lane) the machine needs to reposition an activity. */
 function bodyGrab(
   activities: readonly RenderActivity[],
@@ -232,6 +253,8 @@ export function TsldCanvas({
   fitSignal,
   editing = false,
   mode = 'select',
+  createType,
+  linkType,
   canReposition = false,
   canLink = false,
   onIntent,
@@ -265,7 +288,10 @@ export function TsldCanvas({
     exitAddModeRef.current = onExitAddMode;
   });
 
-  const showEdgeHandles = editing && canLink;
+  // Edge handles are the flag-off edge-drag affordance. Canvas-first authoring (ADR-0032 M5) replaces
+  // edge-drag with the two-click `link` tool, so the handles are suppressed there — no dangling
+  // rubber-band path when the flag is on. `canLink` still gates whether linking is offered at all.
+  const showEdgeHandles = editing && canLink && !CANVAS_AUTHORING_ENABLED;
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -385,6 +411,16 @@ export function TsldCanvas({
     interactionDirtyRef.current = true;
   }, [pending]);
 
+  // Switching tools drops any in-progress gesture ghost — most importantly an unfinished link pick
+  // (M5), so leaving the Link tool mid-pick never leaves a dangling highlight ring.
+  useEffect(() => {
+    if (gestureRef.current.kind !== 'idle') {
+      gestureRef.current = IDLE;
+      gestureActiveRef.current = false;
+      interactionDirtyRef.current = true;
+    }
+  }, [mode]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -475,6 +511,12 @@ export function TsldCanvas({
             sceneRef.current.dataDate,
             sceneRef.current.edges,
           ),
+          linkPick: linkPickRect(
+            gestureRef.current,
+            viewRef.current,
+            sceneRef.current.activities,
+            sceneRef.current.dataDate,
+          ),
         };
         paintInteractionLayer(ictx, overlay, size, palette, dpr);
         interactionDirtyRef.current = false;
@@ -526,7 +568,16 @@ export function TsldCanvas({
           { mode: 'select', view: viewRef.current, dataDate: sceneRef.current.dataDate },
         ).state;
         interactionDirtyRef.current = true;
-      } else if (editing && modeRef.current === 'add-activity' && !pendingRef.current) {
+      } else if (gestureRef.current.kind === 'linkPicking') {
+        // First Escape drops an unfinished link pick (M5) — the tool stays armed for another try.
+        gestureRef.current = IDLE;
+        interactionDirtyRef.current = true;
+      } else if (
+        editing &&
+        (modeRef.current === 'add-activity' || modeRef.current === 'link') &&
+        !pendingRef.current
+      ) {
+        // With no pick/ghost pending, Escape leaves the authoring tool back to Select.
         exitAddModeRef.current?.();
       }
     };
@@ -546,7 +597,13 @@ export function TsldCanvas({
     const rect = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
-  const machineCtx = () => ({ mode, view: viewRef.current, dataDate });
+  const machineCtx = () => ({
+    mode,
+    view: viewRef.current,
+    dataDate,
+    ...(createType ? { createType } : {}),
+    ...(linkType ? { linkType } : {}),
+  });
   const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
   const classifyAt = (p: Point): HitZone =>
     classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate);
@@ -578,7 +635,7 @@ export function TsldCanvas({
         aria-hidden="true"
         style={{ top: RULER_HEIGHT }}
         className={`absolute inset-x-0 block touch-none ${
-          editing && mode === 'add-activity'
+          editing && (mode === 'add-activity' || mode === 'link')
             ? 'cursor-crosshair'
             : 'cursor-grab active:cursor-grabbing'
         }`}
@@ -588,7 +645,10 @@ export function TsldCanvas({
           if (pending) return;
           drag.current = { x: e.clientX, y: e.clientY, moved: false };
           canvasRef.current?.setPointerCapture?.(e.pointerId);
-          if (editing) {
+          // The Link tool (M5) is click-driven (handled on pointer-up), not a drag gesture — so a
+          // press must NOT run the gesture reducer here, else it would clear an in-progress pick
+          // before the second click's release lands. Panning still works via `drag` below.
+          if (editing && mode !== 'link') {
             const p = localPoint(e);
             const rawHit = classifyAt(p);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
@@ -677,6 +737,20 @@ export function TsldCanvas({
           drag.current = null;
           if (wasDrag) return;
           const p = localPoint(e);
+          // Link tool (M5): a click picks a predecessor, then a successor — the gesture machine
+          // holds the pick between clicks. Panning still works (a drag returns above); only a
+          // stationary click reaches here. Non-link modes keep the plain M1 select-on-click.
+          if (editing && mode === 'link') {
+            const { state, intent } = reduce(
+              gestureRef.current,
+              { type: 'click', hit: classifyAt(p) },
+              machineCtx(),
+            );
+            gestureRef.current = state;
+            interactionDirtyRef.current = true;
+            if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
+            return;
+          }
           onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));
         }}
         onPointerCancel={() => {

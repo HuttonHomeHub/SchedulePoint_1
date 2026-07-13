@@ -92,6 +92,7 @@ vi.mock('@/features/schedule', () => ({
   RecalculateButton: () => <div data-testid="recalculate-button" />,
   // The model reads useRecalculate from the barrel (the builder uses the api-path mock below).
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  usePlanAutoRecalc: () => ({ notify: vi.fn(), flush: vi.fn(), isPending: false }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculate: () => ({ mutate: vi.fn(), isPending: false }),

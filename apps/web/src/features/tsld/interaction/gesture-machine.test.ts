@@ -49,13 +49,58 @@ describe('gesture-machine: create-by-drag', () => {
     const dragged: GestureState = { kind: 'creating', originDay: 6, laneIndex: 1, currentDay: 2 };
     const r = reduce(dragged, { type: 'pointerUp' }, ctx('add-activity'));
     expect(r.state).toEqual(IDLE);
-    expect(r.intent).toEqual({ kind: 'create', startDay: 2, endDay: 6, laneIndex: 1 });
+    expect(r.intent).toEqual({
+      kind: 'create',
+      type: 'TASK',
+      startDay: 2,
+      endDay: 6,
+      laneIndex: 1,
+    });
   });
 
   it('commits a 1-day task for a click (origin === current)', () => {
     const clicked: GestureState = { kind: 'creating', originDay: 3, laneIndex: 0, currentDay: 3 };
     const r = reduce(clicked, { type: 'pointerUp' }, ctx('add-activity'));
-    expect(r.intent).toEqual({ kind: 'create', startDay: 3, endDay: 3, laneIndex: 0 });
+    expect(r.intent).toEqual({
+      kind: 'create',
+      type: 'TASK',
+      startDay: 3,
+      endDay: 3,
+      laneIndex: 0,
+    });
+  });
+
+  it('carries the ctx createType onto the intent (ADR-0032 M4)', () => {
+    const clicked: GestureState = { kind: 'creating', originDay: 3, laneIndex: 0, currentDay: 3 };
+    const r = reduce(
+      clicked,
+      { type: 'pointerUp' },
+      {
+        ...ctx('add-activity'),
+        createType: 'START_MILESTONE',
+      },
+    );
+    expect(r.intent).toMatchObject({ kind: 'create', type: 'START_MILESTONE' });
+  });
+
+  it('collapses a milestone draw to a zero-length point at the origin day', () => {
+    // A milestone has no duration — a drag from day 6 back to day 2 still pins a single point (day 6).
+    const dragged: GestureState = { kind: 'creating', originDay: 6, laneIndex: 1, currentDay: 2 };
+    const r = reduce(
+      dragged,
+      { type: 'pointerUp' },
+      {
+        ...ctx('add-activity'),
+        createType: 'FINISH_MILESTONE',
+      },
+    );
+    expect(r.intent).toEqual({
+      kind: 'create',
+      type: 'FINISH_MILESTONE',
+      startDay: 6,
+      endDay: 6,
+      laneIndex: 1,
+    });
   });
 
   it('cancels an in-flight create on escape with no intent', () => {
@@ -69,6 +114,65 @@ describe('gesture-machine: create-by-drag', () => {
     const r = reduce(IDLE, { type: 'pointerUp' }, ctx('add-activity'));
     expect(r.state).toEqual(IDLE);
     expect(r.intent).toBeUndefined();
+  });
+});
+
+describe('gesture-machine: two-click link tool (M5)', () => {
+  const body = (id: string): { kind: 'body'; id: string } => ({ kind: 'body', id });
+
+  it('ignores clicks outside link mode', () => {
+    const r = reduce(IDLE, { type: 'click', hit: body('a') }, ctx('select'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('first body click picks the predecessor', () => {
+    const r = reduce(IDLE, { type: 'click', hit: body('a') }, ctx('link'));
+    expect(r.state).toEqual({ kind: 'linkPicking', predecessorId: 'a' });
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('a click on empty space with no pick does nothing', () => {
+    const r = reduce(IDLE, { type: 'click', hit: { kind: 'empty' } }, ctx('link'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('second body click commits the link with the tool-selected type', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('b') }, { ...ctx('link'), linkType: 'SS' });
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toEqual({
+      kind: 'link',
+      predecessorId: 'a',
+      successorId: 'b',
+      type: 'SS',
+    });
+  });
+
+  it('defaults the link type to FS when none is supplied', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('b') }, ctx('link'));
+    expect(r.intent).toMatchObject({ kind: 'link', type: 'FS' });
+  });
+
+  it('clicking the same activity again cancels the pick (no self-link)', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('a') }, ctx('link'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('clicking empty space cancels an in-progress pick', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: { kind: 'empty' } }, ctx('link'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('escape clears a pick', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    expect(reduce(picked, { type: 'escape' }, ctx('link')).state).toEqual(IDLE);
   });
 });
 
