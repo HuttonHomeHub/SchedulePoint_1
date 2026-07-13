@@ -117,6 +117,65 @@ describe('gesture-machine: create-by-drag', () => {
   });
 });
 
+describe('gesture-machine: two-click link tool (M5)', () => {
+  const body = (id: string): { kind: 'body'; id: string } => ({ kind: 'body', id });
+
+  it('ignores clicks outside link mode', () => {
+    const r = reduce(IDLE, { type: 'click', hit: body('a') }, ctx('select'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('first body click picks the predecessor', () => {
+    const r = reduce(IDLE, { type: 'click', hit: body('a') }, ctx('link'));
+    expect(r.state).toEqual({ kind: 'linkPicking', predecessorId: 'a' });
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('a click on empty space with no pick does nothing', () => {
+    const r = reduce(IDLE, { type: 'click', hit: { kind: 'empty' } }, ctx('link'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('second body click commits the link with the tool-selected type', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('b') }, { ...ctx('link'), linkType: 'SS' });
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toEqual({
+      kind: 'link',
+      predecessorId: 'a',
+      successorId: 'b',
+      type: 'SS',
+    });
+  });
+
+  it('defaults the link type to FS when none is supplied', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('b') }, ctx('link'));
+    expect(r.intent).toMatchObject({ kind: 'link', type: 'FS' });
+  });
+
+  it('clicking the same activity again cancels the pick (no self-link)', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('a') }, ctx('link'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('clicking empty space cancels an in-progress pick', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: { kind: 'empty' } }, ctx('link'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('escape clears a pick', () => {
+    const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
+    expect(reduce(picked, { type: 'escape' }, ctx('link')).state).toEqual(IDLE);
+  });
+});
+
 describe('gesture-machine: reposition-in-time', () => {
   const body = { id: 'a', startDay: 2, endDay: 5, laneIndex: 1 };
   const grab = (): GestureState =>

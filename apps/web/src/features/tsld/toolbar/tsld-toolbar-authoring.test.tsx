@@ -31,6 +31,11 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     toggleAddActivity: vi.fn(),
     createType: 'TASK',
     setCreateType: vi.fn(),
+    canLink: true,
+    isLinking: false,
+    toggleLinkMode: vi.fn(),
+    linkType: 'FS',
+    setLinkType: vi.fn(),
     canAutoArrange: false,
     requestAutoArrange: vi.fn(),
     canRecalc: true,
@@ -131,6 +136,39 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       fireEvent.click(addButton);
       // A disabled trigger never opens the menu.
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Link tool (M5)', () => {
+    it('offers the Link tool and toggles link mode on click', () => {
+      const toggleLinkMode = vi.fn();
+      renderToolbar(ctx({ toggleLinkMode }));
+      fireEvent.click(screen.getByRole('button', { name: 'Link activities' }));
+      expect(toggleLinkMode).toHaveBeenCalledOnce();
+    });
+
+    it('hides the Link tool when the plan is not linkable', () => {
+      renderToolbar(ctx({ canLink: false }));
+      expect(screen.queryByRole('button', { name: 'Link activities' })).not.toBeInTheDocument();
+    });
+
+    it('shows the FS/SS/FF selector only while linking, and picks a type', () => {
+      const setLinkType = vi.fn();
+      const { rerender } = renderToolbar(ctx({ isLinking: false }));
+      // Not shown when idle…
+      expect(screen.queryByRole('button', { name: /Link type/ })).not.toBeInTheDocument();
+      // …shown while linking.
+      rerender(
+        <Toolbar
+          items={buildTsldToolbarItems()}
+          context={ctx({ isLinking: true, linkType: 'FS', setLinkType })}
+          label="Plan toolbar"
+          authoringEnabled
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Link type: FS' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /Start → Start/ }));
+      expect(setLinkType).toHaveBeenCalledWith('SS');
     });
   });
 });

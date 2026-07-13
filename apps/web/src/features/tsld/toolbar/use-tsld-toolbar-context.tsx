@@ -101,6 +101,8 @@ export function useTsldToolbarContext({
     setShowHelp,
     createType,
     setCreateType,
+    linkType,
+    setLinkType,
   } = canvasUi;
 
   // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
@@ -147,6 +149,13 @@ export function useTsldToolbarContext({
         setCreateType(type);
         setMode('add-activity');
       },
+      // Two-click Link tool (ADR-0032 M5): a mode toggle + a persistent FS/SS/FF type. Offered to
+      // schedule-editors; pen-gated as a set with the other authoring tools.
+      canLink: canEditSchedule,
+      isLinking: mode === 'link',
+      toggleLinkMode: () => setMode((m) => (m === 'link' ? 'select' : 'link')),
+      linkType,
+      setLinkType,
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 
@@ -191,6 +200,8 @@ export function useTsldToolbarContext({
       setMode,
       createType,
       setCreateType,
+      linkType,
+      setLinkType,
       requestAutoArrange,
       setShowHelp,
       canRecalc,

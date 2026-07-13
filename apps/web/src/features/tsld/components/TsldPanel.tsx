@@ -209,6 +209,7 @@ export function TsldPanel({
     setShowHelp,
     canvasControlRef,
     createType,
+    linkType,
   } = canvasUi ?? ownCanvasUi;
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
@@ -691,6 +692,7 @@ export function TsldPanel({
               editing={editingEnabled}
               mode={mode}
               createType={createType}
+              linkType={linkType}
               canReposition={onReposition !== undefined}
               canLink={onLink !== undefined}
               onIntent={onIntent}

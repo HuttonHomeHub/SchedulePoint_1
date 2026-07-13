@@ -436,6 +436,9 @@ export interface InteractionOverlay {
   pending?: Rect | null;
   /** A dependency being drawn (rubber-band + target highlight). */
   link?: LinkOverlay | null;
+  /** The picked predecessor while the two-click link tool waits for its second click (M5): a solid
+   * highlight ring so "now click the successor" reads. */
+  linkPick?: Rect | null;
 }
 
 /**
@@ -455,7 +458,16 @@ export function paintInteractionLayer(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
-  const { live, pending, link } = overlay;
+  const { live, pending, link, linkPick } = overlay;
+
+  if (linkPick) {
+    // The picked predecessor waiting for the second click (M5): a solid selection-colour ring, so
+    // the "now click a successor" step reads without a rubber-band. Drawn first (below any ghost).
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.strokeRect(linkPick.x - 2, linkPick.y - 2, linkPick.w + 4, linkPick.h + 4);
+  }
 
   if (pending) {
     ctx.strokeStyle = palette.selection;

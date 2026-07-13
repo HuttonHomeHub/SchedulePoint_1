@@ -1,4 +1,4 @@
-import type { ActivityType } from '@repo/types';
+import type { ActivityType, DependencyType } from '@repo/types';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TsldCanvasHandle } from '../components/TsldCanvas';
@@ -38,6 +38,13 @@ export interface TsldCanvasUiState {
    */
   createType: ActivityType;
   setCreateType: React.Dispatch<React.SetStateAction<ActivityType>>;
+  /**
+   * The dependency kind the two-click Link tool creates (canvas-first authoring, ADR-0032 M5).
+   * Driven by the toolbar's link-type control; the canvas reads it when a link is committed.
+   * Defaults to `'FS'`.
+   */
+  linkType: DependencyType;
+  setLinkType: React.Dispatch<React.SetStateAction<DependencyType>>;
 }
 
 export function useTsldCanvasUiState(): TsldCanvasUiState {
@@ -48,6 +55,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   const [autoArrangeSignal, setAutoArrangeSignal] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
   const [createType, setCreateType] = useState<ActivityType>('TASK');
+  const [linkType, setLinkType] = useState<DependencyType>('FS');
   const canvasControlRef = useRef<TsldCanvasHandle>(null);
 
   const toggleView = useCallback(
@@ -77,6 +85,8 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       canvasControlRef,
       createType,
       setCreateType,
+      linkType,
+      setLinkType,
     }),
     [
       mode,
@@ -89,6 +99,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       requestAutoArrange,
       showHelp,
       createType,
+      linkType,
     ],
   );
 }

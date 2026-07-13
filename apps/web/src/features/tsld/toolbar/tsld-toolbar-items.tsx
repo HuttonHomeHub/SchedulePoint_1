@@ -1,4 +1,4 @@
-import type { ActivityType } from '@repo/types';
+import type { ActivityType, DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   CalendarClock,
@@ -14,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   SlidersHorizontal,
+  Spline,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
@@ -180,6 +181,79 @@ function AddActivityControl({
   );
 }
 
+/** The dependency kinds the two-click Link tool offers (ADR-0032 M5). SF is dialog-only (the rare
+ * inverse, ADR-0026 D5). The short code labels the compact toolbar button; the long name reads in
+ * the menu. */
+const LINK_TYPES: ReadonlyArray<{ type: DependencyType; label: string }> = [
+  { type: 'FS', label: 'Finish → Start' },
+  { type: 'SS', label: 'Start → Start' },
+  { type: 'FF', label: 'Finish → Finish' },
+];
+
+/**
+ * The Link tool's **dependency-type selector** (ADR-0032 M5) — a compact menu-button showing the
+ * armed FS/SS/FF code, opening a `Menu` to switch it. Only shown while the Link tool is active. One
+ * focusable control (spreads `itemProps`) per the toolbar contract.
+ */
+function LinkTypeControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState({ x: 0, y: 0 });
+  const disabled = api.disabled;
+
+  const openMenu = (): void => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    setAnchor({ x: rect?.left ?? 0, y: rect?.bottom ?? 0 });
+    setOpen(true);
+  };
+
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        aria-label={`Link type: ${ctx.linkType}`}
+        onClick={() => {
+          if (disabled) return;
+          if (open) setOpen(false);
+          else openMenu();
+        }}
+        className={cn(toolbarControlVariants({ active: open, disabled }))}
+      >
+        <span className="truncate">{ctx.linkType}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={anchor}
+        label="Link type"
+        restoreFocusRef={triggerRef}
+      >
+        {LINK_TYPES.map(({ type, label }) => (
+          <MenuItem key={type} onSelect={() => ctx.setLinkType(type)}>
+            <Check
+              aria-hidden="true"
+              className={cn('size-4', ctx.linkType === type ? 'opacity-100' : 'opacity-0')}
+            />
+            {type} — {label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
+
 /** The checkbox body of the `View▾` popover — the display toggles, driven off the context. */
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
@@ -337,11 +411,37 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             onActivate: (ctx) => ctx.toggleAddActivity(),
           }),
     },
+    // Link tool (ADR-0032 M5) — the canvas-first two-click dependency tool; only present when
+    // canvas-first authoring is on and the plan is linkable. Pen-gated with the other tools.
+    {
+      id: 'link-tool',
+      group: 'tools',
+      tier: 1,
+      order: 1,
+      label: 'Link activities',
+      icon: <Spline className="size-4" />,
+      penGated: true,
+      disabledReason: () => 'Start editing to link activities',
+      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.canLink,
+      isActive: (ctx) => ctx.isLinking,
+      onActivate: (ctx) => ctx.toggleLinkMode(),
+    },
+    // The FS/SS/FF selector, shown only while the Link tool is active.
+    {
+      id: 'link-type',
+      group: 'tools',
+      tier: 1,
+      order: 2,
+      label: 'Link type',
+      penGated: true,
+      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.canLink && ctx.isLinking,
+      render: (ctx, api) => <LinkTypeControl ctx={ctx} api={api} />,
+    },
     {
       id: 'auto-arrange',
       group: 'tools',
       tier: 3,
-      order: 1,
+      order: 3,
       label: 'Auto-arrange lanes',
       icon: <AlignVerticalSpaceAround className="size-4" />,
       penGated: true,

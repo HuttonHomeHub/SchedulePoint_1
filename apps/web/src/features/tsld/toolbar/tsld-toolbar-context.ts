@@ -1,4 +1,4 @@
-import type { ActivityType } from '@repo/types';
+import type { ActivityType, DependencyType } from '@repo/types';
 import type { ReactNode } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -43,6 +43,17 @@ export interface TsldToolbarContext {
   createType: ActivityType;
   /** Pick the activity kind the next draw creates (also enters add mode). */
   setCreateType: (type: ActivityType) => void;
+  /** Whether the two-click Link tool is offered (canvas-first authoring + a link handler wired,
+   * ADR-0032 M5). False ⇒ the Link tool + its type selector are hidden. */
+  canLink: boolean;
+  /** True when the current edit mode is the two-click Link tool (drives the tool's pressed state). */
+  isLinking: boolean;
+  /** Enter/leave the Link tool (pen-gated). */
+  toggleLinkMode: () => void;
+  /** The dependency kind the Link tool creates — FS / SS / FF (SF is dialog-only, ADR-0026 D5). */
+  linkType: DependencyType;
+  /** Pick the dependency kind the Link tool creates. */
+  setLinkType: (type: DependencyType) => void;
   /** Whether the auto-arrange-lanes action is offered (editing + an `onAutoArrange` handler). */
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */
