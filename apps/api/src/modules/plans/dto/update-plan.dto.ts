@@ -60,10 +60,11 @@ export class UpdatePlanDto {
     example: '2026-05-01',
     description: 'Calendar day (YYYY-MM-DD). May be changed but not cleared (ADR-0033 M1).',
   })
-  @IsOptional()
-  // Validate whenever a value is *present* — including an explicit `null`, which then fails
-  // `@IsCalendarDate` (422). So the field is optional (omit to leave unchanged) but non-nullable:
-  // the mandatory data date can be moved, never cleared (ADR-0033 M1).
+  // NOT `@IsOptional()`: that decorator skips validation for `null` *and* `undefined`, which would
+  // let an explicit `null` slip past to the service and crash `parseCalendarDate` (500). Instead gate
+  // on `!== undefined` so an omitted field is skipped (optional) but an explicit `null` still runs
+  // `@IsCalendarDate` — which rejects it (422). Optional to send, but non-nullable: the mandatory data
+  // date can be moved, never cleared (ADR-0033 M1).
   @ValidateIf((_, value) => value !== undefined)
   @IsCalendarDate()
   plannedStart?: string;

@@ -51,6 +51,9 @@ export interface TsldPalette {
   nonWorking: string;
   /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
   today: string;
+  /** Visual-Planning conflict cue (ADR-0033): a placement earlier than its feasible start. The
+   * warning hue, drawn as a distinct **triangle badge** (shape, not colour-only) at the bar's start. */
+  conflict: string;
   // Label text colours (ADR-0026 D1). Inside-bar text uses the fill's paired *-foreground token so
   // it contrasts against that fill in both themes; beside text uses the page foreground.
   labelInside: string;
@@ -163,6 +166,25 @@ function drawConstraintPin(ctx: Ctx2D, edgeX: number, barTop: number, palette: T
   ctx.moveTo(edgeX - CONSTRAINT_PIN_W / 2, barTop - CONSTRAINT_PIN_H);
   ctx.lineTo(edgeX + CONSTRAINT_PIN_W / 2, barTop - CONSTRAINT_PIN_H);
   ctx.lineTo(edgeX, barTop);
+  ctx.fill();
+}
+
+/** Half-width (px) of the upward warning triangle marking a Visual-Planning conflict. */
+const CONFLICT_BADGE_W = 6;
+const CONFLICT_BADGE_H = 7;
+
+/**
+ * An upward warning triangle at a conflicting bar's start edge (ADR-0033): a Visual placement earlier
+ * than its feasible start. A **shape** cue in the warning hue — distinct from the downward constraint
+ * pin — so it never relies on colour alone (WCAG 1.4.1); the legend names it and the listbox spells it
+ * out for AT. Drawn just below the bar top so it doesn't collide with a constraint pin above.
+ */
+function drawConflictBadge(ctx: Ctx2D, startX: number, barTop: number, palette: TsldPalette): void {
+  ctx.fillStyle = palette.conflict;
+  ctx.beginPath();
+  ctx.moveTo(startX + 1, barTop + CONFLICT_BADGE_H + 1);
+  ctx.lineTo(startX + 1 + CONFLICT_BADGE_W, barTop + CONFLICT_BADGE_H + 1);
+  ctx.lineTo(startX + 1 + CONFLICT_BADGE_W / 2, barTop + 1);
   ctx.fill();
 }
 
@@ -309,6 +331,12 @@ export function paintScene(
           ? rect.x + rect.w
           : rect.x;
       drawConstraintPin(ctx, edgeX, rect.y, palette);
+    }
+    // Visual-Planning conflict (ADR-0033): the placement is before its earliest feasible start. A
+    // warning triangle at the bar's start — never auto-moved, only flagged (the mapping seam gates
+    // this to VISUAL mode, so EARLY/late bars never show it).
+    if (activity.visualConflict) {
+      drawConflictBadge(ctx, rect.x, rect.y, palette);
     }
   }
 

@@ -70,7 +70,16 @@ export function describeActivity(a: ActivitySummary): string {
   // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
   const constraint = formatConstraint(a);
   const constraintPart = constraint ? `, ${constraint.full}` : '';
-  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}`;
+  // Visual-Planning conflict cue (ADR-0033): the spoken equivalent of the warning triangle drawn on a
+  // bar placed earlier than its earliest feasible start (WCAG 1.1.1). Kept a *separate* read-out from
+  // float (SQ-c), since float is a pure-network fact and drift is a placement fact.
+  const conflictPart =
+    a.visualConflict && a.visualDriftDays !== null
+      ? `, conflict: placed ${Math.abs(a.visualDriftDays)} working ${
+          Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
+        } before its earliest feasible start`
+      : '';
+  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}`;
 }
 
 /**

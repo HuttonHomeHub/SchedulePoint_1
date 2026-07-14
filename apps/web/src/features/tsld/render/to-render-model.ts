@@ -54,9 +54,10 @@ export function toRenderActivities(
       earlyFinish: barFinish,
       isCritical: a.isCritical,
       isNearCritical: a.isNearCritical,
-      // Conflict cue is meaningful only in VISUAL mode; carry it always, the painter gates on mode.
-      visualConflict: a.visualConflict,
-      visualDriftDays: a.visualDriftDays,
+      // The conflict cue + drift are meaningful only in VISUAL mode — the engine computes them for
+      // every plan, so gate them to the visual source here (EARLY/late bars never show the cue).
+      visualConflict: source === 'visual' ? a.visualConflict : false,
+      visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
       constraint: activeConstraintAnchor(a),
       label: activityBarLabel(a),
     };

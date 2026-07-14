@@ -13,6 +13,7 @@ const PALETTE: TsldPalette = {
   selection: '#0af',
   nonWorking: '#222',
   today: '#f00',
+  conflict: '#fa0',
   labelInside: '#fff',
   labelInsideCritical: '#fff',
   labelInsideNearCritical: '#000',
