@@ -1,4 +1,4 @@
-import type { ActivityType, DependencyType } from '@repo/types';
+import type { ActivityType, DependencyType, SchedulingMode } from '@repo/types';
 import type { ReactNode } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -39,6 +39,12 @@ export interface TsldToolbarContext {
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
   toggleView: (key: keyof TsldViewToggles) => void;
+  /** The plan's scheduling mode (ADR-0033) — EARLY or VISUAL. Drives the Mode selector's pressed
+   * state. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
+  schedulingMode: SchedulingMode;
+  /** Switch the plan's scheduling mode (targeted PATCH, pen-gated). `null` when the viewer can't
+   * edit the schedule, so the selector renders read-only. */
+  setSchedulingMode: ((mode: SchedulingMode) => void) | null;
 
   // --- Tools / author (group 4, pen-gated) --------------------------------------------------
   /** True when the current edit mode is "add activity" (drives the tool's pressed state). */

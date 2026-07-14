@@ -41,6 +41,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: spies.toggleView,
+    schedulingMode: 'EARLY',
+    setSchedulingMode: vi.fn(),
     isAddingActivity: false,
     toggleAddActivity: spies.toggleAddActivity,
     createType: 'TASK',

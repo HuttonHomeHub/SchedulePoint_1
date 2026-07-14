@@ -28,6 +28,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: vi.fn(),
+    schedulingMode: 'EARLY',
+    setSchedulingMode: vi.fn(),
     isAddingActivity: false,
     toggleAddActivity: vi.fn(),
     createType: 'TASK',

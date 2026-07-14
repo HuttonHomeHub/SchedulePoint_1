@@ -11,7 +11,7 @@ import type {
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
 import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
-import { useSetPlanStart } from '@/features/plans';
+import { useSetPlanStart, useSetPlanSchedulingMode } from '@/features/plans';
 import { ScheduleSummaryStrip } from '@/features/schedule';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -71,6 +71,7 @@ export function useTsldToolbarContext({
   const announce = useAnnounce();
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setStart = useSetPlanStart(orgSlug);
+  const setPlanMode = useSetPlanSchedulingMode(orgSlug);
 
   // The persisted-start control's name: "Project start" once the ADR-0033 split is on, else the
   // original "Timeline start". Kept here so the visible label and the live-region copy share one source.
@@ -152,6 +153,25 @@ export function useTsldToolbarContext({
       // Lens
       viewToggles,
       toggleView,
+      // Scheduling mode (ADR-0033 M3): read the plan's mode + a pen-gated switch. Read-only viewers
+      // get a null setter so the selector renders inert. Announces the switch (the bars re-source on
+      // the next recalc).
+      schedulingMode: plan.schedulingMode,
+      setSchedulingMode: canEditSchedule
+        ? (nextMode) =>
+            setPlanMode.mutate(
+              { planId, version: plan.version, schedulingMode: nextMode },
+              {
+                onSuccess: () =>
+                  announce(
+                    nextMode === 'VISUAL'
+                      ? 'Scheduling mode set to Visual planning.'
+                      : 'Scheduling mode set to Early start.',
+                  ),
+                onError: () => announce('Couldn’t change the scheduling mode. Please try again.'),
+              },
+            )
+        : null,
 
       // Tools (pen-gated as a set at the toolbar via authoringEnabled)
       isAddingActivity: mode === 'add-activity',
@@ -207,8 +227,10 @@ export function useTsldToolbarContext({
       canvasControlRef,
       requestFit,
       plan.plannedStart,
+      plan.schedulingMode,
       plan.version,
       setStart,
+      setPlanMode,
       startLabel,
       startLabelLower,
       planId,

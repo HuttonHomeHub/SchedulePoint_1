@@ -407,6 +407,29 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
       render: (ctx, api) => <GoToDateControl ctx={ctx} itemProps={api.itemProps} />,
     },
+    // Scheduling-mode selector (ADR-0033 M3, flag-on only): a two-item segmented Early | Visual
+    // control in the Lens group. Pen-gated — only offered when the viewer can switch the mode
+    // (`setSchedulingMode` non-null); the mode still drives rendering for read-only viewers.
+    {
+      id: 'mode-early',
+      group: 'lens',
+      tier: 2,
+      order: -2,
+      label: 'Early start',
+      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode !== null,
+      isActive: (ctx) => ctx.schedulingMode === 'EARLY',
+      onActivate: (ctx) => ctx.setSchedulingMode?.('EARLY'),
+    },
+    {
+      id: 'mode-visual',
+      group: 'lens',
+      tier: 2,
+      order: -1,
+      label: 'Visual planning',
+      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode !== null,
+      isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
+      onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
+    },
     ...ZOOM_LEVELS.map((level, i): ToolbarItem<TsldToolbarContext> => ({
       id: `scale-${level}`,
       group: 'frame',

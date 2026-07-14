@@ -29,6 +29,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: vi.fn(),
+    schedulingMode: 'EARLY',
+    setSchedulingMode: vi.fn(),
     isAddingActivity: false,
     toggleAddActivity: vi.fn(),
     createType: 'TASK',
@@ -103,5 +105,22 @@ describe('TSLD toolbar — scheduling-modes date split (flag on)', () => {
   it('hides "Go to date" until the plan is anchored (no plannedStart)', () => {
     renderToolbar(ctx({ plannedStart: null, setPlannedStart: null }));
     expect(screen.queryByRole('button', { name: 'Go to date' })).not.toBeInTheDocument();
+  });
+
+  it('offers an Early | Visual mode selector, marks the active mode, and switches on click', () => {
+    const setSchedulingMode = vi.fn();
+    renderToolbar(ctx({ schedulingMode: 'EARLY', setSchedulingMode }));
+    const early = screen.getByRole('button', { name: 'Early start' });
+    const visual = screen.getByRole('button', { name: 'Visual planning' });
+    expect(early).toHaveAttribute('aria-pressed', 'true');
+    expect(visual).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(visual);
+    expect(setSchedulingMode).toHaveBeenCalledWith('VISUAL');
+  });
+
+  it('hides the mode selector for a read-only viewer (no setter)', () => {
+    renderToolbar(ctx({ setSchedulingMode: null }));
+    expect(screen.queryByRole('button', { name: 'Early start' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Visual planning' })).not.toBeInTheDocument();
   });
 });
