@@ -91,7 +91,10 @@ vi.mock('@/features/dependencies', () => ({
 }));
 
 // The TSLD panel needs Canvas 2D; stub it so the layout renders in jsdom.
-vi.mock('@/features/tsld', () => ({ TsldPanel: () => <div data-testid="tsld-panel" /> }));
+vi.mock('@/features/tsld', () => ({
+  TsldPanel: () => <div data-testid="tsld-panel" />,
+  barDateSourceFor: () => 'early',
+}));
 
 // Schedule: stub the summary strip + the recalc/summary hooks the toolbar builder reads.
 vi.mock('@/features/schedule', () => ({

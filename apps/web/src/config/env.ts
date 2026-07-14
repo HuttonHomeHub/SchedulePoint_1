@@ -152,14 +152,15 @@ export const CANVAS_AUTHORING_ENABLED =
 
 /**
  * Scheduling modes & a de-overloaded plan start (ADR-0033, spec
- * `docs/specs/scheduling-model-and-canvas-planning-modes.md`). **OFF by default** — M0 ships dark
- * foundations only (schema + the engine's effective-Visual pass). When fully on it adds: a plan-level
- * **Early / Visual** scheduling mode + a read-only **Late Start** overlay; a display-only **Go to
- * date** control split out from the project start; a **mandatory** project start; and **Visual
- * Planning**, where dragging a bar records an advisory `visualStart` (no SNET constraint) that pushes
- * successors and flags logic conflicts rather than auto-correcting. Layered on the canvas authoring
- * host — the mode selector and Go-to-date live in the toolbar-hosted workspace — so it is meaningful
- * only when that surface is on; turning the host off turns this off too.
+ * `docs/specs/scheduling-model-and-canvas-planning-modes.md`). **ON by default** (flipped at M5
+ * enablement; set `VITE_SCHEDULING_MODES=false` to disable). It adds: a plan-level **Early / Visual**
+ * scheduling mode + a read-only **Late Start** overlay; a display-only **Go to date** control split
+ * out from the project start; and **Visual Planning**, where dragging a bar records an advisory
+ * `visualStart` (no SNET constraint) that pushes successors and flags logic conflicts rather than
+ * auto-correcting. (The **mandatory** project start shipped at M1 and is live independent of this
+ * flag.) Layered on the canvas authoring host — the mode selector and Go-to-date live in the
+ * toolbar-hosted workspace — so it is meaningful only when that surface is on; turning the host off
+ * turns this off too.
  */
 export const SCHEDULING_MODES_ENABLED =
-  flagDefaultOff(import.meta.env.VITE_SCHEDULING_MODES) && CANVAS_AUTHORING_ENABLED;
+  flagDefaultOn(import.meta.env.VITE_SCHEDULING_MODES) && CANVAS_AUTHORING_ENABLED;
