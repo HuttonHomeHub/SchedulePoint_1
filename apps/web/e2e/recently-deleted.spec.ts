@@ -53,6 +53,10 @@ test('a deleted client cascade is shown and restored from the recycle bin (acces
 
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Baseline');
+  await page
+    .getByRole('dialog')
+    .getByLabel(/Planned start/)
+    .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await expect(page.getByRole('link', { name: 'Baseline' })).toBeVisible();
 
@@ -101,6 +105,10 @@ test('a directly-deleted plan can be restored from the recycle bin', async ({ pa
 
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Baseline');
+  await page
+    .getByRole('dialog')
+    .getByLabel(/Planned start/)
+    .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await expect(page.getByRole('link', { name: 'Baseline' })).toBeVisible();
 
