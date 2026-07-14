@@ -1,5 +1,62 @@
 # @repo/api
 
+## 0.11.0
+
+### Minor Changes
+
+- [#65](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/65) [`5e4e1a8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5e4e1a88b56e6e561102d80129a711ecdcaeec8c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: scheduling modes — mandatory project start + Visual planning (ADR-0033)
+
+  Delivers ADR-0033's scheduling model. The **mandatory project start (M1)** is a live product
+  change; the **Visual-planning surface (M2–M4)** ships behind the default-off `VITE_SCHEDULING_MODES`
+  flag until enablement.
+
+  **M1 — Mandatory project start (live):**
+
+  - A plan can no longer exist without a start date. A backfill+NOT-NULL migration sets
+    `plans.planned_start` for existing plans (CQ-6 chain: earliest active constraint date → actual
+    start → creation day) and makes the column NOT NULL. `CreatePlanDto.plannedStart` is required (422
+    without); `UpdatePlanDto` rejects an explicit `null` (the data date can be moved, never cleared).
+    The web plan form requires it, and the ADR-0032 "first draw anchors to today" hack is gone.
+
+  **M2–M4 — Visual planning (behind `VITE_SCHEDULING_MODES`):**
+
+  - A plan-level `schedulingMode` (**Early** = computed-earliest CPM, **Visual** = hand-placed) with a
+    toolbar mode selector, and a Planner-owned `Activity.visualStart` placement input fed through the
+    engine's second, forward-only effective-Visual pass (placements pin the bar and push unplaced
+    successors; the pure-network pass still owns early/late/float).
+  - A Visual-mode canvas drag hand-places `visualStart` (no implicit SNET constraint); Early mode keeps
+    the SNET path. Engine-owned conflict flags surface as an on-canvas warning triangle (shape, not
+    colour-only) with a spoken read-out — placements are flagged, never auto-moved.
+  - Navigation/data split: a "Go to date" view jump distinct from the persisted "Project start" anchor.
+  - A read-only **Late-start overlay** renders bars from the late dates for float analysis (editing
+    suppressed while on).
+
+  Flag-off, the TSLD renders exactly as before.
+
+### Patch Changes
+
+- [#64](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/64) [`c073c75`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c073c750d7c329286bd3106cb3f5e6dc3501ceb0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: scheduling-modes M0 dark foundations (ADR-0033)
+
+  Additive, behind-the-flag foundations for the scheduling-modes feature — **no user-visible change**
+  (nothing sets `visual_start` yet and no UI reads the flag; existing plans recalc identically):
+
+  - **Schema (additive, reversible):** a `SchedulingMode` enum + `Plan.schedulingMode` (default `EARLY`),
+    the Planner-owned `Activity.visualStart` placement input, and four engine-owned outputs
+    (`visualEffectiveStart/Finish`, `visualConflict`, `visualDriftDays`) modelled like the CPM columns.
+  - **Engine:** a second, forward-only _effective-Visual_ CPM pass — honours each `visualStart` exactly,
+    pushes successors from the feasible finish, and emits the conflict/drift outputs. The pure
+    forward/backward pass is untouched, so `early*`/`late*`/float stay a pure function of the network
+    (proven by a golden-parity test).
+  - **Recalc wiring:** `visual_start` feeds the engine and the four outputs are persisted by the same
+    batched `unnest` UPDATE — still out of the optimistic-lock `version`/`updated_at` path.
+  - **Flag:** `SCHEDULING_MODES_ENABLED` (`VITE_SCHEDULING_MODES`, default-off), gated on the canvas host.
+
+  The mandatory-`plannedStart` migration and the UI (mode selector, Visual drag, Late overlay, Go-to-date)
+  land in later milestones.
+
+- Updated dependencies [[`5e4e1a8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5e4e1a88b56e6e561102d80129a711ecdcaeec8c)]:
+  - @repo/types@0.9.0
+
 ## 0.10.1
 
 ### Patch Changes
