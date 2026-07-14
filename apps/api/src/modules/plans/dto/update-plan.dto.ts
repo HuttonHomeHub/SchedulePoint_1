@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PlanStatus } from '@prisma/client';
+import { PlanStatus, SchedulingMode } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
@@ -22,8 +22,9 @@ const trim = ({ value }: { value: unknown }): unknown =>
 /**
  * Request body for updating a plan. `version` is required for optimistic
  * locking (echo the value from the last read). Every field is optional; send
- * only what changes. `description` may be `""` to clear it; `plannedStart` may
- * be `null` to clear it.
+ * only what changes. `description` may be `""` to clear it. `plannedStart` is the
+ * mandatory CPM data date (ADR-0033 M1): it may be **changed** but never cleared —
+ * an explicit `null` is rejected (422).
  */
 export class UpdatePlanDto {
   @ApiPropertyOptional({ minLength: 1, maxLength: 200 })
@@ -47,16 +48,25 @@ export class UpdatePlanDto {
   status?: PlanStatus;
 
   @ApiPropertyOptional({
-    format: 'date',
-    nullable: true,
-    example: '2026-05-01',
-    description: 'Calendar day (YYYY-MM-DD), or null to clear.',
+    enum: SchedulingMode,
+    description: 'Switch scheduling mode (ADR-0033): EARLY or VISUAL.',
   })
   @IsOptional()
-  // Allow an explicit null (clear the date); validate the format only for a value.
-  @ValidateIf((_, value) => value !== null)
+  @IsEnum(SchedulingMode)
+  schedulingMode?: SchedulingMode;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description: 'Calendar day (YYYY-MM-DD). May be changed but not cleared (ADR-0033 M1).',
+  })
+  @IsOptional()
+  // Validate whenever a value is *present* — including an explicit `null`, which then fails
+  // `@IsCalendarDate` (422). So the field is optional (omit to leave unchanged) but non-nullable:
+  // the mandatory data date can be moved, never cleared (ADR-0033 M1).
+  @ValidateIf((_, value) => value !== undefined)
   @IsCalendarDate()
-  plannedStart?: string | null;
+  plannedStart?: string;
 
   @ApiPropertyOptional({
     format: 'uuid',

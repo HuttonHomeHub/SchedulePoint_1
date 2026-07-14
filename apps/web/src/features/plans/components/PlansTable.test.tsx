@@ -33,6 +33,7 @@ const PLANS: PlanSummary[] = [
     name: 'Baseline',
     description: null,
     status: 'ACTIVE',
+    schedulingMode: 'EARLY',
     plannedStart: '2026-05-01',
     calendarId: null,
     version: 1,

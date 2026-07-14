@@ -149,7 +149,13 @@ describe.skipIf(!hasDatabase)('Projects API (e2e)', () => {
 
     // Seed a plan directly (its HTTP module lands later).
     const plan = await prisma.plan.create({
-      data: { organizationId: orgId, projectId, name: 'Plan', createdBy: actor.userId },
+      data: {
+        organizationId: orgId,
+        projectId,
+        name: 'Plan',
+        plannedStart: new Date('2026-01-01T00:00:00.000Z'),
+        createdBy: actor.userId,
+      },
     });
 
     await actor.agent.delete(`/api/v1/organizations/acme/projects/${projectId}`).expect(204);

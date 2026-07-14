@@ -14,7 +14,7 @@ import { packLanes } from '../render/auto-pack';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { daysBetween, type Point } from '../render/render-model';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
-import { toRenderActivities, toRenderEdges } from '../render/to-render-model';
+import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import {
   SelectionActionsBar,
   type SelectionActionContext,
@@ -150,6 +150,11 @@ export interface TsldPanelProps {
   /** Externally-owned canvas UI state (mode/toggles/zoom/fit/help), so the workspace toolbar and the
    * canvas share one source of truth (ADR-0031). Absent → the panel owns it (unchanged behaviour). */
   canvasUi?: TsldCanvasUiState;
+  /** Which engine dates draw each bar (ADR-0033): `early` (default, classic CPM), `visual` (VISUAL
+   * mode's effective-Visual dates), or `late` (the read-only Late-Start overlay). The route derives
+   * it from the plan's `schedulingMode` + the Late overlay toggle, gated by `VITE_SCHEDULING_MODES`
+   * (flag-off it stays `early`, byte-for-byte). */
+  barDateSource?: BarDateSource;
 }
 
 interface PendingCreate {
@@ -194,6 +199,7 @@ export function TsldPanel({
   fill = false,
   chromeless = false,
   canvasUi,
+  barDateSource = 'early',
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -254,7 +260,10 @@ export function TsldPanel({
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
 
-  const renderActivities = useMemo(() => toRenderActivities(activities), [activities]);
+  const renderActivities = useMemo(
+    () => toRenderActivities(activities, barDateSource),
+    [activities, barDateSource],
+  );
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
   // The listbox option text (Tier-1 `describeActivity`) is memoised by activity, keyed on
   // `activities` only — NOT on selection or unrelated parent re-renders. Without this, any parent

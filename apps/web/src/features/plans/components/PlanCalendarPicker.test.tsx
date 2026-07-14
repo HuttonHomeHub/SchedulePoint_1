@@ -15,6 +15,7 @@ const PLAN: PlanSummary = {
   name: 'Baseline',
   description: null,
   status: 'DRAFT',
+  schedulingMode: 'EARLY',
   plannedStart: '2026-01-01',
   calendarId: 'cal-standard',
   version: 4,

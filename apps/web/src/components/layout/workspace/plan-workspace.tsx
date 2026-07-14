@@ -17,11 +17,11 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { useMediaQuery } from '@/components/ui/use-media-query';
-import { CANVAS_TOOLBAR_ENABLED } from '@/config/env';
+import { CANVAS_TOOLBAR_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
-import { TsldPanel } from '@/features/tsld';
+import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the split; below it, one pane via the view toggle. */
@@ -123,6 +123,9 @@ function Adr0030PlanWorkspace({
       activities={model.activities.data ?? []}
       dependencies={model.dependencies.data ?? []}
       dataDate={plan.plannedStart}
+      barDateSource={
+        SCHEDULING_MODES_ENABLED ? barDateSourceFor(plan.schedulingMode, false) : 'early'
+      }
       canEdit={model.canEditSchedule}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}

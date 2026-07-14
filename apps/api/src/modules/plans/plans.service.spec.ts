@@ -43,7 +43,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     name: 'Baseline',
     description: null,
     status: 'DRAFT',
-    plannedStart: null,
+    plannedStart: new Date('2026-01-01T00:00:00.000Z'),
     calendarId: null,
     schedulingMode: 'EARLY',
     version: 1,
@@ -137,6 +137,7 @@ describe('PlansService', () => {
       plans.create.mockResolvedValue(plan());
       const result = await service.create(principalWith(ALL), 'acme', PROJECT_ID, {
         name: 'Baseline',
+        plannedStart: '2026-01-01',
       });
       expect(result.id).toBe('pl1');
       expect(plans.create).toHaveBeenCalledWith(
@@ -153,7 +154,10 @@ describe('PlansService', () => {
     it('defaults calendarId to null when the org has no active Standard calendar', async () => {
       calendars.findActiveByNameInOrg.mockResolvedValue(null);
       plans.create.mockResolvedValue(plan());
-      await service.create(principalWith(ALL), 'acme', PROJECT_ID, { name: 'NoCal' });
+      await service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+        name: 'NoCal',
+        plannedStart: '2026-01-01',
+      });
       const arg = plans.create.mock.calls[0]?.[0] as Record<string, unknown>;
       expect('calendarId' in arg).toBe(false);
     });
@@ -173,14 +177,20 @@ describe('PlansService', () => {
     it('404s when the parent project is missing/deleted (and does not create)', async () => {
       projects.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(
-        service.create(principalWith(ALL), 'acme', PROJECT_ID, { name: 'X' }),
+        service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+          name: 'X',
+          plannedStart: '2026-01-01',
+        }),
       ).rejects.toBeInstanceOf(NotFoundError);
       expect(plans.create).not.toHaveBeenCalled();
     });
 
     it('forbids a caller without plan:create', async () => {
       await expect(
-        service.create(principalWith(['plan:read']), 'acme', PROJECT_ID, { name: 'X' }),
+        service.create(principalWith(['plan:read']), 'acme', PROJECT_ID, {
+          name: 'X',
+          plannedStart: '2026-01-01',
+        }),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect(plans.create).not.toHaveBeenCalled();
     });
@@ -188,7 +198,10 @@ describe('PlansService', () => {
     it('maps a duplicate name to a 409', async () => {
       plans.create.mockRejectedValue(uniqueViolation());
       await expect(
-        service.create(principalWith(ALL), 'acme', PROJECT_ID, { name: 'Baseline' }),
+        service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+          name: 'Baseline',
+          plannedStart: '2026-01-01',
+        }),
       ).rejects.toBeInstanceOf(ConflictError);
     });
   });
@@ -204,14 +217,15 @@ describe('PlansService', () => {
   });
 
   describe('update', () => {
-    it('clears plannedStart on an explicit null', async () => {
+    it('moves plannedStart to a new calendar day (mandatory: never cleared, ADR-0033 M1)', async () => {
       plans.findActiveByIdInOrg.mockResolvedValue(plan());
       plans.updateIfVersionMatches.mockResolvedValue(1);
-      await service.update(principalWith(ALL), 'acme', 'pl1', { plannedStart: null, version: 1 });
-      const patch = plans.updateIfVersionMatches.mock.calls[0]?.[2] as {
-        plannedStart: Date | null;
-      };
-      expect(patch.plannedStart).toBeNull();
+      await service.update(principalWith(ALL), 'acme', 'pl1', {
+        plannedStart: '2026-09-01',
+        version: 1,
+      });
+      const patch = plans.updateIfVersionMatches.mock.calls[0]?.[2] as { plannedStart: Date };
+      expect(patch.plannedStart.toISOString()).toBe('2026-09-01T00:00:00.000Z');
     });
 
     it('assigns a same-org active calendar and clears it on explicit null', async () => {

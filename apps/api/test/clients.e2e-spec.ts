@@ -136,6 +136,7 @@ describe.skipIf(!hasDatabase)('Clients API (e2e)', () => {
         organizationId: orgId,
         projectId: project.id,
         name: 'Plan',
+        plannedStart: new Date('2026-01-01T00:00:00.000Z'),
         createdBy: actor.userId,
       },
     });

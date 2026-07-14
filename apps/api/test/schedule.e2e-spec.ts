@@ -15,8 +15,10 @@ import type { PrismaService } from '../src/prisma/prisma.service';
  * multi-path plan producing the expected critical set + summary, the
  * version/updated_by-untouched guarantee of the engine-owned write, the RBAC
  * split (Planner writes, Viewer/Contributor 403), the IDOR/cross-org 404 matrix,
- * the 422 no-start path, and a performance smoke at 500 activities. Verified
- * against a real PostgreSQL + Better Auth session.
+ * and a performance smoke at 500 activities. Verified against a real PostgreSQL
+ * + Better Auth session. (The 422 no-start path is no longer reachable through
+ * the API post-ADR-0033-M1 — `plannedStart` is now mandatory — so it is
+ * covered at the unit level only; see the note above the RBAC test below.)
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';
@@ -110,7 +112,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       .expect(201);
     const plan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
-      .send({ name: 'Baseline' })
+      .send({ name: 'Baseline', plannedStart })
       .expect(201);
     const planId = plan.body.data.id as string;
     // Clear the org's default Standard calendar (M5-C1) so these golden cases run on
@@ -118,7 +120,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     // covered by its own case below.
     await actor.agent
       .patch(`/api/v1/organizations/acme/plans/${planId}`)
-      .send({ plannedStart, calendarId: null, version: 1 })
+      .send({ calendarId: null, version: 1 })
       .expect(200);
     return planId;
   }
@@ -243,24 +245,15 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(depAfter.updatedBy).toBe(depBefore.updatedBy);
   });
 
-  it('422s with PLAN_START_REQUIRED when the plan has no start date', async () => {
-    const { actor } = await adminWithOrg();
-    const client = await actor.agent
-      .post('/api/v1/organizations/acme/clients')
-      .send({ name: 'Northgate' })
-      .expect(201);
-    const project = await actor.agent
-      .post(`/api/v1/organizations/acme/clients/${client.body.data.id}/projects`)
-      .send({ name: 'Riverside' })
-      .expect(201);
-    const plan = await actor.agent
-      .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
-      .send({ name: 'No start' })
-      .expect(201);
-
-    const res = await actor.agent.post(recalcUrl(plan.body.data.id as string)).expect(422);
-    expect(res.body.error?.details?.reason).toBe('PLAN_START_REQUIRED');
-  });
+  // NOTE: `plannedStart` is now a mandatory, non-null column (ADR-0033 M1;
+  // migration `20260714130000_require_plan_planned_start`) and `POST /plans`
+  // rejects a missing start with 422 — so a plan with no start date can no
+  // longer be constructed through the API (see `plans.e2e-spec.ts`'s
+  // "rejects a plan created without a start date (422)"). The
+  // PLAN_START_REQUIRED defensive branch in `ScheduleService.recalculate` is
+  // now unreachable via any real code path but is still covered directly at
+  // the unit level (`schedule.service.spec.ts`, which mocks a plan with a
+  // null `plannedStart` to exercise the guard).
 
   it('enforces RBAC: Viewer and Contributor cannot recalculate (403)', async () => {
     const { actor, orgId } = await adminWithOrg();

@@ -127,20 +127,19 @@ export function useTsldToolbarContext({
       // "Timeline start" flag-off — so the announcement never contradicts the field name (ux review).
       plannedStart: plan.plannedStart,
       setPlannedStart: canEditSchedule
-        ? (iso: string) =>
+        ? (iso: string) => {
+            // Mandatory data date (ADR-0033 M1): it can be moved, never cleared — an empty value
+            // (the native date input's clear affordance) is a no-op, not a null write.
+            if (!iso) return;
             setStart.mutate(
-              { planId, version: plan.version, plannedStart: iso || null },
+              { planId, version: plan.version, plannedStart: iso },
               {
-                onSuccess: () =>
-                  announce(
-                    iso
-                      ? `${startLabel} set to ${formatCalendarDate(iso)}.`
-                      : `${startLabel} cleared.`,
-                  ),
+                onSuccess: () => announce(`${startLabel} set to ${formatCalendarDate(iso)}.`),
                 onError: () =>
                   announce(`Couldn’t update the ${startLabelLower}. Please try again.`),
               },
-            )
+            );
+          }
         : null,
       // Go to date (ADR-0033 M2): a pure view pan via the canvas control handle — no fetch, no write,
       // no persisted state (CQ-1). Available to every role; navigating never mutates the plan. It

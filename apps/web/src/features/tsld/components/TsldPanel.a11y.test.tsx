@@ -33,6 +33,11 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     totalFloat: 0,
     isCritical: false,
     isNearCritical: false,
+    visualStart: null,
+    visualEffectiveStart: null,
+    visualEffectiveFinish: null,
+    visualConflict: false,
+    visualDriftDays: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -46,6 +51,11 @@ const B = activity({
   name: 'Excavate',
   laneIndex: 1,
   isNearCritical: true,
+  visualStart: null,
+  visualEffectiveStart: null,
+  visualEffectiveFinish: null,
+  visualConflict: false,
+  visualDriftDays: null,
   totalFloat: 2,
 });
 const DEP_A_DRIVES_B: DependencySummary[] = [

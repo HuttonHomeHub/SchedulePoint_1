@@ -113,7 +113,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
       .expect(201);
     const plan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
-      .send({ name })
+      .send({ name, plannedStart: '2026-01-01' })
       .expect(201);
     return plan.body.data.id as string;
   }
@@ -318,7 +318,7 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
       .expect(201);
     const otherPlan = await otherAdmin.agent
       .post(`/api/v1/organizations/globex/projects/${otherProject.body.data.id}/plans`)
-      .send({ name: 'Hidden' })
+      .send({ name: 'Hidden', plannedStart: '2026-01-01' })
       .expect(201);
 
     await admin.agent.get(lockUrl(otherPlan.body.data.id)).expect(404);

@@ -223,6 +223,20 @@ fourth level (delivered with the activities module); `activities` is a **leaf** 
 it has its own soft-delete/restore but no children, so `assertParentActive` for an
 activity checks its parent **plan**.
 
+### Plan: the mandatory data date (`planned_start`)
+
+`Plan.planned_start` (`@db.Date`, date-only) **is the CPM data date** (ADR-0023)
+and is **`NOT NULL`** as of ADR-0033 M1. It was originally nullable (the M0
+additive slice) and made mandatory in a single, deliberately isolated migration
+(`…_require_plan_planned_start`) that first **backfilled** every existing NULL —
+including soft-deleted plans, since the constraint applies to all rows — via a
+first-non-null-wins chain (earliest **active** activity `constraint_date` →
+earliest **active** activity `actual_start` → `created_at::date` → `CURRENT_DATE`)
+and then ran `SET NOT NULL`. Backfill and constraint commit atomically in the one
+migration transaction. This is a **forward-only, irreversible** change (the
+backfilled dates are indistinguishable from originals afterward); a plan with only
+soft-deleted activities falls through to `created_at::date`.
+
 ### Activity: the schedule leaf
 
 `Activity` follows every standard above and adds three column groups the deferred

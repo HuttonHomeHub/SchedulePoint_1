@@ -98,7 +98,9 @@ export class PlansService {
         name: dto.name,
         description: dto.description ?? null,
         ...(dto.status ? { status: dto.status } : {}),
-        ...(dto.plannedStart ? { plannedStart: parseCalendarDate(dto.plannedStart) } : {}),
+        ...(dto.schedulingMode ? { schedulingMode: dto.schedulingMode } : {}),
+        // Required (ADR-0033 M1): the DTO guarantees a valid calendar date.
+        plannedStart: parseCalendarDate(dto.plannedStart),
         ...(standard ? { calendarId: standard.id } : {}),
         createdBy: principal.userId,
         updatedBy: principal.userId,
@@ -136,8 +138,11 @@ export class PlansService {
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.description !== undefined) patch.description = dto.description;
     if (dto.status !== undefined) patch.status = dto.status;
+    if (dto.schedulingMode !== undefined) patch.schedulingMode = dto.schedulingMode;
+    // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
+    // defined value is always a valid calendar date.
     if (dto.plannedStart !== undefined) {
-      patch.plannedStart = dto.plannedStart === null ? null : parseCalendarDate(dto.plannedStart);
+      patch.plannedStart = parseCalendarDate(dto.plannedStart);
     }
     // A null clears the calendar (all-days-work); a specific id is validated + written
     // under a calendar-scoped advisory lock below.

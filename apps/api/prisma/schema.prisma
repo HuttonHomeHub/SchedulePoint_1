@@ -391,12 +391,11 @@ model Plan {
   schedulingMode SchedulingMode @default(EARLY) @map("scheduling_mode")
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
-  // (ADR-0023). It becomes **required + NOT NULL** in ADR-0033 **M1** (a one-time
-  // backfill — earliest active constraint_date → earliest active actual_start →
-  // created_at::date → today — then SET NOT NULL, shipped together with the
-  // CreatePlanDto-required change). It stays **nullable** in this M0 additive slice
-  // so the irreversible migration lands in its own milestone.
-  plannedStart   DateTime?  @map("planned_start") @db.Date
+  // (ADR-0023). **Required + NOT NULL** as of ADR-0033 **M1** — the
+  // …_require_plan_planned_start migration backfilled every prior NULL (earliest
+  // active constraint_date → earliest active actual_start → created_at::date →
+  // today) then SET NOT NULL. That was the feature's one irreversible migration.
+  plannedStart   DateTime   @map("planned_start") @db.Date
   // The plan's default working-day calendar (M5, ADR-0024). Nullable → all-days-work
   // (M6 back-compat); new plans default to the org's seeded Standard calendar. FK is
   // RESTRICT (calendars soft-delete only; the service in-use guard returns 409

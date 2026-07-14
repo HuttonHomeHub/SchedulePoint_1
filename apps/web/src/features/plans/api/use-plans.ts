@@ -23,7 +23,8 @@ function createBody(input: PlanFormValues) {
     name: input.name,
     description: optional(input.description),
     status: input.status,
-    plannedStart: optional(input.plannedStart),
+    // Required (ADR-0033 M1): the form schema guarantees a non-empty calendar day.
+    plannedStart: input.plannedStart,
   };
 }
 
@@ -32,7 +33,8 @@ function updateBody(input: PlanFormValues & { version: number }) {
     name: input.name,
     description: optional(input.description) ?? null,
     status: input.status,
-    plannedStart: optional(input.plannedStart) ?? null,
+    // Mandatory data date (ADR-0033 M1): send the value, never null (the API rejects a clear).
+    plannedStart: input.plannedStart,
     version: input.version,
   };
 }
@@ -100,17 +102,18 @@ export function useSetPlanCalendar(orgSlug: string) {
 }
 
 /**
- * Set (or clear) a plan's `plannedStart` — the timeline origin the TSLD canvas anchors to
- * (ADR-0023/0032) — as a targeted PATCH of just `plannedStart` + `version`, so the canvas-first
- * inline start-date control (and the first-draw-sets-start path) don't need the whole plan form.
- * `null` clears it. Mirrors {@link useSetPlanCalendar}: the returned plan is written straight into
- * the detail cache so the caller sees the new `plannedStart` **and the fresh `version`** at once,
- * and the schedule summary is invalidated so a later recalculation reflects the new origin.
+ * Set a plan's `plannedStart` — the timeline origin the TSLD canvas anchors to (ADR-0023/0032) — as
+ * a targeted PATCH of just `plannedStart` + `version`, so the inline start-date control doesn't need
+ * the whole plan form. Post-M1 (ADR-0033) the data date is **mandatory**: this moves it, never clears
+ * it (`plannedStart` is a non-empty calendar day). Mirrors {@link useSetPlanCalendar}: the returned
+ * plan is written straight into the detail cache so the caller sees the new `plannedStart` **and the
+ * fresh `version`** at once, and the schedule summary is invalidated so a later recalculation
+ * reflects the new origin.
  */
 export function useSetPlanStart(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { planId: string; version: number; plannedStart: string | null }) =>
+    mutationFn: (input: { planId: string; version: number; plannedStart: string }) =>
       apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
         method: 'PATCH',
         body: JSON.stringify({ plannedStart: input.plannedStart, version: input.version }),

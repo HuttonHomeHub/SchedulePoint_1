@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PlanStatus } from '@prisma/client';
+import { PlanStatus, SchedulingMode } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
@@ -11,7 +11,9 @@ const trim = ({ value }: { value: unknown }): unknown =>
 /**
  * Request body for creating a plan. The parent project and organisation are
  * taken from the route/scope, never from the body (anti-IDOR). `status` defaults
- * to `DRAFT`; `plannedStart` is an optional calendar day (`YYYY-MM-DD`).
+ * to `DRAFT`; `plannedStart` is a **required** calendar day (`YYYY-MM-DD`) — the
+ * CPM data date that anchors auto-scheduling (ADR-0033 M1); a plan cannot exist
+ * without a start.
  */
 export class CreatePlanDto {
   @ApiProperty({ minLength: 1, maxLength: 200, description: 'Display name of the plan.' })
@@ -34,11 +36,21 @@ export class CreatePlanDto {
   status?: PlanStatus;
 
   @ApiPropertyOptional({
-    format: 'date',
-    example: '2026-05-01',
-    description: 'Planned start as a calendar day (YYYY-MM-DD), date-only.',
+    enum: SchedulingMode,
+    default: SchedulingMode.EARLY,
+    description: 'Scheduling mode (ADR-0033); defaults to EARLY.',
   })
   @IsOptional()
+  @IsEnum(SchedulingMode)
+  schedulingMode?: SchedulingMode;
+
+  @ApiProperty({
+    format: 'date',
+    example: '2026-05-01',
+    description:
+      'Planned start as a calendar day (YYYY-MM-DD), date-only. Required — the CPM data date ' +
+      'that anchors the schedule (ADR-0033 M1).',
+  })
   @IsCalendarDate()
-  plannedStart?: string;
+  plannedStart!: string;
 }

@@ -17,10 +17,10 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import { CompactPenStatus, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
-import { TsldPanel } from '@/features/tsld';
+import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
@@ -125,6 +125,11 @@ export function ToolbarPlanWorkspace({
       activities={model.activities.data ?? []}
       dependencies={model.dependencies.data ?? []}
       dataDate={plan.plannedStart}
+      barDateSource={
+        // ADR-0033: VISUAL plans render the effective-Visual dates; the Late overlay (M4) will feed
+        // the second arg. Flag-off the mode is always EARLY, so this stays `early` (byte-for-byte).
+        SCHEDULING_MODES_ENABLED ? barDateSourceFor(plan.schedulingMode, false) : 'early'
+      }
       canEdit={model.canEditSchedule}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}

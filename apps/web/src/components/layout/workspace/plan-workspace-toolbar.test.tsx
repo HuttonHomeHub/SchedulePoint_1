@@ -77,6 +77,7 @@ vi.mock('@/features/activities', () => ({
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn() }),
   useUpdateActivity: () => ({ mutateAsync: vi.fn() }),
   useRepositionLane: () => ({ mutateAsync: vi.fn() }),
+  useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: () => <div data-testid="activities-table" />,

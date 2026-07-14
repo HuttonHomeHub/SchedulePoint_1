@@ -33,6 +33,11 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     totalFloat: 0,
     isCritical: false,
     isNearCritical: false,
+    visualStart: null,
+    visualEffectiveStart: null,
+    visualEffectiveFinish: null,
+    visualConflict: false,
+    visualDriftDays: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -117,9 +122,19 @@ describe('describeActivity (Tier 1)', () => {
   });
 
   it('states the float days for a near-critical activity', () => {
-    expect(describeActivity(activity({ isNearCritical: true, totalFloat: 2 }))).toContain(
-      ', near-critical, 2 days float',
-    );
+    expect(
+      describeActivity(
+        activity({
+          isNearCritical: true,
+          visualStart: null,
+          visualEffectiveStart: null,
+          visualEffectiveFinish: null,
+          visualConflict: false,
+          visualDriftDays: null,
+          totalFloat: 2,
+        }),
+      ),
+    ).toContain(', near-critical, 2 days float');
   });
 
   it('spells out a set date constraint (the spoken equivalent of the canvas pin)', () => {

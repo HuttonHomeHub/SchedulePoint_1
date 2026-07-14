@@ -251,6 +251,7 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
         organizationId: orgId,
         projectId: project.id,
         name: 'Pl',
+        plannedStart: new Date('2026-01-01T00:00:00.000Z'),
         calendarId: calId,
         createdBy: actor.userId,
       },

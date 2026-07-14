@@ -26,6 +26,8 @@ export interface ActivityPatch {
   constraintType?: ConstraintType | null;
   constraintDate?: Date | null;
   laneIndex?: number;
+  /** Visual-Planning placement (ADR-0033): hand-placed start, or null to clear it. */
+  visualStart?: Date | null;
   // Progress
   status?: ActivityStatus;
   percentComplete?: number;

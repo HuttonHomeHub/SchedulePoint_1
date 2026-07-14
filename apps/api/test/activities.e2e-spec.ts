@@ -93,7 +93,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     const projectId = project.body.data.id as string;
     const plan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Baseline' })
+      .send({ name: 'Baseline', plannedStart: '2026-01-01' })
       .expect(201);
     return { actor, orgId, planId: plan.body.data.id as string };
   }
@@ -235,7 +235,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(201);
     const secondPlan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
-      .send({ name: 'Second' })
+      .send({ name: 'Second', plannedStart: '2026-01-01' })
       .expect(201);
     const a = `/api/v1/organizations/acme/plans/${planId}/activities`;
     const b = `/api/v1/organizations/acme/plans/${secondPlan.body.data.id}/activities`;
@@ -490,7 +490,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
         .expect(201);
       const plan2 = await actor.agent
         .post(`/api/v1/organizations/acme/projects/${proj.body.data.id}/plans`)
-        .send({ name: 'Plan2' })
+        .send({ name: 'Plan2', plannedStart: '2026-01-01' })
         .expect(201);
       const foreign = await makeAct(actor, plan2.body.data.id as string, 'Foreign');
 
