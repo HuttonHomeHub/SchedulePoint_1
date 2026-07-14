@@ -10,7 +10,7 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import { useSetPlanStart } from '@/features/plans';
 import { ScheduleSummaryStrip } from '@/features/schedule';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
@@ -72,6 +72,11 @@ export function useTsldToolbarContext({
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setStart = useSetPlanStart(orgSlug);
 
+  // The persisted-start control's name: "Project start" once the ADR-0033 split is on, else the
+  // original "Timeline start". Kept here so the visible label and the live-region copy share one source.
+  const startLabel = SCHEDULING_MODES_ENABLED ? 'Project start' : 'Timeline start';
+  const startLabelLower = startLabel.toLowerCase();
+
   const activities = model.activities.data ?? [];
   const hasDiagram =
     activities.length > 0 &&
@@ -117,7 +122,9 @@ export function useTsldToolbarContext({
       stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
       fit: requestFit,
       // Inline timeline start (ADR-0032 M2): read + (pen-gated) write `plannedStart`. Read-only
-      // viewers get a null setter so the control renders the date as static text (Critical Q3).
+      // viewers get a null setter so the control renders the date as static text (Critical Q3). The
+      // live-region copy tracks the visible label — "Project start" once the split is on (ADR-0033 M2),
+      // "Timeline start" flag-off — so the announcement never contradicts the field name (ux review).
       plannedStart: plan.plannedStart,
       setPlannedStart: canEditSchedule
         ? (iso: string) =>
@@ -127,16 +134,21 @@ export function useTsldToolbarContext({
                 onSuccess: () =>
                   announce(
                     iso
-                      ? `Timeline start set to ${formatCalendarDate(iso)}.`
-                      : 'Timeline start cleared.',
+                      ? `${startLabel} set to ${formatCalendarDate(iso)}.`
+                      : `${startLabel} cleared.`,
                   ),
-                onError: () => announce('Couldn’t update the timeline start. Please try again.'),
+                onError: () =>
+                  announce(`Couldn’t update the ${startLabelLower}. Please try again.`),
               },
             )
         : null,
       // Go to date (ADR-0033 M2): a pure view pan via the canvas control handle — no fetch, no write,
-      // no persisted state (CQ-1). Available to every role; navigating never mutates the plan.
-      goToDate: (iso: string) => canvasControlRef.current?.goToDate(iso),
+      // no persisted state (CQ-1). Available to every role; navigating never mutates the plan. It
+      // announces the jump (WCAG 4.1.3) since the canvas repaint is otherwise invisible to AT.
+      goToDate: (iso: string) => {
+        canvasControlRef.current?.goToDate(iso);
+        announce(`Jumped to ${formatCalendarDate(iso)}.`);
+      },
 
       // Lens
       viewToggles,
@@ -198,6 +210,8 @@ export function useTsldToolbarContext({
       plan.plannedStart,
       plan.version,
       setStart,
+      startLabel,
+      startLabelLower,
       planId,
       viewToggles,
       toggleView,

@@ -95,9 +95,7 @@ describe('TSLD toolbar — scheduling-modes date split (flag on)', () => {
     renderToolbar(ctx({ goToDate, setPlannedStart: null }));
     // It is a disclosure: open it, then pick a date in the panel.
     fireEvent.click(screen.getByRole('button', { name: 'Go to date' }));
-    fireEvent.change(screen.getByLabelText('Go to date', { selector: 'input' }), {
-      target: { value: '2026-06-15' },
-    });
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-06-15' } });
     expect(goToDate).toHaveBeenCalledWith('2026-06-15');
     expect(setPlannedStart).not.toHaveBeenCalled();
   });

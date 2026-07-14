@@ -23,6 +23,7 @@ import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
+import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import type { ToolbarItemRenderApi } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
@@ -87,7 +88,15 @@ function TimelineStartControl({
   }
   const setPlannedStart = ctx.setPlannedStart;
   return (
-    <label className={toolbarControlVariants({ tone: 'control' })}>
+    // The focusable child is the `<input>`, not the `<label>`, so the base `focus-visible:` ring never
+    // matches; mirror it onto the label with `has-[input:focus-visible]` so tabbing to the field shows
+    // a visible focus indicator (WCAG 2.4.7, a11y review).
+    <label
+      className={cn(
+        toolbarControlVariants({ tone: 'control' }),
+        'has-[input:focus-visible]:ring-ring has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-inset',
+      )}
+    >
       <CalendarClock aria-hidden="true" className="size-4" />
       <span className="sr-only">{label}</span>
       <input
@@ -110,6 +119,9 @@ function TimelineStartControl({
  * it — the whole point of de-overloading `plannedStart` (ADR-0033). Uncontrolled: picking a date jumps
  * once; there is no "current go-to date" to reflect, so nothing is echoed back.
  */
+const GOTO_FIELD_ID = 'tsld-goto-date-field';
+const GOTO_HINT_ID = 'tsld-goto-date-hint';
+
 function GoToDateControl({
   ctx,
   itemProps,
@@ -124,17 +136,21 @@ function GoToDateControl({
       itemProps={itemProps}
     >
       <div className="flex flex-col gap-1.5 text-sm">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-muted-foreground font-medium">Go to date</span>
-          <input
-            type="date"
-            onChange={(event) => {
-              if (event.target.value) ctx.goToDate(event.target.value);
-            }}
-            className="border-border bg-background rounded-md border px-2 py-1 text-sm outline-none"
-          />
+        {/* Inner field is "Date" (not another "Go to date") so AT doesn't echo the dialog name; the
+            hint is wired via `aria-describedby` so keyboard/SR users landing on the field hear it. */}
+        <label htmlFor={GOTO_FIELD_ID} className="text-muted-foreground font-medium">
+          Date
         </label>
-        <span className="text-muted-foreground text-xs">
+        <Input
+          id={GOTO_FIELD_ID}
+          type="date"
+          aria-describedby={GOTO_HINT_ID}
+          onChange={(event) => {
+            if (event.target.value) ctx.goToDate(event.target.value);
+          }}
+          className="h-9"
+        />
+        <span id={GOTO_HINT_ID} className="text-muted-foreground text-xs">
           Pans the timeline only — nothing is saved.
         </span>
       </div>
