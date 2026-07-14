@@ -124,6 +124,52 @@ describe('cull', () => {
 });
 
 describe('dependencyPolyline', () => {
+  // Different lanes so the routing keeps its endpoints (a same-lane pair collapses to a straight
+  // line). The anchor assertions compare against each bar's own rect, so they're independent of the
+  // exact bar width.
+  const predBar = activity({
+    id: 'p',
+    earlyStart: '2026-01-01',
+    earlyFinish: '2026-01-03',
+    laneIndex: 0,
+  });
+  const succBar = activity({
+    id: 's',
+    earlyStart: '2026-01-10',
+    earlyFinish: '2026-01-12',
+    laneIndex: 2,
+  });
+  const pRect = activityRect(predBar, VIEW, DATA_DATE)!;
+  const sRect = activityRect(succBar, VIEW, DATA_DATE)!;
+  const ends = (type: Parameters<typeof dependencyPolyline>[2]): [number, number] => {
+    const line = dependencyPolyline(predBar, succBar, type, VIEW, DATA_DATE)!;
+    return [line[0]!.x, line.at(-1)!.x];
+  };
+
+  it('FS anchors predecessor finish → successor start', () => {
+    const [from, to] = ends('FS');
+    expect(from).toBeCloseTo(pRect.x + pRect.w); // predecessor finish (right edge)
+    expect(to).toBeCloseTo(sRect.x); // successor start (left edge)
+  });
+
+  it('SS anchors predecessor start → successor start', () => {
+    const [from, to] = ends('SS');
+    expect(from).toBeCloseTo(pRect.x); // predecessor start
+    expect(to).toBeCloseTo(sRect.x); // successor start
+  });
+
+  it('FF anchors predecessor finish → successor finish', () => {
+    const [from, to] = ends('FF');
+    expect(from).toBeCloseTo(pRect.x + pRect.w); // predecessor finish
+    expect(to).toBeCloseTo(sRect.x + sRect.w); // successor finish
+  });
+
+  it('SF anchors predecessor start → successor finish', () => {
+    const [from, to] = ends('SF');
+    expect(from).toBeCloseTo(pRect.x); // predecessor start
+    expect(to).toBeCloseTo(sRect.x + sRect.w); // successor finish
+  });
+
   it('routes a straight line between activities on the same lane', () => {
     const pred = activity({
       id: 'p',
@@ -137,27 +183,20 @@ describe('dependencyPolyline', () => {
       earlyFinish: '2026-01-06',
       laneIndex: 0,
     });
-    const line = dependencyPolyline(pred, succ, VIEW, DATA_DATE)!;
+    const line = dependencyPolyline(pred, succ, 'FS', VIEW, DATA_DATE)!;
     expect(line).toHaveLength(2);
     expect(line[0]!.y).toBe(line[1]!.y); // same y → horizontal
   });
 
-  it('routes an orthogonal L between different lanes', () => {
-    const pred = activity({ id: 'p', laneIndex: 0 });
-    const succ = activity({
-      id: 's',
-      earlyStart: '2026-01-10',
-      earlyFinish: '2026-01-11',
-      laneIndex: 2,
-    });
-    const line = dependencyPolyline(pred, succ, VIEW, DATA_DATE)!;
+  it('routes an orthogonal L with a vertical elbow between different lanes', () => {
+    const line = dependencyPolyline(predBar, succBar, 'FS', VIEW, DATA_DATE)!;
     expect(line).toHaveLength(4); // start, elbow-down, elbow-across, end
     expect(line[1]!.x).toBe(line[2]!.x); // the vertical elbow segment
   });
 
   it('returns null when an endpoint has no geometry', () => {
     const pred = activity({ id: 'p', earlyStart: null });
-    expect(dependencyPolyline(pred, activity(), VIEW, DATA_DATE)).toBeNull();
+    expect(dependencyPolyline(pred, activity(), 'FS', VIEW, DATA_DATE)).toBeNull();
   });
 });
 
