@@ -181,16 +181,33 @@ const CONFLICT_BADGE_H = 7;
 /**
  * An upward warning triangle at a conflicting bar's start edge (ADR-0033): a Visual placement earlier
  * than its feasible start. A **shape** cue in the warning hue — distinct from the downward constraint
- * pin — so it never relies on colour alone (WCAG 1.4.1); the legend names it and the listbox spells it
- * out for AT. Drawn just below the bar top so it doesn't collide with a constraint pin above.
+ * pin — so it never relies on colour alone (WCAG 1.4.1). It carries a **contrasting outline** (the
+ * foreground stroke, like the critical/near-critical bar outlines) so the triangle clears the 3:1
+ * non-text-contrast bar (WCAG 1.4.11) even against a same-hue near-critical bar fill, where the fill
+ * colour alone would vanish. The legend names it and the listbox spells it out for AT.
  */
 function drawConflictBadge(ctx: Ctx2D, startX: number, barTop: number, palette: TsldPalette): void {
+  const ax = startX + 1;
+  const ay = barTop + CONFLICT_BADGE_H + 1;
+  const bx = startX + 1 + CONFLICT_BADGE_W;
+  const cx = startX + 1 + CONFLICT_BADGE_W / 2;
+  const cy = barTop + 1;
   ctx.fillStyle = palette.conflict;
   ctx.beginPath();
-  ctx.moveTo(startX + 1, barTop + CONFLICT_BADGE_H + 1);
-  ctx.lineTo(startX + 1 + CONFLICT_BADGE_W, barTop + CONFLICT_BADGE_H + 1);
-  ctx.lineTo(startX + 1 + CONFLICT_BADGE_W / 2, barTop + 1);
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, ay);
+  ctx.lineTo(cx, cy);
   ctx.fill();
+  // A foreground outline traced over the same triangle (closed manually — the Ctx2D surface has no
+  // closePath) so the shape stays perceivable on any bar fill, including a same-hue near-critical one.
+  ctx.strokeStyle = palette.outline;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, ay);
+  ctx.lineTo(cx, cy);
+  ctx.lineTo(ax, ay);
+  ctx.stroke();
 }
 
 /**

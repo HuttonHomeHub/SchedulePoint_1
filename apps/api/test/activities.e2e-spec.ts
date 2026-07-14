@@ -416,6 +416,14 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
 
     // A Contributor still cannot edit the definition (that split is the whole point).
     await contributor.agent.patch(item).send({ name: 'Renamed', version: 3 }).expect(403);
+
+    // The Planner-owned Visual placement (`visualStart`, ADR-0033) must never ride the progress
+    // path — the DTO omits it and the global whitelist rejects the unknown property (422), so a
+    // Contributor can't reach a definition-only field through the progress endpoint they DO have.
+    await contributor.agent
+      .patch(`${item}/progress`)
+      .send({ visualStart: '2026-05-01', version: 3 })
+      .expect(422);
   });
 
   describe('batch lane positions (M4)', () => {

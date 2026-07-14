@@ -107,21 +107,27 @@ describe('TSLD toolbar — scheduling-modes date split (flag on)', () => {
     expect(screen.queryByRole('button', { name: 'Go to date' })).not.toBeInTheDocument();
   });
 
-  it('offers an Early | Visual mode selector, marks the active mode, and switches on click', () => {
+  it('offers an Early | Visual mode selector (labelled), marks the active mode, and switches', () => {
     const setSchedulingMode = vi.fn();
     renderToolbar(ctx({ schedulingMode: 'EARLY', setSchedulingMode }));
-    const early = screen.getByRole('button', { name: 'Early start' });
-    const visual = screen.getByRole('button', { name: 'Visual planning' });
+    const early = screen.getByRole('button', { name: 'Early mode' });
+    const visual = screen.getByRole('button', { name: 'Visual mode' });
+    // The buttons carry visible text (tier-1), not just an aria-label (ux/a11y: no blank buttons).
+    expect(early).toHaveTextContent('Early mode');
+    expect(visual).toHaveTextContent('Visual mode');
     expect(early).toHaveAttribute('aria-pressed', 'true');
     expect(visual).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(visual);
     expect(setSchedulingMode).toHaveBeenCalledWith('VISUAL');
   });
 
-  it('hides the mode selector for a read-only viewer (no setter)', () => {
-    renderToolbar(ctx({ setSchedulingMode: null }));
-    expect(screen.queryByRole('button', { name: 'Early start' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Visual planning' })).not.toBeInTheDocument();
+  it('shows a presentational mode read-out (not the switch) for a read-only viewer', () => {
+    renderToolbar(ctx({ setSchedulingMode: null, schedulingMode: 'VISUAL' }));
+    // The interactive switch is gone…
+    expect(screen.queryByRole('button', { name: 'Early mode' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Visual mode' })).not.toBeInTheDocument();
+    // …but the active mode is still surfaced so a viewer can read the diagram correctly.
+    expect(screen.getByLabelText('Scheduling mode: Visual')).toBeInTheDocument();
   });
 
   it('offers the Late-start overlay toggle in the View popover (M4) and flips it', () => {

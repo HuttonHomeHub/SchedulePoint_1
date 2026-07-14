@@ -107,6 +107,11 @@ export function ToolbarPlanWorkspace({
   const canvasLoading =
     CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
 
+  // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
+  // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
+  // tools read as live while doing nothing on the canvas (ux/a11y review).
+  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
+
   // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
   // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so
   // selection/viewport state never leaks across a plan→plan nav.
@@ -133,9 +138,7 @@ export function ToolbarPlanWorkspace({
           : 'early'
       }
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
-      canEdit={
-        model.canEditSchedule && !(SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay)
-      }
+      canEdit={model.canEditSchedule && !lateOverlayActive}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       onLink={model.onTsldLink}
@@ -188,13 +191,26 @@ export function ToolbarPlanWorkspace({
           items={items}
           context={ctx}
           label="Plan toolbar"
-          authoringEnabled={model.canEditSchedule}
+          authoringEnabled={model.canEditSchedule && !lateOverlayActive}
         />
       </div>
 
       {model.penReadOnly ? (
         <div className="px-4 pt-2">
           <PenReadOnlyNote />
+        </div>
+      ) : null}
+
+      {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
+      {lateOverlayActive && model.canEditSchedule ? (
+        <div className="px-4 pt-2">
+          <p
+            role="status"
+            className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
+          >
+            The Late-start overlay is on — editing is paused. Turn it off in{' '}
+            <span className="font-medium">View</span> to edit.
+          </p>
         </div>
       ) : null}
 

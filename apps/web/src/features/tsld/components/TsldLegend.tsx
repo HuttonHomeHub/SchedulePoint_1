@@ -7,11 +7,14 @@
  * Shared so the self-contained {@link TsldPanel} chrome and the canvas-first `Legend▾` toolbar
  * popover (ADR-0031) render one definition — the key can't drift from the canvas or itself.
  */
+import { SCHEDULING_MODES_ENABLED } from '@/config/env';
+
 type LegendItem =
   | { label: string; swatch: React.CSSProperties }
   | { label: string; line: 'solid' | 'dashed' }
   | { label: string; pin: true }
-  | { label: string; today: true };
+  | { label: string; today: true }
+  | { label: string; conflict: true };
 
 const LEGEND: ReadonlyArray<LegendItem> = [
   {
@@ -43,6 +46,9 @@ const LEGEND: ReadonlyArray<LegendItem> = [
   // successor's start; a non-driving link (thin dashed) carries slack (M3).
   { label: 'Driving link', line: 'solid' },
   { label: 'Non-driving link', line: 'dashed' },
+  // Visual-Planning conflict cue (ADR-0033) — an outlined warning triangle on a bar placed before its
+  // earliest feasible start. Only meaningful under scheduling modes, so listed only when enabled.
+  ...(SCHEDULING_MODES_ENABLED ? [{ label: 'Visual conflict', conflict: true } as const] : []),
 ];
 
 /** The diagram legend as a labelled list — used inline by {@link TsldPanel} and inside the
@@ -75,6 +81,19 @@ export function TsldLegend(): React.ReactElement {
                   borderLeftWidth: 1.5,
                   borderLeftStyle: 'dashed',
                   borderLeftColor: 'var(--color-destructive)',
+                }}
+              />
+            </span>
+          ) : 'conflict' in item ? (
+            <span aria-hidden="true" className="inline-flex h-3 w-5 items-center justify-center">
+              <span
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderLeft: '4px solid transparent',
+                  borderRight: '4px solid transparent',
+                  borderBottom: '6px solid var(--color-warning)',
+                  outline: '0.5px solid var(--color-foreground)',
                 }}
               />
             </span>

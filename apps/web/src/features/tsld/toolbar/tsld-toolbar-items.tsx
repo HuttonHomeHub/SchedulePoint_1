@@ -421,14 +421,15 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       render: (ctx, api) => <GoToDateControl ctx={ctx} itemProps={api.itemProps} />,
     },
     // Scheduling-mode selector (ADR-0033 M3, flag-on only): a two-item segmented Early | Visual
-    // control in the Lens group. Pen-gated — only offered when the viewer can switch the mode
-    // (`setSchedulingMode` non-null); the mode still drives rendering for read-only viewers.
+    // control in the Lens group. Tier 1 so the labels actually render (tier-2 label-less items paint
+    // blank — ux review). Pen-gated: writers get the toggle; a read-only viewer gets the presentational
+    // read-out below (the mode changes how the diagram reads, so it must be visible to everyone).
     {
       id: 'mode-early',
       group: 'lens',
-      tier: 2,
-      order: -2,
-      label: 'Early start',
+      tier: 1,
+      order: -3,
+      label: 'Early mode',
       isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode !== null,
       isActive: (ctx) => ctx.schedulingMode === 'EARLY',
       onActivate: (ctx) => ctx.setSchedulingMode?.('EARLY'),
@@ -436,12 +437,30 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'mode-visual',
       group: 'lens',
-      tier: 2,
-      order: -1,
-      label: 'Visual planning',
+      tier: 1,
+      order: -2,
+      label: 'Visual mode',
       isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode !== null,
       isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
       onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
+    },
+    {
+      id: 'mode-readonly',
+      group: 'lens',
+      tier: 1,
+      order: -3,
+      label: 'Scheduling mode',
+      presentational: true,
+      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode === null,
+      render: (ctx, api) => (
+        <span
+          {...api.itemProps}
+          aria-label={`Scheduling mode: ${ctx.schedulingMode === 'VISUAL' ? 'Visual' : 'Early'}`}
+          className={toolbarControlVariants({ tone: 'info' })}
+        >
+          {ctx.schedulingMode === 'VISUAL' ? 'Visual mode' : 'Early mode'}
+        </span>
+      ),
     },
     ...ZOOM_LEVELS.map((level, i): ToolbarItem<TsldToolbarContext> => ({
       id: `scale-${level}`,
