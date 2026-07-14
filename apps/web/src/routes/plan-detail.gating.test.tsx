@@ -106,6 +106,7 @@ vi.mock('@/features/activities', () => ({
   useCreatePlacedActivity: () => ({ mutateAsync: h.createPlaced }),
   useUpdateActivity: () => ({ mutateAsync: h.updateActivity }),
   useRepositionLane: () => ({ mutateAsync: h.repositionLane }),
+  useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: h.batchPositions }),
   useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: ({

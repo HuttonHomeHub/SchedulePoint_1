@@ -38,6 +38,10 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
 
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Baseline');
+  await page
+    .getByRole('dialog')
+    .getByLabel(/Planned start/)
+    .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
 

@@ -2,12 +2,13 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import {
   useActivities,
   useCreatePlacedActivity,
   useUpdateActivity,
   useRepositionLane,
+  useSetActivityVisualStart,
   useBatchPositions,
   isMilestoneType,
 } from '@/features/activities';
@@ -17,7 +18,7 @@ import { useCalendar, useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { useCreateDependency, usePlanDependencies } from '@/features/dependencies';
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
-import { usePlan, useSetPlanStart } from '@/features/plans';
+import { usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
 import {
@@ -168,46 +169,30 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // with an SNET constraint, then the authoritative recalc places it.
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
-  const setPlanStart = useSetPlanStart(orgSlug);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
-    let plannedStart = plan.data?.plannedStart ?? null;
-    if (!plannedStart) {
-      // Canvas-first authoring (ADR-0032): a start-less plan is drawable — the canvas anchors to
-      // today. The first draw silently pins `plannedStart` to that anchor (Critical Q1) so the SNET
-      // dates are coherent, then proceeds. Flag-off keeps today's no-op (needs a start first).
-      if (!CANVAS_AUTHORING_ENABLED || !plan.data) return { recalcConflict: null };
-      let updated;
-      try {
-        updated = await setPlanStart.mutateAsync({
-          planId,
-          version: plan.data.version,
-          plannedStart: todayIso,
-        });
-      } catch {
-        // Curated message (not a raw API string) so the create popover shows something readable; the
-        // row wasn't created, so the draw is simply retryable.
-        throw new Error(
-          'Couldn’t set the timeline start for the first activity. Please try again.',
-        );
-      }
-      plannedStart = updated.plannedStart ?? todayIso;
-      // The start moved as a side effect of drawing — announce it so a screen-reader user knows a
-      // plan-level field changed (sighted users see the toolbar's start field populate).
-      announce('Timeline start set to today.');
-    }
+    // Post-M1 every saved plan has a mandatory start (ADR-0033 M1), so the ADR-0032 "first draw pins
+    // the start to today" special-case is gone — a plan can't exist start-less. This guard is now
+    // purely defensive (the plan's data simply hasn't loaded yet); the canvas isn't drawable until it
+    // has, so a draw here is a no-op rather than an error.
+    const plannedStart = plan.data?.plannedStart;
+    if (!plannedStart) return { recalcConflict: null };
     // The create must land first (this throw keeps the popover open with the error). Only
     // then recalc — a recalc failure is non-fatal: the row persisted, so we report the
     // conflict without re-prompting (never a second POST). The next recalc reconciles dates.
     // The draw kind (ADR-0032 M4): a task spans its dragged days; a milestone is a zero-duration
     // point (the canvas already collapsed the drag to a single day, and the API rejects a non-zero
     // milestone duration). An SNET at the start day pins placement; recalc then lands the dates.
+    // VISUAL mode (ADR-0033 M3): the drop hand-places `visualStart`, no implicit SNET constraint;
+    // EARLY mode keeps the SNET-at-start pin. Either way recalc then lands the dates.
+    const dropDate = addCalendarDays(plannedStart, input.startDay);
     await createPlacedActivity.mutateAsync({
       name: input.name,
       type: input.type,
       durationDays: isMilestoneType(input.type) ? 0 : input.endDay - input.startDay + 1,
       laneIndex: input.laneIndex,
-      constraintType: 'SNET',
-      constraintDate: addCalendarDays(plannedStart, input.startDay),
+      ...(isVisualMode
+        ? { visualStart: dropDate }
+        : { constraintType: 'SNET', constraintDate: dropDate }),
     });
     // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
     // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
@@ -233,6 +218,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // the live version (optimistic lock) — a stale version is a non-destructive conflict, never re-sent.
   const updateActivity = useUpdateActivity(orgSlug, planId);
   const repositionLane = useRepositionLane(orgSlug, planId);
+  const setVisualStart = useSetActivityVisualStart(orgSlug, planId);
+  // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
+  // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
+  // EARLY mode) the schedule mode is always EARLY, so today's SNET path is byte-for-byte unchanged.
+  const isVisualMode = SCHEDULING_MODES_ENABLED && plan.data?.schedulingMode === 'VISUAL';
   const moveConflict =
     'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.';
   const onTsldReposition = async ({
@@ -258,24 +248,36 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       }
     }
 
-    // Day changed (optionally lane too): one PATCH imposing an SNET-at-new-start (ADR-0023) — which
-    // by design overwrites any prior constraint, re-pinning a pinned bar where it was dropped —
-    // plus the lane if it moved, then recalc. Resent definition fields are unchanged.
+    // Day changed (optionally lane too). VISUAL mode (ADR-0033 M3): hand-place `visualStart` at the
+    // drop via the minimal PATCH — NO constraint write — then recalc; the effective-Visual pass pins
+    // this bar and pushes its unplaced successors. EARLY mode: one PATCH imposing an SNET-at-new-start
+    // (ADR-0023) — which by design overwrites any prior constraint, re-pinning a pinned bar where it
+    // was dropped — plus the lane if it moved, then recalc. Resent definition fields are unchanged.
     const plannedStart = plan.data?.plannedStart;
     if (!plannedStart) return { applied: false, conflict: null };
+    const droppedDate = addCalendarDays(plannedStart, startDay);
     try {
-      await updateActivity.mutateAsync({
-        activityId,
-        version: activity.version,
-        name: activity.name,
-        code: activity.code ?? undefined,
-        type: activity.type,
-        durationDays: activity.durationDays,
-        description: activity.description ?? undefined,
-        constraintType: 'SNET',
-        constraintDate: addCalendarDays(plannedStart, startDay),
-        ...(laneIndex !== undefined ? { laneIndex } : {}),
-      });
+      if (isVisualMode) {
+        await setVisualStart.mutateAsync({
+          activityId,
+          visualStart: droppedDate,
+          version: activity.version,
+          ...(laneIndex !== undefined ? { laneIndex } : {}),
+        });
+      } else {
+        await updateActivity.mutateAsync({
+          activityId,
+          version: activity.version,
+          name: activity.name,
+          code: activity.code ?? undefined,
+          type: activity.type,
+          durationDays: activity.durationDays,
+          description: activity.description ?? undefined,
+          constraintType: 'SNET',
+          constraintDate: droppedDate,
+          ...(laneIndex !== undefined ? { laneIndex } : {}),
+        });
+      }
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && err.status === 409) {

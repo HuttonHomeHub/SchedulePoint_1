@@ -93,7 +93,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     const projectId = project.body.data.id as string;
     const plan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Baseline' })
+      .send({ name: 'Baseline', plannedStart: '2026-01-01' })
       .expect(201);
     return { actor, orgId, planId: plan.body.data.id as string };
   }
@@ -235,7 +235,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(201);
     const secondPlan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
-      .send({ name: 'Second' })
+      .send({ name: 'Second', plannedStart: '2026-01-01' })
       .expect(201);
     const a = `/api/v1/organizations/acme/plans/${planId}/activities`;
     const b = `/api/v1/organizations/acme/plans/${secondPlan.body.data.id}/activities`;
@@ -416,6 +416,14 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
 
     // A Contributor still cannot edit the definition (that split is the whole point).
     await contributor.agent.patch(item).send({ name: 'Renamed', version: 3 }).expect(403);
+
+    // The Planner-owned Visual placement (`visualStart`, ADR-0033) must never ride the progress
+    // path — the DTO omits it and the global whitelist rejects the unknown property (422), so a
+    // Contributor can't reach a definition-only field through the progress endpoint they DO have.
+    await contributor.agent
+      .patch(`${item}/progress`)
+      .send({ visualStart: '2026-05-01', version: 3 })
+      .expect(422);
   });
 
   describe('batch lane positions (M4)', () => {
@@ -490,7 +498,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
         .expect(201);
       const plan2 = await actor.agent
         .post(`/api/v1/organizations/acme/projects/${proj.body.data.id}/plans`)
-        .send({ name: 'Plan2' })
+        .send({ name: 'Plan2', plannedStart: '2026-01-01' })
         .expect(201);
       const foreign = await makeAct(actor, plan2.body.data.id as string, 'Foreign');
 

@@ -156,6 +156,12 @@ export function Toolbar<Ctx>({
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       const key = event.key;
       if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(key)) return;
+      // Never steal the arrow / Home / End keys from a form field inside a toolbar item (e.g. the
+      // native date input in the "Go to date" popover or the "Project start" control): those keys drive
+      // native segment editing (month/day/year), and hijacking them both breaks entry and — via the
+      // popover's focusout-closes handler — yanks the picker shut mid-interaction (WCAG 2.1.1). A
+      // portalled popover is still a React-tree descendant, so its keydown bubbles here.
+      if ((event.target as HTMLElement).closest('input, textarea, select')) return;
       const ids = focusableIds;
       if (ids.length === 0) return;
       const current =

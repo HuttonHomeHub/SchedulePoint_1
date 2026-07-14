@@ -73,11 +73,22 @@ export interface RenderActivity {
    * shared `activityBarLabel` so the render model does no domain string logic and the visible
    * label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). */
   label: string;
-  /** Inclusive computed dates (`YYYY-MM-DD`), or null until the plan is recalculated. */
+  /**
+   * The inclusive dates (`YYYY-MM-DD`) the bar is **drawn** at, or null until the plan is
+   * recalculated. Sourced per the active view at the mapping seam (ADR-0033): EARLY → the CPM
+   * earliest dates, VISUAL → the engine's effective-Visual dates, Late overlay → the late dates.
+   * The field names keep their EARLY-mode heritage; `activityRect` reads them verbatim, blind to
+   * which mode chose them.
+   */
   earlyStart: string | null;
   earlyFinish: string | null;
   isCritical: boolean;
   isNearCritical: boolean;
+  /** Engine-owned (ADR-0033): true when a Visual placement is earlier than its feasible start —
+   * the painter marks it (a warning cue, never colour-only). Only meaningful in VISUAL mode. */
+  visualConflict?: boolean;
+  /** Engine-owned (ADR-0033): working-day drift of the placement from the early start (signed). */
+  visualDriftDays?: number | null;
   /** Which edge a set date constraint pins (start/finish), or null when unconstrained —
    * the painter marks that edge with a small pin. Pre-derived from `constraintType` at the
    * mapping seam so the render model stays free of constraint-kind logic (ADR-0026 D8,
@@ -441,6 +452,22 @@ export function zoomAt(view: Viewport, anchorX: number, factor: number): Viewpor
 /** Pan the viewport by a screen delta. Returns a new viewport. */
 export function pan(view: Viewport, dx: number, dy: number): Viewport {
   return { ...view, originX: view.originX + dx, originY: view.originY + dy };
+}
+
+/**
+ * Pan (no zoom) so the calendar day `iso` lands `inset` px from the left edge — the pure math behind
+ * the "Go to date" view command (ADR-0033). The scale (`pxPerDay`) and vertical pan are unchanged, so
+ * `screenXOfDay(daysBetween(dataDateIso, iso), result) === inset`. A pure view transform: it moves
+ * nothing in the schedule and issues no request.
+ */
+export function panToDate(
+  view: Viewport,
+  dataDateIso: string,
+  iso: string,
+  inset: number,
+): Viewport {
+  const day = daysBetween(dataDateIso, iso);
+  return { ...view, originX: inset - day * view.pxPerDay };
 }
 
 /** The default viewport before any content is framed (day zoom, small margin). */

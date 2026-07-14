@@ -15,6 +15,7 @@ const PLAN: PlanSummary = {
   name: 'Baseline',
   description: null,
   status: 'ACTIVE',
+  schedulingMode: 'EARLY',
   plannedStart: '2026-05-01',
   calendarId: null,
   version: 4,
@@ -52,6 +53,18 @@ describe('PlanFormDialog', () => {
       status: 'ACTIVE',
       plannedStart: '2026-06-15',
     });
+  });
+
+  it('rejects an empty planned start with a friendly message and does not submit', async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Kickoff' } });
+    // Leave "Planned start" empty (the field's default value).
+    fireEvent.click(screen.getByRole('button', { name: 'Create plan' }));
+
+    await waitFor(() =>
+      expect(screen.getAllByText('A project start date is required.').length).toBeGreaterThan(0),
+    );
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('seeds status/date in edit mode and PATCHes with the row version', async () => {

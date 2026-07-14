@@ -27,6 +27,9 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // A muted wash for non-working columns and the destructive hue for the today marker.
     nonWorking: token('--color-muted', '#20242d'),
     today: token('--color-destructive', '#c83c3c'),
+    // Visual-Planning conflict cue — the warning hue, drawn as a distinct triangle shape so it never
+    // relies on colour alone (WCAG 1.4.1); shares the token with near-critical but a different shape.
+    conflict: token('--color-warning', '#d29628'),
     // Label text: inside-bar text uses each fill's paired *-foreground token (so it contrasts on
     // that fill in both themes); beside-bar text uses the page foreground over the canvas ground.
     labelInside: token('--color-primary-foreground', '#ffffff'),

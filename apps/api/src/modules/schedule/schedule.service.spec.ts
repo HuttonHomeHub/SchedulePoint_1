@@ -132,7 +132,7 @@ describe('ScheduleService.recalculate', () => {
   });
 
   it('422s with PLAN_START_REQUIRED when the plan has no start date', async () => {
-    plans.findActiveByIdInOrg.mockResolvedValue(plan({ plannedStart: null }));
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ plannedStart: null as unknown as Date }));
     await expect(service.recalculate(principalWith(CAN), 'acme', PLAN_ID)).rejects.toMatchObject({
       details: { reason: 'PLAN_START_REQUIRED' },
     });
@@ -280,7 +280,7 @@ describe('ScheduleService.summary', () => {
   });
 
   it('reports a null data date when the plan has no start, without erroring', async () => {
-    plans.findActiveByIdInOrg.mockResolvedValue(plan({ plannedStart: null }));
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ plannedStart: null as unknown as Date }));
     schedule.summarise.mockResolvedValue({
       activityCount: 0,
       criticalCount: 0,

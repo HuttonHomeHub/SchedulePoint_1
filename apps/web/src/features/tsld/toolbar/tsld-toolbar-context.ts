@@ -1,4 +1,4 @@
-import type { ActivityType, DependencyType } from '@repo/types';
+import type { ActivityType, DependencyType, SchedulingMode } from '@repo/types';
 import type { ReactNode } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -26,12 +26,26 @@ export interface TsldToolbarContext {
    * inline start-date control reads it (ADR-0032 M2). */
   plannedStart: string | null;
   /** Set the timeline start (targeted PATCH). Pen-gated (`canEditSchedule`, Critical Q3): `null`
-   * when the viewer can't edit the schedule, so the control renders the date as static text. */
+   * when the viewer can't edit the schedule, so the control renders the date as static text.
+   *
+   * Under `SCHEDULING_MODES_ENABLED` (ADR-0033 M2) this is surfaced as the labelled **Project start**
+   * data control — the persisted schedule anchor — distinct from {@link goToDate} navigation below. */
   setPlannedStart: ((iso: string) => void) | null;
+  /** Pan the canvas so `iso` sits at the left edge — a pure **view** jump, no fetch and no persisted
+   * state (ADR-0033 M2, CQ-1). Drives the **Go to date** navigation control (flag-on only), which is
+   * available to every role including read-only viewers because navigating never mutates the plan. */
+  goToDate: (iso: string) => void;
 
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
   toggleView: (key: keyof TsldViewToggles) => void;
+  /** The plan's scheduling mode (ADR-0033) — EARLY or VISUAL. Drives the Mode selector's pressed
+   * state. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
+  schedulingMode: SchedulingMode;
+  /** Switch the plan's scheduling mode (targeted PATCH, pen-gated). `null` when the viewer can't edit
+   * the schedule — the registry then hides the interactive switch and shows a presentational mode
+   * read-out instead (the mode changes how the diagram reads, so viewers still see which is active). */
+  setSchedulingMode: ((mode: SchedulingMode) => void) | null;
 
   // --- Tools / author (group 4, pen-gated) --------------------------------------------------
   /** True when the current edit mode is "add activity" (drives the tool's pressed state). */

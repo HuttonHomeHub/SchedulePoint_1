@@ -127,6 +127,9 @@ export interface PlacedActivityInput {
   laneIndex: number;
   constraintType?: ConstraintType;
   constraintDate?: string;
+  /** Visual-Planning placement (ADR-0033): set instead of an SNET constraint when a bar is drawn in
+   * VISUAL mode — the drop hand-places the start, no implicit constraint. */
+  visualStart?: string;
 }
 
 export function useCreatePlacedActivity(orgSlug: string, planId: string) {
@@ -150,6 +153,36 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
       apiFetch<ActivitySummary>(`/organizations/${orgSlug}/activities/${input.activityId}`, {
         method: 'PATCH',
         body: JSON.stringify(updateBody(input)),
+      }),
+    onSettled: (_data, _error, input) =>
+      invalidateActivity(queryClient, orgSlug, planId, input.activityId),
+  });
+}
+
+/**
+ * A canvas Visual-Planning placement (ADR-0033 M3): the minimal `{ visualStart, laneIndex?, version }`
+ * PATCH on the single-activity endpoint. In VISUAL mode a day-drag hand-places the bar's start via
+ * `visualStart` (never an SNET constraint) and — unlike {@link useRepositionLane} — it *does* feed the
+ * effective-Visual pass, so the route recalculates after it (the pass pins this bar and pushes its
+ * unplaced successors, server-side). `visualStart: null` clears the placement (revert to computed).
+ * It resends no definition fields, so it can never clobber a constraint or duration.
+ */
+export function useSetActivityVisualStart(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      activityId: string;
+      visualStart: string | null;
+      laneIndex?: number;
+      version: number;
+    }) =>
+      apiFetch<ActivitySummary>(`/organizations/${orgSlug}/activities/${input.activityId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          visualStart: input.visualStart,
+          ...(input.laneIndex !== undefined ? { laneIndex: input.laneIndex } : {}),
+          version: input.version,
+        }),
       }),
     onSettled: (_data, _error, input) =>
       invalidateActivity(queryClient, orgSlug, planId, input.activityId),

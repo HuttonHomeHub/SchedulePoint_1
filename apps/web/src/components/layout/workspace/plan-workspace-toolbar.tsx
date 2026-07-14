@@ -17,10 +17,10 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import { CompactPenStatus, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
-import { TsldPanel } from '@/features/tsld';
+import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
@@ -107,6 +107,11 @@ export function ToolbarPlanWorkspace({
   const canvasLoading =
     CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
 
+  // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
+  // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
+  // tools read as live while doing nothing on the canvas (ux/a11y review).
+  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
+
   // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
   // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so
   // selection/viewport state never leaks across a plan→plan nav.
@@ -125,7 +130,15 @@ export function ToolbarPlanWorkspace({
       activities={model.activities.data ?? []}
       dependencies={model.dependencies.data ?? []}
       dataDate={plan.plannedStart}
-      canEdit={model.canEditSchedule}
+      barDateSource={
+        // ADR-0033: VISUAL plans render the effective-Visual dates; the Late overlay (M4) wins for
+        // display. Flag-off the mode is always EARLY and the overlay off, so this stays `early`.
+        SCHEDULING_MODES_ENABLED
+          ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
+          : 'early'
+      }
+      // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
+      canEdit={model.canEditSchedule && !lateOverlayActive}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       onLink={model.onTsldLink}
@@ -178,13 +191,26 @@ export function ToolbarPlanWorkspace({
           items={items}
           context={ctx}
           label="Plan toolbar"
-          authoringEnabled={model.canEditSchedule}
+          authoringEnabled={model.canEditSchedule && !lateOverlayActive}
         />
       </div>
 
       {model.penReadOnly ? (
         <div className="px-4 pt-2">
           <PenReadOnlyNote />
+        </div>
+      ) : null}
+
+      {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
+      {lateOverlayActive && model.canEditSchedule ? (
+        <div className="px-4 pt-2">
+          <p
+            role="status"
+            className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
+          >
+            The Late-start overlay is on — editing is paused. Turn it off in{' '}
+            <span className="font-medium">View</span> to edit.
+          </p>
         </div>
       ) : null}
 

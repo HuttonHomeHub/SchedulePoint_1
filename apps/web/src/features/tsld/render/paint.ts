@@ -51,6 +51,9 @@ export interface TsldPalette {
   nonWorking: string;
   /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
   today: string;
+  /** Visual-Planning conflict cue (ADR-0033): a placement earlier than its feasible start. The
+   * warning hue, drawn as a distinct **triangle badge** (shape, not colour-only) at the bar's start. */
+  conflict: string;
   // Label text colours (ADR-0026 D1). Inside-bar text uses the fill's paired *-foreground token so
   // it contrasts against that fill in both themes; beside text uses the page foreground.
   labelInside: string;
@@ -68,9 +71,13 @@ export interface TsldViewToggles {
   nonWorking: boolean;
   /** On-canvas activity labels (`{code} {name} · {n}d`). */
   labels: boolean;
+  /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
+   * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
+   * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
+  lateOverlay: boolean;
 }
 
-/** All view layers on — the default before the user toggles anything. */
+/** All view layers on — the default before the user toggles anything (the Late overlay starts off). */
 export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   dayGrid: true,
   monthGrid: true,
@@ -78,6 +85,7 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   today: true,
   nonWorking: true,
   labels: true,
+  lateOverlay: false,
 };
 
 export interface TsldScene {
@@ -164,6 +172,42 @@ function drawConstraintPin(ctx: Ctx2D, edgeX: number, barTop: number, palette: T
   ctx.lineTo(edgeX + CONSTRAINT_PIN_W / 2, barTop - CONSTRAINT_PIN_H);
   ctx.lineTo(edgeX, barTop);
   ctx.fill();
+}
+
+/** Half-width (px) of the upward warning triangle marking a Visual-Planning conflict. */
+const CONFLICT_BADGE_W = 6;
+const CONFLICT_BADGE_H = 7;
+
+/**
+ * An upward warning triangle at a conflicting bar's start edge (ADR-0033): a Visual placement earlier
+ * than its feasible start. A **shape** cue in the warning hue — distinct from the downward constraint
+ * pin — so it never relies on colour alone (WCAG 1.4.1). It carries a **contrasting outline** (the
+ * foreground stroke, like the critical/near-critical bar outlines) so the triangle clears the 3:1
+ * non-text-contrast bar (WCAG 1.4.11) even against a same-hue near-critical bar fill, where the fill
+ * colour alone would vanish. The legend names it and the listbox spells it out for AT.
+ */
+function drawConflictBadge(ctx: Ctx2D, startX: number, barTop: number, palette: TsldPalette): void {
+  const ax = startX + 1;
+  const ay = barTop + CONFLICT_BADGE_H + 1;
+  const bx = startX + 1 + CONFLICT_BADGE_W;
+  const cx = startX + 1 + CONFLICT_BADGE_W / 2;
+  const cy = barTop + 1;
+  ctx.fillStyle = palette.conflict;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, ay);
+  ctx.lineTo(cx, cy);
+  ctx.fill();
+  // A foreground outline traced over the same triangle (closed manually — the Ctx2D surface has no
+  // closePath) so the shape stays perceivable on any bar fill, including a same-hue near-critical one.
+  ctx.strokeStyle = palette.outline;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, ay);
+  ctx.lineTo(cx, cy);
+  ctx.lineTo(ax, ay);
+  ctx.stroke();
 }
 
 /**
@@ -309,6 +353,12 @@ export function paintScene(
           ? rect.x + rect.w
           : rect.x;
       drawConstraintPin(ctx, edgeX, rect.y, palette);
+    }
+    // Visual-Planning conflict (ADR-0033): the placement is before its earliest feasible start. A
+    // warning triangle at the bar's start — never auto-moved, only flagged (the mapping seam gates
+    // this to VISUAL mode, so EARLY/late bars never show it).
+    if (activity.visualConflict) {
+      drawConflictBadge(ctx, rect.x, rect.y, palette);
     }
   }
 

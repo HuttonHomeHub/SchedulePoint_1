@@ -15,6 +15,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_TOOLBAR?: string;
   /** Canvas-first plan authoring (ADR-0032). "true"/"1" enables it; off by default. */
   readonly VITE_CANVAS_AUTHORING?: string;
-  /** Scheduling modes & de-overloaded plan start (ADR-0033). "true"/"1" enables it; off by default. */
+  /** Scheduling modes & de-overloaded plan start (ADR-0033). On by default; "false"/"0" disables it. */
   readonly VITE_SCHEDULING_MODES?: string;
 }

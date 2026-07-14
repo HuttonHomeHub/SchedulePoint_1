@@ -29,6 +29,11 @@ const ACTIVITY: ActivitySummary = {
   totalFloat: null,
   isCritical: false,
   isNearCritical: false,
+  visualStart: null,
+  visualEffectiveStart: null,
+  visualEffectiveFinish: null,
+  visualConflict: false,
+  visualDriftDays: null,
   version: 1,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
@@ -135,6 +140,11 @@ describe('ActivitiesTable', () => {
         totalFloat: 0,
         isCritical: true,
         isNearCritical: false,
+        visualStart: null,
+        visualEffectiveStart: null,
+        visualEffectiveFinish: null,
+        visualConflict: false,
+        visualDriftDays: null,
       },
     ]);
     expect(screen.getAllByText('01 Jan 2026').length).toBeGreaterThan(0); // early/late start

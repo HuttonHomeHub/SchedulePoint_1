@@ -12,7 +12,10 @@ import type { PrismaService } from '../src/prisma/prisma.service';
  * flat item operations, `status`/`plannedStart` metadata round-trip and
  * validation, per-project name uniqueness, the IDOR/parent-404 matrix, and the
  * soft-delete + restore round-trip incl. the top-down PARENT_DELETED invariant
- * (verified against a real PostgreSQL + Better Auth session).
+ * (verified against a real PostgreSQL + Better Auth session). `plannedStart`
+ * is a mandatory, non-nullable data date (ADR-0033 M1): creating a plan
+ * without one 422s, and it may be moved via PATCH but never cleared (an
+ * explicit `null` 422s).
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';
@@ -100,23 +103,28 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     return { actor, orgId, projectId };
   }
 
-  it('creates a plan with defaults, gets and lists it', async () => {
+  it('creates a plan with a mandatory start (ADR-0033 M1), gets and lists it', async () => {
     const { actor, projectId } = await setup();
     const res = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Baseline' })
+      .send({ name: 'Baseline', plannedStart: '2026-01-01' })
       .expect(201);
     expect(res.body.data).toMatchObject({
       name: 'Baseline',
       projectId,
       status: 'DRAFT',
-      plannedStart: null,
+      plannedStart: '2026-01-01',
       version: 1,
     });
     const id = res.body.data.id as string;
 
     const got = await actor.agent.get(`/api/v1/organizations/acme/plans/${id}`).expect(200);
-    expect(got.body.data).toMatchObject({ name: 'Baseline', projectId, status: 'DRAFT' });
+    expect(got.body.data).toMatchObject({
+      name: 'Baseline',
+      projectId,
+      status: 'DRAFT',
+      plannedStart: '2026-01-01',
+    });
 
     const list = await actor.agent
       .get(`/api/v1/organizations/acme/projects/${projectId}/plans`)
@@ -124,7 +132,21 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     expect(list.body.data).toHaveLength(1);
   });
 
-  it('round-trips status and plannedStart (date-only, no TZ drift)', async () => {
+  it('rejects a plan created without a start date (422, ADR-0033 M1)', async () => {
+    const { actor, projectId } = await setup();
+    const res = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .send({ name: 'No start' })
+      .expect(422);
+    expect(res.body.error).toBeDefined();
+
+    const list = await actor.agent
+      .get(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .expect(200);
+    expect(list.body.data).toHaveLength(0);
+  });
+
+  it('round-trips status and moves plannedStart, but forbids clearing it (date-only, no TZ drift)', async () => {
     const { actor, projectId } = await setup();
     const res = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
@@ -133,12 +155,31 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     expect(res.body.data).toMatchObject({ status: 'ACTIVE', plannedStart: '2026-05-01' });
     const id = res.body.data.id as string;
 
-    // Update status + clear the date.
-    const patched = await actor.agent
+    // An explicit null is rejected — the mandatory data date can be moved, never cleared.
+    const rejected = await actor.agent
       .patch(`/api/v1/organizations/acme/plans/${id}`)
       .send({ status: 'ARCHIVED', plannedStart: null, version: 1 })
+      .expect(422);
+    expect(rejected.body.error).toBeDefined();
+
+    // The rejected PATCH must not have applied any part of the request (still v1, still ACTIVE).
+    const unchanged = await actor.agent.get(`/api/v1/organizations/acme/plans/${id}`).expect(200);
+    expect(unchanged.body.data).toMatchObject({
+      status: 'ACTIVE',
+      plannedStart: '2026-05-01',
+      version: 1,
+    });
+
+    // Moving it to a new day (and changing status) still works.
+    const patched = await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${id}`)
+      .send({ status: 'ARCHIVED', plannedStart: '2026-06-15', version: 1 })
       .expect(200);
-    expect(patched.body.data).toMatchObject({ status: 'ARCHIVED', plannedStart: null, version: 2 });
+    expect(patched.body.data).toMatchObject({
+      status: 'ARCHIVED',
+      plannedStart: '2026-06-15',
+      version: 2,
+    });
   });
 
   it('defaults a new plan to the org Standard calendar and lets a Planner reassign/clear it', async () => {
@@ -152,7 +193,7 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
 
     const created = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Scheduled' })
+      .send({ name: 'Scheduled', plannedStart: '2026-01-01' })
       .expect(201);
     expect(created.body.data.calendarId).toBe(standardId);
     const id = created.body.data.id as string;
@@ -181,7 +222,7 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     const { actor, projectId } = await setup();
     const created = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Guarded' })
+      .send({ name: 'Guarded', plannedStart: '2026-01-01' })
       .expect(201);
     const id = created.body.data.id as string;
 
@@ -205,7 +246,10 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
   it('rejects an invalid status or plannedStart (422)', async () => {
     const { actor, projectId } = await setup();
     const base = `/api/v1/organizations/acme/projects/${projectId}/plans`;
-    await actor.agent.post(base).send({ name: 'A', status: 'WIP' }).expect(422);
+    await actor.agent
+      .post(base)
+      .send({ name: 'A', status: 'WIP', plannedStart: '2026-01-01' })
+      .expect(422);
     await actor.agent.post(base).send({ name: 'B', plannedStart: '2026-02-30' }).expect(422);
     await actor.agent.post(base).send({ name: 'C', plannedStart: '01/05/2026' }).expect(422);
   });
@@ -217,16 +261,16 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     const a = `/api/v1/organizations/acme/projects/${projectId}/plans`;
     const b = `/api/v1/organizations/acme/projects/${otherProject}/plans`;
 
-    await actor.agent.post(a).send({ name: 'Dup' }).expect(201);
-    await actor.agent.post(b).send({ name: 'Dup' }).expect(201); // different project: allowed
-    await actor.agent.post(a).send({ name: 'Dup' }).expect(409); // same project: conflict
+    await actor.agent.post(a).send({ name: 'Dup', plannedStart: '2026-01-01' }).expect(201);
+    await actor.agent.post(b).send({ name: 'Dup', plannedStart: '2026-01-01' }).expect(201); // different project: allowed
+    await actor.agent.post(a).send({ name: 'Dup', plannedStart: '2026-01-01' }).expect(409); // same project: conflict
   });
 
   it('updates with optimistic locking (stale version → 409)', async () => {
     const { actor, projectId } = await setup();
     const created = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Lock' })
+      .send({ name: 'Lock', plannedStart: '2026-01-01' })
       .expect(201);
     const id = created.body.data.id as string;
 
@@ -244,7 +288,7 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     const { actor, projectId } = await setup();
     const created = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Temp' })
+      .send({ name: 'Temp', plannedStart: '2026-01-01' })
       .expect(201);
     const id = created.body.data.id as string;
 
@@ -263,7 +307,7 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     const { actor, projectId } = await setup();
     const created = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Child' })
+      .send({ name: 'Child', plannedStart: '2026-01-01' })
       .expect(201);
     const id = created.body.data.id as string;
 
@@ -284,7 +328,7 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     const { actor, projectId } = await setup();
     const created = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Hidden' })
+      .send({ name: 'Hidden', plannedStart: '2026-01-01' })
       .expect(201);
     const planId = created.body.data.id as string;
 
@@ -294,7 +338,7 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
       .expect(404);
     await actor.agent
       .post(`/api/v1/organizations/acme/projects/${unknownProject}/plans`)
-      .send({ name: 'Nope' })
+      .send({ name: 'Nope', plannedStart: '2026-01-01' })
       .expect(404);
 
     const outsider = await signUp('outsider@example.com');
@@ -313,7 +357,7 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     await viewer.agent.get(`/api/v1/organizations/acme/projects/${projectId}/plans`).expect(200);
     await viewer.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name: 'Nope' })
+      .send({ name: 'Nope', plannedStart: '2026-01-01' })
       .expect(403);
   });
 

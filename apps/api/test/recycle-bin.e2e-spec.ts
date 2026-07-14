@@ -102,7 +102,7 @@ describe.skipIf(!hasDatabase)('Recycle bin API (e2e)', () => {
   async function createPlan(actor: Actor, projectId: string, name: string): Promise<string> {
     const res = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
-      .send({ name })
+      .send({ name, plannedStart: '2026-01-01' })
       .expect(201);
     return res.body.data.id as string;
   }

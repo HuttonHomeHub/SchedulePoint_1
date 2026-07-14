@@ -2,7 +2,7 @@
 
 - **Feature spec:** `docs/specs/scheduling-model-and-canvas-planning-modes.md`
 - **Draft ADR:** `docs/adr/0033-scheduling-modes-and-canvas-planning.md`
-- **Status:** Draft (awaiting approval)
+- **Status:** Approved — in delivery (M0–M4 ✅ shipped; M5 hardening/enablement in progress)
 - **Owner:** _TBD_
 
 > Sequenced as thin vertical slices behind `VITE_SCHEDULING_MODES` (default-off,
@@ -27,7 +27,7 @@ delivering the product's Graphical Path Method promise (PROJECT_BRIEF §1, §8, 
 
 ---
 
-## Milestone 0 — Foundations (schema, engine, flag) — no user-visible change
+## Milestone 0 — Foundations (schema, engine, flag) — no user-visible change — ✅ shipped
 
 **Outcome:** the data model, engine conflict computation, and flag exist; nothing
 changes in the UI yet. Ships dark.
@@ -193,11 +193,18 @@ This milestone contains the one **irreversible data migration** — reviewed alo
 
 ---
 
-## Milestone 2 — Navigation vs data-edit split (Sub-feature 1)
+## Milestone 2 — Navigation vs data-edit split (Sub-feature 1) — ✅ shipped
 
 **Outcome:** the canvas date picker no longer edits the schedule; a "Go to date"
 control pans the viewport (ephemeral, CQ-1), and an explicit "Project start"
 control owns `plannedStart`.
+
+> **Delivered** flag-off (behind `VITE_SCHEDULING_MODES`): `goToDate(iso)` on the
+> canvas handle + the pure `panToDate` helper (2.1); a "Go to date" navigation
+> popover and a labelled "Project start" data control replacing the single
+> "Timeline start" picker flag-on (2.2). The Project-start control still permits
+> clearing (`plannedStart` stays nullable until M1); the non-null guarantee 2.2
+> assumes lands with the M1 migration + required DTO.
 
 #### Feature: Go-to-date + explicit Project start
 
@@ -231,10 +238,17 @@ control owns `plannedStart`.
 
 ---
 
-## Milestone 3 — Visual Planning mode + conflict cues (Sub-feature 3, core)
+## Milestone 3 — Visual Planning mode + conflict cues (Sub-feature 3, core) — ✅ shipped
 
 **Outcome:** a planner can author in Visual Planning — bars stay where placed, no
 implicit constraints, conflicts flagged. Contains the **drag-semantics change**.
+
+> **Delivered** behind `VITE_SCHEDULING_MODES`: plan `schedulingMode` + Planner
+> `Activity.visualStart` writes (3.1); mode-aware bar sourcing via `barDateSourceFor`
+>
+> - a `barDateSource` prop (3.2); an Early/Visual toolbar selector + a Visual-mode
+>   drag/create that hand-places `visualStart` with no SNET (3.3); an on-canvas
+>   conflict warning triangle + spoken read-out (3.4).
 
 #### Feature: Scheduling mode + Visual placement (with successor push)
 
@@ -303,9 +317,13 @@ implicit constraints, conflicts flagged. Contains the **drag-semantics change**.
 
 ---
 
-## Milestone 4 — Late-Start analysis overlay (Sub-feature 3, CQ-2)
+## Milestone 4 — Late-Start analysis overlay (Sub-feature 3, CQ-2) — ✅ shipped
 
 **Outcome:** a read-only toggle shifts bars to late dates for float analysis.
+
+> **Delivered** behind `VITE_SCHEDULING_MODES`: a `lateOverlay` view toggle (per-user,
+> not persisted) in the View popover; while on, bars source from the late dates
+> (`barDateSourceFor` → `late`) and the workspace drops `canEdit` (editing suppressed).
 
 #### Feature: Late overlay
 

@@ -31,7 +31,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     name: 'Baseline',
     description: null,
     status: 'DRAFT',
-    plannedStart: null,
+    plannedStart: new Date('2026-01-01T00:00:00.000Z'),
     calendarId: null,
     schedulingMode: 'EARLY',
     version: 1,

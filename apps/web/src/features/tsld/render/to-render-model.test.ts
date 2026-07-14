@@ -26,6 +26,11 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     totalFloat: 0,
     isCritical: true,
     isNearCritical: false,
+    visualStart: null,
+    visualEffectiveStart: null,
+    visualEffectiveFinish: null,
+    visualConflict: false,
+    visualDriftDays: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -43,6 +48,9 @@ describe('toRenderActivities', () => {
       earlyFinish: '2026-01-03',
       isCritical: true,
       isNearCritical: false,
+      // The render model carries only the engine-owned conflict cue, not the source dates.
+      visualConflict: false,
+      visualDriftDays: null,
     });
   });
 

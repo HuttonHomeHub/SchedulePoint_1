@@ -15,6 +15,9 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
+  // This suite covers the canvas-authoring registry with scheduling-modes OFF (the single "Timeline
+  // start" control); the flag-on split + mode selector are covered by `tsld-toolbar-scheduling-modes`.
+  SCHEDULING_MODES_ENABLED: false,
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -25,8 +28,11 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     fit: vi.fn(),
     plannedStart: '2026-01-01',
     setPlannedStart: vi.fn(),
+    goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: vi.fn(),
+    schedulingMode: 'EARLY',
+    setSchedulingMode: vi.fn(),
     isAddingActivity: false,
     toggleAddActivity: vi.fn(),
     createType: 'TASK',

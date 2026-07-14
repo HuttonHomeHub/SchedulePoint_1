@@ -91,7 +91,7 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
       .expect(201);
     const plan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
-      .send({ name: 'Baseline' })
+      .send({ name: 'Baseline', plannedStart: '2026-01-01' })
       .expect(201);
     return plan.body.data.id as string;
   }

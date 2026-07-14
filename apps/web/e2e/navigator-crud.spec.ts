@@ -65,6 +65,7 @@ test('a writer builds client → project → plan entirely from the Project Expl
   await page.getByRole('menuitem', { name: 'New plan' }).click();
   const planDialog = page.getByRole('dialog');
   await planDialog.getByLabel('Name').fill('Logic');
+  await planDialog.getByLabel(/Planned start/).fill('2026-01-05');
   await planDialog.getByRole('button', { name: 'Create plan' }).click();
   await expect(page).toHaveURL(/\/plans\//);
   await expect(rail(page).getByRole('treeitem', { name: /Logic/ })).toBeVisible();

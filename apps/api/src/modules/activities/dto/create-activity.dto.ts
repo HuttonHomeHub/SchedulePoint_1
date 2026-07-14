@@ -91,4 +91,15 @@ export class CreateActivityDto {
   @Min(0)
   @Max(10000)
   laneIndex?: number;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description:
+      'Visual-Planning placement (ADR-0033): the calendar day (YYYY-MM-DD) to hand-place this ' +
+      "activity's start at. Feeds only the effective-Visual pass; ignored in EARLY mode.",
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  visualStart?: string;
 }

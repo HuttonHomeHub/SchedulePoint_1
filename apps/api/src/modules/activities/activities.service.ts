@@ -131,6 +131,8 @@ export class ActivitiesService {
         ...(dto.constraintType ? { constraintType: dto.constraintType } : {}),
         ...(dto.constraintDate ? { constraintDate: parseCalendarDate(dto.constraintDate) } : {}),
         ...(dto.laneIndex !== undefined ? { laneIndex: dto.laneIndex } : {}),
+        // Visual-Planning placement input (ADR-0033): feeds only the effective-Visual pass.
+        ...(dto.visualStart ? { visualStart: parseCalendarDate(dto.visualStart) } : {}),
         createdBy: principal.userId,
         updatedBy: principal.userId,
       });
@@ -187,6 +189,12 @@ export class ActivitiesService {
         dto.constraintDate === null ? null : parseCalendarDate(dto.constraintDate);
     }
     if (dto.laneIndex !== undefined) patch.laneIndex = dto.laneIndex;
+    // Visual-Planning placement (ADR-0033): a date hand-places the bar; null clears it (revert to
+    // computed). Planner-owned definition input — feeds only the effective-Visual pass, never the
+    // pure-network pass, and never travels the progress path (it's absent from the progress DTO).
+    if (dto.visualStart !== undefined) {
+      patch.visualStart = dto.visualStart === null ? null : parseCalendarDate(dto.visualStart);
+    }
 
     // Keep the milestone invariant when the type changes to (or already is) a
     // milestone: a milestone always has duration 0, regardless of what was sent.

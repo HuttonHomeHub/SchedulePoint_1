@@ -104,12 +104,12 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
       .expect(201);
     const plan = await actor.agent
       .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
-      .send({ name: 'Baseline' })
+      .send({ name: 'Baseline', plannedStart: '2026-01-01' })
       .expect(201);
     const planId = plan.body.data.id as string;
     await actor.agent
       .patch(`/api/v1/organizations/acme/plans/${planId}`)
-      .send({ plannedStart: '2026-01-01', calendarId: null, version: 1 })
+      .send({ calendarId: null, version: 1 })
       .expect(200);
     return planId;
   }

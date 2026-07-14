@@ -86,6 +86,21 @@ export class UpdateActivityDto {
   @Max(10000)
   laneIndex?: number;
 
+  @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-01',
+    description:
+      'Visual-Planning placement (ADR-0033): the calendar day (YYYY-MM-DD) to hand-place the ' +
+      "activity's start at, or null to clear the placement (revert to computed). Feeds only the " +
+      'effective-Visual pass; never the pure-network pass, and not on the progress path.',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear the placement); validate the format only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  visualStart?: string | null;
+
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)
   @IsInt()

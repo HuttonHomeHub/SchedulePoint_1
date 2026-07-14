@@ -95,6 +95,32 @@ describe('Toolbar (APG primitive)', () => {
     expect(chip).toHaveFocus();
   });
 
+  it('does not hijack arrow / Home / End keys from a form field inside a render item', () => {
+    // A native date input (e.g. the "Go to date" / "Project start" controls) owns these keys for
+    // segment editing; the toolbar must not steal them and move roving focus (WCAG 2.1.1, a11y review).
+    const items = defineToolbar<Ctx>([
+      { id: 'fit', group: 'frame', tier: 1, order: 0, label: 'fit', onActivate: () => {} },
+      {
+        id: 'date',
+        group: 'frame',
+        tier: 1,
+        order: 1,
+        label: 'date',
+        render: (_c, api) => <input {...api.itemProps} type="date" aria-label="date field" />,
+      },
+    ]);
+    render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
+    const field = screen.getByLabelText('date field');
+    const fit = screen.getByRole('button', { name: 'fit' });
+    field.focus();
+    fireEvent.keyDown(field, { key: 'ArrowLeft' });
+    fireEvent.keyDown(field, { key: 'ArrowRight' });
+    fireEvent.keyDown(field, { key: 'Home' });
+    // Focus stayed on the input; roving never grabbed a sibling control.
+    expect(field).toHaveFocus();
+    expect(fit).not.toHaveFocus();
+  });
+
   it('activates an enabled item on click', () => {
     const fit = vi.fn();
     render(<Toolbar items={makeItems({ fit })} context={{ count: 1 }} label="T" />);

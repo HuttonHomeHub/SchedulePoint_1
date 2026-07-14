@@ -78,6 +78,43 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ description: 'CPM near-critical flag (engine-owned).' })
   isNearCritical!: boolean;
 
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description: 'Visual-Planning placement (ADR-0033): hand-placed start, or null if unplaced.',
+  })
+  visualStart!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Effective-Visual start (engine-owned, ADR-0033): where the bar renders in VISUAL mode.',
+  })
+  visualEffectiveStart!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description: 'Effective-Visual finish (engine-owned).',
+  })
+  visualEffectiveFinish!: string | null;
+
+  @ApiProperty({
+    description: 'True when the placement is before the earliest feasible start (engine-owned).',
+  })
+  visualConflict!: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'Working-day drift of the placement from early start (signed, engine-owned).',
+  })
+  visualDriftDays!: number | null;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -111,6 +148,11 @@ export class ActivityResponseDto implements ActivitySummary {
       totalFloat: entity.totalFloat,
       isCritical: entity.isCritical,
       isNearCritical: entity.isNearCritical,
+      visualStart: day(entity.visualStart),
+      visualEffectiveStart: day(entity.visualEffectiveStart),
+      visualEffectiveFinish: day(entity.visualEffectiveFinish),
+      visualConflict: entity.visualConflict,
+      visualDriftDays: entity.visualDriftDays,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

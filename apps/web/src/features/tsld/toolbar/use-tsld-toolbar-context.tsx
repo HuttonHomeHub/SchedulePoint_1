@@ -10,8 +10,8 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
-import { useSetPlanStart } from '@/features/plans';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import { useSetPlanStart, useSetPlanSchedulingMode } from '@/features/plans';
 import { ScheduleSummaryStrip } from '@/features/schedule';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -71,6 +71,12 @@ export function useTsldToolbarContext({
   const announce = useAnnounce();
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setStart = useSetPlanStart(orgSlug);
+  const setPlanMode = useSetPlanSchedulingMode(orgSlug);
+
+  // The persisted-start control's name: "Project start" once the ADR-0033 split is on, else the
+  // original "Timeline start". Kept here so the visible label and the live-region copy share one source.
+  const startLabel = SCHEDULING_MODES_ENABLED ? 'Project start' : 'Timeline start';
+  const startLabelLower = startLabel.toLowerCase();
 
   const activities = model.activities.data ?? [];
   const hasDiagram =
@@ -117,27 +123,55 @@ export function useTsldToolbarContext({
       stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
       fit: requestFit,
       // Inline timeline start (ADR-0032 M2): read + (pen-gated) write `plannedStart`. Read-only
-      // viewers get a null setter so the control renders the date as static text (Critical Q3).
+      // viewers get a null setter so the control renders the date as static text (Critical Q3). The
+      // live-region copy tracks the visible label — "Project start" once the split is on (ADR-0033 M2),
+      // "Timeline start" flag-off — so the announcement never contradicts the field name (ux review).
       plannedStart: plan.plannedStart,
       setPlannedStart: canEditSchedule
-        ? (iso: string) =>
+        ? (iso: string) => {
+            // Mandatory data date (ADR-0033 M1): it can be moved, never cleared — an empty value
+            // (the native date input's clear affordance) is a no-op, not a null write.
+            if (!iso) return;
             setStart.mutate(
-              { planId, version: plan.version, plannedStart: iso || null },
+              { planId, version: plan.version, plannedStart: iso },
               {
-                onSuccess: () =>
-                  announce(
-                    iso
-                      ? `Timeline start set to ${formatCalendarDate(iso)}.`
-                      : 'Timeline start cleared.',
-                  ),
-                onError: () => announce('Couldn’t update the timeline start. Please try again.'),
+                onSuccess: () => announce(`${startLabel} set to ${formatCalendarDate(iso)}.`),
+                onError: () =>
+                  announce(`Couldn’t update the ${startLabelLower}. Please try again.`),
               },
-            )
+            );
+          }
         : null,
+      // Go to date (ADR-0033 M2): a pure view pan via the canvas control handle — no fetch, no write,
+      // no persisted state (CQ-1). Available to every role; navigating never mutates the plan. It
+      // announces the jump (WCAG 4.1.3) since the canvas repaint is otherwise invisible to AT.
+      goToDate: (iso: string) => {
+        canvasControlRef.current?.goToDate(iso);
+        announce(`Jumped to ${formatCalendarDate(iso)}.`);
+      },
 
       // Lens
       viewToggles,
       toggleView,
+      // Scheduling mode (ADR-0033 M3): read the plan's mode + a pen-gated switch. Read-only viewers
+      // get a null setter so the selector renders inert. Announces the switch (the bars re-source on
+      // the next recalc).
+      schedulingMode: plan.schedulingMode,
+      setSchedulingMode: canEditSchedule
+        ? (nextMode) =>
+            setPlanMode.mutate(
+              { planId, version: plan.version, schedulingMode: nextMode },
+              {
+                onSuccess: () =>
+                  announce(
+                    nextMode === 'VISUAL'
+                      ? 'Scheduling mode set to Visual planning.'
+                      : 'Scheduling mode set to Early start.',
+                  ),
+                onError: () => announce('Couldn’t change the scheduling mode. Please try again.'),
+              },
+            )
+        : null,
 
       // Tools (pen-gated as a set at the toolbar via authoringEnabled)
       isAddingActivity: mode === 'add-activity',
@@ -193,8 +227,12 @@ export function useTsldToolbarContext({
       canvasControlRef,
       requestFit,
       plan.plannedStart,
+      plan.schedulingMode,
       plan.version,
       setStart,
+      setPlanMode,
+      startLabel,
+      startLabelLower,
       planId,
       viewToggles,
       toggleView,

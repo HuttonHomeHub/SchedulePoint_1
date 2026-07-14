@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PlanStatus, type Plan } from '@prisma/client';
+import { PlanStatus, SchedulingMode, type Plan } from '@prisma/client';
 import type { PlanSummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
@@ -22,10 +22,17 @@ export class PlanResponseDto implements PlanSummary {
   status!: PlanStatus;
 
   @ApiProperty({
+    enum: SchedulingMode,
+    description: 'Scheduling mode (ADR-0033): EARLY (computed-earliest) or VISUAL (hand-placed).',
+  })
+  schedulingMode!: SchedulingMode;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
-    description: 'Planned start as a calendar day (YYYY-MM-DD), or null.',
+    description:
+      'Planned start as a calendar day (YYYY-MM-DD). The mandatory data date (ADR-0033 M1).',
   })
   plannedStart!: string | null;
 
@@ -53,6 +60,7 @@ export class PlanResponseDto implements PlanSummary {
       name: entity.name,
       description: entity.description,
       status: entity.status,
+      schedulingMode: entity.schedulingMode,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

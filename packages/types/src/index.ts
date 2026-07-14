@@ -120,6 +120,14 @@ export interface OrgMemberSummary {
 /** Lifecycle state of a Plan. Mirrors the API's Prisma `PlanStatus` enum. */
 export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 
+/**
+ * A plan's **scheduling mode** (ADR-0033). `EARLY` renders each activity at its
+ * computed earliest dates (classic CPM). `VISUAL` honours the planner's hand-placed
+ * `Activity.visualStart` (bars stay where dropped; the engine pushes unplaced
+ * successors and flags conflicts). Mirrors the API's Prisma `SchedulingMode` enum.
+ */
+export type SchedulingMode = 'EARLY' | 'VISUAL';
+
 /** A client (top level of the Org → Client → Project → Plan hierarchy). */
 export interface ClientSummary {
   id: string;
@@ -149,7 +157,16 @@ export interface PlanSummary {
   name: string;
   description: string | null;
   status: PlanStatus;
-  /** Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. */
+  /**
+   * The scheduling mode (ADR-0033): `EARLY` (computed-earliest) or `VISUAL` (hand-placed).
+   * Defaults to `EARLY` (behaviour-preserving).
+   */
+  schedulingMode: SchedulingMode;
+  /**
+   * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
+   * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
+   * historical/transitional reads; live plans always carry a value.
+   */
   plannedStart: string | null;
   /**
    * The plan's default working-day calendar (M5, ADR-0024), or null for
@@ -228,6 +245,23 @@ export interface ActivitySummary {
   totalFloat: number | null;
   isCritical: boolean;
   isNearCritical: boolean;
+  /**
+   * Visual-Planning placement input (ADR-0033): the calendar day (`YYYY-MM-DD`) the planner
+   * hand-placed this activity's start at, or null if unplaced. Feeds only the engine's
+   * effective-Visual pass; ignored by the pure-network (early/late/float) pass.
+   */
+  visualStart: string | null;
+  /**
+   * Engine-owned effective-Visual output (ADR-0033): where the bar actually renders in `VISUAL`
+   * mode — the placement if set, else the effective earliest after upstream pushes. `YYYY-MM-DD`,
+   * null until first calculated.
+   */
+  visualEffectiveStart: string | null;
+  visualEffectiveFinish: string | null;
+  /** Engine-owned (ADR-0033): true when the placement is earlier than the logic-earliest feasible start. */
+  visualConflict: boolean;
+  /** Engine-owned (ADR-0033): working-day offset of the placement from the early start (signed), or null. */
+  visualDriftDays: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;
