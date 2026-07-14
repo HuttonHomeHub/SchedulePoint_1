@@ -45,6 +45,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     status: 'DRAFT',
     plannedStart: null,
     calendarId: null,
+    schedulingMode: 'EARLY',
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
