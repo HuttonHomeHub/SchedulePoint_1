@@ -238,10 +238,17 @@ control owns `plannedStart`.
 
 ---
 
-## Milestone 3 — Visual Planning mode + conflict cues (Sub-feature 3, core)
+## Milestone 3 — Visual Planning mode + conflict cues (Sub-feature 3, core) — ✅ shipped
 
 **Outcome:** a planner can author in Visual Planning — bars stay where placed, no
 implicit constraints, conflicts flagged. Contains the **drag-semantics change**.
+
+> **Delivered** behind `VITE_SCHEDULING_MODES`: plan `schedulingMode` + Planner
+> `Activity.visualStart` writes (3.1); mode-aware bar sourcing via `barDateSourceFor`
+>
+> - a `barDateSource` prop (3.2); an Early/Visual toolbar selector + a Visual-mode
+>   drag/create that hand-places `visualStart` with no SNET (3.3); an on-canvas
+>   conflict warning triangle + spoken read-out (3.4).
 
 #### Feature: Scheduling mode + Visual placement (with successor push)
 
@@ -310,9 +317,13 @@ implicit constraints, conflicts flagged. Contains the **drag-semantics change**.
 
 ---
 
-## Milestone 4 — Late-Start analysis overlay (Sub-feature 3, CQ-2)
+## Milestone 4 — Late-Start analysis overlay (Sub-feature 3, CQ-2) — ✅ shipped
 
 **Outcome:** a read-only toggle shifts bars to late dates for float analysis.
+
+> **Delivered** behind `VITE_SCHEDULING_MODES`: a `lateOverlay` view toggle (per-user,
+> not persisted) in the View popover; while on, bars source from the late dates
+> (`barDateSourceFor` → `late`) and the workspace drops `canEdit` (editing suppressed).
 
 #### Feature: Late overlay
 
