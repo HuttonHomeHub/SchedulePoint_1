@@ -69,6 +69,47 @@ export function computeSchedule(
     earlyFinish.set(id, start + duration);
   }
 
+  // Pass 2 — effective-Visual (ADR-0033, forward-only). Independent of the pure passes: it reads
+  // only `earlyStart` (for the drift baseline) and never writes back, so `early*`/`late*`/float stay
+  // a pure function of the network (golden-suite parity). Each activity's DISPLAY start is its
+  // hand-placed `visualStart` when set — honoured exactly, even if infeasible (stay-and-flag) — else
+  // its logic-earliest from predecessors' PROPAGATED (feasible) finishes. Successors are pushed from
+  // the FEASIBLE finish (`prop = max(display, logicEarliest)`), so a conflicted bar never implies an
+  // impossible downstream sequence (SQ-b: it pushes from feasible-earliest, not its illegal spot).
+  // One extra O(V+E) topological pass; no backward pass.
+  const visualDisplayStart = new Map<string, number>();
+  const visualPropStart = new Map<string, number>();
+  const visualPropFinish = new Map<string, number>();
+  const visualConflictMap = new Map<string, boolean>();
+  const visualDriftMap = new Map<string, number | null>();
+  for (const id of graph.order) {
+    const activity = graph.activities.get(id)!;
+    const duration = activity.durationDays;
+    let logicEarliest = 0;
+    for (const edge of graph.incoming.get(id)!) {
+      const predPs = visualPropStart.get(edge.predecessorId)!;
+      const predPf = visualPropFinish.get(edge.predecessorId)!;
+      const bound = forwardLowerBound(edge, predPs, predPf, duration);
+      if (bound > logicEarliest) logicEarliest = bound;
+    }
+    logicEarliest = clampForwardStart(activity, logicEarliest, calendar, dataDate);
+    const placed =
+      activity.visualStart != null
+        ? calendar.workingDaysBetween(dataDate, activity.visualStart)
+        : null;
+    const display = placed ?? logicEarliest;
+    const prop = placed !== null ? Math.max(placed, logicEarliest) : logicEarliest;
+    visualDisplayStart.set(id, display);
+    visualPropStart.set(id, prop);
+    visualPropFinish.set(id, prop + duration);
+    // Conflict = a placement earlier than logic/lower-bound constraints allow (SQ-a stay-and-flag).
+    // NB M0: this covers logic + lower-bound constraints (SNET/FNET/MSO/MFO-early, all folded into
+    // `logicEarliest`); the upper-bound case (placed *after* an SNLT/FNLT ceiling) is a Pass-2
+    // refinement to close with the test-engineer before the flag flips.
+    visualConflictMap.set(id, placed !== null && placed < logicEarliest);
+    visualDriftMap.set(id, placed !== null ? placed - earlyStart.get(id)! : null);
+  }
+
   // Driving edges (M3): an incoming edge drives its successor when its forward bound is
   // exactly the successor's early start — the binding relationship (CPM/GPM "driver"). An
   // edge with a lower bound has slack; when a constraint clamped the start above every
@@ -142,6 +183,9 @@ export function computeSchedule(
     // zero-duration milestone sits on its start day (ES = EF).
     const inclusiveFinishOffset = duration === 0 ? es : ef - 1;
     const inclusiveLateFinishOffset = duration === 0 ? ls : lf - 1;
+    // Effective-Visual display (Pass 2): the bar's rendered start + inclusive finish.
+    const vDisplay = visualDisplayStart.get(id)!;
+    const vInclusiveFinishOffset = duration === 0 ? vDisplay : vDisplay + duration - 1;
     if (maxInclusiveFinishOffset === null || inclusiveFinishOffset > maxInclusiveFinishOffset) {
       maxInclusiveFinishOffset = inclusiveFinishOffset;
     }
@@ -159,6 +203,10 @@ export function computeSchedule(
       earlyFinish: calendar.addWorkingDays(dataDate, inclusiveFinishOffset),
       lateStart: calendar.addWorkingDays(dataDate, ls),
       lateFinish: calendar.addWorkingDays(dataDate, inclusiveLateFinishOffset),
+      visualEffectiveStart: calendar.addWorkingDays(dataDate, vDisplay),
+      visualEffectiveFinish: calendar.addWorkingDays(dataDate, vInclusiveFinishOffset),
+      visualConflict: visualConflictMap.get(id)!,
+      visualDriftDays: visualDriftMap.get(id)!,
     });
   }
 
