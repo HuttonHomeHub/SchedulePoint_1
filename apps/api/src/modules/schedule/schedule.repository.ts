@@ -18,6 +18,8 @@ export interface ScheduleActivityRow {
   type: ActivityType;
   constraintType: ConstraintType | null;
   constraintDate: Date | null;
+  /** Visual Planning hand-placement (ADR-0033); advisory input to the effective-Visual pass. */
+  visualStart: Date | null;
 }
 
 /** The minimal dependency shape the CPM engine reads (a plan's active edges). */
@@ -51,7 +53,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the seven engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the eleven engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -78,6 +80,7 @@ export class ScheduleRepository {
         type: true,
         constraintType: true,
         constraintDate: true,
+        visualStart: true,
       },
     });
   }
@@ -162,7 +165,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the seven engine
+   * id can never write across a plan or tenant). Sets only the eleven engine
    * columns; a no-op for an empty result set.
    */
   async writeResults(
@@ -181,6 +184,12 @@ export class ScheduleRepository {
     const totalFloat = results.map((r) => r.totalFloat);
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
+    // Effective-Visual outputs (ADR-0033) — written by the same batch as the CPM columns, so they
+    // stay engine-owned and out of the version/updated_at optimistic-lock path.
+    const visualEffectiveStart = results.map((r) => r.visualEffectiveStart);
+    const visualEffectiveFinish = results.map((r) => r.visualEffectiveFinish);
+    const visualConflict = results.map((r) => r.visualConflict);
+    const visualDriftDays = results.map((r) => r.visualDriftDays);
 
     const updated = await db.$executeRaw`
       UPDATE activities AS a
@@ -191,7 +200,11 @@ export class ScheduleRepository {
         late_finish = v.late_finish,
         total_float = v.total_float,
         is_critical = v.is_critical,
-        is_near_critical = v.is_near_critical
+        is_near_critical = v.is_near_critical,
+        visual_effective_start = v.visual_effective_start,
+        visual_effective_finish = v.visual_effective_finish,
+        visual_conflict = v.visual_conflict,
+        visual_drift_days = v.visual_drift_days
       FROM unnest(
         ${ids}::uuid[],
         ${earlyStart}::date[],
@@ -200,10 +213,15 @@ export class ScheduleRepository {
         ${lateFinish}::date[],
         ${totalFloat}::int[],
         ${isCritical}::boolean[],
-        ${isNearCritical}::boolean[]
+        ${isNearCritical}::boolean[],
+        ${visualEffectiveStart}::date[],
+        ${visualEffectiveFinish}::date[],
+        ${visualConflict}::boolean[],
+        ${visualDriftDays}::int[]
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
-        total_float, is_critical, is_near_critical
+        total_float, is_critical, is_near_critical,
+        visual_effective_start, visual_effective_finish, visual_conflict, visual_drift_days
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid

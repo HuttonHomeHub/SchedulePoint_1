@@ -53,6 +53,7 @@ const activityRow = (
   type: 'TASK',
   constraintType: null,
   constraintDate: null,
+  visualStart: null,
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({
