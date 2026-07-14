@@ -203,6 +203,17 @@ describe('TSLD toolbar registry', () => {
     }
   });
 
+  it('lists the roadmap placeholders in the ⋯ overflow, disabled with a reason', () => {
+    renderToolbar(ctx());
+    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
+    const menu = screen.getByRole('menu', { name: 'More toolbar actions' });
+    for (const name of ['Export…', 'Share…', 'Search activities', 'Add note', 'Colour by…']) {
+      const item = within(menu).getByRole('menuitem', { name });
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).toHaveAttribute('title', 'Coming soon');
+    }
+  });
+
   it('has no axe violations', async () => {
     renderToolbar(ctx());
     expect((await axe(screen.getByRole('toolbar'))).violations).toEqual([]);

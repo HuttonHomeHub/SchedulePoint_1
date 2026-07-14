@@ -230,9 +230,12 @@ as if the toolbar changed with the **planning mode**, even though no command is 
 4. **Future-feature placeholders.** Reserved slots are no longer hidden stubs; they render as
    **disabled "Coming soon" placeholders** so the toolbar reads as fully designed and the roadmap is
    visible in-product. A capability-unavailable disable and a placeholder are distinguished by their
-   tooltip copy ("Add an activity to…" vs "Coming soon"). Inline placeholders: Undo/Redo (history).
-   Overflow placeholders: Recenter-on-today (frame), Filter/Critical-only (find), Snap-to-grid (lens),
-   Clear-visual-placement (tools), Next-conflict (find). The catalogue and intended behaviour live in
+   tooltip copy ("Add an activity to…" vs "Coming soon"). Inline placeholders: Undo/Redo (history). The
+   `⋯` overflow carries the rest — navigation/find (Recenter-today, Search, Filter, Isolate-logic,
+   Next-conflict), display (Colour-by, Baseline-overlay, Snap-to-grid, Resource-view), authoring
+   (Add-note, Clear-visual-placement) and object/deliverable (Export, Print, Share, Comments,
+   Update-progress). Keeping them overflow-only holds the inline bar lean and stable. The full catalogue
+   and intended behaviour live in
    `docs/TOOLBAR_ROADMAP.md`; each is switched on later by swapping the `placeholderItem(...)` stub for
    a real command — no taxonomy change.
 

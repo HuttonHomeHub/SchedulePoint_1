@@ -13,8 +13,10 @@ Refines the TSLD plan toolbar so it stops "changing what's visible" as plan/mode
   canvas onward — the zoom cluster is _disabled with a reason_ until a diagram is computed, rather
   than vanishing. The toolbar's silhouette no longer shifts between planning states.
 - **Future-feature placeholders.** Reserved slots now render as disabled "Coming soon" controls so
-  the toolbar reads as fully designed: Undo/Redo inline; Recenter-on-today, Filter, Snap-to-grid,
-  Clear-visual-placement and Next-conflict in the `⋯` overflow. Catalogue: `docs/TOOLBAR_ROADMAP.md`.
+  the toolbar reads as fully designed: Undo/Redo inline; and — in the `⋯` overflow — Recenter-on-today,
+  Search, Filter, Isolate-logic-path, Next-conflict, Colour-by, Baseline-overlay, Snap-to-grid,
+  Resource-view, Add-note, Clear-visual-placement, Export, Print, Share, Comments and Update-progress.
+  Full catalogue + how-to-enable in `docs/TOOLBAR_ROADMAP.md`.
 
 Frontend only, within the existing `VITE_CANVAS_TOOLBAR` surface; the flag-off `TsldViewControls`
 fallback is unchanged. No API/DB/type change.

@@ -1,6 +1,7 @@
 import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
+  BarChart3,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -8,20 +9,30 @@ import {
   Check,
   ChevronDown,
   Eraser,
+  FileDown,
   Filter,
+  Gauge,
   Grid3x3,
   Info,
   Keyboard,
   Layers,
+  Layers2,
   ListChecks,
   LocateFixed,
   Maximize2,
+  MessageSquare,
   Minus,
+  Palette,
   Plus,
+  Printer,
   RefreshCw,
   Redo2,
+  Route,
+  Search,
+  Share2,
   SlidersHorizontal,
   Spline,
+  StickyNote,
   TriangleAlert,
   Undo2,
 } from 'lucide-react';
@@ -654,6 +665,26 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: () => false,
       onActivate: () => {},
     },
+    // Colour-by — recolour bars by status / WBS / critical / resource. Overflow placeholder.
+    placeholderItem({
+      id: 'colour-by',
+      group: 'lens',
+      tier: 3,
+      order: 1,
+      label: 'Colour by…',
+      icon: <Palette className="size-4" />,
+    }),
+    // Baseline overlay — ghost the active baseline's bars behind the live ones for variance-at-a-glance
+    // (baselines are already captured server-side; nothing draws them on the canvas yet). When built
+    // this becomes a `View▾` toggle; a placeholder button for now. Overflow placeholder.
+    placeholderItem({
+      id: 'baseline-overlay',
+      group: 'lens',
+      tier: 3,
+      order: 2,
+      label: 'Baseline overlay',
+      icon: <Layers2 className="size-4" />,
+    }),
     // Snap-to-grid — a Visual-planning aid (snaps hand-placed bars to working-day gridlines). In the
     // `⋯` overflow as a "Coming soon" placeholder.
     placeholderItem({
@@ -664,8 +695,27 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Snap to grid',
       icon: <Grid3x3 className="size-4" />,
     }),
+    // Resource view — a second lens (resource histogram / over-allocation). Promotes the reserved
+    // `view-mode` slot into a visible "Coming soon" placeholder. Overflow.
+    placeholderItem({
+      id: 'resource-view',
+      group: 'lens',
+      tier: 3,
+      order: 12,
+      label: 'Resource view',
+      icon: <BarChart3 className="size-4" />,
+    }),
 
     // --- 3 · Find / focus (placeholders) ------------------------------------------------------
+    // Search — jump to an activity by name/code. Placeholder in the `⋯` overflow.
+    placeholderItem({
+      id: 'search',
+      group: 'find',
+      tier: 3,
+      order: -1,
+      label: 'Search activities',
+      icon: <Search className="size-4" />,
+    }),
     // Filter / critical-only view — a "Coming soon" placeholder in the `⋯` overflow; the real command
     // lands later. Kept out of the always-inline core to keep the bar lean.
     placeholderItem({
@@ -675,6 +725,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 0,
       label: 'Filter',
       icon: <Filter className="size-4" />,
+    }),
+    // Isolate logic path — highlight the driving/longest path, or a selection's predecessors &
+    // successors. Placeholder in the `⋯` overflow.
+    placeholderItem({
+      id: 'isolate-logic',
+      group: 'find',
+      tier: 3,
+      order: 2,
+      label: 'Isolate logic path',
+      icon: <Route className="size-4" />,
     }),
     // Jump-to-next-conflict — a Visual-planning helper (steps the viewport through flagged placements).
     // In the `⋯` overflow (tier 3) so it's discoverable without crowding the bar.
@@ -754,6 +814,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 4,
       label: 'Clear visual placement',
       icon: <Eraser className="size-4" />,
+    }),
+    // Add note — a free-text annotation / callout pinned to the canvas or an activity (review markup).
+    // Overflow placeholder; leans on the multi-tenant + guest-share model for review workflows.
+    placeholderItem({
+      id: 'add-note',
+      group: 'tools',
+      tier: 3,
+      order: 5,
+      label: 'Add note',
+      icon: <StickyNote className="size-4" />,
     }),
 
     // --- 5 · Object / plan actions ------------------------------------------------------------
@@ -844,6 +914,50 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: (ctx) => ctx.editPlan !== null,
       onActivate: (ctx) => ctx.editPlan?.(),
     },
+    // Deliverables + collaboration — overflow "Coming soon" placeholders (see docs/TOOLBAR_ROADMAP.md).
+    // Export the diagram (PDF/PNG) or the schedule (XER/MSP/CSV); Print; Share (surfaces the ADR-0012
+    // per-plan guest link); Comments (activity threads); Update progress (apply actuals + advance the
+    // data date).
+    placeholderItem({
+      id: 'export',
+      group: 'object',
+      tier: 3,
+      order: 7,
+      label: 'Export…',
+      icon: <FileDown className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'print',
+      group: 'object',
+      tier: 3,
+      order: 8,
+      label: 'Print…',
+      icon: <Printer className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'share',
+      group: 'object',
+      tier: 3,
+      order: 9,
+      label: 'Share…',
+      icon: <Share2 className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'comments',
+      group: 'object',
+      tier: 3,
+      order: 10,
+      label: 'Comments',
+      icon: <MessageSquare className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'update-progress',
+      group: 'object',
+      tier: 3,
+      order: 11,
+      label: 'Update progress…',
+      icon: <Gauge className="size-4" />,
+    }),
 
     // --- 6 · History / status ------------------------------------------------------------------
     // Undo / Redo — high-expectation editing controls, shown inline as "Coming soon" placeholders
