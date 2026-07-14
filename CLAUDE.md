@@ -314,6 +314,15 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   client-side auto-recalc, on-canvas activity types (Add split-button + milestones),
   and a two-click Link tool-mode replacing the edge-drag; frontend-only, amends
   ADR-0022/0023/0026/0031 (behind `VITE_CANVAS_AUTHORING`).
+- **ADR-0033** — Scheduling modes & a de-overloaded plan start: split the conflated
+  `plannedStart` into a mandatory project **data date** and an ephemeral **Go to date**
+  view control; a plan-level `schedulingMode` (**Early** computed-earliest vs **Visual**
+  hand-placed) plus a read-only **Late Start** overlay; an advisory `visualStart` fed
+  through a **second, forward-only "effective-Visual" engine pass** (placements push
+  successors) while the pure-network pass still owns early/late/float; engine-owned
+  `visualConflict`/drift flags (placement highlighted, never auto-moved). Supersedes
+  ADR-0032 M1/D2 + the "drop = SNET" default; amends ADR-0022/0023 (behind
+  `VITE_SCHEDULING_MODES`).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
