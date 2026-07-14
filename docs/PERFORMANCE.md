@@ -49,8 +49,13 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
 - **`O(V + E)` compute.** The pure engine (Kahn topo order + one forward + one
   backward pass) is linear in the graph size; the work is dominated by the two
   round trips, not the maths.
-- **The write touches only the seven engine columns**, never `version` /
-  `updated_at`, so it neither conflicts with nor invalidates cached user edits.
+- **The write touches only the eleven engine columns** (the seven CPM columns plus
+  the four ADR-0033 effective-Visual outputs — `visual_effective_start/finish`,
+  `visual_conflict`, `visual_drift_days`), never `version` / `updated_at`, so it
+  neither conflicts with nor invalidates cached user edits. The engine's second,
+  forward-only effective-Visual pass adds an O(V+E) traversal (~+8.5 ms measured at
+  2,000 activities — well within budget); it currently runs on every recalc, and is a
+  candidate to mode-gate to `VISUAL` plans once the mode is settable (ADR-0033 M3).
 - **Working-day calendar: one more indexed load, near-log cost per call (M5,
   ADR-0024).** When the plan has a calendar, the recalc snapshot adds **one Prisma
   load** for its `working_weekdays` + active exceptions (two short indexed reads under

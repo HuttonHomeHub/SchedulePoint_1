@@ -208,6 +208,7 @@ function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
     type: row.type,
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
+    visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
   };
 }
 

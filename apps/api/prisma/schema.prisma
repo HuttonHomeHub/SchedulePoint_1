@@ -268,6 +268,18 @@ enum PlanStatus {
   ARCHIVED
 }
 
+// The plan-level scheduling mode (ADR-0033). Selects the canvas bar-x date source
+// and the time-drag semantics: EARLY renders pure-network `early_*` and a drag
+// imposes an explicit SNET + recalc (today's behaviour); VISUAL renders the
+// engine's `visual_effective_*` and a drag writes the Planner's `visual_start`
+// placement (no constraint) and pushes unplaced successors. Default EARLY is
+// behaviour-preserving. MUST stay in lock-step with the TypeScript union in
+// @repo/types (added in a later M3 task).
+enum SchedulingMode {
+  EARLY
+  VISUAL
+}
+
 // The kind of schedule activity (PROJECT_BRIEF §8). All five are modelled so the
 // deferred slices (dependencies, CPM, canvas) never need an enum migration; the
 // web UI exposes only TASK + START/FINISH milestones in this slice — HAMMOCK and
@@ -374,8 +386,16 @@ model Plan {
   name           String
   description    String?
   status         PlanStatus @default(DRAFT)
+  // The scheduling mode (ADR-0033). Default EARLY is behaviour-preserving; a single-
+  // row column read with the plan, never filtered across plans, so no index.
+  schedulingMode SchedulingMode @default(EARLY) @map("scheduling_mode")
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
-  // instant, so it is @db.Date, not timestamptz. Optional metadata in this slice.
+  // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
+  // (ADR-0023). It becomes **required + NOT NULL** in ADR-0033 **M1** (a one-time
+  // backfill — earliest active constraint_date → earliest active actual_start →
+  // created_at::date → today — then SET NOT NULL, shipped together with the
+  // CreatePlanDto-required change). It stays **nullable** in this M0 additive slice
+  // so the irreversible migration lands in its own milestone.
   plannedStart   DateTime?  @map("planned_start") @db.Date
   // The plan's default working-day calendar (M5, ADR-0024). Nullable → all-days-work
   // (M6 back-compat); new plans default to the org's seeded Standard calendar. FK is
@@ -463,6 +483,28 @@ model Activity {
   totalFloat     Int?      @map("total_float")
   isCritical     Boolean   @default(false) @map("is_critical")
   isNearCritical Boolean   @default(false) @map("is_near_critical")
+
+  // Visual Planning placement (ADR-0033). `visual_start` is the ONLY Planner-owned
+  // input here — the hand-placed calendar day a DTO may set (date-only, like
+  // constraint_date). It feeds ONLY the engine's second, forward-only effective-
+  // Visual pass, never the pure-network pass, so it can never corrupt early_*/float.
+  visualStart DateTime? @map("visual_start") @db.Date
+
+  // Effective-Visual output — engine-owned (ADR-0033), written ONLY by the recalc's
+  // batched `unnest` UPDATE alongside the CPM columns above; NEVER accepted from a
+  // DTO and NEVER touching version/updated_at/updated_by (ADR-0022 property
+  // preserved). `visual_effective_start/finish` are what Visual mode renders (a
+  // placed bar sits on its visual_start; an unplaced one at its effective-earliest).
+  // `visual_conflict` flags an infeasible placement (stay-and-flag, SQ-a);
+  // `visual_drift_days` = visual_start − pure-network early_start (working days).
+  // Nullable/defaulted, mirroring early_*/is_critical. No index: read as part of the
+  // already plan-scoped activity load ((plan_id, created_at, id)) and aggregated over
+  // that scope (conflictCount) — no predicate targets them; a partial "list
+  // conflicts" index is an explicit ADR-0033 follow-up if a conflicts panel lands.
+  visualEffectiveStart  DateTime? @map("visual_effective_start") @db.Date
+  visualEffectiveFinish DateTime? @map("visual_effective_finish") @db.Date
+  visualConflict        Boolean   @default(false) @map("visual_conflict")
+  visualDriftDays       Int?      @map("visual_drift_days")
 
   // Housekeeping (as Project/Plan): TEXT audit ids (Better Auth ids are TEXT),
   // optimistic-lock version, soft delete + restore-batch correlation.

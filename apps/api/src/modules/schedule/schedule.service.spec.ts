@@ -31,6 +31,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     status: 'DRAFT',
     plannedStart: new Date('2026-01-01T00:00:00.000Z'),
     calendarId: null,
+    schedulingMode: 'EARLY',
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -52,6 +53,7 @@ const activityRow = (
   type: 'TASK',
   constraintType: null,
   constraintDate: null,
+  visualStart: null,
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({

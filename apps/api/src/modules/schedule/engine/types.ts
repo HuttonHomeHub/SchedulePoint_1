@@ -23,6 +23,10 @@ export interface EngineActivity {
   constraintType?: ConstraintType | null;
   /** The constraint's calendar day (`YYYY-MM-DD`); required when a type is set. */
   constraintDate?: string | null;
+  /** Visual Planning hand-placement (`YYYY-MM-DD`), ADR-0033. Advisory input to the
+   * **effective-Visual pass only** — it never touches the pure forward/backward pass, so
+   * `early*`/`late*`/float stay a pure function of the network. Absent = no placement. */
+  visualStart?: string | null;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
@@ -68,6 +72,20 @@ export interface EngineResult {
   earlyFinish: string;
   lateStart: string;
   lateFinish: string;
+  /**
+   * Effective-Visual pass output (ADR-0033), for canvas rendering in `VISUAL` mode.
+   * `visualEffective{Start,Finish}` are the inclusive display dates a bar sits at: a
+   * placed activity renders exactly on its `visualStart` (**even when infeasible** —
+   * stay-and-flag); an unplaced one renders at its effective-earliest, pushed by any
+   * placed predecessors. `visualConflict` flags a placement earlier than logic/an
+   * explicit constraint allows. `visualDriftDays = visualStart − pure-network
+   * earlyStart` (working days), or null when unplaced. These never affect the pure
+   * `early*`/`late*`/float above.
+   */
+  visualEffectiveStart: string;
+  visualEffectiveFinish: string;
+  visualConflict: boolean;
+  visualDriftDays: number | null;
 }
 
 /** Plan-level roll-up of an engine run. */
