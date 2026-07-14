@@ -194,3 +194,47 @@ With `VITE_CANVAS_TOOLBAR` off, the ADR-0030 workspace renders unchanged; with
   `features/tsld/components/TsldPanel.tsx`.
 - New primitives: `apps/web/src/components/ui/toolbar/*` (M1) and
   `apps/web/src/features/tsld/toolbar/*` (M2); flag: `apps/web/src/config/env.ts`.
+
+## Amendment (2026-07-14): stable shape, zoom consolidation & future-feature placeholders
+
+Field feedback after the scheduling-modes release (ADR-0033) surfaced three issues with the
+shipped toolbar. This amendment refines — does not supersede — the registry contract above.
+
+**Problem.** The Frame group carried **five separate zoom-preset buttons**
+(Day/Week/Month/Quarter/Year) plus Zoom −/+/Fit. Combined with the scheduling-modes controls
+(Project start, Go-to-date, the Early|Visual selector) the bar was wide enough that the
+width-based overflow demoted tail Frame items (Fit, then Year/Quarter) into the `⋯` at common
+widths. Because that demotion is width-driven, controls appeared to "come and go" — and it read
+as if the toolbar changed with the **planning mode**, even though no command is gated on
+`schedulingMode` (mode only changes drag semantics + how bars are drawn).
+
+**Decisions.**
+
+1. **Stable shape — shade, don't hide.** A capability that is only _temporarily_ unavailable is
+   rendered **disabled with a reason**, never removed. `isVisible` is reserved for genuinely-absent
+   features (flag-off, or a control a role can't have). Concretely, the zoom/fit controls and the
+   `View`/`Legend`/`Legend`-adjacent items are now always present from the empty-canvas state
+   onward — the zoom cluster is disabled (reason: "Add an activity to enable zoom") until a diagram
+   is computed. The toolbar's silhouette no longer shifts as plan state changes.
+
+2. **One consolidated zoom control.** The five scale buttons collapse into a single
+   `Zoom: <level> ▾` dropdown (all five levels inside, current level on the trigger). This removes
+   the Frame overload that caused the width-overflow churn; Quarter/Year are still one click away
+   but no longer eat the bar.
+
+3. **Fixed core + `⋯` for secondary.** Core Frame/Lens/Tools controls stay inline; only genuinely
+   secondary, low-frequency actions (Baselines, Calendar, Plan details, Shortcuts — already tier-3)
+   live in the `⋯` overflow. With the leaner Frame group, core controls no longer demote at normal
+   widths (below `md` the workspace still switches to a single pane per ADR-0031's responsive rule).
+
+4. **Future-feature placeholders.** Reserved slots are no longer hidden stubs; they render as
+   **disabled "Coming soon" placeholders** so the toolbar reads as fully designed and the roadmap is
+   visible in-product. A capability-unavailable disable and a placeholder are distinguished by their
+   tooltip copy ("Add an activity to…" vs "Coming soon"). Inline placeholders: Undo/Redo (history).
+   Overflow placeholders: Recenter-on-today (frame), Filter/Critical-only (find), Snap-to-grid (lens),
+   Clear-visual-placement (tools), Next-conflict (find). The catalogue and intended behaviour live in
+   `docs/TOOLBAR_ROADMAP.md`; each is switched on later by swapping the `placeholderItem(...)` stub for
+   a real command — no taxonomy change.
+
+**Scope.** Frontend-only, within the existing `VITE_CANVAS_TOOLBAR` surface (no flag change). The
+flag-off `TsldViewControls` fallback is unchanged. No API/DB/type change.
