@@ -24,6 +24,7 @@ import {
   MAX_PX_PER_DAY,
   MIN_PX_PER_DAY,
   pan,
+  panToDate,
   rectsIntersect,
   screenXOfDay,
   screenYOfLane,
@@ -71,6 +72,27 @@ describe('screen transforms', () => {
   it('screenYOfLane steps by the lane height', () => {
     expect(screenYOfLane(0, VIEW)).toBe(50);
     expect(screenYOfLane(3, VIEW)).toBe(50 + 3 * LANE_HEIGHT);
+  });
+});
+
+describe('panToDate (Go to date view command)', () => {
+  it('pans so the target day lands `inset` px from the left, scale + vertical pan untouched', () => {
+    const v = panToDate(VIEW, DATA_DATE, '2026-01-06', 12); // day 5
+    expect(v.pxPerDay).toBe(VIEW.pxPerDay); // no zoom
+    expect(v.originY).toBe(VIEW.originY); // no vertical pan
+    expect(screenXOfDay(daysBetween(DATA_DATE, '2026-01-06'), v)).toBeCloseTo(12);
+  });
+
+  it('places the data date itself (day 0) at the inset', () => {
+    const v = panToDate(VIEW, DATA_DATE, DATA_DATE, 8);
+    expect(screenXOfDay(0, v)).toBeCloseTo(8);
+  });
+
+  it('is a pure transform — returns a new viewport, leaves the input unchanged', () => {
+    const before = { ...VIEW };
+    const v = panToDate(VIEW, DATA_DATE, '2026-02-01', 12);
+    expect(VIEW).toEqual(before);
+    expect(v).not.toBe(VIEW);
   });
 });
 

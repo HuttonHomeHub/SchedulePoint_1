@@ -2,7 +2,7 @@
 
 - **Feature spec:** `docs/specs/scheduling-model-and-canvas-planning-modes.md`
 - **Draft ADR:** `docs/adr/0033-scheduling-modes-and-canvas-planning.md`
-- **Status:** Draft (awaiting approval)
+- **Status:** Approved — in delivery (M0 ✅ shipped, M2 ✅ shipped; M1 held for explicit sign-off)
 - **Owner:** _TBD_
 
 > Sequenced as thin vertical slices behind `VITE_SCHEDULING_MODES` (default-off,
@@ -27,7 +27,7 @@ delivering the product's Graphical Path Method promise (PROJECT_BRIEF §1, §8, 
 
 ---
 
-## Milestone 0 — Foundations (schema, engine, flag) — no user-visible change
+## Milestone 0 — Foundations (schema, engine, flag) — no user-visible change — ✅ shipped
 
 **Outcome:** the data model, engine conflict computation, and flag exist; nothing
 changes in the UI yet. Ships dark.
@@ -193,11 +193,18 @@ This milestone contains the one **irreversible data migration** — reviewed alo
 
 ---
 
-## Milestone 2 — Navigation vs data-edit split (Sub-feature 1)
+## Milestone 2 — Navigation vs data-edit split (Sub-feature 1) — ✅ shipped
 
 **Outcome:** the canvas date picker no longer edits the schedule; a "Go to date"
 control pans the viewport (ephemeral, CQ-1), and an explicit "Project start"
 control owns `plannedStart`.
+
+> **Delivered** flag-off (behind `VITE_SCHEDULING_MODES`): `goToDate(iso)` on the
+> canvas handle + the pure `panToDate` helper (2.1); a "Go to date" navigation
+> popover and a labelled "Project start" data control replacing the single
+> "Timeline start" picker flag-on (2.2). The Project-start control still permits
+> clearing (`plannedStart` stays nullable until M1); the non-null guarantee 2.2
+> assumes lands with the M1 migration + required DTO.
 
 #### Feature: Go-to-date + explicit Project start
 

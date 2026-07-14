@@ -25,6 +25,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     fit: vi.fn(),
     plannedStart: '2026-01-01',
     setPlannedStart: vi.fn(),
+    goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: vi.fn(),
     isAddingActivity: false,

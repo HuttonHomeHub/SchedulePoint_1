@@ -26,8 +26,15 @@ export interface TsldToolbarContext {
    * inline start-date control reads it (ADR-0032 M2). */
   plannedStart: string | null;
   /** Set the timeline start (targeted PATCH). Pen-gated (`canEditSchedule`, Critical Q3): `null`
-   * when the viewer can't edit the schedule, so the control renders the date as static text. */
+   * when the viewer can't edit the schedule, so the control renders the date as static text.
+   *
+   * Under `SCHEDULING_MODES_ENABLED` (ADR-0033 M2) this is surfaced as the labelled **Project start**
+   * data control — the persisted schedule anchor — distinct from {@link goToDate} navigation below. */
   setPlannedStart: ((iso: string) => void) | null;
+  /** Pan the canvas so `iso` sits at the left edge — a pure **view** jump, no fetch and no persisted
+   * state (ADR-0033 M2, CQ-1). Drives the **Go to date** navigation control (flag-on only), which is
+   * available to every role including read-only viewers because navigating never mutates the plan. */
+  goToDate: (iso: string) => void;
 
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;

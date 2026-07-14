@@ -31,6 +31,7 @@ import {
   hitTest,
   LANE_HEIGHT,
   pan,
+  panToDate,
   zoomAt,
   type HitZone,
   type Point,
@@ -52,7 +53,13 @@ export interface TsldCanvasHandle {
   zoomToPreset: (level: ZoomLevel) => void;
   /** Zoom in/out by a factor about the centre (the button equivalent of wheel zoom). */
   stepZoom: (factor: number) => void;
+  /** Pan (no zoom) so the given calendar day (`YYYY-MM-DD`) sits at the left edge of the surface —
+   * a pure **view** jump (ADR-0033 "Go to date"): no fetch, no persisted state, no schedule change. */
+  goToDate: (iso: string) => void;
 }
+
+/** Left inset (px) the "Go to date" jump leaves before the target day, so it isn't flush to the edge. */
+const GOTO_LEFT_INSET = 12;
 
 /** Height (px) of the sticky date-ruler band across the top of the canvas. The drawing canvas sits
  * below it, so a canvas-relative y maps to a container y by adding this (used to place the create
@@ -377,6 +384,18 @@ export function TsldCanvas({
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();
+      },
+      goToDate: (iso: string) => {
+        // Pure pan (scale untouched, so it never crosses a zoom stop → no `reportZoomStop`); a view
+        // jump only — no fetch, no persisted state, no schedule change (ADR-0033 "Go to date").
+        viewRef.current = panToDate(
+          viewRef.current,
+          sceneRef.current.dataDate,
+          iso,
+          GOTO_LEFT_INSET,
+        );
+        dirtyRef.current = true;
+        interactionDirtyRef.current = true;
       },
     }),
     // Stable — reads live state through refs.

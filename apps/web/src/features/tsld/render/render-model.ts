@@ -443,6 +443,22 @@ export function pan(view: Viewport, dx: number, dy: number): Viewport {
   return { ...view, originX: view.originX + dx, originY: view.originY + dy };
 }
 
+/**
+ * Pan (no zoom) so the calendar day `iso` lands `inset` px from the left edge — the pure math behind
+ * the "Go to date" view command (ADR-0033). The scale (`pxPerDay`) and vertical pan are unchanged, so
+ * `screenXOfDay(daysBetween(dataDateIso, iso), result) === inset`. A pure view transform: it moves
+ * nothing in the schedule and issues no request.
+ */
+export function panToDate(
+  view: Viewport,
+  dataDateIso: string,
+  iso: string,
+  inset: number,
+): Viewport {
+  const day = daysBetween(dataDateIso, iso);
+  return { ...view, originX: inset - day * view.pxPerDay };
+}
+
 /** The default viewport before any content is framed (day zoom, small margin). */
 export const DEFAULT_VIEWPORT: Viewport = { pxPerDay: ZOOM_STOPS.week, originX: 40, originY: 40 };
 

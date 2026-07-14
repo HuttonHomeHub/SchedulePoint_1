@@ -134,6 +134,9 @@ export function useTsldToolbarContext({
               },
             )
         : null,
+      // Go to date (ADR-0033 M2): a pure view pan via the canvas control handle — no fetch, no write,
+      // no persisted state (CQ-1). Available to every role; navigating never mutates the plan.
+      goToDate: (iso: string) => canvasControlRef.current?.goToDate(iso),
 
       // Lens
       viewToggles,

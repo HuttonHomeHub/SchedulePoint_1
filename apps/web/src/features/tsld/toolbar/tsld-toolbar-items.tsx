@@ -3,6 +3,7 @@ import {
   AlignVerticalSpaceAround,
   CalendarClock,
   CalendarDays,
+  CalendarSearch,
   Check,
   ChevronDown,
   Info,
@@ -27,7 +28,7 @@ import type { ToolbarItemRenderApi } from '@/components/ui/toolbar/toolbar-regis
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
@@ -51,26 +52,32 @@ const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }>
 ];
 
 /**
- * The inline **timeline start-date** control (ADR-0032 M2) — the plan's `plannedStart`, the canvas
- * day-zero origin. A writer edits it via a native date input; a read-only viewer (`setPlannedStart`
- * null) sees the date as a static read-out. Changing it re-anchors the timeline. The two are
- * registered as separate toolbar items so the read-out is `presentational` — a non-interactive date
- * is not a roving-tabindex stop (a11y review), mirroring the finish-chip. The writer input spreads
- * `itemProps` on its single focusable control; the read-out spreads them on the (inert) span.
+ * The inline **plan start-date** control — the plan's `plannedStart`, the canvas day-zero origin. A
+ * writer edits it via a native date input; a read-only viewer (`setPlannedStart` null) sees the date
+ * as a static read-out. Changing it re-anchors the timeline. The two are registered as separate
+ * toolbar items so the read-out is `presentational` — a non-interactive date is not a roving-tabindex
+ * stop (a11y review), mirroring the finish-chip. The writer input spreads `itemProps` on its single
+ * focusable control; the read-out spreads them on the (inert) span.
+ *
+ * `label` sets the accessible + visible name: "Timeline start" under ADR-0032 (the single conflated
+ * control), or the de-overloaded "Project start" under ADR-0033 M2, where it is purely the *data*
+ * anchor and canvas navigation moves to the separate {@link GoToDateControl}.
  */
 function TimelineStartControl({
   ctx,
   itemProps,
+  label,
 }: {
   ctx: TsldToolbarContext;
   itemProps: ToolbarItemRenderApi['itemProps'];
+  label: string;
 }): React.ReactElement {
   const display = ctx.plannedStart ? formatCalendarDate(ctx.plannedStart) : 'Not set';
   if (!ctx.setPlannedStart) {
     return (
       <span
         {...itemProps}
-        aria-label={`Timeline start: ${display}`}
+        aria-label={`${label}: ${display}`}
         className={toolbarControlVariants({ tone: 'info' })}
       >
         <CalendarClock aria-hidden="true" className="mr-1.5 size-4" />
@@ -82,7 +89,7 @@ function TimelineStartControl({
   return (
     <label className={toolbarControlVariants({ tone: 'control' })}>
       <CalendarClock aria-hidden="true" className="size-4" />
-      <span className="sr-only">Timeline start</span>
+      <span className="sr-only">{label}</span>
       <input
         {...itemProps}
         type="date"
@@ -91,6 +98,47 @@ function TimelineStartControl({
         className="bg-transparent text-sm outline-none"
       />
     </label>
+  );
+}
+
+/**
+ * The **Go to date** navigation control (ADR-0033 M2) — a labelled disclosure that opens a small date
+ * picker and pans the canvas so the chosen date sits at the left edge. It never writes and persists no
+ * state (CQ-1), so it is offered to *every* role, read-only viewers included: navigating the timeline
+ * is not a mutation. A popover (not an inline field) so it reads unmistakably as *navigation*, kept
+ * visually distinct from the persisted {@link TimelineStartControl} "Project start" data anchor beside
+ * it — the whole point of de-overloading `plannedStart` (ADR-0033). Uncontrolled: picking a date jumps
+ * once; there is no "current go-to date" to reflect, so nothing is echoed back.
+ */
+function GoToDateControl({
+  ctx,
+  itemProps,
+}: {
+  ctx: TsldToolbarContext;
+  itemProps: ToolbarItemRenderApi['itemProps'];
+}): React.ReactElement {
+  return (
+    <ToolbarPopover
+      label="Go to date"
+      icon={<CalendarSearch className="size-4" />}
+      itemProps={itemProps}
+    >
+      <div className="flex flex-col gap-1.5 text-sm">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-muted-foreground font-medium">Go to date</span>
+          <input
+            type="date"
+            onChange={(event) => {
+              if (event.target.value) ctx.goToDate(event.target.value);
+            }}
+            className="border-border bg-background rounded-md border px-2 py-1 text-sm outline-none"
+          />
+        </label>
+        <span className="text-muted-foreground text-xs">
+          Pans the timeline only — nothing is saved.
+        </span>
+      </div>
+    </ToolbarPopover>
   );
 }
 
@@ -281,14 +329,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // Inline timeline start-date (ADR-0032 M2) — leftmost in the Frame group; canvas-first only.
     // Split by editability so the read-only variant is a *presentational* read-out (a11y review):
     // a static date shouldn't be a roving-tabindex stop (the same rule the finish-chip follows).
+    // Under ADR-0033 M2 this conflated control is de-overloaded into a labelled "Project start" *data*
+    // anchor + a separate "Go to date" *navigation* jump (the trio below), so it yields flag-on.
     {
       id: 'timeline-start',
       group: 'frame',
       tier: 1,
       order: -1,
       label: 'Timeline start',
-      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.setPlannedStart !== null,
-      render: (ctx, api) => <TimelineStartControl ctx={ctx} itemProps={api.itemProps} />,
+      isVisible: (ctx) =>
+        CANVAS_AUTHORING_ENABLED && !SCHEDULING_MODES_ENABLED && ctx.setPlannedStart !== null,
+      render: (ctx, api) => (
+        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Timeline start" />
+      ),
     },
     {
       id: 'timeline-start-readonly',
@@ -297,8 +350,46 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: -1,
       label: 'Timeline start',
       presentational: true,
-      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.setPlannedStart === null,
-      render: (ctx, api) => <TimelineStartControl ctx={ctx} itemProps={api.itemProps} />,
+      isVisible: (ctx) =>
+        CANVAS_AUTHORING_ENABLED && !SCHEDULING_MODES_ENABLED && ctx.setPlannedStart === null,
+      render: (ctx, api) => (
+        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Timeline start" />
+      ),
+    },
+    // ADR-0033 M2 — the de-overloaded split (flag-on only): "Project start" persists the schedule
+    // anchor (pen-gated write / presentational read-out), "Go to date" is a pure view jump offered to
+    // every role. Ordered start-then-navigate; both stay leftmost in the Frame group.
+    {
+      id: 'project-start',
+      group: 'frame',
+      tier: 1,
+      order: -3,
+      label: 'Project start',
+      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setPlannedStart !== null,
+      render: (ctx, api) => (
+        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Project start" />
+      ),
+    },
+    {
+      id: 'project-start-readonly',
+      group: 'frame',
+      tier: 1,
+      order: -3,
+      label: 'Project start',
+      presentational: true,
+      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setPlannedStart === null,
+      render: (ctx, api) => (
+        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Project start" />
+      ),
+    },
+    {
+      id: 'go-to-date',
+      group: 'frame',
+      tier: 1,
+      order: -2,
+      label: 'Go to date',
+      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
+      render: (ctx, api) => <GoToDateControl ctx={ctx} itemProps={api.itemProps} />,
     },
     ...ZOOM_LEVELS.map((level, i): ToolbarItem<TsldToolbarContext> => ({
       id: `scale-${level}`,

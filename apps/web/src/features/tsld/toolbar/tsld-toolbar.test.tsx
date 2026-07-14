@@ -38,6 +38,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     fit: spies.fit,
     plannedStart: '2026-01-01',
     setPlannedStart: vi.fn(),
+    goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: spies.toggleView,
     isAddingActivity: false,
