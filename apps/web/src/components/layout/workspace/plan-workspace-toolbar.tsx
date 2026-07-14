@@ -126,11 +126,16 @@ export function ToolbarPlanWorkspace({
       dependencies={model.dependencies.data ?? []}
       dataDate={plan.plannedStart}
       barDateSource={
-        // ADR-0033: VISUAL plans render the effective-Visual dates; the Late overlay (M4) will feed
-        // the second arg. Flag-off the mode is always EARLY, so this stays `early` (byte-for-byte).
-        SCHEDULING_MODES_ENABLED ? barDateSourceFor(plan.schedulingMode, false) : 'early'
+        // ADR-0033: VISUAL plans render the effective-Visual dates; the Late overlay (M4) wins for
+        // display. Flag-off the mode is always EARLY and the overlay off, so this stays `early`.
+        SCHEDULING_MODES_ENABLED
+          ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
+          : 'early'
       }
-      canEdit={model.canEditSchedule}
+      // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
+      canEdit={
+        model.canEditSchedule && !(SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay)
+      }
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       onLink={model.onTsldLink}

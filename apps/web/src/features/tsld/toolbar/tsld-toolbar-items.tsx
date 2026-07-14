@@ -323,6 +323,19 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
           {label}
         </label>
       ))}
+      {/* Late-Start analysis overlay (ADR-0033 M4, flag-on only): a read-only view that renders bars
+          from the late dates for float analysis; while on, editing is suppressed by the host. */}
+      {SCHEDULING_MODES_ENABLED ? (
+        <label className="border-border mt-1 flex items-center gap-2 border-t pt-2 text-sm">
+          <input
+            type="checkbox"
+            checked={ctx.viewToggles.lateOverlay}
+            onChange={() => ctx.toggleView('lateOverlay')}
+            className="accent-primary size-4"
+          />
+          Late-start overlay
+        </label>
+      ) : null}
     </fieldset>
   );
 }

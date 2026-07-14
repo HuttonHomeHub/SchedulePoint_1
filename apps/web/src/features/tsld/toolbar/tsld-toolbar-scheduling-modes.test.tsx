@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
@@ -122,5 +122,14 @@ describe('TSLD toolbar — scheduling-modes date split (flag on)', () => {
     renderToolbar(ctx({ setSchedulingMode: null }));
     expect(screen.queryByRole('button', { name: 'Early start' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Visual planning' })).not.toBeInTheDocument();
+  });
+
+  it('offers the Late-start overlay toggle in the View popover (M4) and flips it', () => {
+    const toggleView = vi.fn();
+    renderToolbar(ctx({ toggleView, hasDiagram: true }));
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    fireEvent.click(within(panel).getByLabelText('Late-start overlay'));
+    expect(toggleView).toHaveBeenCalledWith('lateOverlay');
   });
 });

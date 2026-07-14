@@ -71,9 +71,13 @@ export interface TsldViewToggles {
   nonWorking: boolean;
   /** On-canvas activity labels (`{code} {name} · {n}d`). */
   labels: boolean;
+  /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
+   * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
+   * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
+  lateOverlay: boolean;
 }
 
-/** All view layers on — the default before the user toggles anything. */
+/** All view layers on — the default before the user toggles anything (the Late overlay starts off). */
 export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   dayGrid: true,
   monthGrid: true,
@@ -81,6 +85,7 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   today: true,
   nonWorking: true,
   labels: true,
+  lateOverlay: false,
 };
 
 export interface TsldScene {

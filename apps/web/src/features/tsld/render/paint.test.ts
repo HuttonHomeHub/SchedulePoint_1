@@ -28,6 +28,7 @@ const ALL_ON = {
   today: true,
   nonWorking: true,
   labels: true,
+  lateOverlay: false,
 } as const;
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
 const SIZE = { width: 800, height: 400 };
