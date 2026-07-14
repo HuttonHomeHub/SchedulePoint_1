@@ -239,7 +239,7 @@ export function paintScene(
         const pred = byId.get(edge.predecessorId);
         const succ = byId.get(edge.successorId);
         if (!pred || !succ) continue;
-        const line = dependencyPolyline(pred, succ, view, scene.dataDate);
+        const line = dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
         if (line) drawPolyline(ctx, line);
       }
       ctx.stroke();

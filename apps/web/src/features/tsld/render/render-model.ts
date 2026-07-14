@@ -266,22 +266,38 @@ export function cull(
 export function dependencyPolyline(
   predecessor: RenderActivity,
   successor: RenderActivity,
+  type: DependencyType,
   view: Viewport,
   dataDateIso: string,
 ): Point[] | null {
   const from = activityRect(predecessor, view, dataDateIso);
   const to = activityRect(successor, view, dataDateIso);
   if (!from || !to) return null;
-  const x1 = from.x + from.w;
+  // Anchor each end to the edge the relationship type constrains (ADR-0021 logic types), not always
+  // predecessor-finish → successor-start: FS finish→start, SS start→start, FF finish→finish,
+  // SF start→finish. The tie's *type* — carried on the edge — decides which vertical edge to attach.
+  const predFinish = type === 'FS' || type === 'FF';
+  const succStart = type === 'FS' || type === 'SS';
+  const x1 = predFinish ? from.x + from.w : from.x;
   const y1 = from.y + from.h / 2;
-  const x2 = to.x;
+  const x2 = succStart ? to.x : to.x + to.w;
   const y2 = to.y + to.h / 2;
-  const elbow = x1 + Math.min(12, Math.max(4, view.pxPerDay));
   if (y1 === y2)
     return [
       { x: x1, y: y1 },
       { x: x2, y: y2 },
     ];
+  // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
+  // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
+  const gap = Math.min(12, Math.max(4, view.pxPerDay));
+  const elbow =
+    type === 'FS'
+      ? x1 + gap
+      : type === 'SS'
+        ? Math.min(x1, x2) - gap
+        : type === 'FF'
+          ? Math.max(x1, x2) + gap
+          : (x1 + x2) / 2; // SF
   return [
     { x: x1, y: y1 },
     { x: elbow, y: y1 },
