@@ -2,7 +2,7 @@
 
 - **Feature spec:** `docs/specs/scheduling-model-and-canvas-planning-modes.md`
 - **Draft ADR:** `docs/adr/0033-scheduling-modes-and-canvas-planning.md`
-- **Status:** Approved — in delivery (M0 ✅ shipped, M2 ✅ shipped; M1 held for explicit sign-off)
+- **Status:** Approved — in delivery (M0–M4 ✅ shipped; M5 hardening/enablement in progress)
 - **Owner:** _TBD_
 
 > Sequenced as thin vertical slices behind `VITE_SCHEDULING_MODES` (default-off,
