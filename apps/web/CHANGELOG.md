@@ -1,5 +1,48 @@
 # @repo/web
 
+## 0.19.0
+
+### Minor Changes
+
+- [#61](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/61) [`1395359`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1395359c11c160936fe5e931250b38ab8811b78f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): mount the floating TSLD selection-actions bar (ADR-0031)
+
+  Selecting an activity on the TSLD canvas now shows a small **floating toolbar** just above it with
+  its object actions — **Open logic**, **Edit activity**, **Delete activity** — so the common actions
+  are where the planner's attention already is, while the main toolbar stays stable (ADR-0031, Fork-2;
+  resolves TECH_DEBT #31a — the bar was built + unit-tested but not previously mounted).
+
+  - The bar follows the canvas **imperatively**: the canvas writes the selected activity's live
+    viewport anchor to a ref each frame (ADR-0026 D3 — no per-frame React state) and the bar reads it
+    on its own `requestAnimationFrame` to reposition, so pan/zoom track without re-rendering the
+    toolbar. It flips below the selection when there's no room above, and hides when the selected bar
+    scrolls off-screen or the pane is hidden.
+  - Mutating actions (Edit / Delete) are **pen-gated as a set** (disabled with a reason) exactly like
+    the main toolbar; **Open logic** stays available read-only. Edit/Delete open host-owned dialogs via
+    a new shared `ActivityCrudDialogs`, keeping the tsld feature dependency-free (ADR-0026 D8).
+  - The redundant **"Set constraint"** action was dropped (it duplicated Edit; there is no dedicated
+    quick-constraint editor).
+
+  No other capability changes — Open logic / Edit / Delete remain reachable from the parallel listbox
+  and the activities table.
+
+### Patch Changes
+
+- [#59](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/59) [`65da1be`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/65da1be7c8aa9978227434000ec02b897c9a06ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - perf(web): pause the TSLD render loop when the canvas is off-screen; a11y + dedup cleanups
+
+  Fast-follow debt paydown on the canvas-first plan workspace (TECH_DEBT [#30](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/30)/[#31](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/31)):
+
+  - **Perf (#30d):** the TSLD canvas now pauses its `requestAnimationFrame` paint/measure work when
+    it's off-screen (the below-`md` Activities pane showing, so the diagram pane is `display:none`),
+    via an `IntersectionObserver`, and re-arms a repaint the moment it returns — no more painting an
+    unseen canvas every frame on mobile.
+  - **A11y (#30h):** the docked activities panel's landmark is renamed "Activities panel" so it no
+    longer collides with the inner table's "Activities" scroll region (axe `landmark-unique`).
+  - **Dedup (#31b/#30b):** the Plan details / Baselines / Calendar dialogs are extracted into one
+    shared `PlanChromeDialogs` used by both plan layouts (so their copy can't drift), and the plan
+    header's overflow menu adopts the shared `useMenuTrigger` hook.
+
+  No behaviour change beyond the two polish items above.
+
 ## 0.18.0
 
 ### Minor Changes
