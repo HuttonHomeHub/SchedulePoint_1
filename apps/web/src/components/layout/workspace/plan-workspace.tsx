@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
+import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { PlanActionsMenu } from './plan-actions-menu';
 import { PlanDialogs } from './plan-dialogs';
 import { ToolbarPlanWorkspace } from './plan-workspace-toolbar';
@@ -128,6 +129,8 @@ function Adr0030PlanWorkspace({
       onLink={model.onTsldLink}
       onAutoArrange={model.onTsldAutoArrange}
       onOpenLogic={model.setLogicActivity}
+      onEditActivity={model.onEditActivity}
+      onDeleteActivity={model.onDeleteActivity}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
@@ -193,6 +196,9 @@ function Adr0030PlanWorkspace({
       )}
 
       <PlanDialogs model={model} plan={plan} />
+
+      {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
+      <ActivityCrudDialogs model={model} />
     </div>
   );
 }

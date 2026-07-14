@@ -78,7 +78,9 @@ vi.mock('@/features/activities', () => ({
   useUpdateActivity: () => ({ mutateAsync: vi.fn() }),
   useRepositionLane: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
+  useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: () => <div data-testid="activities-table" />,
+  ActivityFormDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));
 vi.mock('@/features/dependencies', () => ({

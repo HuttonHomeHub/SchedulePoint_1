@@ -107,6 +107,7 @@ vi.mock('@/features/activities', () => ({
   useUpdateActivity: () => ({ mutateAsync: h.updateActivity }),
   useRepositionLane: () => ({ mutateAsync: h.repositionLane }),
   useBatchPositions: () => ({ mutateAsync: h.batchPositions }),
+  useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: ({
     canWrite,
     canReportProgress,
@@ -120,6 +121,7 @@ vi.mock('@/features/activities', () => ({
       data-can-progress={String(canReportProgress)}
     />
   ),
+  ActivityFormDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));
 

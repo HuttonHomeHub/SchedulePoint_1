@@ -1,5 +1,5 @@
 import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
@@ -67,6 +67,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   });
   const [editing, setEditing] = useState(false);
   const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
+  // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
+  // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
+  // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
+  // trigger the same host-owned dialogs (ADR-0026 D8: the tsld feature stays dependency-free).
+  const [editActivityId, setEditActivityId] = useState<string | null>(null);
+  const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null);
+  const onEditActivity = useCallback((a: ActivitySummary) => setEditActivityId(a.id), []);
+  const onDeleteActivity = useCallback((a: ActivitySummary) => setDeleteActivityId(a.id), []);
 
   const plan = usePlan(orgSlug, planId);
   const project = useProject(orgSlug, plan.data?.projectId ?? '');
@@ -398,6 +406,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setEditing,
     logicActivity,
     setLogicActivity,
+    // Activity edit/delete targeted from the floating selection bar (rendered by ActivityCrudDialogs).
+    editActivityId,
+    setEditActivityId,
+    deleteActivityId,
+    setDeleteActivityId,
+    onEditActivity,
+    onDeleteActivity,
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,

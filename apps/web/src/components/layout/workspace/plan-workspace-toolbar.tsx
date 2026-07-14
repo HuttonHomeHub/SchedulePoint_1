@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
+import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import {
@@ -130,6 +131,8 @@ export function ToolbarPlanWorkspace({
       onLink={model.onTsldLink}
       onAutoArrange={model.onTsldAutoArrange}
       onOpenLogic={model.setLogicActivity}
+      onEditActivity={model.onEditActivity}
+      onDeleteActivity={model.onDeleteActivity}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
@@ -243,6 +246,9 @@ export function ToolbarPlanWorkspace({
 
       {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
       <PlanDialogs model={model} plan={plan} />
+
+      {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
+      <ActivityCrudDialogs model={model} />
     </div>
   );
 }
