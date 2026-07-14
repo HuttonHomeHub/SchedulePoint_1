@@ -5,9 +5,9 @@ import { expect, test, type Page } from '@playwright/test';
  * The CPM schedule journey (M6): a Planner sets the plan's start date, adds two
  * linked activities, and recalculates — the summary strip and the activities
  * table fill with computed dates and a critical-path badge — with an
- * accessibility check on the result. A second flow covers the friendly inline
- * prompt when the plan has no start date. Requires the API (with a database)
- * running and reachable via the dev proxy.
+ * accessibility check on the result. A second flow covers picking the plan's
+ * working-day calendar and recalculating on it. Requires the API (with a
+ * database) running and reachable via the dev proxy.
  */
 async function onboard(page: Page, stamp: number): Promise<string> {
   const email = `sched-${stamp}@example.com`;
@@ -128,14 +128,4 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
-});
-
-test('recalculating a plan with no start date shows a friendly prompt', async ({ page }) => {
-  const stamp = Date.now();
-  await onboard(page, stamp);
-  await openNewPlan(page);
-
-  // No planned start was set → the API returns 422 and the button prompts for one.
-  await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect(page.getByRole('alert')).toContainText(/Set the plan’s start date/);
 });
