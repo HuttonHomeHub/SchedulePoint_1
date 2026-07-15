@@ -86,7 +86,9 @@ beforeEach(() => vi.clearAllMocks());
 describe('TSLD toolbar registry', () => {
   it('renders the frame controls and drives the canvas seam', () => {
     renderToolbar(ctx());
-    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    // Zoom level is a single dropdown now (not five buttons): open it and pick a level.
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom level: Week' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Month' }));
     expect(spies.setZoomPreset).toHaveBeenCalledWith('month');
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(spies.stepZoom).toHaveBeenCalledWith(2);
@@ -94,10 +96,19 @@ describe('TSLD toolbar registry', () => {
     expect(spies.fit).toHaveBeenCalledOnce();
   });
 
-  it('marks the active scale preset pressed', () => {
+  it('reflects the active scale preset on the zoom trigger and menu', () => {
     renderToolbar(ctx({ zoomPreset: 'month' }));
-    expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'false');
+    const trigger = screen.getByRole('button', { name: 'Zoom level: Month' });
+    expect(trigger).toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menuitemradio', { name: 'Month' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'Week' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
   });
 
   it('opens the View popover and toggles a display layer', () => {
@@ -163,13 +174,44 @@ describe('TSLD toolbar registry', () => {
     expect(within(menu).queryByRole('menuitem', { name: /Edit plan/ })).not.toBeInTheDocument();
   });
 
-  it('hides the view/summary/legend/finish controls on an empty plan (no diagram)', () => {
+  it('shades — not hides — the frame controls on an empty plan (stable shape)', () => {
     renderToolbar(ctx({ hasDiagram: false }));
-    expect(screen.queryByRole('button', { name: 'Fit to plan' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /View/ })).not.toBeInTheDocument();
+    // Zoom + Fit stay on the bar but disabled, so the toolbar's silhouette doesn't shift as the plan
+    // gains a computed diagram (ADR-0031 "shade, don't hide").
+    expect(screen.getByRole('button', { name: 'Fit to plan' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Zoom level: Week' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    // View stays available (display toggles apply to the empty canvas too). The presentational
+    // finish read-out is still gated on a computed finish — it's a value, not a control.
+    expect(screen.getByRole('button', { name: /View/ })).toBeInTheDocument();
     expect(screen.queryByText('Finish: 01 Aug 2026')).not.toBeInTheDocument();
     // Author + recalc remain reachable.
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+  });
+
+  it('shows future features as disabled "Coming soon" placeholders (undo/redo)', () => {
+    renderToolbar(ctx());
+    for (const name of ['Undo', 'Redo']) {
+      const btn = screen.getByRole('button', { name });
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', 'Coming soon');
+    }
+  });
+
+  it('lists the roadmap placeholders in the ⋯ overflow, disabled with a reason', () => {
+    renderToolbar(ctx());
+    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
+    const menu = screen.getByRole('menu', { name: 'More toolbar actions' });
+    for (const name of ['Export…', 'Share…', 'Search activities', 'Add note', 'Colour by…']) {
+      const item = within(menu).getByRole('menuitem', { name });
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).toHaveAttribute('title', 'Coming soon');
+    }
   });
 
   it('has no axe violations', async () => {

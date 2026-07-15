@@ -1,21 +1,40 @@
 import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
+  BarChart3,
   CalendarClock,
   CalendarDays,
+  CalendarRange,
   CalendarSearch,
   Check,
   ChevronDown,
+  Eraser,
+  FileDown,
+  Filter,
+  Gauge,
+  Grid3x3,
   Info,
   Keyboard,
   Layers,
+  Layers2,
   ListChecks,
+  LocateFixed,
   Maximize2,
+  MessageSquare,
   Minus,
+  Palette,
   Plus,
+  Printer,
   RefreshCw,
+  Redo2,
+  Route,
+  Search,
+  Share2,
   SlidersHorizontal,
   Spline,
+  StickyNote,
+  TriangleAlert,
+  Undo2,
 } from 'lucide-react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -307,6 +326,95 @@ function LinkTypeControl({
   );
 }
 
+const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
+
+/**
+ * The **zoom-preset dropdown** — a single compact menu-button replacing the five segmented
+ * scale buttons (Day/Week/Month/Quarter/Year). The trigger shows the current level and opens a
+ * `Menu` to pick another; every level is still one click away, but the Frame group stops overflowing
+ * the bar (which used to silently demote Year/Quarter into `⋯` at narrow widths). One focusable
+ * control (spreads `itemProps`) per the toolbar contract; mirrors `api.disabled` so it shades — not
+ * hides — when the plan has no computed diagram yet (a stable toolbar shape, ADR-0031).
+ */
+function ZoomPresetControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const disabled = api.disabled;
+  const activeLabel = ZOOM_LABELS[ctx.zoomPreset] ?? ctx.zoomPreset;
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        aria-label={`Zoom level: ${activeLabel}`}
+        title={disabled ? ZOOM_DISABLED_REASON : `Zoom level: ${activeLabel}`}
+        onClick={() => {
+          if (!disabled) toggle();
+        }}
+        className={cn(toolbarControlVariants({ active: open, disabled }))}
+      >
+        <CalendarRange aria-hidden="true" className="size-4" />
+        <span className="truncate">{activeLabel}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label="Zoom level"
+        restoreFocusRef={triggerRef}
+      >
+        {ZOOM_LEVELS.map((level) => (
+          <MenuItem
+            key={level}
+            selected={ctx.zoomPreset === level}
+            onSelect={() => ctx.setZoomPreset(level)}
+          >
+            <Check
+              aria-hidden="true"
+              className={cn('size-4', ctx.zoomPreset === level ? 'opacity-100' : 'opacity-0')}
+            />
+            {ZOOM_LABELS[level] ?? level}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
+
+/**
+ * A **future-feature placeholder** (ADR-0031) — a control that is part of the intended toolbar design
+ * but whose behaviour isn't built yet. It renders in its group as a permanently-disabled button with a
+ * "Coming soon" tooltip, so the toolbar reads as fully designed and the code is switched on later by
+ * replacing this stub with a real command. Distinct from a *capability-unavailable* disable (e.g. zoom
+ * before a diagram exists): the tooltip copy differentiates them. Documented in
+ * `docs/adr/0031-*` and `docs/TOOLBAR_ROADMAP.md`.
+ */
+function placeholderItem(o: {
+  id: string;
+  group: ToolbarItem<TsldToolbarContext>['group'];
+  tier: ToolbarItem<TsldToolbarContext>['tier'];
+  order: number;
+  label: string;
+  icon: React.ReactNode;
+}): ToolbarItem<TsldToolbarContext> {
+  return {
+    ...o,
+    isEnabled: () => false,
+    disabledReason: () => 'Coming soon',
+    onActivate: () => {},
+  };
+}
+
 /** The checkbox body of the `View▾` popover — the display toggles, driven off the context. */
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
@@ -341,16 +449,23 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
 }
 
 /**
- * The TSLD command registry (ADR-0031) — every current canvas control expressed as a
- * {@link ToolbarItem} over the {@link TsldToolbarContext}, grouped by the fixed 7-group taxonomy.
- * The abstraction is validated by porting the *real* controls (scale/zoom/fit, view toggles,
- * add-activity, auto-arrange, recalculate, baselines/calendar/plan-details, legend, summary + finish
- * chip) onto it — reserved slots (today-recenter, view-mode switch, filter, undo/redo) are registered
- * as hidden stubs so they're promotable later without a taxonomy change.
+ * The TSLD command registry (ADR-0031) — every canvas control expressed as a {@link ToolbarItem}
+ * over the {@link TsldToolbarContext}, grouped by the fixed 7-group taxonomy. Real controls (the
+ * zoom-level dropdown + zoom/fit, view toggles, add-activity, link, auto-arrange, recalculate,
+ * baselines/calendar/plan-details, legend, summary + finish chip) sit alongside **future-feature
+ * placeholders** — disabled "Coming soon" stubs (undo/redo, filter, recenter-on-today, snap-to-grid,
+ * clear-visual-placement, next-conflict) that make the toolbar read as fully designed and are switched
+ * on later by swapping the stub for a real command (see `docs/TOOLBAR_ROADMAP.md`).
  *
- * NB the `today` reserved stub is a viewport **recenter** command, distinct from the "Today line"
- * display toggle in `View▾` (which only shows/hides the marker) — that toggle is the only "today"
- * capability the source layout shipped; a recenter command is future work (ADR-0031 §3).
+ * Two design rules the registry enforces (ADR-0031):
+ * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom
+ *    before a diagram is computed) is *disabled with a reason*, not removed, so the bar's silhouette
+ *    doesn't shift as plan state changes. Only a genuinely-absent feature (flag-off) uses `isVisible`.
+ * 2. **One consolidated zoom control** — the five scale levels live in a single dropdown so the Frame
+ *    group stops overflowing narrow bars (which used to silently demote Year/Quarter into `⋯`).
+ *
+ * NB `recenter-on-today` is a viewport **recenter** placeholder, distinct from the "Today line"
+ * display toggle in `View▾` (which only shows/hides the marker).
  */
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   return defineToolbar<TsldToolbarContext>([
@@ -462,16 +577,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         </span>
       ),
     },
-    ...ZOOM_LEVELS.map((level, i): ToolbarItem<TsldToolbarContext> => ({
-      id: `scale-${level}`,
+    // Zoom scale — one dropdown holding all five levels (Day…Year), replacing the five segmented
+    // buttons that overflowed the bar (ADR-0031). Shaded (not hidden) until a diagram exists, so the
+    // toolbar keeps a stable shape from the empty canvas onward.
+    {
+      id: 'zoom-preset',
       group: 'frame',
       tier: 1,
-      order: i,
-      label: ZOOM_LABELS[level] ?? level,
-      isVisible: (ctx) => ctx.hasDiagram,
-      isActive: (ctx) => ctx.zoomPreset === level,
-      onActivate: (ctx) => ctx.setZoomPreset(level),
-    })),
+      order: 0,
+      label: 'Zoom level',
+      isEnabled: (ctx) => ctx.hasDiagram,
+      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : ZOOM_DISABLED_REASON),
+      render: (ctx, api) => <ZoomPresetControl ctx={ctx} api={api} />,
+    },
     {
       id: 'zoom-out',
       group: 'frame',
@@ -479,7 +597,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 10,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
-      isVisible: (ctx) => ctx.hasDiagram,
+      isEnabled: (ctx) => ctx.hasDiagram,
+      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : ZOOM_DISABLED_REASON),
       onActivate: (ctx) => ctx.stepZoom(0.5),
     },
     {
@@ -489,7 +608,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 11,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
-      isVisible: (ctx) => ctx.hasDiagram,
+      isEnabled: (ctx) => ctx.hasDiagram,
+      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : ZOOM_DISABLED_REASON),
       onActivate: (ctx) => ctx.stepZoom(2),
     },
     {
@@ -499,20 +619,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 12,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
-      isVisible: (ctx) => ctx.hasDiagram,
+      isEnabled: (ctx) => ctx.hasDiagram,
+      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to fit the view'),
       onActivate: (ctx) => ctx.fit(),
     },
-    // today-recenter slot — reserved (only the "Today line" *toggle* ships, in `View▾`). Registered
-    // hidden so a viewport-recenter command is promotable later without a taxonomy change.
-    {
+    // Recenter-on-today — a viewport recenter command (distinct from the "Today line" *display*
+    // toggle in `View▾`). A disabled "Coming soon" placeholder in the `⋯` overflow (tier 3) so it's
+    // discoverable without widening the always-inline core.
+    placeholderItem({
       id: 'today',
       group: 'frame',
-      tier: 1,
+      tier: 3,
       order: 13,
       label: 'Recenter on today',
-      isVisible: () => false,
-      onActivate: () => {},
-    },
+      icon: <LocateFixed className="size-4" />,
+    }),
 
     // --- 2 · Lens / display -------------------------------------------------------------------
     {
@@ -520,9 +641,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       tier: 2,
       order: 0,
+      // Always shown (display toggles apply to the empty canvas grid too) — part of the stable
+      // toolbar shape (ADR-0031); no longer gated on a computed diagram.
       label: 'View',
       icon: <SlidersHorizontal className="size-4" />,
-      isVisible: (ctx) => ctx.hasDiagram,
       render: (ctx, api) => (
         <ToolbarPopover
           label="View"
@@ -543,17 +665,87 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: () => false,
       onActivate: () => {},
     },
+    // Colour-by — recolour bars by status / WBS / critical / resource. Overflow placeholder.
+    placeholderItem({
+      id: 'colour-by',
+      group: 'lens',
+      tier: 3,
+      order: 1,
+      label: 'Colour by…',
+      icon: <Palette className="size-4" />,
+    }),
+    // Baseline overlay — ghost the active baseline's bars behind the live ones for variance-at-a-glance
+    // (baselines are already captured server-side; nothing draws them on the canvas yet). When built
+    // this becomes a `View▾` toggle; a placeholder button for now. Overflow placeholder.
+    placeholderItem({
+      id: 'baseline-overlay',
+      group: 'lens',
+      tier: 3,
+      order: 2,
+      label: 'Baseline overlay',
+      icon: <Layers2 className="size-4" />,
+    }),
+    // Snap-to-grid — a Visual-planning aid (snaps hand-placed bars to working-day gridlines). In the
+    // `⋯` overflow as a "Coming soon" placeholder.
+    placeholderItem({
+      id: 'snap-to-grid',
+      group: 'lens',
+      tier: 3,
+      order: 11,
+      label: 'Snap to grid',
+      icon: <Grid3x3 className="size-4" />,
+    }),
+    // Resource view — a second lens (resource histogram / over-allocation). Promotes the reserved
+    // `view-mode` slot into a visible "Coming soon" placeholder. Overflow.
+    placeholderItem({
+      id: 'resource-view',
+      group: 'lens',
+      tier: 3,
+      order: 12,
+      label: 'Resource view',
+      icon: <BarChart3 className="size-4" />,
+    }),
 
-    // --- 3 · Find / focus (reserved) ----------------------------------------------------------
-    {
+    // --- 3 · Find / focus (placeholders) ------------------------------------------------------
+    // Search — jump to an activity by name/code. Placeholder in the `⋯` overflow.
+    placeholderItem({
+      id: 'search',
+      group: 'find',
+      tier: 3,
+      order: -1,
+      label: 'Search activities',
+      icon: <Search className="size-4" />,
+    }),
+    // Filter / critical-only view — a "Coming soon" placeholder in the `⋯` overflow; the real command
+    // lands later. Kept out of the always-inline core to keep the bar lean.
+    placeholderItem({
       id: 'filter',
       group: 'find',
-      tier: 2,
+      tier: 3,
       order: 0,
       label: 'Filter',
-      isVisible: () => false,
-      onActivate: () => {},
-    },
+      icon: <Filter className="size-4" />,
+    }),
+    // Isolate logic path — highlight the driving/longest path, or a selection's predecessors &
+    // successors. Placeholder in the `⋯` overflow.
+    placeholderItem({
+      id: 'isolate-logic',
+      group: 'find',
+      tier: 3,
+      order: 2,
+      label: 'Isolate logic path',
+      icon: <Route className="size-4" />,
+    }),
+    // Jump-to-next-conflict — a Visual-planning helper (steps the viewport through flagged placements).
+    // In the `⋯` overflow (tier 3) so it's discoverable without crowding the bar.
+    placeholderItem({
+      id: 'next-conflict',
+      group: 'find',
+      tier: 3,
+      order: 1,
+      label: 'Next conflict',
+      icon: <TriangleAlert className="size-4" />,
+    }),
 
     // --- 4 · Tools / author (pen-gated) -------------------------------------------------------
     // Add activity — a plain toggle button flag-off (byte-for-byte unchanged); flag-on the canvas-first
@@ -613,6 +805,26 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: (ctx) => ctx.canAutoArrange,
       onActivate: (ctx) => ctx.requestAutoArrange(),
     },
+    // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
+    // falls back to the computed date). "Coming soon" placeholder in the `⋯` overflow.
+    placeholderItem({
+      id: 'clear-visual-placement',
+      group: 'tools',
+      tier: 3,
+      order: 4,
+      label: 'Clear visual placement',
+      icon: <Eraser className="size-4" />,
+    }),
+    // Add note — a free-text annotation / callout pinned to the canvas or an activity (review markup).
+    // Overflow placeholder; leans on the multi-tenant + guest-share model for review workflows.
+    placeholderItem({
+      id: 'add-note',
+      group: 'tools',
+      tier: 3,
+      order: 5,
+      label: 'Add note',
+      icon: <StickyNote className="size-4" />,
+    }),
 
     // --- 5 · Object / plan actions ------------------------------------------------------------
     {
@@ -702,17 +914,70 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: (ctx) => ctx.editPlan !== null,
       onActivate: (ctx) => ctx.editPlan?.(),
     },
+    // Deliverables + collaboration — overflow "Coming soon" placeholders (see docs/TOOLBAR_ROADMAP.md).
+    // Export the diagram (PDF/PNG) or the schedule (XER/MSP/CSV); Print; Share (surfaces the ADR-0012
+    // per-plan guest link); Comments (activity threads); Update progress (apply actuals + advance the
+    // data date).
+    placeholderItem({
+      id: 'export',
+      group: 'object',
+      tier: 3,
+      order: 7,
+      label: 'Export…',
+      icon: <FileDown className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'print',
+      group: 'object',
+      tier: 3,
+      order: 8,
+      label: 'Print…',
+      icon: <Printer className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'share',
+      group: 'object',
+      tier: 3,
+      order: 9,
+      label: 'Share…',
+      icon: <Share2 className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'comments',
+      group: 'object',
+      tier: 3,
+      order: 10,
+      label: 'Comments',
+      icon: <MessageSquare className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'update-progress',
+      group: 'object',
+      tier: 3,
+      order: 11,
+      label: 'Update progress…',
+      icon: <Gauge className="size-4" />,
+    }),
 
-    // --- 6 · History / status (reserved undo/redo; pen status lands in M3) ---------------------
-    {
+    // --- 6 · History / status ------------------------------------------------------------------
+    // Undo / Redo — high-expectation editing controls, shown inline as "Coming soon" placeholders
+    // until the edit-history stack is built (ADR-0031). Icon-only; the label is the accessible name.
+    placeholderItem({
       id: 'undo',
       group: 'history',
       tier: 1,
       order: 0,
       label: 'Undo',
-      isVisible: () => false,
-      onActivate: () => {},
-    },
+      icon: <Undo2 className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'redo',
+      group: 'history',
+      tier: 1,
+      order: 1,
+      label: 'Redo',
+      icon: <Redo2 className="size-4" />,
+    }),
 
     // --- 7 · Help -----------------------------------------------------------------------------
     {
@@ -722,7 +987,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 0,
       label: 'Legend',
       icon: <ListChecks className="size-4" />,
-      isVisible: (ctx) => ctx.hasDiagram,
       render: (ctx, api) => (
         <ToolbarPopover
           label="Legend"
@@ -741,7 +1005,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 1,
       label: 'Keyboard shortcuts',
       icon: <Keyboard className="size-4" />,
-      isVisible: (ctx) => ctx.hasDiagram,
       onActivate: (ctx) => ctx.openShortcuts(),
     },
   ]);
