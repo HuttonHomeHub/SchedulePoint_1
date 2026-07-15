@@ -241,3 +241,66 @@ as if the toolbar changed with the **planning mode**, even though no command is 
 
 **Scope.** Frontend-only, within the existing `VITE_CANVAS_TOOLBAR` surface (no flag change). The
 flag-off `TsldViewControls` fallback is unchanged. No API/DB/type change.
+
+## Amendment (2026-07-15): two rows — split by "look vs change"
+
+Product-owner review of the shipped single-row toolbar (post-scheduling-modes) asked for a
+different trade-off than the first amendment's "lean inline core + `⋯` for the rest." On a normal
+desktop monitor the owner wants **every control visible with its label** and **nothing working
+hidden in a `⋯`** — the overflow menu is acceptable only as a mobile fallback (the app is unlikely
+to be deployed on mobile). A single row can't hold the full labelled command set at that width, so
+this amendment splits the toolbar into **two rows** and re-homes several controls. It refines — does
+not supersede — the registry contract and the first amendment.
+
+**Decisions.**
+
+1. **Two rows, split by look vs change.** Each `ToolbarItem` carries a `row: 'look' | 'do'` (absent
+   ⇒ `look`). The workspace renders **one `<Toolbar>` per row** via `splitByRow(items)`; grouping,
+   tiering, gating and overflow are unchanged _within_ each row.
+   - **Row 1 · Look** (always live): Go-to-date, the zoom cluster, `View▾`, the Early | Visual
+     scheduling-mode selector, the search field + find/analyse lenses, and the right-aligned Finish
+     read-out + Summary + Legend. Nothing here needs the pen.
+   - **Row 2 · Do**: a pen-gated **authoring cluster** (Add, Link, Auto-arrange, note/snap/clear,
+     Recalculate, Undo/Redo) that shades as one set when the pen isn't held, then plan & deliverable
+     actions (Baselines, Calendar, Plan details, Edit plan, Update progress, Export/Print/Share/
+     Comments, Shortcuts) that stay live because they don't author. To keep the pen-gated set
+     contiguous, Recalculate and Undo/Redo move from the Object/History groups into `tools`.
+
+2. **Inline, not overflow, on desktop.** The first amendment's "`⋯` carries the rest" is reversed
+   for the placeholders too: analyse/find/authoring/deliverable placeholders are promoted from tier 3
+   to **tier 2 (inline icon buttons)** so a normal-width desktop shows the full command set with no
+   `⋯`. The width-based overflow still exists — below `md` (or any width that can't fit a row) tier-2
+   items demote into the `⋯` exactly as before — but on a desktop it stays empty. "Shade, don't hide"
+   from the first amendment now also covers **authoring vs viewing**: the whole Row-2 authoring
+   cluster is shown shaded (disabled) while viewing rather than removed, so the toolbar's silhouette
+   is identical in view and edit modes.
+
+3. **The data date leaves the toolbar.** The persisted `plannedStart` had an inline date control
+   (ADR-0032 M2 / ADR-0033 M2 "Project start"). It is removed from the bar: the data date is set at
+   plan creation (mandatory, ADR-0033 M1) and changed via **Edit plan**, and will become the status
+   date under **Update progress**. Navigation (**Go to date**) stays on Row 1. This de-clutters the
+   bar and removes the two-adjacent-date-fields confusion the split was meant to solve. The
+   `setPlannedStart`/`canLink` context seams are dropped as dead.
+
+4. **Right-aligned status read-outs.** `Toolbar` gains an optional `alignEndGroup` prop; Row 1 passes
+   `object` so the Finish read-out + Summary (and the Help/Legend after them) push to the trailing
+   edge, separating "status you read" from "controls you drive."
+
+5. **Removed / reserved controls.** The **Gantt/Resource view-mode switch** is not surfaced until a
+   second view exists (product call): the `view-mode` slot stays a genuinely-reserved hidden stub
+   (`isVisible: () => false`). **Hammock** and **Level of effort** are previewed as disabled
+   ("Soon") items under a new **"Span between activities"** section of the Add menu (they're derived
+   from two endpoints, not point-and-draw); this required a `disabled` affordance on the `Menu`
+   primitive. **Search** leads the Find cluster as a real (disabled) field rather than an icon.
+
+6. **One-line header, no read-only banner.** The header collapses to a single line — breadcrumb
+   ending at the plan name + a status pill + the compact pen status. The separate "Read-only — use
+   Start editing" note between the toolbar and canvas is removed as redundant (the pen status in the
+   header already offers Start editing, and the shaded Row-2 cluster shows what's gated).
+
+**Scope.** Frontend-only, within the existing `VITE_CANVAS_TOOLBAR` surface (no flag change). The
+`Toolbar` primitive gains `alignEndGroup`; the `Menu` primitive gains disabled items; the registry
+gains `row` + `splitByRow`. No API/DB/type change. **Deferred:** the zoom cluster stays a horizontal
+group rather than a literal 2×2 pad — a composite 2×2 widget would need its own internal roving-focus
+model (one toolbar stop containing four buttons), which the flat one-control-per-stop registry can't
+express cleanly; revisit if the compact geometry is worth a bespoke primitive (`docs/TOOLBAR_ROADMAP.md`).

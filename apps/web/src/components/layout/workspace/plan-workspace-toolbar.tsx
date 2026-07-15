@@ -14,11 +14,12 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
+import { Badge } from '@/components/ui/badge';
 import { PanelResizer } from '@/components/ui/panel-resizer';
-import { Toolbar } from '@/components/ui/toolbar';
+import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
-import { CompactPenStatus, PenReadOnlyNote } from '@/features/plan-lock';
+import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
@@ -34,12 +35,13 @@ const MD_QUERY = '(min-width: 48rem)';
 
 /**
  * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — the `VITE_CANVAS_TOOLBAR`
- * evolution of {@link PlanWorkspace}. It collapses the ADR-0030 chrome bands into a **slim header**
- * (breadcrumb + plan identity + compact pen status) plus **one registry-driven `<Toolbar>` row**,
- * over a **full-height chromeless canvas** with the activities panel **collapsed by default** — so
- * the canvas gets the room. Every former band (view toggles, legend, summary, plan actions,
- * shortcuts) is one click away in the toolbar's popovers / `⋯` overflow. Flag-off keeps the
- * ADR-0030 layout untouched.
+ * evolution of {@link PlanWorkspace}. It collapses the ADR-0030 chrome bands into a **one-line header**
+ * (breadcrumb ending at the plan name + status pill + compact pen status) plus a **two-row
+ * registry-driven `<Toolbar>`** (Row 1 · Look — view/navigate, always live; Row 2 · Do — build/manage,
+ * with a pen-gated authoring cluster that shades as a set), over a **full-height chromeless canvas**
+ * with the activities panel **collapsed by default** so the canvas gets the room. Every former band
+ * (view toggles, legend, summary, plan actions, shortcuts) lives inline in the two rows or one click
+ * away in their popovers. Flag-off keeps the ADR-0030 layout untouched.
  */
 export function ToolbarPlanWorkspace({
   model,
@@ -53,6 +55,10 @@ export function ToolbarPlanWorkspace({
   const [dialog, setDialog] = useState<PlanDialogKind | null>(null);
   const ctx = useTsldToolbarContext({ model, plan, canvasUi, openDialog: setDialog });
   const items = useMemo(() => buildTsldToolbarItems(), []);
+  // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
+  // always live) and Row 2 · Do (build/manage, its authoring cluster pen-gated). Each row is its own
+  // <Toolbar> so grouping/overflow stay per-row and the primitive is unchanged.
+  const rows = useMemo(() => splitByRow(items), [items]);
 
   // Below `md` the vertical split can't give the canvas and the table useful height at once, so
   // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
@@ -152,6 +158,9 @@ export function ToolbarPlanWorkspace({
     />
   );
 
+  // Breadcrumb ends at the plan name (the current page) so the whole trail — Clients → client →
+  // project → plan — reads on one header line (ADR-0031 two-row amendment). A visually-hidden <h1>
+  // keeps the document outline intact even though the visible title is the last (bold) crumb.
   const crumbs: Crumb[] = [
     { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug: model.orgSlug } },
     {
@@ -164,42 +173,47 @@ export function ToolbarPlanWorkspace({
       to: '/orgs/$orgSlug/projects/$projectId',
       params: { orgSlug: model.orgSlug, projectId: plan.projectId },
     },
+    { label: plan.name },
   ];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Slim header: two lines — breadcrumb, then identity + compact pen status. */}
-      <header className="border-border flex flex-col gap-1.5 border-b px-4 py-2">
-        <Breadcrumbs items={crumbs} />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <h1 className="truncate text-lg font-semibold tracking-tight">{plan.name}</h1>
-            <span className="text-muted-foreground shrink-0 text-sm">
-              {PLAN_STATUS_LABELS[plan.status]}
-            </span>
-          </div>
-          <CompactPenStatus
-            pen={model.pen}
-            {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-          />
+      {/* Slim header: one line — breadcrumb (…→ plan name) + status pill, then compact pen status. */}
+      <header className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-2">
+        <h1 className="sr-only">{plan.name}</h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <Breadcrumbs items={crumbs} />
+          <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
         </div>
+        <CompactPenStatus
+          pen={model.pen}
+          {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+        />
       </header>
 
-      {/* The single command surface (ADR-0031). Authoring group flips as a set on the pen. */}
-      <div className="border-border border-b px-2 py-1">
-        <Toolbar
-          items={items}
-          context={ctx}
-          label="Plan toolbar"
-          authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-        />
-      </div>
-
-      {model.penReadOnly ? (
-        <div className="px-4 pt-2">
-          <PenReadOnlyNote />
+      {/* The two-row command surface (ADR-0031 two-row amendment). Row 1 · Look is always live; Row 2 ·
+          Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
+          the always-live plan & deliverable actions. Both rows share one `authoringEnabled` — only
+          Row 2's `penGated` items react. Row 1 right-aligns its status read-outs (Finish/Summary/Legend). */}
+      <div className="border-border flex flex-col border-b">
+        <div className="border-border border-b px-2 py-1">
+          <Toolbar
+            items={rows.look}
+            context={ctx}
+            label="View and navigate"
+            authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+            alignEndGroup="object"
+          />
         </div>
-      ) : null}
+        <div className="px-2 py-1">
+          <Toolbar
+            items={rows.do}
+            context={ctx}
+            label="Build and manage"
+            authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+          />
+        </div>
+      </div>
 
       {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
       {lateOverlayActive && model.canEditSchedule ? (

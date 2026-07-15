@@ -1,15 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
  * the real `PlanDetailScreen` with both `CANVAS_WORKSPACE_ENABLED` and `CANVAS_TOOLBAR_ENABLED`
- * forced on. Proves the flag routes to the toolbar layout: one command `toolbar`, a full-height
- * chromeless canvas, the activities panel collapsed by default, and the plan actions reachable via
- * the `⋯` overflow. The canvas + heavy children are stubbed (jsdom has no Canvas 2D).
+ * forced on. Proves the flag routes to the toolbar layout: the two command rows (Look / Do), a
+ * full-height chromeless canvas, the activities panel collapsed by default, and the plan actions
+ * reachable inline on Row 2. The canvas + heavy children are stubbed (jsdom has no Canvas 2D).
  */
 
 const h = vi.hoisted(() => ({ role: 'PLANNER' }));
@@ -127,11 +127,12 @@ beforeEach(() => {
 });
 
 describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
-  it('renders one command toolbar over the canvas', () => {
+  it('renders the two command rows over the canvas', () => {
     renderScreen();
-    expect(screen.getByRole('toolbar', { name: 'Plan toolbar' })).toBeInTheDocument();
+    expect(screen.getByRole('toolbar', { name: 'View and navigate' })).toBeInTheDocument();
+    expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
     expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
-    // Frame controls appear once the plan has a computed diagram.
+    // Row 1 · Look hosts Fit; Row 2 · Do hosts Add activity.
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
   });
@@ -154,11 +155,10 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByTestId('activities-table')).toBeInTheDocument();
   });
 
-  it('reaches Baselines via the ⋯ overflow (no capability lost)', () => {
+  it('reaches Baselines inline on Row 2 (no capability lost)', () => {
     renderScreen();
-    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
-    const menu = screen.getByRole('menu', { name: 'More toolbar actions' });
-    fireEvent.click(within(menu).getByRole('menuitem', { name: /Baselines/ }));
+    // Plan actions are inline (tier-2 icon buttons) on the Do row, not behind a `⋯` overflow.
+    fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
     expect(screen.getByRole('dialog', { name: 'Baselines' })).toBeInTheDocument();
     expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
   });

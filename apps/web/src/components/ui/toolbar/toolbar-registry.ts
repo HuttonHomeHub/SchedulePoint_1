@@ -40,6 +40,14 @@ export function groupRank(group: ToolbarGroupId): number {
  */
 export type ToolbarTier = 1 | 2 | 3;
 
+/**
+ * Which of the two toolbar rows an item belongs to (ADR-0031 two-row amendment). `look` = the
+ * always-live view/navigate/find row; `do` = the build-&-manage row (its pen-gated authoring cluster
+ * shades as a set). Absent ⇒ `look`. The workspace renders one {@link Toolbar} per row, so this only
+ * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
+ */
+export type ToolbarRow = 'look' | 'do';
+
 /** What the primitive passes an item's `render` escape-hatch so it can reflect gating + roving focus. */
 export interface ToolbarItemRenderApi {
   /** Resolved enabled state (respects `isEnabled` + pen-gating) — mirror it on custom controls. */
@@ -71,6 +79,8 @@ export interface ToolbarItem<Ctx> {
   /** Stable unique id (test/telemetry handle; dedup key). */
   id: string;
   group: ToolbarGroupId;
+  /** Which toolbar row this item lives on (ADR-0031 two-row amendment). Absent ⇒ `look`. */
+  row?: ToolbarRow;
   tier: ToolbarTier;
   /** Sort order **within the group** (ascending). Ties break by registry order. */
   order: number;
@@ -138,6 +148,20 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
     }
   }
   return items;
+}
+
+/**
+ * Partition a registry into the two toolbar rows (ADR-0031 two-row amendment). Items with no `row`
+ * default to `look`. Pure — the workspace renders one {@link Toolbar} per returned array.
+ */
+export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): {
+  look: ToolbarItem<Ctx>[];
+  do: ToolbarItem<Ctx>[];
+} {
+  const look: ToolbarItem<Ctx>[] = [];
+  const build: ToolbarItem<Ctx>[] = [];
+  for (const item of items) ((item.row ?? 'look') === 'do' ? build : look).push(item);
+  return { look, do: build };
 }
 
 /**

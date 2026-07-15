@@ -33,6 +33,12 @@ export interface ToolbarProps<Ctx> {
   authoringEnabled?: boolean;
   /** Human labels for each `role="group"`; falls back to a humanised group id. */
   groupLabels?: Partial<Record<ToolbarGroupId, string>>;
+  /**
+   * Push this group (and any groups after it) to the trailing edge with `margin-inline-start: auto`
+   * (ADR-0031 two-row amendment). Used on Row 1 to right-align the status read-outs (Finish / Summary /
+   * Legend). No-op if the group isn't currently rendered inline.
+   */
+  alignEndGroup?: ToolbarGroupId;
   className?: string;
 }
 
@@ -66,6 +72,7 @@ export function Toolbar<Ctx>({
   label,
   authoringEnabled = true,
   groupLabels,
+  alignEndGroup,
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -225,6 +232,8 @@ export function Toolbar<Ctx>({
           className={cn(
             'flex items-center gap-1',
             i > 0 && 'border-border ml-1 border-l pl-2', // a hairline separates groups
+            // Right-align this group (and everything after it) — the trailing status read-outs on Row 1.
+            group === alignEndGroup && 'ml-auto',
           )}
         >
           {groupItems.map((r) =>

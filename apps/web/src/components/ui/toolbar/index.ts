@@ -5,8 +5,10 @@ export {
   TOOLBAR_GROUPS,
   defineToolbar,
   groupRank,
+  splitByRow,
   type ToolbarGroupId,
   type ToolbarItem,
   type ToolbarItemRenderApi,
+  type ToolbarRow,
   type ToolbarTier,
 } from './toolbar-registry';

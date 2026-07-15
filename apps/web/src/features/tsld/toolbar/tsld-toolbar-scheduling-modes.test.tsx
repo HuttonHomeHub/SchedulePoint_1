@@ -4,13 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
-import { Toolbar } from '@/components/ui/toolbar/Toolbar';
+import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
- * Scheduling-modes toolbar items (ADR-0033 M2): the de-overloaded date split. `SCHEDULING_MODES_ENABLED`
- * requires `CANVAS_AUTHORING_ENABLED`, so both are pinned on here — flag-off behaviour (the single
- * "Timeline start" control) is covered by `tsld-toolbar-authoring.test.tsx`.
+ * Scheduling-modes toolbar items (ADR-0033): the Go-to-date navigation jump + the Early | Visual mode
+ * selector, both on Row 1 · Look. `SCHEDULING_MODES_ENABLED` requires `CANVAS_AUTHORING_ENABLED`, so
+ * both are pinned on here. The persisted data date no longer has a toolbar control (ADR-0031 two-row
+ * amendment) — it is edited via *Edit plan*.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -25,7 +26,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     stepZoom: vi.fn(),
     fit: vi.fn(),
     plannedStart: '2026-01-01',
-    setPlannedStart: vi.fn(),
     goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: vi.fn(),
@@ -35,7 +35,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     toggleAddActivity: vi.fn(),
     createType: 'TASK',
     setCreateType: vi.fn(),
-    canLink: true,
     isLinking: false,
     toggleLinkMode: vi.fn(),
     linkType: 'FS',
@@ -58,52 +57,39 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   };
 }
 
-function renderToolbar(context: TsldToolbarContext) {
+/** Render the Row 1 · Look toolbar (Go-to-date, the mode selector, the View popover live here). */
+function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
+  const rows = splitByRow(buildTsldToolbarItems());
   return render(
     <Toolbar
-      items={buildTsldToolbarItems()}
+      items={rows.look}
       context={context}
-      label="Plan toolbar"
-      authoringEnabled
+      label="View and navigate"
+      authoringEnabled={authoringEnabled}
+      alignEndGroup="object"
     />,
   );
 }
 
-describe('TSLD toolbar — scheduling-modes date split (flag on)', () => {
-  it('replaces the single "Timeline start" with a labelled "Project start" data control', () => {
+describe('TSLD toolbar — scheduling modes (flag on)', () => {
+  it('has no persisted data-date control on the toolbar (moved to Edit plan)', () => {
     renderToolbar(ctx());
-    expect(screen.queryByLabelText('Timeline start')).not.toBeInTheDocument();
-    const projectStart = screen.getByLabelText('Project start');
-    expect(projectStart).toHaveValue('2026-01-01');
-  });
-
-  it('writes plannedStart from the Project start control (still the persisted anchor)', () => {
-    const setPlannedStart = vi.fn();
-    renderToolbar(ctx({ setPlannedStart }));
-    fireEvent.change(screen.getByLabelText('Project start'), { target: { value: '2026-03-01' } });
-    expect(setPlannedStart).toHaveBeenCalledWith('2026-03-01');
-  });
-
-  it('shows Project start as a static read-out for a read-only viewer', () => {
-    renderToolbar(ctx({ setPlannedStart: null }));
-    expect(screen.queryByLabelText('Project start')).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Project start:/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Project start/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Timeline start/)).not.toBeInTheDocument();
   });
 
   it('offers "Go to date" as a pure view jump — no write, available even without the pen', () => {
     const goToDate = vi.fn();
-    const setPlannedStart = vi.fn();
-    // A read-only viewer (no setter) can still navigate.
-    renderToolbar(ctx({ goToDate, setPlannedStart: null }));
+    // A read-only viewer (authoring off) can still navigate.
+    renderToolbar(ctx({ goToDate }), false);
     // It is a disclosure: open it, then pick a date in the panel.
     fireEvent.click(screen.getByRole('button', { name: 'Go to date' }));
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-06-15' } });
     expect(goToDate).toHaveBeenCalledWith('2026-06-15');
-    expect(setPlannedStart).not.toHaveBeenCalled();
   });
 
   it('hides "Go to date" until the plan is anchored (no plannedStart)', () => {
-    renderToolbar(ctx({ plannedStart: null, setPlannedStart: null }));
+    renderToolbar(ctx({ plannedStart: null }));
     expect(screen.queryByRole('button', { name: 'Go to date' })).not.toBeInTheDocument();
   });
 
@@ -121,13 +107,18 @@ describe('TSLD toolbar — scheduling-modes date split (flag on)', () => {
     expect(setSchedulingMode).toHaveBeenCalledWith('VISUAL');
   });
 
-  it('shows a presentational mode read-out (not the switch) for a read-only viewer', () => {
+  it('keeps the mode selector visible but shaded for a read-only viewer (shade-don’t-hide)', () => {
+    const setSchedulingMode = vi.fn();
     renderToolbar(ctx({ setSchedulingMode: null, schedulingMode: 'VISUAL' }));
-    // The interactive switch is gone…
-    expect(screen.queryByRole('button', { name: 'Early mode' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Visual mode' })).not.toBeInTheDocument();
-    // …but the active mode is still surfaced so a viewer can read the diagram correctly.
-    expect(screen.getByLabelText('Scheduling mode: Visual')).toBeInTheDocument();
+    const early = screen.getByRole('button', { name: 'Early mode' });
+    const visual = screen.getByRole('button', { name: 'Visual mode' });
+    // The selector stays on the bar — the mode changes how the diagram reads, so a viewer must see it…
+    expect(early).toHaveAttribute('aria-disabled', 'true');
+    expect(visual).toHaveAttribute('aria-disabled', 'true');
+    // …with the active mode still marked, and operating it is a no-op.
+    expect(visual).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(visual);
+    expect(setSchedulingMode).not.toHaveBeenCalled();
   });
 
   it('offers the Late-start overlay toggle in the View popover (M4) and flips it', () => {

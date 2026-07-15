@@ -2,9 +2,10 @@ import { expect, type Page } from '@playwright/test';
 
 /**
  * Journey helpers for the flag-ON **canvas-maximal toolbar** suite (`VITE_CANVAS_TOOLBAR`,
- * ADR-0031). Same hierarchy-driving approach as the other flag-on suites; they differ only where
- * the toolbar layout re-homes chrome: the plan actions live in the `⋯` toolbar overflow (not a
- * header menu), and the activities panel is collapsed by default (expand it to reach its table).
+ * ADR-0031, two-row amendment). Same hierarchy-driving approach as the other flag-on suites; they
+ * differ only where the toolbar layout re-homes chrome: the plan actions are inline icon buttons on
+ * Row 2 · Do (not a header menu or `⋯` overflow), and the activities panel is collapsed by default
+ * (expand it to reach its table).
  */
 
 export async function onboard(page: Page, stamp: number): Promise<string> {
@@ -40,23 +41,6 @@ export async function openNewPlan(page: Page): Promise<void> {
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Logic' }).click();
-}
-
-/** Open the `⋯` overflow on the plan toolbar. */
-export async function openToolbarOverflow(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'More toolbar actions' }).click();
-  await expect(page.getByRole('menu', { name: 'More toolbar actions' })).toBeVisible();
-}
-
-/** Set the plan's planned start — reached via the toolbar overflow's "Edit plan" in this layout. */
-export async function setPlannedStart(page: Page, isoDate: string): Promise<void> {
-  await openToolbarOverflow(page);
-  await page.getByRole('menuitem', { name: /edit plan/i }).click();
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill(isoDate);
-  await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
 }
 
 /** Take the pen (the compact status lives in the slim header). */

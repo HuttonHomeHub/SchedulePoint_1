@@ -29,18 +29,16 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
   await expect(page.getByText(/No activities to diagram yet/i)).toBeHidden();
   await expect(diagram.getByRole('option')).toHaveCount(0);
 
-  // Take the pen — the authoring toolbar group (Add split-button, Link tool, inline start date) lights up.
+  // Take the pen — the Row 2 · Do authoring cluster (Add split-button, Link tool) lights up. (The
+  // data date lives off the toolbar now — set silently on first draw, changed via Edit plan.)
   await startEditing(page);
-  const toolbar = page.getByRole('toolbar', { name: 'Plan toolbar' });
+  const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
   await expect(toolbar.getByRole('button', { name: /^Add/ })).toBeVisible();
-  await expect(toolbar.getByLabel('Timeline start')).toBeVisible();
 
   // M1 + M3 — draw the first task; the first draw silently sets the plan start to today and the
   // schedule auto-recalcs, so the bar plots on its own (no Recalculate click).
   await drawActivity(page, 'Task', 'Excavate', { x: 220, y: 120 });
   await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
-  // The inline start-date control now reflects the silently-set start (today), no longer "Not set".
-  await expect(toolbar.getByLabel('Timeline start')).not.toHaveValue('');
 
   // M4 — place a finish milestone straight on the canvas via the Add split-button's type menu.
   await drawActivity(page, 'Finish milestone', 'Handover', { x: 360, y: 180 });
