@@ -1,4 +1,4 @@
-import type { DependencyType } from '@repo/types';
+import { LAG_CALENDAR_SOURCES, type DependencyType, type LagCalendarSource } from '@repo/types';
 import { z } from 'zod';
 
 /**
@@ -17,6 +17,22 @@ export const DEPENDENCY_TYPES = Object.keys(DEPENDENCY_TYPE_LABELS) as [
   DependencyType,
   ...DependencyType[],
 ];
+
+/**
+ * Human labels for the lag-calendar sources (ADR-0036 §6). Exhaustive
+ * `Record<LagCalendarSource, …>` so a new source fails to compile until labelled.
+ * Today only **24-hour** behaves distinctly; Predecessor/Successor coincide with the
+ * project calendar until per-activity calendars land (M5) — the editor says so.
+ */
+export const LAG_CALENDAR_LABELS: Record<LagCalendarSource, string> = {
+  PROJECT_DEFAULT: 'Project calendar',
+  TWENTY_FOUR_HOUR: '24-hour (elapsed)',
+  PREDECESSOR: 'Predecessor calendar',
+  SUCCESSOR: 'Successor calendar',
+};
+
+/** Lag-calendar sources in the shared canonical order (kept in step with `@repo/types`). */
+export const LAG_CALENDAR_OPTIONS = LAG_CALENDAR_SOURCES;
 
 /**
  * Format a signed working-day lag for display: `0d`, `+3d` (lag), `−2d` (lead,
@@ -39,6 +55,7 @@ export const typeAndLagSchema = z.object({
     .int('Enter a whole number of days.')
     .min(-3650, 'Lag is too large.')
     .max(3650, 'Lag is too large.'),
+  lagCalendar: z.enum(LAG_CALENDAR_OPTIONS),
 });
 
 export type TypeAndLagValues = z.infer<typeof typeAndLagSchema>;

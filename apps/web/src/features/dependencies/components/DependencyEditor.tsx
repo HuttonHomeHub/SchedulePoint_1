@@ -4,7 +4,11 @@ import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useDeleteDependency, usePredecessors, useSuccessors } from '../api/use-dependencies';
-import { DEPENDENCY_TYPE_LABELS, formatLag } from '../schemas/dependency-schemas';
+import {
+  DEPENDENCY_TYPE_LABELS,
+  LAG_CALENDAR_LABELS,
+  formatLag,
+} from '../schemas/dependency-schemas';
 
 import { AddDependencyDialog, type LinkDirection } from './AddDependencyDialog';
 import { EditDependencyDialog } from './EditDependencyDialog';
@@ -52,8 +56,17 @@ function DirectionTable({
     { header: 'Type', cell: (dep) => DEPENDENCY_TYPE_LABELS[dep.type] },
     {
       header: 'Lag',
-      cellClassName: 'whitespace-nowrap tabular-nums',
-      cell: (dep) => <span className="text-muted-foreground">{formatLag(dep.lagDays)}</span>,
+      cellClassName: 'whitespace-nowrap',
+      cell: (dep) => (
+        <span className="text-muted-foreground tabular-nums">
+          {formatLag(dep.lagDays)}
+          {dep.lagCalendar !== 'PROJECT_DEFAULT' ? (
+            // Only surface the lag calendar when it's not the default — an elapsed (24h) wait
+            // reads very differently from a working-day lag, so make it visible in the list.
+            <span className="ml-1.5 not-italic">· {LAG_CALENDAR_LABELS[dep.lagCalendar]}</span>
+          ) : null}
+        </span>
+      ),
     },
     {
       // The engine-owned driving flag (M3), in text so it isn't canvas-only: a driving link is

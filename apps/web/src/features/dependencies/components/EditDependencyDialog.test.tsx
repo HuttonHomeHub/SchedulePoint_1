@@ -14,6 +14,7 @@ const DEP: DependencySummary = {
   planId: 'pl1',
   type: 'FS',
   lagDays: 3,
+  lagCalendar: 'PROJECT_DEFAULT',
   predecessor: { id: 'a1', code: null, name: 'Excavate' },
   successor: { id: 'b1', code: null, name: 'Pour slab' },
   isDriving: false,
@@ -39,16 +40,21 @@ describe('EditDependencyDialog', () => {
   it('seeds type/lag and PATCHes with the row version', async () => {
     renderDialog();
     expect(screen.getByLabelText('Type')).toHaveValue('FS');
-    expect(screen.getByLabelText(/Lag/)).toHaveValue(3);
+    expect(screen.getByLabelText(/Lag \(working days/)).toHaveValue(3);
 
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'FF' } });
-    fireEvent.change(screen.getByLabelText(/Lag/), { target: { value: '-1' } });
+    fireEvent.change(screen.getByLabelText(/Lag \(working days/), { target: { value: '-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
     expect(path).toBe('/organizations/acme/dependencies/d1');
     expect(init?.method).toBe('PATCH');
-    expect(JSON.parse(init?.body as string)).toEqual({ type: 'FF', lagDays: -1, version: 5 });
+    expect(JSON.parse(init?.body as string)).toEqual({
+      type: 'FF',
+      lagDays: -1,
+      lagCalendar: 'PROJECT_DEFAULT',
+      version: 5,
+    });
   });
 });

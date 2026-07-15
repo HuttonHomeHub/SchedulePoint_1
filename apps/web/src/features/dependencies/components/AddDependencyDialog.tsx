@@ -7,6 +7,8 @@ import { useCreateDependency } from '../api/use-dependencies';
 import {
   DEPENDENCY_TYPES,
   DEPENDENCY_TYPE_LABELS,
+  LAG_CALENDAR_LABELS,
+  LAG_CALENDAR_OPTIONS,
   dependencyFormSchema,
   type DependencyFormValues,
 } from '../schemas/dependency-schemas';
@@ -56,12 +58,12 @@ export function AddDependencyDialog({
     formState: { errors },
   } = useForm<DependencyFormValues>({
     resolver: zodResolver(dependencyFormSchema),
-    defaultValues: { otherActivityId: '', type: 'FS', lagDays: 0 },
+    defaultValues: { otherActivityId: '', type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' },
   });
 
   useEffect(() => {
     if (open) {
-      reset({ otherActivityId: '', type: 'FS', lagDays: 0 });
+      reset({ otherActivityId: '', type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' });
       create.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on open/direction change
@@ -73,7 +75,14 @@ export function AddDependencyDialog({
     const predecessorId = direction === 'predecessor' ? values.otherActivityId : anchor.id;
     const successorId = direction === 'predecessor' ? anchor.id : values.otherActivityId;
     create.mutate(
-      { planId, predecessorId, successorId, type: values.type, lagDays: values.lagDays },
+      {
+        planId,
+        predecessorId,
+        successorId,
+        type: values.type,
+        lagDays: values.lagDays,
+        lagCalendar: values.lagCalendar,
+      },
       {
         onSuccess: () => {
           announce(`Dependency added to “${anchor.name}”.`);
@@ -158,6 +167,25 @@ export function AddDependencyDialog({
             error={errors.lagDays?.message}
             {...register('lagDays', { valueAsNumber: true })}
           />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="dependency-lag-calendar">Lag calendar</Label>
+            <Select
+              id="dependency-lag-calendar"
+              aria-describedby="dependency-lag-calendar-hint"
+              {...register('lagCalendar')}
+            >
+              {LAG_CALENDAR_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  {LAG_CALENDAR_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+            <p id="dependency-lag-calendar-hint" className="text-muted-foreground text-xs">
+              Choose <strong>24-hour (elapsed)</strong> for waits that run around the clock — a
+              concrete cure of 7 days is 7 calendar days, not 7 working days. Predecessor and
+              Successor match the project calendar until per-activity calendars arrive.
+            </p>
+          </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

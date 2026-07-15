@@ -45,6 +45,7 @@ function link(overrides: Partial<DependencySummary> = {}): DependencySummary {
     planId: 'pl1',
     type: 'FS',
     lagDays: 3,
+    lagCalendar: 'PROJECT_DEFAULT',
     predecessor: { id: 'a1', code: 'A10', name: 'Excavate' },
     successor: { id: 'b1', code: 'B10', name: 'Pour slab' },
     isDriving: false,

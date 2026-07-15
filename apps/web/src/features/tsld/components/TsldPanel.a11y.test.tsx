@@ -64,6 +64,7 @@ const DEP_A_DRIVES_B: DependencySummary[] = [
     planId: 'p1',
     type: 'FS',
     lagDays: 0,
+    lagCalendar: 'PROJECT_DEFAULT',
     isDriving: true,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
