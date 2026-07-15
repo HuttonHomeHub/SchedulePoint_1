@@ -43,6 +43,13 @@ cat "$TEMPLATE/schema.reference.prisma" >>"$SCHEMA"
 info 'Generating the Prisma client'
 pnpm --filter @repo/api exec prisma generate >/dev/null
 
+# Build the app's workspace dependencies so their compiled `dist` (the `.d.ts` the
+# app type-checks against) exists. Turbo's own `typecheck` task gets this via
+# `dependsOn: ["^build"]`; this bare `tsc --noEmit` bypasses Turbo, so build them
+# explicitly (e.g. @repo/engine-conformance ships compiled output — ADR-0019).
+info 'Building workspace dependencies (compiled output the app type-checks against)'
+pnpm --filter "@repo/api^..." build >/dev/null
+
 info 'Type-checking (module + e2e spec against the live codebase)'
 pnpm --filter @repo/api exec tsc --noEmit
 

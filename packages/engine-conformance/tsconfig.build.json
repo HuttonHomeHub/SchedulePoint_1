@@ -8,7 +8,10 @@
     "declaration": true,
     "declarationMap": false,
     "sourceMap": false,
+    // Leaf build: no incremental/composite state, so a clean `dist` is always
+    // emitted (a stale *.tsbuildinfo must never make tsc skip emit in CI).
     "composite": false,
+    "incremental": false,
     "rootDir": "src",
     "outDir": "dist"
   },
