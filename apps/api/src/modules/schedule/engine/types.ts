@@ -1,5 +1,7 @@
 import type { ActivityType, ConstraintType, DependencyType } from '@repo/types';
 
+import type { WorkingTimeCalendar } from './working-time-calendar';
+
 /**
  * The pure CPM engine's input and output structs.
  *
@@ -38,6 +40,16 @@ export interface EngineEdge {
   type: DependencyType;
   /** Signed lag in working **minutes** (ADR-0036): positive is a delay, negative is a lead. */
   lagMinutes: number;
+  /**
+   * The calendar the lag term is measured on (ADR-0036 §6, M3). **Undefined = the plan
+   * calendar** — the fast, default path where the lag is a literal offset add (`anchor +
+   * lag`), so the golden suite stays byte-identical. A distinct calendar (e.g. the 24-Hour
+   * `allMinutesWorkCalendar`, for an elapsed lag like concrete cure) makes the lag walk on
+   * that calendar instead — see `applyLag` in `compute.ts`. Today only `TWENTY_FOUR_HOUR`
+   * resolves to a distinct calendar; Predecessor/Successor coincide with the plan calendar
+   * until per-activity calendars land (M5).
+   */
+  lagCalendar?: WorkingTimeCalendar;
 }
 
 /**
