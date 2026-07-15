@@ -421,7 +421,7 @@ function SearchFieldControl({
   itemProps: ToolbarItemRenderApi['itemProps'];
 }): React.ReactElement {
   return (
-    <div className="ml-1 flex items-center">
+    <div className="ml-3 flex items-center">
       <Search
         aria-hidden="true"
         className="text-muted-foreground pointer-events-none -mr-6 size-4"
@@ -777,7 +777,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <AlignVerticalSpaceAround className="size-4" />,
       penGated: true,
       disabledReason: () => 'Start editing to auto-arrange',
-      isVisible: (ctx) => ctx.canAutoArrange,
+      // Shade-don't-hide (ADR-0031): the tool stays on the bar and greys with the rest of the
+      // authoring cluster when the pen isn't held, rather than appearing/disappearing across
+      // view↔edit. `canAutoArrange` gates it as enabled (via isEnabled), penGating greys it.
+      isEnabled: (ctx) => ctx.canAutoArrange,
       onActivate: (ctx) => ctx.requestAutoArrange(),
     },
     // Add note — a free-text annotation / callout pinned to the canvas or an activity (review markup).

@@ -244,6 +244,25 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
   });
 
+  it('keeps Auto-arrange on the bar and greys it without the pen (shade-don’t-hide)', () => {
+    // Regression: Auto-arrange used to disappear in view mode and reappear when editing. It now
+    // stays on the bar and greys with the rest of the authoring cluster, like Add/Recalculate.
+    renderRows(ctx({ canAutoArrange: true }), false);
+    expect(screen.getByRole('button', { name: 'Auto-arrange lanes' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('enables Auto-arrange with the pen when arrangement is available', () => {
+    const requestAutoArrange = vi.fn();
+    renderRows(ctx({ canAutoArrange: true, requestAutoArrange }), true);
+    const arrange = screen.getByRole('button', { name: 'Auto-arrange lanes' });
+    expect(arrange).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(arrange);
+    expect(requestAutoArrange).toHaveBeenCalledOnce();
+  });
+
   it('shows future features as disabled "Coming soon" placeholders (undo/redo)', () => {
     renderRows(ctx());
     for (const name of ['Undo', 'Redo']) {
