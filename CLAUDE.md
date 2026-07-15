@@ -331,6 +331,17 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   the negative-case reject/repair/report contract; TS-port-not-Python-in-CI; and the
   `packages/engine-conformance` (engine-free) + `apps/api` (harness) split. See
   [`docs/specs/engine-conformance-framework/`](docs/specs/engine-conformance-framework/).
+- **ADR-0035** _(Proposed)_ — SchedulePoint CPM semantics: the documented golden contract for the
+  fixture's ambiguous behaviours (P6-aligned defaults) — Retained-Logic default + data-date floor +
+  suspend/resume, mandatory-constraints-break-logic (produce-and-flag), duplicate-edge reject, named
+  cycle members, SF arithmetic, Expected-Finish/secondary/ALAP, TF≤0 default critical +
+  Longest-Path/multiple-paths/start-finish-smallest options, LOE/zero-task/resource-dependent/WBS
+  rules. Each decision Accepts with its owning milestone (M2/M4/M6).
+- **ADR-0036** _(Proposed)_ — Hour/shift-granular calendars & durations: the **gating** M1 rework
+  amending ADR-0023 (working-day → working-**minute** offsets) and ADR-0024 (weekday mask → intraday
+  shift patterns + time-window exceptions + window-only base weeks); durations/lag in minutes,
+  elapsed durations, per-relationship lag-calendar seam, O(log) walker + iteration cap/horizon
+  (N11/N16), and a day→minute storage migration.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
