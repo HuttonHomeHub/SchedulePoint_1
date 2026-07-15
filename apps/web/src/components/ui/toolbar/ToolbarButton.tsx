@@ -46,6 +46,17 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     },
     ref,
   ) {
+    // Native hover tooltip. A labelled button already shows its name, so its `title` only needs to
+    // explain a disabled state. An **icon-only** button shows nothing, so it always gets a `title`
+    // naming it — `<name>` when live, `<name> — <reason>` when disabled (e.g. "Colour by… — coming
+    // soon"), so hovering any icon tells the user what it is even before the feature ships.
+    const title = showLabel
+      ? disabled
+        ? disabledReason
+        : undefined
+      : disabled && disabledReason
+        ? `${label} — ${disabledReason}`
+        : label;
     return (
       <button
         ref={ref}
@@ -56,7 +67,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         aria-disabled={disabled || undefined}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
         {...(showLabel ? {} : { 'aria-label': label })}
-        {...(disabled && disabledReason ? { title: disabledReason } : {})}
+        {...(title ? { title } : {})}
         tabIndex={tabIndex}
         onClick={() => {
           if (!disabled) onActivate();

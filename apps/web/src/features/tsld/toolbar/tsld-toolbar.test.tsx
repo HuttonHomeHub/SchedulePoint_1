@@ -184,7 +184,10 @@ describe('TSLD toolbar registry (two-row)', () => {
   it('shows the plan actions inline on Row 2 and drives their seams (Baselines)', () => {
     renderRows(ctx());
     // Plan & deliverable actions now sit inline (tier-2 icon buttons), not in a `⋯` overflow.
-    fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
+    // A live icon-only button carries a hover tooltip naming it (not just an aria-label).
+    const baselines = screen.getByRole('button', { name: 'Baselines…' });
+    expect(baselines).toHaveAttribute('title', 'Baselines…');
+    fireEvent.click(baselines);
     expect(spies.openBaselines).toHaveBeenCalledOnce();
   });
 
@@ -218,7 +221,8 @@ describe('TSLD toolbar registry (two-row)', () => {
     for (const name of ['Undo', 'Redo']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).toHaveAttribute('title', 'Coming soon');
+      // Icon-only tooltip names the button, then the reason (WCAG/discoverability).
+      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 
@@ -226,11 +230,11 @@ describe('TSLD toolbar registry (two-row)', () => {
     renderRows(ctx());
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
-    // The rest are inline "Coming soon" icon buttons.
+    // The rest are inline "Coming soon" icon buttons whose tooltip names them.
     for (const name of ['Export…', 'Share…', 'Add note', 'Colour by…']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
-      expect(item).toHaveAttribute('title', 'Coming soon');
+      expect(item).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 

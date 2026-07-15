@@ -407,7 +407,7 @@ function SearchFieldControl({
   itemProps: ToolbarItemRenderApi['itemProps'];
 }): React.ReactElement {
   return (
-    <div className="flex items-center">
+    <div className="ml-1 flex items-center">
       <Search
         aria-hidden="true"
         className="text-muted-foreground pointer-events-none -mr-6 size-4"
@@ -525,7 +525,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'zoom-out',
       group: 'frame',
       row: 'look',
-      tier: 1,
+      tier: 2,
       order: 10,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
@@ -537,7 +537,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'zoom-in',
       group: 'frame',
       row: 'look',
-      tier: 1,
+      tier: 2,
       order: 11,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
@@ -549,7 +549,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'fit',
       group: 'frame',
       row: 'look',
-      tier: 1,
+      tier: 2,
       order: 12,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
