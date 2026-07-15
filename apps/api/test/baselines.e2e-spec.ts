@@ -426,7 +426,7 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
         organizationId: orgId,
         planId,
         name: `A${i}`,
-        durationDays: 1,
+        durationMinutes: 1440,
       })),
     });
     await prisma.activityDependency.createMany({
