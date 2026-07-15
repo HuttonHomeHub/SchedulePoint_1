@@ -42,12 +42,16 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: 'needs the actual-dates recalc mode (ADR-0035 §1, M2)',
   },
   S05_LAG_CALENDAR_SUCCESSOR: {
+    // Predecessor-vs-Successor lag calendar needs the two endpoints to have DIFFERENT
+    // calendars — i.e. per-activity calendars, which are M5. In M3 both resolve to the plan
+    // calendar, so this scenario cannot yet be a differential (spec §honesty finding).
     runnable: false,
-    reason: 'needs per-relationship lag calendars (ADR-0036 §6, M3)',
+    reason: 'needs per-ACTIVITY calendars so predecessor/successor calendars differ (M5)',
   },
   S06_LAG_CALENDAR_24H: {
-    runnable: false,
-    reason: 'needs a 24-hour lag calendar (ADR-0036 §6, M3)',
+    // M3 wired the 24-Hour (elapsed) per-relationship lag calendar (ADR-0036 §6).
+    runnable: true,
+    reason: '',
   },
   S07_LONGEST_PATH: {
     runnable: false,
@@ -94,11 +98,14 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
   if (!support) return { ran: false, scenarioId, todo: `unknown scenario "${scenarioId}"` };
   if (!support.runnable) return { ran: false, scenarioId, todo: support.reason };
 
-  // S01: the unprogressed baseline. Anchor at planned start (its override sets
-  // data_date = planned_start and strips all actuals — which the adapter does by
-  // construction, since the engine ignores progress).
+  // Anchor at planned start (S01's override sets data_date = planned_start and strips all
+  // actuals — which the adapter does by construction, since the engine ignores progress).
   const dataDate = toCalendarDay(fixture.project.planned_start);
-  const { activities, edges, options } = adaptFixture(fixture, { dataDate });
+  // S06 flips the 24-Hour per-relationship lag calendar ON; every other runnable scenario
+  // (the S01 baseline) leaves it OFF, so `resultsDiffer(S06, S01)` proves the elapsed lag
+  // actually moved dates — the "flip one option, dates must change" differential (ADR-0034 §2).
+  const honorLagCalendars = scenarioId === 'S06_LAG_CALENDAR_24H';
+  const { activities, edges, options } = adaptFixture(fixture, { dataDate, honorLagCalendars });
   return { ran: true, scenarioId, output: computeSchedule(activities, edges, options) };
 }
 

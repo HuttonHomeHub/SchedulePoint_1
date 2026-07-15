@@ -63,6 +63,7 @@ const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow =>
   successorId,
   type: 'FS',
   lagMinutes: 0,
+  lagCalendar: 'PROJECT_DEFAULT',
 });
 
 function principalWith(permissions: Permission[]): Principal {
@@ -236,6 +237,36 @@ describe('ScheduleService.recalculate', () => {
 
     const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
     expect(results[0]).toMatchObject({ activityId: 'A', earlyStart: '2026-01-04' });
+  });
+
+  it('a TWENTY_FOUR_HOUR lag edge moves the recalculated date (not a silent no-op, M3)', async () => {
+    // On a Mon–Fri plan calendar, FS + 3 days measured as ELAPSED time (24-Hour) crosses the
+    // weekend and lands the successor earlier than the same lag measured in working days.
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: 'cal-1' }));
+    schedule.loadPlanCalendar.mockResolvedValue({
+      shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 0, endMinute: 1440 })),
+      exceptions: [],
+    });
+    schedule.loadActivities.mockResolvedValue([activityRow('A', 1), activityRow('B', 1)]);
+
+    const bStart = async (lagCalendar: 'PROJECT_DEFAULT' | 'TWENTY_FOUR_HOUR') => {
+      schedule.writeResults.mockClear();
+      schedule.loadEdges.mockResolvedValue([
+        {
+          id: 'A-B-FS',
+          predecessorId: 'A',
+          successorId: 'B',
+          type: 'FS',
+          lagMinutes: 3 * 1440,
+          lagCalendar,
+        },
+      ]);
+      await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+      const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+      return results.find((r) => r.activityId === 'B')!.earlyStart;
+    };
+
+    expect(await bStart('TWENTY_FOUR_HOUR')).not.toBe(await bStart('PROJECT_DEFAULT'));
   });
 });
 

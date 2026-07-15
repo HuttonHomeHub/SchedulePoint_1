@@ -12,6 +12,7 @@ import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import {
+  allMinutesWorkCalendar,
   computeSchedule,
   ScheduleGraphNotADagError,
   type EngineActivity,
@@ -71,6 +72,7 @@ export class ScheduleService {
 
     const startedAt = Date.now();
     let summary: EngineSummary;
+    let lagCalendarOverrideCount = 0;
     try {
       summary = await this.prisma.$transaction(async (tx) => {
         // Serialise with dependency creates and other recalcs on this plan, then
@@ -81,6 +83,12 @@ export class ScheduleService {
         await this.editLock.assertHoldsPen(principal, planId, organization.id, tx);
         const activityRows = await this.schedule.loadActivities(organization.id, planId, tx);
         const edgeRows = await this.schedule.loadEdges(organization.id, planId, tx);
+        // Observability (ADR-0036 §6): how many edges carry a lag calendar that changes the
+        // arithmetic today. Only TWENTY_FOUR_HOUR is distinct from the plan calendar in M3, so
+        // a non-zero count here is the signal that an elapsed lag actually moved dates.
+        lagCalendarOverrideCount = edgeRows.filter(
+          (e) => e.lagCalendar === 'TWENTY_FOUR_HOUR',
+        ).length;
         // Build the plan's working-day calendar once and inject it at the existing
         // port seam (ADR-0023 §5) — the engine's pass code is unchanged (ADR-0024).
         const calendar = await this.resolveCalendar(organization.id, plan.calendarId, tx);
@@ -121,6 +129,7 @@ export class ScheduleService {
         activityCount: summary.activityCount,
         criticalCount: summary.criticalCount,
         parkedConstraintCount: summary.parkedConstraintCount,
+        lagCalendarOverrideCount,
         durationMs: Date.now() - startedAt,
       },
       'schedule recalculated',
@@ -206,7 +215,14 @@ function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
   };
 }
 
-/** Project a stored dependency row onto the engine's edge struct (lag is stored in minutes). */
+/**
+ * Project a stored dependency row onto the engine's edge struct (lag is stored in minutes).
+ * Resolve the per-relationship lag calendar (ADR-0036 §6, M3): `TWENTY_FOUR_HOUR` measures the
+ * lag as **elapsed** time (the 24/7 `allMinutesWorkCalendar`); `PREDECESSOR`/`SUCCESSOR`/
+ * `PROJECT_DEFAULT` leave it **undefined** — the engine's fast path measures the lag on the
+ * plan calendar. Pred/Succ become distinct from the plan calendar only once per-activity
+ * calendars land (M5); until then all three coincide.
+ */
 function toEngineEdge(row: ScheduleEdgeRow): EngineEdge {
   return {
     id: row.id,
@@ -214,5 +230,6 @@ function toEngineEdge(row: ScheduleEdgeRow): EngineEdge {
     successorId: row.successorId,
     type: row.type,
     lagMinutes: row.lagMinutes,
+    ...(row.lagCalendar === 'TWENTY_FOUR_HOUR' ? { lagCalendar: allMinutesWorkCalendar } : {}),
   };
 }

@@ -71,7 +71,7 @@ describe('AddDependencyDialog', () => {
   it('adds a predecessor: the chosen activity → the anchor', async () => {
     renderDialog('predecessor');
     fireEvent.change(screen.getByLabelText('Predecessor activity'), { target: { value: 'a1' } });
-    fireEvent.change(screen.getByLabelText(/Lag/), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText(/Lag \(working days/), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add dependency' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -82,7 +82,33 @@ describe('AddDependencyDialog', () => {
       successorId: 'anchor',
       type: 'FS',
       lagDays: 2,
+      lagCalendar: 'PROJECT_DEFAULT', // the default when the selector isn't touched
     });
+  });
+
+  it('sends the chosen 24-hour lag calendar (M3, ADR-0036 §6)', async () => {
+    renderDialog('successor');
+    fireEvent.change(screen.getByLabelText('Successor activity'), { target: { value: 'a1' } });
+    fireEvent.change(screen.getByLabelText('Lag calendar'), {
+      target: { value: 'TWENTY_FOUR_HOUR' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add dependency' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(JSON.parse(init?.body as string)).toMatchObject({ lagCalendar: 'TWENTY_FOUR_HOUR' });
+  });
+
+  it('relabels the lag field to calendar days once 24-hour (elapsed) is chosen (M3)', () => {
+    renderDialog('successor');
+    // Default lag calendar → the unit is working days.
+    expect(screen.getByLabelText(/Lag \(working days/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Lag calendar'), {
+      target: { value: 'TWENTY_FOUR_HOUR' },
+    });
+    // An elapsed lag is counted in calendar days, so the label must track the choice.
+    expect(screen.getByLabelText(/Lag \(calendar days/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Lag \(working days/)).not.toBeInTheDocument();
   });
 
   it('adds a successor: the anchor → the chosen activity', async () => {

@@ -76,7 +76,7 @@ export function computeSchedule(
     for (const edge of graph.incoming.get(id)!) {
       const predEs = earlyStart.get(edge.predecessorId)!;
       const predEf = earlyFinish.get(edge.predecessorId)!;
-      const bound = forwardLowerBound(edge, predEs, predEf, duration);
+      const bound = forwardLowerBound(edge, predEs, predEf, duration, calendar, dataDate);
       if (bound > start) start = bound;
     }
     start = clampForwardStart(activity, start, calendar, dataDate);
@@ -104,7 +104,7 @@ export function computeSchedule(
     for (const edge of graph.incoming.get(id)!) {
       const predPs = visualPropStart.get(edge.predecessorId)!;
       const predPf = visualPropFinish.get(edge.predecessorId)!;
-      const bound = forwardLowerBound(edge, predPs, predPf, duration);
+      const bound = forwardLowerBound(edge, predPs, predPf, duration, calendar, dataDate);
       if (bound > logicEarliest) logicEarliest = bound;
     }
     logicEarliest = clampForwardStart(activity, logicEarliest, calendar, dataDate);
@@ -137,7 +137,7 @@ export function computeSchedule(
     for (const edge of graph.incoming.get(id)!) {
       const predEs = earlyStart.get(edge.predecessorId)!;
       const predEf = earlyFinish.get(edge.predecessorId)!;
-      const bound = forwardLowerBound(edge, predEs, predEf, successorDuration);
+      const bound = forwardLowerBound(edge, predEs, predEf, successorDuration, calendar, dataDate);
       edgeResults.push({ edgeId: edge.id, isDriving: bound === successorStart });
     }
   }
@@ -162,7 +162,7 @@ export function computeSchedule(
     for (const edge of graph.outgoing.get(id)!) {
       const succLs = lateStart.get(edge.successorId)!;
       const succLf = lateFinish.get(edge.successorId)!;
-      const bound = backwardUpperBound(edge, succLs, succLf, duration);
+      const bound = backwardUpperBound(edge, succLs, succLf, duration, calendar, dataDate);
       if (bound < finish) finish = bound;
     }
     finish = clampBackwardFinish(activity, finish, calendar, dataDate);
@@ -241,22 +241,88 @@ export function computeSchedule(
   return { results, edges: edgeResults, summary };
 }
 
+/** The instant one real minute before `instant` (`YYYY-MM-DDTHH:MM`, dropping `T00:00`). */
+function minusOneRealMinute(instant: string): string {
+  const iso = instant.length > 10 ? `${instant}:00Z` : `${instant}T00:00:00Z`;
+  const d = new Date(iso);
+  d.setUTCMinutes(d.getUTCMinutes() - 1);
+  const out = d.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  return out.endsWith('T00:00') ? out.slice(0, 10) : out;
+}
+
+/**
+ * The real instant of an anchor **offset**, resolved START- vs FINISH-aware (the ADR-0023
+ * distinction). `addWorkingTime(dataDate, offset)` sits at the **pre-gap** boundary (the end
+ * of the offset-th working minute); a **finish** anchor stays there, but a **start** anchor
+ * that lands on a non-working gap belongs at the **post-gap** instant (the beginning of its
+ * working minute). Getting this wrong makes the forward `+lag` and backward `−lag` walks
+ * non-inverse across a gap, which shows up as spurious negative float on a critical chain.
+ */
+function anchorInstant(
+  calendar: WorkingTimeCalendar,
+  dataDate: string,
+  offset: number,
+  kind: 'start' | 'finish',
+): string {
+  const boundary = calendar.addWorkingTime(dataDate, offset);
+  if (kind === 'finish') return boundary;
+  // The first working instant at/after `boundary`: one working minute on, stepped back a
+  // single real minute (identity when `boundary` is already working).
+  return minusOneRealMinute(calendar.addWorkingTime(boundary, 1));
+}
+
+/**
+ * Apply an edge's lag to an anchor **offset**, measured on the edge's lag calendar
+ * (ADR-0036 §6, M3). The lag term is the only part of the relationship arithmetic that can
+ * run on a calendar other than the plan calendar: a `signedLag` of `+168h` on the 24-Hour
+ * calendar is 7 **elapsed** days, not 7 working days.
+ *
+ * **Undefined lag calendar → the fast, exact default:** `anchor + signedLag` in plan-offset
+ * space (the pre-M3 arithmetic), so the whole golden suite stays byte-identical and no
+ * calendar round-trip is paid on the default path. Otherwise: resolve the anchor offset to a
+ * real instant (START/FINISH-aware, `anchorKind`), walk `signedLag` working-minutes on the
+ * **lag** calendar (negative walks backward — the backward pass), and convert the landing
+ * back to a plan-calendar offset. Forward (`+lag`, from a pred anchor) and backward (`−lag`,
+ * from a succ anchor) route through this one helper, so the bounds stay exact inverses.
+ */
+function applyLag(
+  anchorOffset: number,
+  signedLag: number,
+  edge: EngineEdge,
+  calendar: WorkingTimeCalendar,
+  dataDate: string,
+  anchorKind: 'start' | 'finish',
+): number {
+  if (edge.lagCalendar === undefined || signedLag === 0) return anchorOffset + signedLag;
+  const from = anchorInstant(calendar, dataDate, anchorOffset, anchorKind);
+  const landing = edge.lagCalendar.addWorkingTime(from, signedLag);
+  return calendar.workingTimeBetween(dataDate, landing);
+}
+
 /** The lower bound an incoming edge imposes on the successor's early start (spec §4). */
 function forwardLowerBound(
   edge: EngineEdge,
   predEarlyStart: number,
   predEarlyFinish: number,
   successorDuration: number,
+  calendar: WorkingTimeCalendar,
+  dataDate: string,
 ): number {
   switch (edge.type) {
     case 'FS':
-      return predEarlyFinish + edge.lagMinutes;
+      return applyLag(predEarlyFinish, edge.lagMinutes, edge, calendar, dataDate, 'finish');
     case 'SS':
-      return predEarlyStart + edge.lagMinutes;
+      return applyLag(predEarlyStart, edge.lagMinutes, edge, calendar, dataDate, 'start');
     case 'FF':
-      return predEarlyFinish + edge.lagMinutes - successorDuration;
+      return (
+        applyLag(predEarlyFinish, edge.lagMinutes, edge, calendar, dataDate, 'finish') -
+        successorDuration
+      );
     case 'SF':
-      return predEarlyStart + edge.lagMinutes - successorDuration;
+      return (
+        applyLag(predEarlyStart, edge.lagMinutes, edge, calendar, dataDate, 'start') -
+        successorDuration
+      );
   }
 }
 
@@ -266,15 +332,23 @@ function backwardUpperBound(
   succLateStart: number,
   succLateFinish: number,
   predecessorDuration: number,
+  calendar: WorkingTimeCalendar,
+  dataDate: string,
 ): number {
   switch (edge.type) {
     case 'FS':
-      return succLateStart - edge.lagMinutes;
+      return applyLag(succLateStart, -edge.lagMinutes, edge, calendar, dataDate, 'start');
     case 'SS':
-      return succLateStart - edge.lagMinutes + predecessorDuration;
+      return (
+        applyLag(succLateStart, -edge.lagMinutes, edge, calendar, dataDate, 'start') +
+        predecessorDuration
+      );
     case 'FF':
-      return succLateFinish - edge.lagMinutes;
+      return applyLag(succLateFinish, -edge.lagMinutes, edge, calendar, dataDate, 'finish');
     case 'SF':
-      return succLateFinish - edge.lagMinutes + predecessorDuration;
+      return (
+        applyLag(succLateFinish, -edge.lagMinutes, edge, calendar, dataDate, 'finish') +
+        predecessorDuration
+      );
   }
 }

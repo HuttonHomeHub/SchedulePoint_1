@@ -198,6 +198,19 @@ describe('DependenciesService', () => {
       );
     });
 
+    it('passes the lag calendar through to the repository (ADR-0036 §6, M3)', async () => {
+      deps.create.mockResolvedValue(dependency());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        predecessorId: PRED_ID,
+        successorId: SUCC_ID,
+        lagCalendar: 'TWENTY_FOUR_HOUR',
+      });
+      expect(deps.create).toHaveBeenCalledWith(
+        expect.objectContaining({ lagCalendar: 'TWENTY_FOUR_HOUR' }),
+        expect.anything(),
+      );
+    });
+
     it('rejects a self-loop (422) before touching the repository', async () => {
       await expect(
         service.create(principalWith(ALL), 'acme', PLAN_ID, {
@@ -338,6 +351,21 @@ describe('DependenciesService', () => {
       await expect(
         service.update(principalWith(ALL), 'acme', DEP_ID, { lagDays: 1, version: 1 }),
       ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('threads the lag calendar into the version-gated patch (M3)', async () => {
+      deps.findActiveByIdInOrg.mockResolvedValue(dependency());
+      deps.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', DEP_ID, {
+        lagCalendar: 'TWENTY_FOUR_HOUR',
+        version: 1,
+      });
+      expect(deps.updateIfVersionMatches).toHaveBeenCalledWith(
+        DEP_ID,
+        1,
+        expect.objectContaining({ lagCalendar: 'TWENTY_FOUR_HOUR' }),
+        expect.anything(),
+      );
     });
   });
 

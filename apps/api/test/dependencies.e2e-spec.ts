@@ -129,6 +129,7 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
       planId,
       type: 'FS',
       lagDays: 3,
+      lagCalendar: 'PROJECT_DEFAULT', // the default when unset (ADR-0036 §6)
       predecessor: { id: a, name: 'Excavate' },
       successor: { id: b, name: 'Pour slab' },
       version: 1,
@@ -156,6 +157,28 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
       (await actor.agent.get(`/api/v1/organizations/acme/activities/${a}/predecessors`).expect(200))
         .body.data,
     ).toHaveLength(0);
+  });
+
+  it('round-trips a 24-Hour lag calendar on create and update (ADR-0036 §6, M3)', async () => {
+    const { actor, planId, a, b } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .send({ predecessorId: a, successorId: b, lagDays: 7, lagCalendar: 'TWENTY_FOUR_HOUR' })
+      .expect(201);
+    expect(created.body.data).toMatchObject({ lagDays: 7, lagCalendar: 'TWENTY_FOUR_HOUR' });
+    const id = created.body.data.id as string;
+
+    const patched = await actor.agent
+      .patch(`/api/v1/organizations/acme/dependencies/${id}`)
+      .send({ lagCalendar: 'PROJECT_DEFAULT', version: 1 })
+      .expect(200);
+    expect(patched.body.data).toMatchObject({ lagCalendar: 'PROJECT_DEFAULT', version: 2 });
+
+    // An unknown lag-calendar value is rejected (422).
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .send({ predecessorId: a, successorId: b, type: 'SS', lagCalendar: 'NOPE' })
+      .expect(422);
   });
 
   it('updates type/lag with optimistic locking (stale version → 409)', async () => {

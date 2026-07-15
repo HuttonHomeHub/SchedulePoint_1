@@ -31,12 +31,18 @@ describe('conformance adapter', () => {
     const kinds = new Set(network.report.notes.map((n) => n.kind));
     // Unsupported activity types are excluded with a reason.
     expect(network.report.notes.filter((n) => n.kind === 'type-unsupported')).toHaveLength(10);
-    // The five fractional-day tasks are rounded (hours restored in M1).
-    expect(network.report.notes.filter((n) => n.kind === 'duration-rounded')).toHaveLength(5);
+    // Durations/lags are now minute-EXACT (hours × 60, M1/ADR-0036) — nothing rounds away.
+    expect(network.report.notes.filter((n) => n.kind === 'duration-rounded')).toHaveLength(0);
+    expect(network.report.notes.filter((n) => n.kind === 'lag-rounded')).toHaveLength(0);
+    // The honest M5 gap surfaced per-row: 88 supported activities are assigned a calendar
+    // other than the plan default (CAL-01) and are scheduled on the default instead.
+    expect(
+      network.report.notes.filter((n) => n.kind === 'activity-calendar-substituted'),
+    ).toHaveLength(88);
     // Sixteen progressed activities have their progress ignored (no progress model yet).
     expect(network.report.notes.filter((n) => n.kind === 'progress-ignored')).toHaveLength(16);
-    // The one 24H lag-calendar override and the one secondary constraint are dropped.
-    expect(network.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(1);
+    // The one 24H lag-calendar override is now HONOURED (M3) — no longer dropped.
+    expect(network.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(0);
     expect(
       network.report.notes.filter((n) => n.kind === 'secondary-constraint-dropped'),
     ).toHaveLength(1);
@@ -51,6 +57,32 @@ describe('conformance adapter', () => {
     // The plan-wide degradations are spelled out.
     expect(network.report.approximations.length).toBeGreaterThanOrEqual(4);
     expect(kinds.has('type-unsupported')).toBe(true);
+  });
+
+  it('maps hour durations/lags faithfully to minutes over the default shift calendar', () => {
+    // The whole network is scheduled on the project default (CAL-01).
+    expect(network.report.planCalendarId).toBe('CAL-01');
+    // Every duration/lag is a whole number of minutes derived from the fixture's hours
+    // (× 60) — no day-collapse. Tasks carry positive minutes; milestones are zero.
+    for (const activity of network.activities) {
+      expect(Number.isInteger(activity.durationMinutes)).toBe(true);
+      expect(activity.durationMinutes).toBeGreaterThanOrEqual(0);
+    }
+    expect(
+      network.activities.some((a) => a.durationMinutes > 0 && a.durationMinutes % 60 === 0),
+    ).toBe(true);
+    for (const edge of network.edges) expect(Number.isInteger(edge.lagMinutes)).toBe(true);
+  });
+
+  it('honours the one 24-Hour per-relationship lag calendar (M3, ADR-0036 §6)', () => {
+    // The fixture carries exactly one per-edge lag calendar (the concrete-cure A4430→A4440
+    // FS + 168h / 24H edge); it now carries an elapsed-lag port, not a dropped note.
+    const withLagCalendar = network.edges.filter((e) => e.lagCalendar !== undefined);
+    expect(withLagCalendar).toHaveLength(1);
+    // The baseline adaptation (honorLagCalendars: false) leaves it on the plan calendar.
+    const baseline = adaptFixture(fixture, { honorLagCalendars: false });
+    expect(baseline.edges.filter((e) => e.lagCalendar !== undefined)).toHaveLength(0);
+    expect(baseline.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(1);
   });
 
   it('never emits an edge to an excluded activity (the graph stays a valid DAG)', () => {

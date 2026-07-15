@@ -1,4 +1,4 @@
-import type { DependencySummary, DependencyType } from '@repo/types';
+import type { DependencySummary, DependencyType, LagCalendarSource } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -68,13 +68,14 @@ export function useSuccessors(
   return useQuery({ ...successorsQueryOptions(orgSlug, activityId), enabled });
 }
 
-/** A dependency create — predecessor → successor within a plan, with type + lag. */
+/** A dependency create — predecessor → successor within a plan, with type + lag + lag calendar. */
 export interface CreateDependencyInput {
   planId: string;
   predecessorId: string;
   successorId: string;
   type: DependencyType;
   lagDays: number;
+  lagCalendar: LagCalendarSource;
 }
 
 // Editing any link changes what an activity's predecessors/successors lists show
@@ -98,6 +99,7 @@ export function useCreateDependency(orgSlug: string) {
           successorId: input.successorId,
           type: input.type,
           lagDays: input.lagDays,
+          lagCalendar: input.lagCalendar,
         }),
       }),
     onSettled: () => invalidateAll(queryClient, orgSlug),
@@ -111,11 +113,17 @@ export function useUpdateDependency(orgSlug: string) {
       dependencyId: string;
       type: DependencyType;
       lagDays: number;
+      lagCalendar: LagCalendarSource;
       version: number;
     }) =>
       apiFetch<DependencySummary>(`/organizations/${orgSlug}/dependencies/${input.dependencyId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ type: input.type, lagDays: input.lagDays, version: input.version }),
+        body: JSON.stringify({
+          type: input.type,
+          lagDays: input.lagDays,
+          lagCalendar: input.lagCalendar,
+          version: input.version,
+        }),
       }),
     onSettled: () => invalidateAll(queryClient, orgSlug),
   });

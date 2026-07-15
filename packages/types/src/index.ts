@@ -334,6 +334,13 @@ export interface DependencySummary {
   planId: string;
   type: DependencyType;
   lagDays: number;
+  /**
+   * The calendar the lag is measured on (ADR-0036 §6, M3). `PROJECT_DEFAULT` (the default)
+   * and `PREDECESSOR`/`SUCCESSOR` all schedule the lag on the plan calendar today — the last
+   * two are forward-wired for per-activity calendars (M5); only `TWENTY_FOUR_HOUR` is
+   * distinct now, measuring the lag as **elapsed** time (e.g. concrete cure's 168h = 7 days).
+   */
+  lagCalendar: LagCalendarSource;
   predecessor: DependencyEndpoint;
   successor: DependencyEndpoint;
   /**

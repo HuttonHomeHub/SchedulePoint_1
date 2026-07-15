@@ -313,7 +313,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     type,
   }: TsldLinkInput): Promise<TsldLinkOutcome> => {
     try {
-      await createDependency.mutateAsync({ planId, predecessorId, successorId, type, lagDays: 0 });
+      await createDependency.mutateAsync({
+        planId,
+        predecessorId,
+        successorId,
+        type,
+        lagDays: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+      });
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {

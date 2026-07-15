@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { DependencyType } from '@prisma/client';
+import { DependencyType, LagCalendarSource } from '@prisma/client';
 import type { DependencyEndpoint, DependencySummary } from '@repo/types';
 
 import type { DependencyWithEndpoints } from '../dependency.repository';
@@ -37,6 +37,13 @@ export class DependencyResponseDto implements DependencySummary {
   @ApiProperty({ description: 'Signed lag in working days (a lead is negative).' })
   lagDays!: number;
 
+  @ApiProperty({
+    enum: LagCalendarSource,
+    description:
+      'The calendar the lag is measured on (ADR-0036 §6). TWENTY_FOUR_HOUR = elapsed time; the rest schedule on the plan calendar today.',
+  })
+  lagCalendar!: LagCalendarSource;
+
   @ApiProperty({ type: DependencyEndpointDto })
   predecessor!: DependencyEndpoint;
 
@@ -66,6 +73,7 @@ export class DependencyResponseDto implements DependencySummary {
       type: entity.type,
       // Stored as signed working-minutes (ADR-0036); the public field stays signed days.
       lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY),
+      lagCalendar: entity.lagCalendar,
       predecessor: {
         id: entity.predecessor.id,
         code: entity.predecessor.code,

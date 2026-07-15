@@ -1,13 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ActivitySummary } from '@repo/types';
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateDependency } from '../api/use-dependencies';
 import {
   DEPENDENCY_TYPES,
   DEPENDENCY_TYPE_LABELS,
+  LAG_CALENDAR_DISPLAY_ORDER,
+  LAG_CALENDAR_HINT,
+  LAG_CALENDAR_LABELS,
   dependencyFormSchema,
+  lagFieldLabel,
   type DependencyFormValues,
 } from '../schemas/dependency-schemas';
 
@@ -53,15 +57,20 @@ export function AddDependencyDialog({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<DependencyFormValues>({
     resolver: zodResolver(dependencyFormSchema),
-    defaultValues: { otherActivityId: '', type: 'FS', lagDays: 0 },
+    defaultValues: { otherActivityId: '', type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' },
   });
+
+  // The lag unit tracks the chosen calendar (elapsed vs working days); subscribe to just
+  // that field so the numeric label restays honest as the selection changes.
+  const lagCalendar = useWatch({ control, name: 'lagCalendar' });
 
   useEffect(() => {
     if (open) {
-      reset({ otherActivityId: '', type: 'FS', lagDays: 0 });
+      reset({ otherActivityId: '', type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' });
       create.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on open/direction change
@@ -73,7 +82,14 @@ export function AddDependencyDialog({
     const predecessorId = direction === 'predecessor' ? values.otherActivityId : anchor.id;
     const successorId = direction === 'predecessor' ? anchor.id : values.otherActivityId;
     create.mutate(
-      { planId, predecessorId, successorId, type: values.type, lagDays: values.lagDays },
+      {
+        planId,
+        predecessorId,
+        successorId,
+        type: values.type,
+        lagDays: values.lagDays,
+        lagCalendar: values.lagCalendar,
+      },
       {
         onSuccess: () => {
           announce(`Dependency added to “${anchor.name}”.`);
@@ -152,8 +168,25 @@ export function AddDependencyDialog({
               ))}
             </Select>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="dependency-lag-calendar">Lag calendar</Label>
+            <Select
+              id="dependency-lag-calendar"
+              aria-describedby="dependency-lag-calendar-hint"
+              {...register('lagCalendar')}
+            >
+              {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+                <option key={value} value={value}>
+                  {LAG_CALENDAR_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+            <p id="dependency-lag-calendar-hint" className="text-muted-foreground text-sm">
+              {LAG_CALENDAR_HINT}
+            </p>
+          </div>
           <TextField
-            label="Lag (working days, negative for a lead)"
+            label={lagFieldLabel(lagCalendar)}
             type="number"
             error={errors.lagDays?.message}
             {...register('lagDays', { valueAsNumber: true })}

@@ -29,7 +29,8 @@ import type { UpdateDependencyDto } from './dto/update-dependency.dto';
 /**
  * Minutes in one full calendar day — the fixed day↔minute factor (ADR-0036 §4.2). The
  * public API stays day-denominated (`lagDays`); storage is signed minutes, so the service
- * converts at the boundary. `lagCalendar` stays at its DB default (not exposed yet, M3).
+ * converts at the boundary. `lagCalendar` is exposed and passed through unchanged (M3,
+ * ADR-0036 §6) — the engine resolves it to a calendar port at recalculation.
  */
 const MINUTES_PER_DAY = 1440;
 
@@ -181,6 +182,7 @@ export class DependenciesService {
             successorId: dto.successorId,
             ...(dto.type ? { type: dto.type } : {}),
             ...(dto.lagDays !== undefined ? { lagMinutes: dto.lagDays * MINUTES_PER_DAY } : {}),
+            ...(dto.lagCalendar ? { lagCalendar: dto.lagCalendar } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -218,6 +220,7 @@ export class DependenciesService {
     const patch: DependencyPatch = {};
     if (dto.type !== undefined) patch.type = dto.type;
     if (dto.lagDays !== undefined) patch.lagMinutes = dto.lagDays * MINUTES_PER_DAY;
+    if (dto.lagCalendar !== undefined) patch.lagCalendar = dto.lagCalendar;
 
     try {
       const changed = await this.dependencies.updateIfVersionMatches(

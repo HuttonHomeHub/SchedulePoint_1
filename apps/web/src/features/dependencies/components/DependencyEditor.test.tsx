@@ -45,6 +45,7 @@ function link(overrides: Partial<DependencySummary> = {}): DependencySummary {
     planId: 'pl1',
     type: 'FS',
     lagDays: 3,
+    lagCalendar: 'PROJECT_DEFAULT',
     predecessor: { id: 'a1', code: 'A10', name: 'Excavate' },
     successor: { id: 'b1', code: 'B10', name: 'Pour slab' },
     isDriving: false,
@@ -97,6 +98,20 @@ describe('DependencyEditor', () => {
     expect(screen.getByText('Start → Start')).toBeInTheDocument();
     expect(screen.getByText('−2d')).toBeInTheDocument();
     expect(screen.getByText(/No predecessors/)).toBeInTheDocument();
+  });
+
+  it('surfaces the 24-hour (elapsed) lag calendar in the list — the one source that moves dates (M3)', () => {
+    renderEditor([link({ lagCalendar: 'TWENTY_FOUR_HOUR' })], []);
+    expect(screen.getByText(/24-hour \(elapsed\)/)).toBeInTheDocument();
+  });
+
+  it('does not badge Predecessor/Successor lag calendars — they compute like the project calendar until M5 (ADR-0036 §6)', () => {
+    renderEditor(
+      [link({ lagCalendar: 'PREDECESSOR' })],
+      [link({ lagCalendar: 'SUCCESSOR', successor: { id: 'c1', code: null, name: 'Cure' } })],
+    );
+    expect(screen.queryByText(/Predecessor calendar/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Successor calendar/)).not.toBeInTheDocument();
   });
 
   it('marks a driving link in text so the cue is not canvas-only (M3, WCAG 1.3.1)', () => {

@@ -1,12 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { DependencySummary } from '@repo/types';
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { useUpdateDependency } from '../api/use-dependencies';
 import {
   DEPENDENCY_TYPES,
   DEPENDENCY_TYPE_LABELS,
+  LAG_CALENDAR_DISPLAY_ORDER,
+  LAG_CALENDAR_HINT,
+  LAG_CALENDAR_LABELS,
+  lagFieldLabel,
   typeAndLagSchema,
   type TypeAndLagValues,
 } from '../schemas/dependency-schemas';
@@ -42,15 +46,24 @@ export function EditDependencyDialog({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<TypeAndLagValues>({
     resolver: zodResolver(typeAndLagSchema),
-    defaultValues: { type: 'FS', lagDays: 0 },
+    defaultValues: { type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' },
   });
+
+  // The lag unit tracks the chosen calendar (elapsed vs working days); subscribe to just
+  // that field so the numeric label stays honest as the selection changes.
+  const lagCalendar = useWatch({ control, name: 'lagCalendar' });
 
   useEffect(() => {
     if (open && dependency) {
-      reset({ type: dependency.type, lagDays: dependency.lagDays });
+      reset({
+        type: dependency.type,
+        lagDays: dependency.lagDays,
+        lagCalendar: dependency.lagCalendar,
+      });
       update.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
@@ -63,6 +76,7 @@ export function EditDependencyDialog({
         dependencyId: dependency.id,
         type: values.type,
         lagDays: values.lagDays,
+        lagCalendar: values.lagCalendar,
         version: dependency.version,
       },
       {
@@ -106,8 +120,25 @@ export function EditDependencyDialog({
             ))}
           </Select>
         </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="edit-dependency-lag-calendar">Lag calendar</Label>
+          <Select
+            id="edit-dependency-lag-calendar"
+            aria-describedby="edit-dependency-lag-calendar-hint"
+            {...register('lagCalendar')}
+          >
+            {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+              <option key={value} value={value}>
+                {LAG_CALENDAR_LABELS[value]}
+              </option>
+            ))}
+          </Select>
+          <p id="edit-dependency-lag-calendar-hint" className="text-muted-foreground text-sm">
+            {LAG_CALENDAR_HINT}
+          </p>
+        </div>
         <TextField
-          label="Lag (working days, negative for a lead)"
+          label={lagFieldLabel(lagCalendar)}
           type="number"
           error={errors.lagDays?.message}
           {...register('lagDays', { valueAsNumber: true })}

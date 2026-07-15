@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type DependencyType } from '@prisma/client';
+import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/client';
 
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -21,6 +21,7 @@ export type DependencyWithEndpoints = Prisma.ActivityDependencyGetPayload<typeof
 export interface DependencyPatch {
   type?: DependencyType;
   lagMinutes?: number;
+  lagCalendar?: LagCalendarSource;
 }
 
 /** A directed edge in a plan — the minimal shape the cycle walk (B2) needs. */
