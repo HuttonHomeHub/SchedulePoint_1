@@ -4,6 +4,7 @@ import {
   type ActivityType,
   type ConstraintType,
   type DependencyType,
+  type LagCalendarSource,
 } from '@prisma/client';
 
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
@@ -31,6 +32,8 @@ export interface ScheduleEdgeRow {
   successorId: string;
   type: DependencyType;
   lagMinutes: number;
+  /** The calendar the lag is measured on (ADR-0036 §6, M3); resolved to a port in the service. */
+  lagCalendar: LagCalendarSource;
 }
 
 /**
@@ -177,7 +180,14 @@ export class ScheduleRepository {
   ): Promise<ScheduleEdgeRow[]> {
     return db.activityDependency.findMany({
       where: { organizationId, planId, deletedAt: null },
-      select: { id: true, predecessorId: true, successorId: true, type: true, lagMinutes: true },
+      select: {
+        id: true,
+        predecessorId: true,
+        successorId: true,
+        type: true,
+        lagMinutes: true,
+        lagCalendar: true,
+      },
     });
   }
 

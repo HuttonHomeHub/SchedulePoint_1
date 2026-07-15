@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DependencyType } from '@prisma/client';
+import { DependencyType, LagCalendarSource } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
 
@@ -37,4 +37,16 @@ export class CreateDependencyDto {
   @Min(-3650)
   @Max(3650)
   lagDays?: number;
+
+  @ApiPropertyOptional({
+    enum: LagCalendarSource,
+    default: LagCalendarSource.PROJECT_DEFAULT,
+    description:
+      'The calendar the lag is measured on (ADR-0036 §6). Defaults to PROJECT_DEFAULT. ' +
+      'TWENTY_FOUR_HOUR measures the lag as elapsed time (e.g. concrete cure); ' +
+      'PREDECESSOR/SUCCESSOR coincide with the plan calendar until per-activity calendars land.',
+  })
+  @IsOptional()
+  @IsEnum(LagCalendarSource)
+  lagCalendar?: LagCalendarSource;
 }

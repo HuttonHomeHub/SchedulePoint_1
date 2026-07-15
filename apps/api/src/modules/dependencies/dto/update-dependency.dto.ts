@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DependencyType } from '@prisma/client';
+import { DependencyType, LagCalendarSource } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
 
@@ -22,6 +22,14 @@ export class UpdateDependencyDto {
   @Min(-3650)
   @Max(3650)
   lagDays?: number;
+
+  @ApiPropertyOptional({
+    enum: LagCalendarSource,
+    description: 'The calendar the lag is measured on (ADR-0036 §6).',
+  })
+  @IsOptional()
+  @IsEnum(LagCalendarSource)
+  lagCalendar?: LagCalendarSource;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)
