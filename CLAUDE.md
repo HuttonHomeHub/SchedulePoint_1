@@ -323,6 +323,14 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   `visualConflict`/drift flags (placement highlighted, never auto-moved). Supersedes
   ADR-0032 M1/D2 + the "drop = SNET" default; amends ADR-0022/0023 (behind
   `VITE_SCHEDULING_MODES`).
+- **ADR-0034** — Engine conformance & validation methodology: adopt the product owner's
+  P6-class fixture as a versioned benchmark + living gap map (**north star, not parity**);
+  three test tiers (engine-free structural CI gate, differential "flip-one-option-must-differ",
+  golden snapshots); a **no-external-oracle** golden strategy (first-principles + documented
+  SchedulePoint semantics per ADR-0035, self-baselined; any P6/open-source cross-check optional);
+  the negative-case reject/repair/report contract; TS-port-not-Python-in-CI; and the
+  `packages/engine-conformance` (engine-free) + `apps/api` (harness) split. See
+  [`docs/specs/engine-conformance-framework/`](docs/specs/engine-conformance-framework/).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

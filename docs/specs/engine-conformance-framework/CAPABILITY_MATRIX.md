@@ -1,0 +1,135 @@
+<!--
+Living capability matrix for the Engine Conformance & Validation Framework (ADR-0034).
+Rule: every capability epic (M1–M7) updates its rows here IN THE SAME PR that lands the behaviour,
+moving ❌/🟡 → ✅ and flipping the owning fixture tags from `todo` to an asserting scenario.
+-->
+
+# SchedulePoint CPM/PDM engine — capability matrix
+
+**How SchedulePoint's scheduling engine measures against the P6-class conformance fixture**
+(`@repo/engine-conformance`). This turns "what does our engine do vs P6" from opinion into a scored,
+source-grounded table. It is the **feature-gap analysis** deliverable of the framework (ADR-0034) and
+a **living document** — each capability milestone updates its rows in the PR that ships it.
+
+> **This is a north star, not a parity pledge.** The fixture is deliberately P6-class; much of it is
+> beyond what SchedulePoint's construction planners need first. Rows marked ⚪ are **out-of-scope
+> for now**, not failures. Priority follows the [implementation plan](implementation-plan.md), gated
+> on the hour/shift-granular calendar rework.
+
+## Status legend
+
+|                  | Meaning                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ✅ **Supported** | The engine handles this today; a differential/golden test can assert it now.                                                                                       |
+| 🟡 **Partial**   | Partly handled — correct in a narrower model (e.g. working-**days** not hours), or caught by a generic guard rather than the exact behaviour the fixture asks for. |
+| ❌ **Missing**   | Not implemented; the owning milestone will build it.                                                                                                               |
+| ⚪ **Deferred**  | Out-of-scope-for-now (resources/levelling/cost/inter-project); revisited only if it reaches the roadmap.                                                           |
+
+Engine reality verified against `apps/api/src/modules/schedule/engine/` (see
+[feature-spec.md §3](feature-spec.md)). Headline: the engine works in **integer working-day** offsets
+with **no actuals ingestion**; the fixture is **hour-granular with intraday shift calendars and
+progress**.
+
+## Summary
+
+| Status       | Capability groups |
+| ------------ | ----------------- |
+| ✅ Supported | 6                 |
+| 🟡 Partial   | 6                 |
+| ❌ Missing   | 13                |
+| ⚪ Deferred  | 3                 |
+
+The gating item behind most ❌ rows is **M1 — hour/shift-granular calendars + hour-based durations**
+(ADR-0036).
+
+## 1. Capability matrix (by group)
+
+| Capability                                                 | Fixture tags                                                                                      | Status | Owning milestone | Notes                                                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Four relationship types                                    | `rel_fs` `rel_ss` `rel_ff` `rel_sf`                                                               | ✅     | —                | FS/SS/FF/SF with correct forward/backward bounds.                                                                                       |
+| Lag sign × type arithmetic                                 | `lag_zero/positive/negative`, `lag_{fs,ss,ff,sf}_*`, `lag_exceeds_pred_duration`                  | 🟡     | M1               | Sign/type arithmetic correct — but in signed working-**days**; the fixture's lags are **hours** (and one is on a 24h lag calendar).     |
+| Long lag / search horizon                                  | `lag_long`, N16                                                                                   | 🟡     | M1               | Bounded day-search exists; an hour-granular horizon + cap is M1.                                                                        |
+| Per-relationship lag calendar                              | `lag_calendar_24h`, `lag_calendar_setting_sensitive`                                              | ❌     | M3 (needs M1)    | No per-edge lag calendar; the concrete-cure `A4430→A4440 FS+168h/24H` edge can't be represented.                                        |
+| Moderate constraints                                       | `con_snet` `con_snlt` `con_fnet` `con_fnlt`                                                       | ✅     | —                | SNET/SNLT/FNET/FNLT honoured on the correct pass.                                                                                       |
+| Start-On / Finish-On (hard pin)                            | `con_start_on`, `con_finish_on`                                                                   | 🟡     | —                | Pinned via MSO/MFO clamping; exact both-pass pin behaviour to be confirmed against the fixture.                                         |
+| Constraint landing on a non-work day                       | `con_on_nonworkday`                                                                               | 🟡     | M1               | Rolls forward at **day** granularity; the exact instant (e.g. Tue 05-May 07:00) needs hour calendars.                                   |
+| Mandatory (must break logic)                               | `con_mandatory_start` `con_mandatory_finish`, `breaks_logic`                                      | ❌     | M4 (ADR-0035)    | Currently **parked** as MSO/MFO and counted; must instead override the network and **produce-and-flag** the violation.                  |
+| Expected finish                                            | `con_expected_finish`                                                                             | ❌     | M4               | No remaining-duration recalculation to a target finish.                                                                                 |
+| Secondary constraint                                       | `con_secondary_fnlt`                                                                              | ❌     | M4               | Only one constraint per activity today.                                                                                                 |
+| As-late-as-possible                                        | `con_alap`                                                                                        | ❌     | M4 / M6          | No zero-free-float ALAP pass.                                                                                                           |
+| Start / Finish milestones                                  | `type_start_ms` `type_finish_ms`                                                                  | ✅     | —                | Zero-duration, start = finish.                                                                                                          |
+| Zero-duration **task** (≠ milestone)                       | `net_zero_duration_task`                                                                          | ❌     | M1               | A7550 is a zero-duration task with a start and a finish; not modelled distinctly.                                                       |
+| Level of effort                                            | `type_loe`, `loe_*`                                                                               | ❌     | M5               | No LOE; duration-from-span, never-drive, never-critical semantics absent.                                                               |
+| Resource-dependent scheduling                              | `type_resource_dependent`, `res_calendar_drives`, `res_driving`                                   | ❌     | M5 (needs M1)    | Activities always schedule on the activity calendar; no resource-calendar drive.                                                        |
+| WBS-summary rollup                                         | `type_wbs_summary`                                                                                | ❌     | M5               | No summary-bar date rollup.                                                                                                             |
+| Weekday / holiday / shutdown calendars                     | `cal_5day` `cal_6day` `cal_4day_week` `cal_holidays` `cal_shutdown`                               | ✅     | —                | 7-bit weekday mask + whole-day dated exceptions (day granularity).                                                                      |
+| Intraday shift calendars                                   | `cal_split_shift` `cal_24h` `cal_night_crosses_midnight` `cal_asymmetric_week` `cal_forces_split` | ❌     | M1               | No intraday windows, split shifts, or midnight-crossing.                                                                                |
+| Window-only / empty base week                              | `cal_window_only` `cal_empty_base_week` `cal_positive_exception`                                  | ❌     | M1               | The mask-must-be-nonzero guard actively rejects an empty base week; time-window positive exceptions unmodelled.                         |
+| Elapsed durations                                          | `elapsed_duration`                                                                                | ❌     | M1               | `168h = 7 elapsed days` on a 24h calendar is not expressible in working-days.                                                           |
+| Progress ingestion + retained-logic/override/actual-dates  | `prog_*`, `retained_logic_vs_progress_override`                                                   | ❌     | M2 (ADR-0035)    | The engine ingests **no actuals** — no data-date floor, no out-of-sequence handling, no suspend/resume.                                 |
+| Duration types                                             | `dt_fixed_units` `dt_fixed_units_time` `dt_fixed_dur_units`                                       | ⚪     | M7               | Needs the resource/units model.                                                                                                         |
+| Percent-complete types (physical/units/steps)              | `pct_physical` `pct_units` `code_steps`                                                           | ⚪     | M7               | EV/%-complete model deferred.                                                                                                           |
+| Negative float                                             | `float_negative`, `float_negative_driver`                                                         | ✅     | —                | `TF = LS − ES`; negative float propagates on the driving chain.                                                                         |
+| Free vs total / start-finish-smallest float                | `float_zero_free`                                                                                 | 🟡     | M6               | Total float computed; free-float and start/finish/smallest-float options absent.                                                        |
+| Longest-path critical                                      | (scenario S07)                                                                                    | ❌     | M6               | Only `TF ≤ 0` critical today.                                                                                                           |
+| Multiple float paths                                       | `float_multiple_paths_target`                                                                     | ❌     | M6               | No multi-path enumeration.                                                                                                              |
+| Network topology (open/dangling/merge/redundant)           | `net_open_*` `net_dangling_*` `net_merge_point` `net_redundant_logic` `net_multiple_predecessors` | ✅     | —                | Scheduled correctly; a redundancy/dangler _report_ is a later nicety, not a scheduling gap.                                             |
+| External / inter-project dates                             | `net_external_*` `interproject`                                                                   | ⚪     | M7               | External early-start / late-finish and the ignore-external option deferred.                                                             |
+| Resources / levelling / curves / cost / EV / accrual       | `res_*` `levelling_test` `cost_*` `accrual_*` `*_curve_*`                                         | ⚪     | M7               | The whole resource/cost dimension is deferred (not on the TSLD planner's critical path to value).                                       |
+| Cycle / self-loop / dangling-ref / duplicate-edge handling | (negatives N01–N05)                                                                               | 🟡     | M0 → M4          | DAG invariant + rejects exist; **exact cycle-member naming** (N01/N03) and the **duplicate-edge policy** (N04) are decided in ADR-0035. |
+
+## 2. Scenario matrix (S01–S13)
+
+Each scenario flips exactly one scheduling option; the fixture's discriminator is _"if a scenario's
+dates equal S02's, that option isn't wired up."_ The differential harness (M0-B2) runs the runnable
+subset now and marks the rest `todo` against the owning milestone.
+
+| Scenario                                     | Flips                                       | Status | Owner                                                                          |
+| -------------------------------------------- | ------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| S01 Baseline unprogressed                    | data date = project start, actuals stripped | 🟡     | M1 — the pure network computes, but day-granular and with no actuals to strip. |
+| **S02 Progressed, retained logic** (primary) | —                                           | ❌     | M2 — needs actuals ingestion + data-date floor.                                |
+| S03 Progress override                        | out-of-sequence remaining from data date    | ❌     | M2 (ADR-0035)                                                                  |
+| S04 Actual dates                             | out-of-sequence, actuals frozen             | ❌     | M2 (ADR-0035)                                                                  |
+| S05 Lag calendar = successor                 | lag resolved on successor calendar          | ❌     | M3                                                                             |
+| S06 Lag calendar = 24-hour                   | lag on 24h globally                         | ❌     | M3                                                                             |
+| S07 Longest-path critical                    | critical definition                         | ❌     | M6                                                                             |
+| S08 Open-ends critical                       | open-ended → critical                       | ❌     | M6                                                                             |
+| S09 Ignore external relationships            | drop inter-project links                    | ⚪     | M7 (deferred)                                                                  |
+| S10 Resource levelling                       | serialise over-allocations                  | ⚪     | M7 (deferred)                                                                  |
+| S11 Multiple float paths (→ A12500)          | 10 contiguous paths                         | ❌     | M6                                                                             |
+| S12 Expected finish OFF                      | recompute remaining to target               | ❌     | M4                                                                             |
+| S13 Total float = start float                | float definition                            | ❌     | M6                                                                             |
+
+## 3. Negative-case matrix (N01–N18)
+
+The contract: **reject, repair or report — never hang, crash, or silently produce nonsense.** The
+"testable-now" subset is asserted by the harness in M0-B2; the rest are `todo` against their epic.
+
+| Case                                           | Expected                            | Status | Owner                                                                                                                   |
+| ---------------------------------------------- | ----------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| N01 3-activity cycle                           | reject + name members               | 🟡     | M0 → guard rejects; exact-member naming per ADR-0035.                                                                   |
+| N02 self-loop                                  | reject                              | ✅     | Rejected on the write path + flagged by the structural validator.                                                       |
+| N03 SS/FF cycle                                | reject + name members               | 🟡     | Caught by the directed topo-sort; member naming per ADR-0035.                                                           |
+| N04 duplicate relationship                     | reject / dedupe / most-constraining | 🟡     | Validator flags it; **policy chosen in ADR-0035.**                                                                      |
+| N05 dangling reference                         | reject                              | ✅     | FK / referential-integrity reject.                                                                                      |
+| N06 actual finish before start                 | reject                              | ❌     | M2 (no actuals yet).                                                                                                    |
+| N07 actual in the future                       | reject / warn                       | ❌     | M2.                                                                                                                     |
+| N08 complete, no actual finish                 | repair / warn                       | ❌     | M2.                                                                                                                     |
+| N09 negative duration                          | reject                              | 🟡     | Rejected at the API DTO boundary; an engine-level assert is confirmed in M1.                                            |
+| N10 impossible mandatory pair                  | schedule + report violation         | ❌     | M4 (ADR-0035) — must not "fix" it.                                                                                      |
+| N11 zero-working-hour calendar (**hang test**) | reject at load / terminate safely   | 🟡     | Day-level all-non-working guard exists; the hour-granular iteration cap + "no working time within N years" lands in M1. |
+| N12 LOE with no span                           | reject / warn                       | 🟡     | Structural validator catches it; engine LOE is M5.                                                                      |
+| N13 lead before data date                      | clamp to data date                  | ❌     | M2 — needs the remaining-work data-date floor.                                                                          |
+| N14 negative units                             | reject                              | ⚪     | M7 (resources deferred).                                                                                                |
+| N15 constraint before project start            | warn, don't pull back               | 🟡     | The data-date origin prevents pulling before it; the _warning_ is added with M4.                                        |
+| N16 lag exceeds horizon                        | reject / warn                       | 🟡     | Bounded day-search; hour horizon + explicit report in M1/M3.                                                            |
+| N17 milestone with a duration                  | reject / coerce                     | 🟡     | Validator flags it; engine coercion confirmed in M1.                                                                    |
+| N18 remaining-duration > 0 on complete         | repair / warn                       | ❌     | M2.                                                                                                                     |
+
+## References
+
+- [ADR-0034 — Engine conformance methodology](../../adr/0034-engine-conformance-methodology.md)
+- ADR-0035 — SchedulePoint CPM semantics (the golden contract for the ambiguous behaviours; drafted in M0-B2)
+- ADR-0036 — Hour/shift-granular calendar & duration rework (the gating design; drafted in M0-B2)
+- [Feature spec](feature-spec.md) · [Implementation plan](implementation-plan.md)
+- The fixture, its `TEST_MATRIX.md`, and the loaders: `packages/engine-conformance/`
