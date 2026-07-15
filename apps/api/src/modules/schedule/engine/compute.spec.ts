@@ -1,21 +1,21 @@
 import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { allDaysWorkCalendar } from './calendar';
 import { computeSchedule } from './compute';
 import { ScheduleGraphNotADagError } from './errors';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
+import { allMinutesWorkCalendar } from './working-time-calendar';
 
 const DATA_DATE = '2026-01-01';
 
 const task = (id: string, durationDays: number): EngineActivity => ({
   id,
-  durationDays,
+  durationMinutes: durationDays * 1440,
   type: 'TASK',
 });
 const milestone = (id: string): EngineActivity => ({
   id,
-  durationDays: 0,
+  durationMinutes: 0,
   type: 'START_MILESTONE',
 });
 const edge = (
@@ -28,13 +28,13 @@ const edge = (
   predecessorId,
   successorId,
   type,
-  lagDays,
+  lagMinutes: lagDays * 1440,
 });
 
 function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[]) {
   const output = computeSchedule(activities, edges, {
     dataDate: DATA_DATE,
-    calendar: allDaysWorkCalendar,
+    calendar: allMinutesWorkCalendar,
   });
   const byId = new Map<string, EngineResult>(output.results.map((r) => [r.activityId, r]));
   const drivingById = new Map<string, boolean>(output.edges.map((e) => [e.edgeId, e.isDriving]));
@@ -58,11 +58,11 @@ describe('computeSchedule — worked CPM example (all values hand-verified)', ()
 
   it('computes the forward pass (ES/EF)', () => {
     const { byId } = run(activities, edges);
-    expect(offsets(byId.get('A')!)).toMatchObject({ es: 0, ef: 3 });
-    expect(offsets(byId.get('B')!)).toMatchObject({ es: 3, ef: 7 });
-    expect(offsets(byId.get('C')!)).toMatchObject({ es: 3, ef: 5 });
-    expect(offsets(byId.get('D')!)).toMatchObject({ es: 7, ef: 12 });
-    expect(offsets(byId.get('E')!)).toMatchObject({ es: 12, ef: 13 });
+    expect(offsets(byId.get('A')!)).toMatchObject({ es: 0, ef: 4320 });
+    expect(offsets(byId.get('B')!)).toMatchObject({ es: 4320, ef: 10080 });
+    expect(offsets(byId.get('C')!)).toMatchObject({ es: 4320, ef: 7200 });
+    expect(offsets(byId.get('D')!)).toMatchObject({ es: 10080, ef: 17280 });
+    expect(offsets(byId.get('E')!)).toMatchObject({ es: 17280, ef: 18720 });
   });
 
   it('flags driving edges: only C→D has slack, so it is the sole non-driving edge (M3)', () => {
@@ -78,11 +78,11 @@ describe('computeSchedule — worked CPM example (all values hand-verified)', ()
 
   it('computes the backward pass (LS/LF) and total float', () => {
     const { byId } = run(activities, edges);
-    expect(offsets(byId.get('A')!)).toMatchObject({ ls: 0, lf: 3, tf: 0 });
-    expect(offsets(byId.get('B')!)).toMatchObject({ ls: 3, lf: 7, tf: 0 });
-    expect(offsets(byId.get('C')!)).toMatchObject({ ls: 5, lf: 7, tf: 2 });
-    expect(offsets(byId.get('D')!)).toMatchObject({ ls: 7, lf: 12, tf: 0 });
-    expect(offsets(byId.get('E')!)).toMatchObject({ ls: 12, lf: 13, tf: 0 });
+    expect(offsets(byId.get('A')!)).toMatchObject({ ls: 0, lf: 4320, tf: 0 });
+    expect(offsets(byId.get('B')!)).toMatchObject({ ls: 4320, lf: 10080, tf: 0 });
+    expect(offsets(byId.get('C')!)).toMatchObject({ ls: 7200, lf: 10080, tf: 2880 });
+    expect(offsets(byId.get('D')!)).toMatchObject({ ls: 10080, lf: 17280, tf: 0 });
+    expect(offsets(byId.get('E')!)).toMatchObject({ ls: 17280, lf: 18720, tf: 0 });
   });
 
   it('flags the critical chain and only the critical chain', () => {
@@ -92,7 +92,7 @@ describe('computeSchedule — worked CPM example (all values hand-verified)', ()
     expect(byId.get('D')!.isCritical).toBe(true);
     expect(byId.get('E')!.isCritical).toBe(true);
     expect(byId.get('C')!.isCritical).toBe(false);
-    expect(byId.get('C')!.isNearCritical).toBe(true); // float 2 ≤ 5
+    expect(byId.get('C')!.isNearCritical).toBe(true); // float 2880 ≤ 7200 (5 days)
   });
 
   it('maps offsets to inclusive calendar dates (ADR-0023)', () => {
@@ -104,7 +104,7 @@ describe('computeSchedule — worked CPM example (all values hand-verified)', ()
     expect(byId.get('E')!.earlyStart).toBe('2026-01-13');
     expect(byId.get('E')!.earlyFinish).toBe('2026-01-13');
     expect(summary.projectFinish).toBe('2026-01-13');
-    expect(summary.projectFinishOffset).toBe(13);
+    expect(summary.projectFinishOffset).toBe(18720);
   });
 
   it('rolls up the plan summary', () => {
@@ -124,30 +124,30 @@ describe('computeSchedule — each relationship type with lag', () => {
     run([task('p', 3), task('s', 2)], [edge('p', 's', type, lag)]);
 
   it('FS+2: successor starts 2 after the predecessor finishes', () => {
-    expect(offsets(network('FS', 2).byId.get('s')!)).toMatchObject({ es: 5, ef: 7 });
+    expect(offsets(network('FS', 2).byId.get('s')!)).toMatchObject({ es: 7200, ef: 10080 });
   });
 
   it('SS+2: successor starts 2 after the predecessor starts', () => {
-    expect(offsets(network('SS', 2).byId.get('s')!)).toMatchObject({ es: 2, ef: 4 });
+    expect(offsets(network('SS', 2).byId.get('s')!)).toMatchObject({ es: 2880, ef: 5760 });
   });
 
   it('FF+2: successor finishes 2 after the predecessor finishes', () => {
     const s = network('FF', 2).byId.get('s')!;
-    expect(offsets(s)).toMatchObject({ es: 3, ef: 5 }); // EF = EF_p + 2 = 5
+    expect(offsets(s)).toMatchObject({ es: 4320, ef: 7200 }); // EF = EF_p + 2 = 5
   });
 
   it('SF+2: successor finishes 2 after the predecessor starts', () => {
     const s = network('SF', 2).byId.get('s')!;
-    expect(offsets(s)).toMatchObject({ es: 0, ef: 2 }); // EF = ES_p + 2 = 2
+    expect(offsets(s)).toMatchObject({ es: 0, ef: 2880 }); // EF = ES_p + 2 = 2
   });
 
   it('FS−1 (a lead) pulls the successor earlier', () => {
-    expect(offsets(network('FS', -1).byId.get('s')!)).toMatchObject({ es: 2, ef: 4 });
+    expect(offsets(network('FS', -1).byId.get('s')!)).toMatchObject({ es: 2880, ef: 5760 });
   });
 
   it('floors the early start at the data date when a lead would go negative', () => {
     // SS−5 wants ES_s = −5; the data date (offset 0) is the floor.
-    expect(offsets(network('SS', -5).byId.get('s')!)).toMatchObject({ es: 0, ef: 2 });
+    expect(offsets(network('SS', -5).byId.get('s')!)).toMatchObject({ es: 0, ef: 2880 });
   });
 });
 
@@ -177,16 +177,16 @@ describe('computeSchedule — parallel paths & the near-critical band', () => {
   const activities = [task('A', 10), task('B', 5), task('C', 4), milestone('E')];
   const edges = [edge('A', 'E'), edge('B', 'E'), edge('C', 'E')];
 
-  it('marks float ≤ 0 critical, 0 < float ≤ 5 near-critical, and > 5 neither', () => {
+  it('marks float ≤ 0 critical, 0 < float ≤ 7200 (5 days) near-critical, and > 7200 neither', () => {
     const { byId } = run(activities, edges);
     expect(byId.get('A')!.totalFloat).toBe(0);
     expect(byId.get('A')!.isCritical).toBe(true);
 
-    expect(byId.get('B')!.totalFloat).toBe(5);
+    expect(byId.get('B')!.totalFloat).toBe(7200);
     expect(byId.get('B')!.isCritical).toBe(false);
     expect(byId.get('B')!.isNearCritical).toBe(true);
 
-    expect(byId.get('C')!.totalFloat).toBe(6);
+    expect(byId.get('C')!.totalFloat).toBe(8640);
     expect(byId.get('C')!.isCritical).toBe(false);
     expect(byId.get('C')!.isNearCritical).toBe(false);
   });
@@ -204,8 +204,8 @@ describe('computeSchedule — degenerate shapes', () => {
   it('schedules islands (no edges): each starts at the data date, floats to the finish', () => {
     // A(3) and B(5) disconnected → T = 5; A carries 2 float, B is critical.
     const { byId, summary } = run([task('A', 3), task('B', 5)], []);
-    expect(offsets(byId.get('A')!)).toMatchObject({ es: 0, ef: 3, tf: 2 });
-    expect(offsets(byId.get('B')!)).toMatchObject({ es: 0, ef: 5, tf: 0 });
+    expect(offsets(byId.get('A')!)).toMatchObject({ es: 0, ef: 4320, tf: 2880 });
+    expect(offsets(byId.get('B')!)).toMatchObject({ es: 0, ef: 7200, tf: 0 });
     expect(byId.get('B')!.isCritical).toBe(true);
     expect(summary.projectFinish).toBe('2026-01-05');
   });
@@ -214,7 +214,7 @@ describe('computeSchedule — degenerate shapes', () => {
     expect(() =>
       computeSchedule([task('A', 1), task('B', 1)], [edge('A', 'B'), edge('B', 'A')], {
         dataDate: DATA_DATE,
-        calendar: allDaysWorkCalendar,
+        calendar: allMinutesWorkCalendar,
       }),
     ).toThrow(ScheduleGraphNotADagError);
   });
@@ -243,7 +243,7 @@ describe('computeSchedule — driving edges (M3)', () => {
     // A(4) SS(+2)→ B: B.es = A.es(0) + 2 = 2, so the SS tie drives B — exercises the
     // per-type forwardLowerBound in the driving pass, not only the FS path.
     const { byId, drivingById } = run([task('A', 4), task('B', 2)], [edge('A', 'B', 'SS', 2)]);
-    expect(byId.get('B')!.earlyStartOffset).toBe(2);
+    expect(byId.get('B')!.earlyStartOffset).toBe(2880);
     expect(drivingById.get('A-B-SS')).toBe(true);
   });
 });

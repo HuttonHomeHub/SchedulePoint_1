@@ -15,11 +15,8 @@ import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
-import {
-  allDaysWorkCalendar,
-  buildWorkingDayCalendar,
-  type WorkingDayCalendar,
-} from '../schedule/engine';
+import { buildDayCompatCalendar } from '../schedule/day-compat-calendar';
+import { type WorkingTimeCalendar } from '../schedule/engine';
 
 import { BaselineRepository, type CaptureActivityRow } from './baseline.repository';
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
@@ -318,17 +315,12 @@ export class BaselinesService {
   private async resolveCalendar(
     organizationId: string,
     calendarId: string | null,
-  ): Promise<WorkingDayCalendar> {
-    if (!calendarId) return allDaysWorkCalendar;
+  ): Promise<WorkingTimeCalendar> {
+    if (!calendarId) return buildDayCompatCalendar(null);
     const calendar = await this.baselines.loadPlanCalendar(organizationId, calendarId);
-    if (!calendar) return allDaysWorkCalendar;
-    return buildWorkingDayCalendar(
-      calendar.workingWeekdays,
-      calendar.exceptions.map((e) => ({
-        date: formatCalendarDate(e.date),
-        isWorking: e.isWorking,
-      })),
-    );
+    // The M1 compat shim (ADR-0036 §4.2) — mirrors ScheduleService so variance days match
+    // the computed dates they diff.
+    return buildDayCompatCalendar(calendar);
   }
 
   /** Assert an active plan exists in this org, so a list/read on a bogus plan is a 404 (not empty). */

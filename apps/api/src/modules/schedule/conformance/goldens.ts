@@ -1,4 +1,4 @@
-import { allDaysWorkCalendar, buildWorkingDayCalendar, STANDARD_WEEKDAYS } from '../engine';
+import { allMinutesWorkCalendar, buildWorkingTimeCalendar, fullDayWeek } from '../engine';
 import type { ComputeOptions, EngineActivity, EngineEdge } from '../engine';
 
 /**
@@ -15,7 +15,7 @@ import type { ComputeOptions, EngineActivity, EngineEdge } from '../engine';
  * regression net ADR-0036 §3 names — a green diff on M1 means dates held; a red
  * one is a reviewed re-baseline, not a silent drift.
  *
- * Dates use `allDaysWorkCalendar` (every calendar day works, offset == day) except
+ * Dates use `allMinutesWorkCalendar` (every calendar day works, 1440 min/day) except
  * the two calendar cases, which use a Monday–Friday calendar anchored on Monday
  * 2026-01-05 to exercise weekend skipping.
  */
@@ -45,11 +45,11 @@ export interface GoldenCase {
 const ALL_DAYS_DATA_DATE = '2026-06-01';
 /** Monday 2026-01-05 — the anchor for the weekday-mask cases (so weekend skips are visible). */
 const MONDAY_DATA_DATE = '2026-01-05';
-const monFri = buildWorkingDayCalendar(STANDARD_WEEKDAYS, []);
+const monFri = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
 
-const task = (id: string, durationDays: number): EngineActivity => ({
+const task = (id: string, durationMinutes: number): EngineActivity => ({
   id,
-  durationDays,
+  durationMinutes: durationMinutes * 1440,
   type: 'TASK',
 });
 
@@ -58,8 +58,8 @@ export const GOLDEN_CASES: GoldenCase[] = [
     name: 'fs-chain',
     description: 'A(5) → B(3) finish-to-start, lag 0 — the canonical critical chain.',
     activities: [task('A', 5), task('B', 3)],
-    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagDays: 0 }],
-    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allDaysWorkCalendar },
+    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 0 }],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
     expected: {
       // ES 0, EF 5 → inclusive finish offset 4 = 06-05.
       A: {
@@ -88,10 +88,10 @@ export const GOLDEN_CASES: GoldenCase[] = [
       'A(10) drives B(4) via SS+2 and C(4) via FF+1 — start-to-start and finish-to-finish arithmetic with a floating branch.',
     activities: [task('A', 10), task('B', 4), task('C', 4)],
     edges: [
-      { id: 'e1', predecessorId: 'A', successorId: 'B', type: 'SS', lagDays: 2 },
-      { id: 'e2', predecessorId: 'A', successorId: 'C', type: 'FF', lagDays: 1 },
+      { id: 'e1', predecessorId: 'A', successorId: 'B', type: 'SS', lagMinutes: 2880 },
+      { id: 'e2', predecessorId: 'A', successorId: 'C', type: 'FF', lagMinutes: 1440 },
     ],
-    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allDaysWorkCalendar },
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
     expected: {
       // ES 0, EF 10 → inclusive 9 = 06-10.
       A: {
@@ -102,13 +102,13 @@ export const GOLDEN_CASES: GoldenCase[] = [
         totalFloat: 0,
         isCritical: true,
       },
-      // SS+2: ES 2, EF 6 → inclusive 5 = 06-06. LS 7 (float 5).
+      // SS+2: ES 2, EF 6 → inclusive 5 = 06-06. LS 7 (float 5 days = 7200 min).
       B: {
         earlyStart: '2026-06-03',
         earlyFinish: '2026-06-06',
         lateStart: '2026-06-08',
         lateFinish: '2026-06-11',
-        totalFloat: 5,
+        totalFloat: 7200,
         isCritical: false,
       },
       // FF+1: ES = EF_A + 1 − 4 = 7, EF 11 → inclusive 10 = 06-11. Critical.
@@ -128,8 +128,8 @@ export const GOLDEN_CASES: GoldenCase[] = [
     description:
       'A(5) → B(3) start-to-finish, lag 5 — SF sets EF(succ) from ES(pred); ES(succ) = EF − duration (ADR-0035 §15).',
     activities: [task('A', 5), task('B', 3)],
-    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'SF', lagDays: 5 }],
-    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allDaysWorkCalendar },
+    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'SF', lagMinutes: 7200 }],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
     expected: {
       A: {
         earlyStart: '2026-06-01',
@@ -157,7 +157,7 @@ export const GOLDEN_CASES: GoldenCase[] = [
     description:
       'A(5) → B(3) FS on a Mon–Fri calendar from Monday 2026-01-05 — the finish skips the weekend (Fri → Mon).',
     activities: [task('A', 5), task('B', 3)],
-    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagDays: 0 }],
+    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 0 }],
     options: { dataDate: MONDAY_DATA_DATE, calendar: monFri },
     expected: {
       // ES Mon 01-05; 5 working days → inclusive offset 4 = Fri 01-09.
@@ -169,7 +169,9 @@ export const GOLDEN_CASES: GoldenCase[] = [
         totalFloat: 0,
         isCritical: true,
       },
-      // ES offset 5 = Mon 01-12 (weekend skipped); EF offset 8 → inclusive 7 = Wed 01-14.
+      // ES offset 5 days = Mon 01-12 (the weekend is skipped); EF → inclusive last working day = Wed 01-14.
+      // The start lands exactly on the Fri-close gap; the engine displays it as the next WORKING day
+      // (Mon 01-12), not the empty weekend instant — the date-invariant holds under days→minutes.
       B: {
         earlyStart: '2026-01-12',
         earlyFinish: '2026-01-14',
@@ -189,13 +191,13 @@ export const GOLDEN_CASES: GoldenCase[] = [
       task('A', 2),
       {
         id: 'B',
-        durationDays: 2,
+        durationMinutes: 2880,
         type: 'TASK',
         constraintType: 'SNET',
         constraintDate: '2026-01-12',
       },
     ],
-    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagDays: 0 }],
+    edges: [{ id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 0 }],
     options: { dataDate: MONDAY_DATA_DATE, calendar: monFri },
     expected: {
       // ES Mon 01-05, EF inclusive offset 1 = Tue 01-06. SNET floats A by 3 (LS offset 3 = Thu 01-08).
@@ -204,10 +206,11 @@ export const GOLDEN_CASES: GoldenCase[] = [
         earlyFinish: '2026-01-06',
         lateStart: '2026-01-08',
         lateFinish: '2026-01-09',
-        totalFloat: 3,
+        totalFloat: 4320,
         isCritical: false,
       },
-      // Logic start offset 2, but SNET(01-12)=offset 5 clamps it: ES 01-12, EF inclusive 6 = Tue 01-13.
+      // Logic start offset 2 days, but SNET(01-12) clamps it to Mon 01-12; the start lands on the
+      // Fri-close gap and displays as the next working day (Mon 01-12), EF inclusive → Tue 01-13.
       B: {
         earlyStart: '2026-01-12',
         earlyFinish: '2026-01-13',

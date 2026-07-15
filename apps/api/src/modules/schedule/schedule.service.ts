@@ -11,15 +11,14 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
+import { buildDayCompatCalendar, MINUTES_PER_DAY } from './day-compat-calendar';
 import {
-  allDaysWorkCalendar,
-  buildWorkingDayCalendar,
   computeSchedule,
   ScheduleGraphNotADagError,
   type EngineActivity,
   type EngineEdge,
   type EngineSummary,
-  type WorkingDayCalendar,
+  type WorkingTimeCalendar,
 } from './engine';
 import {
   ScheduleRepository,
@@ -176,17 +175,12 @@ export class ScheduleService {
     organizationId: string,
     calendarId: string | null,
     tx: Prisma.TransactionClient,
-  ): Promise<WorkingDayCalendar> {
-    if (!calendarId) return allDaysWorkCalendar;
+  ): Promise<WorkingTimeCalendar> {
+    if (!calendarId) return buildDayCompatCalendar(null);
     const calendar = await this.schedule.loadPlanCalendar(organizationId, calendarId, tx);
-    if (!calendar) return allDaysWorkCalendar;
-    return buildWorkingDayCalendar(
-      calendar.workingWeekdays,
-      calendar.exceptions.map((e) => ({
-        date: formatCalendarDate(e.date),
-        isWorking: e.isWorking,
-      })),
-    );
+    // The M1 compat shim (ADR-0036 §4.2): the stored mask + whole-day exceptions become a
+    // full-day (24 h) minute calendar, so dates are byte-identical to the working-day engine.
+    return buildDayCompatCalendar(calendar);
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {
@@ -200,11 +194,15 @@ export class ScheduleService {
   }
 }
 
-/** Project a stored activity row onto the engine's input struct (ADR-0023). */
+/**
+ * Project a stored activity row onto the engine's input struct. Durations are stored
+ * day-granular today; the M1 compat shim (ADR-0036 §4.2) scales them to working-minutes
+ * by the fixed `M = 1440` factor that matches the full-day compat calendar.
+ */
 function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
   return {
     id: row.id,
-    durationDays: row.durationDays,
+    durationMinutes: row.durationDays * MINUTES_PER_DAY,
     type: row.type,
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
@@ -212,13 +210,13 @@ function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
   };
 }
 
-/** Project a stored dependency row onto the engine's edge struct. */
+/** Project a stored dependency row onto the engine's edge struct (day lag → minutes, ADR-0036 §4.2). */
 function toEngineEdge(row: ScheduleEdgeRow): EngineEdge {
   return {
     id: row.id,
     predecessorId: row.predecessorId,
     successorId: row.successorId,
     type: row.type,
-    lagDays: row.lagDays,
+    lagMinutes: row.lagDays * MINUTES_PER_DAY,
   };
 }

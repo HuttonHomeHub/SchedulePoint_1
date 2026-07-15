@@ -16,8 +16,8 @@ import type { ActivityType, ConstraintType, DependencyType } from '@repo/types';
 /** An activity node the engine schedules. */
 export interface EngineActivity {
   id: string;
-  /** Working days of work. Milestones (START/FINISH_MILESTONE) are 0. */
-  durationDays: number;
+  /** Working **minutes** of work (ADR-0036). Milestones (START/FINISH_MILESTONE) are 0. */
+  durationMinutes: number;
   type: ActivityType;
   /** Schedule constraint kind, if any. Honoured from Task A3 onward. */
   constraintType?: ConstraintType | null;
@@ -36,8 +36,8 @@ export interface EngineEdge {
   predecessorId: string;
   successorId: string;
   type: DependencyType;
-  /** Signed lag in working days: positive is a delay, negative is a lead. */
-  lagDays: number;
+  /** Signed lag in working **minutes** (ADR-0036): positive is a delay, negative is a lead. */
+  lagMinutes: number;
 }
 
 /**
@@ -53,11 +53,13 @@ export interface EngineEdgeResult {
 }
 
 /**
- * The computed schedule for one activity. Offsets are continuous working-day
- * positions from the data date (a start offset of 0 means the activity starts on
- * the data date); the paired dates are the inclusive display dates mapped via the
- * calendar port. Total float is `lateStartOffset − earlyStartOffset`; it may be
- * negative when a constraint cannot be satisfied (surfaced, not an error).
+ * The computed schedule for one activity. Offsets are continuous working-**minute**
+ * positions from the data date (ADR-0036; a start offset of 0 means the activity
+ * starts at the data date's first working minute); the paired dates are the
+ * inclusive display dates mapped via the calendar port. Total float is
+ * `lateStartOffset − earlyStartOffset` (working minutes); it may be negative when a
+ * constraint cannot be satisfied (surfaced, not an error). The service layer maps
+ * these minute quantities back to the day-denominated public API (ADR-0036 §7).
  */
 export interface EngineResult {
   activityId: string;
@@ -78,14 +80,14 @@ export interface EngineResult {
    * placed activity renders exactly on its `visualStart` (**even when infeasible** —
    * stay-and-flag); an unplaced one renders at its effective-earliest, pushed by any
    * placed predecessors. `visualConflict` flags a placement earlier than logic/an
-   * explicit constraint allows. `visualDriftDays = visualStart − pure-network
-   * earlyStart` (working days), or null when unplaced. These never affect the pure
-   * `early*`/`late*`/float above.
+   * explicit constraint allows. `visualDriftMinutes = visualStart − pure-network
+   * earlyStart` (working minutes, ADR-0036), or null when unplaced. These never
+   * affect the pure `early*`/`late*`/float above.
    */
   visualEffectiveStart: string;
   visualEffectiveFinish: string;
   visualConflict: boolean;
-  visualDriftDays: number | null;
+  visualDriftMinutes: number | null;
 }
 
 /** Plan-level roll-up of an engine run. */

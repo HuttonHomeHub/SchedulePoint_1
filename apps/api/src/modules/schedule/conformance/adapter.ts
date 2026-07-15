@@ -4,7 +4,7 @@ import type {
   FixtureRelationship,
 } from '@repo/engine-conformance';
 
-import { allDaysWorkCalendar } from '../engine';
+import { allMinutesWorkCalendar } from '../engine';
 import type { ComputeOptions, EngineActivity, EngineEdge } from '../engine';
 
 import { mapActivityType, mapConstraintType, toCalendarDay } from './type-map';
@@ -122,7 +122,7 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     notes,
   };
 
-  return { activities, edges, options: { dataDate, calendar: allDaysWorkCalendar }, report };
+  return { activities, edges, options: { dataDate, calendar: allMinutesWorkCalendar }, report };
 }
 
 /** Adapt one activity, or return null (with a note) if its type is unsupported. */
@@ -165,7 +165,11 @@ function adaptActivity(activity: FixtureActivity, notes: AdaptationNote[]): Engi
     });
   }
 
-  const engineActivity: EngineActivity = { id: activity.id, durationDays, type };
+  const engineActivity: EngineActivity = {
+    id: activity.id,
+    durationMinutes: durationDays * 1440,
+    type,
+  };
 
   if (activity.secondary_constraint) {
     notes.push({
@@ -241,6 +245,6 @@ function adaptRelationship(
     predecessorId: rel.predecessor,
     successorId: rel.successor,
     type: rel.type,
-    lagDays,
+    lagMinutes: lagDays * 1440,
   };
 }

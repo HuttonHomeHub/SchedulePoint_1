@@ -1,9 +1,9 @@
 import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { allDaysWorkCalendar } from './calendar';
 import { computeSchedule } from './compute';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
+import { allMinutesWorkCalendar } from './working-time-calendar';
 
 /**
  * ADR-0033 §Decision-4/5 — the effective-Visual (Pass 2) engine tests. Pass 1
@@ -20,13 +20,13 @@ const task = (
   extra: Partial<EngineActivity> = {},
 ): EngineActivity => ({
   id,
-  durationDays,
+  durationMinutes: durationDays * 1440,
   type: 'TASK',
   ...extra,
 });
 const milestone = (id: string, extra: Partial<EngineActivity> = {}): EngineActivity => ({
   id,
-  durationDays: 0,
+  durationMinutes: 0,
   type: 'START_MILESTONE',
   ...extra,
 });
@@ -40,13 +40,13 @@ const edge = (
   predecessorId,
   successorId,
   type,
-  lagDays,
+  lagMinutes: lagDays * 1440,
 });
 
 function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[]) {
   const output = computeSchedule(activities, edges, {
     dataDate: DATA_DATE,
-    calendar: allDaysWorkCalendar,
+    calendar: allMinutesWorkCalendar,
   });
   const byId = new Map<string, EngineResult>(output.results.map((r) => [r.activityId, r]));
   return { ...output, byId };
@@ -75,7 +75,7 @@ describe('computeSchedule — effective-Visual pass, golden parity (Pass 1 purit
       expect(r.visualEffectiveStart).toBe(r.earlyStart);
       expect(r.visualEffectiveFinish).toBe(r.earlyFinish);
       expect(r.visualConflict).toBe(false);
-      expect(r.visualDriftDays).toBeNull();
+      expect(r.visualDriftMinutes).toBeNull();
     }
   });
 
@@ -117,12 +117,12 @@ describe('computeSchedule — effective-Visual pass, placement pushes successors
     expect(a.visualEffectiveStart).toBe('2026-01-06');
     expect(a.visualEffectiveFinish).toBe('2026-01-08'); // 3 working days from the placement
     expect(a.visualConflict).toBe(false);
-    expect(a.visualDriftDays).toBe(5); // placed (offset 5) − pure earlyStart (offset 0)
+    expect(a.visualDriftMinutes).toBe(7200); // placed (offset 5) − pure earlyStart (offset 0)
 
     expect(b.visualEffectiveStart).toBe('2026-01-09'); // the day after A's placed finish
     expect(b.visualEffectiveFinish).toBe('2026-01-10');
     expect(b.visualConflict).toBe(false);
-    expect(b.visualDriftDays).toBeNull(); // B itself is unplaced
+    expect(b.visualDriftMinutes).toBeNull(); // B itself is unplaced
   });
 });
 
@@ -147,7 +147,7 @@ describe('computeSchedule — effective-Visual pass, feasible-finish propagation
     expect(a.visualConflict).toBe(true);
     expect(a.visualEffectiveStart).toBe('2026-01-02'); // the illegal placement, honoured exactly
     expect(a.visualEffectiveFinish).toBe('2026-01-03'); // its own (illegal) 2-day span
-    expect(a.visualDriftDays).toBe(-2); // placed (offset 1) − pure earlyStart (offset 3)
+    expect(a.visualDriftMinutes).toBe(-2880); // placed (offset 1) − pure earlyStart (offset 3)
 
     // B is pushed from A's FEASIBLE finish (offset 3 + 2 = 5 → '2026-01-06'), never from
     // the illegal finish (offset 1 + 2 = 3 → would be '2026-01-04').
@@ -168,13 +168,13 @@ describe('computeSchedule — effective-Visual pass, drift sign & working days',
       ],
       [],
     );
-    expect(byId.get('Later')!.visualDriftDays).toBe(5);
+    expect(byId.get('Later')!.visualDriftMinutes).toBe(7200);
     expect(byId.get('Later')!.visualConflict).toBe(false);
 
-    expect(byId.get('Earlier')!.visualDriftDays).toBe(-2);
+    expect(byId.get('Earlier')!.visualDriftMinutes).toBe(-2880);
     expect(byId.get('Earlier')!.visualConflict).toBe(true); // placed before the only legal start
 
-    expect(byId.get('Unplaced')!.visualDriftDays).toBeNull();
+    expect(byId.get('Unplaced')!.visualDriftMinutes).toBeNull();
     expect(byId.get('Unplaced')!.visualConflict).toBe(false);
   });
 });
@@ -199,7 +199,7 @@ describe('computeSchedule — effective-Visual pass, a placed successor stays pu
     expect(b.visualEffectiveFinish).toBe('2026-01-04');
     // Flagged, since its own placement is earlier than what logic (the push) allows.
     expect(b.visualConflict).toBe(true);
-    expect(b.visualDriftDays).toBe(-1); // placed (offset 2) − pure earlyStart (offset 3)
+    expect(b.visualDriftMinutes).toBe(-1440); // placed (offset 2) − pure earlyStart (offset 3)
   });
 });
 

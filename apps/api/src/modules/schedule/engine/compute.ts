@@ -1,5 +1,4 @@
-import type { WorkingDayCalendar } from './calendar';
-import { NEAR_CRITICAL_THRESHOLD_WORKING_DAYS } from './constants';
+import { NEAR_CRITICAL_THRESHOLD_MINUTES } from './constants';
 import { clampBackwardFinish, clampForwardStart, isParkedMandatory } from './constraints';
 import { buildGraph } from './graph';
 import type {
@@ -9,13 +8,29 @@ import type {
   EngineResult,
   EngineSummary,
 } from './types';
+import type { WorkingTimeCalendar } from './working-time-calendar';
 
 /** Inputs the CPM pass needs beyond the network itself. */
 export interface ComputeOptions {
   /** The data date (`Plan.plannedStart`, `YYYY-MM-DD`) — offset 0. */
   dataDate: string;
-  /** The working-day calendar seam (ADR-0023); MVP is all-days-work. */
-  calendar: WorkingDayCalendar;
+  /** The working-time calendar seam (ADR-0036); MVP is all-minutes-work. */
+  calendar: WorkingTimeCalendar;
+}
+
+/**
+ * The calendar day of the working-minute at inclusive offset `index` (ADR-0036). Take the
+ * instant one working-minute later (the exclusive boundary after `index`) and step back a
+ * single real minute, so a start or finish that lands exactly on a **non-working gap**
+ * (e.g. a Friday shift-close boundary is midnight Saturday) reads as its true working day —
+ * Friday for a finish, the next working day for a start — not the empty gap instant.
+ */
+function workingIndexDate(calendar: WorkingTimeCalendar, dataDate: string, index: number): string {
+  const endBoundary = calendar.addWorkingTime(dataDate, index + 1);
+  const iso = endBoundary.length > 10 ? `${endBoundary}:00Z` : `${endBoundary}T00:00:00Z`;
+  const instant = new Date(iso);
+  instant.setUTCMinutes(instant.getUTCMinutes() - 1);
+  return instant.toISOString().slice(0, 10);
 }
 
 /** The engine's full result: per-activity schedule, per-edge driving flags, plan roll-up. */
@@ -56,7 +71,7 @@ export function computeSchedule(
   const earlyFinish = new Map<string, number>();
   for (const id of graph.order) {
     const activity = graph.activities.get(id)!;
-    const duration = activity.durationDays;
+    const duration = activity.durationMinutes;
     let start = 0; // the data date is the earliest any activity can start
     for (const edge of graph.incoming.get(id)!) {
       const predEs = earlyStart.get(edge.predecessorId)!;
@@ -84,7 +99,7 @@ export function computeSchedule(
   const visualDriftMap = new Map<string, number | null>();
   for (const id of graph.order) {
     const activity = graph.activities.get(id)!;
-    const duration = activity.durationDays;
+    const duration = activity.durationMinutes;
     let logicEarliest = 0;
     for (const edge of graph.incoming.get(id)!) {
       const predPs = visualPropStart.get(edge.predecessorId)!;
@@ -95,7 +110,7 @@ export function computeSchedule(
     logicEarliest = clampForwardStart(activity, logicEarliest, calendar, dataDate);
     const placed =
       activity.visualStart != null
-        ? calendar.workingDaysBetween(dataDate, activity.visualStart)
+        ? calendar.workingTimeBetween(dataDate, activity.visualStart)
         : null;
     const display = placed ?? logicEarliest;
     const prop = placed !== null ? Math.max(placed, logicEarliest) : logicEarliest;
@@ -118,7 +133,7 @@ export function computeSchedule(
   const edgeResults: EngineEdgeResult[] = [];
   for (const id of graph.order) {
     const successorStart = earlyStart.get(id)!;
-    const successorDuration = graph.activities.get(id)!.durationDays;
+    const successorDuration = graph.activities.get(id)!.durationMinutes;
     for (const edge of graph.incoming.get(id)!) {
       const predEs = earlyStart.get(edge.predecessorId)!;
       const predEf = earlyFinish.get(edge.predecessorId)!;
@@ -142,7 +157,7 @@ export function computeSchedule(
   for (let i = graph.order.length - 1; i >= 0; i -= 1) {
     const id = graph.order[i]!;
     const activity = graph.activities.get(id)!;
-    const duration = activity.durationDays;
+    const duration = activity.durationMinutes;
     let finish = projectFinish;
     for (const edge of graph.outgoing.get(id)!) {
       const succLs = lateStart.get(edge.successorId)!;
@@ -167,7 +182,7 @@ export function computeSchedule(
   let maxInclusiveFinishOffset: number | null = null;
   for (const id of graph.order) {
     const activity = graph.activities.get(id)!;
-    const duration = activity.durationDays;
+    const duration = activity.durationMinutes;
     if (isParkedMandatory(activity.constraintType)) parkedConstraintCount += 1;
     const es = earlyStart.get(id)!;
     const ef = earlyFinish.get(id)!;
@@ -175,12 +190,13 @@ export function computeSchedule(
     const lf = lateFinish.get(id)!;
     const totalFloat = ls - es;
     const isCritical = totalFloat <= 0;
-    const isNearCritical = totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_WORKING_DAYS;
+    const isNearCritical = totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_MINUTES;
     if (isCritical) criticalCount += 1;
     if (isNearCritical) nearCriticalCount += 1;
 
-    // Inclusive finish offset: a task's last working day is EF − 1; a
-    // zero-duration milestone sits on its start day (ES = EF).
+    // Inclusive finish offset (working MINUTES): a task's last working minute is EF − 1,
+    // and its inclusive display DATE is the calendar day that minute falls in; a
+    // zero-duration milestone sits on its start (ES = EF).
     const inclusiveFinishOffset = duration === 0 ? es : ef - 1;
     const inclusiveLateFinishOffset = duration === 0 ? ls : lf - 1;
     // Effective-Visual display (Pass 2): the bar's rendered start + inclusive finish.
@@ -199,14 +215,14 @@ export function computeSchedule(
       totalFloat,
       isCritical,
       isNearCritical,
-      earlyStart: calendar.addWorkingDays(dataDate, es),
-      earlyFinish: calendar.addWorkingDays(dataDate, inclusiveFinishOffset),
-      lateStart: calendar.addWorkingDays(dataDate, ls),
-      lateFinish: calendar.addWorkingDays(dataDate, inclusiveLateFinishOffset),
-      visualEffectiveStart: calendar.addWorkingDays(dataDate, vDisplay),
-      visualEffectiveFinish: calendar.addWorkingDays(dataDate, vInclusiveFinishOffset),
+      earlyStart: workingIndexDate(calendar, dataDate, es),
+      earlyFinish: workingIndexDate(calendar, dataDate, inclusiveFinishOffset),
+      lateStart: workingIndexDate(calendar, dataDate, ls),
+      lateFinish: workingIndexDate(calendar, dataDate, inclusiveLateFinishOffset),
+      visualEffectiveStart: workingIndexDate(calendar, dataDate, vDisplay),
+      visualEffectiveFinish: workingIndexDate(calendar, dataDate, vInclusiveFinishOffset),
       visualConflict: visualConflictMap.get(id)!,
-      visualDriftDays: visualDriftMap.get(id)!,
+      visualDriftMinutes: visualDriftMap.get(id)!,
     });
   }
 
@@ -219,7 +235,7 @@ export function computeSchedule(
     projectFinish:
       maxInclusiveFinishOffset === null
         ? null
-        : calendar.addWorkingDays(dataDate, maxInclusiveFinishOffset),
+        : workingIndexDate(calendar, dataDate, maxInclusiveFinishOffset),
   };
 
   return { results, edges: edgeResults, summary };
@@ -234,13 +250,13 @@ function forwardLowerBound(
 ): number {
   switch (edge.type) {
     case 'FS':
-      return predEarlyFinish + edge.lagDays;
+      return predEarlyFinish + edge.lagMinutes;
     case 'SS':
-      return predEarlyStart + edge.lagDays;
+      return predEarlyStart + edge.lagMinutes;
     case 'FF':
-      return predEarlyFinish + edge.lagDays - successorDuration;
+      return predEarlyFinish + edge.lagMinutes - successorDuration;
     case 'SF':
-      return predEarlyStart + edge.lagDays - successorDuration;
+      return predEarlyStart + edge.lagMinutes - successorDuration;
   }
 }
 
@@ -253,12 +269,12 @@ function backwardUpperBound(
 ): number {
   switch (edge.type) {
     case 'FS':
-      return succLateStart - edge.lagDays;
+      return succLateStart - edge.lagMinutes;
     case 'SS':
-      return succLateStart - edge.lagDays + predecessorDuration;
+      return succLateStart - edge.lagMinutes + predecessorDuration;
     case 'FF':
-      return succLateFinish - edge.lagDays;
+      return succLateFinish - edge.lagMinutes;
     case 'SF':
-      return succLateFinish - edge.lagDays + predecessorDuration;
+      return succLateFinish - edge.lagMinutes + predecessorDuration;
   }
 }

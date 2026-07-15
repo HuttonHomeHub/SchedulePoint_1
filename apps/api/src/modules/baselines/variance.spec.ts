@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  allDaysWorkCalendar,
-  buildWorkingDayCalendar,
-  STANDARD_WEEKDAYS,
-} from '../schedule/engine';
+import { allMinutesWorkCalendar, buildWorkingTimeCalendar, fullDayWeek } from '../schedule/engine';
 
 import { computeVariance, type VarianceBaselineRow, type VarianceLiveRow } from './variance';
 
@@ -34,7 +30,7 @@ function live(overrides: Partial<VarianceLiveRow> = {}): VarianceLiveRow {
 
 describe('computeVariance', () => {
   it('is zero when the live schedule matches the baseline', () => {
-    const { rows, rollup } = computeVariance([base()], [live()], allDaysWorkCalendar);
+    const { rows, rollup } = computeVariance([base()], [live()], allMinutesWorkCalendar);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       activityId: 'a1',
@@ -56,7 +52,7 @@ describe('computeVariance', () => {
     const behind = computeVariance(
       [base()],
       [live({ earlyFinish: '2026-01-12', earlyStart: '2026-01-06' })],
-      allDaysWorkCalendar,
+      allMinutesWorkCalendar,
     );
     expect(behind.rows[0]).toMatchObject({ startVarianceDays: 1, finishVarianceDays: 3 });
     expect(behind.rollup).toMatchObject({ worstFinishSlipDays: 3, behindCount: 1 });
@@ -64,7 +60,7 @@ describe('computeVariance', () => {
     const ahead = computeVariance(
       [base()],
       [live({ earlyFinish: '2026-01-07' })],
-      allDaysWorkCalendar,
+      allMinutesWorkCalendar,
     );
     expect(ahead.rows[0]?.finishVarianceDays).toBe(-2);
     expect(ahead.rollup).toMatchObject({ worstFinishSlipDays: null, behindCount: 0 });
@@ -73,7 +69,7 @@ describe('computeVariance', () => {
   it('measures the slip in WORKING days on the plan calendar (skips the weekend)', () => {
     // Baseline finish Fri 9 Jan 2026; live finish Mon 12 Jan. Calendar-days = 3, but only
     // 1 working day (Sat/Sun are non-working on a Mon–Fri calendar).
-    const cal = buildWorkingDayCalendar(STANDARD_WEEKDAYS, []);
+    const cal = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
     const { rows } = computeVariance(
       [base({ baselineFinish: '2026-01-09' })],
       [live({ earlyFinish: '2026-01-12' })],
@@ -86,7 +82,7 @@ describe('computeVariance', () => {
     const { rows } = computeVariance(
       [base({ totalFloat: 2 })],
       [live({ totalFloat: 5 })],
-      allDaysWorkCalendar,
+      allMinutesWorkCalendar,
     );
     expect(rows[0]?.floatVarianceDays).toBe(3);
   });
@@ -95,7 +91,7 @@ describe('computeVariance', () => {
     const { rows, rollup } = computeVariance(
       [],
       [live({ id: 'new', name: 'Added' })],
-      allDaysWorkCalendar,
+      allMinutesWorkCalendar,
     );
     expect(rows[0]).toMatchObject({
       activityId: 'new',
@@ -113,7 +109,7 @@ describe('computeVariance', () => {
     const { rows, rollup } = computeVariance(
       [base({ sourceActivityId: 'gone', name: 'Removed' })],
       [],
-      allDaysWorkCalendar,
+      allMinutesWorkCalendar,
     );
     expect(rows[0]).toMatchObject({
       activityId: 'gone',
@@ -130,7 +126,7 @@ describe('computeVariance', () => {
     const { rows, rollup } = computeVariance(
       [base()],
       [live({ earlyFinish: null })],
-      allDaysWorkCalendar,
+      allMinutesWorkCalendar,
     );
     expect(rows[0]?.finishVarianceDays).toBeNull();
     expect(rollup.behindCount).toBe(0);
@@ -140,7 +136,7 @@ describe('computeVariance', () => {
     const { rows } = computeVariance(
       [base({ sourceActivityId: 'x' })],
       [live({ id: 'a' }), live({ id: 'b' })],
-      allDaysWorkCalendar,
+      allMinutesWorkCalendar,
     );
     expect(rows.map((r) => r.activityId)).toEqual(['a', 'b', 'x']);
   });

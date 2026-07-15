@@ -9,6 +9,7 @@ import {
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 
+import { MINUTES_PER_DAY } from './day-compat-calendar';
 import type { EngineEdgeResult, EngineResult } from './engine';
 
 /** The minimal activity shape the CPM engine reads (a plan's active nodes). */
@@ -181,7 +182,10 @@ export class ScheduleRepository {
     const earlyFinish = results.map((r) => r.earlyFinish);
     const lateStart = results.map((r) => r.lateStart);
     const lateFinish = results.map((r) => r.lateFinish);
-    const totalFloat = results.map((r) => r.totalFloat);
+    // The engine works in minutes (ADR-0036); the day-denominated public columns
+    // `total_float` / `visual_drift_days` are kept unchanged (ADR-0036 §7) by dividing
+    // by the fixed M = 1440 factor. Exact for the full-day compat calendar (M1).
+    const totalFloat = results.map((r) => Math.round(r.totalFloat / MINUTES_PER_DAY));
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
     // Effective-Visual outputs (ADR-0033) — written by the same batch as the CPM columns, so they
@@ -189,7 +193,9 @@ export class ScheduleRepository {
     const visualEffectiveStart = results.map((r) => r.visualEffectiveStart);
     const visualEffectiveFinish = results.map((r) => r.visualEffectiveFinish);
     const visualConflict = results.map((r) => r.visualConflict);
-    const visualDriftDays = results.map((r) => r.visualDriftDays);
+    const visualDriftDays = results.map((r) =>
+      r.visualDriftMinutes === null ? null : Math.round(r.visualDriftMinutes / MINUTES_PER_DAY),
+    );
 
     const updated = await db.$executeRaw`
       UPDATE activities AS a

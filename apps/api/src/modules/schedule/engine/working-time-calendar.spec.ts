@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWorkingDayCalendar, STANDARD_WEEKDAYS } from './calendar';
 import {
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
@@ -252,23 +251,28 @@ describe('buildWorkingTimeCalendar — guards', () => {
 
 describe('day-equivalence — the goldens’ safety net', () => {
   // A full-day (24h) Mon–Fri minute calendar with durations ×1440 must reproduce the SAME dates
-  // as the working-DAY calendar (ADR-0036 §4.2 / the M0 golden invariant).
-  const dayCal = buildWorkingDayCalendar(STANDARD_WEEKDAYS, []);
+  // the retired working-DAY model produced (ADR-0036 §4.2 / the M0 golden invariant). The day
+  // calendar has been removed, so the equivalence is asserted purely on the minute calendar.
   const minCal = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
 
-  it('a whole-day offset lands on the same calendar day (the inclusive-finish invariant)', () => {
-    for (const [from, days] of [
-      ['2026-01-05', 1],
-      ['2026-01-05', 5],
-      ['2026-01-01', 3],
-      ['2026-06-15', 20],
+  it('a whole-day inclusive finish lands on the expected last working day (the inclusive-finish invariant)', () => {
+    // compute.ts derives an activity's inclusive finish DATE from offset (days*1440 − 1); it must
+    // land on the last of `days` working days counted from `from`, skipping weekends — the exact
+    // identity that keeps the M0 goldens green under the days→minutes rework.
+    for (const [from, days, lastWorkingDay] of [
+      ['2026-01-05', 1, '2026-01-05'], // Mon, 1 day → Mon
+      ['2026-01-05', 5, '2026-01-09'], // Mon, 5 days → Fri
+      ['2026-01-01', 3, '2026-01-05'], // Thu, 3 days → Thu, Fri, Mon
+      ['2026-06-15', 20, '2026-07-10'], // Mon, 20 days → 4 weeks → Fri
     ] as const) {
-      // compute.ts derives an activity's inclusive finish DATE from offset (days*1440 − 1); it must
-      // equal the working-DAY model's last working day = addWorkingDays(from, days − 1). This is the
-      // exact identity that keeps the M0 goldens green under the days→minutes rework.
-      const inclusive = minCal.addWorkingTime(from, days * 1440 - 1).slice(0, 10);
-      expect(inclusive).toBe(dayCal.addWorkingDays(from, days - 1));
+      expect(minCal.addWorkingTime(from, days * 1440 - 1).slice(0, 10)).toBe(lastWorkingDay);
     }
+  });
+
+  it('a whole-day exclusive offset advances to the close of the last working day', () => {
+    // The exclusive finish boundary (days*1440) sits at the end of the last working day's window.
+    expect(minCal.addWorkingTime('2026-01-05', 1 * 1440).slice(0, 10)).toBe('2026-01-06'); // end of Mon
+    expect(minCal.addWorkingTime('2026-01-05', 5 * 1440).slice(0, 10)).toBe('2026-01-10'); // end of Fri
   });
 
   it('allMinutesWorkCalendar advances one calendar day per 1440 minutes', () => {

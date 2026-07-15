@@ -1,18 +1,9 @@
 import { ALL_WEEKDAYS_MASK, STANDARD_WEEKDAYS_MASK, WEEKDAYS, WorkingWeekdays } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { ALL_WEEKDAYS, STANDARD_WEEKDAYS } from '../modules/schedule/engine';
-
 // The shared bitmask contract (@repo/types) that the API DTO validates against and
-// the web weekday toggle group binds to. These tests pin its semantics AND that it
-// stays in lock-step with the engine's own constants (ADR-0024), since the two are
-// deliberately kept mirrored rather than sharing one runtime import.
+// the web weekday toggle group binds to. These tests pin its semantics.
 describe('WorkingWeekdays (shared @repo/types bitmask helper)', () => {
-  it('mirrors the engine constants exactly (lock-step, not drifted)', () => {
-    expect(ALL_WEEKDAYS_MASK).toBe(ALL_WEEKDAYS);
-    expect(STANDARD_WEEKDAYS_MASK).toBe(STANDARD_WEEKDAYS);
-  });
-
   it('has seven named weekdays, Monday first', () => {
     expect(WEEKDAYS).toHaveLength(7);
     expect(WEEKDAYS[0]).toBe('MONDAY');
