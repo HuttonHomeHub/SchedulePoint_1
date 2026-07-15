@@ -68,6 +68,18 @@ deploy`). Each test sets up and tears down its own data; no cross-test
 - Playwright journeys cover the critical paths and include automated
   accessibility assertions.
 
+## Engine conformance (structural gate)
+
+The `@repo/engine-conformance` package vendors a P6-class CPM/PDM conformance fixture and an
+**engine-free structural validator** (ADR-0034). Its Vitest suite runs in the standard **quality**
+job via `pnpm test` — no database, no browser, no engine — and **blocks merge** if the fixture is
+malformed (referential integrity, DAG, level-of-effort spans, open-end sets, progress sanity) or
+stops covering a required feature. It asserts **no schedule dates**: the fixture specifies inputs and
+intended behaviours, and the engine (measured by the differential harness in `apps/api`) is the thing
+judged on dates. See
+[`docs/specs/engine-conformance-framework/`](specs/engine-conformance-framework/) and the package
+README.
+
 ## Running tests
 
 ```bash

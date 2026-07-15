@@ -15,3 +15,6 @@ CHANGELOG.md
 
 # Docs assets that must not be reformatted
 **/*.min.*
+
+# Vendored conformance fixtures — an upstream contract, not ours to reformat
+packages/engine-conformance/fixtures/**

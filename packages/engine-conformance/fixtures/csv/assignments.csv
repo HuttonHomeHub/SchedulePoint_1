@@ -1,0 +1,46 @@
+id,activity,resource,role,units_per_hour,budgeted_units,actual_units,remaining_units,at_completion_units,curve,assignment_lag_h,test_tags,note
+AS0001,A1010,LAB-SUP,,3,3600,620,2980,3600,LINEAR,0,type_loe;res_labour,
+AS0002,A1020,LAB-QA,,2,2000,300,1700,2000,LINEAR,0,type_loe,
+AS0003,A1030,LAB-SUP,,1,1600,260,1340,1600,LINEAR,0,type_loe,
+AS0004,A3100,LAB-SCAF,,6,4800,0,4800,4800,LINEAR,0,type_loe,
+AS0005,A3010,LAB-CIVIL,,6,600,600,0,600,LINEAR,0,prog_complete;cost_actual,
+AS0006,A4100,LAB-CIVIL,,12,1800,1860,0,1860,LINEAR,0,prog_complete;cost_actual;cost_overrun,Actual units (1860) EXCEED budget (1800). At-completion must reflect the overrun; EV/CPI must go < 1.0.
+AS0007,A4100,NL-EXCAV,,2,300,320,0,320,LINEAR,0,,
+AS0008,A4200,LAB-CIVIL,,10,2000,1200,1200,2400,LINEAR,0,prog_in_progress;cost_actual,At-completion = 1200 actual + 1200 remaining = 2400 vs 2000 budget. 20%% over.
+AS0009,A4200,NL-EXCAV,,1,200,120,120,240,LINEAR,0,,
+AS0010,A4210,LAB-CIVIL,,10,1800,300,1500,1800,LINEAR,0,prog_suspended_no_resume,
+AS0011,A4220,LAB-QA,,2,80,32,48,80,LINEAR,0,prog_out_of_sequence,
+AS0012,A4230,LAB-CIVIL,,6,720,360,360,720,LINEAR,0,prog_suspend_resume,
+AS0013,A4330,MAT-CONC,,21.25,850,0,850,850,LINEAR,0,res_material;dt_fixed_units,"MATERIAL resource, unit of measure m3 (not hours). 850 m3 over 40h = 21.25 m3/h."
+AS0014,A4430,MAT-CONC,,19.5,780,0,780,780,LINEAR,0,res_material,
+AS0015,A5100,LAB-STEEL,,6,1200,0,1200,1200,BELL,0,res_curve_bell,
+AS0016,A5100,NL-CRANE200,,1,200,0,200,200,LINEAR,0,res_nonlabour,
+AS0017,A5100,MAT-STEEL,,0.6,120,0,120,120,LINEAR,0,res_material,
+AS0018,A5200,LAB-STEEL,,6,1320,0,1320,1320,BELL,0,,
+AS0019,A5200,NL-CRANE200,,1,220,0,220,220,LINEAR,0,,
+AS0020,A5200,MAT-STEEL,,0.61,135,0,135,135,LINEAR,0,,
+AS0021,A5500,LAB-STEEL,,4,240,0,240,240,LINEAR,0,cal_night_crosses_midnight,"Resource LAB-STEEL's own calendar is CAL-02 (day shift) but the activity runs on CAL-04 (nights). For a TASK DEPENDENT activity the ACTIVITY calendar wins - the resource's calendar must be ignored here. Contrast with A6100/A8300, which are RESOURCE DEPENDENT."
+AS0022,A6100,NL-CRANE600,,1,60,0,60,60,LINEAR,0,type_resource_dependent;res_calendar_drives;res_driving,DRIVING resource assignment on a RESOURCE DEPENDENT activity. The crane's calendar dictates the dates.
+AS0023,A6100,LAB-STEEL,,8,480,0,480,480,LINEAR,0,,
+AS0024,A6200,NL-CRANE600,,1,80,0,80,80,LINEAR,0,res_overallocation,Second concurrent claim on the single 600t crane. 200%% allocation until levelled.
+AS0025,A6200,LAB-STEEL,,6,480,0,480,480,LINEAR,0,,
+AS0026,A7100,LAB-PIPE,,8,2400,0,2400,2400,FRONT_LOADED,0,res_curve_front_loaded,
+AS0027,A7100,LAB-WELD,,4,1104,0,1104,1104,BELL,24,res_assignment_lag,"ASSIGNMENT LAG of 24h: welders join 3 days (24h on CAL-02) after the activity starts, so the assignment spans only 276h of the 300h activity. Resource histograms and cost spreads must both respect this."
+AS0028,A7100,NL-MEWP,,2,600,0,600,600,LINEAR,0,,
+AS0029,A7100,MAT-SPOOL,,0.73,220,0,220,220,LINEAR,0,res_material,
+AS0030,A7200,LAB-PIPE,ROLE-PF,8,2560,0,2560,2560,LINEAR,0,res_role,
+AS0031,A7200,LAB-WELD,ROLE-WD,4,1280,0,1280,1280,LINEAR,0,res_role,
+AS0032,A7200,MAT-SPOOL,,0.75,240,0,240,240,LINEAR,0,,
+AS0033,A7700,NL-HYDROPUMP,,1,60,0,60,60,LINEAR,0,res_overallocation;levelling_test,
+AS0034,A7700,LAB-PIPE,,4,240,0,240,240,LINEAR,0,,
+AS0035,A7730,NL-HYDROPUMP,,1,60,0,60,60,LINEAR,0,res_overallocation;levelling_test,"Same single-unit pump, same window as A7700. Levelling must serialise; unlevelled must report 200%%."
+AS0036,A7730,LAB-PIPE,,4,240,0,240,240,LINEAR,0,,
+AS0037,A8010,LAB-EI,,8,1600,0,1600,1600,LINEAR,0,pct_units,
+AS0038,A8010,MAT-CABLE,,60,12000,0,12000,12000,LINEAR,0,res_material;pct_units,"UNITS %% COMPLETE is driven by this material assignment: metres of cable pulled / 12,000."
+AS0039,A8300,LAB-EI-SPEC,ROLE-EIT,2,240,0,240,240,LINEAR,0,type_resource_dependent;cal_4day_week;res_driving,Driving resource on a 4-day (Mon-Thu) resource calendar.
+AS0040,A10300,LAB-WELD,,8,768,0,768,768,LINEAR,0,cal_window_only,
+AS0041,A10300,NL-WELDSET,,8,768,0,768,768,LINEAR,0,,
+AS0042,A11100,LAB-COMM,,4,640,0,640,640,BACK_LOADED,0,res_curve_back_loaded,
+AS0043,A11200,LAB-COMM,,4,560,0,560,560,DOUBLE_PEAK,0,res_curve_double_peak,
+AS0044,A9100,LAB-INS,,8,1920,0,1920,1920,LINEAR,0,,
+AS0045,A9200,LAB-PAINT,,6,960,0,960,960,LINEAR,0,,
