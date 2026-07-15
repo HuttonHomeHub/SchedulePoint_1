@@ -4,19 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
-import { Toolbar } from '@/components/ui/toolbar/Toolbar';
+import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
- * Canvas-first authoring toolbar items (ADR-0032). The inline timeline start-date control is gated
- * on `VITE_CANVAS_AUTHORING`, so this file pins it on (the flag-off registry is covered by
- * `tsld-toolbar.test.tsx`).
+ * Canvas-first authoring toolbar items (ADR-0032) — the Row 2 · Do authoring cluster. Gated on
+ * `VITE_CANVAS_AUTHORING`, so this file pins it on (the flag-off registry is covered by
+ * `tsld-toolbar.test.tsx`). Scheduling-modes are pinned OFF here (the mode selector + Go-to-date are
+ * covered by `tsld-toolbar-scheduling-modes.test.tsx`); the data-date control has left the toolbar.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  // This suite covers the canvas-authoring registry with scheduling-modes OFF (the single "Timeline
-  // start" control); the flag-on split + mode selector are covered by `tsld-toolbar-scheduling-modes`.
   SCHEDULING_MODES_ENABLED: false,
 }));
 
@@ -27,7 +26,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     stepZoom: vi.fn(),
     fit: vi.fn(),
     plannedStart: '2026-01-01',
-    setPlannedStart: vi.fn(),
     goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: vi.fn(),
@@ -37,7 +35,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     toggleAddActivity: vi.fn(),
     createType: 'TASK',
     setCreateType: vi.fn(),
-    canLink: true,
     isLinking: false,
     toggleLinkMode: vi.fn(),
     linkType: 'FS',
@@ -60,40 +57,24 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   };
 }
 
-function renderToolbar(context: TsldToolbarContext) {
-  return render(
+/** The Row 2 · Do toolbar element (where the authoring cluster lives). */
+function doRow(context: TsldToolbarContext, authoringEnabled = true) {
+  const rows = splitByRow(buildTsldToolbarItems());
+  return (
     <Toolbar
-      items={buildTsldToolbarItems()}
+      items={rows.do}
       context={context}
-      label="Plan toolbar"
-      authoringEnabled
-    />,
+      label="Build and manage"
+      authoringEnabled={authoringEnabled}
+    />
   );
 }
 
+function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
+  return render(doRow(context, authoringEnabled));
+}
+
 describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
-  it('shows an editable timeline start-date input for a writer and writes on change', () => {
-    const setPlannedStart = vi.fn();
-    renderToolbar(ctx({ setPlannedStart }));
-    const input = screen.getByLabelText('Timeline start');
-    expect(input).toHaveValue('2026-01-01');
-    fireEvent.change(input, { target: { value: '2026-02-15' } });
-    expect(setPlannedStart).toHaveBeenCalledWith('2026-02-15');
-  });
-
-  it('renders the start date as static text for a read-only viewer (no setter)', () => {
-    renderToolbar(ctx({ setPlannedStart: null }));
-    // No editable date input…
-    expect(screen.queryByLabelText('Timeline start')).not.toBeInTheDocument();
-    // …but the date is shown, labelled, as a read-out.
-    expect(screen.getByLabelText(/Timeline start:/)).toBeInTheDocument();
-  });
-
-  it('shows "Not set" when the plan has no start date yet', () => {
-    renderToolbar(ctx({ plannedStart: null, setPlannedStart: null }));
-    expect(screen.getByLabelText('Timeline start: Not set')).toBeInTheDocument();
-  });
-
   describe('Add split-button (M4)', () => {
     it('opens a type menu and arms the picked kind', () => {
       const setCreateType = vi.fn();
@@ -102,6 +83,15 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       // The three draw kinds are offered as single-choice (radio) menu items…
       fireEvent.click(screen.getByRole('menuitemradio', { name: 'Start milestone' }));
       expect(setCreateType).toHaveBeenCalledWith('START_MILESTONE');
+    });
+
+    it('previews Hammock / Level of effort as disabled "Span between" menu items', () => {
+      renderToolbar(ctx());
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      for (const name of ['Hammock', 'Level of effort']) {
+        const item = screen.getByRole('menuitem', { name: new RegExp(name) });
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+      }
     });
 
     it('labels the button with the armed kind while adding', () => {
@@ -116,27 +106,13 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: 'Stop adding' }));
       expect(toggleAddActivity).toHaveBeenCalledOnce();
 
-      rerender(
-        <Toolbar
-          items={buildTsldToolbarItems()}
-          context={ctx({ isAddingActivity: false })}
-          label="Plan toolbar"
-          authoringEnabled
-        />,
-      );
+      rerender(doRow(ctx({ isAddingActivity: false })));
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       expect(screen.queryByRole('menuitem', { name: 'Stop adding' })).not.toBeInTheDocument();
     });
 
     it('disables the split-button when the pen is not held (authoring off)', () => {
-      render(
-        <Toolbar
-          items={buildTsldToolbarItems()}
-          context={ctx()}
-          label="Plan toolbar"
-          authoringEnabled={false}
-        />,
-      );
+      render(doRow(ctx(), false));
       const addButton = screen.getByRole('button', { name: 'Add' });
       expect(addButton).toHaveAttribute('aria-disabled', 'true');
       fireEvent.click(addButton);
@@ -153,9 +129,13 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       expect(toggleLinkMode).toHaveBeenCalledOnce();
     });
 
-    it('hides the Link tool when the plan is not linkable', () => {
-      renderToolbar(ctx({ canLink: false }));
-      expect(screen.queryByRole('button', { name: 'Link activities' })).not.toBeInTheDocument();
+    it('shows the Link tool shaded (not hidden) when the pen is not held', () => {
+      // Two-row rule: shade-don't-hide — a viewer sees the disabled Link tool rather than a gap.
+      renderToolbar(ctx(), false);
+      expect(screen.getByRole('button', { name: 'Link activities' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
     });
 
     it('shows the FS/SS/FF selector only while linking, and picks a type', () => {
@@ -164,14 +144,7 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       // Not shown when idle…
       expect(screen.queryByRole('button', { name: /Link type/ })).not.toBeInTheDocument();
       // …shown while linking.
-      rerender(
-        <Toolbar
-          items={buildTsldToolbarItems()}
-          context={ctx({ isLinking: true, linkType: 'FS', setLinkType })}
-          label="Plan toolbar"
-          authoringEnabled
-        />,
-      );
+      rerender(doRow(ctx({ isLinking: true, linkType: 'FS', setLinkType })));
       fireEvent.click(screen.getByRole('button', { name: 'Link type: FS' }));
       fireEvent.click(screen.getByRole('menuitemradio', { name: /Start → Start/ }));
       expect(setLinkType).toHaveBeenCalledWith('SS');

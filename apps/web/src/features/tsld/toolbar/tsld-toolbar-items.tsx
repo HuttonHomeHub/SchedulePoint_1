@@ -2,7 +2,6 @@ import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   BarChart3,
-  CalendarClock,
   CalendarDays,
   CalendarRange,
   CalendarSearch,
@@ -28,13 +27,16 @@ import {
   RefreshCw,
   Redo2,
   Route,
+  Rows3,
   Search,
   Share2,
   SlidersHorizontal,
   Spline,
+  SquarePen,
   StickyNote,
   TriangleAlert,
   Undo2,
+  Waypoints,
 } from 'lucide-react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -44,13 +46,12 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
 
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
-import type { ToolbarItemRenderApi } from '@/components/ui/toolbar/toolbar-registry';
+import type { ToolbarItemRenderApi, ToolbarRow } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
-import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
 const ZOOM_LABELS: Record<string, string> = {
@@ -72,71 +73,14 @@ const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }>
 ];
 
 /**
- * The inline **plan start-date** control — the plan's `plannedStart`, the canvas day-zero origin. A
- * writer edits it via a native date input; a read-only viewer (`setPlannedStart` null) sees the date
- * as a static read-out. Changing it re-anchors the timeline. The two are registered as separate
- * toolbar items so the read-out is `presentational` — a non-interactive date is not a roving-tabindex
- * stop (a11y review), mirroring the finish-chip. The writer input spreads `itemProps` on its single
- * focusable control; the read-out spreads them on the (inert) span.
- *
- * `label` sets the accessible + visible name: "Timeline start" under ADR-0032 (the single conflated
- * control), or the de-overloaded "Project start" under ADR-0033 M2, where it is purely the *data*
- * anchor and canvas navigation moves to the separate {@link GoToDateControl}.
- */
-function TimelineStartControl({
-  ctx,
-  itemProps,
-  label,
-}: {
-  ctx: TsldToolbarContext;
-  itemProps: ToolbarItemRenderApi['itemProps'];
-  label: string;
-}): React.ReactElement {
-  const display = ctx.plannedStart ? formatCalendarDate(ctx.plannedStart) : 'Not set';
-  if (!ctx.setPlannedStart) {
-    return (
-      <span
-        {...itemProps}
-        aria-label={`${label}: ${display}`}
-        className={toolbarControlVariants({ tone: 'info' })}
-      >
-        <CalendarClock aria-hidden="true" className="mr-1.5 size-4" />
-        {display}
-      </span>
-    );
-  }
-  const setPlannedStart = ctx.setPlannedStart;
-  return (
-    // The focusable child is the `<input>`, not the `<label>`, so the base `focus-visible:` ring never
-    // matches; mirror it onto the label with `has-[input:focus-visible]` so tabbing to the field shows
-    // a visible focus indicator (WCAG 2.4.7, a11y review).
-    <label
-      className={cn(
-        toolbarControlVariants({ tone: 'control' }),
-        'has-[input:focus-visible]:ring-ring has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-inset',
-      )}
-    >
-      <CalendarClock aria-hidden="true" className="size-4" />
-      <span className="sr-only">{label}</span>
-      <input
-        {...itemProps}
-        type="date"
-        value={ctx.plannedStart ?? ''}
-        onChange={(event) => setPlannedStart(event.target.value)}
-        className="bg-transparent text-sm outline-none"
-      />
-    </label>
-  );
-}
-
-/**
  * The **Go to date** navigation control (ADR-0033 M2) — a labelled disclosure that opens a small date
  * picker and pans the canvas so the chosen date sits at the left edge. It never writes and persists no
  * state (CQ-1), so it is offered to *every* role, read-only viewers included: navigating the timeline
- * is not a mutation. A popover (not an inline field) so it reads unmistakably as *navigation*, kept
- * visually distinct from the persisted {@link TimelineStartControl} "Project start" data anchor beside
- * it — the whole point of de-overloading `plannedStart` (ADR-0033). Uncontrolled: picking a date jumps
- * once; there is no "current go-to date" to reflect, so nothing is echoed back.
+ * is not a mutation. A popover (not an inline field) so it reads unmistakably as *navigation*. Under
+ * the two-row toolbar (ADR-0031 amendment) the persisted **data date** leaves the bar entirely — it is
+ * set at plan creation and changed via *Edit plan* — so navigation ("Go to date") and the data anchor
+ * are no longer adjacent controls a planner could confuse. Uncontrolled: picking a date jumps once;
+ * there is no "current go-to date" to reflect, so nothing is echoed back.
  */
 const GOTO_FIELD_ID = 'tsld-goto-date-field';
 const GOTO_HINT_ID = 'tsld-goto-date-hint';
@@ -184,6 +128,24 @@ function GoToDateControl({
 const ADD_ACTIVITY_TYPES = ['TASK', 'START_MILESTONE', 'FINISH_MILESTONE'] as const;
 const ADD_DISABLED_REASON = 'Start editing to add activities';
 
+/** A small "coming soon" tag for menu rows that preview a not-yet-built activity kind. */
+function SoonTag(): React.ReactElement {
+  return (
+    <span className="border-border text-muted-foreground ml-auto rounded-full border border-dashed px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+      Soon
+    </span>
+  );
+}
+
+/** A non-interactive section heading inside the Add menu (grouping draw-vs-span kinds). */
+function MenuSection({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <p className="text-muted-foreground px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
+      {children}
+    </p>
+  );
+}
+
 /**
  * The **Add split-button** (ADR-0032 M4) — the canvas-first replacement for the plain "Add activity"
  * toggle. An APG menu-button: the trigger arms/labels the current draw kind and opens a `Menu` to
@@ -229,6 +191,7 @@ function AddActivityControl({
         label="Add activity type"
         restoreFocusRef={triggerRef}
       >
+        <MenuSection>Draw on the canvas</MenuSection>
         {ADD_ACTIVITY_TYPES.map((type) => (
           <MenuItem
             key={type}
@@ -248,6 +211,21 @@ function AddActivityControl({
             Stop adding
           </MenuItem>
         ) : null}
+        {/* Span-between kinds (ADR-0032) are derived from two endpoints, not point-and-draw — so they
+            live here as a distinct section, previewed disabled ("Soon") until the endpoint-pick flow
+            is built (docs/TOOLBAR_ROADMAP.md). */}
+        <div role="separator" className="bg-border my-1 h-px" />
+        <MenuSection>Span between activities</MenuSection>
+        <MenuItem disabled onSelect={() => {}}>
+          <Waypoints aria-hidden="true" className="size-4" />
+          Hammock
+          <SoonTag />
+        </MenuItem>
+        <MenuItem disabled onSelect={() => {}}>
+          <Rows3 aria-hidden="true" className="size-4" />
+          Level of effort
+          <SoonTag />
+        </MenuItem>
       </Menu>
     </>
   );
@@ -402,6 +380,7 @@ function ZoomPresetControl({
 function placeholderItem(o: {
   id: string;
   group: ToolbarItem<TsldToolbarContext>['group'];
+  row?: ToolbarRow;
   tier: ToolbarItem<TsldToolbarContext>['tier'];
   order: number;
   label: string;
@@ -413,6 +392,37 @@ function placeholderItem(o: {
     disabledReason: () => 'Coming soon',
     onActivate: () => {},
   };
+}
+
+/**
+ * The **search / filter field** that leads the Find cluster (ADR-0031 two-row amendment) — a
+ * presentational placeholder for the not-yet-built activity search. Rendered as a disabled search
+ * input (not an icon button) so the affordance reads at a glance the way the old app's did, sized to
+ * a comfortable field but shaded until wired. `presentational` keeps a non-operable field out of the
+ * roving-tabindex order (a11y); the "Coming soon" title differentiates it from a live-but-empty box.
+ */
+function SearchFieldControl({
+  itemProps,
+}: {
+  itemProps: ToolbarItemRenderApi['itemProps'];
+}): React.ReactElement {
+  return (
+    <div className="flex items-center">
+      <Search
+        aria-hidden="true"
+        className="text-muted-foreground pointer-events-none -mr-6 size-4"
+      />
+      <Input
+        {...itemProps}
+        type="search"
+        disabled
+        placeholder="Search or filter activities…"
+        aria-label="Search or filter activities (coming soon)"
+        title="Search / filter activities (coming soon)"
+        className="h-8 w-[min(15rem,32vw)] min-w-[9rem] pl-8 text-sm"
+      />
+    </div>
+  );
 }
 
 /** The checkbox body of the `View▾` popover — the display toggles, driven off the context. */
@@ -449,140 +459,61 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
 }
 
 /**
- * The TSLD command registry (ADR-0031) — every canvas control expressed as a {@link ToolbarItem}
- * over the {@link TsldToolbarContext}, grouped by the fixed 7-group taxonomy. Real controls (the
- * zoom-level dropdown + zoom/fit, view toggles, add-activity, link, auto-arrange, recalculate,
- * baselines/calendar/plan-details, legend, summary + finish chip) sit alongside **future-feature
- * placeholders** — disabled "Coming soon" stubs (undo/redo, filter, recenter-on-today, snap-to-grid,
- * clear-visual-placement, next-conflict) that make the toolbar read as fully designed and are switched
- * on later by swapping the stub for a real command (see `docs/TOOLBAR_ROADMAP.md`).
+ * The TSLD command registry (ADR-0031, two-row amendment) — every canvas control expressed as a
+ * {@link ToolbarItem} over the {@link TsldToolbarContext}, grouped by the fixed 7-group taxonomy and
+ * split across **two toolbar rows** via each item's `row`:
+ *
+ * - **Row 1 · Look** (`row: 'look'`) — view & navigate: Go-to-date, the zoom cluster, View toggles,
+ *   the Early | Visual scheduling-mode segment, the search field + find/analyse lenses, and the
+ *   right-aligned Finish read-out + Summary + Legend. Always live; nothing here needs the pen.
+ * - **Row 2 · Do** (`row: 'do'`) — build & manage: a pen-gated **authoring cluster** (Add, Link,
+ *   Auto-arrange, note/snap/clear, Recalculate, Undo/Redo) that shades as one set when the pen isn't
+ *   held, then plan & deliverable actions (Baselines, Calendar, Plan details, Edit plan, Update
+ *   progress, Export/Print/Share/Comments, Shortcuts) that stay live because they don't author.
+ *
+ * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
+ * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
+ * "Coming soon" stubs (undo/redo, filter, recenter-on-today, snap-to-grid, clear-visual-placement,
+ * next-conflict, colour-by, baseline-overlay, resource-view, add-note, export/print/share/comments,
+ * update-progress, plus Hammock / Level-of-effort in the Add menu) that make the toolbar read as fully
+ * designed and are switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom
- *    before a diagram is computed) is *disabled with a reason*, not removed, so the bar's silhouette
- *    doesn't shift as plan state changes. Only a genuinely-absent feature (flag-off) uses `isVisible`.
+ *    before a diagram is computed, or an authoring tool while viewing) is *disabled with a reason*,
+ *    not removed, so the bar's silhouette doesn't shift between viewing and editing. Only a
+ *    genuinely-absent feature (flag-off) uses `isVisible`.
  * 2. **One consolidated zoom control** — the five scale levels live in a single dropdown so the Frame
  *    group stops overflowing narrow bars (which used to silently demote Year/Quarter into `⋯`).
  *
- * NB `recenter-on-today` is a viewport **recenter** placeholder, distinct from the "Today line"
- * display toggle in `View▾` (which only shows/hides the marker).
+ * NB the persisted **data date** has no toolbar control (it is set at plan creation and changed via
+ * *Edit plan*); `recenter-on-today` is a viewport **recenter** placeholder, distinct from the "Today
+ * line" display toggle in `View▾` (which only shows/hides the marker).
  */
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   return defineToolbar<TsldToolbarContext>([
-    // --- 1 · Frame / navigate -----------------------------------------------------------------
-    // Inline timeline start-date (ADR-0032 M2) — leftmost in the Frame group; canvas-first only.
-    // Split by editability so the read-only variant is a *presentational* read-out (a11y review):
-    // a static date shouldn't be a roving-tabindex stop (the same rule the finish-chip follows).
-    // Under ADR-0033 M2 this conflated control is de-overloaded into a labelled "Project start" *data*
-    // anchor + a separate "Go to date" *navigation* jump (the trio below), so it yields flag-on.
-    {
-      id: 'timeline-start',
-      group: 'frame',
-      tier: 1,
-      order: -1,
-      label: 'Timeline start',
-      isVisible: (ctx) =>
-        CANVAS_AUTHORING_ENABLED && !SCHEDULING_MODES_ENABLED && ctx.setPlannedStart !== null,
-      render: (ctx, api) => (
-        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Timeline start" />
-      ),
-    },
-    {
-      id: 'timeline-start-readonly',
-      group: 'frame',
-      tier: 1,
-      order: -1,
-      label: 'Timeline start',
-      presentational: true,
-      isVisible: (ctx) =>
-        CANVAS_AUTHORING_ENABLED && !SCHEDULING_MODES_ENABLED && ctx.setPlannedStart === null,
-      render: (ctx, api) => (
-        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Timeline start" />
-      ),
-    },
-    // ADR-0033 M2 — the de-overloaded split (flag-on only): "Project start" persists the schedule
-    // anchor (pen-gated write / presentational read-out), "Go to date" is a pure view jump offered to
-    // every role. Ordered start-then-navigate; both stay leftmost in the Frame group.
-    {
-      id: 'project-start',
-      group: 'frame',
-      tier: 1,
-      order: -3,
-      label: 'Project start',
-      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setPlannedStart !== null,
-      render: (ctx, api) => (
-        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Project start" />
-      ),
-    },
-    {
-      id: 'project-start-readonly',
-      group: 'frame',
-      tier: 1,
-      order: -3,
-      label: 'Project start',
-      presentational: true,
-      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setPlannedStart === null,
-      render: (ctx, api) => (
-        <TimelineStartControl ctx={ctx} itemProps={api.itemProps} label="Project start" />
-      ),
-    },
+    // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
+    // "Go to date" is a pure view pan (ADR-0033 M2) offered to every role — navigating never mutates.
+    // The persisted **data date** no longer lives on the bar (ADR-0031 two-row amendment): it is set at
+    // plan creation and changed via *Edit plan* (and will become the status date under *Update
+    // progress*), so navigation and the data anchor can no longer be confused as adjacent date fields.
     {
       id: 'go-to-date',
       group: 'frame',
+      row: 'look',
       tier: 1,
       order: -2,
       label: 'Go to date',
       isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
       render: (ctx, api) => <GoToDateControl ctx={ctx} itemProps={api.itemProps} />,
     },
-    // Scheduling-mode selector (ADR-0033 M3, flag-on only): a two-item segmented Early | Visual
-    // control in the Lens group. Tier 1 so the labels actually render (tier-2 label-less items paint
-    // blank — ux review). Pen-gated: writers get the toggle; a read-only viewer gets the presentational
-    // read-out below (the mode changes how the diagram reads, so it must be visible to everyone).
-    {
-      id: 'mode-early',
-      group: 'lens',
-      tier: 1,
-      order: -3,
-      label: 'Early mode',
-      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode !== null,
-      isActive: (ctx) => ctx.schedulingMode === 'EARLY',
-      onActivate: (ctx) => ctx.setSchedulingMode?.('EARLY'),
-    },
-    {
-      id: 'mode-visual',
-      group: 'lens',
-      tier: 1,
-      order: -2,
-      label: 'Visual mode',
-      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode !== null,
-      isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
-      onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
-    },
-    {
-      id: 'mode-readonly',
-      group: 'lens',
-      tier: 1,
-      order: -3,
-      label: 'Scheduling mode',
-      presentational: true,
-      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.setSchedulingMode === null,
-      render: (ctx, api) => (
-        <span
-          {...api.itemProps}
-          aria-label={`Scheduling mode: ${ctx.schedulingMode === 'VISUAL' ? 'Visual' : 'Early'}`}
-          className={toolbarControlVariants({ tone: 'info' })}
-        >
-          {ctx.schedulingMode === 'VISUAL' ? 'Visual mode' : 'Early mode'}
-        </span>
-      ),
-    },
-    // Zoom scale — one dropdown holding all five levels (Day…Year), replacing the five segmented
-    // buttons that overflowed the bar (ADR-0031). Shaded (not hidden) until a diagram exists, so the
-    // toolbar keeps a stable shape from the empty canvas onward.
+    // Zoom — one dropdown (Day…Year) plus −/+ and Fit, a compact cluster in the Frame group (ADR-0031).
+    // Always on Row 1 (Look) and shaded (not hidden) until a diagram exists, so the bar keeps a stable
+    // shape from the empty canvas onward.
     {
       id: 'zoom-preset',
       group: 'frame',
+      row: 'look',
       tier: 1,
       order: 0,
       label: 'Zoom level',
@@ -593,6 +524,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'zoom-out',
       group: 'frame',
+      row: 'look',
       tier: 1,
       order: 10,
       label: 'Zoom out',
@@ -604,6 +536,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'zoom-in',
       group: 'frame',
+      row: 'look',
       tier: 1,
       order: 11,
       label: 'Zoom in',
@@ -615,6 +548,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'fit',
       group: 'frame',
+      row: 'look',
       tier: 1,
       order: 12,
       label: 'Fit to plan',
@@ -624,21 +558,23 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       onActivate: (ctx) => ctx.fit(),
     },
     // Recenter-on-today — a viewport recenter command (distinct from the "Today line" *display*
-    // toggle in `View▾`). A disabled "Coming soon" placeholder in the `⋯` overflow (tier 3) so it's
-    // discoverable without widening the always-inline core.
+    // toggle in `View▾`). Shown inline (tier 2 icon) with the zoom/nav cluster; a "Coming soon"
+    // placeholder for now.
     placeholderItem({
       id: 'today',
       group: 'frame',
-      tier: 3,
+      row: 'look',
+      tier: 2,
       order: 13,
       label: 'Recenter on today',
       icon: <LocateFixed className="size-4" />,
     }),
 
-    // --- 2 · Lens / display -------------------------------------------------------------------
+    // --- 2 · Lens / display (Row 1 · Look) ----------------------------------------------------
     {
       id: 'view',
       group: 'lens',
+      row: 'look',
       tier: 2,
       order: 0,
       // Always shown (display toggles apply to the empty canvas grid too) — part of the stable
@@ -655,104 +591,139 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         </ToolbarPopover>
       ),
     },
-    // view-mode switch slot — reserved (TSLD is lens #1). Registered hidden; promotable later.
+    // Scheduling-mode selector (ADR-0033 M3, flag-on only): the Early | Visual segment, immediately
+    // after View in the Lens group. Two-row rule (ADR-0031 amendment): shown **always** (flag-on) and
+    // shaded — not hidden — for a read-only viewer (null setter), since the mode changes how the
+    // diagram reads and must be legible to everyone; only writers can operate it. Tier 1 so the labels
+    // render (a tier-2 label-less segment paints blank — ux review).
+    {
+      id: 'mode-early',
+      group: 'lens',
+      row: 'look',
+      tier: 1,
+      order: 1,
+      label: 'Early mode',
+      isVisible: () => SCHEDULING_MODES_ENABLED,
+      isEnabled: (ctx) => ctx.setSchedulingMode !== null,
+      disabledReason: (ctx) =>
+        ctx.setSchedulingMode === null ? 'Start editing to change the scheduling mode' : undefined,
+      isActive: (ctx) => ctx.schedulingMode === 'EARLY',
+      onActivate: (ctx) => ctx.setSchedulingMode?.('EARLY'),
+    },
+    {
+      id: 'mode-visual',
+      group: 'lens',
+      row: 'look',
+      tier: 1,
+      order: 2,
+      label: 'Visual mode',
+      isVisible: () => SCHEDULING_MODES_ENABLED,
+      isEnabled: (ctx) => ctx.setSchedulingMode !== null,
+      disabledReason: (ctx) =>
+        ctx.setSchedulingMode === null ? 'Start editing to change the scheduling mode' : undefined,
+      isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
+      onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
+    },
+    // view-mode switch slot — reserved (TSLD is lens #1). Registered hidden; promotable later. The
+    // Gantt/Resource lens switch isn't surfaced until a second view exists (product call), so the seam
+    // stays in the code but paints nothing.
     {
       id: 'view-mode',
       group: 'lens',
+      row: 'look',
       tier: 1,
       order: 10,
       label: 'View mode',
       isVisible: () => false,
       onActivate: () => {},
     },
-    // Colour-by — recolour bars by status / WBS / critical / resource. Overflow placeholder.
+    // Analyse placeholders (Row 1) — shown **inline** (tier 2 icon buttons) rather than parked in `⋯`,
+    // so the intended lenses read at a glance beside the search field (ADR-0031 two-row amendment).
+    // Colour-by recolours bars by status/WBS/critical/resource; baseline-overlay ghosts the active
+    // baseline; resource-view is the second (histogram) lens that folds into `view-mode` when built.
     placeholderItem({
       id: 'colour-by',
       group: 'lens',
-      tier: 3,
-      order: 1,
+      row: 'look',
+      tier: 2,
+      order: 3,
       label: 'Colour by…',
       icon: <Palette className="size-4" />,
     }),
-    // Baseline overlay — ghost the active baseline's bars behind the live ones for variance-at-a-glance
-    // (baselines are already captured server-side; nothing draws them on the canvas yet). When built
-    // this becomes a `View▾` toggle; a placeholder button for now. Overflow placeholder.
     placeholderItem({
       id: 'baseline-overlay',
       group: 'lens',
-      tier: 3,
-      order: 2,
+      row: 'look',
+      tier: 2,
+      order: 4,
       label: 'Baseline overlay',
       icon: <Layers2 className="size-4" />,
     }),
-    // Snap-to-grid — a Visual-planning aid (snaps hand-placed bars to working-day gridlines). In the
-    // `⋯` overflow as a "Coming soon" placeholder.
-    placeholderItem({
-      id: 'snap-to-grid',
-      group: 'lens',
-      tier: 3,
-      order: 11,
-      label: 'Snap to grid',
-      icon: <Grid3x3 className="size-4" />,
-    }),
-    // Resource view — a second lens (resource histogram / over-allocation). Promotes the reserved
-    // `view-mode` slot into a visible "Coming soon" placeholder. Overflow.
     placeholderItem({
       id: 'resource-view',
       group: 'lens',
-      tier: 3,
-      order: 12,
+      row: 'look',
+      tier: 2,
+      order: 5,
       label: 'Resource view',
       icon: <BarChart3 className="size-4" />,
     }),
 
-    // --- 3 · Find / focus (placeholders) ------------------------------------------------------
-    // Search — jump to an activity by name/code. Placeholder in the `⋯` overflow.
-    placeholderItem({
+    // --- 3 · Find / focus (Row 1 · Look) ------------------------------------------------------
+    // Search / filter field — leads the Find cluster as a real (disabled) input, so the affordance
+    // reads the way the old app's did (ADR-0031 two-row amendment). Presentational until wired, so it
+    // isn't a roving-tabindex stop while inert.
+    {
       id: 'search',
       group: 'find',
-      tier: 3,
+      row: 'look',
+      tier: 1,
       order: -1,
-      label: 'Search activities',
-      icon: <Search className="size-4" />,
-    }),
-    // Filter / critical-only view — a "Coming soon" placeholder in the `⋯` overflow; the real command
-    // lands later. Kept out of the always-inline core to keep the bar lean.
+      label: 'Search or filter activities',
+      presentational: true,
+      render: (_ctx, api) => <SearchFieldControl itemProps={api.itemProps} />,
+    },
+    // Filter / critical-only, isolate-logic and next-conflict — inline "Coming soon" icon placeholders
+    // trailing the search field (tier 2; no longer parked in `⋯`).
     placeholderItem({
       id: 'filter',
       group: 'find',
-      tier: 3,
+      row: 'look',
+      tier: 2,
       order: 0,
       label: 'Filter',
       icon: <Filter className="size-4" />,
     }),
-    // Isolate logic path — highlight the driving/longest path, or a selection's predecessors &
-    // successors. Placeholder in the `⋯` overflow.
     placeholderItem({
       id: 'isolate-logic',
       group: 'find',
-      tier: 3,
-      order: 2,
+      row: 'look',
+      tier: 2,
+      order: 1,
       label: 'Isolate logic path',
       icon: <Route className="size-4" />,
     }),
-    // Jump-to-next-conflict — a Visual-planning helper (steps the viewport through flagged placements).
-    // In the `⋯` overflow (tier 3) so it's discoverable without crowding the bar.
     placeholderItem({
       id: 'next-conflict',
       group: 'find',
-      tier: 3,
-      order: 1,
+      row: 'look',
+      tier: 2,
+      order: 2,
       label: 'Next conflict',
       icon: <TriangleAlert className="size-4" />,
     }),
 
-    // --- 4 · Tools / author (pen-gated) -------------------------------------------------------
+    // --- 4 · Tools / author (Row 2 · Do — pen-gated authoring cluster) ------------------------
+    // The whole authoring cluster shades as one set when the pen isn't held (ADR-0028 + the ADR-0031
+    // two-row amendment): Add, Link, Auto-arrange, note/snap/clear, then Recalculate and Undo/Redo —
+    // moved here from the Object/History groups so the pen-gated set is contiguous. Plan & deliverable
+    // actions (baselines, calendar, export…) stay live on the same row because they don't need the pen.
     // Add activity — a plain toggle button flag-off (byte-for-byte unchanged); flag-on the canvas-first
     // Add split-button (ADR-0032 M4), a menu-button that also picks the draw kind (task / milestone).
     {
       id: 'add-activity',
       group: 'tools',
+      row: 'do',
       tier: 1,
       order: 0,
       label: 'Add activity',
@@ -766,18 +737,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             onActivate: (ctx) => ctx.toggleAddActivity(),
           }),
     },
-    // Link tool (ADR-0032 M5) — the canvas-first two-click dependency tool; only present when
-    // canvas-first authoring is on and the plan is linkable. Pen-gated with the other tools.
+    // Link tool (ADR-0032 M5) — the canvas-first two-click dependency tool. Two-row rule: shown
+    // **always** when canvas-first authoring is on (shade-don't-hide) and pen-gated, so a viewer sees
+    // it disabled rather than missing.
     {
       id: 'link-tool',
       group: 'tools',
+      row: 'do',
       tier: 1,
       order: 1,
       label: 'Link activities',
       icon: <Spline className="size-4" />,
       penGated: true,
       disabledReason: () => 'Start editing to link activities',
-      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.canLink,
+      isVisible: () => CANVAS_AUTHORING_ENABLED,
       isActive: (ctx) => ctx.isLinking,
       onActivate: (ctx) => ctx.toggleLinkMode(),
     },
@@ -785,18 +758,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'link-type',
       group: 'tools',
+      row: 'do',
       tier: 1,
       order: 2,
       label: 'Link type',
       penGated: true,
       disabledReason: () => LINK_DISABLED_REASON,
-      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.canLink && ctx.isLinking,
+      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.isLinking,
       render: (ctx, api) => <LinkTypeControl ctx={ctx} api={api} />,
     },
     {
       id: 'auto-arrange',
       group: 'tools',
-      tier: 3,
+      row: 'do',
+      tier: 2,
       order: 3,
       label: 'Auto-arrange lanes',
       icon: <AlignVerticalSpaceAround className="size-4" />,
@@ -805,31 +780,87 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: (ctx) => ctx.canAutoArrange,
       onActivate: (ctx) => ctx.requestAutoArrange(),
     },
-    // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
-    // falls back to the computed date). "Coming soon" placeholder in the `⋯` overflow.
-    placeholderItem({
-      id: 'clear-visual-placement',
-      group: 'tools',
-      tier: 3,
-      order: 4,
-      label: 'Clear visual placement',
-      icon: <Eraser className="size-4" />,
-    }),
     // Add note — a free-text annotation / callout pinned to the canvas or an activity (review markup).
-    // Overflow placeholder; leans on the multi-tenant + guest-share model for review workflows.
+    // Inline "Coming soon" icon; leans on the multi-tenant + guest-share model for review workflows.
     placeholderItem({
       id: 'add-note',
       group: 'tools',
-      tier: 3,
-      order: 5,
+      row: 'do',
+      tier: 2,
+      order: 4,
       label: 'Add note',
       icon: <StickyNote className="size-4" />,
     }),
+    // Snap-to-grid — a Visual-planning authoring aid (snaps hand-placed bars to working-day gridlines).
+    // Moved into the authoring cluster (was in the Lens group). Inline "Coming soon" icon.
+    placeholderItem({
+      id: 'snap-to-grid',
+      group: 'tools',
+      row: 'do',
+      tier: 2,
+      order: 5,
+      label: 'Snap to grid',
+      icon: <Grid3x3 className="size-4" />,
+    }),
+    // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
+    // falls back to the computed date). Inline "Coming soon" icon.
+    placeholderItem({
+      id: 'clear-visual-placement',
+      group: 'tools',
+      row: 'do',
+      tier: 2,
+      order: 6,
+      label: 'Clear visual placement',
+      icon: <Eraser className="size-4" />,
+    }),
+    // Recalculate + Undo/Redo close the authoring cluster (moved here from the Object/History groups so
+    // the pen-gated set is contiguous). Recalculate is enabled only with the pen and when not in flight.
+    {
+      id: 'recalculate',
+      group: 'tools',
+      row: 'do',
+      tier: 1,
+      order: 7,
+      label: 'Recalculate',
+      icon: <RefreshCw className="size-4" />,
+      penGated: true,
+      isEnabled: (ctx) => ctx.canRecalc && !ctx.recalcPending,
+      // Explain the disabled state like the sibling authoring commands do, rather than a silent grey:
+      // in-flight (busy) vs. no pen (identical underlying cause to Add activity).
+      disabledReason: (ctx) =>
+        ctx.recalcPending
+          ? 'Recalculating…'
+          : ctx.canRecalc
+            ? undefined
+            : 'Start editing to recalculate',
+      onActivate: (ctx) => ctx.recalculate(),
+    },
+    placeholderItem({
+      id: 'undo',
+      group: 'tools',
+      row: 'do',
+      tier: 2,
+      order: 8,
+      label: 'Undo',
+      icon: <Undo2 className="size-4" />,
+    }),
+    placeholderItem({
+      id: 'redo',
+      group: 'tools',
+      row: 'do',
+      tier: 2,
+      order: 9,
+      label: 'Redo',
+      icon: <Redo2 className="size-4" />,
+    }),
 
     // --- 5 · Object / plan actions ------------------------------------------------------------
+    // Finish read-out + Summary popover stay on Row 1 (Look): they report the computed schedule and
+    // don't need the pen. They right-align via the toolbar's `alignEndGroup="object"` on Row 1.
     {
       id: 'finish-chip',
       group: 'object',
+      row: 'look',
       tier: 1,
       order: 0,
       label: 'Project finish',
@@ -846,6 +877,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'summary',
       group: 'object',
+      row: 'look',
       tier: 2,
       order: 1,
       label: 'Summary',
@@ -860,29 +892,15 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         </ToolbarPopover>
       ),
     },
-    {
-      id: 'recalculate',
-      group: 'object',
-      tier: 1,
-      order: 2,
-      label: 'Recalculate',
-      icon: <RefreshCw className="size-4" />,
-      isEnabled: (ctx) => ctx.canRecalc && !ctx.recalcPending,
-      // Explain the disabled state like the sibling authoring commands do, rather than a silent grey:
-      // in-flight (busy) vs. no pen (identical underlying cause to Add activity).
-      disabledReason: (ctx) =>
-        ctx.recalcPending
-          ? 'Recalculating…'
-          : ctx.canRecalc
-            ? undefined
-            : 'Start editing to recalculate',
-      onActivate: (ctx) => ctx.recalculate(),
-    },
+    // Plan & deliverables (Row 2 · Do) — available whether or not you hold the pen (they open dialogs /
+    // export; they don't author on the canvas). Shown inline as icon buttons (tier 2). The persisted
+    // **data date** is changed here, via *Edit plan* — it no longer has its own control on the bar.
     {
       id: 'baselines',
       group: 'object',
-      tier: 3,
-      order: 3,
+      row: 'do',
+      tier: 2,
+      order: 2,
       label: 'Baselines…',
       icon: <Layers className="size-4" />,
       onActivate: (ctx) => ctx.openBaselines(),
@@ -890,8 +908,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'calendar',
       group: 'object',
-      tier: 3,
-      order: 4,
+      row: 'do',
+      tier: 2,
+      order: 3,
       label: 'Calendar…',
       icon: <CalendarDays className="size-4" />,
       onActivate: (ctx) => ctx.openCalendar(),
@@ -899,8 +918,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'plan-details',
       group: 'object',
-      tier: 3,
-      order: 5,
+      row: 'do',
+      tier: 2,
+      order: 4,
       label: 'Plan details…',
       icon: <Info className="size-4" />,
       onActivate: (ctx) => ctx.openPlanDetails(),
@@ -908,20 +928,32 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'edit-plan',
       group: 'object',
-      tier: 3,
-      order: 6,
+      row: 'do',
+      tier: 2,
+      order: 5,
       label: 'Edit plan…',
+      icon: <SquarePen className="size-4" />,
       isVisible: (ctx) => ctx.editPlan !== null,
       onActivate: (ctx) => ctx.editPlan?.(),
     },
-    // Deliverables + collaboration — overflow "Coming soon" placeholders (see docs/TOOLBAR_ROADMAP.md).
-    // Export the diagram (PDF/PNG) or the schedule (XER/MSP/CSV); Print; Share (surfaces the ADR-0012
-    // per-plan guest link); Comments (activity threads); Update progress (apply actuals + advance the
-    // data date).
+    // Deliverables + collaboration — inline "Coming soon" icon placeholders (Row 2; see
+    // docs/TOOLBAR_ROADMAP.md). Update progress (apply actuals + advance the data date); Export the
+    // diagram (PDF/PNG) or schedule (XER/MSP/CSV); Print; Share (the ADR-0012 per-plan guest link);
+    // Comments (activity threads).
+    placeholderItem({
+      id: 'update-progress',
+      group: 'object',
+      row: 'do',
+      tier: 2,
+      order: 6,
+      label: 'Update progress…',
+      icon: <Gauge className="size-4" />,
+    }),
     placeholderItem({
       id: 'export',
       group: 'object',
-      tier: 3,
+      row: 'do',
+      tier: 2,
       order: 7,
       label: 'Export…',
       icon: <FileDown className="size-4" />,
@@ -929,7 +961,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     placeholderItem({
       id: 'print',
       group: 'object',
-      tier: 3,
+      row: 'do',
+      tier: 2,
       order: 8,
       label: 'Print…',
       icon: <Printer className="size-4" />,
@@ -937,7 +970,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     placeholderItem({
       id: 'share',
       group: 'object',
-      tier: 3,
+      row: 'do',
+      tier: 2,
       order: 9,
       label: 'Share…',
       icon: <Share2 className="size-4" />,
@@ -945,44 +979,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     placeholderItem({
       id: 'comments',
       group: 'object',
-      tier: 3,
+      row: 'do',
+      tier: 2,
       order: 10,
       label: 'Comments',
       icon: <MessageSquare className="size-4" />,
     }),
-    placeholderItem({
-      id: 'update-progress',
-      group: 'object',
-      tier: 3,
-      order: 11,
-      label: 'Update progress…',
-      icon: <Gauge className="size-4" />,
-    }),
 
-    // --- 6 · History / status ------------------------------------------------------------------
-    // Undo / Redo — high-expectation editing controls, shown inline as "Coming soon" placeholders
-    // until the edit-history stack is built (ADR-0031). Icon-only; the label is the accessible name.
-    placeholderItem({
-      id: 'undo',
-      group: 'history',
-      tier: 1,
-      order: 0,
-      label: 'Undo',
-      icon: <Undo2 className="size-4" />,
-    }),
-    placeholderItem({
-      id: 'redo',
-      group: 'history',
-      tier: 1,
-      order: 1,
-      label: 'Redo',
-      icon: <Redo2 className="size-4" />,
-    }),
-
-    // --- 7 · Help -----------------------------------------------------------------------------
+    // --- 6 · Help -----------------------------------------------------------------------------
+    // Legend rides Row 1 (Look) at the far right; Shortcuts sits at the end of Row 2 (Do). (Undo/Redo
+    // moved to the Row-2 authoring cluster above, so the History group holds no toolbar items now.)
     {
       id: 'legend',
       group: 'help',
+      row: 'look',
       tier: 2,
       order: 0,
       label: 'Legend',
@@ -1001,7 +1011,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'shortcuts',
       group: 'help',
-      tier: 3,
+      row: 'do',
+      tier: 2,
       order: 1,
       label: 'Keyboard shortcuts',
       icon: <Keyboard className="size-4" />,

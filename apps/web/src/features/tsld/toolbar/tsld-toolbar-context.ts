@@ -22,15 +22,11 @@ export interface TsldToolbarContext {
   setZoomPreset: (level: ZoomLevel) => void;
   stepZoom: (factor: number) => void;
   fit: () => void;
-  /** The plan's timeline start (`plannedStart`) — the canvas day-zero origin; null when unset. The
-   * inline start-date control reads it (ADR-0032 M2). */
+  /** The plan's data date (`plannedStart`) — the canvas day-zero origin; null when unset. The registry
+   * gates **Go to date** on it (there is a timeline to navigate only once it's set). The persisted
+   * value is edited off-toolbar now (set at plan creation, changed via *Edit plan*), so there is no
+   * `setPlannedStart` seam here (ADR-0031 two-row amendment). */
   plannedStart: string | null;
-  /** Set the timeline start (targeted PATCH). Pen-gated (`canEditSchedule`, Critical Q3): `null`
-   * when the viewer can't edit the schedule, so the control renders the date as static text.
-   *
-   * Under `SCHEDULING_MODES_ENABLED` (ADR-0033 M2) this is surfaced as the labelled **Project start**
-   * data control — the persisted schedule anchor — distinct from {@link goToDate} navigation below. */
-  setPlannedStart: ((iso: string) => void) | null;
   /** Pan the canvas so `iso` sits at the left edge — a pure **view** jump, no fetch and no persisted
    * state (ADR-0033 M2, CQ-1). Drives the **Go to date** navigation control (flag-on only), which is
    * available to every role including read-only viewers because navigating never mutates the plan. */
@@ -43,8 +39,8 @@ export interface TsldToolbarContext {
    * state. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
   schedulingMode: SchedulingMode;
   /** Switch the plan's scheduling mode (targeted PATCH, pen-gated). `null` when the viewer can't edit
-   * the schedule — the registry then hides the interactive switch and shows a presentational mode
-   * read-out instead (the mode changes how the diagram reads, so viewers still see which is active). */
+   * the schedule — the registry then keeps the Early | Visual selector **visible but shaded** (the mode
+   * changes how the diagram reads, so viewers still see which is active), operable only by writers. */
   setSchedulingMode: ((mode: SchedulingMode) => void) | null;
 
   // --- Tools / author (group 4, pen-gated) --------------------------------------------------
@@ -57,10 +53,9 @@ export interface TsldToolbarContext {
   createType: ActivityType;
   /** Pick the activity kind the next draw creates (also enters add mode). */
   setCreateType: (type: ActivityType) => void;
-  /** Whether the two-click Link tool is offered (canvas-first authoring + a link handler wired,
-   * ADR-0032 M5). False ⇒ the Link tool + its type selector are hidden. */
-  canLink: boolean;
-  /** True when the current edit mode is the two-click Link tool (drives the tool's pressed state). */
+  /** True when the current edit mode is the two-click Link tool (drives the tool's pressed state).
+   * The Link tool is shown whenever canvas-first authoring is on (shade-don't-hide) and pen-gated, so
+   * its visibility no longer depends on a per-plan capability flag (ADR-0031 two-row amendment). */
   isLinking: boolean;
   /** Enter/leave the Link tool (pen-gated). */
   toggleLinkMode: () => void;

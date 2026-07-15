@@ -33,6 +33,12 @@ export interface ToolbarProps<Ctx> {
   authoringEnabled?: boolean;
   /** Human labels for each `role="group"`; falls back to a humanised group id. */
   groupLabels?: Partial<Record<ToolbarGroupId, string>>;
+  /**
+   * Push this group (and any groups after it) to the trailing edge with `margin-inline-start: auto`
+   * (ADR-0031 two-row amendment). Used on Row 1 to right-align the status read-outs (Finish / Summary /
+   * Legend). No-op if the group isn't currently rendered inline.
+   */
+  alignEndGroup?: ToolbarGroupId;
   className?: string;
 }
 
@@ -66,10 +72,19 @@ export function Toolbar<Ctx>({
   label,
   authoringEnabled = true,
   groupLabels,
+  alignEndGroup,
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef(new Map<string, HTMLElement>());
+  // Last-known measured width per item. A demotable item that is currently in the `⋯` overflow has no
+  // inline node, so its live `getBoundingClientRect().width` reads 0 — feeding that 0 back into
+  // `computeOverflow` would drop the total below the threshold, promote the item inline, re-measure a
+  // non-zero width, overflow it again… a per-frame flip-flop (ResizeObserver overflow loop) that makes
+  // the bar jitter. Caching each item's real width (updated only while it's inline, > 0) keeps the
+  // overflow decision deterministic and stable. Item widths are content-driven, so a cached value stays
+  // valid across container resizes (pinned render items are always inline, so they re-measure fresh).
+  const widthCacheRef = useRef(new Map<string, number>());
   const [overflowedIds, setOverflowedIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -89,8 +104,16 @@ export function Toolbar<Ctx>({
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
     const available = container.clientWidth;
-    const widthOf = (id: string): number =>
-      itemRefs.current.get(id)?.getBoundingClientRect().width ?? 0;
+    // Read the live width when the item is inline (caching it), else fall back to its last-known width
+    // so overflowed items don't collapse to 0 and cause an overflow flip-flop (see widthCacheRef).
+    const widthOf = (id: string): number => {
+      const live = itemRefs.current.get(id)?.getBoundingClientRect().width ?? 0;
+      if (live > 0) {
+        widthCacheRef.current.set(id, live);
+        return live;
+      }
+      return widthCacheRef.current.get(id) ?? 0;
+    };
     const pinnedWidth = bar
       .filter((r) => typeof r.item.onActivate !== 'function')
       .reduce((sum, r) => sum + widthOf(r.item.id), 0);
@@ -225,6 +248,8 @@ export function Toolbar<Ctx>({
           className={cn(
             'flex items-center gap-1',
             i > 0 && 'border-border ml-1 border-l pl-2', // a hairline separates groups
+            // Right-align this group (and everything after it) — the trailing status read-outs on Row 1.
+            group === alignEndGroup && 'ml-auto',
           )}
         >
           {groupItems.map((r) =>

@@ -16,9 +16,10 @@ import { cn } from '@/lib/utils';
  * Controlled via `open`/`onClose`. Pass `restoreFocusRef` for the element that
  * should regain focus on Escape/selection (the invoking trigger).
  *
- * Scope is intentionally minimal — a flat list of 2–4 actions, no submenus,
- * typeahead, or disabled items. A future consumer needing those should extend
- * this primitive (add the feature here) rather than fork it.
+ * Scope is intentionally minimal — a flat list of a handful of actions, no
+ * submenus or typeahead. Items may be **disabled** (`aria-disabled`, skipped by
+ * roving focus) for "coming soon" affordances. A future consumer needing more
+ * should extend this primitive (add the feature here) rather than fork it.
  */
 
 interface MenuAnchor {
@@ -44,12 +45,13 @@ function clampAnchor({ x, y }: MenuAnchor): { left: number; top: number } {
   };
 }
 
-/** The focusable menu items currently in the menu, in DOM order (plain + radio items). */
+/** The focusable menu items currently in the menu, in DOM order (plain + radio items).
+ * Disabled items (`aria-disabled`) are present in the DOM but skipped by roving focus. */
 function itemsOf(container: HTMLElement | null): HTMLButtonElement[] {
   if (!container) return [];
   return Array.from(
     container.querySelectorAll<HTMLButtonElement>('[role="menuitem"],[role="menuitemradio"]'),
-  );
+  ).filter((el) => el.getAttribute('aria-disabled') !== 'true');
 }
 
 /**
@@ -200,16 +202,22 @@ export function Menu({
  * (`role="menuitemradio"` + `aria-checked`) so a screen reader announces which
  * option in a single-choice group is currently active — the visual check on its
  * own (an `aria-hidden` icon) conveys nothing to AT (component/a11y review).
+ *
+ * `disabled` renders a non-actionable item (`aria-disabled`, muted, no hover/
+ * focus affordance) that {@link Menu}'s roving focus skips — used for "coming
+ * soon" affordances so the option is discoverable without being operable.
  */
 export function MenuItem({
   onSelect,
   destructive = false,
   selected,
+  disabled = false,
   children,
 }: {
   onSelect: () => void;
   destructive?: boolean;
   selected?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const close = useContext(MenuCloseContext);
@@ -218,18 +226,25 @@ export function MenuItem({
       type="button"
       role={selected === undefined ? 'menuitem' : 'menuitemradio'}
       {...(selected === undefined ? {} : { 'aria-checked': selected })}
+      {...(disabled ? { 'aria-disabled': true } : {})}
       tabIndex={-1}
       onClick={() => {
+        if (disabled) return;
         onSelect();
         close?.();
       }}
       className={cn(
-        'flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none',
-        // A visible focus ring for the roving-focus item — `bg-accent` alone is ~1.09:1 on the
-        // popover surface (fails WCAG 1.4.11); `ring` clears the 3:1 non-text floor (~4.9:1).
-        'focus:bg-accent focus:text-accent-foreground focus:ring-ring focus:ring-2 focus:ring-inset',
-        'hover:bg-accent hover:text-accent-foreground',
-        destructive && 'text-destructive-text',
+        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none',
+        disabled
+          ? 'text-muted-foreground cursor-default'
+          : [
+              'cursor-pointer',
+              // A visible focus ring for the roving-focus item — `bg-accent` alone is ~1.09:1 on the
+              // popover surface (fails WCAG 1.4.11); `ring` clears the 3:1 non-text floor (~4.9:1).
+              'focus:bg-accent focus:text-accent-foreground focus:ring-ring focus:ring-2 focus:ring-inset',
+              'hover:bg-accent hover:text-accent-foreground',
+              destructive && 'text-destructive-text',
+            ],
       )}
     >
       {children}

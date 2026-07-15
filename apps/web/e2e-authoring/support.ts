@@ -66,7 +66,9 @@ export async function drawActivity(
   name: string,
   pos: { x: number; y: number },
 ): Promise<void> {
-  await page.getByRole('button', { name: /^Add/ }).click();
+  // The Add split-button reads "Add" / "Adding <kind>"; anchor the regex so it doesn't also match
+  // the inline "Add note" placeholder now on the same row (Playwright name matching is substring).
+  await page.getByRole('button', { name: /^Add(ing .+)?$/ }).click();
   await page.getByRole('menuitemradio', { name: kind }).click();
   await canvas(page).click({ position: pos });
   const form = page.getByRole('form', { name: 'Name the new activity' });

@@ -63,6 +63,34 @@ describe('Menu', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('a disabled item is aria-disabled, inert on click, and skipped by roving focus', () => {
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <Menu open onClose={onClose} anchor={{ x: 40, y: 40 }} label="Add type">
+        <MenuItem onSelect={() => onSelect('task')}>Task</MenuItem>
+        <MenuItem disabled onSelect={() => onSelect('hammock')}>
+          Hammock
+        </MenuItem>
+        <MenuItem onSelect={() => onSelect('milestone')}>Milestone</MenuItem>
+      </Menu>,
+    );
+    const menu = screen.getByRole('menu');
+    const task = screen.getByRole('menuitem', { name: 'Task' });
+    const hammock = screen.getByRole('menuitem', { name: 'Hammock' });
+    const milestone = screen.getByRole('menuitem', { name: 'Milestone' });
+    expect(hammock).toHaveAttribute('aria-disabled', 'true');
+    // Clicking it does nothing (no select, no close).
+    fireEvent.click(hammock);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    // Roving focus jumps over the disabled item: first → last, skipping Hammock.
+    expect(task).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(milestone).toHaveFocus();
+    expect(hammock).not.toHaveFocus();
+  });
+
   it('a `selected` item becomes a radio menu item conveying its checked state to AT', () => {
     render(
       <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Type">

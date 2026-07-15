@@ -5,11 +5,11 @@ import { axe } from 'vitest-axe';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
-import { Toolbar } from '@/components/ui/toolbar/Toolbar';
+import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
-// This suite covers the **flag-off** registry (plain Add toggle, no timeline-start / Link tool). Now
-// that `VITE_CANVAS_AUTHORING` defaults on, pin it off here; the flag-on registry is covered by
+// This suite covers the **flag-off** registry (plain Add toggle, no Link tool). Now that
+// `VITE_CANVAS_AUTHORING` defaults on, pin it off here; the flag-on registry is covered by
 // `tsld-toolbar-authoring.test.tsx`.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -37,7 +37,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     stepZoom: spies.stepZoom,
     fit: spies.fit,
     plannedStart: '2026-01-01',
-    setPlannedStart: vi.fn(),
     goToDate: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: spies.toggleView,
@@ -47,7 +46,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     toggleAddActivity: spies.toggleAddActivity,
     createType: 'TASK',
     setCreateType: vi.fn(),
-    canLink: false,
     isLinking: false,
     toggleLinkMode: vi.fn(),
     linkType: 'FS',
@@ -70,22 +68,33 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   };
 }
 
-function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
+/** Render the two-row toolbar the workspace renders (ADR-0031 amendment): Row 1 · Look + Row 2 · Do. */
+function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
+  const rows = splitByRow(buildTsldToolbarItems());
   return render(
-    <Toolbar
-      items={buildTsldToolbarItems()}
-      context={context}
-      label="Plan toolbar"
-      authoringEnabled={authoringEnabled}
-    />,
+    <div>
+      <Toolbar
+        items={rows.look}
+        context={context}
+        label="View and navigate"
+        authoringEnabled={authoringEnabled}
+        alignEndGroup="object"
+      />
+      <Toolbar
+        items={rows.do}
+        context={context}
+        label="Build and manage"
+        authoringEnabled={authoringEnabled}
+      />
+    </div>,
   );
 }
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('TSLD toolbar registry', () => {
+describe('TSLD toolbar registry (two-row)', () => {
   it('renders the frame controls and drives the canvas seam', () => {
-    renderToolbar(ctx());
+    renderRows(ctx());
     // Zoom level is a single dropdown now (not five buttons): open it and pick a level.
     fireEvent.click(screen.getByRole('button', { name: 'Zoom level: Week' }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Month' }));
@@ -97,7 +106,7 @@ describe('TSLD toolbar registry', () => {
   });
 
   it('reflects the active scale preset on the zoom trigger and menu', () => {
-    renderToolbar(ctx({ zoomPreset: 'month' }));
+    renderRows(ctx({ zoomPreset: 'month' }));
     const trigger = screen.getByRole('button', { name: 'Zoom level: Month' });
     expect(trigger).toBeInTheDocument();
     fireEvent.click(trigger);
@@ -112,20 +121,28 @@ describe('TSLD toolbar registry', () => {
   });
 
   it('opens the View popover and toggles a display layer', () => {
-    renderToolbar(ctx());
+    renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
     const panel = screen.getByRole('dialog', { name: 'View' });
     fireEvent.click(within(panel).getByLabelText('Non-working'));
     expect(spies.toggleView).toHaveBeenCalledWith('nonWorking');
   });
 
-  it('pins the Project-finish chip inline (product-owner decision #1)', () => {
-    renderToolbar(ctx());
-    expect(screen.getByText('Finish: 01 Aug 2026')).toBeInTheDocument();
+  it('keeps the two rows on distinct toolbars (Look / Do)', () => {
+    renderRows(ctx());
+    // Row 1 hosts view/navigate; Row 2 hosts build/manage. Both are APG toolbars.
+    expect(screen.getByRole('toolbar', { name: 'View and navigate' })).toBeInTheDocument();
+    expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
+  });
+
+  it('pins the Project-finish chip inline on Row 1 (product-owner decision #1)', () => {
+    renderRows(ctx());
+    const lookRow = screen.getByRole('toolbar', { name: 'View and navigate' });
+    expect(within(lookRow).getByText('Finish: 01 Aug 2026')).toBeInTheDocument();
   });
 
   it('renders the Summary and Legend popover bodies from the context', () => {
-    renderToolbar(ctx());
+    renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /Summary/ }));
     expect(screen.getByTestId('summary-body')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Legend/ }));
@@ -133,49 +150,51 @@ describe('TSLD toolbar registry', () => {
   });
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {
-    const { rerender } = renderToolbar(ctx(), false);
+    const { rerender } = renderRows(ctx(), false);
     const add = screen.getByRole('button', { name: 'Add activity' });
     expect(add).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(add);
     expect(spies.toggleAddActivity).not.toHaveBeenCalled();
 
+    const rows = splitByRow(buildTsldToolbarItems());
     rerender(
-      <Toolbar
-        items={buildTsldToolbarItems()}
-        context={ctx()}
-        label="Plan toolbar"
-        authoringEnabled
-      />,
+      <div>
+        <Toolbar
+          items={rows.look}
+          context={ctx()}
+          label="View and navigate"
+          authoringEnabled
+          alignEndGroup="object"
+        />
+        <Toolbar items={rows.do} context={ctx()} label="Build and manage" authoringEnabled />
+      </div>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
     expect(spies.toggleAddActivity).toHaveBeenCalledOnce();
   });
 
   it('disables Recalculate when the model says it cannot recalc', () => {
-    renderToolbar(ctx({ canRecalc: false }));
+    renderRows(ctx({ canRecalc: false }));
     expect(screen.getByRole('button', { name: 'Recalculate' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
   });
 
-  it('absorbs the plan actions into the ⋯ overflow (Baselines/Calendar/Plan details)', () => {
-    renderToolbar(ctx());
-    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
-    const menu = screen.getByRole('menu', { name: 'More toolbar actions' });
-    fireEvent.click(within(menu).getByRole('menuitem', { name: /Baselines/ }));
+  it('shows the plan actions inline on Row 2 and drives their seams (Baselines)', () => {
+    renderRows(ctx());
+    // Plan & deliverable actions now sit inline (tier-2 icon buttons), not in a `⋯` overflow.
+    fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
     expect(spies.openBaselines).toHaveBeenCalledOnce();
   });
 
   it('hides Edit plan for a non-writer (editPlan null)', () => {
-    renderToolbar(ctx({ editPlan: null }));
-    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
-    const menu = screen.getByRole('menu', { name: 'More toolbar actions' });
-    expect(within(menu).queryByRole('menuitem', { name: /Edit plan/ })).not.toBeInTheDocument();
+    renderRows(ctx({ editPlan: null }));
+    expect(screen.queryByRole('button', { name: 'Edit plan…' })).not.toBeInTheDocument();
   });
 
   it('shades — not hides — the frame controls on an empty plan (stable shape)', () => {
-    renderToolbar(ctx({ hasDiagram: false }));
+    renderRows(ctx({ hasDiagram: false }));
     // Zoom + Fit stay on the bar but disabled, so the toolbar's silhouette doesn't shift as the plan
     // gains a computed diagram (ADR-0031 "shade, don't hide").
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toHaveAttribute(
@@ -195,7 +214,7 @@ describe('TSLD toolbar registry', () => {
   });
 
   it('shows future features as disabled "Coming soon" placeholders (undo/redo)', () => {
-    renderToolbar(ctx());
+    renderRows(ctx());
     for (const name of ['Undo', 'Redo']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
@@ -203,19 +222,20 @@ describe('TSLD toolbar registry', () => {
     }
   });
 
-  it('lists the roadmap placeholders in the ⋯ overflow, disabled with a reason', () => {
-    renderToolbar(ctx());
-    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
-    const menu = screen.getByRole('menu', { name: 'More toolbar actions' });
-    for (const name of ['Export…', 'Share…', 'Search activities', 'Add note', 'Colour by…']) {
-      const item = within(menu).getByRole('menuitem', { name });
+  it('renders the search field and inline roadmap placeholders, disabled with a reason', () => {
+    renderRows(ctx());
+    // Search leads the Find cluster as a disabled field (not a menu item).
+    expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
+    // The rest are inline "Coming soon" icon buttons.
+    for (const name of ['Export…', 'Share…', 'Add note', 'Colour by…']) {
+      const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', 'Coming soon');
     }
   });
 
-  it('has no axe violations', async () => {
-    renderToolbar(ctx());
-    expect((await axe(screen.getByRole('toolbar'))).violations).toEqual([]);
+  it('has no axe violations across both rows', async () => {
+    const { container } = renderRows(ctx());
+    expect((await axe(container)).violations).toEqual([]);
   });
 });
