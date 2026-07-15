@@ -1,5 +1,14 @@
 # @repo/web
 
+## 0.23.1
+
+### Patch Changes
+
+- [#72](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/72) [`ba3ca38`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ba3ca389a107c5accd60d0d43826f4b2fb13bebb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Two small plan-toolbar fixes: the Auto-arrange lanes control now stays on the bar and greys out in
+  View mode (shade-don't-hide), instead of disappearing and reappearing when switching between View and
+  Edit — consistent with the other authoring icons. The search / filter field also gets a little more
+  spacing from the divider on its left.
+
 ## 0.23.0
 
 ### Minor Changes
