@@ -53,5 +53,6 @@ the loader tests catch any shape drift.
 
 The fixture is **P6-class** — most of it is intentionally _beyond_ SchedulePoint's current
 working-day engine. It is a **north star and gap map**, not a commitment to full P6 parity. Which
-behaviours are supported / partial / missing / out-of-scope is tracked in the capability matrix
-(added in M0-B); the roadmap sequences the gaps behind the hour/shift-granular calendar rework.
+behaviours are supported / partial / missing / out-of-scope is tracked in the
+[capability matrix](../../docs/specs/engine-conformance-framework/CAPABILITY_MATRIX.md); the roadmap
+sequences the gaps behind the hour/shift-granular calendar rework (ADR-0034).
