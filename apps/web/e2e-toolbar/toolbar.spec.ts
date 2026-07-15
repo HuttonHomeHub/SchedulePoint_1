@@ -49,7 +49,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   // Project-finish chip and the `View▾` lens popover. The canvas now plots the activities in its
   // labelled diagram region with a focusable option each.
   const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
-  await expect(lookRow.getByRole('button', { name: 'View' })).toBeVisible();
+  await expect(lookRow.getByRole('button', { name: 'View', exact: true })).toBeVisible();
   await expect(lookRow.getByText('Finish')).toBeVisible();
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();
@@ -57,7 +57,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
 
   // The display toggles moved off the canvas into the `View▾` Tier-2 popover — a non-modal disclosure
   // whose trigger is a roving toolbar member. Toggling a layer and closing keeps the canvas mounted.
-  await lookRow.getByRole('button', { name: 'View' }).click();
+  await lookRow.getByRole('button', { name: 'View', exact: true }).click();
   const viewPanel = page.getByRole('dialog', { name: 'View' });
   await viewPanel.getByLabel('Labels').click();
   await page.keyboard.press('Escape');
@@ -88,7 +88,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
 
   // Row 1 is one roving-tabindex APG widget: arrows move focus between controls. Drive it from the
   // pinned View trigger (a stable, never-demoted target) — ArrowRight moves focus off it.
-  const viewTrigger = lookRow.getByRole('button', { name: 'View' });
+  const viewTrigger = lookRow.getByRole('button', { name: 'View', exact: true });
   await viewTrigger.focus();
   await expect(viewTrigger).toBeFocused();
   await page.keyboard.press('ArrowRight');

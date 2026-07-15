@@ -33,7 +33,9 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
   // data date lives off the toolbar now — set silently on first draw, changed via Edit plan.)
   await startEditing(page);
   const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
-  await expect(toolbar.getByRole('button', { name: /^Add/ })).toBeVisible();
+  // Match the Add split-button ("Add" / "Adding <kind>") without colliding with the inline
+  // "Add note" placeholder that now shares the row (Playwright name matching is substring).
+  await expect(toolbar.getByRole('button', { name: /^Add(ing .+)?$/ })).toBeVisible();
 
   // M1 + M3 — draw the first task; the first draw silently sets the plan start to today and the
   // schedule auto-recalcs, so the bar plots on its own (no Recalculate click).

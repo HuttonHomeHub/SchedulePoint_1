@@ -76,7 +76,9 @@ describe('Menu', () => {
       </Menu>,
     );
     const menu = screen.getByRole('menu');
-    const [task, hammock, milestone] = screen.getAllByRole('menuitem');
+    const task = screen.getByRole('menuitem', { name: 'Task' });
+    const hammock = screen.getByRole('menuitem', { name: 'Hammock' });
+    const milestone = screen.getByRole('menuitem', { name: 'Milestone' });
     expect(hammock).toHaveAttribute('aria-disabled', 'true');
     // Clicking it does nothing (no select, no close).
     fireEvent.click(hammock);
