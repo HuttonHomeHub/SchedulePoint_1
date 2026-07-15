@@ -337,7 +337,7 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   cycle members, SF arithmetic, Expected-Finish/secondary/ALAP, TF≤0 default critical +
   Longest-Path/multiple-paths/start-finish-smallest options, LOE/zero-task/resource-dependent/WBS
   rules. Each decision Accepts with its owning milestone (M2/M4/M6).
-- **ADR-0036** _(Proposed)_ — Hour/shift-granular calendars & durations: the **gating** M1 rework
+- **ADR-0036** _(Accepted)_ — Hour/shift-granular calendars & durations: the **gating** M1 rework
   amending ADR-0023 (working-day → working-**minute** offsets) and ADR-0024 (weekday mask → intraday
   shift patterns + time-window exceptions + window-only base weeks); durations/lag in minutes,
   elapsed durations, per-relationship lag-calendar seam, O(log) walker + iteration cap/horizon
