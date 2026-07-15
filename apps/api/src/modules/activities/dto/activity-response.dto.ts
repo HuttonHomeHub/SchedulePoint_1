@@ -4,6 +4,9 @@ import type { ActivitySummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 
+/** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
+const MINUTES_PER_DAY = 1440;
+
 /**
  * Public representation of an activity (the leaf of Client → Project → Plan →
  * Activity). Calendar-day fields (constraint date, actuals, CPM early/late
@@ -133,7 +136,8 @@ export class ActivityResponseDto implements ActivitySummary {
       name: entity.name,
       description: entity.description,
       type: entity.type,
-      durationDays: entity.durationDays,
+      // Stored in working-minutes (ADR-0036); the public field stays whole working days.
+      durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),
       laneIndex: entity.laneIndex,

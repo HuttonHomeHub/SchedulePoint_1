@@ -15,7 +15,7 @@ import type { EngineEdgeResult, EngineResult } from './engine';
 /** The minimal activity shape the CPM engine reads (a plan's active nodes). */
 export interface ScheduleActivityRow {
   id: string;
-  durationDays: number;
+  durationMinutes: number;
   type: ActivityType;
   constraintType: ConstraintType | null;
   constraintDate: Date | null;
@@ -30,13 +30,21 @@ export interface ScheduleEdgeRow {
   predecessorId: string;
   successorId: string;
   type: DependencyType;
-  lagDays: number;
+  lagMinutes: number;
 }
 
-/** A plan's calendar as the engine needs it: the weekly mask + active dated exceptions. */
+/**
+ * A plan's calendar as the engine needs it: the weekly shift windows + active dated
+ * exceptions with their replacement windows (ADR-0036 §2). Loaded as three batched
+ * reads (calendar row, shift rows, exceptions joined to windows) — never per-window.
+ */
 export interface ScheduleCalendarRow {
-  workingWeekdays: number;
-  exceptions: { date: Date; isWorking: boolean }[];
+  shifts: { weekday: number; startMinute: number; endMinute: number }[];
+  exceptions: {
+    startDate: Date;
+    endDate: Date;
+    windows: { startMinute: number; endMinute: number }[];
+  }[];
 }
 
 /** The read-side aggregate over a plan's persisted engine columns (C1). */
@@ -77,7 +85,7 @@ export class ScheduleRepository {
       where: { organizationId, planId, deletedAt: null },
       select: {
         id: true,
-        durationDays: true,
+        durationMinutes: true,
         type: true,
         constraintType: true,
         constraintDate: true,
@@ -125,12 +133,12 @@ export class ScheduleRepository {
   }
 
   /**
-   * A plan's calendar (`working_weekdays`) plus its ACTIVE exceptions, date-ordered —
-   * part of the recalculate snapshot (M5, ADR-0024). One Prisma call (with
-   * `previewFeatures = []`, no `relationJoins`, it emits two short round trips: the
-   * calendar row, then a single batched exceptions read — never a query-per-exception).
-   * Scoped by org (anti-IDOR) and `deletedAt: null`; returns null if the calendar is
-   * missing or soft-deleted, so the service falls back to all-days-work.
+   * A plan's calendar shift windows plus its ACTIVE exceptions and their replacement
+   * windows, date-ordered — part of the recalculate snapshot (M5, ADR-0024/0036). Emits
+   * batched reads (the calendar row, its shift rows, then the exceptions joined to their
+   * windows — never a query-per-window). Scoped by org (anti-IDOR) and `deletedAt: null`;
+   * returns null if the calendar is missing or soft-deleted, so the service falls back to
+   * all-days-work.
    */
   async loadPlanCalendar(
     organizationId: string,
@@ -140,11 +148,21 @@ export class ScheduleRepository {
     const calendar = await db.calendar.findFirst({
       where: { id: calendarId, organizationId, deletedAt: null },
       select: {
-        workingWeekdays: true,
+        shifts: {
+          orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
+          select: { weekday: true, startMinute: true, endMinute: true },
+        },
         exceptions: {
           where: { deletedAt: null },
-          orderBy: [{ date: 'asc' }],
-          select: { date: true, isWorking: true },
+          orderBy: [{ startDate: 'asc' }],
+          select: {
+            startDate: true,
+            endDate: true,
+            windows: {
+              orderBy: [{ startMinute: 'asc' }],
+              select: { startMinute: true, endMinute: true },
+            },
+          },
         },
       },
     });
@@ -159,7 +177,7 @@ export class ScheduleRepository {
   ): Promise<ScheduleEdgeRow[]> {
     return db.activityDependency.findMany({
       where: { organizationId, planId, deletedAt: null },
-      select: { id: true, predecessorId: true, successorId: true, type: true, lagDays: true },
+      select: { id: true, predecessorId: true, successorId: true, type: true, lagMinutes: true },
     });
   }
 

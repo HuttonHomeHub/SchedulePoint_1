@@ -4,6 +4,9 @@ import type { DependencyEndpoint, DependencySummary } from '@repo/types';
 
 import type { DependencyWithEndpoints } from '../dependency.repository';
 
+/** Day↔minute factor (ADR-0036 §4.2): lag is stored in signed minutes, exposed as signed days. */
+const MINUTES_PER_DAY = 1440;
+
 /** The public shape of a dependency's endpoint activity. */
 class DependencyEndpointDto implements DependencyEndpoint {
   @ApiProperty({ format: 'uuid' })
@@ -61,7 +64,8 @@ export class DependencyResponseDto implements DependencySummary {
       id: entity.id,
       planId: entity.planId,
       type: entity.type,
-      lagDays: entity.lagDays,
+      // Stored as signed working-minutes (ADR-0036); the public field stays signed days.
+      lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY),
       predecessor: {
         id: entity.predecessor.id,
         code: entity.predecessor.code,

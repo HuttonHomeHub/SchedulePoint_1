@@ -379,13 +379,13 @@ model Project {
 }
 
 model Plan {
-  id             String     @id @default(uuid(7)) @db.Uuid
+  id             String         @id @default(uuid(7)) @db.Uuid
   // Denormalised from the parent project (see the block comment above). RESTRICT.
-  organizationId String     @map("organization_id") @db.Uuid
-  projectId      String     @map("project_id") @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  projectId      String         @map("project_id") @db.Uuid
   name           String
   description    String?
-  status         PlanStatus @default(DRAFT)
+  status         PlanStatus     @default(DRAFT)
   // The scheduling mode (ADR-0033). Default EARLY is behaviour-preserving; a single-
   // row column read with the plan, never filtered across plans, so no index.
   schedulingMode SchedulingMode @default(EARLY) @map("scheduling_mode")
@@ -395,20 +395,20 @@ model Plan {
   // …_require_plan_planned_start migration backfilled every prior NULL (earliest
   // active constraint_date → earliest active actual_start → created_at::date →
   // today) then SET NOT NULL. That was the feature's one irreversible migration.
-  plannedStart   DateTime   @map("planned_start") @db.Date
+  plannedStart   DateTime       @map("planned_start") @db.Date
   // The plan's default working-day calendar (M5, ADR-0024). Nullable → all-days-work
   // (M6 back-compat); new plans default to the org's seeded Standard calendar. FK is
   // RESTRICT (calendars soft-delete only; the service in-use guard returns 409
   // CALENDAR_IN_USE before any delete). Backed by a partial index on (calendar_id)
   // WHERE deleted_at IS NULL — raw SQL in the migration.
-  calendarId     String?    @map("calendar_id") @db.Uuid
-  version        Int        @default(1)
-  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy      String?    @map("created_by")
-  updatedBy      String?    @map("updated_by")
-  deletedAt      DateTime?  @map("deleted_at") @db.Timestamptz(3)
-  deleteBatchId  String?    @map("delete_batch_id") @db.Uuid
+  calendarId     String?        @map("calendar_id") @db.Uuid
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?        @map("created_by")
+  updatedBy      String?        @map("updated_by")
+  deletedAt      DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId  String?        @map("delete_batch_id") @db.Uuid
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   project      Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
@@ -452,21 +452,23 @@ model Activity {
   planId         String @map("plan_id") @db.Uuid
 
   // Definition (Planner-owned).
-  code           String?
-  name           String
-  description    String?
-  type           ActivityType    @default(TASK)
-  // Working days (= calendar days until the M5 Calendars slice); milestones are 0.
-  durationDays   Int             @default(1) @map("duration_days")
+  code            String?
+  name            String
+  description     String?
+  type            ActivityType    @default(TASK)
+  // Working MINUTES of work (ADR-0036); milestones are 0. The public API is still
+  // day-denominated (ADR-0036 §7) — the service scales days↔minutes at the boundary.
+  // A ck_activities_duration_minutes_nonneg (>= 0) CHECK is raw SQL in the migration.
+  durationMinutes Int             @default(480) @map("duration_minutes")
   // Reserved for M5 (Calendars) — a nullable column with NO FK relation yet; not
   // client-settable in this slice.
-  calendarId     String?         @map("calendar_id") @db.Uuid
-  constraintType ConstraintType? @map("constraint_type")
+  calendarId      String?         @map("calendar_id") @db.Uuid
+  constraintType  ConstraintType? @map("constraint_type")
   // Calendar day (date-only, no timezone), like Plan.plannedStart.
-  constraintDate DateTime?       @map("constraint_date") @db.Date
+  constraintDate  DateTime?       @map("constraint_date") @db.Date
   // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
   // persisted model per PROJECT_BRIEF §9, not a runtime concern.
-  laneIndex      Int             @default(0) @map("lane_index")
+  laneIndex       Int             @default(0) @map("lane_index")
 
   // Progress (Contributor-updatable via the progress path).
   status          ActivityStatus @default(NOT_STARTED)
@@ -552,6 +554,18 @@ enum DependencyType {
   SF
 }
 
+// The calendar on which a relationship's lag is measured (ADR-0036 §6) — a per-relationship
+// override of the P6 "calendar for scheduling relationship lag" setting. M1 lands the column
+// (the seam); M3 wires resolution + the 24-hour override. PREDECESSOR/SUCCESSOR resolve
+// against the endpoint's effective calendar (= the plan calendar until per-activity calendars
+// land). Kept in lock-step with the LagCalendarSource union in @repo/types.
+enum LagCalendarSource {
+  PREDECESSOR
+  SUCCESSOR
+  TWENTY_FOUR_HOUR
+  PROJECT_DEFAULT
+}
+
 // An ActivityDependency — a typed, lagged logic edge between two activities in a plan
 // (PROJECT_BRIEF §10), turning a Plan's flat list of activities into a schedule
 // network (a directed graph). The complete edge the CPM engine (M6) reads: `type`
@@ -579,10 +593,14 @@ model ActivityDependency {
   predecessorId  String @map("predecessor_id") @db.Uuid
   successorId    String @map("successor_id") @db.Uuid
 
-  // Logic (Planner-owned). `lag_days` is a SIGNED working-day lag (negative = lead),
-  // bounded to −3650…3650 by a CHECK in the migration (matches the DTO bound in B1).
-  type    DependencyType @default(FS)
-  lagDays Int            @default(0) @map("lag_days")
+  // Logic (Planner-owned). `lag_minutes` is a SIGNED working-MINUTE lag (negative = lead),
+  // bounded to −5_256_000…5_256_000 (≈ ±10 years) by ck_dependencies_lag_minutes_range
+  // (raw SQL). `lag_calendar` is the ADR-0036 §6 resolution seam — M1 lands the column
+  // (default PROJECT_DEFAULT is behaviour-preserving), M3 wires the option. The public
+  // API stays day-denominated (ADR-0036 §7); the service scales days↔minutes.
+  type        DependencyType    @default(FS)
+  lagMinutes  Int               @default(0) @map("lag_minutes")
+  lagCalendar LagCalendarSource @default(PROJECT_DEFAULT) @map("lag_calendar")
 
   // CPM output — engine-owned (ADR-0022), recomputed each recalculate. True when this
   // edge is the binding tie that determines its successor's early start (a "driving"
@@ -656,12 +674,12 @@ model Calendar {
   name           String
   description    String?
 
-  // The weekly working pattern as a 7-bit mask (bit 0 = Monday … bit 6 = Sunday).
-  // Stored as smallint (2 bytes is ample for a 7-bit value). A `working_weekdays
-  // > 0 AND <= 127` CHECK (raw SQL in the migration) mirrors the factory's
-  // non-zero guard: a pattern with no working weekday would make addWorkingDays
-  // non-terminating, and a value above 127 has bits outside the 7-day week.
-  workingWeekdays Int @map("working_weekdays") @db.SmallInt
+  // The weekly working pattern is the child `shifts` rows (ADR-0036 §2): per weekday a
+  // sorted list of [start,end) minute windows (split shifts, 24h, midnight-crossing
+  // nights). NO working-time guard lives here — a window-only calendar (all weekdays
+  // empty; work comes only from positive exceptions) is VALID. "Has working time within
+  // the horizon" is a cross-row/temporal property enforced at the engine factory + the
+  // N11/N16 iteration cap (ADR-0036 §5), not a DB CHECK (the DAG-invariant precedent).
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -672,6 +690,7 @@ model Calendar {
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  shifts       CalendarShift[]
   exceptions   CalendarException[]
   // Plans defaulting to this calendar (M5 Task C1). The service in-use guard counts
   // ACTIVE plans here before allowing a delete (409 CALENDAR_IN_USE); the FK is
@@ -692,19 +711,22 @@ model Calendar {
   @@map("calendars")
 }
 
-// A dated override of a calendar's weekly default (ADR-0024). `is_working = false`
-// is a holiday (a normally-working weekday made non-working); `is_working = true`
-// is a working exception (a normally-non-working day, e.g. a worked Saturday). An
-// optional `label` names it (e.g. "Christmas Day") for the editor. `date` is a
-// calendar day (date-only, no time/timezone), like Plan.plannedStart.
+// A dated override whose windows REPLACE the weekly pattern across an inclusive date
+// range (ADR-0036 §2). A range with ZERO child windows is a holiday / non-work block
+// (Christmas shutdown, a winter embargo); a range WITH windows is worked overtime or a
+// window-only working period (a turnaround). Replaces the old whole-day `is_working`
+// flag. An optional `label` names it for the editor.
 model CalendarException {
   id             String @id @default(uuid(7)) @db.Uuid
   // Denormalised from the parent calendar (never client input). RESTRICT.
   organizationId String @map("organization_id") @db.Uuid
   calendarId     String @map("calendar_id") @db.Uuid
 
-  date      DateTime @db.Date
-  isWorking Boolean  @map("is_working")
+  // Inclusive `YYYY-MM-DD` range (single day ⇒ start == end). ck_calendar_exceptions_date_order
+  // (end_date >= start_date) is raw SQL. Active-range non-overlap is a btree_gist EXCLUDE
+  // (raw SQL) that REPLACES the old uq_calendar_exceptions_cal_date point-key partial unique.
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
   label     String?
 
   version       Int       @default(1)
@@ -715,26 +737,62 @@ model CalendarException {
   deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  calendar     Calendar     @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  calendar     Calendar                  @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  windows      CalendarExceptionWindow[]
 
-  // At most one ACTIVE exception per (calendar, date) — partial unique
-  // (uq_calendar_exceptions_cal_date ON (calendar_id, date) WHERE deleted_at IS
-  // NULL), raw SQL in the migration. A single day cannot be both a holiday and a
-  // worked day, and a soft-deleted exception frees its (calendar, date) for reuse.
-  // Backs the add DUPLICATE_EXCEPTION (409) check. This index (active rows, keyed
-  // by (calendar_id, date)) is exactly the engine's active-exception load — WHERE
-  // calendar_id = ? AND deleted_at IS NULL ORDER BY date — so no separate index is
-  // needed for it (the Organization-slug precedent).
-  //
-  // (calendar_id, date) as a plain index backs the calendar_id FK (leftmost prefix)
-  // and the editor's list-all-exceptions load over ALL rows (the partial unique
-  // only covers active ones). organization_id is indexed on its own for its FK
-  // (RESTRICT) and org-scoped IDOR loads. The partial delete_batch_id index (raw
-  // SQL) backs batch restore alongside the parent calendar.
-  @@index([calendarId, date])
+  // (calendar_id, start_date) backs the FK (leftmost prefix), the editor's list-all load,
+  // and the engine's active load ordered by start_date. organization_id indexed for its FK
+  // + org-scoped IDOR. The partial delete_batch_id index (raw SQL) backs batch restore.
+  @@index([calendarId, startDate])
   @@index([organizationId])
   @@map("calendar_exceptions")
+}
+
+// One [start_minute, end_minute) working window on one weekday of a calendar's weekly
+// pattern (ADR-0036 §2). An OWNED VALUE ROW (the PlanLock precedent): no soft-delete, no
+// version, no delete_batch_id, no audit ids, no denormalised organization_id — it is always
+// reached VIA its (org-scoped) calendar and never queried/scoped on its own. The weekly
+// pattern is edited as a SET (the service replaces the rows inside the calendar's write
+// transaction; the calendar's own `version` provides the optimistic lock). FK ON DELETE
+// CASCADE (true composition). Per-row bound/order CHECKs + a btree_gist EXCLUDE for
+// non-overlap within (calendar, weekday) are raw SQL in the migration.
+model CalendarShift {
+  id          String @id @default(uuid(7)) @db.Uuid
+  calendarId  String @map("calendar_id") @db.Uuid
+  // Monday = 0 … Sunday = 6. Minutes from local midnight, [0, 1440] (1440 = 24:00;
+  // midnight-crossing is two adjacent-day windows, never a wrap).
+  weekday     Int    @map("weekday") @db.SmallInt
+  startMinute Int    @map("start_minute") @db.SmallInt
+  endMinute   Int    @map("end_minute") @db.SmallInt
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  calendar Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  // The engine load IS this index: WHERE calendar_id = ? ORDER BY weekday, start_minute.
+  @@index([calendarId, weekday, startMinute])
+  @@map("calendar_shifts")
+}
+
+// One [start_minute, end_minute) working window inside a CalendarException's replacement
+// set (ADR-0036 §2). Same OWNED-VALUE-ROW treatment as CalendarShift; a holiday exception
+// simply has zero of these rows. FK ON DELETE CASCADE.
+model CalendarExceptionWindow {
+  id                  String @id @default(uuid(7)) @db.Uuid
+  calendarExceptionId String @map("calendar_exception_id") @db.Uuid
+  startMinute         Int    @map("start_minute") @db.SmallInt
+  endMinute           Int    @map("end_minute") @db.SmallInt
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  exception CalendarException @relation(fields: [calendarExceptionId], references: [id], onDelete: Cascade)
+
+  // Engine load IS this index: WHERE calendar_exception_id = ? ORDER BY start_minute.
+  @@index([calendarExceptionId, startMinute])
+  @@map("calendar_exception_windows")
 }
 
 // ---------------------------------------------------------------------------
@@ -829,10 +887,11 @@ model BaselineActivity {
   sourceActivityId String @map("source_activity_id") @db.Uuid
 
   // Frozen identity (as captured).
-  code         String?
-  name         String
-  type         ActivityType @default(TASK)
-  durationDays Int          @map("duration_days")
+  code            String?
+  name            String
+  type            ActivityType @default(TASK)
+  // Frozen working-MINUTES (ADR-0036) so a historic baseline stays faithful (ADR-0025).
+  durationMinutes Int          @map("duration_minutes")
 
   // Frozen schedule (the captured CPM output, all date-only like the Activity
   // columns, ADR-0023). `baseline_start`/`baseline_finish` are the captured

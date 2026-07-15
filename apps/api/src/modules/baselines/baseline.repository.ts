@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type ActivityType, type Baseline } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import type { PlanCalendarInput } from '../schedule/plan-calendar';
 
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
 
@@ -13,7 +14,7 @@ export interface CaptureActivityRow {
   code: string | null;
   name: string;
   type: ActivityType;
-  durationDays: number;
+  durationMinutes: number;
   earlyStart: Date | null;
   earlyFinish: Date | null;
   lateStart: Date | null;
@@ -80,7 +81,9 @@ export class BaselineRepository {
           code: a.code,
           name: a.name,
           type: a.type,
-          durationDays: a.durationDays,
+          // Both live and baseline durations are working-minutes now (ADR-0036) — a
+          // direct copy keeps the frozen snapshot faithful (ADR-0025), no ×1440.
+          durationMinutes: a.durationMinutes,
           baselineStart: a.earlyStart,
           baselineFinish: a.earlyFinish,
           lateStart: a.lateStart,
@@ -112,7 +115,7 @@ export class BaselineRepository {
         code: true,
         name: true,
         type: true,
-        durationDays: true,
+        durationMinutes: true,
         earlyStart: true,
         earlyFinish: true,
         lateStart: true,
@@ -191,23 +194,34 @@ export class BaselineRepository {
   }
 
   /**
-   * A plan's calendar (`working_weekdays`) plus its ACTIVE exceptions, for building the
-   * working-day calendar variance is measured on (M5, ADR-0024). Scoped by org
-   * (anti-IDOR); null if the calendar is missing/soft-deleted (→ all-days-work).
+   * A plan's calendar shift windows plus its ACTIVE exceptions and their replacement
+   * windows, for building the working-time calendar variance is measured on (M5,
+   * ADR-0024/0036). Scoped by org (anti-IDOR); null if the calendar is missing/
+   * soft-deleted (→ all-days-work).
    */
   loadPlanCalendar(
     organizationId: string,
     calendarId: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<{ workingWeekdays: number; exceptions: { date: Date; isWorking: boolean }[] } | null> {
+  ): Promise<PlanCalendarInput | null> {
     return db.calendar.findFirst({
       where: { id: calendarId, organizationId, deletedAt: null },
       select: {
-        workingWeekdays: true,
+        shifts: {
+          orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
+          select: { weekday: true, startMinute: true, endMinute: true },
+        },
         exceptions: {
           where: { deletedAt: null },
-          orderBy: [{ date: 'asc' }],
-          select: { date: true, isWorking: true },
+          orderBy: [{ startDate: 'asc' }],
+          select: {
+            startDate: true,
+            endDate: true,
+            windows: {
+              orderBy: [{ startMinute: 'asc' }],
+              select: { startMinute: true, endMinute: true },
+            },
+          },
         },
       },
     });

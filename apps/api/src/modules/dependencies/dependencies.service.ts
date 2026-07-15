@@ -26,6 +26,13 @@ import {
 import type { CreateDependencyDto } from './dto/create-dependency.dto';
 import type { UpdateDependencyDto } from './dto/update-dependency.dto';
 
+/**
+ * Minutes in one full calendar day — the fixed day↔minute factor (ADR-0036 §4.2). The
+ * public API stays day-denominated (`lagDays`); storage is signed minutes, so the service
+ * converts at the boundary. `lagCalendar` stays at its DB default (not exposed yet, M3).
+ */
+const MINUTES_PER_DAY = 1440;
+
 /** Machine-readable reasons carried in a dependency {@link ConflictError}/{@link ValidationError}. */
 export const DEPENDENCY_CONFLICT = {
   /** A link with this (predecessor, successor, type) already exists in the plan. */
@@ -173,7 +180,7 @@ export class DependenciesService {
             predecessorId: dto.predecessorId,
             successorId: dto.successorId,
             ...(dto.type ? { type: dto.type } : {}),
-            ...(dto.lagDays !== undefined ? { lagDays: dto.lagDays } : {}),
+            ...(dto.lagDays !== undefined ? { lagMinutes: dto.lagDays * MINUTES_PER_DAY } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -210,7 +217,7 @@ export class DependenciesService {
 
     const patch: DependencyPatch = {};
     if (dto.type !== undefined) patch.type = dto.type;
-    if (dto.lagDays !== undefined) patch.lagDays = dto.lagDays;
+    if (dto.lagDays !== undefined) patch.lagMinutes = dto.lagDays * MINUTES_PER_DAY;
 
     try {
       const changed = await this.dependencies.updateIfVersionMatches(

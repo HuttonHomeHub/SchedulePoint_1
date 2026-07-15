@@ -49,7 +49,8 @@ const activityRow = (
   extra: Partial<ScheduleActivityRow> = {},
 ): ScheduleActivityRow => ({
   id,
-  durationDays,
+  // Storage is working-minutes (ADR-0036); a whole day = 1440 min on the all-minutes calendar.
+  durationMinutes: durationDays * 1440,
   type: 'TASK',
   constraintType: null,
   constraintDate: null,
@@ -61,7 +62,7 @@ const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow =>
   predecessorId,
   successorId,
   type: 'FS',
-  lagDays: 0,
+  lagMinutes: 0,
 });
 
 function principalWith(permissions: Permission[]): Principal {
@@ -150,7 +151,11 @@ describe('ScheduleService.recalculate', () => {
 
   it('loads the plan calendar (scoped) when one is assigned', async () => {
     plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: 'cal-1' }));
-    schedule.loadPlanCalendar.mockResolvedValue({ workingWeekdays: 0b0011111, exceptions: [] });
+    schedule.loadPlanCalendar.mockResolvedValue({
+      // Mon–Fri full-day shift rows (ADR-0036) — the storage shape the engine port loads.
+      shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 0, endMinute: 1440 })),
+      exceptions: [],
+    });
     await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
     expect(schedule.loadPlanCalendar).toHaveBeenCalledWith(ORG_ID, 'cal-1', expect.anything());
   });

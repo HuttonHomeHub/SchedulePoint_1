@@ -1,8 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { Calendar, CalendarException } from '@prisma/client';
+import { WorkingWeekdays } from '@repo/types';
 import type { CalendarDetail, CalendarExceptionSummary, CalendarSummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
+import type {
+  CalendarExceptionWithWindows,
+  CalendarWithExceptions,
+  CalendarWithShifts,
+} from '../calendar.repository';
 
 /** Public representation of a calendar (list shape — no exceptions embedded). */
 export class CalendarResponseDto implements CalendarSummary {
@@ -31,12 +36,16 @@ export class CalendarResponseDto implements CalendarSummary {
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: Calendar): CalendarResponseDto {
+  static from(entity: CalendarWithShifts): CalendarResponseDto {
     return {
       id: entity.id,
       name: entity.name,
       description: entity.description,
-      workingWeekdays: entity.workingWeekdays,
+      // Storage is intraday shift rows (ADR-0036); the public field stays a weekday mask —
+      // a weekday is "working" if it carries any shift. Every API-created calendar is
+      // full-day-per-weekday, so this round-trips exactly (richer shift calendars aren't
+      // API-authorable yet — M1 follow-on).
+      workingWeekdays: WorkingWeekdays.fromIndices(entity.shifts.map((shift) => shift.weekday)),
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
@@ -67,11 +76,13 @@ export class CalendarExceptionResponseDto implements CalendarExceptionSummary {
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: CalendarException): CalendarExceptionResponseDto {
+  static from(entity: CalendarExceptionWithWindows): CalendarExceptionResponseDto {
     return {
       id: entity.id,
-      date: formatCalendarDate(entity.date),
-      isWorking: entity.isWorking,
+      // A whole-day exception is a single-day range with (worked) or without (holiday)
+      // a full-day window (ADR-0036 §2); the public shape stays `{ date, isWorking }`.
+      date: formatCalendarDate(entity.startDate),
+      isWorking: entity.windows.length > 0,
       label: entity.label,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
@@ -85,9 +96,7 @@ export class CalendarDetailResponseDto extends CalendarResponseDto implements Ca
   @ApiProperty({ type: CalendarExceptionResponseDto, isArray: true })
   exceptions!: CalendarExceptionResponseDto[];
 
-  static fromDetail(
-    entity: Calendar & { exceptions: CalendarException[] },
-  ): CalendarDetailResponseDto {
+  static fromDetail(entity: CalendarWithExceptions): CalendarDetailResponseDto {
     return {
       ...CalendarResponseDto.from(entity),
       exceptions: entity.exceptions.map((e) => CalendarExceptionResponseDto.from(e)),

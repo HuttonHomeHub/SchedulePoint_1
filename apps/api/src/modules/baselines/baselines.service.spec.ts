@@ -69,7 +69,7 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     code: 'A100',
     name: 'Mobilise',
     type: 'TASK',
-    durationDays: 5,
+    durationMinutes: 5 * 1440,
     earlyStart: new Date('2026-01-05T00:00:00Z'),
     earlyFinish: new Date('2026-01-09T00:00:00Z'),
     lateStart: new Date('2026-01-05T00:00:00Z'),

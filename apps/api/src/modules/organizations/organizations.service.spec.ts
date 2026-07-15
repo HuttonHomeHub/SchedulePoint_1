@@ -87,12 +87,20 @@ describe('OrganizationsService', () => {
       );
       // The org is seeded a Standard (Mon–Fri) calendar in the same transaction,
       // scoped to the just-created org (id copied from the created row, not input).
+      // The Mon–Fri mask is materialised as one full-day [0,1440) shift per weekday 0–4
+      // (ADR-0036 §2), written as a nested create in the same insert.
       expect(calendarCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({
           organizationId: 'org-1',
           name: 'Standard',
-          workingWeekdays: 31,
           createdBy: USER,
+          shifts: {
+            create: [0, 1, 2, 3, 4].map((weekday) => ({
+              weekday,
+              startMinute: 0,
+              endMinute: 1440,
+            })),
+          },
         }),
       });
     });

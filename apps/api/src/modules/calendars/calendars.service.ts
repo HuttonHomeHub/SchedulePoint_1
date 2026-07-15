@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Calendar, type CalendarException } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -12,8 +12,10 @@ import { OrganizationsService } from '../organizations/organizations.service';
 
 import {
   CalendarRepository,
+  type CalendarExceptionWithWindows,
   type CalendarPatch,
   type CalendarWithExceptions,
+  type CalendarWithShifts,
 } from './calendar.repository';
 import type { CreateCalendarExceptionDto } from './dto/create-calendar-exception.dto';
 import type { CreateCalendarDto } from './dto/create-calendar.dto';
@@ -52,7 +54,7 @@ export class CalendarsService {
     principal: Principal,
     orgSlug: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: Calendar[]; meta: PageMeta }> {
+  ): Promise<{ items: CalendarWithShifts[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:read', organization.id);
 
@@ -128,11 +130,10 @@ export class CalendarsService {
     if (dto.workingWeekdays !== undefined) patch.workingWeekdays = dto.workingWeekdays;
 
     try {
-      const changed = await this.calendars.updateIfVersionMatches(
-        calendarId,
-        dto.version,
-        patch,
-        principal.userId,
+      // Replacing the weekly shift set on a mask change is atomic with the version-gated
+      // scalar update (ADR-0036 §2): run both inside one transaction.
+      const changed = await this.prisma.$transaction((tx) =>
+        this.calendars.updateIfVersionMatches(calendarId, dto.version, patch, principal.userId, tx),
       );
       if (changed === 0) {
         throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
@@ -184,7 +185,7 @@ export class CalendarsService {
     orgSlug: string,
     calendarId: string,
     dto: CreateCalendarExceptionDto,
-  ): Promise<CalendarException> {
+  ): Promise<CalendarExceptionWithWindows> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
 

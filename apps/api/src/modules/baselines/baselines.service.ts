@@ -15,8 +15,8 @@ import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
-import { buildDayCompatCalendar } from '../schedule/day-compat-calendar';
 import { type WorkingTimeCalendar } from '../schedule/engine';
+import { buildPlanCalendar } from '../schedule/plan-calendar';
 
 import { BaselineRepository, type CaptureActivityRow } from './baseline.repository';
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
@@ -316,11 +316,11 @@ export class BaselinesService {
     organizationId: string,
     calendarId: string | null,
   ): Promise<WorkingTimeCalendar> {
-    if (!calendarId) return buildDayCompatCalendar(null);
+    if (!calendarId) return buildPlanCalendar(null);
     const calendar = await this.baselines.loadPlanCalendar(organizationId, calendarId);
-    // The M1 compat shim (ADR-0036 §4.2) — mirrors ScheduleService so variance days match
-    // the computed dates they diff.
-    return buildDayCompatCalendar(calendar);
+    // Build the engine's minute-granular calendar directly from the stored shift/window rows
+    // (ADR-0036 §2) — mirrors ScheduleService so variance days match the computed dates they diff.
+    return buildPlanCalendar(calendar);
   }
 
   /** Assert an active plan exists in this org, so a list/read on a bogus plan is a 404 (not empty). */

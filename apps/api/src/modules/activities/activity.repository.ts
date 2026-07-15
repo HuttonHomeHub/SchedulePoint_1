@@ -22,7 +22,7 @@ export interface ActivityPatch {
   code?: string | null;
   description?: string | null;
   type?: ActivityType;
-  durationDays?: number;
+  durationMinutes?: number;
   constraintType?: ConstraintType | null;
   constraintDate?: Date | null;
   laneIndex?: number;
