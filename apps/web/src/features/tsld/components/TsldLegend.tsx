@@ -4,10 +4,11 @@
  * never conveyed by colour alone (WCAG 1.4.1). Swatches read their colours from the same
  * design tokens the painter uses, so the key stays truthful across themes.
  *
- * Shared so the self-contained {@link TsldPanel} chrome and the canvas-first `Legend▾` toolbar
- * popover (ADR-0031) render one definition — the key can't drift from the canvas or itself.
+ * Shared so the self-contained {@link TsldPanel} chrome and the canvas-first floating Legend panel
+ * (ADR-0031) render one definition — the key can't drift from the canvas or itself.
  */
 import { SCHEDULING_MODES_ENABLED } from '@/config/env';
+import { cn } from '@/lib/utils';
 
 type LegendItem =
   | { label: string; swatch: React.CSSProperties }
@@ -51,13 +52,23 @@ const LEGEND: ReadonlyArray<LegendItem> = [
   ...(SCHEDULING_MODES_ENABLED ? [{ label: 'Visual conflict', conflict: true } as const] : []),
 ];
 
-/** The diagram legend as a labelled list — used inline by {@link TsldPanel} and inside the
- * canvas-first `Legend▾` popover (ADR-0031). Pure presentation; no state. */
-export function TsldLegend(): React.ReactElement {
+/** The diagram legend as a labelled list — used inline by {@link TsldPanel} (horizontal, wrapping)
+ * and inside the canvas-first floating Legend panel (vertical, ADR-0031). Pure presentation; no
+ * state. */
+export function TsldLegend({
+  orientation = 'horizontal',
+}: {
+  orientation?: 'horizontal' | 'vertical';
+} = {}): React.ReactElement {
   return (
     <ul
       aria-label="Legend"
-      className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs"
+      className={cn(
+        'text-muted-foreground text-xs',
+        orientation === 'vertical'
+          ? 'flex flex-col items-start gap-1.5'
+          : 'flex flex-wrap items-center gap-x-4 gap-y-1',
+      )}
     >
       {LEGEND.map((item) => (
         <li key={item.label} className="flex items-center gap-1.5">

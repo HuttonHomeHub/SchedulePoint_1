@@ -27,6 +27,7 @@ const spies = {
   openCalendar: vi.fn(),
   editPlan: vi.fn(),
   openShortcuts: vi.fn(),
+  toggleLegend: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -58,7 +59,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     openCalendar: spies.openCalendar,
     editPlan: spies.editPlan,
     openShortcuts: spies.openShortcuts,
-    legendContent: <div data-testid="legend-body">legend</div>,
+    legendOpen: false,
+    toggleLegend: spies.toggleLegend,
     summaryContent: <div data-testid="summary-body">summary</div>,
     projectFinishContent: <span>Finish: 01 Aug 2026</span>,
     hasDiagram: true,
@@ -139,12 +141,37 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(within(lookRow).getByText('Finish: 01 Aug 2026')).toBeInTheDocument();
   });
 
-  it('renders the Summary and Legend popover bodies from the context', () => {
+  it('renders the Summary popover body from the context', () => {
     renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /Summary/ }));
     expect(screen.getByTestId('summary-body')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Legend/ }));
-    expect(screen.getByTestId('legend-body')).toBeInTheDocument();
+  });
+
+  it('toggles the on-canvas Legend panel (a show/hide button, not a popover)', () => {
+    // The legend lives on the canvas now (ADR-0031 amendment): the toolbar item is a pressed-state
+    // toggle that drives the workspace's floating panel — it renders no key of its own.
+    const { rerender } = renderRows(ctx({ legendOpen: false }));
+    const legend = screen.getByRole('button', { name: /Legend/ });
+    expect(legend).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(legend);
+    expect(spies.toggleLegend).toHaveBeenCalledOnce();
+
+    // Reflecting the open state marks the toggle pressed.
+    const rows = splitByRow(buildTsldToolbarItems());
+    const opened = ctx({ legendOpen: true });
+    rerender(
+      <div>
+        <Toolbar
+          items={rows.look}
+          context={opened}
+          label="View and navigate"
+          authoringEnabled
+          alignEndGroup="object"
+        />
+        <Toolbar items={rows.do} context={opened} label="Build and manage" authoringEnabled />
+      </div>,
+    );
+    expect(screen.getByRole('button', { name: /Legend/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {

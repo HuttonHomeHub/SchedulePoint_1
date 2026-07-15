@@ -1,7 +1,5 @@
 import { useMemo } from 'react';
 
-import { TsldLegend } from '../components/TsldLegend';
-
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
@@ -61,11 +59,15 @@ export function useTsldToolbarContext({
   plan,
   canvasUi,
   openDialog,
+  legend,
 }: {
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
   canvasUi: TsldCanvasUiState;
   openDialog: (kind: PlanDialogKind) => void;
+  /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
+   * Legend control shows/hides it rather than rendering the key in a popover. */
+  legend: { open: boolean; toggle: () => void };
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
@@ -111,7 +113,7 @@ export function useTsldToolbarContext({
     () => <ProjectFinishChip orgSlug={orgSlug} planId={planId} />,
     [orgSlug, planId],
   );
-  const legendContent = useMemo(() => <TsldLegend />, []);
+  const { open: legendOpen, toggle: toggleLegend } = legend;
 
   const {
     zoomPreset,
@@ -214,7 +216,9 @@ export function useTsldToolbarContext({
 
       // Help
       openShortcuts: () => setShowHelp(true),
-      legendContent,
+      // The legend lives on the canvas now (ADR-0031 amendment) — this toggles the floating panel.
+      legendOpen,
+      toggleLegend,
 
       // Summary popover + pinned finish chip
       summaryContent,
@@ -248,7 +252,8 @@ export function useTsldToolbarContext({
       model.autoRecalc,
       announce,
       openDialog,
-      legendContent,
+      legendOpen,
+      toggleLegend,
       summaryContent,
       projectFinishContent,
       hasDiagram,

@@ -969,8 +969,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     }),
 
     // --- 6 · Help -----------------------------------------------------------------------------
-    // Legend rides Row 1 (Look) at the far right; Shortcuts sits at the end of Row 2 (Do). (Undo/Redo
-    // moved to the Row-2 authoring cluster above, so the History group holds no toolbar items now.)
+    // Legend rides Row 1 (Look) at the far right; Shortcuts sits beside it. (Undo/Redo moved to the
+    // Row-2 authoring cluster above, so the History group holds no toolbar items now.)
+    // The legend lives **on the canvas** now (ADR-0031 amendment): this is a show/hide toggle for the
+    // floating Legend panel (draggable + pinnable over the diagram), not a popover that renders the key.
     {
       id: 'legend',
       group: 'help',
@@ -979,16 +981,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 0,
       label: 'Legend',
       icon: <ListChecks className="size-4" />,
-      render: (ctx, api) => (
-        <ToolbarPopover
-          label="Legend"
-          icon={<ListChecks className="size-4" />}
-          itemProps={api.itemProps}
-          align="end"
-        >
-          {ctx.legendContent}
-        </ToolbarPopover>
-      ),
+      isActive: (ctx) => ctx.legendOpen,
+      onActivate: (ctx) => ctx.toggleLegend(),
     },
     {
       // Keyboard shortcuts belong with the reference controls, not the authoring row: shown at the

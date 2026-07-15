@@ -23,7 +23,9 @@ import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
+import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
+import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
   useTsldToolbarContext,
@@ -54,7 +56,16 @@ export function ToolbarPlanWorkspace({
   // One shared canvas UI state drives both the chromeless canvas and the toolbar (ADR-0031).
   const canvasUi = useTsldCanvasUiState();
   const [dialog, setDialog] = useState<PlanDialogKind | null>(null);
-  const ctx = useTsldToolbarContext({ model, plan, canvasUi, openDialog: setDialog });
+  // The on-canvas floating Legend panel (ADR-0031 amendment): open state + drag position persist here,
+  // toggled from the toolbar's Legend control and rendered over the canvas below.
+  const legend = useLegendPanelPrefs();
+  const ctx = useTsldToolbarContext({
+    model,
+    plan,
+    canvasUi,
+    openDialog: setDialog,
+    legend: { open: legend.open, toggle: legend.toggle },
+  });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
   // always live) and Row 2 · Do (build/manage, its authoring cluster pen-gated). Each row is its own
@@ -174,6 +185,17 @@ export function ToolbarPlanWorkspace({
     />
   );
 
+  // The floating Legend panel is overlaid on whichever canvas region is active (its container is
+  // `relative`); it renders null when closed, so dropping it in both layout branches is cheap.
+  const legendPanel = (
+    <TsldLegendPanel
+      open={legend.open}
+      position={legend.position}
+      onClose={legend.close}
+      onPositionChange={legend.setPosition}
+    />
+  );
+
   // Breadcrumb ends at the plan name (the current page) so the whole trail — Clients → client →
   // project → plan — reads on one header line (ADR-0031 two-row amendment). A visually-hidden <h1>
   // keeps the document outline intact even though the visible title is the last (bold) crumb.
@@ -260,8 +282,12 @@ export function ToolbarPlanWorkspace({
       <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {isWide ? (
           <>
-            {/* Full-height chromeless canvas — the toolbar hosts its controls. */}
-            <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">{canvas}</div>
+            {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
+                panel (when open) is overlaid via the `relative` container. */}
+            <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
+              {canvas}
+              {legendPanel}
+            </div>
 
             {collapsed ? (
               <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
@@ -292,11 +318,12 @@ export function ToolbarPlanWorkspace({
             <WorkspaceViewToggle value={pane} onChange={setPane} />
             <div
               className={cn(
-                'min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2',
+                'relative min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2',
                 pane === 'diagram' ? 'flex' : 'hidden',
               )}
             >
               {canvas}
+              {legendPanel}
             </div>
             <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
               <ActivityBottomPanel model={model} />

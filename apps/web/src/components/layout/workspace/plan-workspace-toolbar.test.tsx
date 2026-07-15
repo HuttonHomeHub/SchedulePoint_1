@@ -162,4 +162,16 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByRole('dialog', { name: 'Baselines' })).toBeInTheDocument();
     expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
   });
+
+  it('toggles the floating Legend panel on the canvas from the Row-1 control', () => {
+    renderScreen();
+    // The legend lives on the canvas now (ADR-0031 amendment): the Row-1 Legend control shows/hides
+    // a floating, draggable key overlaid on the diagram, rather than opening a toolbar popover.
+    expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Legend' }));
+    const panel = screen.getByRole('group', { name: 'Diagram legend' });
+    expect(panel).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide legend' }));
+    expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
+  });
 });
