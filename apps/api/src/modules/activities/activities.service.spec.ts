@@ -54,7 +54,8 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     name: 'Excavate',
     description: null,
     type: 'TASK',
-    durationDays: 5,
+    // Stored in working-minutes now (ADR-0036): 5 working days = 5 × 1440.
+    durationMinutes: 5 * 1440,
     calendarId: null,
     constraintType: null,
     constraintDate: null,
@@ -164,9 +165,10 @@ describe('ActivitiesService', () => {
     it('defaults type to TASK and duration to 1 when omitted', async () => {
       activities.create.mockResolvedValue(activity());
       await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'A' });
-      const arg = activities.create.mock.calls[0]?.[0] as { type: string; durationDays: number };
+      const arg = activities.create.mock.calls[0]?.[0] as { type: string; durationMinutes: number };
       expect(arg.type).toBe('TASK');
-      expect(arg.durationDays).toBe(1);
+      // Public default of 1 working day is stored as 1440 working-minutes (ADR-0036).
+      expect(arg.durationMinutes).toBe(1440);
     });
 
     it('forces a milestone duration to 0 even if a non-zero value slips through', async () => {
@@ -176,8 +178,8 @@ describe('ActivitiesService', () => {
         type: 'START_MILESTONE',
         durationDays: 3,
       });
-      const arg = activities.create.mock.calls[0]?.[0] as { durationDays: number };
-      expect(arg.durationDays).toBe(0);
+      const arg = activities.create.mock.calls[0]?.[0] as { durationMinutes: number };
+      expect(arg.durationMinutes).toBe(0);
     });
 
     it('converts a constraintDate (YYYY-MM-DD) to a UTC-midnight Date', async () => {
@@ -270,9 +272,9 @@ describe('ActivitiesService', () => {
         version: 1,
       });
       const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
-        durationDays: number;
+        durationMinutes: number;
       };
-      expect(patch.durationDays).toBe(0);
+      expect(patch.durationMinutes).toBe(0);
     });
 
     it('422s a partial constraint update (one side omitted) without touching the row', async () => {

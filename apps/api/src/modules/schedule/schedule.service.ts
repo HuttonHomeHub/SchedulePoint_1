@@ -12,15 +12,14 @@ import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import {
-  allDaysWorkCalendar,
-  buildWorkingDayCalendar,
   computeSchedule,
   ScheduleGraphNotADagError,
   type EngineActivity,
   type EngineEdge,
   type EngineSummary,
-  type WorkingDayCalendar,
+  type WorkingTimeCalendar,
 } from './engine';
+import { buildPlanCalendar } from './plan-calendar';
 import {
   ScheduleRepository,
   type ScheduleActivityRow,
@@ -176,17 +175,12 @@ export class ScheduleService {
     organizationId: string,
     calendarId: string | null,
     tx: Prisma.TransactionClient,
-  ): Promise<WorkingDayCalendar> {
-    if (!calendarId) return allDaysWorkCalendar;
+  ): Promise<WorkingTimeCalendar> {
+    if (!calendarId) return buildPlanCalendar(null);
     const calendar = await this.schedule.loadPlanCalendar(organizationId, calendarId, tx);
-    if (!calendar) return allDaysWorkCalendar;
-    return buildWorkingDayCalendar(
-      calendar.workingWeekdays,
-      calendar.exceptions.map((e) => ({
-        date: formatCalendarDate(e.date),
-        isWorking: e.isWorking,
-      })),
-    );
+    // Build the engine's minute-granular calendar directly from the stored shift/window
+    // rows (ADR-0036 §2); a missing/soft-deleted calendar falls back to all-days-work.
+    return buildPlanCalendar(calendar);
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {
@@ -200,11 +194,11 @@ export class ScheduleService {
   }
 }
 
-/** Project a stored activity row onto the engine's input struct (ADR-0023). */
+/** Project a stored activity row onto the engine's input struct (durations are stored in minutes). */
 function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
   return {
     id: row.id,
-    durationDays: row.durationDays,
+    durationMinutes: row.durationMinutes,
     type: row.type,
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
@@ -212,13 +206,13 @@ function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
   };
 }
 
-/** Project a stored dependency row onto the engine's edge struct. */
+/** Project a stored dependency row onto the engine's edge struct (lag is stored in minutes). */
 function toEngineEdge(row: ScheduleEdgeRow): EngineEdge {
   return {
     id: row.id,
     predecessorId: row.predecessorId,
     successorId: row.successorId,
     type: row.type,
-    lagDays: row.lagDays,
+    lagMinutes: row.lagMinutes,
   };
 }

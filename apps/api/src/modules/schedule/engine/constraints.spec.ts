@@ -1,9 +1,9 @@
 import type { ConstraintType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { allDaysWorkCalendar } from './calendar';
 import { computeSchedule } from './compute';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
+import { allMinutesWorkCalendar } from './working-time-calendar';
 
 const DATA_DATE = '2026-01-01';
 
@@ -13,7 +13,7 @@ const task = (
   constraint?: { type: ConstraintType; date: string },
 ): EngineActivity => ({
   id,
-  durationDays,
+  durationMinutes: durationDays * 1440,
   type: 'TASK',
   constraintType: constraint?.type ?? null,
   constraintDate: constraint?.date ?? null,
@@ -23,13 +23,13 @@ const edge = (predecessorId: string, successorId: string): EngineEdge => ({
   predecessorId,
   successorId,
   type: 'FS',
-  lagDays: 0,
+  lagMinutes: 0,
 });
 
 function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[] = []) {
   const output = computeSchedule(activities, edges, {
     dataDate: DATA_DATE,
-    calendar: allDaysWorkCalendar,
+    calendar: allMinutesWorkCalendar,
   });
   const byId = new Map<string, EngineResult>(output.results.map((r) => [r.activityId, r]));
   return { ...output, byId };
@@ -38,13 +38,13 @@ function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[]
 describe('constraint clamping — forward (early dates)', () => {
   it('SNET pushes the early start out to the constraint date', () => {
     const { byId } = run([task('A', 2, { type: 'SNET', date: '2026-01-04' })]);
-    expect(byId.get('A')!.earlyStartOffset).toBe(3);
+    expect(byId.get('A')!.earlyStartOffset).toBe(4320);
     expect(byId.get('A')!.earlyStart).toBe('2026-01-04');
   });
 
   it('FNET lands the early finish exactly on the constraint date', () => {
     const { byId } = run([task('A', 3, { type: 'FNET', date: '2026-01-06' })]);
-    expect(byId.get('A')!.earlyStartOffset).toBe(3); // finishOffset(6) − D(3)
+    expect(byId.get('A')!.earlyStartOffset).toBe(4320); // finishOffset(6) − D(3)
     expect(byId.get('A')!.earlyFinish).toBe('2026-01-06');
   });
 
@@ -65,7 +65,7 @@ describe('constraint clamping — forward (early dates)', () => {
       [task('A', 2), task('B', 1, { type: 'SNET', date: '2026-01-05' })],
       [edge('A', 'B')],
     );
-    expect(byId.get('B')!.earlyStartOffset).toBe(4);
+    expect(byId.get('B')!.earlyStartOffset).toBe(5760);
     expect(edges.find((e) => e.edgeId === 'A-B-FS')!.isDriving).toBe(false);
   });
 });
@@ -86,7 +86,7 @@ describe('constraint clamping — backward (float)', () => {
       [task('A', 5), task('B', 1, { type: 'FNLT', date: '2026-01-03' })],
       [edge('A', 'B')],
     );
-    expect(byId.get('B')!.totalFloat).toBe(-3);
+    expect(byId.get('B')!.totalFloat).toBe(-4320);
     expect(byId.get('B')!.isCritical).toBe(true);
   });
 });
@@ -98,8 +98,8 @@ describe('constraint clamping — pins do not silently drop logic', () => {
       [task('A', 3), task('B', 2, { type: 'MSO', date: '2026-01-02' })],
       [edge('A', 'B')],
     );
-    expect(byId.get('B')!.earlyStartOffset).toBe(1); // the pin holds
-    expect(byId.get('A')!.totalFloat).toBe(-2); // the impossibility is visible on A
+    expect(byId.get('B')!.earlyStartOffset).toBe(1440); // the pin holds
+    expect(byId.get('A')!.totalFloat).toBe(-2880); // the impossibility is visible on A
     expect(byId.get('A')!.isCritical).toBe(true);
   });
 });

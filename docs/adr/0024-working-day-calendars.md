@@ -1,8 +1,12 @@
 # ADR-0024: Working-day calendars (model, engine integration & scope)
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by ADR-0036)
 - **Date:** 2026-07-10
 - **Deciders:** James Ewbank (with Claude Code)
+
+> **Amended by [ADR-0036](0036-hour-granular-calendars-and-durations.md) (M1):** the weekday-mask +
+> whole-day-exception model is replaced by intraday **shift windows** + time-window exception ranges;
+> the O(log) week-arithmetic + binary-search calendar port survives at minute granularity.
 
 ## Context
 

@@ -1,8 +1,11 @@
 # ADR-0023: CPM scheduling date convention (continuous-internal / inclusive-display)
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by ADR-0036)
 - **Date:** 2026-07-10
 - **Deciders:** James Ewbank (with Claude Code)
+
+> **Amended by [ADR-0036](0036-hour-granular-calendars-and-durations.md) (M1):** the continuous-internal
+> unit is now the working-**minute** (was the working-day); the inclusive-display convention is unchanged.
 
 ## Context
 

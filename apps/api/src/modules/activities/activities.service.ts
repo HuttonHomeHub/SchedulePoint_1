@@ -29,6 +29,13 @@ import type { UpdatePositionsDto } from './dto/update-positions.dto';
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
 
 /**
+ * Minutes in one full calendar day — the fixed day↔minute factor (ADR-0036 §4.2).
+ * The public API stays day-denominated (`durationDays`); storage is minutes, so the
+ * service converts at the boundary (a whole day of work = 1440 working-minutes).
+ */
+const MINUTES_PER_DAY = 1440;
+
+/**
  * Derive an activity's status from its measurable progress so the two can never
  * contradict: a finish date (or 100%) means COMPLETE; a start date (or any
  * progress) means IN_PROGRESS; otherwise NOT_STARTED. Using the actual dates as
@@ -127,7 +134,7 @@ export class ActivitiesService {
         code: dto.code ?? null,
         description: dto.description ?? null,
         type,
-        durationDays,
+        durationMinutes: durationDays * MINUTES_PER_DAY,
         ...(dto.constraintType ? { constraintType: dto.constraintType } : {}),
         ...(dto.constraintDate ? { constraintDate: parseCalendarDate(dto.constraintDate) } : {}),
         ...(dto.laneIndex !== undefined ? { laneIndex: dto.laneIndex } : {}),
@@ -182,7 +189,7 @@ export class ActivitiesService {
       patch.description = dto.description === '' ? null : dto.description;
     }
     if (dto.type !== undefined) patch.type = dto.type;
-    if (dto.durationDays !== undefined) patch.durationDays = dto.durationDays;
+    if (dto.durationDays !== undefined) patch.durationMinutes = dto.durationDays * MINUTES_PER_DAY;
     if (dto.constraintType !== undefined) patch.constraintType = dto.constraintType;
     if (dto.constraintDate !== undefined) {
       patch.constraintDate =
@@ -199,7 +206,7 @@ export class ActivitiesService {
     // Keep the milestone invariant when the type changes to (or already is) a
     // milestone: a milestone always has duration 0, regardless of what was sent.
     const effectiveType = patch.type ?? existing.type;
-    if (MILESTONE_TYPES.includes(effectiveType)) patch.durationDays = 0;
+    if (MILESTONE_TYPES.includes(effectiveType)) patch.durationMinutes = 0;
 
     try {
       const changed = await this.activities.updateIfVersionMatches(

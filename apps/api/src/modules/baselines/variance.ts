@@ -1,6 +1,7 @@
 import type { BaselineVarianceRow } from '@repo/types';
 
-import type { WorkingDayCalendar } from '../schedule/engine';
+import { MINUTES_PER_DAY } from '../schedule/day-compat-calendar';
+import type { WorkingTimeCalendar } from '../schedule/engine';
 
 /** A baseline snapshot row projected to the fields variance needs (dates as `YYYY-MM-DD`). */
 export interface VarianceBaselineRow {
@@ -41,12 +42,14 @@ export interface VarianceResult {
  * absent — a not-yet-computed live date or an unbaselined activity is not comparable.
  */
 function workingDiff(
-  calendar: WorkingDayCalendar,
+  calendar: WorkingTimeCalendar,
   baseline: string | null,
   current: string | null,
 ): number | null {
   if (baseline === null || current === null) return null;
-  return calendar.workingDaysBetween(baseline, current);
+  // The engine calendar is minute-granular (ADR-0036); variance stays day-denominated
+  // (ADR-0036 §7) via the fixed M = 1440 factor — exact for the full-day compat calendar.
+  return Math.round(calendar.workingTimeBetween(baseline, current) / MINUTES_PER_DAY);
 }
 
 /**
@@ -62,7 +65,7 @@ function workingDiff(
 export function computeVariance(
   baselineRows: readonly VarianceBaselineRow[],
   liveRows: readonly VarianceLiveRow[],
-  calendar: WorkingDayCalendar,
+  calendar: WorkingTimeCalendar,
 ): VarianceResult {
   const baselineById = new Map(baselineRows.map((b) => [b.sourceActivityId, b]));
   const liveIds = new Set(liveRows.map((l) => l.id));

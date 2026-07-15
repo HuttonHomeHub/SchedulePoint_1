@@ -561,6 +561,11 @@ minute-granular data exists. This is documented as an accepted, reviewed one-way
 
 Kept tight — only choices that could move dates or are one-way doors.
 
+> **RESOLVED (product owner, 2026-07-15): Q1 → full-day `00:00–24:00` / `M = 1440`; Q2 → defer
+> re-shaping to planners; Q3 → bound `lag_minutes` at ±5,256,000 (≈ ±10 y) and reject the N16
+> 100,000 h lag at the boundary.** All three as recommended below. These are the M1 build's
+> acceptance criteria; ADR-0036's corresponding open points are settled with the same choices.
+
 **Q1 — The mask→shift window (and thus `M`): full-day `00:00–24:00` vs a construction `08:00–17:00`.**
 _Recommendation: `00:00–24:00`, `M = 1440`._ It is the **only** choice that is provably
 date-preserving for **both** calendared and null-calendar plans under a **single** factor (§4.2): the

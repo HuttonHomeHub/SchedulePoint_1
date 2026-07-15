@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Organization } from '@prisma/client';
-import { STANDARD_CALENDAR_NAME, STANDARD_WEEKDAYS_MASK } from '@repo/types';
+import { STANDARD_CALENDAR_NAME, STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import { OrganizationRole, type Principal } from '../../common/auth/principal';
@@ -76,7 +76,15 @@ export class OrganizationsService {
             data: {
               organizationId: created.id,
               name: STANDARD_CALENDAR_NAME,
-              workingWeekdays: STANDARD_WEEKDAYS_MASK,
+              // The Mon–Fri mask materialises as one full-day [0,1440) shift per weekday
+              // (ADR-0036 §2): weekdays 0–4 (Monday–Friday).
+              shifts: {
+                create: WorkingWeekdays.toIndices(STANDARD_WEEKDAYS_MASK).map((weekday) => ({
+                  weekday,
+                  startMinute: 0,
+                  endMinute: 1440,
+                })),
+              },
               createdBy: principal.userId,
               updatedBy: principal.userId,
             },

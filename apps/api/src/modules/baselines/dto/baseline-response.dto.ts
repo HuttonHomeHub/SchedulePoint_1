@@ -4,6 +4,9 @@ import type { BaselineActivitySnapshot, BaselineDetail, BaselineSummary } from '
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 
+/** Day↔minute factor (ADR-0036 §4.2): the frozen duration is minutes, exposed as whole days. */
+const MINUTES_PER_DAY = 1440;
+
 /** A baseline plus a count of its frozen activity rows — the list/summary source shape. */
 export type BaselineWithCount = Baseline & { activityCount: number };
 /** A baseline with its frozen activity rows embedded — the single-baseline (GET one) source shape. */
@@ -114,7 +117,8 @@ export class BaselineActivitySnapshotResponseDto implements BaselineActivitySnap
       code: entity.code,
       name: entity.name,
       type: entity.type,
-      durationDays: entity.durationDays,
+      // Frozen in working-minutes (ADR-0036); the public field stays whole working days.
+      durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
       baselineStart: entity.baselineStart ? formatCalendarDate(entity.baselineStart) : null,
       baselineFinish: entity.baselineFinish ? formatCalendarDate(entity.baselineFinish) : null,
       lateStart: entity.lateStart ? formatCalendarDate(entity.lateStart) : null,

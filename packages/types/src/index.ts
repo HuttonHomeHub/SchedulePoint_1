@@ -279,6 +279,21 @@ export const DEPENDENCY_TYPES = ['FS', 'SS', 'FF', 'SF'] as const;
 export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
 
 /**
+ * The calendar a relationship's lag is measured on (ADR-0036 §6) — the per-relationship
+ * override of the P6 "calendar for scheduling relationship lag" setting. Kept in lock-step
+ * with the API's Prisma `LagCalendarSource` enum. M1 lands the seam (default
+ * `PROJECT_DEFAULT`, behaviour-preserving); M3 wires resolution + the 24-hour override.
+ */
+export const LAG_CALENDAR_SOURCES = [
+  'PREDECESSOR',
+  'SUCCESSOR',
+  'TWENTY_FOUR_HOUR',
+  'PROJECT_DEFAULT',
+] as const;
+
+export type LagCalendarSource = (typeof LAG_CALENDAR_SOURCES)[number];
+
+/**
  * Canonical dependency-conflict messages (ADR-0021), shared so the same rejection reads
  * identically wherever it surfaces: the API throws them, and the web TSLD link-draw pre-check
  * shows them locally before the write. One voice — the client pre-check and the server 409/422

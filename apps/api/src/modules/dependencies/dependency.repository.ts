@@ -20,7 +20,7 @@ export type DependencyWithEndpoints = Prisma.ActivityDependencyGetPayload<typeof
 /** Fields a dependency update may change (endpoints are immutable). */
 export interface DependencyPatch {
   type?: DependencyType;
-  lagDays?: number;
+  lagMinutes?: number;
 }
 
 /** A directed edge in a plan — the minimal shape the cycle walk (B2) needs. */

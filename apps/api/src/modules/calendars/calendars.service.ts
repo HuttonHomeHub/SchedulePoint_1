@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Calendar, type CalendarException } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -12,8 +12,10 @@ import { OrganizationsService } from '../organizations/organizations.service';
 
 import {
   CalendarRepository,
+  type CalendarExceptionWithWindows,
   type CalendarPatch,
   type CalendarWithExceptions,
+  type CalendarWithShifts,
 } from './calendar.repository';
 import type { CreateCalendarExceptionDto } from './dto/create-calendar-exception.dto';
 import type { CreateCalendarDto } from './dto/create-calendar.dto';
@@ -52,7 +54,7 @@ export class CalendarsService {
     principal: Principal,
     orgSlug: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: Calendar[]; meta: PageMeta }> {
+  ): Promise<{ items: CalendarWithShifts[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:read', organization.id);
 
@@ -128,11 +130,10 @@ export class CalendarsService {
     if (dto.workingWeekdays !== undefined) patch.workingWeekdays = dto.workingWeekdays;
 
     try {
-      const changed = await this.calendars.updateIfVersionMatches(
-        calendarId,
-        dto.version,
-        patch,
-        principal.userId,
+      // Replacing the weekly shift set on a mask change is atomic with the version-gated
+      // scalar update (ADR-0036 §2): run both inside one transaction.
+      const changed = await this.prisma.$transaction((tx) =>
+        this.calendars.updateIfVersionMatches(calendarId, dto.version, patch, principal.userId, tx),
       );
       if (changed === 0) {
         throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
@@ -184,7 +185,7 @@ export class CalendarsService {
     orgSlug: string,
     calendarId: string,
     dto: CreateCalendarExceptionDto,
-  ): Promise<CalendarException> {
+  ): Promise<CalendarExceptionWithWindows> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
 
@@ -220,7 +221,7 @@ export class CalendarsService {
       );
       return exception;
     } catch (error) {
-      if (this.isUniqueViolation(error)) throw this.duplicateExceptionError();
+      if (this.isExceptionOverlapViolation(error)) throw this.duplicateExceptionError();
       throw error;
     }
   }
@@ -258,9 +259,25 @@ export class CalendarsService {
     );
   }
 
-  /** A Prisma unique-violation from a partial unique index (name or exception date). */
+  /** A Prisma unique-violation from a partial unique index (calendar name). */
   private isUniqueViolation(error: unknown): boolean {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+  }
+
+  /**
+   * A duplicate active exception on the same calendar. Since ADR-0036 the overlap
+   * guard is a GiST EXCLUDE over the exception's inclusive date range (Postgres
+   * `23P01` exclusion_violation), not a unique index — Prisma does not map `23P01`
+   * to a `P2002` code, so match it by the constraint name across whichever error
+   * shape Prisma surfaces it as. The DB constraint remains the last line of defence;
+   * this catch is what turns it into the 409 `DUPLICATE_EXCEPTION` the API promises.
+   */
+  private isExceptionOverlapViolation(error: unknown): boolean {
+    return (
+      (error instanceof Prisma.PrismaClientKnownRequestError ||
+        error instanceof Prisma.PrismaClientUnknownRequestError) &&
+      error.message.includes('ex_calendar_exceptions_no_overlap')
+    );
   }
 
   private duplicateCalendarError(): ConflictError {

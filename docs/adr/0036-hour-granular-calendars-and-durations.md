@@ -1,12 +1,17 @@
 # ADR-0036: Hour/shift-granular calendars & durations (engine rework)
 
-- **Status:** Proposed
-- **Date:** 2026-07-15
+- **Status:** Accepted
+- **Date:** 2026-07-15 (accepted when M1 landed)
 - **Deciders:** James Ewbank (with Claude Code)
 
-> **Draft / gating design.** This is the design target for milestone **M1** of the Engine Conformance
-> & Validation Framework (ADR-0034). It **amends ADR-0023 and ADR-0024**; it moves to **Accepted**
-> when M1 lands. No engine code changes on this ADR alone.
+> **Accepted — M1 landed this rework.** The engine now computes in continuous working-**minute**
+> offsets over intraday shift calendars; durations/lag are stored in minutes and calendars as shift
+> windows (see the storage design under `docs/specs/engine-conformance-framework/M1-storage-design.md`).
+> This **amends ADR-0023 and ADR-0024** (the continuous-internal / inclusive-display convention and the
+> O(log) calendar arithmetic survive; only the unit and the calendar's intraday shape changed). The
+> public HTTP API stays day/mask-denominated (§7) — the service converts at the boundary (factor 1440);
+> hour-duration input and a shift-authoring UI are additive follow-ons. Product-owner decisions locked:
+> `M = 1440` (full-day windows), calendar re-shaping deferred to planners, lag bound ±5,256,000 minutes.
 
 ## Context
 

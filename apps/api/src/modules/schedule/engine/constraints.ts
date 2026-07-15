@@ -1,7 +1,9 @@
 import type { ConstraintType } from '@repo/types';
 
-import type { WorkingDayCalendar } from './calendar';
+import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
+
 import type { EngineActivity } from './types';
+import type { WorkingTimeCalendar } from './working-time-calendar';
 
 /**
  * The six **moderate** constraint kinds the engine honours in this slice (ADR-0023
@@ -28,14 +30,21 @@ export function isParkedMandatory(type: ConstraintType | null | undefined): bool
   return type === 'MANDATORY_START' || type === 'MANDATORY_FINISH';
 }
 
+/** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
+function nextCalendarDay(date: string): string {
+  const d = parseCalendarDate(date);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return formatCalendarDate(d);
+}
+
 /**
- * The active constraint on an activity, resolved to continuous working-day
- * offsets (ADR-0023). A constraint is active only when both `constraintType` and
+ * The active constraint on an activity, resolved to continuous working-**minute**
+ * offsets (ADR-0036). A constraint is active only when both `constraintType` and
  * `constraintDate` are present. `startOffset` is the constraint date as a start
- * offset (`start = DD + offset`); `finishOffset` is the same date as a
- * continuous **finish** offset — a task's inclusive finish `c` maps to `EF = c +
- * 1` (the boundary after the last working day), while a zero-duration milestone's
- * finish equals its start (no `+1`).
+ * offset (the first working minute of that day). `finishOffset` is the exclusive
+ * boundary after the constraint day (its last working minute + 1) — the working
+ * minutes from the data date through the end of day `c`; for a zero-duration
+ * milestone the finish equals the start.
  */
 interface ResolvedConstraint {
   kind: ModerateConstraint;
@@ -45,13 +54,16 @@ interface ResolvedConstraint {
 
 function resolve(
   activity: EngineActivity,
-  calendar: WorkingDayCalendar,
+  calendar: WorkingTimeCalendar,
   dataDate: string,
 ): ResolvedConstraint | null {
-  const { constraintType, constraintDate, durationDays } = activity;
+  const { constraintType, constraintDate, durationMinutes } = activity;
   if (!constraintType || !constraintDate) return null;
-  const startOffset = calendar.workingDaysBetween(dataDate, constraintDate);
-  const finishOffset = durationDays === 0 ? startOffset : startOffset + 1;
+  const startOffset = calendar.workingTimeBetween(dataDate, constraintDate);
+  const finishOffset =
+    durationMinutes === 0
+      ? startOffset
+      : calendar.workingTimeBetween(dataDate, nextCalendarDay(constraintDate));
   return { kind: normaliseConstraint(constraintType), startOffset, finishOffset };
 }
 
@@ -64,12 +76,12 @@ function resolve(
 export function clampForwardStart(
   activity: EngineActivity,
   logicEarlyStart: number,
-  calendar: WorkingDayCalendar,
+  calendar: WorkingTimeCalendar,
   dataDate: string,
 ): number {
   const constraint = resolve(activity, calendar, dataDate);
   if (!constraint) return logicEarlyStart;
-  const duration = activity.durationDays;
+  const duration = activity.durationMinutes;
   switch (constraint.kind) {
     case 'SNET':
       return Math.max(logicEarlyStart, constraint.startOffset);
@@ -93,12 +105,12 @@ export function clampForwardStart(
 export function clampBackwardFinish(
   activity: EngineActivity,
   logicLateFinish: number,
-  calendar: WorkingDayCalendar,
+  calendar: WorkingTimeCalendar,
   dataDate: string,
 ): number {
   const constraint = resolve(activity, calendar, dataDate);
   if (!constraint) return logicLateFinish;
-  const duration = activity.durationDays;
+  const duration = activity.durationMinutes;
   switch (constraint.kind) {
     case 'SNLT':
       return Math.min(logicLateFinish, constraint.startOffset + duration);

@@ -20,7 +20,6 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     organizationId: ORG_ID,
     name: 'Standard',
     description: null,
-    workingWeekdays: STANDARD_WEEKDAYS_MASK,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -37,8 +36,9 @@ function exception(overrides: Partial<CalendarException> = {}): CalendarExceptio
     id: 'exc-1',
     organizationId: ORG_ID,
     calendarId: 'cal-1',
-    date: new Date('2026-12-25T00:00:00Z'),
-    isWorking: false,
+    // A whole-day exception is a single-day inclusive range (ADR-0036 §2).
+    startDate: new Date('2026-12-25T00:00:00Z'),
+    endDate: new Date('2026-12-25T00:00:00Z'),
     label: 'Christmas Day',
     version: 1,
     createdAt: new Date(),
@@ -53,6 +53,18 @@ function exception(overrides: Partial<CalendarException> = {}): CalendarExceptio
 
 function uniqueViolation(): Prisma.PrismaClientKnownRequestError {
   return new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: '6' });
+}
+
+/**
+ * The exclusion-constraint violation Postgres raises when an exception overlaps an existing one
+ * (ADR-0036 replaced the unique index with a GiST EXCLUDE). Prisma surfaces `23P01` as an
+ * unknown-request error carrying the raw message (with the constraint name), not a `P2002`.
+ */
+function exceptionOverlapViolation(): Prisma.PrismaClientUnknownRequestError {
+  return new Prisma.PrismaClientUnknownRequestError(
+    'conflicting key value violates exclusion constraint "ex_calendar_exceptions_no_overlap"',
+    { clientVersion: '6' },
+  );
 }
 
 function principalWith(permissions: Permission[]): Principal {
@@ -272,9 +284,9 @@ describe('CalendarsService', () => {
       expect(calendars.createException).not.toHaveBeenCalled();
     });
 
-    it('maps a duplicate exception date to a 409', async () => {
+    it('maps a duplicate/overlapping exception date to a 409', async () => {
       calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
-      calendars.createException.mockRejectedValue(uniqueViolation());
+      calendars.createException.mockRejectedValue(exceptionOverlapViolation());
       await expect(
         service.addException(principalWith(ALL), 'acme', 'cal-1', { date: '2026-12-25' }),
       ).rejects.toBeInstanceOf(ConflictError);
