@@ -80,6 +80,28 @@ judged on dates. See
 [`docs/specs/engine-conformance-framework/`](specs/engine-conformance-framework/) and the package
 README.
 
+The **differential harness** lives in `apps/api/src/modules/schedule/conformance/` (it imports the
+real engine, so it cannot sit in the engine-free package). It has four parts, all in the standard
+**quality** job:
+
+- **First-principles goldens** (`goldens.ts`) — small hand-authored networks with exact,
+  hand-computed dates for FS/SS/FF/SF, lag, weekend-skipping calendars, and constraint clamping.
+  These are the oracle-free regression floor and, per ADR-0036 §3, the **safety net for the M1
+  days→minutes rework**: their dates are invariant across that change, so a red diff is a reviewed
+  re-baseline, never a silent drift.
+- **Adapter** (`adapter.ts`) — maps the P6-class fixture onto today's day-granular engine and
+  **reports every skip/approximation** (unsupported activity types, hour durations, per-activity
+  calendars, progress, secondary constraints) rather than faking a value; its supported 119-activity
+  subset is scheduled as a structural-regression smoke (dates there are a degradation, not a golden).
+- **Differential scaffold** (`scenarios.ts`) — a living registry of the fixture's 13 scenarios; only
+  the unprogressed baseline (S01) runs today, the rest are honest `todo`s citing the milestone that
+  unlocks them. As a milestone lands an option, its scenario flips to a "dates must differ from S02"
+  assertion in the same PR (ADR-0034 §8).
+- **Negative-case contract** (`negative.spec.ts`) — hostile inputs must reject/report, never hang:
+  cycle members are named, dangling references rejected, and calendar/lag walkers are bounded.
+  Input-validity cases (negative duration, milestone-with-duration) are API-boundary concerns and
+  marked `todo` at the engine level.
+
 ## Running tests
 
 ```bash

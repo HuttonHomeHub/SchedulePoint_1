@@ -1,0 +1,20 @@
+{
+  // Emits the consumable build (dist/*.js + *.d.ts). `apps/api` typechecks against these flat
+  // declarations rather than the source, because the source uses `import.meta` and `.js`-extension
+  // imports that a CommonJS/Node-resolution consumer (apps/api) cannot process directly.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    // Leaf build: no incremental/composite state, so a clean `dist` is always
+    // emitted (a stale *.tsbuildinfo must never make tsc skip emit in CI).
+    "composite": false,
+    "incremental": false,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts"]
+}

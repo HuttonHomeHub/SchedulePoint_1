@@ -141,6 +141,9 @@ importers:
       '@repo/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@repo/engine-conformance':
+        specifier: workspace:*
+        version: link:../../packages/engine-conformance
       '@swc/core':
         specifier: ^1.10.7
         version: 1.15.43

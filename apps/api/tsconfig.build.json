@@ -8,5 +8,17 @@
     // dist output anyway).
     "incremental": false
   },
-  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.e2e-spec.ts"]
+  // The conformance harness (src/modules/schedule/conformance/) is a TEST asset:
+  // it is imported only by *.spec.ts and depends on @repo/engine-conformance (a
+  // devDependency vendored fixture), which is pruned from the production image.
+  // `nest build` must not compile it — it is exercised by Vitest + `typecheck`
+  // (tsconfig.json), never shipped. Same spirit as the *.spec.ts exclusion.
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "**/*.spec.ts",
+    "**/*.e2e-spec.ts",
+    "src/modules/schedule/conformance/**"
+  ]
 }
