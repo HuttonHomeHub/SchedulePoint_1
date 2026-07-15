@@ -174,4 +174,15 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hide legend' }));
     expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
   });
+
+  it('offers a header edit-pencil to writers (folded from the toolbar), hidden for viewers', () => {
+    // The standalone Edit-plan toolbar button folded into a header pencil beside the status pill.
+    const writer = renderScreen();
+    expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument();
+    writer.unmount();
+
+    h.role = 'VIEWER';
+    renderScreen();
+    expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument();
+  });
 });

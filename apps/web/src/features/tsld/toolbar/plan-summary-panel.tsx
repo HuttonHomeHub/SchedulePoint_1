@@ -28,7 +28,7 @@ export function PlanSummaryPanel({
   onEdit: (() => void) | null;
 }): React.ReactElement {
   return (
-    <div className="flex min-w-[15rem] flex-col gap-3 text-sm">
+    <div className="flex min-w-60 flex-col gap-3 text-sm">
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5">
         <dt className="text-muted-foreground">Status</dt>
         <dd className="text-right font-medium">{statusLabel}</dd>

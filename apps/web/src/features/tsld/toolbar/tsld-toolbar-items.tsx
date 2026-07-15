@@ -433,7 +433,7 @@ function SearchFieldControl({
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities (coming soon)"
         title="Search / filter activities (coming soon)"
-        className="h-8 w-[min(15rem,32vw)] min-w-[9rem] pl-8 text-sm"
+        className="h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm"
       />
     </div>
   );

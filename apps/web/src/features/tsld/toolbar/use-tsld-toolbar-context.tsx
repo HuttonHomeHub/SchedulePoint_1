@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
+import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
 import type {
@@ -67,7 +68,7 @@ export function useTsldToolbarContext({
   openDialog: (kind: PlanDialogKind) => void;
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
    * Legend control shows/hides it rather than rendering the key in a popover. */
-  legend: { open: boolean; toggle: () => void };
+  legend: Pick<UseLegendPanelPrefs, 'open' | 'toggle'>;
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();

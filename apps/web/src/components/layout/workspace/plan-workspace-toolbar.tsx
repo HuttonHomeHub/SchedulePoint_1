@@ -16,6 +16,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
@@ -72,20 +73,29 @@ export function ToolbarPlanWorkspace({
   // <Toolbar> so grouping/overflow stay per-row and the primitive is unchanged.
   const rows = useMemo(() => splitByRow(items), [items]);
 
-  // "Press ? for keyboard shortcuts" (ADR-0031 amendment) — the standard global affordance, alongside
-  // the Row-1 help icon. Ignore it while typing in a field so `?` still types normally.
+  // "Press ? for keyboard shortcuts" (ADR-0031 amendment) — scoped to the workspace region rather than
+  // the whole document (WCAG 2.1.4: a single-character shortcut must not be globally active). The
+  // listener is attached to the workspace root element, so it only fires when focus is inside it
+  // (keydown bubbles from the canvas or a toolbar control), mirroring the listbox-scoped `?` in
+  // TsldPanel. Ignore it while typing in a field, and don't stack the sheet on an already-open plan
+  // dialog / edit form (whose modal keydown still bubbles to this root).
   const openShortcuts = canvasUi.setShowHelp;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const anotherDialogOpen = dialog !== null || model.editing;
   useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (anotherDialogOpen) return;
       event.preventDefault();
       openShortcuts(true);
     };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [openShortcuts]);
+    root.addEventListener('keydown', onKeyDown);
+    return () => root.removeEventListener('keydown', onKeyDown);
+  }, [openShortcuts, anotherDialogOpen]);
 
   // Below `md` the vertical split can't give the canvas and the table useful height at once, so
   // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
@@ -215,7 +225,7 @@ export function ToolbarPlanWorkspace({
   ];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={rootRef} className="flex min-h-0 flex-1 flex-col">
       {/* Slim header: one line — breadcrumb (…→ plan name) + status pill, then compact pen status. */}
       <header className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-2">
         <h1 className="sr-only">{plan.name}</h1>
@@ -225,15 +235,16 @@ export function ToolbarPlanWorkspace({
           {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
               the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
           {model.canWrite ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => model.setEditing(true)}
               title="Edit plan…"
-              aria-label="Edit plan…"
-              className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring shrink-0 rounded-md p-1 focus-visible:ring-2 focus-visible:outline-none"
+              aria-label="Edit plan"
+              className="text-muted-foreground shrink-0"
             >
               <SquarePen aria-hidden="true" className="size-4" />
-            </button>
+            </Button>
           ) : null}
         </div>
         <CompactPenStatus

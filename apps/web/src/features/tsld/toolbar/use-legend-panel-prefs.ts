@@ -52,9 +52,9 @@ function readPrefs(): LegendPrefs {
 }
 
 export function useLegendPanelPrefs(): UseLegendPanelPrefs {
-  const [prefs, setPrefs] = useState<LegendPrefs>(() =>
-    typeof localStorage === 'undefined' ? { open: false, position: null } : readPrefs(),
-  );
+  // `readPrefs` is wrapped in try/catch, so a missing/blocked `localStorage` falls back to defaults —
+  // no separate SSR guard needed (matches the shared `useResizablePanelPrefs`).
+  const [prefs, setPrefs] = useState<LegendPrefs>(readPrefs);
 
   useEffect(() => {
     try {
