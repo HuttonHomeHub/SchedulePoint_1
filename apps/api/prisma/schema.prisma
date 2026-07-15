@@ -460,8 +460,14 @@ model Activity {
   // day-denominated (ADR-0036 §7) — the service scales days↔minutes at the boundary.
   // A ck_activities_duration_minutes_nonneg (>= 0) CHECK is raw SQL in the migration.
   durationMinutes Int             @default(480) @map("duration_minutes")
-  // Reserved for M5 (Calendars) — a nullable column with NO FK relation yet; not
-  // client-settable in this slice.
+  // The activity's own working-time calendar (M5, ADR-0037). Nullable → inherit the
+  // plan default (resolution: activity.calendarId → plan.calendarId → all-minutes).
+  // Client-settable, but the FK alone does NOT enforce same-org — a cross-org
+  // calendarId satisfies the FK, so the org-scope check stays in the service (like the
+  // plan picker). FK is RESTRICT (calendars soft-delete only; the CALENDAR_IN_USE
+  // service guard, which now unions active plans + active activities, is the real
+  // protection — RESTRICT is defence in depth). Backed by a partial index on
+  // (calendar_id) WHERE deleted_at IS NULL — raw SQL in the migration.
   calendarId      String?         @map("calendar_id") @db.Uuid
   constraintType  ConstraintType? @map("constraint_type")
   // Calendar day (date-only, no timezone), like Plan.plannedStart.
@@ -519,6 +525,9 @@ model Activity {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  // The activity's own working-time calendar (M5, ADR-0037) — mirrors Plan.calendar
+  // exactly (nullable, onDelete: Restrict). null = inherit the plan default.
+  calendar     Calendar?    @relation(fields: [calendarId], references: [id], onDelete: Restrict)
 
   // The dependency edges incident on this activity (M4). Two named self-relations
   // on ActivityDependency point back here: `predecessorLinks` are the edges where
@@ -696,6 +705,10 @@ model Calendar {
   // ACTIVE plans here before allowing a delete (409 CALENDAR_IN_USE); the FK is
   // RESTRICT as defence in depth.
   plans        Plan[]
+  // Activities assigned this calendar (M5, ADR-0037). The delete-in-use guard now
+  // ALSO counts ACTIVE activities here (WHERE deleted_at IS NULL) — a soft-deleted
+  // activity must NOT block the delete; the FK is RESTRICT as defence in depth.
+  activities   Activity[]
 
   // Calendar name is unique per organisation among ACTIVE rows — partial unique
   // (uq_calendars_org_name ON (organization_id, name) WHERE deleted_at IS NULL),
