@@ -41,8 +41,8 @@ describe('conformance adapter', () => {
     ).toHaveLength(88);
     // Sixteen progressed activities have their progress ignored (no progress model yet).
     expect(network.report.notes.filter((n) => n.kind === 'progress-ignored')).toHaveLength(16);
-    // The one 24H lag-calendar override and the one secondary constraint are dropped.
-    expect(network.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(1);
+    // The one 24H lag-calendar override is now HONOURED (M3) — no longer dropped.
+    expect(network.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(0);
     expect(
       network.report.notes.filter((n) => n.kind === 'secondary-constraint-dropped'),
     ).toHaveLength(1);
@@ -72,6 +72,17 @@ describe('conformance adapter', () => {
       network.activities.some((a) => a.durationMinutes > 0 && a.durationMinutes % 60 === 0),
     ).toBe(true);
     for (const edge of network.edges) expect(Number.isInteger(edge.lagMinutes)).toBe(true);
+  });
+
+  it('honours the one 24-Hour per-relationship lag calendar (M3, ADR-0036 §6)', () => {
+    // The fixture carries exactly one per-edge lag calendar (the concrete-cure A4430→A4440
+    // FS + 168h / 24H edge); it now carries an elapsed-lag port, not a dropped note.
+    const withLagCalendar = network.edges.filter((e) => e.lagCalendar !== undefined);
+    expect(withLagCalendar).toHaveLength(1);
+    // The baseline adaptation (honorLagCalendars: false) leaves it on the plan calendar.
+    const baseline = adaptFixture(fixture, { honorLagCalendars: false });
+    expect(baseline.edges.filter((e) => e.lagCalendar !== undefined)).toHaveLength(0);
+    expect(baseline.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(1);
   });
 
   it('never emits an edge to an excluded activity (the graph stays a valid DAG)', () => {

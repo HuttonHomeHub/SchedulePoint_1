@@ -87,10 +87,25 @@ export interface AdaptOptions {
    * progress-free engine can represent.
    */
   dataDate?: string;
+  /**
+   * Honour each relationship's per-edge lag calendar (ADR-0036 §6, M3). Default **true**
+   * (the faithful mapping). When `false` the lag is measured on the plan calendar and the
+   * override is noted — the S01 baseline, so `resultsDiffer(S06, S01)` proves the 24-Hour
+   * lag actually moved dates. Only `24H` (→ elapsed `allMinutesWorkCalendar`) is distinct
+   * today; a Predecessor/Successor calendar needs per-activity calendars (M5).
+   */
+  honorLagCalendars?: boolean;
 }
 
 const MINUTES_PER_HOUR = 60;
 const WEEKDAY_KEYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
+
+/** Normalise a fixture `lag_calendar` string to a `LagCalendarSource`, or null if unmappable. */
+function normaliseLagCalendar(value: string): 'TWENTY_FOUR_HOUR' | null {
+  const upper = value.trim().toUpperCase();
+  if (upper === '24H' || upper === '24_HOUR' || upper === '24HOUR') return 'TWENTY_FOUR_HOUR';
+  return null;
+}
 
 /**
  * Adapt the fixture into the supported engine subset. Unsupported activities are
@@ -103,6 +118,7 @@ const WEEKDAY_KEYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
  */
 export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {}): AdaptedNetwork {
   const dataDate = opts.dataDate ?? toCalendarDay(fixture.project.planned_start);
+  const honorLagCalendars = opts.honorLagCalendars ?? true;
   const notes: AdaptationNote[] = [];
 
   const defaultCalendarId = fixture.project.default_calendar;
@@ -124,7 +140,7 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const edges: EngineEdge[] = [];
   let excludedRelationships = 0;
   for (const rel of fixture.relationships) {
-    const adapted = adaptRelationship(rel, supportedIds, notes);
+    const adapted = adaptRelationship(rel, supportedIds, honorLagCalendars, notes);
     if (adapted) edges.push(adapted);
     else excludedRelationships += 1;
   }
@@ -139,7 +155,9 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     approximations: [
       `every activity is scheduled on the project default calendar ${defaultCalendarId}; per-activity shift/24h/window calendars are not applied (ADR-0024/ADR-0036, M5)`,
       'progress, actuals, suspend/resume and the data-date floor are ignored (ADR-0035 §1–§6, M2)',
-      'per-relationship lag calendars are ignored; lag is measured on the plan calendar (ADR-0036 §6, M3)',
+      honorLagCalendars
+        ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag); Predecessor/Successor lag calendars coincide with the plan calendar until per-activity calendars (ADR-0036 §6, M5)'
+        : 'per-relationship lag calendars are ignored; lag is measured on the plan calendar (ADR-0036 §6, M3)',
       'the data date and constraint dates are taken at day granularity (the shift calendar restores intraday working time within the day)',
     ],
     notes,
@@ -283,6 +301,7 @@ function adaptActivity(
 function adaptRelationship(
   rel: FixtureRelationship,
   supportedIds: ReadonlySet<string>,
+  honorLagCalendars: boolean,
   notes: AdaptationNote[],
 ): EngineEdge | null {
   if (!supportedIds.has(rel.predecessor) || !supportedIds.has(rel.successor)) {
@@ -308,20 +327,31 @@ function adaptRelationship(
       reason: `${rel.lag_h}h lag rounded to ${lagMinutes} working minutes`,
     });
   }
-  if (rel.lag_calendar) {
-    notes.push({
-      entity: 'relationship',
-      id: rel.id,
-      kind: 'lag-calendar-dropped',
-      reason: `lag calendar "${rel.lag_calendar}" ignored; lag measured on the plan calendar (ADR-0036 §6, M3)`,
-    });
-  }
-
-  return {
+  const edge: EngineEdge = {
     id: rel.id,
     predecessorId: rel.predecessor,
     successorId: rel.successor,
     type: rel.type,
     lagMinutes,
   };
+
+  if (rel.lag_calendar) {
+    const source = normaliseLagCalendar(rel.lag_calendar);
+    if (honorLagCalendars && source === 'TWENTY_FOUR_HOUR') {
+      // Measure this lag as ELAPSED time on the 24/7 calendar (ADR-0036 §6, M3) — the
+      // concrete-cure A4430→A4440 FS + 168h case: 7 elapsed days, not 7 working days.
+      edge.lagCalendar = allMinutesWorkCalendar;
+    } else {
+      notes.push({
+        entity: 'relationship',
+        id: rel.id,
+        kind: 'lag-calendar-dropped',
+        reason: honorLagCalendars
+          ? `lag calendar "${rel.lag_calendar}" not representable; lag measured on the plan calendar (M5)`
+          : `lag calendar "${rel.lag_calendar}" ignored; lag measured on the plan calendar (baseline)`,
+      });
+    }
+  }
+
+  return edge;
 }

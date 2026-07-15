@@ -23,15 +23,27 @@ describe('conformance scenarios (differential scaffold)', () => {
     expect(Object.keys(SCENARIO_SUPPORT)).toHaveLength(fixture.scenarios.length);
   });
 
-  it('marks exactly the unprogressed baseline runnable today; the rest are documented todo', () => {
+  it('marks the baseline + the 24-Hour lag scenario runnable; the rest are documented todo', () => {
     const runnable = Object.entries(SCENARIO_SUPPORT)
       .filter(([, s]) => s.runnable)
       .map(([id]) => id);
-    expect(runnable).toEqual(['S01_BASELINE_UNPROGRESSED']);
+    // S06 became runnable when M3 wired the 24-Hour lag calendar (ADR-0036 §6).
+    expect(runnable).toEqual(['S01_BASELINE_UNPROGRESSED', 'S06_LAG_CALENDAR_24H']);
 
     for (const [id, support] of Object.entries(SCENARIO_SUPPORT)) {
       if (support.runnable) expect(support.reason).toBe('');
       else expect(support.reason, `${id} needs a deferral reason`).not.toBe('');
+    }
+  });
+
+  it('runs S06 (24-Hour lag) as a differential — its dates differ from the S01 baseline', () => {
+    const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
+    const lag24h = runScenario(fixture, 'S06_LAG_CALENDAR_24H');
+    expect(baseline.ran && lag24h.ran).toBe(true);
+    if (baseline.ran && lag24h.ran) {
+      // Honouring the concrete-cure A4430→A4440 FS + 168h / 24H edge moves at least one date:
+      // "flip the option, dates must change" (ADR-0034 §2). S05 (Pred-vs-Succ) stays todo → M5.
+      expect(resultsDiffer(lag24h.output, baseline.output)).toBe(true);
     }
   });
 

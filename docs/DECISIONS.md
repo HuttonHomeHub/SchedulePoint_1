@@ -10,6 +10,29 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-15 — M3 lag-calendar scope: only the 24-Hour half is a differential (setting-sensitive → M5)
+
+**Decision.** M3 (per-relationship lag calendars, ADR-0036 §6) realises **only the 24-Hour
+(elapsed) lag calendar** as a runnable conformance differential. The fixture's
+`lag_calendar_setting_sensitive` case (scenario S05, Predecessor-vs-Successor) is **re-scoped to
+M5**, correcting the M3 acceptance in the implementation plan.
+
+**Why.** S05 needs the predecessor and successor to schedule on **different** calendars for the
+lag-calendar setting to change any date — i.e. per-**activity** calendars, which ADR-0024
+deferred to M5. In M3 all activities schedule on the single plan calendar, so `PREDECESSOR`,
+`SUCCESSOR` and `PROJECT_DEFAULT` all resolve to the same calendar; only `TWENTY_FOUR_HOUR`
+(elapsed time) is behaviourally distinct. Claiming S05 in M3 would be a false differential (its
+output can't differ from S01). The product owner approved landing all four enum options now
+(Pred/Succ forward-wired, honest microcopy) with only 24-Hour asserted.
+
+**Consequences.** The capability-matrix "Per-relationship lag calendar" row is **🟡** (24-Hour ✓,
+setting-sensitive → M5); scenario **S06** is a runnable differential (`resultsDiffer(S06, S01)`),
+**S05** stays `todo` → M5. The lag DTO/enum surface is complete now, so M5 adds no new API
+surface — it only makes Pred/Succ resolve to distinct per-activity calendars. Engine detail: the
+lag `applyLag` anchor→instant conversion is START/FINISH-aware (ADR-0023) so the forward/backward
+walks invert across a non-working gap (no spurious negative float); undefined lag calendar stays
+the literal `anchor + lag` fast path, so the golden suite is byte-identical.
+
 ### 2026-07-13 — On-canvas TSLD activity labels (extension within ADR-0026 D1)
 
 **Decision.** The TSLD canvas now draws each activity's label (`{code} {name} · {n}d`) directly
