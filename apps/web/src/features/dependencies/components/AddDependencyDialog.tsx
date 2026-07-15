@@ -1,15 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ActivitySummary } from '@repo/types';
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateDependency } from '../api/use-dependencies';
 import {
   DEPENDENCY_TYPES,
   DEPENDENCY_TYPE_LABELS,
+  LAG_CALENDAR_DISPLAY_ORDER,
+  LAG_CALENDAR_HINT,
   LAG_CALENDAR_LABELS,
-  LAG_CALENDAR_OPTIONS,
   dependencyFormSchema,
+  lagFieldLabel,
   type DependencyFormValues,
 } from '../schemas/dependency-schemas';
 
@@ -55,11 +57,16 @@ export function AddDependencyDialog({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<DependencyFormValues>({
     resolver: zodResolver(dependencyFormSchema),
     defaultValues: { otherActivityId: '', type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' },
   });
+
+  // The lag unit tracks the chosen calendar (elapsed vs working days); subscribe to just
+  // that field so the numeric label restays honest as the selection changes.
+  const lagCalendar = useWatch({ control, name: 'lagCalendar' });
 
   useEffect(() => {
     if (open) {
@@ -161,12 +168,6 @@ export function AddDependencyDialog({
               ))}
             </Select>
           </div>
-          <TextField
-            label="Lag (working days, negative for a lead)"
-            type="number"
-            error={errors.lagDays?.message}
-            {...register('lagDays', { valueAsNumber: true })}
-          />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="dependency-lag-calendar">Lag calendar</Label>
             <Select
@@ -174,18 +175,22 @@ export function AddDependencyDialog({
               aria-describedby="dependency-lag-calendar-hint"
               {...register('lagCalendar')}
             >
-              {LAG_CALENDAR_OPTIONS.map((value) => (
+              {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
                 <option key={value} value={value}>
                   {LAG_CALENDAR_LABELS[value]}
                 </option>
               ))}
             </Select>
-            <p id="dependency-lag-calendar-hint" className="text-muted-foreground text-xs">
-              Choose <strong>24-hour (elapsed)</strong> for waits that run around the clock — a
-              concrete cure of 7 days is 7 calendar days, not 7 working days. Predecessor and
-              Successor match the project calendar until per-activity calendars arrive.
+            <p id="dependency-lag-calendar-hint" className="text-muted-foreground text-sm">
+              {LAG_CALENDAR_HINT}
             </p>
           </div>
+          <TextField
+            label={lagFieldLabel(lagCalendar)}
+            type="number"
+            error={errors.lagDays?.message}
+            {...register('lagDays', { valueAsNumber: true })}
+          />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

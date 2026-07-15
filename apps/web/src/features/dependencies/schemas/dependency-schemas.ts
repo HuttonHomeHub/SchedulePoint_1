@@ -35,6 +35,38 @@ export const LAG_CALENDAR_LABELS: Record<LagCalendarSource, string> = {
 export const LAG_CALENDAR_OPTIONS = LAG_CALENDAR_SOURCES;
 
 /**
+ * Display order for the lag-calendar `<select>` — the storage constant lists
+ * `PROJECT_DEFAULT` last, but the default (and by far the most common) choice should
+ * surface first, followed by the one behaviourally-distinct option (24-hour). Derived
+ * from `LAG_CALENDAR_LABELS` so it stays exhaustive if a source is ever added.
+ */
+export const LAG_CALENDAR_DISPLAY_ORDER: readonly LagCalendarSource[] = [
+  'PROJECT_DEFAULT',
+  'TWENTY_FOUR_HOUR',
+  'PREDECESSOR',
+  'SUCCESSOR',
+];
+
+/**
+ * The one lag-calendar hint, shared so the add and edit dialogs can never drift on
+ * what the field means (mirrors why `formatLag`/`typeAndLagSchema` are centralised).
+ */
+export const LAG_CALENDAR_HINT =
+  'Choose 24-hour (elapsed) for waits that run around the clock — a concrete cure of ' +
+  '7 days is 7 calendar days, not 7 working days. Predecessor and Successor match the ' +
+  'project calendar until per-activity calendars arrive.';
+
+/**
+ * Label for the signed-lag numeric field. The unit depends on the chosen lag calendar:
+ * a 24-hour (elapsed) lag is counted in **calendar** days, everything else in **working**
+ * days — so the label tracks the selection rather than always claiming "working days".
+ */
+export function lagFieldLabel(lagCalendar: LagCalendarSource): string {
+  const unit = lagCalendar === 'TWENTY_FOUR_HOUR' ? 'calendar days' : 'working days';
+  return `Lag (${unit}, negative for a lead)`;
+}
+
+/**
  * Format a signed working-day lag for display: `0d`, `+3d` (lag), `−2d` (lead,
  * with a real minus sign). Kept tiny and pure so tables and dialogs agree.
  */

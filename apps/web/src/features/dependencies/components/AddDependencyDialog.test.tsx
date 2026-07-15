@@ -99,6 +99,18 @@ describe('AddDependencyDialog', () => {
     expect(JSON.parse(init?.body as string)).toMatchObject({ lagCalendar: 'TWENTY_FOUR_HOUR' });
   });
 
+  it('relabels the lag field to calendar days once 24-hour (elapsed) is chosen (M3)', () => {
+    renderDialog('successor');
+    // Default lag calendar → the unit is working days.
+    expect(screen.getByLabelText(/Lag \(working days/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Lag calendar'), {
+      target: { value: 'TWENTY_FOUR_HOUR' },
+    });
+    // An elapsed lag is counted in calendar days, so the label must track the choice.
+    expect(screen.getByLabelText(/Lag \(calendar days/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Lag \(working days/)).not.toBeInTheDocument();
+  });
+
   it('adds a successor: the anchor → the chosen activity', async () => {
     renderDialog('successor');
     fireEvent.change(screen.getByLabelText('Successor activity'), { target: { value: 'c1' } });

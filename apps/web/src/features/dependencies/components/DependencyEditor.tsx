@@ -60,10 +60,12 @@ function DirectionTable({
       cell: (dep) => (
         <span className="text-muted-foreground tabular-nums">
           {formatLag(dep.lagDays)}
-          {dep.lagCalendar !== 'PROJECT_DEFAULT' ? (
-            // Only surface the lag calendar when it's not the default — an elapsed (24h) wait
-            // reads very differently from a working-day lag, so make it visible in the list.
-            <span className="ml-1.5 not-italic">· {LAG_CALENDAR_LABELS[dep.lagCalendar]}</span>
+          {dep.lagCalendar === 'TWENTY_FOUR_HOUR' ? (
+            // Only surface the lag calendar for 24-hour (elapsed), the one source that changes the
+            // computed dates today — an elapsed wait reads very differently from a working-day lag.
+            // Predecessor/Successor compute identically to the project calendar until M5, so badging
+            // them here would imply a difference that doesn't yet exist (ADR-0036 §6).
+            <span className="ml-1.5">· {LAG_CALENDAR_LABELS[dep.lagCalendar]}</span>
           ) : null}
         </span>
       ),

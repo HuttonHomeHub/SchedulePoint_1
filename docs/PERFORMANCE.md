@@ -67,6 +67,18 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
   `n`/`H`, so a real calendar keeps the recalc inside the same budget even over
   multi-year spans. A **null calendar** skips the load entirely and schedules exactly
   as M6 (all-days-work). The engine's pass code is unchanged.
+- **Per-relationship lag calendar: zero cost on the default path, near-log per
+  overridden edge (M3, ADR-0036 §6).** Each edge's lag is measured on its lag
+  calendar. For the default (`PROJECT_DEFAULT`/`PREDECESSOR`/`SUCCESSOR`, which all
+  coincide with the plan calendar today), `applyLag` short-circuits to the literal
+  `anchor + lag` arithmetic — **no calendar round-trip**, so a plan with no `24-hour`
+  lag pays exactly what it did before M3. A `TWENTY_FOUR_HOUR` edge measures the lag as
+  elapsed time on the shared 24/7 `allMinutesWorkCalendar` **singleton** (never a
+  per-edge allocation): a bounded handful of **O(log)** calendar-port calls
+  (`addWorkingTime` + `workingTimeBetween`, both binary-search — never a per-minute
+  scan), horizon-capped (ADR-0036 §5) so even a ±14-year lag terminates. `loadEdges`
+  adds `lag_calendar` to its existing single `select` — a plain enum column, no join,
+  no extra query.
 - **Scale ceiling:** when a plan outgrows the synchronous budget (or progress-
   aware re-forecasting lands), move to the queued path (ADR-0009) — the endpoint
   and service stay the same. A CI **structural** smoke at 500 activities (all-days
