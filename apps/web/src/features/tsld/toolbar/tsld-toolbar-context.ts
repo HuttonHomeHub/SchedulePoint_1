@@ -76,14 +76,19 @@ export interface TsldToolbarContext {
   recalculate: () => void;
   openBaselines: () => void;
   openCalendar: () => void;
-  openPlanDetails: () => void;
-  /** Edit the plan's metadata (writer only); absent for non-writers (item hidden). */
+  /** Edit the plan's metadata (writer only); absent for non-writers. Surfaced by the Summary popover's
+   * Edit-plan shortcut and the header edit-pencil — the standalone toolbar buttons were removed
+   * (ADR-0031 amendment: Plan details folded into Summary). */
   editPlan: (() => void) | null;
 
   // --- Help (group 7) -----------------------------------------------------------------------
   openShortcuts: () => void;
-  /** The legend body for the `Legend▾` popover (lifted from the canvas so it isn't duplicated). */
-  legendContent: ReactNode;
+  /** Whether the on-canvas floating Legend panel is open (drives the Legend toggle's pressed state).
+   * The legend lives on the canvas now (ADR-0031 amendment), so the toolbar item is a show/hide
+   * toggle rather than a popover that renders the key itself. */
+  legendOpen: boolean;
+  /** Show/hide the on-canvas floating Legend panel. */
+  toggleLegend: () => void;
 
   // --- Summary popover + pinned Project-finish chip -----------------------------------------
   /** The schedule-summary body for the `Summary▾` popover (`ScheduleSummaryStrip`). */

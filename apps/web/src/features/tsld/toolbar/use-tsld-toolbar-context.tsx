@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 
-import { TsldLegend } from '../components/TsldLegend';
-
+import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
+import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
 import type {
@@ -10,9 +10,8 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
-import { useSetPlanSchedulingMode } from '@/features/plans';
-import { ScheduleSummaryStrip } from '@/features/schedule';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -61,11 +60,15 @@ export function useTsldToolbarContext({
   plan,
   canvasUi,
   openDialog,
+  legend,
 }: {
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
   canvasUi: TsldCanvasUiState;
   openDialog: (kind: PlanDialogKind) => void;
+  /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
+   * Legend control shows/hides it rather than rendering the key in a popover. */
+  legend: Pick<UseLegendPanelPrefs, 'open' | 'toggle'>;
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
@@ -78,17 +81,41 @@ export function useTsldToolbarContext({
     activities.some((a) => a.earlyStart !== null) &&
     plan.plannedStart !== null;
 
+  const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
+  // Edit-plan opens the plan form (writer only). Shared by the Summary popover's shortcut and the
+  // header edit-pencil. Memoised so it doesn't re-identify the toolbar context each render.
+  const editPlan = useMemo(
+    () => (canWrite ? () => setEditing(true) : null),
+    [canWrite, setEditing],
+  );
+
+  // The Summary popover folds the former Plan-details facts (status + data date, plus the scheduling
+  // mode) together with the computed schedule strip and an Edit-plan shortcut (ADR-0031 amendment).
   const summaryContent = useMemo(
-    () => <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />,
-    [orgSlug, planId],
+    () => (
+      <PlanSummaryPanel
+        statusLabel={PLAN_STATUS_LABELS[plan.status]}
+        dataDate={plan.plannedStart}
+        schedulingModeLabel={
+          SCHEDULING_MODES_ENABLED
+            ? plan.schedulingMode === 'VISUAL'
+              ? 'Visual'
+              : 'Early'
+            : undefined
+        }
+        orgSlug={orgSlug}
+        planId={planId}
+        onEdit={editPlan}
+      />
+    ),
+    [orgSlug, planId, plan.status, plan.plannedStart, plan.schedulingMode, editPlan],
   );
   const projectFinishContent = useMemo(
     () => <ProjectFinishChip orgSlug={orgSlug} planId={planId} />,
     [orgSlug, planId],
   );
-  const legendContent = useMemo(() => <TsldLegend />, []);
+  const { open: legendOpen, toggle: toggleLegend } = legend;
 
-  const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
   const {
     zoomPreset,
     canvasControlRef,
@@ -186,12 +213,13 @@ export function useTsldToolbarContext({
             }),
       openBaselines: () => openDialog('baselines'),
       openCalendar: () => openDialog('calendar'),
-      openPlanDetails: () => openDialog('details'),
-      editPlan: canWrite ? () => setEditing(true) : null,
+      editPlan,
 
       // Help
       openShortcuts: () => setShowHelp(true),
-      legendContent,
+      // The legend lives on the canvas now (ADR-0031 amendment) — this toggles the floating panel.
+      legendOpen,
+      toggleLegend,
 
       // Summary popover + pinned finish chip
       summaryContent,
@@ -220,13 +248,13 @@ export function useTsldToolbarContext({
       setShowHelp,
       canRecalc,
       canEditSchedule,
-      canWrite,
-      setEditing,
+      editPlan,
       recalc,
       model.autoRecalc,
       announce,
       openDialog,
-      legendContent,
+      legendOpen,
+      toggleLegend,
       summaryContent,
       projectFinishContent,
       hasDiagram,

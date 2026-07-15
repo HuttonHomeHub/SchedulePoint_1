@@ -15,7 +15,7 @@ import { cva } from 'class-variance-authority';
  *   presentation only).
  */
 export const toolbarControlVariants = cva(
-  'focus-visible:ring-ring inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset',
+  'focus-visible:ring-ring inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
   {
     variants: {
       tone: {

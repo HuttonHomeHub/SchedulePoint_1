@@ -25,9 +25,9 @@ const spies = {
   recalculate: vi.fn(),
   openBaselines: vi.fn(),
   openCalendar: vi.fn(),
-  openPlanDetails: vi.fn(),
   editPlan: vi.fn(),
   openShortcuts: vi.fn(),
+  toggleLegend: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -57,10 +57,10 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     recalculate: spies.recalculate,
     openBaselines: spies.openBaselines,
     openCalendar: spies.openCalendar,
-    openPlanDetails: spies.openPlanDetails,
     editPlan: spies.editPlan,
     openShortcuts: spies.openShortcuts,
-    legendContent: <div data-testid="legend-body">legend</div>,
+    legendOpen: false,
+    toggleLegend: spies.toggleLegend,
     summaryContent: <div data-testid="summary-body">summary</div>,
     projectFinishContent: <span>Finish: 01 Aug 2026</span>,
     hasDiagram: true,
@@ -141,12 +141,37 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(within(lookRow).getByText('Finish: 01 Aug 2026')).toBeInTheDocument();
   });
 
-  it('renders the Summary and Legend popover bodies from the context', () => {
+  it('renders the Summary popover body from the context', () => {
     renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /Summary/ }));
     expect(screen.getByTestId('summary-body')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Legend/ }));
-    expect(screen.getByTestId('legend-body')).toBeInTheDocument();
+  });
+
+  it('toggles the on-canvas Legend panel (a show/hide button, not a popover)', () => {
+    // The legend lives on the canvas now (ADR-0031 amendment): the toolbar item is a pressed-state
+    // toggle that drives the workspace's floating panel — it renders no key of its own.
+    const { rerender } = renderRows(ctx({ legendOpen: false }));
+    const legend = screen.getByRole('button', { name: /Legend/ });
+    expect(legend).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(legend);
+    expect(spies.toggleLegend).toHaveBeenCalledOnce();
+
+    // Reflecting the open state marks the toggle pressed.
+    const rows = splitByRow(buildTsldToolbarItems());
+    const opened = ctx({ legendOpen: true });
+    rerender(
+      <div>
+        <Toolbar
+          items={rows.look}
+          context={opened}
+          label="View and navigate"
+          authoringEnabled
+          alignEndGroup="object"
+        />
+        <Toolbar items={rows.do} context={opened} label="Build and manage" authoringEnabled />
+      </div>,
+    );
+    expect(screen.getByRole('button', { name: /Legend/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {
@@ -184,12 +209,18 @@ describe('TSLD toolbar registry (two-row)', () => {
   it('shows the plan actions inline on Row 2 and drives their seams (Baselines)', () => {
     renderRows(ctx());
     // Plan & deliverable actions now sit inline (tier-2 icon buttons), not in a `⋯` overflow.
-    fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
+    // A live icon-only button carries a hover tooltip naming it (not just an aria-label).
+    const baselines = screen.getByRole('button', { name: 'Baselines…' });
+    expect(baselines).toHaveAttribute('title', 'Baselines…');
+    fireEvent.click(baselines);
     expect(spies.openBaselines).toHaveBeenCalledOnce();
   });
 
-  it('hides Edit plan for a non-writer (editPlan null)', () => {
-    renderRows(ctx({ editPlan: null }));
+  it('has no standalone Plan-details or Edit-plan toolbar buttons (folded into Summary)', () => {
+    renderRows(ctx());
+    // Both were consolidated (ADR-0031 amendment): Plan-details facts live in the Summary popover,
+    // which also carries the Edit-plan shortcut (plus a header edit-pencil).
+    expect(screen.queryByRole('button', { name: 'Plan details…' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit plan…' })).not.toBeInTheDocument();
   });
 
@@ -218,7 +249,8 @@ describe('TSLD toolbar registry (two-row)', () => {
     for (const name of ['Undo', 'Redo']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).toHaveAttribute('title', 'Coming soon');
+      // Icon-only tooltip names the button, then the reason (WCAG/discoverability).
+      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 
@@ -226,11 +258,11 @@ describe('TSLD toolbar registry (two-row)', () => {
     renderRows(ctx());
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
-    // The rest are inline "Coming soon" icon buttons.
+    // The rest are inline "Coming soon" icon buttons whose tooltip names them.
     for (const name of ['Export…', 'Share…', 'Add note', 'Colour by…']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
-      expect(item).toHaveAttribute('title', 'Coming soon');
+      expect(item).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 

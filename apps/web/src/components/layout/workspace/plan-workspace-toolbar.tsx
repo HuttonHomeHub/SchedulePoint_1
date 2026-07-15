@@ -1,3 +1,4 @@
+import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
@@ -15,6 +16,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
@@ -22,7 +24,9 @@ import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
+import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
+import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
   useTsldToolbarContext,
@@ -53,12 +57,45 @@ export function ToolbarPlanWorkspace({
   // One shared canvas UI state drives both the chromeless canvas and the toolbar (ADR-0031).
   const canvasUi = useTsldCanvasUiState();
   const [dialog, setDialog] = useState<PlanDialogKind | null>(null);
-  const ctx = useTsldToolbarContext({ model, plan, canvasUi, openDialog: setDialog });
+  // The on-canvas floating Legend panel (ADR-0031 amendment): open state + drag position persist here,
+  // toggled from the toolbar's Legend control and rendered over the canvas below.
+  const legend = useLegendPanelPrefs();
+  const ctx = useTsldToolbarContext({
+    model,
+    plan,
+    canvasUi,
+    openDialog: setDialog,
+    legend: { open: legend.open, toggle: legend.toggle },
+  });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
   // always live) and Row 2 · Do (build/manage, its authoring cluster pen-gated). Each row is its own
   // <Toolbar> so grouping/overflow stay per-row and the primitive is unchanged.
   const rows = useMemo(() => splitByRow(items), [items]);
+
+  // "Press ? for keyboard shortcuts" (ADR-0031 amendment) — scoped to the workspace region rather than
+  // the whole document (WCAG 2.1.4: a single-character shortcut must not be globally active). The
+  // listener is attached to the workspace root element, so it only fires when focus is inside it
+  // (keydown bubbles from the canvas or a toolbar control), mirroring the listbox-scoped `?` in
+  // TsldPanel. Ignore it while typing in a field, and don't stack the sheet on an already-open plan
+  // dialog / edit form (whose modal keydown still bubbles to this root).
+  const openShortcuts = canvasUi.setShowHelp;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const anotherDialogOpen = dialog !== null || model.editing;
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (anotherDialogOpen) return;
+      event.preventDefault();
+      openShortcuts(true);
+    };
+    root.addEventListener('keydown', onKeyDown);
+    return () => root.removeEventListener('keydown', onKeyDown);
+  }, [openShortcuts, anotherDialogOpen]);
 
   // Below `md` the vertical split can't give the canvas and the table useful height at once, so
   // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
@@ -158,6 +195,17 @@ export function ToolbarPlanWorkspace({
     />
   );
 
+  // The floating Legend panel is overlaid on whichever canvas region is active (its container is
+  // `relative`); it renders null when closed, so dropping it in both layout branches is cheap.
+  const legendPanel = (
+    <TsldLegendPanel
+      open={legend.open}
+      position={legend.position}
+      onClose={legend.close}
+      onPositionChange={legend.setPosition}
+    />
+  );
+
   // Breadcrumb ends at the plan name (the current page) so the whole trail — Clients → client →
   // project → plan — reads on one header line (ADR-0031 two-row amendment). A visually-hidden <h1>
   // keeps the document outline intact even though the visible title is the last (bold) crumb.
@@ -177,13 +225,27 @@ export function ToolbarPlanWorkspace({
   ];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={rootRef} className="flex min-h-0 flex-1 flex-col">
       {/* Slim header: one line — breadcrumb (…→ plan name) + status pill, then compact pen status. */}
       <header className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-2">
         <h1 className="sr-only">{plan.name}</h1>
         <div className="flex min-w-0 items-center gap-2">
           <Breadcrumbs items={crumbs} />
           <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+          {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
+              the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
+          {model.canWrite ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => model.setEditing(true)}
+              title="Edit plan…"
+              aria-label="Edit plan"
+              className="text-muted-foreground shrink-0"
+            >
+              <SquarePen aria-hidden="true" className="size-4" />
+            </Button>
+          ) : null}
         </div>
         <CompactPenStatus
           pen={model.pen}
@@ -231,8 +293,12 @@ export function ToolbarPlanWorkspace({
       <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {isWide ? (
           <>
-            {/* Full-height chromeless canvas — the toolbar hosts its controls. */}
-            <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">{canvas}</div>
+            {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
+                panel (when open) is overlaid via the `relative` container. */}
+            <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
+              {canvas}
+              {legendPanel}
+            </div>
 
             {collapsed ? (
               <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
@@ -263,11 +329,12 @@ export function ToolbarPlanWorkspace({
             <WorkspaceViewToggle value={pane} onChange={setPane} />
             <div
               className={cn(
-                'min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2',
+                'relative min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2',
                 pane === 'diagram' ? 'flex' : 'hidden',
               )}
             >
               {canvas}
+              {legendPanel}
             </div>
             <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
               <ActivityBottomPanel model={model} />

@@ -12,8 +12,8 @@ import { drawActivity, onboard, openNewPlan, startEditing } from './support';
  * 2. Drawing the **first activity** silently sets the plan start and the schedule **auto-recalcs** —
  *    the bar plots without anyone pressing Recalculate (M1 + M3).
  * 3. The **Add split-button** places a **milestone** directly on the canvas (M4).
- * 4. The **two-click Link tool** + its FS/SS/FF selector are the authoring path for dependencies,
- *    with the edge-drag affordance gone (M5).
+ * 4. The **Link split-button** (mirroring Add) picks the FS/SS/FF kind and arms link-mode in one
+ *    gesture — the authoring path for dependencies, with the edge-drag affordance gone (M5).
  *
  * Serial + wide viewport (the suite mutates one shared plan); Chromium only (TECH_DEBT #25a).
  */
@@ -46,17 +46,16 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
   await drawActivity(page, 'Finish milestone', 'Handover', { x: 360, y: 180 });
   await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
 
-  // M5 — the two-click Link tool is the dependency path: activating it reveals the FS/SS/FF selector,
-  // and its type can be switched. (The click-pick-click creation itself is covered by the gesture-
-  // machine unit tests; here we prove the tool + selector are wired into the live toolbar.)
-  const linkTool = toolbar.getByRole('button', { name: 'Link activities' });
+  // M5 — the Link split-button mirrors Add: one menu-button whose menu picks the FS/SS/FF kind and
+  // arms link-mode in a single gesture (the edge-drag affordance is gone). (The click-pick-click
+  // creation itself is covered by the gesture-machine unit tests; here we prove the split-button +
+  // type menu are wired into the live toolbar.)
+  const linkTool = toolbar.getByRole('button', { name: 'Link', exact: true });
   await expect(linkTool).toBeVisible();
   await linkTool.click();
-  const linkType = toolbar.getByRole('button', { name: 'Link type: FS' });
-  await expect(linkType).toBeVisible();
-  await linkType.click();
   await page.getByRole('menuitemradio', { name: /Start → Start/ }).click();
-  await expect(toolbar.getByRole('button', { name: 'Link type: SS' })).toBeVisible();
+  // Picking a kind enters link-mode and relabels the button with the armed code (Linking · SS).
+  await expect(toolbar.getByRole('button', { name: /Linking · SS/ })).toBeVisible();
 
   // The canvas-first authoring workspace is accessible.
   expect(

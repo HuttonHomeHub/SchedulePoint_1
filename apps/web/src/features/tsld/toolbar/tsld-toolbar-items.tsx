@@ -32,7 +32,6 @@ import {
   Share2,
   SlidersHorizontal,
   Spline,
-  SquarePen,
   StickyNote,
   TriangleAlert,
   Undo2,
@@ -244,14 +243,18 @@ const LINK_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   LINK_TYPES.map(({ type, label }) => [type, label]),
 );
 
-/**
- * The Link tool's **dependency-type selector** (ADR-0032 M5) — a compact menu-button showing the
- * armed FS/SS/FF code, opening a `Menu` to switch it. Only shown while the Link tool is active. One
- * focusable control (spreads `itemProps`) per the toolbar contract.
- */
-const LINK_DISABLED_REASON = 'Start editing to change the link type';
+const LINK_DISABLED_REASON = 'Start editing to link activities';
 
-function LinkTypeControl({
+/**
+ * The **Link split-button** (ADR-0032 M5, ADR-0031 amendment) — the canvas-first two-click dependency
+ * tool, now a single APG menu-button that mirrors the {@link AddActivityControl} Add split-button
+ * (product decision): the trigger arms/labels the current FS/SS/FF kind and opens a `Menu` to pick it;
+ * picking one arms link-mode with that kind (so a pick always means "start linking now"). While
+ * linking, the menu also offers "Stop linking". This replaces the old pair (a plain Link toggle + a
+ * separate, only-while-linking FS/SS/FF selector) with one consistent control. Pen-gated as one
+ * focusable roving stop (spreads `itemProps`).
+ */
+function LinkControl({
   ctx,
   api,
 }: {
@@ -269,14 +272,14 @@ function LinkTypeControl({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
-        aria-label={`Link type: ${ctx.linkType}`}
         title={disabled ? LINK_DISABLED_REASON : `Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ active: open, disabled }))}
+        className={cn(toolbarControlVariants({ active: ctx.isLinking || open, disabled }))}
       >
-        <span className="truncate">{ctx.linkType}</span>
+        <Spline aria-hidden="true" className="size-4" />
+        <span className="truncate">{ctx.isLinking ? `Linking · ${ctx.linkType}` : 'Link'}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
@@ -290,7 +293,12 @@ function LinkTypeControl({
           <MenuItem
             key={type}
             selected={ctx.linkType === type}
-            onSelect={() => ctx.setLinkType(type)}
+            onSelect={() => {
+              // Pick the kind and arm link-mode in one gesture (a pick always means "link now"),
+              // mirroring the Add split-button. Changing the kind while already linking just re-arms.
+              ctx.setLinkType(type);
+              if (!ctx.isLinking) ctx.toggleLinkMode();
+            }}
           >
             <Check
               aria-hidden="true"
@@ -299,6 +307,12 @@ function LinkTypeControl({
             {type} — {label}
           </MenuItem>
         ))}
+        {ctx.isLinking ? (
+          <MenuItem onSelect={() => ctx.toggleLinkMode()}>
+            <span aria-hidden="true" className="size-4" />
+            Stop linking
+          </MenuItem>
+        ) : null}
       </Menu>
     </>
   );
@@ -407,7 +421,7 @@ function SearchFieldControl({
   itemProps: ToolbarItemRenderApi['itemProps'];
 }): React.ReactElement {
   return (
-    <div className="flex items-center">
+    <div className="ml-1 flex items-center">
       <Search
         aria-hidden="true"
         className="text-muted-foreground pointer-events-none -mr-6 size-4"
@@ -419,7 +433,7 @@ function SearchFieldControl({
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities (coming soon)"
         title="Search / filter activities (coming soon)"
-        className="h-8 w-[min(15rem,32vw)] min-w-[9rem] pl-8 text-sm"
+        className="h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm"
       />
     </div>
   );
@@ -468,8 +482,9 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
  *   right-aligned Finish read-out + Summary + Legend. Always live; nothing here needs the pen.
  * - **Row 2 · Do** (`row: 'do'`) — build & manage: a pen-gated **authoring cluster** (Add, Link,
  *   Auto-arrange, note/snap/clear, Recalculate, Undo/Redo) that shades as one set when the pen isn't
- *   held, then plan & deliverable actions (Baselines, Calendar, Plan details, Edit plan, Update
- *   progress, Export/Print/Share/Comments, Shortcuts) that stay live because they don't author.
+ *   held, then plan & deliverable actions (Baselines, Calendar, Update progress,
+ *   Export/Print/Share/Comments) that stay live because they don't author. (Plan details + Edit plan
+ *   are folded into the Row 1 Summary popover; Keyboard shortcuts rides Row 1 beside Legend.)
  *
  * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
@@ -525,7 +540,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'zoom-out',
       group: 'frame',
       row: 'look',
-      tier: 1,
+      tier: 2,
       order: 10,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
@@ -537,7 +552,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'zoom-in',
       group: 'frame',
       row: 'look',
-      tier: 1,
+      tier: 2,
       order: 11,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
@@ -549,7 +564,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'fit',
       group: 'frame',
       row: 'look',
-      tier: 1,
+      tier: 2,
       order: 12,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
@@ -737,9 +752,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             onActivate: (ctx) => ctx.toggleAddActivity(),
           }),
     },
-    // Link tool (ADR-0032 M5) — the canvas-first two-click dependency tool. Two-row rule: shown
-    // **always** when canvas-first authoring is on (shade-don't-hide) and pen-gated, so a viewer sees
-    // it disabled rather than missing.
+    // Link split-button (ADR-0032 M5, ADR-0031 amendment) — one menu-button that arms link-mode and
+    // picks FS/SS/FF, mirroring Add. Shown **always** when canvas-first authoring is on
+    // (shade-don't-hide) and pen-gated, so a viewer sees it disabled rather than missing.
     {
       id: 'link-tool',
       group: 'tools',
@@ -747,25 +762,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 1,
       order: 1,
       label: 'Link activities',
-      icon: <Spline className="size-4" />,
-      penGated: true,
-      disabledReason: () => 'Start editing to link activities',
-      isVisible: () => CANVAS_AUTHORING_ENABLED,
-      isActive: (ctx) => ctx.isLinking,
-      onActivate: (ctx) => ctx.toggleLinkMode(),
-    },
-    // The FS/SS/FF selector, shown only while the Link tool is active.
-    {
-      id: 'link-type',
-      group: 'tools',
-      row: 'do',
-      tier: 1,
-      order: 2,
-      label: 'Link type',
       penGated: true,
       disabledReason: () => LINK_DISABLED_REASON,
-      isVisible: (ctx) => CANVAS_AUTHORING_ENABLED && ctx.isLinking,
-      render: (ctx, api) => <LinkTypeControl ctx={ctx} api={api} />,
+      isVisible: () => CANVAS_AUTHORING_ENABLED,
+      render: (ctx, api) => <LinkControl ctx={ctx} api={api} />,
     },
     {
       id: 'auto-arrange',
@@ -915,27 +915,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <CalendarDays className="size-4" />,
       onActivate: (ctx) => ctx.openCalendar(),
     },
-    {
-      id: 'plan-details',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 4,
-      label: 'Plan details…',
-      icon: <Info className="size-4" />,
-      onActivate: (ctx) => ctx.openPlanDetails(),
-    },
-    {
-      id: 'edit-plan',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 5,
-      label: 'Edit plan…',
-      icon: <SquarePen className="size-4" />,
-      isVisible: (ctx) => ctx.editPlan !== null,
-      onActivate: (ctx) => ctx.editPlan?.(),
-    },
+    // Plan details + Edit plan are no longer toolbar buttons (ADR-0031 amendment): the key facts
+    // (status, data date, mode) now live in the Summary popover, which also carries an "Edit plan…"
+    // shortcut; the header shows an edit-pencil next to the status pill for quick access.
     // Deliverables + collaboration — inline "Coming soon" icon placeholders (Row 2; see
     // docs/TOOLBAR_ROADMAP.md). Update progress (apply actuals + advance the data date); Export the
     // diagram (PDF/PNG) or schedule (XER/MSP/CSV); Print; Share (the ADR-0012 per-plan guest link);
@@ -987,8 +969,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     }),
 
     // --- 6 · Help -----------------------------------------------------------------------------
-    // Legend rides Row 1 (Look) at the far right; Shortcuts sits at the end of Row 2 (Do). (Undo/Redo
-    // moved to the Row-2 authoring cluster above, so the History group holds no toolbar items now.)
+    // Legend rides Row 1 (Look) at the far right; Shortcuts sits beside it. (Undo/Redo moved to the
+    // Row-2 authoring cluster above, so the History group holds no toolbar items now.)
+    // The legend lives **on the canvas** now (ADR-0031 amendment): this is a show/hide toggle for the
+    // floating Legend panel (draggable + pinnable over the diagram), not a popover that renders the key.
     {
       id: 'legend',
       group: 'help',
@@ -997,21 +981,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 0,
       label: 'Legend',
       icon: <ListChecks className="size-4" />,
-      render: (ctx, api) => (
-        <ToolbarPopover
-          label="Legend"
-          icon={<ListChecks className="size-4" />}
-          itemProps={api.itemProps}
-          align="end"
-        >
-          {ctx.legendContent}
-        </ToolbarPopover>
-      ),
+      isActive: (ctx) => ctx.legendOpen,
+      onActivate: (ctx) => ctx.toggleLegend(),
     },
     {
+      // Keyboard shortcuts belong with the reference controls, not the authoring row: shown at the
+      // far right of Row 1 (help group, beside Legend) and also bound to the `?` key by the workspace
+      // (ADR-0031 amendment) — the standard "press ? for shortcuts" affordance.
       id: 'shortcuts',
       group: 'help',
-      row: 'do',
+      row: 'look',
       tier: 2,
       order: 1,
       label: 'Keyboard shortcuts',

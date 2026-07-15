@@ -304,3 +304,46 @@ gains `row` + `splitByRow`. No API/DB/type change. **Deferred:** the zoom cluste
 group rather than a literal 2×2 pad — a composite 2×2 widget would need its own internal roving-focus
 model (one toolbar stop containing four buttons), which the flat one-control-per-stop registry can't
 express cleanly; revisit if the compact geometry is worth a bespoke primitive (`docs/TOOLBAR_ROADMAP.md`).
+
+## Amendment (2026-07-15): consolidation & legend-on-canvas
+
+A second product-owner review (of the shipped two-row toolbar, web 0.22.0) asked for a last
+consolidation pass. It refines — does not supersede — the two-row amendment above.
+
+**Decisions.**
+
+1. **Link becomes a split-button, mirroring Add.** The old pair — a plain Link toggle plus a
+   separate, only-while-linking FS/SS/FF selector — is replaced by one APG menu-button
+   (`LinkControl`) that picks the dependency kind **and** arms link-mode in a single gesture, exactly
+   like the Add split-button. Idle it reads "Link"; armed it reads "Linking · <code>" and offers
+   "Stop linking." The `link-type` registry item is removed.
+
+2. **Plan details + Edit plan fold into the Summary popover.** The two standalone Row-2 buttons are
+   removed. A new `PlanSummaryPanel` renders the former Plan-details facts (status, data date, and the
+   scheduling mode when relevant) above the computed `ScheduleSummaryStrip`, plus an **Edit plan…**
+   shortcut for writers. A header **edit-pencil** beside the status pill gives quick access too. So
+   "how does this plan stand?" and "edit the plan" live in one hub instead of three toolbar buttons.
+   The `openPlanDetails` context seam is dropped as dead.
+
+3. **Keyboard shortcuts move to Row 1 and bind `?`.** Shortcuts sits beside Legend in the help group
+   (Row 1 · Look) rather than trailing Row 2, and the workspace binds the global `?` key (ignored
+   while typing in a field) — the standard "press ? for shortcuts" affordance.
+
+4. **The legend lives on the canvas.** The Row-1 Legend control changes from a popover that rendered
+   the key to a **show/hide toggle** (pressed-state) for a new floating `TsldLegendPanel` overlaid on
+   the canvas. The planner drags it anywhere within the canvas region and pins it; open state +
+   position persist via `useLegendPanelPrefs` (localStorage), re-clamped to the live region so a
+   shrunk viewport can't strand it off-screen. Dragging is a pointer enhancement — the panel is fully
+   readable and closable by keyboard without it. Rendering the key over the canvas keeps it visible
+   while reading the diagram and is a natural seam for the future print area. `TsldLegend` gains a
+   vertical orientation for the narrow panel; the inline `TsldPanel` key keeps its horizontal wrap.
+   The `legendContent` context node is replaced by `legendOpen` + `toggleLegend`.
+
+5. **Polish.** The finish chip no longer wraps vertically (`whitespace-nowrap` on the toolbar control
+   base); icon-only "Coming soon" tooltips name the button first ("Undo — Coming soon"); the zoom
+   −/+/Fit controls drop to tier 2 (icon-only) so the Frame group is more compact; and the search
+   field gains a little breathing room from its divider.
+
+**Scope.** Frontend-only, within the existing `VITE_CANVAS_TOOLBAR` surface (no flag change). No
+API/DB/type change. New: `PlanSummaryPanel`, `TsldLegendPanel`, `useLegendPanelPrefs`, a `?`-key
+binding, and a `row: 'look'` move for Shortcuts.
