@@ -46,7 +46,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     recalculate: vi.fn(),
     openBaselines: vi.fn(),
     openCalendar: vi.fn(),
-    openPlanDetails: vi.fn(),
     editPlan: vi.fn(),
     openShortcuts: vi.fn(),
     legendContent: null,
@@ -121,33 +120,31 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
     });
   });
 
-  describe('Link tool (M5)', () => {
-    it('offers the Link tool and toggles link mode on click', () => {
+  describe('Link split-button (M5)', () => {
+    it('arms link-mode and the picked FS/SS/FF type from one menu (mirrors Add)', () => {
       const toggleLinkMode = vi.fn();
-      renderToolbar(ctx({ toggleLinkMode }));
-      fireEvent.click(screen.getByRole('button', { name: 'Link activities' }));
+      const setLinkType = vi.fn();
+      renderToolbar(ctx({ isLinking: false, toggleLinkMode, setLinkType }));
+      // Idle label is "Link"; clicking opens the type menu (a split-button, like Add).
+      fireEvent.click(screen.getByRole('button', { name: 'Link' }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Start → Start/ }));
+      // Picking a kind sets the type and enters link-mode in one gesture.
+      expect(setLinkType).toHaveBeenCalledWith('SS');
       expect(toggleLinkMode).toHaveBeenCalledOnce();
     });
 
-    it('shows the Link tool shaded (not hidden) when the pen is not held', () => {
-      // Two-row rule: shade-don't-hide — a viewer sees the disabled Link tool rather than a gap.
-      renderToolbar(ctx(), false);
-      expect(screen.getByRole('button', { name: 'Link activities' })).toHaveAttribute(
-        'aria-disabled',
-        'true',
-      );
+    it('labels the button with the armed type and offers "Stop linking" while linking', () => {
+      const toggleLinkMode = vi.fn();
+      renderToolbar(ctx({ isLinking: true, linkType: 'SS', toggleLinkMode }));
+      fireEvent.click(screen.getByRole('button', { name: /Linking/ }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Stop linking' }));
+      expect(toggleLinkMode).toHaveBeenCalledOnce();
     });
 
-    it('shows the FS/SS/FF selector only while linking, and picks a type', () => {
-      const setLinkType = vi.fn();
-      const { rerender } = renderToolbar(ctx({ isLinking: false }));
-      // Not shown when idle…
-      expect(screen.queryByRole('button', { name: /Link type/ })).not.toBeInTheDocument();
-      // …shown while linking.
-      rerender(doRow(ctx({ isLinking: true, linkType: 'FS', setLinkType })));
-      fireEvent.click(screen.getByRole('button', { name: 'Link type: FS' }));
-      fireEvent.click(screen.getByRole('menuitemradio', { name: /Start → Start/ }));
-      expect(setLinkType).toHaveBeenCalledWith('SS');
+    it('shows the Link split-button shaded (not hidden) when the pen is not held', () => {
+      // Two-row rule: shade-don't-hide — a viewer sees the disabled Link tool rather than a gap.
+      renderToolbar(ctx(), false);
+      expect(screen.getByRole('button', { name: 'Link' })).toHaveAttribute('aria-disabled', 'true');
     });
   });
 });

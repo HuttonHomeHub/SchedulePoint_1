@@ -76,8 +76,9 @@ export interface TsldToolbarContext {
   recalculate: () => void;
   openBaselines: () => void;
   openCalendar: () => void;
-  openPlanDetails: () => void;
-  /** Edit the plan's metadata (writer only); absent for non-writers (item hidden). */
+  /** Edit the plan's metadata (writer only); absent for non-writers. Surfaced by the Summary popover's
+   * Edit-plan shortcut and the header edit-pencil — the standalone toolbar buttons were removed
+   * (ADR-0031 amendment: Plan details folded into Summary). */
   editPlan: (() => void) | null;
 
   // --- Help (group 7) -----------------------------------------------------------------------

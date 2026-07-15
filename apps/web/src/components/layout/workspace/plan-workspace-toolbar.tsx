@@ -1,3 +1,4 @@
+import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
@@ -59,6 +60,21 @@ export function ToolbarPlanWorkspace({
   // always live) and Row 2 · Do (build/manage, its authoring cluster pen-gated). Each row is its own
   // <Toolbar> so grouping/overflow stay per-row and the primitive is unchanged.
   const rows = useMemo(() => splitByRow(items), [items]);
+
+  // "Press ? for keyboard shortcuts" (ADR-0031 amendment) — the standard global affordance, alongside
+  // the Row-1 help icon. Ignore it while typing in a field so `?` still types normally.
+  const openShortcuts = canvasUi.setShowHelp;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      event.preventDefault();
+      openShortcuts(true);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [openShortcuts]);
 
   // Below `md` the vertical split can't give the canvas and the table useful height at once, so
   // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
@@ -184,6 +200,19 @@ export function ToolbarPlanWorkspace({
         <div className="flex min-w-0 items-center gap-2">
           <Breadcrumbs items={crumbs} />
           <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+          {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
+              the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
+          {model.canWrite ? (
+            <button
+              type="button"
+              onClick={() => model.setEditing(true)}
+              title="Edit plan…"
+              aria-label="Edit plan…"
+              className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring shrink-0 rounded-md p-1 focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <SquarePen aria-hidden="true" className="size-4" />
+            </button>
+          ) : null}
         </div>
         <CompactPenStatus
           pen={model.pen}

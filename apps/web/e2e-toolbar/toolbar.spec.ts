@@ -31,12 +31,14 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(page.getByRole('button', { name: 'Expand activities panel' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeHidden();
 
-  // Plan details is an inline Row 2 action (not behind an overflow), reachable to any role.
-  await page.getByRole('button', { name: 'Plan details…' }).click();
-  const details = page.getByRole('dialog', { name: 'Plan details' });
-  await expect(details.getByText('Status')).toBeVisible();
-  await expect(details.getByText('Planned start')).toBeVisible();
-  await details.getByRole('button', { name: 'Close dialog' }).click();
+  // Plan-details facts (status + data date) are folded into the Row 1 Summary popover (ADR-0031
+  // amendment) — a read surface reachable to any role, no standalone Plan-details button.
+  await page.getByRole('button', { name: /Summary/ }).click();
+  const summary = page.getByRole('dialog', { name: 'Summary' });
+  await expect(summary.getByText('Status')).toBeVisible();
+  await expect(summary.getByText('Data date')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(summary).toBeHidden();
 
   // Populate the plan so the canvas has something to plot (the plan already carries a mandatory
   // planned start from creation, so the bars plot after a recalc).

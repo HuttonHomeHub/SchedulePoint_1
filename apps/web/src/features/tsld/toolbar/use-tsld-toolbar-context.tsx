@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { TsldLegend } from '../components/TsldLegend';
 
+import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
@@ -10,9 +11,8 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
-import { useSetPlanSchedulingMode } from '@/features/plans';
-import { ScheduleSummaryStrip } from '@/features/schedule';
+import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -78,9 +78,34 @@ export function useTsldToolbarContext({
     activities.some((a) => a.earlyStart !== null) &&
     plan.plannedStart !== null;
 
+  const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
+  // Edit-plan opens the plan form (writer only). Shared by the Summary popover's shortcut and the
+  // header edit-pencil. Memoised so it doesn't re-identify the toolbar context each render.
+  const editPlan = useMemo(
+    () => (canWrite ? () => setEditing(true) : null),
+    [canWrite, setEditing],
+  );
+
+  // The Summary popover folds the former Plan-details facts (status + data date, plus the scheduling
+  // mode) together with the computed schedule strip and an Edit-plan shortcut (ADR-0031 amendment).
   const summaryContent = useMemo(
-    () => <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />,
-    [orgSlug, planId],
+    () => (
+      <PlanSummaryPanel
+        statusLabel={PLAN_STATUS_LABELS[plan.status]}
+        dataDate={plan.plannedStart}
+        schedulingModeLabel={
+          SCHEDULING_MODES_ENABLED
+            ? plan.schedulingMode === 'VISUAL'
+              ? 'Visual'
+              : 'Early'
+            : undefined
+        }
+        orgSlug={orgSlug}
+        planId={planId}
+        onEdit={editPlan}
+      />
+    ),
+    [orgSlug, planId, plan.status, plan.plannedStart, plan.schedulingMode, editPlan],
   );
   const projectFinishContent = useMemo(
     () => <ProjectFinishChip orgSlug={orgSlug} planId={planId} />,
@@ -88,7 +113,6 @@ export function useTsldToolbarContext({
   );
   const legendContent = useMemo(() => <TsldLegend />, []);
 
-  const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
   const {
     zoomPreset,
     canvasControlRef,
@@ -186,8 +210,7 @@ export function useTsldToolbarContext({
             }),
       openBaselines: () => openDialog('baselines'),
       openCalendar: () => openDialog('calendar'),
-      openPlanDetails: () => openDialog('details'),
-      editPlan: canWrite ? () => setEditing(true) : null,
+      editPlan,
 
       // Help
       openShortcuts: () => setShowHelp(true),
@@ -220,8 +243,7 @@ export function useTsldToolbarContext({
       setShowHelp,
       canRecalc,
       canEditSchedule,
-      canWrite,
-      setEditing,
+      editPlan,
       recalc,
       model.autoRecalc,
       announce,

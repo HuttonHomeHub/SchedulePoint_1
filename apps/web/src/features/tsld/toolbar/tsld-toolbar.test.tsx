@@ -25,7 +25,6 @@ const spies = {
   recalculate: vi.fn(),
   openBaselines: vi.fn(),
   openCalendar: vi.fn(),
-  openPlanDetails: vi.fn(),
   editPlan: vi.fn(),
   openShortcuts: vi.fn(),
 };
@@ -57,7 +56,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     recalculate: spies.recalculate,
     openBaselines: spies.openBaselines,
     openCalendar: spies.openCalendar,
-    openPlanDetails: spies.openPlanDetails,
     editPlan: spies.editPlan,
     openShortcuts: spies.openShortcuts,
     legendContent: <div data-testid="legend-body">legend</div>,
@@ -191,8 +189,11 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(spies.openBaselines).toHaveBeenCalledOnce();
   });
 
-  it('hides Edit plan for a non-writer (editPlan null)', () => {
-    renderRows(ctx({ editPlan: null }));
+  it('has no standalone Plan-details or Edit-plan toolbar buttons (folded into Summary)', () => {
+    renderRows(ctx());
+    // Both were consolidated (ADR-0031 amendment): Plan-details facts live in the Summary popover,
+    // which also carries the Edit-plan shortcut (plus a header edit-pencil).
+    expect(screen.queryByRole('button', { name: 'Plan details…' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit plan…' })).not.toBeInTheDocument();
   });
 
