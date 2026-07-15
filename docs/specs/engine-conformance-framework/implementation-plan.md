@@ -150,8 +150,14 @@ changes.**
 - **Complexity:** L
 - **Development steps:** draft ADR-0036; enumerate the port changes to `calendar.ts`/`types.ts`/`compute.ts`/`constraints.ts`; flag DB/storage follow-up.
 
-#### Feature: Differential harness scaffold (engine-dependent, subset only)
+#### Feature: Differential harness scaffold (engine-dependent, subset only) — ✅ DELIVERED
 
+> **Status:** Delivered in `apps/api/src/modules/schedule/conformance/` — `type-map.ts`
+> (fixture→engine vocabulary, honest about the unsupported), `adapter.ts` (119-activity
+> supported subset + an approximation/exclusion report, nothing faked), `scenarios.ts`
+> (S01 runs; S02–S13 are `todo` with their unlocking milestone), `goldens.ts` (five
+> first-principles date goldens — the M1 safety net), and specs for each. `@repo/engine-conformance`
+> now builds to `dist` so `apps/api` (CommonJS/Node resolution) can consume it. See `docs/TESTING.md`.
 > **Description:** the fixture→engine adapter + scenario runner + the "must differ from S02" assertion pattern, running only the subset the engine supports today; everything else is explicit `todo` with a reason.
 > **Complexity:** M
 > **Dependencies:** loaders; existing engine.
