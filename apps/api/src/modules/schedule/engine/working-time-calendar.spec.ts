@@ -167,6 +167,69 @@ describe('buildWorkingTimeCalendar — differential vs naive', () => {
   });
 });
 
+describe('buildWorkingTimeCalendar — many exceptions (the O(log E) prefix-sum path)', () => {
+  // A multi-year calendar with ~150 non-overlapping exceptions — the shape that made the old
+  // linear-scan `exceptionAdjustment` O(E) per call (ADR-0036 §5 perf). The prefix-sum range query
+  // must still match the naive minute-by-minute reference exactly, including whole-day spans that
+  // straddle many exceptions and spans whose endpoints fall inside a multi-day exception range.
+  const base = Math.round(new Date('2026-01-05T00:00:00Z').getTime() / 86_400_000); // a Monday
+  const exceptions: TimeException[] = [];
+  for (let k = 0; k < 150; k += 1) {
+    // One exception every 20 days → strictly increasing and NON-OVERLAPPING (the DB EXCLUDE
+    // contract). Alternate a whole-day holiday (windows []) with a worked-weekend AM (positive),
+    // so the exception-vs-pattern deltas go in both directions.
+    const day = new Date((base + k * 20) * 86_400_000).toISOString().slice(0, 10);
+    exceptions.push(
+      k % 2 === 0
+        ? { startDate: day, endDate: day, windows: [] }
+        : { startDate: day, endDate: day, windows: [{ startMinute: 480, endMinute: 720 }] },
+    );
+  }
+  // Plus a multi-day 24h shutdown range in a clean gap (days 402–411, between the day-400 and
+  // day-420 single-day exceptions) — exercises a boundary exception that straddles a span edge.
+  const shutStart = new Date((base + 402) * 86_400_000).toISOString().slice(0, 10);
+  const shutEnd = new Date((base + 411) * 86_400_000).toISOString().slice(0, 10);
+  exceptions.push({
+    startDate: shutStart,
+    endDate: shutEnd,
+    windows: [{ startMinute: 0, endMinute: 1440 }],
+  });
+
+  const cal = buildWorkingTimeCalendar(SPLIT, exceptions);
+  const ref = naive(SPLIT, exceptions);
+
+  it('matches the naive reference on whole-day spans crossing many exceptions', () => {
+    // Representative whole-day spans (bare dates → whole-day spans, the exceptionAdjustment
+    // prefix-sum path). Each crosses several single-day exceptions plus the shutdown range:
+    // [380,470] contains the shutdown fully (an interior exception); [405,500] starts INSIDE it
+    // (a straddling boundary exception → the clip path). Spans stay ≤ ~200 days so the
+    // minute-by-minute reference itself finishes quickly.
+    for (const [fromD, toD] of [
+      [0, 90],
+      [200, 320],
+      [380, 470],
+      [405, 500],
+      [10, 210],
+    ] as const) {
+      const from = new Date((base + fromD) * 86_400_000).toISOString().slice(0, 10);
+      const to = new Date((base + toD) * 86_400_000).toISOString().slice(0, 10);
+      expect(cal.workingTimeBetween(from, to)).toBe(ref.workingTimeBetween(from, to));
+    }
+  });
+
+  it('handles the full multi-year exception field with no O(E) blow-up (inverse invariant)', () => {
+    // Fast path only (no minute-by-minute reference): thousands of round-trips spread across the
+    // whole ~3,000-day exception field must be exact and return promptly — the ADR-0036 §5
+    // "never a per-exception scan" guarantee. A linear exceptionAdjustment would make this crawl.
+    for (let d = 0; d <= 2900; d += 17) {
+      const from = new Date((base + d) * 86_400_000).toISOString().slice(0, 10);
+      for (const n of [-9000, -1, 1, 9000, 250_000]) {
+        expect(cal.workingTimeBetween(from, cal.addWorkingTime(from, n))).toBe(n);
+      }
+    }
+  });
+});
+
 describe('buildWorkingTimeCalendar — night shift crossing midnight', () => {
   // Mon–Fri 20:00–06:00 stored as two adjacent-day windows (ADR-0036 §2): a weekday works
   // [1200,1440) of its own evening plus [0,360) of the *next* calendar morning. Model it as

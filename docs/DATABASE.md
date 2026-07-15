@@ -243,10 +243,14 @@ soft-deleted activities falls through to `created_at::date`.
 scheduling slices depend on, persisted **now** so those slices are additive (no
 wide `ALTER TABLE` + backfill later):
 
-- **Definition** (`type`, `duration_days`, `constraint_type`/`constraint_date`,
-  `lane_index`, optional `code`) — Planner-owned. `duration_days` is an integer
-  count of **working days** (= calendar days until the Calendars slice adds
-  working patterns); milestones are `0`.
+- **Definition** (`type`, `duration_minutes`, `constraint_type`/`constraint_date`,
+  `lane_index`, optional `code`) — Planner-owned. Since ADR-0036 (M1) `duration_minutes`
+  is an integer count of **working minutes** (the engine schedules in working-minute
+  offsets over intraday shift calendars); milestones are `0`. The public API stays
+  **day-denominated** (`durationDays`) — the service converts at the boundary by the plan
+  calendar's day length (factor `1440` for a full-day window; ADR-0036 §7), so no HTTP
+  contract changed. A defensive `DEFAULT 480` (one 8 h day) applies only to a direct-DB
+  insert; the service always sets the value explicitly.
 - **Progress** (`status`, `percent_complete`, `actual_start`, `actual_finish`) —
   Contributor-updatable via a dedicated progress path, never via a definition
   update.
@@ -266,7 +270,7 @@ finish` columns) are `@db.Date` (date-only, no timezone), like `Plan.planned_sta
 `activities` is the first domain table with bounded numerics, so it is also the
 first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
 invariants in the DB, not only in code): `ck_activities_percent_complete`
-(0–100), `ck_activities_duration_days_nonneg` (≥ 0), `ck_activities_lane_index_nonneg`
+(0–100), `ck_activities_duration_minutes_nonneg` (≥ 0), `ck_activities_lane_index_nonneg`
 (≥ 0), and `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
 and `constraint_date` are both set or both null (never one without the other), so a
 half-set constraint can never corrupt CPM scheduling even if a future code path
@@ -278,8 +282,8 @@ bypasses the service. They are raw SQL in the migration (Prisma cannot express
 The `dependencies` table (Prisma model `ActivityDependency`, `@@map("dependencies")` —
 the shorter plural reads cleaner and matches the API module name) is the **edge** of the
 schedule network: a typed, lagged logic tie between two activities in a plan
-(`FS`/`SS`/`FF`/`SF` + a signed working-day `lag_days`). Together with `activities` (the
-nodes) it forms the directed graph the CPM engine (a later slice) walks. It follows every
+(`FS`/`SS`/`FF`/`SF` + a signed working-minute `lag_minutes`, since ADR-0036). Together with
+`activities` (the nodes) it forms the directed graph the CPM engine walks. It follows every
 standard above — UUID v7 PK, snake_case via `@map`, timestamptz UTC, soft delete, audit
 with **TEXT** `created_by`/`updated_by`, optimistic-locking `version`, `delete_batch_id`.
 
@@ -314,11 +318,18 @@ with **TEXT** `created_by`/`updated_by`, optimistic-locking `version`, `delete_b
   predecessors/successors direction lists **and** the two FKs; `predecessor_id` also
   serves the cycle-walk adjacency load. `(plan_id, created_at, id)` covers the plan FK,
   the plan-level list and its cursor sort; `organization_id` backs its FK and IDOR loads.
+- **Lag units & the lag-calendar seam (ADR-0036 §6).** `lag_minutes` is a signed
+  **working-minute** lag; the public API stays day-denominated (`lagDays`) and the service
+  converts at the boundary (×1440). A `lag_calendar` enum column (`LagCalendarSource`:
+  `PREDECESSOR`/`SUCCESSOR`/`TWENTY_FOUR_HOUR`/`PROJECT_DEFAULT`, default `PROJECT_DEFAULT`)
+  is the **per-relationship lag-calendar seam** — M1 lands the column; M3 wires resolution and
+  exposes it. It must stay in lock-step with the `LagCalendarSource` union in `@repo/types`.
 - **CHECK constraints** (raw SQL — defence-in-depth). `ck_dependencies_no_self_loop`
   (`predecessor_id <> successor_id`) guarantees a self-edge (the trivial 1-node cycle) can
   never persist even if the service's 422 `SELF_DEPENDENCY` guard is bypassed;
-  `ck_dependencies_lag_days_range` bounds `lag_days` to **−3650…3650** (≈ ±10 years,
-  matching the create DTO). The broader **DAG (no-cycle) invariant** is a graph-wide
+  `ck_dependencies_lag_minutes_range` bounds `lag_minutes` to **−5 256 000…5 256 000** (≈ ±10
+  years = ±3650 days × 1440, preserving the old day-range intent). The broader **DAG (no-cycle)
+  invariant** is a graph-wide
   property the DB cannot express as a CHECK — it is enforced by a service-layer
   reachability walk inside the create transaction (a later task / ADR-0021).
 - **Link soft-delete/cascade is service-owned.** Both endpoint FKs are `RESTRICT`; links
@@ -331,14 +342,25 @@ with **TEXT** `created_by`/`updated_by`, optimistic-locking `version`, `delete_b
 
 ### Calendar & CalendarException: the working-week library
 
-The `calendars` and `calendar_exceptions` tables (M5, ADR-0024) are the org-scoped
-**working-day calendar library** that fills the CPM engine's `WorkingDayCalendar`
-port. A `Calendar` is a **weekly pattern** — a 7-bit `working_weekdays` mask (bit 0 =
-Monday … bit 6 = Sunday) — plus a sparse list of dated `CalendarException`s that flip a
-single day (`is_working = false` a holiday, `is_working = true` a worked weekend). Both
-follow every house standard (UUID v7 PK, snake_case via `@map`, timestamptz UTC, soft
-delete + `delete_batch_id`, TEXT audit ids, optimistic-locking `version`, scoped
-indexes).
+The `calendars`, `calendar_shifts`, `calendar_exceptions` and `calendar_exception_windows`
+tables (M5, ADR-0024; reworked to intraday granularity by **ADR-0036**, M1) are the
+org-scoped **working-time calendar library** that fills the CPM engine's
+`WorkingTimeCalendar` port. Since ADR-0036 a `Calendar` is an **intraday weekly pattern** —
+per weekday a list of `[start_minute, end_minute)` **shift windows** (`calendar_shifts`) —
+plus dated `CalendarException` ranges whose **windows** (`calendar_exception_windows`)
+_replace_ that period's pattern: zero windows = a holiday/non-work block, a non-empty list =
+worked overtime or a window-only working period. This expresses split shifts, 24 h, a
+midnight-crossing night shift (two adjacent-day windows, never a wrap), and window-only
+calendars whose base week is empty. The public API stays **weekday-mask / whole-day-exception
+denominated** (ADR-0036 §7): the service materialises each set weekday of the mask as one
+full-day `[0, 1440)` shift and each `isWorking` exception as one full-day window, and
+reconstructs the mask/`isWorking` on read — so the HTTP contract is unchanged and richer
+shift authoring is an additive follow-on. `Calendar` and `CalendarException` follow every
+house standard (UUID v7 PK, snake_case via `@map`, timestamptz UTC, soft delete +
+`delete_batch_id`, TEXT audit ids, optimistic-locking `version`, scoped indexes);
+`calendar_shifts` and `calendar_exception_windows` are **owned-value child tables** (the
+`PlanLock` precedent: no soft-delete, no `version`, no audit ids, no denormalised
+`organization_id`, FK `ON DELETE CASCADE`) — they have no existence apart from their parent.
 
 - **Scope.** `Calendar.organization_id` is **native** (the org is its direct parent,
   like `Client`). `CalendarException.organization_id` is **denormalised** from its
@@ -350,23 +372,34 @@ indexes).
   not a hierarchy level. A null `calendar_id` means all-days-work (M6 back-compat); new
   plans default to the org's seeded **Standard (Mon–Fri)** calendar, seeded on org create
   and backfilled for existing orgs by the M5 data migration.
-- **`working_weekdays` CHECK** (raw SQL — defence-in-depth). `ck_calendars_working_weekdays_range`
-  bounds the mask to **`> 0 AND <= 127`**: it must have at least one working weekday (an
-  empty pattern would make the engine's `addWorkingDays` non-terminating — mirrored by the
-  pure factory throwing on `0` and by the shared `WorkingWeekdays.isValid` helper) and no
-  bits outside the 7-day week. Stored as `smallint` (2 bytes is ample for a 7-bit value).
-- **Uniqueness.** `uq_calendars_org_name` (partial, `WHERE deleted_at IS NULL`) keeps a
-  calendar name unique per org among live rows (backs `DUPLICATE_CALENDAR` 409).
-  `uq_calendar_exceptions_cal_date` (partial) allows **at most one active exception per
-  `(calendar, date)`** — a day cannot be both a holiday and a worked day — and, being an
-  active-row index keyed by `(calendar_id, date)`, it **doubles as the engine's
-  active-exception load** (`WHERE calendar_id = ? AND deleted_at IS NULL ORDER BY date`),
-  the Organization-slug precedent. A soft-deleted row frees its key for reuse.
-- **Indexes.** `(organization_id, created_at, id)` on `calendars` backs the org FK, the
-  active library list and its cursor sort (same full-composite pattern as `Client`). On
-  `calendar_exceptions`, `(calendar_id, date)` (full) backs the calendar FK and the
-  editor's list-all-exceptions load over **all** rows (the partial unique only covers
-  active ones); `organization_id` backs its FK and IDOR loads.
+- **Window bounds & non-overlap CHECK/EXCLUDE** (raw SQL — Prisma cannot express either).
+  Both window tables carry `ck_*_minute_bounds` (`0 ≤ start_minute`, `end_minute ≤ 1440`),
+  `ck_*_window_order` (`start_minute < end_minute`), and a **btree_gist `EXCLUDE`** guaranteeing
+  windows never overlap within a day (per `(calendar_id, weekday)` for shifts, per
+  `(calendar_exception_id)` for exception windows). The old `ck_calendars_working_weekdays_range`
+  (mask `> 0`) guard is **dropped, not replaced**: a window-only calendar (empty base week, work
+  only from positive exceptions) is now valid, and the "no working time in the horizon" check
+  moved into the pure `buildWorkingTimeCalendar` factory (the N11 hang backstop). `weekday` is a
+  `smallint` (0 = Monday … 6 = Sunday) with `ck_calendar_shifts_weekday_range` (0–6).
+- **Uniqueness & non-overlap.** `uq_calendars_org_name` (partial, `WHERE deleted_at IS NULL`)
+  keeps a calendar name unique per org among live rows (backs `DUPLICATE_CALENDAR` 409). The
+  old point-key `uq_calendar_exceptions_cal_date` is **replaced** by
+  `ex_calendar_exceptions_no_overlap` — a **partial GiST `EXCLUDE`** (`WHERE deleted_at IS NULL`)
+  over `daterange(start_date, end_date, '[]')` guaranteeing **at most one active exception
+  covers any given day** (a day cannot be both a holiday and a worked window). It backs the add
+  `DUPLICATE_EXCEPTION` (409); because `23P01` (exclusion_violation) is not a Prisma `P2002`, the
+  service matches it by constraint name to map it to the 409.
+- **Ranged exceptions.** `CalendarException` carries an inclusive `[start_date, end_date]`
+  **range** (single-day when `start_date = end_date`; `ck_calendar_exceptions_date_order`
+  enforces `end_date ≥ start_date`), so a multi-day shutdown is one row.
+- **Indexes.** `(organization_id, created_at, id)` on `calendars` backs the org FK, the active
+  library list and its cursor sort (same full-composite pattern as `Client`).
+  `calendar_exceptions(calendar_id, start_date)` backs the FK, the editor's list-all load, and
+  the engine's active-exception load ordered by `start_date`; `organization_id` backs its FK and
+  IDOR loads. The owned-value tables are indexed exactly on their sole access path —
+  `calendar_shifts(calendar_id, weekday, start_minute)` and
+  `calendar_exception_windows(calendar_exception_id, start_minute)` — which is both the engine's
+  load order and the FK's leftmost prefix.
 - **Cascade.** Both FKs are `RESTRICT`; calendars/exceptions are never hard-deleted.
   Soft-deleting a calendar stamps it and its exceptions with one `delete_batch_id` so
   restore brings the set back — the same service-owned mechanism as the hierarchy. A

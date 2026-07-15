@@ -221,7 +221,7 @@ export class CalendarsService {
       );
       return exception;
     } catch (error) {
-      if (this.isUniqueViolation(error)) throw this.duplicateExceptionError();
+      if (this.isExceptionOverlapViolation(error)) throw this.duplicateExceptionError();
       throw error;
     }
   }
@@ -259,9 +259,25 @@ export class CalendarsService {
     );
   }
 
-  /** A Prisma unique-violation from a partial unique index (name or exception date). */
+  /** A Prisma unique-violation from a partial unique index (calendar name). */
   private isUniqueViolation(error: unknown): boolean {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+  }
+
+  /**
+   * A duplicate active exception on the same calendar. Since ADR-0036 the overlap
+   * guard is a GiST EXCLUDE over the exception's inclusive date range (Postgres
+   * `23P01` exclusion_violation), not a unique index — Prisma does not map `23P01`
+   * to a `P2002` code, so match it by the constraint name across whichever error
+   * shape Prisma surfaces it as. The DB constraint remains the last line of defence;
+   * this catch is what turns it into the 409 `DUPLICATE_EXCEPTION` the API promises.
+   */
+  private isExceptionOverlapViolation(error: unknown): boolean {
+    return (
+      (error instanceof Prisma.PrismaClientKnownRequestError ||
+        error instanceof Prisma.PrismaClientUnknownRequestError) &&
+      error.message.includes('ex_calendar_exceptions_no_overlap')
+    );
   }
 
   private duplicateCalendarError(): ConflictError {

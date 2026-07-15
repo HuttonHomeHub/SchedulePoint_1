@@ -139,10 +139,28 @@ export function buildWorkingTimeCalendar(
     throw new Error('A working-time calendar must have at least one working minute.');
   }
 
+  // Per-exception full adjustment (exception minutes − the weekday pattern's minutes, summed over
+  // the exception's whole day range) and a prefix sum of those. Because active exception ranges are
+  // NON-OVERLAPPING (the DB `ex_calendar_exceptions_no_overlap` EXCLUDE guarantees it), `startDay`
+  // and `endDay` are both monotonic in `sorted`, so a whole-day-span adjustment is an O(log E) range
+  // query (two binary searches + a prefix diff, boundary exceptions clipped) instead of a scan over
+  // every exception on the plan span — the ADR-0036 §5 "never a per-exception loop" contract. The
+  // one-time build cost is O(total exception days), which the single-day API shape keeps at O(E).
+  const excCumDelta = new Array<number>(sorted.length + 1);
+  excCumDelta[0] = 0;
+  for (let i = 0; i < sorted.length; i += 1) {
+    const e = sorted[i]!;
+    let full = 0;
+    for (let d = e.startDay; d <= e.endDay; d += 1) {
+      full += e.minutes - weekdayMinutes[weekdayOfDay(d)]!;
+    }
+    excCumDelta[i + 1] = excCumDelta[i]! + full;
+  }
+
   /** The effective windows for a given epoch day: the covering exception's, else the weekday pattern. */
   const windowsForDay = (dayIndex: number): readonly ShiftWindow[] => {
-    // Binary search the last exception whose startDay ≤ dayIndex, then scan back over
-    // overlapping ranges (ranges are non-overlapping among active rows, so at most one covers).
+    // Binary search the last exception whose startDay ≤ dayIndex. Ranges are non-overlapping among
+    // active rows, so that single candidate is the ONLY one that can cover the day — no back-scan.
     let lo = 0;
     let hi = sorted.length;
     while (lo < hi) {
@@ -150,10 +168,9 @@ export function buildWorkingTimeCalendar(
       if (sorted[mid]!.startDay <= dayIndex) lo = mid + 1;
       else hi = mid;
     }
-    for (let i = lo - 1; i >= 0 && sorted[i]!.startDay >= dayIndex - HORIZON_DAYS; i -= 1) {
-      const e = sorted[i]!;
+    if (lo > 0) {
+      const e = sorted[lo - 1]!;
       if (e.startDay <= dayIndex && dayIndex <= e.endDay) return e.windows;
-      if (e.endDay < dayIndex && e.startDay < dayIndex - 1) break; // no earlier range can cover
     }
     return weekly[weekdayOfDay(dayIndex)]!;
   };
@@ -196,17 +213,55 @@ export function buildWorkingTimeCalendar(
     return total;
   };
 
-  /** Net (exception − weekday-pattern) whole-day minutes over epoch-day span `[startDay, endDay)`. */
-  const exceptionAdjustment = (startDay: number, endDay: number): number => {
+  /** Clipped (exception − weekday-pattern) minutes of one exception over the whole-day span `[startDay, endDay)`. */
+  const clippedExceptionDelta = (
+    e: (typeof sorted)[number],
+    startDay: number,
+    endDay: number,
+  ): number => {
     let delta = 0;
-    for (const e of sorted) {
-      if (e.endDay < startDay) continue;
-      if (e.startDay >= endDay) break;
-      for (let d = Math.max(e.startDay, startDay); d <= Math.min(e.endDay, endDay - 1); d += 1) {
-        delta += e.minutes - weekdayMinutes[weekdayOfDay(d)]!;
-      }
+    const last = Math.min(e.endDay, endDay - 1);
+    for (let d = Math.max(e.startDay, startDay); d <= last; d += 1) {
+      delta += e.minutes - weekdayMinutes[weekdayOfDay(d)]!;
     }
     return delta;
+  };
+
+  /**
+   * Net (exception − weekday-pattern) whole-day minutes over epoch-day span `[startDay, endDay)`,
+   * in **O(log E)**: binary-search the exception index range that overlaps the span, sum the fully
+   * contained interior exceptions with the prefix sum, and clip only the (at most two) boundary
+   * exceptions by hand. Interior exceptions are guaranteed fully contained because active ranges are
+   * non-overlapping and sorted (only the first/last overlapping range can straddle a span edge).
+   */
+  const exceptionAdjustment = (startDay: number, endDay: number): number => {
+    if (endDay <= startDay || sorted.length === 0) return 0;
+    // i0 = first exception reaching into the span (endDay ≥ startDay); i1 = first past it (startDay ≥ endDay).
+    let lo = 0;
+    let hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sorted[mid]!.endDay < startDay) lo = mid + 1;
+      else hi = mid;
+    }
+    const i0 = lo;
+    lo = 0;
+    hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sorted[mid]!.startDay < endDay) lo = mid + 1;
+      else hi = mid;
+    }
+    const i1 = lo;
+    if (i0 >= i1) return 0;
+    if (i0 === i1 - 1) return clippedExceptionDelta(sorted[i0]!, startDay, endDay);
+    // Interior [i0+1, i1-1) is fully contained → O(1) prefix diff; the two ends are clipped.
+    return (
+      excCumDelta[i1 - 1]! -
+      excCumDelta[i0 + 1]! +
+      clippedExceptionDelta(sorted[i0]!, startDay, endDay) +
+      clippedExceptionDelta(sorted[i1 - 1]!, startDay, endDay)
+    );
   };
 
   return {
