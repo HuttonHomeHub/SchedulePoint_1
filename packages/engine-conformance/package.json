@@ -1,0 +1,30 @@
+{
+  "name": "@repo/engine-conformance",
+  "version": "0.0.0",
+  "private": true,
+  "description": "P6-class CPM/PDM engine conformance fixture, typed loaders, and an engine-free structural validator (ADR-0034).",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf .turbo coverage *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@types/node": "^22.10.7",
+    "eslint": "^9.18.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
