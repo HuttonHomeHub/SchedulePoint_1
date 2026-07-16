@@ -99,9 +99,16 @@ We will implement the following semantics. Each cites the milestone that will bu
 
 ### Relationships, cycles & topology (→ M0/M4)
 
-13. **Duplicate relationship between the same ordered pair: reject** with a clear error naming the
-    pair (P6 permits only one; we already enforce uniqueness on the write path). We do **not** silently
-    dedupe or keep-most-constraining (N04).
+13. **Duplicate relationship: reject** with a clear error naming the pair. We do **not** silently
+    dedupe or keep-most-constraining (N04). **Amendment (M4-F8):** the reject is scoped to an
+    **exact duplicate — the same ordered pair _and_ type** (the write-path partial-unique index
+    `uq_dependencies_pred_succ_type`), not the whole pair. A _different-type_ relationship between the
+    same pair (an FS **and** an SS — the construction **ladder**/overlap technique) is **permitted**:
+    P6 allows one relationship of each of the four types between a pair, and the ladder is a standard
+    construction construct we deliberately keep. The original wording ("only one per pair") reflected
+    the fixture's simplification; N04's intent — never silently dedupe, always reject a true duplicate
+    — is fully met by per-(pair, type) uniqueness. A second FS on an existing A→B FS is rejected 409
+    `DUPLICATE_DEPENDENCY`; an SS on that pair is allowed.
 14. **Cycle reports name the exact members** of the cycle (N01/N03), including cycles that exist only
     through SS/FF edges — not merely "loop detected."
 15. **SF arithmetic:** `EF(succ) ≥ ES(pred) + lag`, then `ES(succ) = EF(succ) − RD(succ)`; correct for

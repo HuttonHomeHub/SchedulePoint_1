@@ -201,6 +201,8 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
       .expect(409);
   });
 
+  // N04 (ADR-0035 §13 amendment): reject an EXACT duplicate (same pair AND type); allow a
+  // different-type ladder (SS+FF between a pair). Never silently dedupe.
   it('rejects a self-loop (422) and a duplicate of the same type (409), but allows another type', async () => {
     const { actor, planId, a, b } = await setup();
     const base = `/api/v1/organizations/acme/plans/${planId}/dependencies`;

@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-16 — M4-F8 duplicate-relationship policy: reject per-(pair, type), not per-pair
+
+**Decision.** The "duplicate relationship is rejected" contract (ADR-0035 §13, N04) is scoped to an
+**exact duplicate — the same ordered predecessor→successor pair _and_ the same relationship type**,
+enforced by the write-path partial-unique index `uq_dependencies_pred_succ_type`. A **different-type**
+relationship between the same pair (an FS **and** an SS) is **permitted**. A second FS on an existing
+A→B FS is rejected `409 DUPLICATE_DEPENDENCY`; an SS on that pair is allowed (`201`).
+
+**Why.** The fixture's N04 wording ("only one relationship per pair") was a simplification. P6 permits
+one relationship of **each of the four types** between a pair, and the FS+SS **ladder**/overlap is a
+standard construction technique (start B a bit after A starts, finish B a bit after A finishes) we
+deliberately keep. N04's actual intent — never silently dedupe, always reject a _true_ duplicate — is
+fully satisfied by per-(pair, type) uniqueness, so no destructive per-pair migration is warranted.
+
+**Consequences.** ADR-0035 §13 gains an M4-F8 amendment paragraph; the CAPABILITY_MATRIX N04 and
+section-1 topology rows flip to ✅. The behaviour already shipped with the dependency write-path — the
+existing `test/dependencies.e2e-spec.ts` case (dup FS → 409, SS on the same pair → 201) is the
+regression guard; the conformance N04 case points to it rather than duplicating the assertion.
+
 ### 2026-07-16 — M2 recalc modes: finish-side float + Actual-Dates = max(data date, actual start)
 
 **Decision.** Two semantics for M2 progress ingestion (ADR-0035 §1):

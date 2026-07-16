@@ -178,9 +178,9 @@ describe('negative-case contract (engine-owned cases)', () => {
   // Input-validity cases owned by the API boundary (DTO/service), not the pure engine
   // (ADR-0035 §25). The engine intentionally does not re-validate these; they are
   // asserted at the API e2e layer as boundary rejection/coercion lands.
-  it.todo(
-    'N04: a duplicate relationship is rejected at the write path (ADR-0035 §13; dependency e2e)',
-  );
+  // N04 (duplicate relationship) is a write-path concern, not the pure engine: an exact (pair+type)
+  // duplicate is rejected 409 DUPLICATE_DEPENDENCY and a different-type ladder is allowed — covered in
+  // `test/dependencies.e2e-spec.ts` (ADR-0035 §13 amendment). Cycle-member naming (N01/N03) is above.
   it.todo('N09: negative duration is rejected at the API boundary (ADR-0035 §25)');
   it.todo('N12: a level-of-effort with no span is rejected/warned (ADR-0035 §21, M5)');
   it.todo('N17: a milestone with a non-zero duration is coerced to zero (ADR-0035 §25)');
