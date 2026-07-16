@@ -4,6 +4,7 @@ import {
   isParkedConstraintType,
   type ActivitySummary,
 } from '@repo/types';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -12,6 +13,7 @@ import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
+  INHERIT_CALENDAR_LABEL,
   activityFormSchema,
   isMilestoneType,
   type ActivityFormValues,
@@ -23,6 +25,8 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { ACTIVITY_CALENDAR_ENABLED } from '@/config/env';
+import { calendarsQueryOptions } from '@/features/calendars';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
 /**
@@ -66,6 +70,7 @@ export function ActivityFormDialog({
       durationDays: 1,
       constraintType: '',
       constraintDate: '',
+      calendarId: '',
       description: '',
     },
   });
@@ -79,6 +84,9 @@ export function ActivityFormDialog({
         durationDays: activity?.durationDays ?? 1,
         constraintType: activity?.constraintType ?? '',
         constraintDate: activity?.constraintDate ?? '',
+        // Always seed from the row so the value round-trips even when the picker is hidden
+        // (flag off) — an edit then never silently clears an assigned calendar. '' = inherit.
+        calendarId: activity?.calendarId ?? '',
         description: activity?.description ?? '',
       });
       mutation.reset();
@@ -86,8 +94,20 @@ export function ActivityFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
   }, [open, activity?.id]);
 
+  // The org's calendar library, for the picker's options. Fetched only when the picker is enabled
+  // (flag default-off) — the value still round-trips via the seeded field when the picker is hidden.
+  const calendars = useQuery({
+    ...calendarsQueryOptions(orgSlug),
+    enabled: ACTIVITY_CALENDAR_ENABLED,
+  });
+
   const type = useWatch({ control, name: 'type' });
   const constraintType = useWatch({ control, name: 'constraintType' });
+  const calendarId = useWatch({ control, name: 'calendarId' });
+  // While the calendar list is still loading, a seeded non-inherit value won't match any option;
+  // inject a synthetic one so the Select shows it as selected (not blank, which reads as "inherit").
+  const calendarList = calendars.data ?? [];
+  const missingCalendar = Boolean(calendarId) && !calendarList.some((c) => c.id === calendarId);
   // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off
   // option so opening the form never coerces it (US-2). Derived from the live field value, so
   // it appears when a parked value is selected and disappears once the planner changes away.
@@ -170,6 +190,31 @@ export function ActivityFormDialog({
             {...register('durationDays', { valueAsNumber: true })}
           />
         )}
+        {ACTIVITY_CALENDAR_ENABLED ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="activity-calendar">Calendar</Label>
+            <Select
+              id="activity-calendar"
+              disabled={calendars.isPending}
+              aria-busy={calendars.isPending}
+              aria-describedby="activity-calendar-help"
+              {...register('calendarId')}
+            >
+              <option value="">{INHERIT_CALENDAR_LABEL}</option>
+              {/* The seeded calendar isn't in the list yet while it loads — keep it selected. */}
+              {missingCalendar ? <option value={calendarId}>Loading…</option> : null}
+              {calendarList.map((calendar) => (
+                <option key={calendar.id} value={calendar.id}>
+                  {calendar.name}
+                </option>
+              ))}
+            </Select>
+            <p id="activity-calendar-help" className="text-muted-foreground text-sm">
+              The working-time calendar this activity is scheduled on. Inherits the plan’s calendar
+              unless you pick one. Recalculate to apply it to the dates.
+            </p>
+          </div>
+        ) : null}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="activity-constraint-type">Constraint (optional)</Label>
           <Select

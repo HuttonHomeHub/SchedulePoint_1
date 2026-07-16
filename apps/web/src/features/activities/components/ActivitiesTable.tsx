@@ -1,4 +1,5 @@
 import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
+import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -17,6 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { ACTIVITY_CALENDAR_ENABLED } from '@/config/env';
+import { calendarsQueryOptions } from '@/features/calendars';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
@@ -98,6 +101,13 @@ export function ActivitiesTable({
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
+  // The org calendar library, to name an activity's own calendar (ADR-0037). Fetched only when the
+  // picker feature is on (flag default-off); off, no column and no request.
+  const calendars = useQuery({
+    ...calendarsQueryOptions(orgSlug),
+    enabled: ACTIVITY_CALENDAR_ENABLED,
+  });
+  const calendarNameById = new Map((calendars.data ?? []).map((c) => [c.id, c.name]));
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -177,6 +187,24 @@ export function ActivitiesTable({
       },
     },
   ];
+  // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. Shown
+  // solely when it isn't inheriting the plan's calendar (an em dash = inherit), so the column stays
+  // quiet for the common case. Hidden below `lg` like the other definition detail columns.
+  if (ACTIVITY_CALENDAR_ENABLED) {
+    columns.splice(6, 0, {
+      header: 'Calendar',
+      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+      cell: (activity) =>
+        activity.calendarId ? (
+          <span className="text-muted-foreground">
+            {calendarNameById.get(activity.calendarId) ?? '—'}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    });
+  }
   // Variance vs the active baseline — only when the route supplies the map (M7). The
   // text carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces.
   // Finish variance is the headline (always shown); start/float variance hide first on

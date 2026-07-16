@@ -164,3 +164,16 @@ export const CANVAS_AUTHORING_ENABLED =
  */
 export const SCHEDULING_MODES_ENABLED =
   flagDefaultOn(import.meta.env.VITE_SCHEDULING_MODES) && CANVAS_AUTHORING_ENABLED;
+
+/**
+ * Per-activity working-time calendars (ADR-0037, M5 — engine conformance framework). **OFF by
+ * default**: the picker ships dark until its quality gates (component/a11y/ux) are cleared and the
+ * feature is turned on per-environment, then flipped default-on. When on, the activity form offers a
+ * "Plan default (inherit)" ↔ specific-calendar `Select` (writing `activities.calendar_id`) and the
+ * activities table shows an activity's own calendar when it isn't inheriting. Everything behind it —
+ * the settable API field, the absolute-instant engine, and the conformance proof — is already live;
+ * only the picker is gated. Set `VITE_ACTIVITY_CALENDAR=true` to enable. The engine schedules each
+ * activity on its resolved calendar (`activity.calendarId → plan.calendarId → 24/7`) regardless of
+ * this flag; the flag only governs whether a planner can *pick* it in the web UI.
+ */
+export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_CALENDAR);
