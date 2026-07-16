@@ -1,5 +1,10 @@
 import { NEAR_CRITICAL_THRESHOLD_MINUTES } from './constants';
-import { clampBackwardFinish, clampForwardStart, isParkedMandatory } from './constraints';
+import {
+  clampBackwardFinish,
+  clampForwardStart,
+  isMilestone,
+  isParkedMandatory,
+} from './constraints';
 import { buildGraph } from './graph';
 import {
   advanceWorking,
@@ -355,9 +360,12 @@ export function computeSchedule(
 
     // Project finish = the latest inclusive finish INSTANT, displayed on its own calendar. A task's
     // last occupied minute is `efInst − 1` (one real minute before its exclusive end boundary); a
-    // milestone occupies its start instant. This keeps a finish milestone pinned one boundary past a
-    // task that ends at the same instant winning the max (as the old inclusive-offset compare did).
-    const inclusiveFinishInstant = duration === 0 ? esInst : efInst - 1;
+    // milestone TYPE occupies its start instant. This keeps a finish milestone pinned one boundary
+    // past a task that ends at the same instant winning the max. Keyed off the milestone **type**, not
+    // `duration === 0` (ADR-0035 §22): a zero-duration TASK is a task here, so it loses the tie-break
+    // to a finish milestone at the same instant (and `esInst === efInst` for it, so `efInst − 1` is
+    // its own last minute).
+    const inclusiveFinishInstant = isMilestone(activity.type) ? esInst : efInst - 1;
     if (maxInclusiveFinishInstant === null || inclusiveFinishInstant > maxInclusiveFinishInstant) {
       maxInclusiveFinishInstant = inclusiveFinishInstant;
       projectFinishDate = earlyFinishDate;

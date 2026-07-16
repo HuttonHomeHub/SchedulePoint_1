@@ -1,4 +1,4 @@
-import type { ConstraintType } from '@repo/types';
+import type { ActivityType, ConstraintType } from '@repo/types';
 
 import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
 
@@ -29,6 +29,18 @@ export function normaliseConstraint(type: ConstraintType): ModerateConstraint {
 /** True for the two kinds parked as their moderate equivalents (for the count). */
 export function isParkedMandatory(type: ConstraintType | null | undefined): boolean {
   return type === 'MANDATORY_START' || type === 'MANDATORY_FINISH';
+}
+
+/**
+ * A milestone **type** — a point-in-time event that *occupies* its start instant (ADR-0035 §22), as
+ * distinct from a zero-duration `TASK`. Milestone-**semantic** branches (e.g. the project-finish
+ * tie-break, where a finish milestone must beat a task ending at the same instant) key off this, not
+ * `duration === 0`; `duration === 0` stays only where it is a pure arithmetic shortcut (finish =
+ * start when there is no work), which is correct for a milestone and a zero-duration task alike. So a
+ * zero-duration task keeps a genuine start + finish and is never coerced to a milestone.
+ */
+export function isMilestone(type: ActivityType): boolean {
+  return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
 }
 
 /** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
