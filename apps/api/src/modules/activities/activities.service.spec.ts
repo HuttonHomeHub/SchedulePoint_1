@@ -32,7 +32,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     name: 'Baseline',
     description: null,
     status: 'DRAFT',
-    plannedStart: new Date('2026-01-01T00:00:00.000Z'),
+    // Data date late enough that the progress tests' 2026 actuals are all on/before it (M2 N07).
+    plannedStart: new Date('2026-12-31T00:00:00.000Z'),
     calendarId: null,
     schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
@@ -401,6 +402,64 @@ describe('ActivitiesService', () => {
         }),
       ).rejects.toBeInstanceOf(ValidationError);
       expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
+    it('rejects an actual date after the data date (M2 N07)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      // Data date is 2026-12-31; an actual start in 2027 is in the future.
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualStart: '2027-03-01',
+          version: 1,
+        }),
+      ).rejects.toMatchObject({ details: { reason: 'ACTUAL_AFTER_DATA_DATE' } });
+      expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
+    it('repairs a complete activity with no actual finish to the data date (M2 N08)', async () => {
+      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+        percentComplete: 100,
+        actualStart: '2026-05-01',
+        version: 1, // no actualFinish, but 100% ⇒ complete
+      });
+      const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        actualFinish: Date;
+        status: string;
+      };
+      expect(patch.status).toBe('COMPLETE');
+      expect(patch.actualFinish.toISOString()).toBe('2026-12-31T00:00:00.000Z'); // repaired to data date
+    });
+
+    it('repairs remaining > 0 on a complete activity to 0 (M2 N18)', async () => {
+      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+        percentComplete: 100,
+        actualStart: '2026-05-01',
+        actualFinish: '2026-06-01',
+        remainingDurationDays: 3, // contradicts completeness → repaired to 0
+        version: 1,
+      });
+      const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        remainingDurationMinutes: number;
+      };
+      expect(patch.remainingDurationMinutes).toBe(0);
+    });
+
+    it('converts remaining days to stored minutes for an in-progress activity (M2)', async () => {
+      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ percentComplete: 0 }));
+      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+        actualStart: '2026-05-01',
+        remainingDurationDays: 2,
+        version: 1,
+      });
+      const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        remainingDurationMinutes: number;
+      };
+      expect(patch.remainingDurationMinutes).toBe(2 * 1440);
     });
 
     it('forbids a caller without activity:update_progress', async () => {

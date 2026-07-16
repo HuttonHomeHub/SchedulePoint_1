@@ -35,6 +35,8 @@ export interface ActivityPatch {
   percentComplete?: number;
   actualStart?: Date | null;
   actualFinish?: Date | null;
+  /** Explicit remaining work in minutes (M2, ADR-0035); null derives it from percent complete. */
+  remainingDurationMinutes?: number | null;
 }
 
 /**

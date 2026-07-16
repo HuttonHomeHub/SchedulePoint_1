@@ -45,6 +45,20 @@ export class UpdateActivityProgressDto {
   @IsCalendarDate()
   actualFinish?: string | null;
 
+  @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    example: 3,
+    description:
+      'Remaining work in whole days for an in-progress activity (M2, ADR-0035). Null derives it from percent complete.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  remainingDurationDays?: number | null;
+
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)
   @IsInt()
