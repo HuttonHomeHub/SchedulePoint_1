@@ -102,8 +102,13 @@ export type ActivityFormValues = z.infer<typeof activityFormSchema>;
 /**
  * Activity PROGRESS form schema — for the Contributor-capable progress editor.
  * `percentComplete` is a number (registered with `valueAsNumber`); the actual
- * dates are raw `<input type="date">` values (`''` = unset). Cross-field rules
- * mirror the API: you cannot finish before you start, or finish without starting.
+ * dates are raw `<input type="date">` values (`''` = unset). The M2 progress-ingestion
+ * fields (ADR-0035) — an explicit `remainingDurationDays` (blank derives it from
+ * percent) plus `suspendDate` / `resumeDate` for a paused activity — are optional and
+ * only editable behind the `VITE_PROGRESS_INGESTION` flag; the dialog seeds them from
+ * the row either way so a stored value round-trips unchanged. Cross-field rules mirror
+ * the API: you cannot finish before you start, finish without starting, or resume
+ * before you suspend.
  */
 export const progressFormSchema = z
   .object({
@@ -114,6 +119,16 @@ export const progressFormSchema = z
       .max(100, 'Percentage cannot exceed 100.'),
     actualStart: z.string().optional(),
     actualFinish: z.string().optional(),
+    // A blank field registers as `undefined` (via the input's `setValueAs`), which means "absent →
+    // the API derives remaining from percent complete"; a value is a whole number of days.
+    remainingDurationDays: z
+      .number({ message: 'Enter a whole number of days.' })
+      .int('Enter a whole number of days.')
+      .min(0, 'Remaining cannot be negative.')
+      .max(100000, 'Remaining is too large.')
+      .optional(),
+    suspendDate: z.string().optional(),
+    resumeDate: z.string().optional(),
   })
   .refine((v) => !v.actualFinish || Boolean(v.actualStart), {
     message: 'Set an actual start before a finish.',
@@ -122,6 +137,14 @@ export const progressFormSchema = z
   .refine((v) => !v.actualStart || !v.actualFinish || v.actualFinish >= v.actualStart, {
     message: 'Finish cannot be before the start.',
     path: ['actualFinish'],
+  })
+  .refine((v) => !v.resumeDate || Boolean(v.suspendDate), {
+    message: 'Set a suspend date before a resume.',
+    path: ['resumeDate'],
+  })
+  .refine((v) => !v.suspendDate || !v.resumeDate || v.resumeDate >= v.suspendDate, {
+    message: 'Resume cannot be before the suspend.',
+    path: ['resumeDate'],
   });
 
 export type ProgressFormValues = z.infer<typeof progressFormSchema>;

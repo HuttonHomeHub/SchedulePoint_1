@@ -25,6 +25,9 @@ const ACTIVITY: ActivitySummary = {
   percentComplete: 0,
   actualStart: null,
   actualFinish: null,
+  remainingDurationDays: null,
+  suspendDate: null,
+  resumeDate: null,
   earlyStart: null,
   earlyFinish: null,
   lateStart: null,
@@ -99,5 +102,26 @@ describe('ActivityProgressDialog', () => {
       expect(screen.getAllByText(/Finish cannot be before the start/).length).toBeGreaterThan(0),
     );
     expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('hides the progress-ingestion inputs when the flag is off but round-trips a seeded value', async () => {
+    // Flag off (this file mocks no env): the remaining/suspend/resume inputs never render, yet a
+    // stored value seeded from the row still round-trips through a save unchanged (ADR-0035).
+    renderDialog({
+      ...ACTIVITY,
+      remainingDurationDays: 2,
+      suspendDate: '2026-05-08',
+      resumeDate: '2026-05-12',
+    });
+    expect(screen.queryByLabelText(/Remaining duration/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Suspend date/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string)).toMatchObject({
+      remainingDurationDays: 2,
+      suspendDate: '2026-05-08',
+      resumeDate: '2026-05-12',
+    });
   });
 });

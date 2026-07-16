@@ -10,11 +10,11 @@ import {
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { CANVAS_WORKSPACE_ENABLED } from '@/config/env';
+import { CANVAS_WORKSPACE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary } from '@/features/baselines';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
-import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
+import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanRecalcModePicker } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -162,6 +162,11 @@ function LegacyPlanLayout({
           canEdit={model.canWrite}
         />
       </div>
+      {PROGRESS_INGESTION_ENABLED ? (
+        <div className="mt-3">
+          <PlanRecalcModePicker orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+        </div>
+      ) : null}
       <div className="mt-3">
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       </div>

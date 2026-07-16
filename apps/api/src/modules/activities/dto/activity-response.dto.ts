@@ -68,6 +68,31 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ format: 'date', nullable: true, type: String })
   actualFinish!: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035); null derives it from percent complete.',
+  })
+  remainingDurationDays!: number | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description: 'Suspend day for a paused in-progress activity (M2, ADR-0035 §4), or null.',
+  })
+  suspendDate!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Resume day; the remaining work is floored at max(data date, resume) (M2), or null.',
+  })
+  resumeDate!: string | null;
+
   @ApiProperty({ format: 'date', nullable: true, type: String, description: 'CPM (engine-owned).' })
   earlyStart!: string | null;
 
@@ -154,6 +179,14 @@ export class ActivityResponseDto implements ActivitySummary {
       percentComplete: entity.percentComplete,
       actualStart: day(entity.actualStart),
       actualFinish: day(entity.actualFinish),
+      // Stored in working-minutes (ADR-0036); the public field stays whole working days. Null when
+      // unset (the engine then derives remaining from percent complete).
+      remainingDurationDays:
+        entity.remainingDurationMinutes === null
+          ? null
+          : Math.round(entity.remainingDurationMinutes / MINUTES_PER_DAY),
+      suspendDate: day(entity.suspendDate),
+      resumeDate: day(entity.resumeDate),
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),
       lateStart: day(entity.lateStart),

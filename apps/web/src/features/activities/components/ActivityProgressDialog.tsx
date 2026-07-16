@@ -14,6 +14,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { PROGRESS_INGESTION_ENABLED } from '@/config/env';
 
 /**
  * Report an activity's progress (percent + actual dates). This is the
@@ -48,7 +49,14 @@ export function ActivityProgressDialog({
     formState: { errors },
   } = useForm<ProgressFormValues>({
     resolver: zodResolver(progressFormSchema),
-    defaultValues: { percentComplete: 0, actualStart: '', actualFinish: '' },
+    defaultValues: {
+      percentComplete: 0,
+      actualStart: '',
+      actualFinish: '',
+      remainingDurationDays: undefined,
+      suspendDate: '',
+      resumeDate: '',
+    },
   });
 
   useEffect(() => {
@@ -57,6 +65,11 @@ export function ActivityProgressDialog({
         percentComplete: activity.percentComplete,
         actualStart: activity.actualStart ?? '',
         actualFinish: activity.actualFinish ?? '',
+        // Seed the M2 fields from the row even when the inputs are hidden (flag off), so an
+        // edit round-trips a stored remaining/suspend/resume unchanged (ADR-0035).
+        remainingDurationDays: activity.remainingDurationDays ?? undefined,
+        suspendDate: activity.suspendDate ?? '',
+        resumeDate: activity.resumeDate ?? '',
       });
       update.reset();
     }
@@ -119,6 +132,34 @@ export function ActivityProgressDialog({
           error={errors.actualFinish?.message}
           {...register('actualFinish')}
         />
+        {PROGRESS_INGESTION_ENABLED ? (
+          <>
+            <TextField
+              label="Remaining duration (days, optional)"
+              type="number"
+              min={0}
+              hint="Leave blank to derive it from percent complete."
+              error={errors.remainingDurationDays?.message}
+              {...register('remainingDurationDays', {
+                // Blank clears the explicit remaining (undefined → the API derives it from percent).
+                setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
+              })}
+            />
+            <TextField
+              label="Suspend date (optional)"
+              type="date"
+              error={errors.suspendDate?.message}
+              {...register('suspendDate')}
+            />
+            <TextField
+              label="Resume date (optional)"
+              type="date"
+              hint="Remaining work resumes from here when it is after the data date."
+              error={errors.resumeDate?.message}
+              {...register('resumeDate')}
+            />
+          </>
+        ) : null}
         <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
           Status (set automatically): <span className="text-foreground font-medium">{preview}</span>
         </p>

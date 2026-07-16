@@ -258,6 +258,19 @@ export interface ActivitySummary {
   percentComplete: number;
   actualStart: string | null;
   actualFinish: string | null;
+  /**
+   * Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035 §2), or null to
+   * derive it from `percentComplete`. The engine schedules this remaining from the data date (never
+   * before it).
+   */
+  remainingDurationDays: number | null;
+  /**
+   * Suspend / resume calendar days (`YYYY-MM-DD`) for a paused in-progress activity (M2, ADR-0035 §4),
+   * or null. A resume after the data date floors the remaining work at the resume day; a resume on or
+   * before the data date is a no-op (the data-date floor governs).
+   */
+  suspendDate: string | null;
+  resumeDate: string | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.
   earlyStart: string | null;
   earlyFinish: string | null;
