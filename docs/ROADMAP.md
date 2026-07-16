@@ -32,6 +32,30 @@ keep `main` releasable.
 - **M5 — Working-day calendars.** Weekday-mask + dated-exception calendars behind the
   engine port, org library + per-plan default, web calendar library + plan picker
   (ADR-0024).
+- **Progress & retained logic (conformance M2).** Explicit remaining duration,
+  suspend/resume, and a plan **recalc mode** (Retained Logic / Progress Override /
+  Actual Dates) with a data-date floor; web progress-ingestion editor **on by default**
+  (ADR-0035 §1–§6).
+- **Advanced constraints (conformance M4).** Mandatory **produce-and-flag** (a pin that
+  breaks logic is scheduled and flagged, never silently fixed), a **secondary** constraint
+  on the backward pass, **as-late-as-possible** placement, and **expected-finish**
+  resizing; web _Advanced scheduling_ editor + Conflict badge + plan Expected-finish
+  toggle, **on by default** (ADR-0035 §7–§14, §22).
+- **Hour/shift-granular calendars (conformance M1) & per-activity calendars (M5).**
+  Working-**minute** engine axis with intraday shift patterns and time-window exceptions;
+  each activity schedules on its own resolved calendar (activity → plan → 24/7) on an
+  absolute-instant frame; web per-activity calendar picker **on by default**
+  (ADR-0036/0037).
+- **Scheduling modes & a de-overloaded plan start (ADR-0033).** A mandatory project
+  **data date** split from an ephemeral **Go-to-date** view control; a plan-level
+  **Early / Visual** scheduling mode with a read-only **Late-Start** overlay; Visual
+  Planning drags record an advisory `visualStart` that pushes successors and flags
+  conflicts rather than auto-correcting. On by default.
+- **Engine conformance framework (ADR-0034/0035).** A P6-class torture-test fixture as a
+  versioned benchmark + living **capability matrix**; a three-tier harness (engine-free
+  structural gate, differential "flip-one-option-must-differ", no-oracle golden
+  snapshots) and the negative-case reject/repair/report contract, with SchedulePoint's
+  CPM semantics documented as the golden contract.
 - **M7 — Baselines.** Named plan-of-record snapshots (snapshot-copy model), one active
   baseline per plan, server-side working-day variance, web baselines panel + variance
   columns (ADR-0025).
@@ -51,36 +75,54 @@ keep `main` releasable.
   soft-delete/Recently-Deleted flow via a hand-rolled APG `Menu` primitive and a
   shell-layer CRUD coordinator (no backend change).
 
-## Next (candidate order — not yet committed)
+## Delivered — TSLD canvas & editing surface
 
-Governed by the brief's MoSCoW (§8). Each becomes a spec/plan before build:
-
-- **Notes.** Attach notes to any entity (client/project/plan/activity) — the weekly
-  progress journey.
 - **The TSLD graphical canvas** — the flagship primary editing surface (ADR-0026).
   **M1–M4 delivered** (read render; on-canvas create/move/link/relane; live critical
   path + driving-vs-non-driving arrows with a non-colour encoding; lane persistence +
-  auto-pack). **On-canvas editing is now ON by default** (2026-07-12): `VITE_TSLD_EDITING`
-  defaults on (with `=false` as opt-out), all pre-enablement gates green. The canvas also
-  now reads as a time-scaled document — an **adaptive date ruler** (year→month→day), **zoom
-  presets** (Day…Year) + zoom −/+, a **TODAY** marker, **non-working-day shading** (weekends
-  - calendar holidays), **six** **layer toggles**, and **on-canvas activity labels**
-    (`{code} {name} · {n}d`, adaptive inside/beside placement, culled + LOD-gated, a shared
-    identity builder keeping the visible label consistent with the accessible name — 2026-07-13,
-    ADR-0026 D1; perf re-verified on the corrected spike at p95 9.4ms draw @ 2,000 activities,
-    inside the ≤16ms 60fps budget). Remaining: the deferred
-    per-activity driving summary in the parallel listbox.
-- **Gantt view** — the secondary tabular projection of the same model.
-- **Plan edit-lock** (single-editor hand-off) — **delivered & enabled** (ADR-0028): the
-  server lease + 423 write-gate and the web "pen". The web pen (`VITE_PLAN_EDIT_LOCK`)
-  now defaults **on**; server enforcement (`PLAN_EDIT_LOCK_ENFORCED`) stays the one
-  deliberate ops switch, enabled after the pen bundle is live (ADR-0028 §9).
-- **Editing enablement hardening** — **delivered**: a flag-on E2E harness
-  (`test:e2e:edit`, in CI) proving the editing surface + pen end-to-end, a flags-off
-  baseline suite, route-level gating coverage, and an operator runbook
+  auto-pack), **on-canvas editing ON by default** (`VITE_TSLD_EDITING`). Time-scaled
+  document chrome: an **adaptive date ruler** (year→month→day), **zoom presets** + zoom
+  −/+, a **TODAY** marker, **non-working-day shading**, **layer toggles**, and
+  **on-canvas activity labels** (`{code} {name} · {n}d`, adaptive placement, culled +
+  LOD-gated; perf re-verified at p95 9.4ms draw @ 2,000 activities, inside the ≤16ms
+  budget — ADR-0026 D1).
+- **Canvas-first workspace, toolbar & authoring (ADR-0030/0031/0032).** The canvas is the
+  primary workspace surface (resizable rail + activity panel, responsive single-pane
+  toggle); a declarative **toolbar-item registry** feeding one APG `<Toolbar>` with a
+  7-group taxonomy and pen-gated authoring; and canvas-first **authoring** (live empty
+  canvas, on-canvas activity types, a two-click Link tool, coalesced auto-recalc). All
+  on by default.
+- **Plan edit-lock** (single-editor hand-off, ADR-0028) — **delivered & enabled**: the
+  server lease + 423 write-gate and the web "pen" (`VITE_PLAN_EDIT_LOCK`, on by default).
+  Server enforcement (`PLAN_EDIT_LOCK_ENFORCED`) stays the one deliberate ops switch,
+  enabled after the pen bundle is live (ADR-0028 §9).
+- **Editing enablement hardening** — a flag-on E2E harness (`test:e2e:edit`, in CI), a
+  flags-off baseline suite, route-level gating coverage, and an operator runbook
   ([`docs/runbooks/tsld-editing-enablement.md`](runbooks/tsld-editing-enablement.md)).
-  The web flags are now on by default (the manual cross-browser `Alt+←/→` check,
-  TECH_DEBT #25a, passed); enabling API enforcement is the remaining ops action.
+- **Project Explorer** — see above. **Remaining canvas polish:** the deferred per-activity
+  driving summary in the parallel listbox, plus the debt items in `TECH_DEBT.md`.
+
+## Next
+
+### Committed engine milestones (conformance framework)
+
+The remaining clauses of the CPM semantics contract (ADR-0035), each with clear fixture
+discriminators. Each becomes a spec/plan before build:
+
+- **M6 — Float & critical (ADR-0035 §17–§20).** A selectable **Longest-Path** critical
+  definition (vs today's Total-Float ≤ 0), **Total Float as start / finish / smallest**,
+  **multiple float paths** (contiguous driving chains), a **make-open-ends-critical**
+  option, and the **zero-free-float** refinement that completes the as-late-as-possible
+  flag. Engine + a few plan options + web toggles.
+- **M5-epic — Advanced activity types (ADR-0035 §21, §23–§24).** **Level-of-Effort**
+  (duration-from-span, never drives, never critical), **resource-dependent** scheduling
+  (needs a resource model first), and **WBS-summary** rollup.
+
+### Product features (candidate order — governed by the brief's MoSCoW §8)
+
+- **Notes.** Attach notes to any entity (client/project/plan/activity) — the weekly
+  progress journey.
+- **Gantt view** — the secondary tabular projection of the same model.
 - **Undo/redo**, **export** (PDF/CSV), and **resources** (library + assignments) —
   all Must/Should-have per the brief.
 
