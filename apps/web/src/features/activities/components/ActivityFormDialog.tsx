@@ -22,7 +22,7 @@ import {
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
+import { CheckboxField, FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ACTIVITY_CALENDAR_ENABLED, ADVANCED_CONSTRAINTS_ENABLED } from '@/config/env';
@@ -302,10 +302,14 @@ export function ActivityFormDialog({
           />
         ) : null}
         {ADVANCED_CONSTRAINTS_ENABLED ? (
-          <fieldset className="border-border flex flex-col gap-4 rounded-md border p-3">
-            <legend className="text-muted-foreground px-1 text-sm font-medium">
+          // Grouped by the same top-border divider the app uses elsewhere (e.g. the plan Summary
+          // popover) rather than a bespoke bordered card, so the fields read like every other stacked
+          // field in this dialog. `<fieldset>`/`<legend>` keep the semantic grouping without the box.
+          <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
+            <legend className="sr-only">Advanced scheduling</legend>
+            <p className="text-sm font-medium" aria-hidden="true">
               Advanced scheduling
-            </legend>
+            </p>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="activity-secondary-constraint-type">Secondary constraint</Label>
               <Select
@@ -331,9 +335,9 @@ export function ActivityFormDialog({
                 ) : null}
               </Select>
               <p id="activity-secondary-constraint-help" className="text-muted-foreground text-sm">
-                A second constraint that drives the late dates (the backward pass) — e.g. a primary
-                “start no earlier than” with a secondary “finish no later than”. The primary drives
-                the early dates.
+                A second date constraint that drives the activity’s late dates — e.g. a primary
+                “start no earlier than” with a secondary “finish no later than”. The primary
+                constraint drives its early dates.
               </p>
               {errors.secondaryConstraintType?.message ? (
                 <p
@@ -352,33 +356,22 @@ export function ActivityFormDialog({
                 {...register('secondaryConstraintDate')}
               />
             ) : null}
-            <div className="flex flex-col gap-1.5">
-              {/* `py-1` + `min-h-6` gives the label a ≥24px hit target (WCAG 2.2 SC 2.5.8, AA). */}
-              <label
-                htmlFor="activity-alap"
-                className="flex min-h-6 items-center gap-2 py-1 text-sm font-medium"
-              >
-                <input
-                  id="activity-alap"
-                  type="checkbox"
-                  className="accent-primary size-4"
-                  aria-describedby="activity-alap-help"
-                  {...register('scheduleAsLateAsPossible')}
-                />
-                Schedule as late as possible
-              </label>
-              <p id="activity-alap-help" className="text-muted-foreground text-sm">
-                Draws the activity at its latest position without changing its dates or float. A
-                display preference, not a date constraint.
-              </p>
-            </div>
-            <TextField
-              label="Expected finish (optional)"
-              type="date"
-              hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine resizes this activity’s remaining work so it finishes here."
-              error={errors.expectedFinish?.message}
-              {...register('expectedFinish')}
+            <CheckboxField
+              label="Schedule as late as possible"
+              hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
+              {...register('scheduleAsLateAsPossible')}
             />
+            {/* Expected finish sizes work to a target finish, so it's meaningless for a milestone
+                (a point in time, 0 duration) — hidden for those types, mirroring the Duration field. */}
+            {isMilestoneType(type) ? null : (
+              <TextField
+                label="Expected finish (optional)"
+                type="date"
+                hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
+                error={errors.expectedFinish?.message}
+                {...register('expectedFinish')}
+              />
+            )}
           </fieldset>
         ) : null}
         <TextareaField

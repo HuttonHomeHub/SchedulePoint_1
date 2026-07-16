@@ -138,6 +138,13 @@ describe('ActivitiesTable', () => {
     expect(cells[5]).toHaveTextContent('—');
   });
 
+  it('does not show the Conflict badge while VITE_ADVANCED_CONSTRAINTS is off, even when violated', () => {
+    // The engine flag is set on the row, but the badge is gated on the (default-off) feature flag —
+    // so the flag-off surface never surfaces it. (Flag-on behaviour is in the dedicated suite.)
+    renderTable(false, [{ ...ACTIVITY, constraintViolated: true }]);
+    expect(screen.queryByText('Conflict')).not.toBeInTheDocument();
+  });
+
   it('shows computed dates, float and a Critical badge for a calculated activity', () => {
     renderTable(false, [
       {

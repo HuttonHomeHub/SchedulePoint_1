@@ -291,8 +291,9 @@ export interface ActivitySummary {
   resumeDate: string | null;
   /**
    * Expected-finish target (ADR-0035 §9, M4): when the plan's `useExpectedFinishDates` is on, an
-   * in-progress activity's remaining work is resized so its early finish lands on this calendar day
-   * (`YYYY-MM-DD`). Null = no target. Ignored when the option is off or the activity isn't in progress.
+   * incomplete activity's remaining work is resized so its early finish lands on this calendar day
+   * (`YYYY-MM-DD`). Null = no target. Ignored when the option is off, the activity is complete, or it
+   * has no duration (a milestone).
    */
   expectedFinish: string | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.

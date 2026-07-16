@@ -181,4 +181,35 @@ describe('ActivityFormDialog', () => {
       constraintDate: null,
     });
   });
+
+  it('round-trips seeded advanced-constraint values on a no-op save with the flag off', async () => {
+    // The advanced fields (secondary constraint, ALAP, expected finish) aren't rendered while
+    // VITE_ADVANCED_CONSTRAINTS is off (the default here), but the dialog still seeds them from the
+    // row, so editing something else must never silently clear a stored value.
+    renderDialog({
+      activity: {
+        ...ACTIVITY,
+        secondaryConstraintType: 'FNLT',
+        secondaryConstraintDate: '2026-06-01',
+        scheduleAsLateAsPossible: true,
+        expectedFinish: '2026-05-20',
+      },
+    });
+    // The advanced controls are hidden with the flag off.
+    expect(screen.queryByLabelText('Secondary constraint')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Schedule as late as possible')).not.toBeInTheDocument();
+    // Change only the name and save — the seeded advanced values must ride through unchanged.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Excavate deeper' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(JSON.parse(init?.body as string)).toMatchObject({
+      version: 4,
+      secondaryConstraintType: 'FNLT',
+      secondaryConstraintDate: '2026-06-01',
+      scheduleAsLateAsPossible: true,
+      expectedFinish: '2026-05-20',
+    });
+  });
 });

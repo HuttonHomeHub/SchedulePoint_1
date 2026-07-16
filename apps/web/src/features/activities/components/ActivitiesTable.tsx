@@ -137,7 +137,36 @@ export function ActivitiesTable({
           <span className="text-muted-foreground">—</span>
         ),
     },
-    { header: 'Name', cell: (activity) => <span className="font-medium">{activity.name}</span> },
+    {
+      header: 'Name',
+      cell: (activity) => {
+        // A mandatory pin that broke logic (engine-owned, ADR-0035 §7): surface it as a "Conflict"
+        // pill beside the name — always visible (the Constraint column hides below `lg`), so a
+        // produced-and-flagged violation can't slip off narrow screens. Text carries the meaning
+        // (never colour alone, WCAG 1.4.1); an sr-only clause spells out the cause for non-hover
+        // users, matching the summary strip's wording. Only shown when the M4 surface is on.
+        const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
+        return (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{activity.name}</span>
+            {violated ? (
+              <Badge
+                variant="critical"
+                size="sm"
+                title="A mandatory constraint forces a date earlier than the logic allows; shown as pinned, not corrected — review the dates."
+              >
+                Conflict
+                <span className="sr-only">
+                  {' '}
+                  — a mandatory constraint forces a date earlier than the logic allows; shown as
+                  pinned, not corrected. Review the dates.
+                </span>
+              </Badge>
+            ) : null}
+          </span>
+        );
+      },
+    },
     { header: 'Type', cell: (activity) => ACTIVITY_TYPE_LABELS[activity.type] },
     {
       header: 'Duration',
@@ -159,33 +188,17 @@ export function ActivitiesTable({
       cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
       cell: (activity) => {
         const constraint = formatConstraint(activity);
-        // A mandatory pin that broke logic (engine-owned, ADR-0035 §7): surface it as a "Conflict"
-        // pill so a produced-and-flagged violation is visible in the list, not just the summary. Text
-        // carries the meaning (never colour alone, WCAG 1.4.1); only shown when the M4 surface is on.
-        const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
         // `aria-label` on a plain span (role generic) isn't reliably honoured; instead show the
         // shorthand visually (aria-hidden) with the spelled-out label in an sr-only node — the
-        // same visible-glyph + hidden-text pattern the diagram legend uses. `title` = hover.
-        const label = constraint ? (
+        // same visible-glyph + hidden-text pattern the diagram legend uses. `title` = hover. A
+        // produced-and-flagged violation shows as a "Conflict" pill in the always-visible Name cell.
+        return constraint ? (
           <span className="text-muted-foreground" title={constraint.full}>
             <span aria-hidden="true">{constraint.short}</span>
             <span className="sr-only">{constraint.full}</span>
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
-        );
-        if (!violated) return label;
-        return (
-          <span className="flex flex-col items-start gap-1">
-            {label}
-            <Badge
-              variant="critical"
-              size="sm"
-              title="A mandatory constraint pinned this activity against its logic — the schedule is shown as-is, not corrected."
-            >
-              Conflict
-            </Badge>
-          </span>
         );
       },
     },
