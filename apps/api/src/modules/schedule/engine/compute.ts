@@ -7,7 +7,12 @@ import {
   rollBackwardToWorking,
   rollForwardToWorking,
 } from './instants';
-import { resolveProgress, type ResolvedProgress } from './progress';
+import {
+  remainingHonoursPredecessor,
+  resolveProgress,
+  type ProgressMode,
+  type ResolvedProgress,
+} from './progress';
 import type {
   EngineActivity,
   EngineEdge,
@@ -31,6 +36,12 @@ export interface ComputeOptions {
    * absolute working-instants, so each activity advances on **its own** calendar.
    */
   calendar: WorkingTimeCalendar;
+  /**
+   * The out-of-sequence recalc mode (M2, ADR-0035 §1). Governs how an **in-progress** activity's
+   * remaining work treats predecessor logic; the three modes coincide on an unprogressed network.
+   * Defaults to `RETAINED_LOGIC` (the P6 default, behaviour-preserving).
+   */
+  progressMode?: ProgressMode;
 }
 
 /**
@@ -79,6 +90,7 @@ export function computeSchedule(
   options: ComputeOptions,
 ): EngineOutput {
   const { dataDate, calendar: planCalendar } = options;
+  const progressMode: ProgressMode = options.progressMode ?? 'RETAINED_LOGIC';
   const graph = buildGraph(activities, edges);
   const dataDateAbs = instantToAbsMinutes(dataDate);
   const calendarOf = (activity: EngineActivity): WorkingTimeCalendar =>
@@ -112,19 +124,36 @@ export function computeSchedule(
       earlyFinish.set(id, progress.actualFinishInst!);
       continue;
     }
+    const inProgress = progress.status === 'IN_PROGRESS';
     let lower = dataDateAbs; // the data date floors any (remaining) work — never before it (§2)
     for (const edge of graph.incoming.get(id)!) {
+      // For an IN-PROGRESS activity's remaining work, the recalc mode decides whether this
+      // predecessor's tie still holds (ADR-0035 §1): Retained Logic keeps all; Progress Override
+      // drops incomplete predecessors; Actual Dates drops all. A not-started activity always
+      // follows full logic (this skip never applies to it).
+      if (
+        inProgress &&
+        !remainingHonoursPredecessor(progressMode, progressOf.get(edge.predecessorId)!.status)
+      ) {
+        continue;
+      }
       const predStart = earlyStart.get(edge.predecessorId)!;
       const predFinish = earlyFinish.get(edge.predecessorId)!;
       const bound = forwardLowerBound(edge, predStart, predFinish, cal, duration, planCalendar);
       if (bound > lower) lower = bound;
     }
+    // Actual Dates additionally floors the remaining at the actual start — max(data date, actual
+    // start) — so a FUTURE actual start schedules its remaining from that date (ADR-0035 §1/§6).
+    // Under N07 (no actual after the data date) the actual start ≤ the data date, so this is a no-op
+    // and Actual Dates coincides with Progress Override for past-dated actuals.
+    if (inProgress && progressMode === 'ACTUAL_DATES' && progress.actualStartInst! > lower) {
+      lower = progress.actualStartInst!;
+    }
     lower = clampForwardStart(activity, lower, cal, dataDateAbs);
     const workStart = rollForwardToWorking(cal, lower);
-    if (progress.status === 'IN_PROGRESS') {
-      // Frozen actual start; the REMAINING work reschedules forward from max(data date, retained
-      // logic) — the remaining-work data-date floor (§2). Retained Logic keeps predecessor ties on
-      // the remaining work (the incoming bounds above still apply).
+    if (inProgress) {
+      // Frozen actual start; the REMAINING work reschedules forward from the ties retained by the
+      // recalc mode, floored at the data date (§2) — `workStart` above.
       earlyStart.set(id, progress.actualStartInst!);
       earlyFinish.set(
         id,

@@ -2,6 +2,7 @@ import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { computeSchedule } from './compute';
+import type { ProgressMode } from './progress';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
 import {
   buildWorkingTimeCalendar,
@@ -39,8 +40,16 @@ function edge(
   return { id: `${predecessorId}-${successorId}`, predecessorId, successorId, type, lagMinutes };
 }
 
-function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[] = []) {
-  const output = computeSchedule(activities, edges, { dataDate: DATA_DATE, calendar: FIVE_DAY });
+function run(
+  activities: readonly EngineActivity[],
+  edges: readonly EngineEdge[] = [],
+  progressMode?: ProgressMode,
+) {
+  const output = computeSchedule(activities, edges, {
+    dataDate: DATA_DATE,
+    calendar: FIVE_DAY,
+    ...(progressMode ? { progressMode } : {}),
+  });
   return new Map<string, EngineResult>(output.results.map((r) => [r.activityId, r]));
 }
 
@@ -115,6 +124,42 @@ describe('progress ingestion (M2, ADR-0035 §1–§2)', () => {
     );
     expect(byId.get('B')!.earlyStart).toBe('2025-12-30'); // frozen actual start
     expect(byId.get('B')!.earlyFinish).toBe('2026-01-06'); // remaining floored at data date, +2d
+  });
+
+  it('applies the recalc mode to an out-of-sequence activity’s remaining (retained vs override)', () => {
+    // P is in progress with 5 days of work left (remaining finishes Fri 01-09). B started out of
+    // sequence (before P finished) with an FS tie to P and 2 days left.
+    const net = (): EngineActivity[] => [
+      task('P', 5 * DAY, { actualStart: '2025-12-29', remainingMinutes: 5 * DAY }),
+      task('B', 5 * DAY, { actualStart: '2025-12-30', remainingMinutes: 2 * DAY }),
+    ];
+    const edges = [edge('P', 'B')]; // FS: under retained logic B waits for P's remaining finish
+    const retained = run(net(), edges, 'RETAINED_LOGIC').get('B')!;
+    const override = run(net(), edges, 'PROGRESS_OVERRIDE').get('B')!;
+    const actual = run(net(), edges, 'ACTUAL_DATES').get('B')!;
+
+    // Retained: B's remaining waits for P (finishes Fri 01-09) → starts Mon 01-12, +2d → Tue 01-13.
+    expect(retained.earlyFinish).toBe('2026-01-13');
+    // Override drops the INCOMPLETE predecessor P → B's remaining runs from the data date, +2d → Tue 01-06.
+    expect(override.earlyFinish).toBe('2026-01-06');
+    // The definitive Retained-Logic vs Progress-Override discriminator (ADR-0035 §1).
+    expect(retained.earlyFinish).not.toBe(override.earlyFinish);
+    // Actual Dates coincides with Override for a PAST actual start (N07 forbids future actuals).
+    expect(actual.earlyFinish).toBe(override.earlyFinish);
+  });
+
+  it('schedules a future actual start’s remaining from the actual start under Actual Dates (vs the data date under Override)', () => {
+    // Engine-level isolation of Actual Dates vs Progress Override: a future actual start (Wed 01-07,
+    // after the data date) — the boundary rejects this via N07, but the engine is N07-agnostic, so
+    // this is where the two modes provably diverge. 2 days of work remain.
+    const net = (): EngineActivity[] => [
+      task('A', 5 * DAY, { actualStart: '2026-01-07', remainingMinutes: 2 * DAY }),
+    ];
+    const override = run(net(), [], 'PROGRESS_OVERRIDE').get('A')!;
+    const actual = run(net(), [], 'ACTUAL_DATES').get('A')!;
+    expect(override.earlyFinish).toBe('2026-01-06'); // floored at the data date (Mon 01-05) + 2d
+    expect(actual.earlyFinish).toBe('2026-01-08'); // floored at the actual start (Wed 01-07) + 2d
+    expect(actual.earlyFinish).not.toBe(override.earlyFinish);
   });
 
   it('is byte-identical to the pre-progress result when no activity carries actuals', () => {

@@ -18,6 +18,34 @@ import { instantToAbsMinutes, type WorkingTimeCalendar } from './working-time-ca
  */
 export type ProgressStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
 
+/**
+ * The out-of-sequence recalc mode (ADR-0035 §1). Governs whether an **in-progress** activity's
+ * REMAINING work still waits on its predecessors: **Retained Logic** (default) keeps every
+ * predecessor tie; **Progress Override** drops the tie from *incomplete* predecessors (a complete
+ * one still bounds via its actual finish); **Actual Dates** drops them all — the started activity's
+ * remaining simply runs from the data date. The three coincide on an unprogressed network.
+ */
+export type ProgressMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUAL_DATES';
+
+/**
+ * Whether an in-progress activity's remaining-work start still honours a predecessor bound under
+ * `mode` (ADR-0035 §1). Applies only to a started activity's remaining work; a not-started activity
+ * always follows full logic. See {@link ProgressMode}.
+ */
+export function remainingHonoursPredecessor(
+  mode: ProgressMode,
+  predecessor: ProgressStatus,
+): boolean {
+  switch (mode) {
+    case 'RETAINED_LOGIC':
+      return true;
+    case 'PROGRESS_OVERRIDE':
+      return predecessor === 'COMPLETE';
+    case 'ACTUAL_DATES':
+      return false;
+  }
+}
+
 export interface ResolvedProgress {
   status: ProgressStatus;
   /** Frozen actual **start** instant (the day's first working instant); null when not started. */
