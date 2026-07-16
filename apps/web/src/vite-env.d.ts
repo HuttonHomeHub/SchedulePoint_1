@@ -17,10 +17,10 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_AUTHORING?: string;
   /** Scheduling modes & de-overloaded plan start (ADR-0033). On by default; "false"/"0" disables it. */
   readonly VITE_SCHEDULING_MODES?: string;
-  /** Per-activity working-time calendar picker (ADR-0037). "true"/"1" enables it; off by default. */
+  /** Per-activity working-time calendar picker (ADR-0037). On by default; "false"/"0" disables it. */
   readonly VITE_ACTIVITY_CALENDAR?: string;
   /** Progress ingestion controls — remaining/suspend/resume + recalc mode (ADR-0035, M2). On by default; "false"/"0" disables it. */
   readonly VITE_PROGRESS_INGESTION?: string;
-  /** Advanced schedule constraints — secondary/ALAP/expected-finish + violation badge (ADR-0035, M4). "true"/"1" enables it; off by default. */
+  /** Advanced schedule constraints — secondary/ALAP/expected-finish + violation badge (ADR-0035, M4). On by default; "false"/"0" disables it. */
   readonly VITE_ADVANCED_CONSTRAINTS?: string;
 }

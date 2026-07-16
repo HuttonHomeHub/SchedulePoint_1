@@ -166,17 +166,17 @@ export const SCHEDULING_MODES_ENABLED =
   flagDefaultOn(import.meta.env.VITE_SCHEDULING_MODES) && CANVAS_AUTHORING_ENABLED;
 
 /**
- * Per-activity working-time calendars (ADR-0037, M5 — engine conformance framework). **OFF by
- * default**: the picker ships dark until its quality gates (component/a11y/ux) are cleared and the
- * feature is turned on per-environment, then flipped default-on. When on, the activity form offers a
- * "Plan default (inherit)" ↔ specific-calendar `Select` (writing `activities.calendar_id`) and the
- * activities table shows an activity's own calendar when it isn't inheriting. Everything behind it —
- * the settable API field, the absolute-instant engine, and the conformance proof — is already live;
- * only the picker is gated. Set `VITE_ACTIVITY_CALENDAR=true` to enable. The engine schedules each
- * activity on its resolved calendar (`activity.calendarId → plan.calendarId → 24/7`) regardless of
- * this flag; the flag only governs whether a planner can *pick* it in the web UI.
+ * Per-activity working-time calendars (ADR-0037, M5 — engine conformance framework). **ON by default**.
+ * The picker is a thin "Plan default (inherit)" ↔ specific-calendar `Select` (writing
+ * `activities.calendar_id`) that reuses the same primitive and states as the already-reviewed
+ * plan-calendar picker (M5-D2), and the activities table shows an activity's own calendar when it isn't
+ * inheriting. Everything behind it — the settable API field, the absolute-instant engine, and the
+ * conformance proof — is already live; only the picker is gated. Set `VITE_ACTIVITY_CALENDAR=false` to
+ * hide it. The engine schedules each activity on its resolved calendar
+ * (`activity.calendarId → plan.calendarId → 24/7`) regardless of this flag; the flag only governs
+ * whether a planner can *pick* it in the web UI.
  */
-export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_CALENDAR);
+export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_CALENDAR);
 
 /**
  * Progress ingestion — retained-logic recalc (ADR-0035, M2). **ON by default** (quality gates cleared
@@ -191,18 +191,18 @@ export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOff(import.meta.env.VITE_ACT
 export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PROGRESS_INGESTION);
 
 /**
- * Advanced schedule constraints (ADR-0035 §7–§11, M4). **OFF by default**: the editor surface ships
- * dark until its quality gates (component/a11y/ux) are cleared and the feature is turned on
- * per-environment, then flipped default-on (how `VITE_PROGRESS_INGESTION` began). When on, the activity
- * form gains a **secondary constraint** (a second type + date driving the backward pass, ADR-0035 §10),
- * an **As-late-as-possible** toggle (ADR-0035 §11) and an **expected-finish** date (ADR-0035 §9); the
- * plan settings gain an **Expected-finish scheduling** toggle (`useExpectedFinishDates`); and a
- * **Conflict** badge surfaces an engine-flagged `constraintViolated` activity (a mandatory pin that
- * broke logic, produced-and-flagged, ADR-0035 §7). Everything behind it — the settable API fields, the
- * engine's constraint passes, and the conformance proof (S12/N10) — is already live; the flag only
- * governs whether a planner can *edit and see* the new fields in the web UI. Set
- * `VITE_ADVANCED_CONSTRAINTS=true` to enable.
+ * Advanced schedule constraints (ADR-0035 §7–§11, M4). **ON by default** now that its quality gates are
+ * cleared — the accessibility (pass), component (pass), and UX (blockers folded in: shared
+ * `CheckboxField`, plain section chrome, expected-finish copy/guard) reviews are green. When on, the
+ * activity form gains a **secondary constraint** (a second type + date driving the backward pass,
+ * ADR-0035 §10), an **As-late-as-possible** toggle (ADR-0035 §11) and an **expected-finish** date
+ * (ADR-0035 §9); the plan settings gain an **Expected-finish scheduling** toggle
+ * (`useExpectedFinishDates`); and a **Conflict** badge surfaces an engine-flagged `constraintViolated`
+ * activity (a mandatory pin that broke logic, produced-and-flagged, ADR-0035 §7). Everything behind it —
+ * the settable API fields, the engine's constraint passes, and the conformance proof (S12/N10) — is
+ * already live; the flag only governs whether a planner can *edit and see* the new fields in the web UI.
+ * Set `VITE_ADVANCED_CONSTRAINTS=false` to roll back to the moderate-constraint editor.
  */
-export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOff(
+export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ADVANCED_CONSTRAINTS,
 );
