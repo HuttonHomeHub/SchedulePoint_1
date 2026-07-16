@@ -35,6 +35,7 @@ const ACTIVITY: ActivitySummary = {
   totalFloat: null,
   isCritical: false,
   isNearCritical: false,
+  constraintViolated: false,
   visualStart: null,
   visualEffectiveStart: null,
   visualEffectiveFinish: null,

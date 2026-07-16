@@ -62,7 +62,7 @@ export function ScheduleSummaryStrip({
   }
 
   const { dataDate, projectFinish, activityCount, criticalCount, nearCriticalCount } = summary.data;
-  const { parkedConstraintCount } = summary.data;
+  const { constraintViolationCount, constraintWarningCount } = summary.data;
 
   // No computed finish yet → the plan has never been recalculated (or is empty).
   if (projectFinish === null) {
@@ -86,18 +86,31 @@ export function ScheduleSummaryStrip({
         <Stat label="Activities" value={activityCount} />
         <Stat label="Critical" value={criticalCount} />
         <Stat label="Near-critical" value={nearCriticalCount} />
-        {parkedConstraintCount > 0 ? (
+        {constraintViolationCount > 0 ? (
           <Stat
-            label="Parked constraints"
-            value={parkedConstraintCount}
-            hintId="parked-constraints-hint"
+            label="Constraint conflicts"
+            value={constraintViolationCount}
+            hintId="constraint-violations-hint"
+          />
+        ) : null}
+        {constraintWarningCount > 0 ? (
+          <Stat
+            label="Constraint warnings"
+            value={constraintWarningCount}
+            hintId="constraint-warnings-hint"
           />
         ) : null}
       </dl>
-      {parkedConstraintCount > 0 ? (
-        <p id="parked-constraints-hint" className="text-muted-foreground text-xs">
-          Parked constraints are mandatory constraints the scheduler applies as Must start on / Must
-          finish on.
+      {constraintViolationCount > 0 ? (
+        <p id="constraint-violations-hint" className="text-muted-foreground text-xs">
+          Constraint conflicts are activities where a mandatory constraint forces a date earlier
+          than the logic allows. The schedule is shown as pinned; review the dates.
+        </p>
+      ) : null}
+      {constraintWarningCount > 0 ? (
+        <p id="constraint-warnings-hint" className="text-muted-foreground text-xs">
+          Constraint warnings are Start-no-earlier-than constraints dated before the data date. They
+          are honoured but cannot pull work before the data date.
         </p>
       ) : null}
     </div>,

@@ -113,6 +113,12 @@ export interface EngineResult {
   totalFloat: number;
   isCritical: boolean;
   isNearCritical: boolean;
+  /**
+   * Mandatory produce-and-flag (ADR-0035 §7): true when a `MANDATORY_START`/`MANDATORY_FINISH` pin
+   * overrode a stronger logic bound (drove the start earlier than the network-earliest). The schedule
+   * is produced as-pinned; this flags that it broke logic — engine-owned, never repaired.
+   */
+  constraintViolated: boolean;
   earlyStart: string;
   earlyFinish: string;
   lateStart: string;
@@ -139,10 +145,15 @@ export interface EngineSummary {
   criticalCount: number;
   nearCriticalCount: number;
   /**
-   * How many `MANDATORY_START` / `MANDATORY_FINISH` constraints were treated as
-   * their moderate equivalents (`MSO` / `MFO`) in this slice. Zero until A3.
+   * How many activities a mandatory pin drove into a broken relationship (`constraintViolated`) —
+   * the produce-and-flag count (ADR-0035 §7), replacing the old parked-mandatory count.
    */
-  parkedConstraintCount: number;
+  constraintViolationCount: number;
+  /**
+   * How many soft constraint warnings the plan carries — today the N15 case: a Start-No-Earlier-Than
+   * dated before the data date (honoured, but can't pull work before it). ADR-0035 §12.
+   */
+  constraintWarningCount: number;
   /** The project finish offset (max early-finish offset); null for an empty plan. */
   projectFinishOffset: number | null;
   /** The inclusive project finish display date; null for an empty plan. */

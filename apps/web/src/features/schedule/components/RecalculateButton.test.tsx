@@ -20,7 +20,8 @@ const SUMMARY: PlanScheduleSummary = {
   activityCount: 2,
   criticalCount: 2,
   nearCriticalCount: 0,
-  parkedConstraintCount: 0,
+  constraintViolationCount: 0,
+  constraintWarningCount: 0,
 };
 
 function renderButton(canCalculate = true) {

@@ -161,7 +161,8 @@ export class ScheduleService {
         calendarId: plan.calendarId ?? null,
         activityCount: summary.activityCount,
         criticalCount: summary.criticalCount,
-        parkedConstraintCount: summary.parkedConstraintCount,
+        constraintViolationCount: summary.constraintViolationCount,
+        constraintWarningCount: summary.constraintWarningCount,
         lagCalendarOverrideCount,
         // How many DISTINCT per-activity calendars were built this recalc (ADR-0037, M5) — the
         // signal that per-activity calendars actually shaped the dates (0 on the all-inherit path).
@@ -180,7 +181,8 @@ export class ScheduleService {
       activityCount: summary.activityCount,
       criticalCount: summary.criticalCount,
       nearCriticalCount: summary.nearCriticalCount,
-      parkedConstraintCount: summary.parkedConstraintCount,
+      constraintViolationCount: summary.constraintViolationCount,
+      constraintWarningCount: summary.constraintWarningCount,
     };
   }
 
@@ -208,7 +210,8 @@ export class ScheduleService {
       activityCount: aggregate.activityCount,
       criticalCount: aggregate.criticalCount,
       nearCriticalCount: aggregate.nearCriticalCount,
-      parkedConstraintCount: aggregate.parkedConstraintCount,
+      constraintViolationCount: aggregate.constraintViolationCount,
+      constraintWarningCount: aggregate.constraintWarningCount,
     };
   }
 

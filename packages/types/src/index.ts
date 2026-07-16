@@ -280,6 +280,12 @@ export interface ActivitySummary {
   isCritical: boolean;
   isNearCritical: boolean;
   /**
+   * Engine-owned (ADR-0035 §7): true when a mandatory pin (MANDATORY_START/FINISH) drove this
+   * activity's start earlier than its logic-earliest — produced as pinned and flagged, never
+   * repaired. False for every non-mandatory or non-conflicting activity.
+   */
+  constraintViolated: boolean;
+  /**
    * Visual-Planning placement input (ADR-0033): the calendar day (`YYYY-MM-DD`) the planner
    * hand-placed this activity's start at, or null if unplaced. Feeds only the engine's
    * effective-Visual pass; ignored by the pure-network (early/late/float) pass.
@@ -422,8 +428,9 @@ export interface DeletedHierarchyItem {
  * plan's start (`plannedStart`); it is null when the plan has no start date yet.
  * `projectFinish` is the latest computed finish across the plan (the max inclusive
  * `earlyFinish`); it is null until the plan has been calculated (or when empty).
- * `parkedConstraintCount` is how many mandatory constraints were treated as their
- * moderate equivalents (MSO/MFO). All dates are calendar days (`YYYY-MM-DD`).
+ * `constraintViolationCount` is how many activities a mandatory pin drove into a broken relationship
+ * (produce-and-flag, ADR-0035 §7); `constraintWarningCount` counts soft constraint warnings (today
+ * the N15 case: a SNET dated before the data date). All dates are calendar days (`YYYY-MM-DD`).
  */
 export interface PlanScheduleSummary {
   dataDate: string | null;
@@ -431,7 +438,8 @@ export interface PlanScheduleSummary {
   activityCount: number;
   criticalCount: number;
   nearCriticalCount: number;
-  parkedConstraintCount: number;
+  constraintViolationCount: number;
+  constraintWarningCount: number;
 }
 
 /**

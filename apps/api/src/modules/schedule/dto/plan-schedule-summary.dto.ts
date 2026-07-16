@@ -34,9 +34,16 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
   nearCriticalCount!: number;
 
   @ApiProperty({
-    description: 'Mandatory constraints treated as their moderate equivalents (MSO/MFO).',
+    description:
+      'Activities where a mandatory pin (MANDATORY_START/FINISH) drove the start earlier than logic allowed — produced as pinned and flagged (ADR-0035 §7).',
   })
-  parkedConstraintCount!: number;
+  constraintViolationCount!: number;
+
+  @ApiProperty({
+    description:
+      'Soft constraint warnings — today the N15 case: a Start-No-Earlier-Than dated before the data date (honoured, but cannot pull work before it). ADR-0035 §12.',
+  })
+  constraintWarningCount!: number;
 
   static from(summary: PlanScheduleSummary): PlanScheduleSummaryDto {
     return {
@@ -45,7 +52,8 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
       activityCount: summary.activityCount,
       criticalCount: summary.criticalCount,
       nearCriticalCount: summary.nearCriticalCount,
-      parkedConstraintCount: summary.parkedConstraintCount,
+      constraintViolationCount: summary.constraintViolationCount,
+      constraintWarningCount: summary.constraintWarningCount,
     };
   }
 }

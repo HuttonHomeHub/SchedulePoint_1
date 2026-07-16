@@ -1,10 +1,5 @@
 import { NEAR_CRITICAL_THRESHOLD_MINUTES } from './constants';
-import {
-  clampBackwardFinish,
-  clampForwardStart,
-  isMilestone,
-  isParkedMandatory,
-} from './constraints';
+import { clampBackwardFinish, clampForwardStart, isMandatory, isMilestone } from './constraints';
 import { buildGraph } from './graph';
 import {
   advanceWorking,
@@ -116,6 +111,9 @@ export function computeSchedule(
   // its remaining work reschedules forward from the data date (ADR-0035 §1–§2).
   const earlyStart = new Map<string, number>();
   const earlyFinish = new Map<string, number>();
+  // Mandatory produce-and-flag (ADR-0035 §7): true when a MANDATORY_* pin forced the start earlier
+  // than the network-earliest (a stronger logic bound) — the schedule is produced, the violation flagged.
+  const constraintViolated = new Map<string, boolean>();
   for (const id of graph.order) {
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
@@ -159,7 +157,13 @@ export function computeSchedule(
     if (inProgress && progressMode === 'ACTUAL_DATES' && progress.actualStartInst! > lower) {
       lower = progress.actualStartInst!;
     }
+    // A mandatory pin that drives the start EARLIER than logic wants (predecessors) breaks the
+    // relationship — flag it (ADR-0035 §7). A pin later than logic just delays (no broken edge).
+    const logicLower = lower;
     lower = clampForwardStart(activity, lower, cal, dataDateAbs);
+    if (isMandatory(activity.constraintType) && lower < logicLower) {
+      constraintViolated.set(id, true);
+    }
     const workStart = rollForwardToWorking(cal, lower);
     if (inProgress) {
       // Frozen actual start; the REMAINING work reschedules forward from the ties retained by the
@@ -304,7 +308,8 @@ export function computeSchedule(
   const results: EngineResult[] = [];
   let criticalCount = 0;
   let nearCriticalCount = 0;
-  let parkedConstraintCount = 0;
+  let constraintViolationCount = 0;
+  let constraintWarningCount = 0;
   let maxInclusiveFinishInstant: number | null = null;
   let projectFinishDate: string | null = null;
   for (const id of graph.order) {
@@ -312,7 +317,17 @@ export function computeSchedule(
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
     const progress = progressOf.get(id)!;
-    if (isParkedMandatory(activity.constraintType)) parkedConstraintCount += 1;
+    if (constraintViolated.get(id)) constraintViolationCount += 1;
+    // N15 (ADR-0035 §12): a Start-No-Earlier-Than whose date is before the data date is honoured but
+    // cannot pull work before it — a WARNING (not a violation), derived purely from the inputs.
+    if (
+      activity.constraintType === 'SNET' &&
+      activity.constraintDate !== undefined &&
+      activity.constraintDate !== null &&
+      activity.constraintDate < dataDate
+    ) {
+      constraintWarningCount += 1;
+    }
     const esInst = earlyStart.get(id)!;
     const efInst = earlyFinish.get(id)!;
     const lsInst = lateStart.get(id)!;
@@ -380,6 +395,7 @@ export function computeSchedule(
       totalFloat,
       isCritical,
       isNearCritical,
+      constraintViolated: constraintViolated.get(id) ?? false,
       earlyStart: earlyStartDate,
       earlyFinish: earlyFinishDate,
       lateStart: lateStartDate,
@@ -395,7 +411,8 @@ export function computeSchedule(
     activityCount: results.length,
     criticalCount,
     nearCriticalCount,
-    parkedConstraintCount,
+    constraintViolationCount,
+    constraintWarningCount,
     projectFinishOffset:
       projectFinishInstant === null
         ? null

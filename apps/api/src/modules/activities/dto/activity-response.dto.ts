@@ -115,6 +115,12 @@ export class ActivityResponseDto implements ActivitySummary {
   isNearCritical!: boolean;
 
   @ApiProperty({
+    description:
+      'Mandatory produce-and-flag (engine-owned, ADR-0035 §7): true when a mandatory pin drove the start earlier than logic allowed.',
+  })
+  constraintViolated!: boolean;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -194,6 +200,7 @@ export class ActivityResponseDto implements ActivitySummary {
       totalFloat: entity.totalFloat,
       isCritical: entity.isCritical,
       isNearCritical: entity.isNearCritical,
+      constraintViolated: entity.constraintViolated,
       visualStart: day(entity.visualStart),
       visualEffectiveStart: day(entity.visualEffectiveStart),
       visualEffectiveFinish: day(entity.visualEffectiveFinish),

@@ -7,14 +7,20 @@ import type { EngineActivity } from './types';
 import { instantToAbsMinutes, type WorkingTimeCalendar } from './working-time-calendar';
 
 /**
- * The six **moderate** constraint kinds the engine honours in this slice (ADR-0023
- * §6). `MANDATORY_START` / `MANDATORY_FINISH` are **parked** as their moderate
- * equivalents here (`MSO` / `MFO`) and counted in the summary's
- * `parkedConstraintCount` — hard-mandatory semantics are a documented follow-up.
+ * The six constraint kinds the engine applies as date-clamp arithmetic. `MANDATORY_START` /
+ * `MANDATORY_FINISH` share MSO/MFO's **pin** arithmetic (a Must-Start-On/Must-Finish-On hard pin in
+ * both passes), but M4 **un-parks** them: unlike a plain MSO/MFO the mandatory pin is allowed to
+ * override a stronger logic bound and, when it does, the engine **produces the (possibly impossible)
+ * schedule and flags it** (`constraintViolated`, ADR-0035 §7) — it never repairs it.
  */
 type ModerateConstraint = 'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO';
 
-/** Map a stored constraint kind to the moderate kind the engine applies. */
+/**
+ * Map a stored constraint kind to the clamp arithmetic the engine applies. Mandatory pins reuse the
+ * MSO/MFO pin math; whether a pin *violated* logic is decided separately (see {@link isMandatory} and
+ * the forward-pass check in `compute`), so the produce-and-flag distinction is orthogonal to the
+ * arithmetic here.
+ */
 export function normaliseConstraint(type: ConstraintType): ModerateConstraint {
   switch (type) {
     case 'MANDATORY_START':
@@ -26,8 +32,12 @@ export function normaliseConstraint(type: ConstraintType): ModerateConstraint {
   }
 }
 
-/** True for the two kinds parked as their moderate equivalents (for the count). */
-export function isParkedMandatory(type: ConstraintType | null | undefined): boolean {
+/**
+ * True for the two **mandatory** kinds (`MANDATORY_START` / `MANDATORY_FINISH`) — the ones that pin
+ * their date and may legally break logic (ADR-0035 §7). When a mandatory pin forces the start earlier
+ * than the network-earliest (a stronger logic bound), the activity is flagged `constraintViolated`.
+ */
+export function isMandatory(type: ConstraintType | null | undefined): boolean {
   return type === 'MANDATORY_START' || type === 'MANDATORY_FINISH';
 }
 

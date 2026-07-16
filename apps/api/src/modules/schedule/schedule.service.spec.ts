@@ -110,7 +110,8 @@ describe('ScheduleService.recalculate', () => {
         activityCount: 0,
         criticalCount: 0,
         nearCriticalCount: 0,
-        parkedConstraintCount: 0,
+        constraintViolationCount: 0,
+        constraintWarningCount: 0,
         projectFinish: null,
       }),
     };
@@ -358,7 +359,8 @@ describe('ScheduleService.summary', () => {
         activityCount: 3,
         criticalCount: 2,
         nearCriticalCount: 1,
-        parkedConstraintCount: 0,
+        constraintViolationCount: 0,
+        constraintWarningCount: 0,
         projectFinish: '2026-01-13',
       }),
     };
@@ -381,7 +383,8 @@ describe('ScheduleService.summary', () => {
       activityCount: 3,
       criticalCount: 2,
       nearCriticalCount: 1,
-      parkedConstraintCount: 0,
+      constraintViolationCount: 0,
+      constraintWarningCount: 0,
     });
   });
 
@@ -391,7 +394,8 @@ describe('ScheduleService.summary', () => {
       activityCount: 0,
       criticalCount: 0,
       nearCriticalCount: 0,
-      parkedConstraintCount: 0,
+      constraintViolationCount: 0,
+      constraintWarningCount: 0,
       projectFinish: null,
     });
     const result = await service.summary(principalWith(READ), 'acme', PLAN_ID);

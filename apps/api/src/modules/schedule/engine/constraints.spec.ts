@@ -104,21 +104,19 @@ describe('constraint clamping — pins do not silently drop logic', () => {
   });
 });
 
-describe('mandatory constraints are parked as their moderate equivalents', () => {
-  it('MANDATORY_START behaves as MSO and is counted', () => {
-    const { byId, summary } = run([task('A', 2, { type: 'MANDATORY_START', date: '2026-01-03' })]);
-    expect(byId.get('A')!.earlyStart).toBe('2026-01-03'); // pinned like MSO
-    expect(summary.parkedConstraintCount).toBe(1);
+describe('mandatory constraints pin like MSO/MFO (produce-and-flag arithmetic in compute.mandatory.spec)', () => {
+  it('MANDATORY_START pins the early start like MSO', () => {
+    const { byId } = run([task('A', 2, { type: 'MANDATORY_START', date: '2026-01-03' })]);
+    expect(byId.get('A')!.earlyStart).toBe('2026-01-03');
   });
 
-  it('MANDATORY_FINISH behaves as MFO and is counted', () => {
-    const { byId, summary } = run([task('A', 2, { type: 'MANDATORY_FINISH', date: '2026-01-05' })]);
-    expect(byId.get('A')!.earlyFinish).toBe('2026-01-05'); // pinned like MFO
-    expect(summary.parkedConstraintCount).toBe(1);
+  it('MANDATORY_FINISH pins the early finish like MFO', () => {
+    const { byId } = run([task('A', 2, { type: 'MANDATORY_FINISH', date: '2026-01-05' })]);
+    expect(byId.get('A')!.earlyFinish).toBe('2026-01-05');
   });
 
-  it('leaves parkedConstraintCount at zero when only moderate constraints are used', () => {
+  it('leaves constraintViolationCount at zero when only moderate constraints are used', () => {
     const { summary } = run([task('A', 2, { type: 'SNET', date: '2026-01-04' })]);
-    expect(summary.parkedConstraintCount).toBe(0);
+    expect(summary.constraintViolationCount).toBe(0);
   });
 });

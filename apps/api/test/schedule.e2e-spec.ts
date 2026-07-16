@@ -177,7 +177,8 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       activityCount: 5,
       criticalCount: 4,
       nearCriticalCount: 1,
-      parkedConstraintCount: 0,
+      constraintViolationCount: 0,
+      constraintWarningCount: 0,
     });
 
     const acts = await activitiesByName(actor, planId);
@@ -328,7 +329,8 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       activityCount: 2,
       criticalCount: 2,
       nearCriticalCount: 0,
-      parkedConstraintCount: 0,
+      constraintViolationCount: 0,
+      constraintWarningCount: 0,
     });
 
     // A Viewer can read the summary (schedule:read is granted to every member).
@@ -344,6 +346,27 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const planId = await makePlan(actor, 'Northgate');
     const outsider = await signUp('outsider@example.com');
     await outsider.agent.get(summaryUrl(planId)).expect(404);
+  });
+
+  it('a mandatory pin that breaks logic is produced, flagged, and counted (ADR-0035 §7)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    // A(3) → B; B is pinned MANDATORY_START before A can finish — produced as pinned and flagged.
+    const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 2);
+    await link(actor, planId, a, b);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}/activities/${b}`)
+      .send({ constraintType: 'MANDATORY_START', constraintDate: '2026-01-02' })
+      .expect(200);
+
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+    expect(res.body.data).toMatchObject({ constraintViolationCount: 1, constraintWarningCount: 0 });
+
+    const acts = await activitiesByName(actor, planId);
+    // The pin holds (produce) and B carries the flag; A is not flagged.
+    expect(acts.get('B')).toMatchObject({ earlyStart: '2026-01-02', constraintViolated: true });
+    expect(acts.get('A')).toMatchObject({ constraintViolated: false });
   });
 
   it('recalculates on a Mon–Fri calendar with a holiday: dates skip weekends & holidays', async () => {

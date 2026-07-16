@@ -278,10 +278,14 @@ wide `ALTER TABLE` + backfill later):
   `max(data date, resume_date)`. All three are **additive & nullable** (no data
   migration); the engine does not consume them until the M2 engine tasks land.
 - **CPM output — engine-owned** (`early_start`/`early_finish`,
-  `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`):
-  nullable/defaulted, **never accepted from a write DTO**. They are populated by
-  the CPM engine (a later slice); until then they read as null/false ("—" in the
-  UI). Storing them now avoids a wide migration when the engine lands.
+  `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`,
+  `constraint_violated`): nullable/defaulted, **never accepted from a write DTO**.
+  They are populated by the CPM engine; until a plan is recalculated they read as
+  null/false ("—" in the UI). `constraint_violated` (M4, ADR-0035 §7) is a
+  defaulted (`false`) **NOT NULL** boolean — true when a mandatory pin
+  (`MANDATORY_START`/`MANDATORY_FINISH`) drove the activity earlier than logic
+  allowed (produce-and-flag; the schedule is produced as pinned, never repaired).
+  Storing these avoids a wide migration when features that read them land.
 - **`calendar_id`** is the activity's own working-time calendar (**M5, ADR-0037**):
   a nullable, **client-settable** UUID FK to `calendars` (`onDelete: Restrict`),
   mirroring `Plan.calendar` exactly. `null` means **inherit the plan default** —
