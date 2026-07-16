@@ -50,9 +50,9 @@ export interface ComputeOptions {
    */
   progressMode?: ProgressMode;
   /**
-   * Expected-finish scheduling option (M4, ADR-0035 §9). When true, an in-progress activity that
+   * Expected-finish scheduling option (M4, ADR-0035 §9). When true, any **incomplete** activity that
    * carries an {@link EngineActivity.expectedFinish} has its remaining work recomputed so its early
-   * finish lands on that date (floored at the data date). Off (the default) ⇒ expected finishes are
+   * finish lands on that date (floored at the start). Off (the default) ⇒ expected finishes are
    * ignored and the schedule is byte-identical to the pure-progress path.
    */
   useExpectedFinishDates?: boolean;
@@ -128,6 +128,10 @@ export function computeSchedule(
   // its remaining work reschedules forward from the data date (ADR-0035 §1–§2).
   const earlyStart = new Map<string, number>();
   const earlyFinish = new Map<string, number>();
+  // The duration the BACKWARD pass should use per activity: the original duration, except an
+  // Expected-Finish-resized activity (§9), whose effective span is its recomputed remaining — so its
+  // late dates stay consistent with its early dates. Byte-identical (= original) for every other case.
+  const effectiveDurationById = new Map<string, number>();
   // Mandatory produce-and-flag (ADR-0035 §7): true when a MANDATORY_* pin forced the start earlier
   // than the network-earliest (a stronger logic bound) — the schedule is produced, the violation flagged.
   const constraintViolated = new Map<string, boolean>();
@@ -182,32 +186,43 @@ export function computeSchedule(
       constraintViolated.set(id, true);
     }
     const workStart = rollForwardToWorking(cal, lower);
+    // Expected Finish (§9): with the plan option on, RECOMPUTE the work remaining from `workStart` so
+    // the early finish lands on the target date (its working-end boundary, like an actual finish),
+    // floored at `workStart` — a target on/before the start collapses it to zero, never negative. It
+    // applies to any INCOMPLETE activity: an in-progress one's remaining, and a NOT-started one's full
+    // duration (the ADR-0035 §9 example A6200 is not-started). Off/absent ⇒ the ordinary work stands.
+    const efResizedMinutes =
+      useExpectedFinishDates && activity.expectedFinish != null && duration > 0
+        ? Math.max(
+            0,
+            cal.workingTimeBetween(
+              absMinutesToInstant(workStart),
+              absMinutesToInstant(
+                rollBackwardToWorking(
+                  cal,
+                  dataDateAbs,
+                  instantToAbsMinutes(nextCalendarDay(activity.expectedFinish)),
+                ),
+              ),
+            ),
+          )
+        : null;
+    if (efResizedMinutes !== null) expectedFinishAppliedCount += 1;
+    // The backward pass uses the resized span for an EF activity so its late dates match its early ones.
+    effectiveDurationById.set(id, efResizedMinutes ?? duration);
     if (inProgress) {
       // Frozen actual start; the REMAINING work reschedules forward from the ties retained by the
-      // recalc mode, floored at the data date (§2) — `workStart` above.
+      // recalc mode, floored at the data date (§2) — `workStart` above. Expected Finish overrides
+      // the pure-progress remaining when set.
       earlyStart.set(id, progress.actualStartInst!);
-      // Expected Finish (§9): with the plan option on, RECOMPUTE the remaining so the early finish
-      // lands on the target date (its working-end boundary, like an actual finish). Floored at
-      // `workStart` — a target on/before the rescheduled start collapses the remaining to zero (the
-      // data-date floor governs), never negative. Off/absent ⇒ the pure-progress remaining stands.
-      let remaining = progress.remainingMinutes;
-      if (useExpectedFinishDates && activity.expectedFinish != null && duration > 0) {
-        const efInst = rollBackwardToWorking(
-          cal,
-          dataDateAbs,
-          instantToAbsMinutes(nextCalendarDay(activity.expectedFinish)),
-        );
-        remaining = Math.max(
-          0,
-          cal.workingTimeBetween(absMinutesToInstant(workStart), absMinutesToInstant(efInst)),
-        );
-        expectedFinishAppliedCount += 1;
-      }
+      const remaining = efResizedMinutes ?? progress.remainingMinutes;
       earlyFinish.set(id, remaining === 0 ? workStart : advanceWorking(cal, workStart, remaining));
     } else {
-      // NOT_STARTED — the ordinary planned path (byte-identical to the pre-M2 engine).
+      // NOT_STARTED — the ordinary planned path (byte-identical to the pre-M2 engine), unless an
+      // expected finish resizes the full duration.
       earlyStart.set(id, workStart);
-      earlyFinish.set(id, duration === 0 ? workStart : advanceWorking(cal, workStart, duration));
+      const work = efResizedMinutes ?? duration;
+      earlyFinish.set(id, work === 0 ? workStart : advanceWorking(cal, workStart, work));
     }
   }
 
@@ -299,7 +314,6 @@ export function computeSchedule(
     const id = graph.order[i]!;
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
-    const duration = activity.durationMinutes;
     const progress = progressOf.get(id)!;
     if (progress.status === 'COMPLETE') {
       // Frozen: a completed activity's late dates are its actuals — it carries zero float (§1).
@@ -307,6 +321,9 @@ export function computeSchedule(
       lateStart.set(id, progress.actualStartInst ?? progress.actualFinishInst!);
       continue;
     }
+    // The Expected-Finish-resized span for an EF activity, else the original duration (§9). Keeps an
+    // EF activity's late dates consistent with its early dates; byte-identical for every other case.
+    const duration = effectiveDurationById.get(id) ?? activity.durationMinutes;
     let upper = projectFinish;
     for (const edge of graph.outgoing.get(id)!) {
       const succLs = lateStart.get(edge.successorId)!;

@@ -43,20 +43,32 @@ describe('conformance adapter', () => {
     expect(network.report.notes.filter((n) => n.kind === 'progress-ignored')).toHaveLength(16);
     // The one 24H lag-calendar override is now HONOURED (M3) — no longer dropped.
     expect(network.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(0);
-    expect(
-      network.report.notes.filter((n) => n.kind === 'secondary-constraint-dropped'),
-    ).toHaveLength(1);
-    // AS_LATE_AS_POSSIBLE is dropped as an unmodelled constraint.
-    expect(
-      network.report.notes.some(
-        (n) => n.kind === 'constraint-dropped' && n.reason.includes('as-late-as-possible'),
-      ),
-    ).toBe(true);
+    // M4 (ADR-0035 §7/§9/§10/§11) feeds the advanced constraints instead of dropping them: the
+    // secondary constraint, expected finish and as-late-as-possible are no longer degradation notes,
+    // and every fixture constraint kind is representable, so nothing drops as an unmodelled constraint.
+    expect(network.report.notes.filter((n) => n.kind === 'constraint-dropped')).toHaveLength(0);
     // Every edge dropped for an excluded endpoint is recorded.
     expect(network.report.notes.filter((n) => n.kind === 'endpoint-excluded')).toHaveLength(19);
     // The plan-wide degradations are spelled out.
     expect(network.report.approximations.length).toBeGreaterThanOrEqual(4);
     expect(kinds.has('type-unsupported')).toBe(true);
+  });
+
+  it('feeds the M4 advanced constraints through instead of dropping them (ADR-0035 §7/§9/§10/§11)', () => {
+    const byId = new Map(network.activities.map((a) => [a.id, a]));
+    // A5200 carries its secondary constraint (SNET primary + FNLT secondary, §10).
+    expect(byId.get('A5200')).toMatchObject({
+      constraintType: 'SNET',
+      secondaryConstraintType: 'FNLT',
+    });
+    // A6200 carries its expected finish (§9), fed unconditionally (the engine acts on it under the option).
+    expect(byId.get('A6200')?.expectedFinish).toBe('2026-08-14');
+    // A9400's AS_LATE_AS_POSSIBLE maps to the placement flag, not a constraint (§11).
+    expect(byId.get('A9400')?.scheduleAsLateAsPossible).toBe(true);
+    expect(byId.get('A9400')?.constraintType).toBeUndefined();
+    // The mandatory pins pass through as produce-and-flag constraints (§7), no longer parked.
+    expect(byId.get('A10100')?.constraintType).toBe('MANDATORY_START');
+    expect(byId.get('A10500')?.constraintType).toBe('MANDATORY_FINISH');
   });
 
   it('maps hour durations/lags faithfully to minutes over the default shift calendar', () => {

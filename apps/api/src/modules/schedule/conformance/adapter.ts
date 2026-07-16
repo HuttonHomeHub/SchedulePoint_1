@@ -4,6 +4,7 @@ import type {
   FixtureCalendar,
   FixtureRelationship,
 } from '@repo/engine-conformance';
+import type { ConstraintType } from '@repo/types';
 
 import { allMinutesWorkCalendar, buildWorkingTimeCalendar } from '../engine';
 import type {
@@ -23,9 +24,10 @@ import { mapActivityType, mapConstraintType, toCalendarDay } from './type-map';
  * fixture onto the inputs today's engine can actually consume, and — the whole
  * point — **reports every place it had to skip or approximate rather than faking a
  * value** (ADR-0034 §2–§3). What the engine still cannot represent
- * (progress/actuals, resource-dependent/LOE/summary activities, secondary
- * constraints, per-relationship lag calendars, per-activity calendars) is
- * recorded, not invented.
+ * (resource-dependent/LOE/summary activities, external relationships) is recorded,
+ * not invented. M4 added the advanced constraints — mandatory produce-and-flag,
+ * secondary constraints, expected finish and as-late-as-possible — which the
+ * adapter now feeds through instead of dropping.
  *
  * Since M1 (ADR-0036) the engine computes in working-**minutes** over intraday
  * shift calendars, so the adapter now feeds the fixture's **hour** durations/lags
@@ -47,7 +49,6 @@ export interface AdaptationNote {
     | 'type-unsupported'
     | 'duration-rounded'
     | 'constraint-dropped'
-    | 'secondary-constraint-dropped'
     | 'progress-ignored'
     | 'endpoint-excluded'
     | 'lag-rounded'
@@ -116,6 +117,12 @@ export interface AdaptOptions {
    * data date and the recalc `progressMode`.
    */
   honorProgress?: boolean;
+  /**
+   * Turn on the Expected-Finish scheduling option (M4, ADR-0035 §9). Off by default — the adapter
+   * always FEEDS each activity's `expected_finish`, but the engine only acts on it when this is true
+   * (the S12 differential flips it on; the baseline leaves it off). See `ComputeOptions`.
+   */
+  useExpectedFinishDates?: boolean;
 }
 
 const MINUTES_PER_HOUR = 60;
@@ -142,6 +149,7 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const honorLagCalendars = opts.honorLagCalendars ?? true;
   const honorActivityCalendars = opts.honorActivityCalendars ?? false;
   const honorProgress = opts.honorProgress ?? false;
+  const useExpectedFinishDates = opts.useExpectedFinishDates ?? false;
   const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
 
@@ -216,7 +224,12 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     notes,
   };
 
-  return { activities, edges, options: { dataDate, calendar }, report };
+  return {
+    activities,
+    edges,
+    options: { dataDate, calendar, ...(useExpectedFinishDates ? { useExpectedFinishDates } : {}) },
+    report,
+  };
 }
 
 /** `"HH:MM"` (end may be `"24:00"`) → minutes-of-day in `[0, 1440]`. */
@@ -251,6 +264,39 @@ function fixtureCalendarToWorkingTime(cal: FixtureCalendar): WorkingTimeCalendar
     ];
   });
   return buildWorkingTimeCalendar(weekly, exceptions);
+}
+
+/**
+ * Map one fixture constraint (`{ type, date }`) to the engine's kind + calendar day and hand it to
+ * `set`, or push a `constraint-dropped` note when the kind is unsupported or the date is missing.
+ * Shared by the primary (forward) and secondary (backward) constraints, so both are honest the same way.
+ */
+function applyConstraint(
+  constraint: { type: string; date: string | null },
+  activityId: string,
+  notes: AdaptationNote[],
+  set: (kind: ConstraintType, date: string) => void,
+): void {
+  const mapped = mapConstraintType(constraint.type);
+  if (!mapped.supported) {
+    notes.push({
+      entity: 'activity',
+      id: activityId,
+      kind: 'constraint-dropped',
+      reason: mapped.reason,
+    });
+    return;
+  }
+  if (constraint.date === null) {
+    notes.push({
+      entity: 'activity',
+      id: activityId,
+      kind: 'constraint-dropped',
+      reason: `${constraint.type} has no date; constraint needs one`,
+    });
+    return;
+  }
+  set(mapped.value, toCalendarDay(constraint.date));
 }
 
 /** Adapt one activity, or return null (with a note) if its type is unsupported. */
@@ -348,36 +394,32 @@ function adaptActivity(
     ...(ownPort ? { calendar: ownPort } : {}),
   };
 
-  if (activity.secondary_constraint) {
-    notes.push({
-      entity: 'activity',
-      id: activity.id,
-      kind: 'secondary-constraint-dropped',
-      reason: 'engine applies a single constraint; secondary dropped (ADR-0035 §10, M4)',
+  // Expected finish (ADR-0035 §9, M4): fed unconditionally; the engine only acts on it when the plan
+  // option `useExpectedFinishDates` is on (ComputeOptions), for an incomplete activity.
+  if (activity.expected_finish) {
+    engineActivity.expectedFinish = toCalendarDay(activity.expected_finish);
+  }
+
+  // Primary constraint. `AS_LATE_AS_POSSIBLE` is not a date constraint — it maps to the activity's
+  // as-late-as-possible placement flag (ADR-0035 §11, M4). Every other kind clamps the passes.
+  const primary = activity.primary_constraint;
+  if (primary && primary.type === 'AS_LATE_AS_POSSIBLE') {
+    engineActivity.scheduleAsLateAsPossible = true;
+  } else if (primary) {
+    applyConstraint(primary, activity.id, notes, (kind, date) => {
+      engineActivity.constraintType = kind;
+      engineActivity.constraintDate = date;
     });
   }
 
-  const primary = activity.primary_constraint;
-  if (primary) {
-    const mapped = mapConstraintType(primary.type);
-    if (!mapped.supported) {
-      notes.push({
-        entity: 'activity',
-        id: activity.id,
-        kind: 'constraint-dropped',
-        reason: mapped.reason,
-      });
-    } else if (primary.date === null) {
-      notes.push({
-        entity: 'activity',
-        id: activity.id,
-        kind: 'constraint-dropped',
-        reason: `${primary.type} has no date; constraint needs one`,
-      });
-    } else {
-      engineActivity.constraintType = mapped.value;
-      engineActivity.constraintDate = toCalendarDay(primary.date);
-    }
+  // Secondary constraint (ADR-0035 §10, M4): the primary drives the forward pass, the secondary the
+  // backward pass. Fed through the same mapping; an unsupported/dateless one is noted, not faked.
+  const secondary = activity.secondary_constraint;
+  if (secondary) {
+    applyConstraint(secondary, activity.id, notes, (kind, date) => {
+      engineActivity.secondaryConstraintType = kind;
+      engineActivity.secondaryConstraintDate = date;
+    });
   }
 
   return engineActivity;

@@ -105,6 +105,60 @@ describe('negative-case contract (engine-owned cases)', () => {
     );
   });
 
+  it('N10: an impossible mandatory pair is PRODUCED and flagged, never repaired (ADR-0035 §7)', () => {
+    // N10A must-start 2026-06-01 → N10B must-finish 2026-05-01: B must finish before A even starts.
+    // P6 produces the impossible schedule and shows the violation; the engine must not "fix" it.
+    const activities: EngineActivity[] = [
+      {
+        id: 'N10A',
+        durationMinutes: 5 * 1440,
+        type: 'TASK',
+        constraintType: 'MANDATORY_START',
+        constraintDate: '2026-06-01',
+      },
+      {
+        id: 'N10B',
+        durationMinutes: 5 * 1440,
+        type: 'TASK',
+        constraintType: 'MANDATORY_FINISH',
+        constraintDate: '2026-05-01',
+      },
+    ];
+    const output = computeSchedule(
+      activities,
+      [{ id: 'e1', predecessorId: 'N10A', successorId: 'N10B', type: 'FS', lagMinutes: 0 }],
+      { dataDate: '2026-05-01', calendar: allMinutesWorkCalendar },
+    );
+    const b = output.results.find((r) => r.activityId === 'N10B')!;
+    // Produced, not repaired: the mandatory-finish pin holds on 2026-05-01 despite the broken logic…
+    expect(b.earlyFinish).toBe('2026-05-01');
+    // …and the broken relationship is flagged, counted, never thrown.
+    expect(b.constraintViolated).toBe(true);
+    expect(output.summary.constraintViolationCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('N15: a constraint before the project start is honoured but warns (never pulls work back)', () => {
+    // N15A SNET 2025-06-01, a year before the data date. It cannot pull work before the data date —
+    // the start floors there and the plan carries a soft warning (ADR-0035 §12), not a violation.
+    const output = computeSchedule(
+      [
+        {
+          id: 'N15A',
+          durationMinutes: 5 * 1440,
+          type: 'TASK',
+          constraintType: 'SNET',
+          constraintDate: '2025-06-01',
+        },
+      ],
+      [],
+      { dataDate: '2026-06-01', calendar: allMinutesWorkCalendar },
+    );
+    const a = output.results.find((r) => r.activityId === 'N15A')!;
+    expect(a.earlyStart).toBe('2026-06-01'); // floored at the data date, not warped to 2025
+    expect(a.constraintViolated).toBe(false);
+    expect(output.summary.constraintWarningCount).toBe(1);
+  });
+
   it('N16: an enormous lag terminates quickly with a finite date (no walker hang)', () => {
     // 100,000 h ≈ 12,500 working days. The O(log n) week-arithmetic walker must not
     // spin — it returns a far-future but finite date. (If this ever hangs, the test
@@ -124,6 +178,9 @@ describe('negative-case contract (engine-owned cases)', () => {
   // Input-validity cases owned by the API boundary (DTO/service), not the pure engine
   // (ADR-0035 §25). The engine intentionally does not re-validate these; they are
   // asserted at the API e2e layer as boundary rejection/coercion lands.
+  it.todo(
+    'N04: a duplicate relationship is rejected at the write path (ADR-0035 §13; dependency e2e)',
+  );
   it.todo('N09: negative duration is rejected at the API boundary (ADR-0035 §25)');
   it.todo('N12: a level-of-effort with no span is rejected/warned (ADR-0035 §21, M5)');
   it.todo('N17: a milestone with a non-zero duration is coerced to zero (ADR-0035 §25)');

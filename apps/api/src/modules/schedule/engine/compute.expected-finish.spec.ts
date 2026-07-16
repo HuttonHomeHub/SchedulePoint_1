@@ -5,11 +5,12 @@ import type { EngineActivity, EngineResult } from './types';
 import { allMinutesWorkCalendar } from './working-time-calendar';
 
 /**
- * Expected Finish (ADR-0035 §9, M4-F5). With the plan option `useExpectedFinishDates` on, an
- * in-progress activity that carries an `expectedFinish` has its remaining work **recomputed** so its
- * early finish lands on that date (its working-end boundary), floored at the rescheduled start — a
- * past target collapses the remaining to zero. Off, or for a not-started/complete activity, the target
- * is ignored and the schedule is byte-identical to the pure-progress path.
+ * Expected Finish (ADR-0035 §9, M4-F5). With the plan option `useExpectedFinishDates` on, any
+ * **incomplete** activity that carries an `expectedFinish` has its work recomputed so its early finish
+ * lands on that date (its working-end boundary) — an in-progress activity's remaining, a not-started
+ * one's full duration (the ADR §9 example A6200 is not-started). Floored at the scheduled start — a
+ * past target collapses to zero. Off, or for a complete activity, the target is ignored and the
+ * schedule is byte-identical to the pure-progress path.
  */
 
 const DATA_DATE = '2026-01-01';
@@ -58,7 +59,7 @@ describe('expected finish — remaining resize (ADR-0035 §9)', () => {
     expect(on.summary.expectedFinishAppliedCount).toBe(1);
   });
 
-  it('ignores an expected finish on a NOT-started activity (no effect, not counted)', () => {
+  it('resizes a NOT-started activity’s full duration to the expected finish (ADR §9 A6200 is not-started)', () => {
     const notStarted: EngineActivity = {
       id: 'A',
       durationMinutes: 3 * DAY,
@@ -66,9 +67,15 @@ describe('expected finish — remaining resize (ADR-0035 §9)', () => {
       expectedFinish: '2026-01-20',
     };
     const on = run([notStarted], true);
-    // Ordinary planned path: ES data date, EF inclusive offset 2 = 2026-01-03.
-    expect(on.byId.get('A')!.earlyFinish).toBe('2026-01-03');
-    expect(on.summary.expectedFinishAppliedCount).toBe(0);
+    // The full duration is recomputed so the finish lands on the target (01-20), not the 3-day plan.
+    expect(on.byId.get('A')!.earlyStart).toBe('2026-01-01');
+    expect(on.byId.get('A')!.earlyFinish).toBe('2026-01-20');
+    expect(on.summary.expectedFinishAppliedCount).toBe(1);
+
+    // With the option off it takes its ordinary 3-day duration → inclusive finish 2026-01-03.
+    const off = run([notStarted], false);
+    expect(off.byId.get('A')!.earlyFinish).toBe('2026-01-03');
+    expect(off.summary.expectedFinishAppliedCount).toBe(0);
   });
 
   it('ignores an expected finish on a COMPLETE activity (frozen on its actuals)', () => {

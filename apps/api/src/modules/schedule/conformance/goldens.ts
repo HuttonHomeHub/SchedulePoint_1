@@ -295,4 +295,28 @@ export const GOLDEN_CASES: GoldenCase[] = [
     },
     projectFinish: '2026-06-05',
   },
+  {
+    name: 'expected-finish-resize',
+    description:
+      'A6200-style: a not-started A(3d) carries an expected finish of 06-08 and the plan option is ON — its full duration is recomputed so the finish lands on 06-08 (not its 3-day plan) (ADR-0035 §9).',
+    activities: [{ id: 'A', durationMinutes: 4320, type: 'TASK', expectedFinish: '2026-06-08' }],
+    edges: [],
+    options: {
+      dataDate: ALL_DAYS_DATA_DATE,
+      calendar: allMinutesWorkCalendar,
+      useExpectedFinishDates: true,
+    },
+    expected: {
+      // ES data date 06-01; the remaining is resized to land the finish on 06-08 (offset 8 → inclusive 06-08).
+      A: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-08',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-08',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-08',
+  },
 ];
