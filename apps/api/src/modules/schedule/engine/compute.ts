@@ -7,6 +7,7 @@ import {
   rollBackwardToWorking,
   rollForwardToWorking,
 } from './instants';
+import { resolveProgress, type ResolvedProgress } from './progress';
 import type {
   EngineActivity,
   EngineEdge,
@@ -83,16 +84,35 @@ export function computeSchedule(
   const calendarOf = (activity: EngineActivity): WorkingTimeCalendar =>
     activity.calendar ?? planCalendar;
 
+  // Classify each activity's progress once (M2, ADR-0035 §1–§2), resolving its actuals to instants
+  // on its own calendar. An all-NOT_STARTED plan leaves every branch below on the ordinary planned
+  // path — a byte-identical relabelling of the pre-M2 arithmetic (the golden-suite parity gate).
+  const progressOf = new Map<string, ResolvedProgress>();
+  for (const activity of activities) {
+    progressOf.set(activity.id, resolveProgress(activity, calendarOf(activity), dataDateAbs));
+  }
+
   // Forward pass (topological order): earliest start/finish INSTANTS. `earlyStart` is the post-gap
   // beginning of the activity's first working minute; `earlyFinish` is the exclusive end boundary
-  // after its last working minute (= the start, for a zero-duration milestone).
+  // after its last working minute (= the start, for a zero-duration milestone). A **complete**
+  // activity is frozen on its actuals; an **in-progress** one keeps its frozen actual start while
+  // its remaining work reschedules forward from the data date (ADR-0035 §1–§2).
   const earlyStart = new Map<string, number>();
   const earlyFinish = new Map<string, number>();
   for (const id of graph.order) {
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
-    let lower = dataDateAbs; // the data date is the earliest any activity can start
+    const progress = progressOf.get(id)!;
+    if (progress.status === 'COMPLETE') {
+      // Frozen: neither logic nor the data date moves a completed activity (§1). Successors gate
+      // off its actual finish.
+      const start = progress.actualStartInst ?? progress.actualFinishInst!;
+      earlyStart.set(id, start);
+      earlyFinish.set(id, progress.actualFinishInst!);
+      continue;
+    }
+    let lower = dataDateAbs; // the data date floors any (remaining) work — never before it (§2)
     for (const edge of graph.incoming.get(id)!) {
       const predStart = earlyStart.get(edge.predecessorId)!;
       const predFinish = earlyFinish.get(edge.predecessorId)!;
@@ -100,9 +120,23 @@ export function computeSchedule(
       if (bound > lower) lower = bound;
     }
     lower = clampForwardStart(activity, lower, cal, dataDateAbs);
-    const start = rollForwardToWorking(cal, lower);
-    earlyStart.set(id, start);
-    earlyFinish.set(id, duration === 0 ? start : advanceWorking(cal, start, duration));
+    const workStart = rollForwardToWorking(cal, lower);
+    if (progress.status === 'IN_PROGRESS') {
+      // Frozen actual start; the REMAINING work reschedules forward from max(data date, retained
+      // logic) — the remaining-work data-date floor (§2). Retained Logic keeps predecessor ties on
+      // the remaining work (the incoming bounds above still apply).
+      earlyStart.set(id, progress.actualStartInst!);
+      earlyFinish.set(
+        id,
+        progress.remainingMinutes === 0
+          ? workStart
+          : advanceWorking(cal, workStart, progress.remainingMinutes),
+      );
+    } else {
+      // NOT_STARTED — the ordinary planned path (byte-identical to the pre-M2 engine).
+      earlyStart.set(id, workStart);
+      earlyFinish.set(id, duration === 0 ? workStart : advanceWorking(cal, workStart, duration));
+    }
   }
 
   // Pass 2 — effective-Visual (ADR-0033, forward-only). Independent of the pure passes: it reads
@@ -194,6 +228,13 @@ export function computeSchedule(
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
+    const progress = progressOf.get(id)!;
+    if (progress.status === 'COMPLETE') {
+      // Frozen: a completed activity's late dates are its actuals — it carries zero float (§1).
+      lateFinish.set(id, progress.actualFinishInst!);
+      lateStart.set(id, progress.actualStartInst ?? progress.actualFinishInst!);
+      continue;
+    }
     let upper = projectFinish;
     for (const edge of graph.outgoing.get(id)!) {
       const succLs = lateStart.get(edge.successorId)!;
@@ -202,9 +243,19 @@ export function computeSchedule(
       if (bound < upper) upper = bound;
     }
     upper = clampBackwardFinish(activity, upper, cal, dataDateAbs);
-    const finish = rollBackwardToWorking(cal, dataDateAbs, upper);
-    lateFinish.set(id, finish);
-    lateStart.set(id, duration === 0 ? finish : advanceWorking(cal, finish, -duration));
+    let finish = rollBackwardToWorking(cal, dataDateAbs, upper);
+    if (progress.status === 'IN_PROGRESS') {
+      // The remaining work can't be scheduled to finish before its own early finish; the started
+      // portion pins the late start at the actual start. Float is then measured on the finish side
+      // (below), i.e. on the remaining work.
+      const ef = earlyFinish.get(id)!;
+      if (finish < ef) finish = ef;
+      lateFinish.set(id, finish);
+      lateStart.set(id, progress.actualStartInst!);
+    } else {
+      lateFinish.set(id, finish);
+      lateStart.set(id, duration === 0 ? finish : advanceWorking(cal, finish, -duration));
+    }
   }
 
   // Map instants to inclusive dates, compute float (on the activity's own calendar) and
@@ -221,16 +272,21 @@ export function computeSchedule(
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
+    const progress = progressOf.get(id)!;
     if (isParkedMandatory(activity.constraintType)) parkedConstraintCount += 1;
     const esInst = earlyStart.get(id)!;
     const efInst = earlyFinish.get(id)!;
     const lsInst = lateStart.get(id)!;
     const lfInst = lateFinish.get(id)!;
 
-    // Float is the working time from early to late start on the activity's OWN calendar (P6).
+    // Float is the working time from early to late FINISH on the activity's OWN calendar (P6).
+    // Measured on the finish side so a progressed activity's float reflects its remaining work
+    // (its early→late START span differs from a full duration once it is under way); for an
+    // unprogressed activity the start-side and finish-side spans are equal, so this is byte-identical
+    // to the pre-M2 `lateStart − earlyStart` (the golden-suite parity gate).
     const totalFloat = cal.workingTimeBetween(
-      absMinutesToInstant(esInst),
-      absMinutesToInstant(lsInst),
+      absMinutesToInstant(efInst),
+      absMinutesToInstant(lfInst),
     );
     const isCritical = totalFloat <= 0;
     const isNearCritical = totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_MINUTES;
@@ -248,6 +304,21 @@ export function computeSchedule(
     const vDisplayOwn = offsetFromDataDate(cal, dataDateAbs, vDisplayInst);
     const vInclusiveFinishOwn = duration === 0 ? vDisplayOwn : vDisplayOwn + duration - 1;
 
+    // A frozen actual endpoint (M2) displays its actual date VERBATIM: the data-date-anchored offset
+    // mapping is lossy for instants BEFORE the data date (a completed/started activity in the past —
+    // a non-working gap between the actual and the data date collapses to zero working-minutes), and
+    // "actuals never move" (ADR-0035 §1). Computed endpoints (≥ the data date) use the normal mapping.
+    const started = progress.actualStartInst !== null;
+    const isComplete = progress.status === 'COMPLETE';
+    const earlyStartDate = started ? activity.actualStart! : workingIndexDate(cal, dataDate, esOwn);
+    const earlyFinishDate = isComplete
+      ? activity.actualFinish!
+      : workingIndexDate(cal, dataDate, inclusiveFinishOwn);
+    const lateStartDate = started ? activity.actualStart! : workingIndexDate(cal, dataDate, lsOwn);
+    const lateFinishDate = isComplete
+      ? activity.actualFinish!
+      : workingIndexDate(cal, dataDate, inclusiveLateFinishOwn);
+
     // Project finish = the latest inclusive finish INSTANT, displayed on its own calendar. A task's
     // last occupied minute is `efInst − 1` (one real minute before its exclusive end boundary); a
     // milestone occupies its start instant. This keeps a finish milestone pinned one boundary past a
@@ -255,7 +326,7 @@ export function computeSchedule(
     const inclusiveFinishInstant = duration === 0 ? esInst : efInst - 1;
     if (maxInclusiveFinishInstant === null || inclusiveFinishInstant > maxInclusiveFinishInstant) {
       maxInclusiveFinishInstant = inclusiveFinishInstant;
-      projectFinishDate = workingIndexDate(cal, dataDate, inclusiveFinishOwn);
+      projectFinishDate = earlyFinishDate;
     }
 
     results.push({
@@ -267,10 +338,10 @@ export function computeSchedule(
       totalFloat,
       isCritical,
       isNearCritical,
-      earlyStart: workingIndexDate(cal, dataDate, esOwn),
-      earlyFinish: workingIndexDate(cal, dataDate, inclusiveFinishOwn),
-      lateStart: workingIndexDate(cal, dataDate, lsOwn),
-      lateFinish: workingIndexDate(cal, dataDate, inclusiveLateFinishOwn),
+      earlyStart: earlyStartDate,
+      earlyFinish: earlyFinishDate,
+      lateStart: lateStartDate,
+      lateFinish: lateFinishDate,
       visualEffectiveStart: workingIndexDate(cal, dataDate, vDisplayOwn),
       visualEffectiveFinish: workingIndexDate(cal, dataDate, vInclusiveFinishOwn),
       visualConflict: visualConflictMap.get(id)!,
