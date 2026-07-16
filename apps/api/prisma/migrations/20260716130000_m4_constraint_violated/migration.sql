@@ -1,0 +1,38 @@
+-- M4 mandatory produce-and-flag: the per-activity constraint-violation output
+-- (Engine Conformance Framework, ADR-0035 §7 amendment, M4 Task F2).
+--
+-- `constraint_violated` is engine-owned CPM output, the machine-readable half of
+-- produce-and-flag: true when a mandatory pin (MANDATORY_START/MANDATORY_FINISH)
+-- overrode a stronger logic bound — a forward pin earlier than the network-earliest,
+-- or a backward pin that forced negative float (ADR-0035 §7). It un-parks the old
+-- silent MSO/MFO treatment; the engine PRODUCES the (possibly impossible) schedule
+-- and FLAGS it, never repairs it. It is the direct analogue of the existing activity
+-- engine columns (early_start/is_critical/is_near_critical) and of dependencies
+-- .is_driving: defaulted, NOT NULL, never set from a user-facing write DTO, and
+-- written only by the CPM engine's batched raw UPDATE, which touches engine columns
+-- alone (never version/updated_at/updated_by) so a recalc stays invisible to
+-- optimistic locking (ADR-0022).
+--
+-- Fully additive and reversible. The constant DEFAULT false backfills every existing
+-- row in the same statement (rows read "not violated" until the plan is first
+-- calculated, and on the no-mandatory / all-inherit path), so existing data and the
+-- byte-parity golden path are unchanged. On Postgres 11+ an ADD COLUMN with a constant
+-- DEFAULT is a metadata-only change — no table rewrite, no full-table scan, no lock
+-- held beyond a brief ACCESS EXCLUSIVE for the catalog update — so this is fast and
+-- safe at any data volume (same posture as add_dependency_is_driving; docs/DATABASE.md).
+--
+-- No new index: the flag is read as part of the already plan-scoped activity load
+-- (WHERE organization_id / plan_id / deleted_at, served by the existing
+-- (plan_id, created_at, id) index) and aggregated over that same scope for the
+-- plan-level constraintViolationCount; no predicate ever targets it in isolation. An
+-- index on a low-cardinality boolean that no query filters or sorts by would only cost
+-- writes for no read benefit (docs/DATABASE.md: index real query patterns, not columns).
+--
+-- The plan-level constraintViolationCount / constraintWarningCount (which replace
+-- parkedConstraintCount) need NO storage: like parkedConstraintCount today, they are
+-- computed in the engine summary at read time (a grouped COUNT(*) FILTER over the
+-- plan's active activities), so there is no plan column here.
+ALTER TABLE "activities" ADD COLUMN "constraint_violated" BOOLEAN NOT NULL DEFAULT false;
+
+-- Down (forward-only in prod; documented for completeness): fully reversible —
+--   ALTER TABLE "activities" DROP COLUMN "constraint_violated";

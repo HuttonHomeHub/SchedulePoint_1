@@ -517,13 +517,26 @@ model Activity {
   resumeDate               DateTime?      @map("resume_date") @db.Date
 
   // CPM output — engine-owned (M6). Nullable/defaulted; never set from input.
-  earlyStart     DateTime? @map("early_start") @db.Date
-  earlyFinish    DateTime? @map("early_finish") @db.Date
-  lateStart      DateTime? @map("late_start") @db.Date
-  lateFinish     DateTime? @map("late_finish") @db.Date
-  totalFloat     Int?      @map("total_float")
-  isCritical     Boolean   @default(false) @map("is_critical")
-  isNearCritical Boolean   @default(false) @map("is_near_critical")
+  earlyStart         DateTime? @map("early_start") @db.Date
+  earlyFinish        DateTime? @map("early_finish") @db.Date
+  lateStart          DateTime? @map("late_start") @db.Date
+  lateFinish         DateTime? @map("late_finish") @db.Date
+  totalFloat         Int?      @map("total_float")
+  isCritical         Boolean   @default(false) @map("is_critical")
+  isNearCritical     Boolean   @default(false) @map("is_near_critical")
+  // Produce-and-flag violation output (ADR-0035 §7 amendment, M4). True when a mandatory
+  // pin (MANDATORY_START/MANDATORY_FINISH) overrode a stronger logic bound — a forward pin
+  // earlier than the network-earliest, or a backward pin that forced negative float. This
+  // un-parks the old silent MSO/MFO treatment: the engine produces the (possibly impossible)
+  // schedule and flags it, never repairs it. Engine-owned exactly like is_critical:
+  // defaulted false, never accepted from a write DTO, written only by the recalc's batched
+  // `unnest` UPDATE alongside the CPM columns above (never touching version/updated_at/
+  // updated_by, ADR-0022). Reads false until the plan is first calculated AND on the
+  // no-mandatory / all-inherit path, so existing rows stay byte-identical. No index: read
+  // as part of the already plan-scoped activity load ((plan_id, created_at, id)) and
+  // aggregated over that scope (constraintViolationCount) — no predicate targets it; a
+  // low-cardinality boolean index would only cost writes (mirrors is_critical/is_driving).
+  constraintViolated Boolean   @default(false) @map("constraint_violated")
 
   // Visual Planning placement (ADR-0033). `visual_start` is the ONLY Planner-owned
   // input here — the hand-placed calendar day a DTO may set (date-only, like
