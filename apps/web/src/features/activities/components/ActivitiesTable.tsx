@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { ACTIVITY_CALENDAR_ENABLED } from '@/config/env';
+import { ACTIVITY_CALENDAR_ENABLED, ADVANCED_CONSTRAINTS_ENABLED } from '@/config/env';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
@@ -159,16 +159,33 @@ export function ActivitiesTable({
       cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
       cell: (activity) => {
         const constraint = formatConstraint(activity);
+        // A mandatory pin that broke logic (engine-owned, ADR-0035 §7): surface it as a "Conflict"
+        // pill so a produced-and-flagged violation is visible in the list, not just the summary. Text
+        // carries the meaning (never colour alone, WCAG 1.4.1); only shown when the M4 surface is on.
+        const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
         // `aria-label` on a plain span (role generic) isn't reliably honoured; instead show the
         // shorthand visually (aria-hidden) with the spelled-out label in an sr-only node — the
         // same visible-glyph + hidden-text pattern the diagram legend uses. `title` = hover.
-        return constraint ? (
+        const label = constraint ? (
           <span className="text-muted-foreground" title={constraint.full}>
             <span aria-hidden="true">{constraint.short}</span>
             <span className="sr-only">{constraint.full}</span>
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
+        );
+        if (!violated) return label;
+        return (
+          <span className="flex flex-col items-start gap-1">
+            {label}
+            <Badge
+              variant="critical"
+              size="sm"
+              title="A mandatory constraint pinned this activity against its logic — the schedule is shown as-is, not corrected."
+            >
+              Conflict
+            </Badge>
+          </span>
         );
       },
     },

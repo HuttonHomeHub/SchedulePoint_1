@@ -59,6 +59,7 @@ function optional(value?: string): string | undefined {
 
 function createBody(input: ActivityFormValues) {
   const hasConstraint = Boolean(input.constraintType);
+  const hasSecondary = Boolean(input.secondaryConstraintType);
   return {
     name: input.name,
     code: optional(input.code),
@@ -69,6 +70,16 @@ function createBody(input: ActivityFormValues) {
     ...(hasConstraint
       ? { constraintType: input.constraintType, constraintDate: input.constraintDate }
       : {}),
+    // M4 advanced constraints (ADR-0035): paired secondary, ALAP flag, expected-finish date. Sent only
+    // when set (absent = the API's default), so a create without the flag on stays byte-identical.
+    ...(hasSecondary
+      ? {
+          secondaryConstraintType: input.secondaryConstraintType,
+          secondaryConstraintDate: input.secondaryConstraintDate,
+        }
+      : {}),
+    ...(input.scheduleAsLateAsPossible ? { scheduleAsLateAsPossible: true } : {}),
+    ...(input.expectedFinish ? { expectedFinish: input.expectedFinish } : {}),
     // `''` = inherit the plan calendar → omit the field (the API treats absent as inherit).
     ...(input.calendarId ? { calendarId: input.calendarId } : {}),
   };
@@ -76,6 +87,7 @@ function createBody(input: ActivityFormValues) {
 
 function updateBody(input: ActivityFormValues & { version: number; laneIndex?: number }) {
   const hasConstraint = Boolean(input.constraintType);
+  const hasSecondary = Boolean(input.secondaryConstraintType);
   return {
     name: input.name,
     code: optional(input.code) ?? null,
@@ -85,6 +97,12 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     // Clear both sides together when the constraint is removed (API pairs them).
     constraintType: hasConstraint ? input.constraintType : null,
     constraintDate: hasConstraint ? input.constraintDate : null,
+    // M4 advanced constraints (ADR-0035). The dialog always seeds these from the row (even with the
+    // fields hidden), so an edit round-trips a stored value; clearing a field sends null / false.
+    secondaryConstraintType: hasSecondary ? input.secondaryConstraintType : null,
+    secondaryConstraintDate: hasSecondary ? input.secondaryConstraintDate : null,
+    scheduleAsLateAsPossible: input.scheduleAsLateAsPossible ?? false,
+    expectedFinish: input.expectedFinish ? input.expectedFinish : null,
     // `''` (inherit) clears the activity's own calendar → null. The dialog always seeds this from
     // the row (even with the picker hidden), so an edit round-trips the stored value unchanged.
     calendarId: input.calendarId ? input.calendarId : null,

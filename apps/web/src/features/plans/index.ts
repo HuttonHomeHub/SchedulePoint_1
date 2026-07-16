@@ -18,4 +18,5 @@ export { CreatePlanButton } from './components/CreatePlanButton';
 export { PlanFormDialog } from './components/PlanFormDialog';
 export { PlanCalendarPicker } from './components/PlanCalendarPicker';
 export { PlanRecalcModePicker } from './components/PlanRecalcModePicker';
+export { PlanExpectedFinishToggle } from './components/PlanExpectedFinishToggle';
 export { PLAN_STATUS_LABELS } from './schemas/plan-schemas';

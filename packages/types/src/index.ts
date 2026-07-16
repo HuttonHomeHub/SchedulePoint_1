@@ -178,7 +178,7 @@ export interface PlanSummary {
   progressRecalcMode: ProgressRecalcMode;
   /**
    * Expected-finish scheduling option (M4, ADR-0035 §9). When true, the engine's forward pass resizes
-   * an in-progress activity's remaining work so its early finish lands on its `expectedFinish`. Default
+   * an incomplete activity's remaining work so its early finish lands on its `expectedFinish`. Default
    * `false` (behaviour-preserving); the engine ignores expected finishes when off.
    */
   useExpectedFinishDates: boolean;

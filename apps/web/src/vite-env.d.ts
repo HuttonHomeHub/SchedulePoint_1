@@ -21,4 +21,6 @@ interface ImportMetaEnv {
   readonly VITE_ACTIVITY_CALENDAR?: string;
   /** Progress ingestion controls — remaining/suspend/resume + recalc mode (ADR-0035, M2). On by default; "false"/"0" disables it. */
   readonly VITE_PROGRESS_INGESTION?: string;
+  /** Advanced schedule constraints — secondary/ALAP/expected-finish + violation badge (ADR-0035, M4). "true"/"1" enables it; off by default. */
+  readonly VITE_ADVANCED_CONSTRAINTS?: string;
 }

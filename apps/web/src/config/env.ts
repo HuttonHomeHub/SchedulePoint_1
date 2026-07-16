@@ -189,3 +189,20 @@ export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOff(import.meta.env.VITE_ACT
  * the percent-plus-actual-dates editor.
  */
 export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PROGRESS_INGESTION);
+
+/**
+ * Advanced schedule constraints (ADR-0035 §7–§11, M4). **OFF by default**: the editor surface ships
+ * dark until its quality gates (component/a11y/ux) are cleared and the feature is turned on
+ * per-environment, then flipped default-on (how `VITE_PROGRESS_INGESTION` began). When on, the activity
+ * form gains a **secondary constraint** (a second type + date driving the backward pass, ADR-0035 §10),
+ * an **As-late-as-possible** toggle (ADR-0035 §11) and an **expected-finish** date (ADR-0035 §9); the
+ * plan settings gain an **Expected-finish scheduling** toggle (`useExpectedFinishDates`); and a
+ * **Conflict** badge surfaces an engine-flagged `constraintViolated` activity (a mandatory pin that
+ * broke logic, produced-and-flagged, ADR-0035 §7). Everything behind it — the settable API fields, the
+ * engine's constraint passes, and the conformance proof (S12/N10) — is already live; the flag only
+ * governs whether a planner can *edit and see* the new fields in the web UI. Set
+ * `VITE_ADVANCED_CONSTRAINTS=true` to enable.
+ */
+export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_ADVANCED_CONSTRAINTS,
+);

@@ -25,7 +25,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { ACTIVITY_CALENDAR_ENABLED } from '@/config/env';
+import { ACTIVITY_CALENDAR_ENABLED, ADVANCED_CONSTRAINTS_ENABLED } from '@/config/env';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
 /**
@@ -83,6 +83,10 @@ export function ActivityFormDialog({
       durationDays: 1,
       constraintType: '',
       constraintDate: '',
+      secondaryConstraintType: '',
+      secondaryConstraintDate: '',
+      scheduleAsLateAsPossible: false,
+      expectedFinish: '',
       calendarId: '',
       description: '',
     },
@@ -97,6 +101,12 @@ export function ActivityFormDialog({
         durationDays: activity?.durationDays ?? 1,
         constraintType: activity?.constraintType ?? '',
         constraintDate: activity?.constraintDate ?? '',
+        // Always seed the M4 advanced fields from the row so a stored value round-trips even when the
+        // fields are hidden (flag off) — an edit then never silently clears them.
+        secondaryConstraintType: activity?.secondaryConstraintType ?? '',
+        secondaryConstraintDate: activity?.secondaryConstraintDate ?? '',
+        scheduleAsLateAsPossible: activity?.scheduleAsLateAsPossible ?? false,
+        expectedFinish: activity?.expectedFinish ?? '',
         // Always seed from the row so the value round-trips even when the picker is hidden
         // (flag off) — an edit then never silently clears an assigned calendar. '' = inherit.
         calendarId: activity?.calendarId ?? '',
@@ -109,6 +119,7 @@ export function ActivityFormDialog({
 
   const type = useWatch({ control, name: 'type' });
   const constraintType = useWatch({ control, name: 'constraintType' });
+  const secondaryConstraintType = useWatch({ control, name: 'secondaryConstraintType' });
   const calendarId = useWatch({ control, name: 'calendarId' });
   // A seeded non-inherit value that doesn't match any option (the list is still loading, or failed
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
@@ -119,6 +130,11 @@ export function ActivityFormDialog({
   // it appears when a parked value is selected and disappears once the planner changes away.
   const parkedValue =
     constraintType && isParkedConstraintType(constraintType) ? constraintType : null;
+  // A parked secondary value round-trips as its own honest option, exactly like the primary.
+  const secondaryParkedValue =
+    secondaryConstraintType && isParkedConstraintType(secondaryConstraintType)
+      ? secondaryConstraintType
+      : null;
 
   const onSubmit = handleSubmit((values) => {
     if (isEdit) {
@@ -284,6 +300,86 @@ export function ActivityFormDialog({
             error={errors.constraintDate?.message}
             {...register('constraintDate')}
           />
+        ) : null}
+        {ADVANCED_CONSTRAINTS_ENABLED ? (
+          <fieldset className="border-border flex flex-col gap-4 rounded-md border p-3">
+            <legend className="text-muted-foreground px-1 text-sm font-medium">
+              Advanced scheduling
+            </legend>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="activity-secondary-constraint-type">Secondary constraint</Label>
+              <Select
+                id="activity-secondary-constraint-type"
+                aria-invalid={errors.secondaryConstraintType ? true : undefined}
+                aria-describedby={
+                  errors.secondaryConstraintType
+                    ? 'activity-secondary-constraint-help activity-secondary-constraint-type-error'
+                    : 'activity-secondary-constraint-help'
+                }
+                {...register('secondaryConstraintType')}
+              >
+                <option value="">None</option>
+                {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {CONSTRAINT_TYPE_LABELS[value]}
+                  </option>
+                ))}
+                {secondaryParkedValue ? (
+                  <option value={secondaryParkedValue}>
+                    {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
+                  </option>
+                ) : null}
+              </Select>
+              <p id="activity-secondary-constraint-help" className="text-muted-foreground text-sm">
+                A second constraint that drives the late dates (the backward pass) — e.g. a primary
+                “start no earlier than” with a secondary “finish no later than”. The primary drives
+                the early dates.
+              </p>
+              {errors.secondaryConstraintType?.message ? (
+                <p
+                  id="activity-secondary-constraint-type-error"
+                  className="text-destructive-text text-sm"
+                >
+                  {errors.secondaryConstraintType.message}
+                </p>
+              ) : null}
+            </div>
+            {secondaryConstraintType ? (
+              <TextField
+                label="Secondary constraint date"
+                type="date"
+                error={errors.secondaryConstraintDate?.message}
+                {...register('secondaryConstraintDate')}
+              />
+            ) : null}
+            <div className="flex flex-col gap-1.5">
+              {/* `py-1` + `min-h-6` gives the label a ≥24px hit target (WCAG 2.2 SC 2.5.8, AA). */}
+              <label
+                htmlFor="activity-alap"
+                className="flex min-h-6 items-center gap-2 py-1 text-sm font-medium"
+              >
+                <input
+                  id="activity-alap"
+                  type="checkbox"
+                  className="accent-primary size-4"
+                  aria-describedby="activity-alap-help"
+                  {...register('scheduleAsLateAsPossible')}
+                />
+                Schedule as late as possible
+              </label>
+              <p id="activity-alap-help" className="text-muted-foreground text-sm">
+                Draws the activity at its latest position without changing its dates or float. A
+                display preference, not a date constraint.
+              </p>
+            </div>
+            <TextField
+              label="Expected finish (optional)"
+              type="date"
+              hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine resizes this activity’s remaining work so it finishes here."
+              error={errors.expectedFinish?.message}
+              {...register('expectedFinish')}
+            />
+          </fieldset>
         ) : null}
         <TextareaField
           label="Description (optional)"
