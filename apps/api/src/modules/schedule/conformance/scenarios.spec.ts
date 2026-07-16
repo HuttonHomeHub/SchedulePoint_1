@@ -23,12 +23,16 @@ describe('conformance scenarios (differential scaffold)', () => {
     expect(Object.keys(SCENARIO_SUPPORT)).toHaveLength(fixture.scenarios.length);
   });
 
-  it('marks the baseline + the 24-Hour lag scenario runnable; the rest are documented todo', () => {
+  it('marks the baseline + the lag-calendar scenarios runnable; the rest are documented todo', () => {
     const runnable = Object.entries(SCENARIO_SUPPORT)
       .filter(([, s]) => s.runnable)
       .map(([id]) => id);
-    // S06 became runnable when M3 wired the 24-Hour lag calendar (ADR-0036 §6).
-    expect(runnable).toEqual(['S01_BASELINE_UNPROGRESSED', 'S06_LAG_CALENDAR_24H']);
+    // S06 became runnable at M3 (24-Hour lag); S05 at M5 (per-activity calendars → successor lag).
+    expect(runnable).toEqual([
+      'S01_BASELINE_UNPROGRESSED',
+      'S05_LAG_CALENDAR_SUCCESSOR',
+      'S06_LAG_CALENDAR_24H',
+    ]);
 
     for (const [id, support] of Object.entries(SCENARIO_SUPPORT)) {
       if (support.runnable) expect(support.reason).toBe('');
@@ -42,8 +46,19 @@ describe('conformance scenarios (differential scaffold)', () => {
     expect(baseline.ran && lag24h.ran).toBe(true);
     if (baseline.ran && lag24h.ran) {
       // Honouring the concrete-cure A4430→A4440 FS + 168h / 24H edge moves at least one date:
-      // "flip the option, dates must change" (ADR-0034 §2). S05 (Pred-vs-Succ) stays todo → M5.
+      // "flip the option, dates must change" (ADR-0034 §2).
       expect(resultsDiffer(lag24h.output, baseline.output)).toBe(true);
+    }
+  });
+
+  it('runs S05 (successor lag calendar) as a differential — per-activity calendars move dates (M5)', () => {
+    const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
+    const succ = runScenario(fixture, 'S05_LAG_CALENDAR_SUCCESSOR');
+    expect(baseline.ran && succ.ran).toBe(true);
+    if (baseline.ran && succ.ran) {
+      // Turning on per-activity calendars + resolving relationship lag on the successor's calendar
+      // (ADR-0037) moves dates vs the all-plan-calendar baseline — the M5 differential.
+      expect(resultsDiffer(succ.output, baseline.output)).toBe(true);
     }
   });
 
