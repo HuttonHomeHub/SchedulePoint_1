@@ -28,6 +28,8 @@ export interface PlanPatch {
   criticalFloatThreshold?: number;
   /** Total-float measure (M6, ADR-0035 §18): FINISH / START / SMALLEST. */
   totalFloatMode?: TotalFloatMode;
+  /** Make open-ended activities critical (M6, ADR-0035 §20). */
+  makeOpenEndsCritical?: boolean;
   /** The mandatory CPM data date (ADR-0033 M1): may be moved, never cleared — so never null. */
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */

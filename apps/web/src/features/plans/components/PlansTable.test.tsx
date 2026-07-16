@@ -39,6 +39,7 @@ const PLANS: PlanSummary[] = [
     criticalPathDefinition: 'TOTAL_FLOAT',
     criticalFloatThreshold: 0,
     totalFloatMode: 'FINISH',
+    makeOpenEndsCritical: false,
     plannedStart: '2026-05-01',
     calendarId: null,
     version: 1,

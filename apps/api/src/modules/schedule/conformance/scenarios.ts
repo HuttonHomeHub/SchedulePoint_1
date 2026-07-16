@@ -70,8 +70,11 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: '',
   },
   S08_OPEN_ENDS_CRITICAL: {
-    runnable: false,
-    reason: 'needs the make-open-ends-critical option (ADR-0035 §20, M6)',
+    // M6-F4 (ADR-0035 §20) landed the make-open-ends-critical option. S08 runs the same unprogressed
+    // network as S01 with `makeOpenEndsCritical: true`, so the DATES are identical while the CRITICAL
+    // SET gains the open ends (the fixture's A9500/A3900/A12700) — a criticality-only differential.
+    runnable: true,
+    reason: '',
   },
   S09_IGNORE_EXTERNAL: {
     runnable: false,
@@ -143,6 +146,9 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
   // activities are flagged critical, never the dates — so it is asserted with `criticalSetDiffers`.
   const criticalDefinition =
     scenarioId === 'S07_LONGEST_PATH' ? ('LONGEST_PATH' as const) : undefined;
+  // S08 flips make-open-ends-critical on (ADR-0035 §20, M6-F4). Like S07 it changes only the critical
+  // set (the open ends), never the dates — asserted with `criticalSetDiffers`.
+  const makeOpenEndsCritical = scenarioId === 'S08_OPEN_ENDS_CRITICAL' ? true : undefined;
   const { activities, edges, options } = adaptFixture(fixture, {
     dataDate,
     honorLagCalendars,
@@ -158,6 +164,7 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
       ...options,
       ...(progressMode ? { progressMode } : {}),
       ...(criticalDefinition ? { criticalDefinition } : {}),
+      ...(makeOpenEndsCritical ? { makeOpenEndsCritical } : {}),
     }),
   };
 }

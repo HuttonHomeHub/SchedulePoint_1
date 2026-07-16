@@ -108,6 +108,14 @@ export class UpdatePlanDto {
   totalFloatMode?: TotalFloatMode;
 
   @ApiPropertyOptional({
+    description:
+      'Make open-ended activities critical (M6, ADR-0035 §20): when on, activities with no predecessors/successors are flagged critical.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  makeOpenEndsCritical?: boolean;
+
+  @ApiPropertyOptional({
     format: 'date',
     example: '2026-05-01',
     description: 'Calendar day (YYYY-MM-DD). May be changed but not cleared (ADR-0033 M1).',

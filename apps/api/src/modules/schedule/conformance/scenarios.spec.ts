@@ -37,6 +37,7 @@ describe('conformance scenarios (differential scaffold)', () => {
       'S05_LAG_CALENDAR_SUCCESSOR',
       'S06_LAG_CALENDAR_24H',
       'S07_LONGEST_PATH',
+      'S08_OPEN_ENDS_CRITICAL',
       'S12_EXPECTED_FINISH_OFF',
     ]);
 
@@ -110,6 +111,18 @@ describe('conformance scenarios (differential scaffold)', () => {
     }
   });
 
+  it('runs S08 (make open ends critical) as a criticality-only differential', () => {
+    const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
+    const openEnds = runScenario(fixture, 'S08_OPEN_ENDS_CRITICAL');
+    expect(baseline.ran && openEnds.ran).toBe(true);
+    if (baseline.ran && openEnds.ran) {
+      // Turning the option on flags the fixture's open ends (A9500/A3900/A12700) critical — the
+      // critical set grows while every date is unchanged (ADR-0035 §20).
+      expect(criticalSetDiffers(openEnds.output, baseline.output)).toBe(true);
+      expect(resultsDiffer(openEnds.output, baseline.output)).toBe(false);
+    }
+  });
+
   it('runs the S01 baseline against the real engine', () => {
     const run = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
     expect(run.ran).toBe(true);
@@ -120,8 +133,8 @@ describe('conformance scenarios (differential scaffold)', () => {
   });
 
   it('returns a todo (not a fabricated run) for a not-yet-supported scenario', () => {
-    // S08 (make open-ends critical) is a later M6 rung (F4) — still honestly deferred.
-    const run = runScenario(fixture, 'S08_OPEN_ENDS_CRITICAL');
+    // S11 (multiple float paths) is a later M6 rung (F6) — still honestly deferred.
+    const run = runScenario(fixture, 'S11_MULTIPLE_FLOAT_PATHS');
     expect(run.ran).toBe(false);
     if (!run.ran) expect(run.todo).toContain('M6');
   });

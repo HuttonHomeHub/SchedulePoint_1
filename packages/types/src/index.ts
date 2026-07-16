@@ -214,6 +214,11 @@ export interface PlanSummary {
    */
   totalFloatMode: TotalFloatMode;
   /**
+   * Make open-ended activities critical (M6, ADR-0035 §20): when true, every activity with no
+   * predecessors or no successors is flagged critical, OR-ed with the definition. Default `false`.
+   */
+  makeOpenEndsCritical: boolean;
+  /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
    * historical/transitional reads; live plans always carry a value.

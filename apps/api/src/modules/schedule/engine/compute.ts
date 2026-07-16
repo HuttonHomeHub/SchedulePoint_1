@@ -77,6 +77,13 @@ export interface ComputeOptions {
    * the pre-M6 path. Diverges from `FINISH` only on mixed calendars / progressed activities.
    */
   totalFloatMode?: TotalFloatMode;
+  /**
+   * Make open-ended activities critical (M6-F4, ADR-0035 §20). When true, every **open end** — an
+   * activity with no predecessors OR no successors (a dangling either end, e.g. the fixture's
+   * A9500/A3900/A12700) — is flagged critical, **OR-ed** with the active definition (so it never drops
+   * an already-critical member). Off (the default) ⇒ byte-identical to the pre-M6 path (P6 default off).
+   */
+  makeOpenEndsCritical?: boolean;
 }
 
 /**
@@ -130,6 +137,7 @@ export function computeSchedule(
   const criticalDefinition: CriticalPathDefinition = options.criticalDefinition ?? 'TOTAL_FLOAT';
   const criticalThreshold = options.criticalFloatThresholdMinutes ?? 0;
   const totalFloatMode: TotalFloatMode = options.totalFloatMode ?? 'FINISH';
+  const makeOpenEndsCritical = options.makeOpenEndsCritical ?? false;
   // How many in-progress activities had their remaining work resized to an expected finish (§9).
   let expectedFinishAppliedCount = 0;
   const graph = buildGraph(activities, edges);
@@ -455,10 +463,14 @@ export function computeSchedule(
           : finishFloat;
     // Criticality by the plan's definition (M6-F2): the driving chain (LONGEST_PATH) or total float ≤
     // the threshold (TOTAL_FLOAT, default; threshold 0 ⇒ byte-identical to the pre-M6 `totalFloat <= 0`).
-    const isCritical =
+    const byDefinition =
       criticalDefinition === 'LONGEST_PATH'
         ? onLongestPath.has(id)
         : totalFloat <= criticalThreshold;
+    // Make-open-ends-critical (M6-F4): OR an open end (no predecessors or no successors) into the
+    // definition when the option is on — never dropping an already-critical member. Off ⇒ unchanged.
+    const isOpenEnd = graph.incoming.get(id)!.length === 0 || graph.outgoing.get(id)!.length === 0;
+    const isCritical = byDefinition || (makeOpenEndsCritical && isOpenEnd);
     // Near-critical stays total-float-based and never overlaps critical: a positive-but-small float that
     // is not already flagged critical. On the default path (threshold 0) this equals the old predicate.
     const isNearCritical =

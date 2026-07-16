@@ -67,6 +67,12 @@ export class PlanResponseDto implements PlanSummary {
   totalFloatMode!: TotalFloatMode;
 
   @ApiProperty({
+    description:
+      'Make open-ended activities critical (M6, ADR-0035 §20): when on, activities with no predecessors/successors are flagged critical. Default false.',
+  })
+  makeOpenEndsCritical!: boolean;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -105,6 +111,7 @@ export class PlanResponseDto implements PlanSummary {
       criticalPathDefinition: entity.criticalPathDefinition,
       criticalFloatThreshold: entity.criticalFloatThreshold,
       totalFloatMode: entity.totalFloatMode,
+      makeOpenEndsCritical: entity.makeOpenEndsCritical,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

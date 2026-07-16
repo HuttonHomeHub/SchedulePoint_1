@@ -253,12 +253,14 @@ describe('PlansService', () => {
         criticalPathDefinition: 'LONGEST_PATH',
         criticalFloatThreshold: 3,
         totalFloatMode: 'SMALLEST',
+        makeOpenEndsCritical: true,
         version: 1,
       });
       const patch = plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch;
       expect(patch.criticalPathDefinition).toBe('LONGEST_PATH');
       expect(patch.criticalFloatThreshold).toBe(3);
       expect(patch.totalFloatMode).toBe('SMALLEST');
+      expect(patch.makeOpenEndsCritical).toBe(true);
     });
 
     it('assigns a same-org active calendar and clears it on explicit null', async () => {

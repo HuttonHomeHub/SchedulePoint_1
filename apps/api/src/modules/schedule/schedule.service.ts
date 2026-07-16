@@ -141,6 +141,7 @@ export class ScheduleService {
             criticalDefinition: plan.criticalPathDefinition,
             criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
             totalFloatMode: plan.totalFloatMode,
+            makeOpenEndsCritical: plan.makeOpenEndsCritical,
           },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
