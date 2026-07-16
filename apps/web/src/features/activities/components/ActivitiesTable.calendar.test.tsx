@@ -7,13 +7,12 @@ import { activityKeys } from '../api/use-activities';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
-import { calendarKeys } from '@/features/calendars';
-
 /**
  * The activities table's per-activity calendar column (ADR-0037, M5) with `VITE_ACTIVITY_CALENDAR`
- * forced ON. The column names an activity's own calendar and stays quiet (em dash) when it inherits
- * the plan's — so the common all-inherit case reads the same as before. Flag-off (no column, no
- * fetch) is the default the other table suite exercises.
+ * forced ON. The column names an activity's own calendar, stays quiet (em dash) when it inherits the
+ * plan's, and — crucially — never renders that same em dash for a calendar that simply isn't nameable
+ * yet: "Loading…" while the (route-composed) list loads, "Unnamed" once settled without a match.
+ * Flag-off (no column) is the default the other table suite exercises.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -65,13 +64,21 @@ const BASE: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderTable(data: ActivitySummary[]) {
+function renderTable(
+  data: ActivitySummary[],
+  calendarProps: Partial<React.ComponentProps<typeof ActivitiesTable>> = {},
+) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), data);
-  queryClient.setQueryData(calendarKeys.list('acme'), CALENDARS);
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivitiesTable orgSlug="acme" planId="pl1" canWrite />
+      <ActivitiesTable
+        orgSlug="acme"
+        planId="pl1"
+        canWrite
+        calendars={CALENDARS}
+        {...calendarProps}
+      />
     </QueryClientProvider>,
   );
 }
@@ -82,12 +89,32 @@ describe('ActivitiesTable — calendar column (flag on)', () => {
       { ...BASE, id: 'a1', name: 'On 24/7', calendarId: 'cal-247' },
       { ...BASE, id: 'a2', name: 'Inherits', calendarId: null },
     ]);
-    // The header is present…
     expect(screen.getByRole('columnheader', { name: 'Calendar' })).toBeInTheDocument();
-    // …the assigned row names its calendar…
     expect(screen.getByText('24/7')).toBeInTheDocument();
-    // …and the inheriting row shows an em dash (not a calendar name).
+    // The inheriting row shows an em dash (not a calendar name).
     const inheritRow = screen.getByText('Inherits').closest('tr')!;
     expect(inheritRow).toHaveTextContent('—');
+  });
+
+  it('reads "Loading…" (not an em dash) for an assigned calendar while the list is still loading', () => {
+    // A row assigned to a calendar the (still-loading) list can't yet name must not read as inherit.
+    renderTable([{ ...BASE, id: 'a1', name: 'Assigned', calendarId: 'cal-unknown' }], {
+      calendars: [],
+      calendarsLoading: true,
+    });
+    // The calendar cell (keyed by the id title) shows "Loading…", never the inherit em dash.
+    const cell = screen.getByTitle('cal-unknown');
+    expect(cell).toHaveTextContent('Loading…');
+    expect(cell).not.toHaveTextContent('—');
+  });
+
+  it('reads "Unnamed" for an assigned calendar the settled list can’t resolve', () => {
+    renderTable([{ ...BASE, id: 'a1', name: 'Assigned', calendarId: 'cal-unknown' }], {
+      calendars: [],
+      calendarsLoading: false,
+    });
+    const cell = screen.getByTitle('cal-unknown');
+    expect(cell).toHaveTextContent('Unnamed');
+    expect(cell).not.toHaveTextContent('—');
   });
 });

@@ -10,8 +10,10 @@ import { apiFetch } from '@/lib/api/client';
 /**
  * The per-activity calendar picker (ADR-0037, M5) with `VITE_ACTIVITY_CALENDAR` forced ON — the
  * feature ships dark by default, so this suite pins the flag to prove the Select renders, defaults to
- * inherit, persists a chosen calendar, and round-trips a seeded one. (The flag-off behaviour — no
- * picker, value still round-trips — is covered by `ActivityFormDialog.test.tsx`.)
+ * inherit, persists a chosen calendar, round-trips a seeded one, and surfaces a load error without
+ * masking a seeded calendar as "inherit". The org calendars are route-composed (passed as a prop),
+ * so no calendars fetch is mocked here — only the create/update mutation hits `apiFetch`. (The
+ * flag-off behaviour — no picker, value still round-trips — is covered by `ActivityFormDialog.test.tsx`.)
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -74,58 +76,49 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-// Route the calendars GET to the library; everything else (the create/update mutation) to the row.
-function mockApi(): void {
-  vi.mocked(apiFetch)
-    .mockReset()
-    .mockImplementation((path: string) => {
-      if (path.endsWith('/calendars')) return Promise.resolve(CALENDARS);
-      return Promise.resolve(ACTIVITY);
-    });
-}
-
 function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityFormDialog
+        orgSlug="acme"
+        planId="pl1"
+        open
+        onClose={vi.fn()}
+        calendars={CALENDARS}
+        {...props}
+      />
     </QueryClientProvider>,
   );
 }
 
 describe('ActivityFormDialog — calendar picker (flag on)', () => {
-  beforeEach(mockApi);
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
+  });
 
-  it('offers "Plan default (inherit)" plus each org calendar, defaulting to inherit on a new activity', async () => {
+  it('offers "Plan default (inherit)" plus each org calendar, defaulting to inherit on a new activity', () => {
     renderDialog();
-    const select = await screen.findByLabelText('Calendar');
-    await waitFor(() => {
-      const labels = within(select)
-        .getAllByRole('option')
-        .map((o) => o.textContent);
-      expect(labels).toEqual(['Plan default (inherit)', '5-day week', '24/7']);
-    });
+    const select = screen.getByLabelText('Calendar (optional)');
+    const labels = within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(labels).toEqual(['Plan default (inherit)', '5-day week', '24/7']);
     expect(select).toHaveValue('');
   });
 
   it('creates an activity on a chosen calendar', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    const select = await screen.findByLabelText('Calendar');
-    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
-    fireEvent.change(select, { target: { value: 'cal-5day' } });
+    fireEvent.change(screen.getByLabelText('Calendar (optional)'), {
+      target: { value: 'cal-5day' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
-    await waitFor(() =>
-      expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(
-        '/organizations/acme/plans/pl1/activities',
-        expect.objectContaining({ method: 'POST' }),
-      ),
-    );
-    const call = vi
-      .mocked(apiFetch)
-      .mock.calls.find(([path]) => path === '/organizations/acme/plans/pl1/activities')!;
-    expect(JSON.parse(call[1]?.body as string)).toMatchObject({
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(path).toBe('/organizations/acme/plans/pl1/activities');
+    expect(JSON.parse(init?.body as string)).toMatchObject({
       name: 'Pour slab',
       calendarId: 'cal-5day',
     });
@@ -133,20 +126,26 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
 
   it('seeds the activity’s calendar and clears it to inherit (null) on save', async () => {
     renderDialog({ activity: ACTIVITY });
-    const select = await screen.findByLabelText('Calendar');
-    await waitFor(() => expect(select).toHaveValue('cal-247'));
+    const select = screen.getByLabelText('Calendar (optional)');
+    expect(select).toHaveValue('cal-247');
     fireEvent.change(select, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    await waitFor(() =>
-      expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(
-        '/organizations/acme/activities/a1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = vi
-      .mocked(apiFetch)
-      .mock.calls.find(([path]) => path === '/organizations/acme/activities/a1')!;
-    expect(JSON.parse(call[1]?.body as string)).toMatchObject({ version: 4, calendarId: null });
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(path).toBe('/organizations/acme/activities/a1');
+    expect(JSON.parse(init?.body as string)).toMatchObject({ version: 4, calendarId: null });
+  });
+
+  it('surfaces a load error and keeps a seeded calendar visibly distinct from inherit', () => {
+    // The org calendar list failed to load: empty options + calendarsError, with a seeded calendar.
+    renderDialog({ activity: ACTIVITY, calendars: [], calendarsError: true });
+
+    // The failure is announced, not silent.
+    expect(screen.getByRole('alert')).toHaveTextContent(/Couldn’t load the calendar list/);
+    // The seeded calendar still shows as selected under an honest label — never blank (= inherit).
+    const select = screen.getByLabelText('Calendar (optional)');
+    expect(select).toHaveValue('cal-247');
+    expect(within(select).getByRole('option', { name: 'Unavailable' })).toBeInTheDocument();
   });
 });

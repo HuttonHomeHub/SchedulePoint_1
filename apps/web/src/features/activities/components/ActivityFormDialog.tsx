@@ -3,8 +3,8 @@ import {
   SELECTABLE_CONSTRAINT_TYPES,
   isParkedConstraintType,
   type ActivitySummary,
+  type CalendarSummary,
 } from '@repo/types';
-import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -26,7 +26,6 @@ import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ACTIVITY_CALENDAR_ENABLED } from '@/config/env';
-import { calendarsQueryOptions } from '@/features/calendars';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
 /**
@@ -35,6 +34,11 @@ import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
  * is hidden for milestone types (a milestone is a point in time); the constraint
  * date only shows once a constraint type is chosen — both mirror the API rules.
  * Edit mode PATCHes with the row's `version`.
+ *
+ * The org calendar library (for the per-activity calendar picker, ADR-0037) is **supplied by the
+ * composing route/workspace**, not fetched here — so the activities feature stays dependency-free of
+ * the calendars feature (like {@link ActivitiesTable}'s `varianceByActivityId`). `CalendarSummary`
+ * is a shared `@repo/types` shape. Absent it, the picker still round-trips a seeded `calendarId`.
  */
 export function ActivityFormDialog({
   orgSlug,
@@ -42,12 +46,21 @@ export function ActivityFormDialog({
   open,
   onClose,
   activity,
+  calendars = [],
+  calendarsLoading = false,
+  calendarsError = false,
 }: {
   orgSlug: string;
   planId: string;
   open: boolean;
   onClose: () => void;
   activity?: ActivitySummary;
+  /** The org's calendars, for the calendar picker's options (route-composed). */
+  calendars?: CalendarSummary[];
+  /** The calendars list is still loading (its options aren't complete yet). */
+  calendarsLoading?: boolean;
+  /** The calendars list failed to load — surface it rather than silently offering only "inherit". */
+  calendarsError?: boolean;
 }): React.ReactElement {
   const isEdit = activity !== undefined;
   const create = useCreateActivity(orgSlug, planId);
@@ -94,20 +107,13 @@ export function ActivityFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
   }, [open, activity?.id]);
 
-  // The org's calendar library, for the picker's options. Fetched only when the picker is enabled
-  // (flag default-off) — the value still round-trips via the seeded field when the picker is hidden.
-  const calendars = useQuery({
-    ...calendarsQueryOptions(orgSlug),
-    enabled: ACTIVITY_CALENDAR_ENABLED,
-  });
-
   const type = useWatch({ control, name: 'type' });
   const constraintType = useWatch({ control, name: 'constraintType' });
   const calendarId = useWatch({ control, name: 'calendarId' });
-  // While the calendar list is still loading, a seeded non-inherit value won't match any option;
-  // inject a synthetic one so the Select shows it as selected (not blank, which reads as "inherit").
-  const calendarList = calendars.data ?? [];
-  const missingCalendar = Boolean(calendarId) && !calendarList.some((c) => c.id === calendarId);
+  // A seeded non-inherit value that doesn't match any option (the list is still loading, or failed
+  // to load): inject a synthetic option so the Select shows it as selected — never blank, which
+  // would read as "inherit".
+  const missingCalendar = Boolean(calendarId) && !calendars.some((c) => c.id === calendarId);
   // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off
   // option so opening the form never coerces it (US-2). Derived from the live field value, so
   // it appears when a parked value is selected and disappears once the planner changes away.
@@ -192,18 +198,27 @@ export function ActivityFormDialog({
         )}
         {ACTIVITY_CALENDAR_ENABLED ? (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="activity-calendar">Calendar</Label>
+            <Label htmlFor="activity-calendar">Calendar (optional)</Label>
             <Select
               id="activity-calendar"
-              disabled={calendars.isPending}
-              aria-busy={calendars.isPending}
-              aria-describedby="activity-calendar-help"
+              disabled={calendarsLoading}
+              aria-busy={calendarsLoading}
+              aria-invalid={calendarsError ? true : undefined}
+              aria-describedby={
+                calendarsError
+                  ? 'activity-calendar-help activity-calendar-error'
+                  : 'activity-calendar-help'
+              }
               {...register('calendarId')}
             >
               <option value="">{INHERIT_CALENDAR_LABEL}</option>
-              {/* The seeded calendar isn't in the list yet while it loads — keep it selected. */}
-              {missingCalendar ? <option value={calendarId}>Loading…</option> : null}
-              {calendarList.map((calendar) => (
+              {/* The seeded calendar isn't resolvable from the list — still loading, or the list
+                  failed to load. Keep it selected under an honest label (never blank, which would
+                  read as "inherit"); "Loading…" only while pending, else "Unavailable". */}
+              {missingCalendar ? (
+                <option value={calendarId}>{calendarsLoading ? 'Loading…' : 'Unavailable'}</option>
+              ) : null}
+              {calendars.map((calendar) => (
                 <option key={calendar.id} value={calendar.id}>
                   {calendar.name}
                 </option>
@@ -211,8 +226,17 @@ export function ActivityFormDialog({
             </Select>
             <p id="activity-calendar-help" className="text-muted-foreground text-sm">
               The working-time calendar this activity is scheduled on. Inherits the plan’s calendar
-              unless you pick one. Recalculate to apply it to the dates.
+              unless you pick one. Recalculate to apply the calendar to the activity’s dates.
             </p>
+            {calendarsError ? (
+              <p
+                id="activity-calendar-error"
+                role="alert"
+                className="text-destructive-text text-sm"
+              >
+                Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is available.
+              </p>
+            ) : null}
           </div>
         ) : null}
         <div className="flex flex-col gap-1.5">

@@ -29,9 +29,10 @@ export const ACTIVITY_TYPES = Object.keys(ACTIVITY_TYPE_LABELS) as [
 ];
 
 /**
- * The activity-calendar picker's "inherit" option (ADR-0037): the empty `Select` value maps to a
- * null `calendarId`, i.e. the activity schedules on the plan's default calendar. Shared so the
- * form and any list/detail label read the inherit case in one voice.
+ * The activity-calendar picker's "inherit" option label (ADR-0037): the empty `Select` value maps
+ * to a null `calendarId`, i.e. the activity schedules on the plan's default calendar. Used by the
+ * form's calendar Select (the table shows a bare em dash for the inherit case, matching its other
+ * "nothing to show" columns).
  */
 export const INHERIT_CALENDAR_LABEL = 'Plan default (inherit)';
 

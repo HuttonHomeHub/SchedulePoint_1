@@ -205,7 +205,15 @@ function LegacyPlanLayout({
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-medium">Activities</h2>
-        {model.canEditSchedule ? <CreateActivityButton orgSlug={orgSlug} planId={planId} /> : null}
+        {model.canEditSchedule ? (
+          <CreateActivityButton
+            orgSlug={orgSlug}
+            planId={planId}
+            calendars={model.calendars.data ?? []}
+            calendarsLoading={model.calendars.isPending}
+            calendarsError={model.calendars.isError}
+          />
+        ) : null}
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
         The activities that make up this plan. Edit their details here; the logic diagram above
@@ -224,6 +232,9 @@ function LegacyPlanLayout({
           canWrite={model.canEditSchedule}
           canReportProgress={model.canProgress}
           onOpenLogic={model.setLogicActivity}
+          calendars={model.calendars.data ?? []}
+          calendarsLoading={model.calendars.isPending}
+          calendarsError={model.calendars.isError}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
             : {})}

@@ -1,6 +1,5 @@
-import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
-import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import type { ActivitySummary, BaselineVarianceRow, CalendarSummary } from '@repo/types';
+import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useActivities, useDeleteActivity } from '../api/use-activities';
@@ -19,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { ACTIVITY_CALENDAR_ENABLED } from '@/config/env';
-import { calendarsQueryOptions } from '@/features/calendars';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
@@ -81,6 +79,9 @@ export function ActivitiesTable({
   canReportProgress = false,
   onOpenLogic,
   varianceByActivityId,
+  calendars = [],
+  calendarsLoading = false,
+  calendarsError = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -98,16 +99,24 @@ export function ActivitiesTable({
    * (a shared `@repo/types` shape, no cross-feature import).
    */
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow>;
+  /**
+   * The org's calendars (ADR-0037), route-composed like `varianceByActivityId` — used to name an
+   * activity's own calendar in the "Calendar" column (shown only when `ACTIVITY_CALENDAR_ENABLED`)
+   * and threaded into the edit dialog's picker. A shared `@repo/types` shape, so activities stays
+   * dependency-free of the calendars feature.
+   */
+  calendars?: CalendarSummary[];
+  /** The calendars list is still loading (an assigned calendar reads "Loading…", not "inherit"). */
+  calendarsLoading?: boolean;
+  /** The calendars list failed to load — forwarded to the edit dialog's picker to surface it. */
+  calendarsError?: boolean;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
-  // The org calendar library, to name an activity's own calendar (ADR-0037). Fetched only when the
-  // picker feature is on (flag default-off); off, no column and no request.
-  const calendars = useQuery({
-    ...calendarsQueryOptions(orgSlug),
-    enabled: ACTIVITY_CALENDAR_ENABLED,
-  });
-  const calendarNameById = new Map((calendars.data ?? []).map((c) => [c.id, c.name]));
+  const calendarNameById = useMemo(
+    () => new Map(calendars.map((c) => [c.id, c.name])),
+    [calendars],
+  );
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -163,6 +172,31 @@ export function ActivitiesTable({
         );
       },
     },
+    // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. An em
+    // dash means "inherits the plan's calendar" — so a row that HAS a calendar must never fall back
+    // to one: while the library is still loading it reads "Loading…", and if that fetch fails/omits
+    // it "Unnamed" (with the id as a title), keeping the assigned case visibly distinct from a
+    // genuine inherit. Conditional spread (not a post-hoc splice) so its position can't silently
+    // drift. Hidden below `lg` like the other definition detail columns.
+    ...(ACTIVITY_CALENDAR_ENABLED
+      ? [
+          {
+            header: 'Calendar',
+            headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+            cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+            cell: (activity: ActivitySummary) => {
+              if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
+              const name = calendarNameById.get(activity.calendarId);
+              if (name) return <span className="text-muted-foreground">{name}</span>;
+              return (
+                <span className="text-muted-foreground italic" title={activity.calendarId}>
+                  {calendarsLoading ? 'Loading…' : 'Unnamed'}
+                </span>
+              );
+            },
+          } satisfies Column<ActivitySummary>,
+        ]
+      : []),
     // Engine-owned computed columns (M6, read-only). Null renders as an em dash
     // until the plan is recalculated. Late dates hide first on narrow screens.
     scheduleColumn('Early start', (a) => a.earlyStart, 'md'),
@@ -187,24 +221,6 @@ export function ActivitiesTable({
       },
     },
   ];
-  // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. Shown
-  // solely when it isn't inheriting the plan's calendar (an em dash = inherit), so the column stays
-  // quiet for the common case. Hidden below `lg` like the other definition detail columns.
-  if (ACTIVITY_CALENDAR_ENABLED) {
-    columns.splice(6, 0, {
-      header: 'Calendar',
-      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
-      cell: (activity) =>
-        activity.calendarId ? (
-          <span className="text-muted-foreground">
-            {calendarNameById.get(activity.calendarId) ?? '—'}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-    });
-  }
   // Variance vs the active baseline — only when the route supplies the map (M7). The
   // text carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces.
   // Finish variance is the headline (always shown); start/float variance hide first on
@@ -340,6 +356,9 @@ export function ActivitiesTable({
             planId={planId}
             open={editing !== undefined}
             onClose={() => setEditingId(null)}
+            calendars={calendars}
+            calendarsLoading={calendarsLoading}
+            calendarsError={calendarsError}
             {...(editing ? { activity: editing } : {})}
           />
           <ConfirmDialog
