@@ -27,6 +27,8 @@ describe('engine golden networks (first-principles)', () => {
             lateFinish: result!.lateFinish,
             totalFloat: result!.totalFloat,
             isCritical: result!.isCritical,
+            // Free float is compared only when the case pins it (M6-F1/F5), so existing cases stay exact.
+            ...(expected.freeFloat !== undefined ? { freeFloat: result!.freeFloat } : {}),
           }).toEqual(expected);
         });
       }

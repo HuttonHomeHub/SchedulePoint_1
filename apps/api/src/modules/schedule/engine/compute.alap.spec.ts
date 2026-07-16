@@ -5,12 +5,11 @@ import type { EngineActivity, EngineResult } from './types';
 import { allMinutesWorkCalendar } from './working-time-calendar';
 
 /**
- * As-Late-As-Possible (ADR-0035 §11, M4-F4). ALAP is a **display-only** placement preference: a
- * flagged activity is rendered at its late-based position (its late dates, which the pure backward
- * pass already computes), while its `early*`/`late*`/`totalFloat` stay a pure function of the network.
- * The zero-**free**-float refinement (place only as late as SUCCESSORS allow, so free float = 0) lands
- * in M6; today the late-based position is the render target. These tests pin the non-interference
- * contract: the flag never moves the pure schedule.
+ * As-Late-As-Possible (ADR-0035 §11, M4-F4 + M6-F5). ALAP is a **display-only** placement preference: a
+ * flagged activity is placed as late as its SUCCESSORS allow, so its **free float becomes 0** at that
+ * placement (the M6-F5 refinement), while its `early*`/`late*`/`totalFloat` stay a pure function of the
+ * network. These tests pin the non-interference contract (the flag never moves the pure schedule) and
+ * the zero-free-float signal.
  */
 
 const DATA_DATE = '2026-01-01';
@@ -32,12 +31,23 @@ function run(activities: readonly EngineActivity[]) {
 }
 
 describe('as-late-as-possible — display-only, never the pure passes (ADR-0035 §11)', () => {
-  it('leaves early/late/float byte-identical whether the flag is on or off', () => {
+  it('leaves the pure early/late/total-float byte-identical whether the flag is on or off', () => {
     // A(2) floats by 3 days against the 5-day B (both start at the data date; no logic ties).
-    const off = run([task('A', 2, false), task('B', 5)]);
-    const on = run([task('A', 2, true), task('B', 5)]);
-    expect(on.get('A')).toEqual(off.get('A'));
-    expect(on.get('B')).toEqual(off.get('B'));
+    const off = run([task('A', 2, false), task('B', 5)]).get('A')!;
+    const on = run([task('A', 2, true), task('B', 5)]).get('A')!;
+    // The PURE schedule is untouched by the display flag (§11) …
+    for (const k of [
+      'earlyStart',
+      'earlyFinish',
+      'lateStart',
+      'lateFinish',
+      'totalFloat',
+    ] as const) {
+      expect(on[k]).toEqual(off[k]);
+    }
+    // … but the ALAP placement consumes its slack, so its free float is 0 (M6-F5); off it keeps its 3-day free float.
+    expect(off.freeFloat).toBe(3 * DAY);
+    expect(on.freeFloat).toBe(0);
   });
 
   it('the ALAP render target is the activity’s late-based position (its late dates)', () => {

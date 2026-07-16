@@ -501,6 +501,13 @@ export function computeSchedule(
       }
       freeFloat = Math.min(minGap, totalFloat);
     }
+    // ALAP zero-free-float refinement (M6-F5, ADR-0035 §11). A flagged As-Late-As-Possible activity is
+    // DISPLAYED as late as its successors allow — its effective placement consumes its free float, so at
+    // that placement free float is 0. This is display-only: `early*`/`late*`/`totalFloat` stay a pure
+    // function of the network (the placement start is `earlyStart + freeFloat`; an open end, with no
+    // successors, falls back to its late dates per §11). Reporting `freeFloat = 0` is the machine-readable
+    // signal of that placement.
+    if (activity.scheduleAsLateAsPossible) freeFloat = 0;
 
     // Own-calendar offsets (for the inclusive-date mapping) and plan-frame offsets (exposed).
     const esOwn = offsetFromDataDate(cal, dataDateAbs, esInst);
