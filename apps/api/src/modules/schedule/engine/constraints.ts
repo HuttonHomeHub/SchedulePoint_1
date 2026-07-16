@@ -2,8 +2,9 @@ import type { ConstraintType } from '@repo/types';
 
 import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
 
+import { advanceWorking, rollBackwardToWorking, rollForwardToWorking } from './instants';
 import type { EngineActivity } from './types';
-import type { WorkingTimeCalendar } from './working-time-calendar';
+import { instantToAbsMinutes, type WorkingTimeCalendar } from './working-time-calendar';
 
 /**
  * The six **moderate** constraint kinds the engine honours in this slice (ADR-0023
@@ -38,59 +39,63 @@ function nextCalendarDay(date: string): string {
 }
 
 /**
- * The active constraint on an activity, resolved to continuous working-**minute**
- * offsets (ADR-0036). A constraint is active only when both `constraintType` and
- * `constraintDate` are present. `startOffset` is the constraint date as a start
- * offset (the first working minute of that day). `finishOffset` is the exclusive
- * boundary after the constraint day (its last working minute + 1) — the working
- * minutes from the data date through the end of day `c`; for a zero-duration
- * milestone the finish equals the start.
+ * The active constraint on an activity, resolved to **absolute working-instants** on the
+ * activity's own calendar (ADR-0037). A constraint is active only when both `constraintType`
+ * and `constraintDate` are present. `startAbs` is the constraint day's first working instant;
+ * `finishAbs` is the exclusive end of the constraint day's working time (its last working
+ * minute + 1) — measured on the activity's calendar so an activity constraint rolls to the
+ * activity's own next/previous working instant. For a zero-duration milestone finish = start.
  */
 interface ResolvedConstraint {
   kind: ModerateConstraint;
-  startOffset: number;
-  finishOffset: number;
+  startAbs: number;
+  finishAbs: number;
 }
 
 function resolve(
   activity: EngineActivity,
   calendar: WorkingTimeCalendar,
-  dataDate: string,
+  dataDateAbs: number,
 ): ResolvedConstraint | null {
   const { constraintType, constraintDate, durationMinutes } = activity;
   if (!constraintType || !constraintDate) return null;
-  const startOffset = calendar.workingTimeBetween(dataDate, constraintDate);
-  const finishOffset =
+  const startAbs = rollForwardToWorking(calendar, instantToAbsMinutes(constraintDate));
+  const finishAbs =
     durationMinutes === 0
-      ? startOffset
-      : calendar.workingTimeBetween(dataDate, nextCalendarDay(constraintDate));
-  return { kind: normaliseConstraint(constraintType), startOffset, finishOffset };
+      ? startAbs
+      : rollBackwardToWorking(
+          calendar,
+          dataDateAbs,
+          instantToAbsMinutes(nextCalendarDay(constraintDate)),
+        );
+  return { kind: normaliseConstraint(constraintType), startAbs, finishAbs };
 }
 
 /**
  * Clamp an activity's logic-driven **early start** for its constraint (forward
- * pass). `SNET`/`FNET` are lower bounds (take the max with logic); `MSO`/`MFO`
- * **pin** the start regardless of logic — a conflict then surfaces as negative
- * float on a predecessor, never a dropped edge. `SNLT`/`FNLT` are backward-only.
+ * pass), in absolute working-instants on the activity's calendar. `SNET`/`FNET` are
+ * lower bounds (take the max with logic); `MSO`/`MFO` **pin** the start regardless
+ * of logic — a conflict then surfaces as negative float on a predecessor, never a
+ * dropped edge. `SNLT`/`FNLT` are backward-only.
  */
 export function clampForwardStart(
   activity: EngineActivity,
   logicEarlyStart: number,
   calendar: WorkingTimeCalendar,
-  dataDate: string,
+  dataDateAbs: number,
 ): number {
-  const constraint = resolve(activity, calendar, dataDate);
+  const constraint = resolve(activity, calendar, dataDateAbs);
   if (!constraint) return logicEarlyStart;
   const duration = activity.durationMinutes;
   switch (constraint.kind) {
     case 'SNET':
-      return Math.max(logicEarlyStart, constraint.startOffset);
+      return Math.max(logicEarlyStart, constraint.startAbs);
     case 'FNET':
-      return Math.max(logicEarlyStart, constraint.finishOffset - duration);
+      return Math.max(logicEarlyStart, advanceWorking(calendar, constraint.finishAbs, -duration));
     case 'MSO':
-      return constraint.startOffset;
+      return constraint.startAbs;
     case 'MFO':
-      return constraint.finishOffset - duration;
+      return advanceWorking(calendar, constraint.finishAbs, -duration);
     case 'SNLT':
     case 'FNLT':
       return logicEarlyStart;
@@ -99,27 +104,28 @@ export function clampForwardStart(
 
 /**
  * Clamp an activity's logic-driven **late finish** for its constraint (backward
- * pass). `SNLT`/`FNLT` are upper bounds (take the min with logic); `MSO`/`MFO`
- * pin the finish. `SNET`/`FNET` are forward-only.
+ * pass), in absolute working-instants on the activity's calendar. `SNLT`/`FNLT` are
+ * upper bounds (take the min with logic); `MSO`/`MFO` pin the finish. `SNET`/`FNET`
+ * are forward-only.
  */
 export function clampBackwardFinish(
   activity: EngineActivity,
   logicLateFinish: number,
   calendar: WorkingTimeCalendar,
-  dataDate: string,
+  dataDateAbs: number,
 ): number {
-  const constraint = resolve(activity, calendar, dataDate);
+  const constraint = resolve(activity, calendar, dataDateAbs);
   if (!constraint) return logicLateFinish;
   const duration = activity.durationMinutes;
   switch (constraint.kind) {
     case 'SNLT':
-      return Math.min(logicLateFinish, constraint.startOffset + duration);
+      return Math.min(logicLateFinish, advanceWorking(calendar, constraint.startAbs, duration));
     case 'FNLT':
-      return Math.min(logicLateFinish, constraint.finishOffset);
+      return Math.min(logicLateFinish, constraint.finishAbs);
     case 'MSO':
-      return constraint.startOffset + duration;
+      return advanceWorking(calendar, constraint.startAbs, duration);
     case 'MFO':
-      return constraint.finishOffset;
+      return constraint.finishAbs;
     case 'SNET':
     case 'FNET':
       return logicLateFinish;
