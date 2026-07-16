@@ -25,9 +25,14 @@ export interface ActivityPatch {
   durationMinutes?: number;
   constraintType?: ConstraintType | null;
   constraintDate?: Date | null;
+  /** Secondary constraint (ADR-0035 §10): drives the backward pass; paired like the primary. */
+  secondaryConstraintType?: ConstraintType | null;
+  secondaryConstraintDate?: Date | null;
   /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
   calendarId?: string | null;
   laneIndex?: number;
+  /** As-Late-As-Possible placement preference (ADR-0035 §11): display-only, never the pure passes. */
+  scheduleAsLateAsPossible?: boolean;
   /** Visual-Planning placement (ADR-0033): hand-placed start, or null to clear it. */
   visualStart?: Date | null;
   // Progress
@@ -40,6 +45,8 @@ export interface ActivityPatch {
   /** Suspend / resume dates (M2, ADR-0035 §4); resume floors the remaining work. */
   suspendDate?: Date | null;
   resumeDate?: Date | null;
+  /** Expected-finish target (M4, ADR-0035 §9); resizes remaining work when the plan option is on. */
+  expectedFinish?: Date | null;
 }
 
 /**

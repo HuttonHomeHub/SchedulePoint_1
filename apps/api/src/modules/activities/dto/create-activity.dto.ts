@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ActivityType, ConstraintType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -88,6 +89,42 @@ export class CreateActivityDto {
   constraintDate?: string;
 
   @ApiPropertyOptional({
+    enum: ConstraintType,
+    description:
+      'Optional secondary schedule constraint (ADR-0035 §10); drives the backward pass. Set with a date.',
+  })
+  @IsOptional()
+  @IsEnum(ConstraintType)
+  @IsConstraintPaired({
+    typeField: 'secondaryConstraintType',
+    dateField: 'secondaryConstraintDate',
+  })
+  secondaryConstraintType?: ConstraintType;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description: 'Secondary constraint date (YYYY-MM-DD); required with a secondaryConstraintType.',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  @IsConstraintPaired({
+    typeField: 'secondaryConstraintType',
+    dateField: 'secondaryConstraintDate',
+  })
+  secondaryConstraintDate?: string;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description:
+      'Expected-finish target (ADR-0035 §9): when the plan option useExpectedFinishDates is on, an in-progress activity’s remaining work is resized so its early finish lands on this date.',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  expectedFinish?: string;
+
+  @ApiPropertyOptional({
     format: 'uuid',
     nullable: true,
     description:
@@ -108,6 +145,15 @@ export class CreateActivityDto {
   @Min(0)
   @Max(10000)
   laneIndex?: number;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference — the activity renders at its late-based position. Does not change early/late/float.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  scheduleAsLateAsPossible?: boolean;
 
   @ApiPropertyOptional({
     format: 'date',

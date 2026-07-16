@@ -140,6 +140,9 @@ export class PlansService {
     if (dto.status !== undefined) patch.status = dto.status;
     if (dto.schedulingMode !== undefined) patch.schedulingMode = dto.schedulingMode;
     if (dto.progressRecalcMode !== undefined) patch.progressRecalcMode = dto.progressRecalcMode;
+    if (dto.useExpectedFinishDates !== undefined) {
+      patch.useExpectedFinishDates = dto.useExpectedFinishDates;
+    }
     // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
     // defined value is always a valid calendar date.
     if (dto.plannedStart !== undefined) {

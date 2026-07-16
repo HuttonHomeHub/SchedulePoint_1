@@ -113,7 +113,8 @@ describe('computeSchedule — worked CPM example (all values hand-verified)', ()
       activityCount: 5,
       criticalCount: 4,
       nearCriticalCount: 1,
-      parkedConstraintCount: 0,
+      constraintViolationCount: 0,
+      constraintWarningCount: 0,
     });
   });
 });

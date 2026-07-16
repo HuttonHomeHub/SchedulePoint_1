@@ -18,6 +18,8 @@ export interface PlanPatch {
   schedulingMode?: SchedulingMode;
   /** Out-of-sequence recalc mode (M2, ADR-0035): RETAINED_LOGIC / PROGRESS_OVERRIDE / ACTUAL_DATES. */
   progressRecalcMode?: ProgressRecalcMode;
+  /** Expected-finish scheduling option (M4, ADR-0035 §9). */
+  useExpectedFinishDates?: boolean;
   /** The mandatory CPM data date (ADR-0033 M1): may be moved, never cleared — so never null. */
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */

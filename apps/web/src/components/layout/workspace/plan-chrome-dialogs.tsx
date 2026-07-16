@@ -1,9 +1,14 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Dialog } from '@/components/ui/dialog';
-import { PROGRESS_INGESTION_ENABLED } from '@/config/env';
+import { ADVANCED_CONSTRAINTS_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
-import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanRecalcModePicker } from '@/features/plans';
+import {
+  PLAN_STATUS_LABELS,
+  PlanCalendarPicker,
+  PlanExpectedFinishToggle,
+  PlanRecalcModePicker,
+} from '@/features/plans';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The lower-frequency plan-chrome surfaces reachable from either layout's overflow. */
@@ -70,6 +75,13 @@ export function PlanChromeDialogs({
           />
           {PROGRESS_INGESTION_ENABLED ? (
             <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          ) : null}
+          {ADVANCED_CONSTRAINTS_ENABLED ? (
+            <PlanExpectedFinishToggle
+              orgSlug={model.orgSlug}
+              plan={plan}
+              canEdit={model.canWrite}
+            />
           ) : null}
         </div>
       </Dialog>

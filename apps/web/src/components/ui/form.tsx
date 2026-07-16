@@ -54,6 +54,60 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   );
 });
 
+export interface CheckboxFieldProps extends Omit<InputProps, 'type'> {
+  label: string;
+  /** Validation message for this field, if any (from React Hook Form). */
+  error?: string | undefined;
+  /** Optional helper text rendered under the control when there is no error. */
+  hint?: string | undefined;
+}
+
+/**
+ * Accessible labelled checkbox — the boolean sibling of {@link TextField}. The `&lt;label&gt;` wraps the
+ * native `&lt;input type="checkbox"&gt;` and its text (so the accessible name never depends on `aria-label`),
+ * clears the WCAG 2.2 SC 2.5.8 ≥24px hit target (`min-h-6` + `py-1`), and links any error/hint via
+ * `aria-describedby`. Forwards its ref so `register()` can be spread directly onto it. Centralises the
+ * checkbox chrome so it isn't hand-rolled per feature (DESIGN_SYSTEM.md — no one-off styling).
+ */
+export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
+  function CheckboxField({ label, error, hint, id, className, ...props }, ref) {
+    const generatedId = useId();
+    const fieldId = id ?? generatedId;
+    const errorId = `${fieldId}-error`;
+    const hintId = `${fieldId}-hint`;
+    const describedBy = error ? errorId : hint ? hintId : undefined;
+
+    return (
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor={fieldId}
+          className="flex min-h-6 items-center gap-2 py-1 text-sm font-medium"
+        >
+          <input
+            ref={ref}
+            id={fieldId}
+            type="checkbox"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            className={cn('accent-primary size-4', className)}
+            {...props}
+          />
+          {label}
+        </label>
+        {error ? (
+          <p id={errorId} className="text-destructive-text text-sm">
+            {error}
+          </p>
+        ) : hint ? (
+          <p id={hintId} className="text-muted-foreground text-sm">
+            {hint}
+          </p>
+        ) : null}
+      </div>
+    );
+  },
+);
+
 export interface TextareaFieldProps extends TextareaProps {
   label: string;
   /** Validation message for this field, if any (from React Hook Form). */

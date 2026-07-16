@@ -1,4 +1,4 @@
-import type { ConstraintType } from '@repo/types';
+import type { ActivityType, ConstraintType } from '@repo/types';
 
 import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
 
@@ -7,14 +7,20 @@ import type { EngineActivity } from './types';
 import { instantToAbsMinutes, type WorkingTimeCalendar } from './working-time-calendar';
 
 /**
- * The six **moderate** constraint kinds the engine honours in this slice (ADR-0023
- * §6). `MANDATORY_START` / `MANDATORY_FINISH` are **parked** as their moderate
- * equivalents here (`MSO` / `MFO`) and counted in the summary's
- * `parkedConstraintCount` — hard-mandatory semantics are a documented follow-up.
+ * The six constraint kinds the engine applies as date-clamp arithmetic. `MANDATORY_START` /
+ * `MANDATORY_FINISH` share MSO/MFO's **pin** arithmetic (a Must-Start-On/Must-Finish-On hard pin in
+ * both passes), but M4 **un-parks** them: unlike a plain MSO/MFO the mandatory pin is allowed to
+ * override a stronger logic bound and, when it does, the engine **produces the (possibly impossible)
+ * schedule and flags it** (`constraintViolated`, ADR-0035 §7) — it never repairs it.
  */
 type ModerateConstraint = 'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO';
 
-/** Map a stored constraint kind to the moderate kind the engine applies. */
+/**
+ * Map a stored constraint kind to the clamp arithmetic the engine applies. Mandatory pins reuse the
+ * MSO/MFO pin math; whether a pin *violated* logic is decided separately (see {@link isMandatory} and
+ * the forward-pass check in `compute`), so the produce-and-flag distinction is orthogonal to the
+ * arithmetic here.
+ */
 export function normaliseConstraint(type: ConstraintType): ModerateConstraint {
   switch (type) {
     case 'MANDATORY_START':
@@ -26,9 +32,25 @@ export function normaliseConstraint(type: ConstraintType): ModerateConstraint {
   }
 }
 
-/** True for the two kinds parked as their moderate equivalents (for the count). */
-export function isParkedMandatory(type: ConstraintType | null | undefined): boolean {
+/**
+ * True for the two **mandatory** kinds (`MANDATORY_START` / `MANDATORY_FINISH`) — the ones that pin
+ * their date and may legally break logic (ADR-0035 §7). When a mandatory pin forces the start earlier
+ * than the network-earliest (a stronger logic bound), the activity is flagged `constraintViolated`.
+ */
+export function isMandatory(type: ConstraintType | null | undefined): boolean {
   return type === 'MANDATORY_START' || type === 'MANDATORY_FINISH';
+}
+
+/**
+ * A milestone **type** — a point-in-time event that *occupies* its start instant (ADR-0035 §22), as
+ * distinct from a zero-duration `TASK`. Milestone-**semantic** branches (e.g. the project-finish
+ * tie-break, where a finish milestone must beat a task ending at the same instant) key off this, not
+ * `duration === 0`; `duration === 0` stays only where it is a pure arithmetic shortcut (finish =
+ * start when there is no work), which is correct for a milestone and a zero-duration task alike. So a
+ * zero-duration task keeps a genuine start + finish and is never coerced to a milestone.
+ */
+export function isMilestone(type: ActivityType): boolean {
+  return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
 }
 
 /** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
@@ -52,12 +74,13 @@ interface ResolvedConstraint {
   finishAbs: number;
 }
 
-function resolve(
-  activity: EngineActivity,
+function resolvePair(
+  constraintType: ConstraintType | null | undefined,
+  constraintDate: string | null | undefined,
+  durationMinutes: number,
   calendar: WorkingTimeCalendar,
   dataDateAbs: number,
 ): ResolvedConstraint | null {
-  const { constraintType, constraintDate, durationMinutes } = activity;
   if (!constraintType || !constraintDate) return null;
   const startAbs = rollForwardToWorking(calendar, instantToAbsMinutes(constraintDate));
   const finishAbs =
@@ -69,6 +92,21 @@ function resolve(
           instantToAbsMinutes(nextCalendarDay(constraintDate)),
         );
   return { kind: normaliseConstraint(constraintType), startAbs, finishAbs };
+}
+
+/** The activity's **primary** constraint (drives the forward pass), or null when none is set. */
+function resolve(
+  activity: EngineActivity,
+  calendar: WorkingTimeCalendar,
+  dataDateAbs: number,
+): ResolvedConstraint | null {
+  return resolvePair(
+    activity.constraintType,
+    activity.constraintDate,
+    activity.durationMinutes,
+    calendar,
+    dataDateAbs,
+  );
 }
 
 /**
@@ -114,9 +152,45 @@ export function clampBackwardFinish(
   calendar: WorkingTimeCalendar,
   dataDateAbs: number,
 ): number {
-  const constraint = resolve(activity, calendar, dataDateAbs);
+  return backwardClamp(
+    resolve(activity, calendar, dataDateAbs),
+    logicLateFinish,
+    activity.durationMinutes,
+    calendar,
+  );
+}
+
+/**
+ * Clamp the late finish for an activity's **secondary** constraint (ADR-0035 §10, M4-F3). The
+ * secondary drives the **backward** pass only, applied on top of the primary's backward clamp
+ * (`min` for the upper-bound kinds). A secondary of a forward-only kind (`SNET`/`FNET`) is a no-op
+ * here — matching the clamp table — and no secondary at all returns `logicLateFinish` unchanged, so
+ * the single-constraint golden path stays byte-identical.
+ */
+export function clampSecondaryBackwardFinish(
+  activity: EngineActivity,
+  logicLateFinish: number,
+  calendar: WorkingTimeCalendar,
+  dataDateAbs: number,
+): number {
+  const constraint = resolvePair(
+    activity.secondaryConstraintType,
+    activity.secondaryConstraintDate,
+    activity.durationMinutes,
+    calendar,
+    dataDateAbs,
+  );
+  return backwardClamp(constraint, logicLateFinish, activity.durationMinutes, calendar);
+}
+
+/** The backward-pass clamp switch, shared by the primary and secondary constraints. */
+function backwardClamp(
+  constraint: ResolvedConstraint | null,
+  logicLateFinish: number,
+  duration: number,
+  calendar: WorkingTimeCalendar,
+): number {
   if (!constraint) return logicLateFinish;
-  const duration = activity.durationMinutes;
   switch (constraint.kind) {
     case 'SNLT':
       return Math.min(logicLateFinish, advanceWorking(calendar, constraint.startAbs, duration));

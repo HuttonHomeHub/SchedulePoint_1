@@ -20,8 +20,13 @@ export interface ScheduleActivityRow {
   type: ActivityType;
   constraintType: ConstraintType | null;
   constraintDate: Date | null;
+  /** Secondary constraint (ADR-0035 §10, M4): drives the backward pass only. */
+  secondaryConstraintType: ConstraintType | null;
+  secondaryConstraintDate: Date | null;
   /** Visual Planning hand-placement (ADR-0033); advisory input to the effective-Visual pass. */
   visualStart: Date | null;
+  /** As-Late-As-Possible placement preference (ADR-0035 §11, M4): display-only, never the pure passes. */
+  scheduleAsLateAsPossible: boolean;
   /** The activity's own calendar (ADR-0037, M5); null inherits the plan default. Resolved to a
    * port in the service and attached per-activity to the engine. */
   calendarId: string | null;
@@ -35,6 +40,8 @@ export interface ScheduleActivityRow {
   remainingDurationMinutes: number | null;
   /** Resume date for a suspended in-progress activity (M2, ADR-0035 §4); floors the remaining work. */
   resumeDate: Date | null;
+  /** Expected-finish target (M4, ADR-0035 §9); resizes remaining work when the plan option is on. */
+  expectedFinish: Date | null;
 }
 
 /** The minimal dependency shape the CPM engine reads (a plan's active edges). */
@@ -68,7 +75,10 @@ export interface ScheduleAggregate {
   activityCount: number;
   criticalCount: number;
   nearCriticalCount: number;
-  parkedConstraintCount: number;
+  /** Activities a mandatory pin drove into a broken relationship (ADR-0035 §7). */
+  constraintViolationCount: number;
+  /** Soft constraint warnings (today N15: a SNET dated before the data date). ADR-0035 §12. */
+  constraintWarningCount: number;
   /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
   projectFinish: string | null;
 }
@@ -78,7 +88,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the eleven engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the twelve engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -105,13 +115,17 @@ export class ScheduleRepository {
         type: true,
         constraintType: true,
         constraintDate: true,
+        secondaryConstraintType: true,
+        secondaryConstraintDate: true,
         visualStart: true,
+        scheduleAsLateAsPossible: true,
         calendarId: true,
         actualStart: true,
         actualFinish: true,
         percentComplete: true,
         remainingDurationMinutes: true,
         resumeDate: true,
+        expectedFinish: true,
       },
     });
   }
@@ -127,7 +141,8 @@ export class ScheduleRepository {
         activity_count: bigint;
         critical_count: bigint;
         near_critical_count: bigint;
-        parked_constraint_count: bigint;
+        constraint_violation_count: bigint;
+        constraint_warning_count: bigint;
         project_finish: string | null;
       }>
     >`
@@ -135,9 +150,14 @@ export class ScheduleRepository {
         COUNT(*) AS activity_count,
         COUNT(*) FILTER (WHERE is_critical) AS critical_count,
         COUNT(*) FILTER (WHERE is_near_critical) AS near_critical_count,
+        -- Produce-and-flag: the engine-written flag (ADR-0035 §7), read back like is_critical.
+        COUNT(*) FILTER (WHERE constraint_violated) AS constraint_violation_count,
+        -- N15 (ADR-0035 §12): a SNET dated before the plan's data date — derived from inputs, so it
+        -- matches the engine's own count without a stored column. A null data date yields no warning.
         COUNT(*) FILTER (
-          WHERE constraint_type IN ('MANDATORY_START', 'MANDATORY_FINISH')
-        ) AS parked_constraint_count,
+          WHERE constraint_type = 'SNET'
+            AND constraint_date < (SELECT planned_start FROM plans WHERE id = ${planId}::uuid)
+        ) AS constraint_warning_count,
         to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
       FROM activities
       WHERE plan_id = ${planId}::uuid
@@ -149,7 +169,8 @@ export class ScheduleRepository {
       activityCount: Number(row.activity_count),
       criticalCount: Number(row.critical_count),
       nearCriticalCount: Number(row.near_critical_count),
-      parkedConstraintCount: Number(row.parked_constraint_count),
+      constraintViolationCount: Number(row.constraint_violation_count),
+      constraintWarningCount: Number(row.constraint_warning_count),
       projectFinish: row.project_finish,
     };
   }
@@ -213,7 +234,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the eleven engine
+   * id can never write across a plan or tenant). Sets only the twelve engine
    * columns; a no-op for an empty result set.
    */
   async writeResults(
@@ -235,6 +256,7 @@ export class ScheduleRepository {
     const totalFloat = results.map((r) => Math.round(r.totalFloat / MINUTES_PER_DAY));
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
+    const constraintViolated = results.map((r) => r.constraintViolated);
     // Effective-Visual outputs (ADR-0033) — written by the same batch as the CPM columns, so they
     // stay engine-owned and out of the version/updated_at optimistic-lock path.
     const visualEffectiveStart = results.map((r) => r.visualEffectiveStart);
@@ -254,6 +276,7 @@ export class ScheduleRepository {
         total_float = v.total_float,
         is_critical = v.is_critical,
         is_near_critical = v.is_near_critical,
+        constraint_violated = v.constraint_violated,
         visual_effective_start = v.visual_effective_start,
         visual_effective_finish = v.visual_effective_finish,
         visual_conflict = v.visual_conflict,
@@ -267,13 +290,14 @@ export class ScheduleRepository {
         ${totalFloat}::int[],
         ${isCritical}::boolean[],
         ${isNearCritical}::boolean[],
+        ${constraintViolated}::boolean[],
         ${visualEffectiveStart}::date[],
         ${visualEffectiveFinish}::date[],
         ${visualConflict}::boolean[],
         ${visualDriftDays}::int[]
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
-        total_float, is_critical, is_near_critical,
+        total_float, is_critical, is_near_critical, constraint_violated,
         visual_effective_start, visual_effective_finish, visual_conflict, visual_drift_days
       )
       WHERE a.id = v.id

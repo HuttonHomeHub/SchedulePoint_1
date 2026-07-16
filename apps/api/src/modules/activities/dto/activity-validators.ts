@@ -39,11 +39,19 @@ export function IsZeroWhenMilestone(options?: ValidationOptions) {
  * set one without the other. Reads both fields off the payload (not the decorated
  * value) so it behaves the same whichever field it is applied to; treats
  * `null`/`undefined` as absent, so sending both as `null` (to clear) is valid, but
- * setting only one is rejected. Apply it to BOTH `constraintType` and
- * `constraintDate`: an omitted optional field skips its own validators, so the
- * check must live on whichever side is present to catch a lone value.
+ * setting only one is rejected. Apply it to BOTH the type and date fields of a pair:
+ * an omitted optional field skips its own validators, so the check must live on
+ * whichever side is present to catch a lone value. `fields` names the pair — it
+ * defaults to the primary `constraintType`/`constraintDate`, and the secondary pair
+ * (ADR-0035 §10) passes its own field names so the same rule guards both.
  */
-export function IsConstraintPaired(options?: ValidationOptions) {
+export function IsConstraintPaired(
+  fields: { typeField: string; dateField: string } = {
+    typeField: 'constraintType',
+    dateField: 'constraintDate',
+  },
+  options?: ValidationOptions,
+) {
   return function (object: object, propertyName: string): void {
     registerDecorator({
       name: 'isConstraintPaired',
@@ -52,13 +60,15 @@ export function IsConstraintPaired(options?: ValidationOptions) {
       ...(options ? { options } : {}),
       validator: {
         validate(_value: unknown, args: ValidationArguments): boolean {
-          const obj = args.object as { constraintType?: unknown; constraintDate?: unknown };
-          const hasType = obj.constraintType !== undefined && obj.constraintType !== null;
-          const hasDate = obj.constraintDate !== undefined && obj.constraintDate !== null;
+          const obj = args.object as Record<string, unknown>;
+          const typeValue = obj[fields.typeField];
+          const dateValue = obj[fields.dateField];
+          const hasType = typeValue !== undefined && typeValue !== null;
+          const hasDate = dateValue !== undefined && dateValue !== null;
           return hasType === hasDate;
         },
         defaultMessage(): string {
-          return 'constraintType and constraintDate must be set together (or both cleared).';
+          return `${fields.typeField} and ${fields.dateField} must be set together (or both cleared).`;
         },
       },
     });

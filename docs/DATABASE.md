@@ -247,7 +247,13 @@ incomplete-predecessor logic, `PROGRESS_OVERRIDE` drops the incoming bound from
 incomplete predecessors, `ACTUAL_DATES` follows the ADR-0035 §1 actual-dates
 treatment. `RETAINED_LOGIC` is behaviour-preserving in spirit; the column is
 additive with a constant `DEFAULT` (no data migration) and the engine does not
-consume it until the M2 engine tasks land.
+consume it until the M2 engine tasks land. `Plan` also carries the single-row
+boolean scheduling option `use_expected_finish_dates` (default `false`; ADR-0035
+§9, M4 F5): when on, the engine's forward pass recomputes an in-progress activity's
+remaining duration so its early finish lands on the activity's `expected_finish`
+(see _Activity_ below). Like the mode enums it is read with the plan, never filtered
+across plans (so unindexed), and additive with a constant `DEFAULT` (no data
+migration) — default `false` is behaviour-preserving.
 
 ### Activity: the schedule leaf
 
@@ -256,7 +262,18 @@ scheduling slices depend on, persisted **now** so those slices are additive (no
 wide `ALTER TABLE` + backfill later):
 
 - **Definition** (`type`, `duration_minutes`, `constraint_type`/`constraint_date`,
-  `lane_index`, optional `code`) — Planner-owned. Since ADR-0036 (M1) `duration_minutes`
+  `secondary_constraint_type`/`secondary_constraint_date`, `lane_index`,
+  `schedule_as_late_as_possible`, optional
+  `code`) — Planner-owned. The **secondary** constraint pair (ADR-0035 §10, M4 F3)
+  mirrors the primary pair exactly and is equally **client-settable** (NOT
+  engine-owned): the primary drives the CPM forward pass, the secondary drives the
+  backward pass. `schedule_as_late_as_possible` (ADR-0035 §11, M4 F4) is a defaulted
+  (`false`) **NOT NULL** boolean that is likewise **client-settable** (NOT
+  engine-owned) — a **display-only** placement preference: the ALAP pass shows the
+  activity's start as late as its successors allow while the pure `early_*`/`late_*`/
+  `total_float` network stays untouched (the effective-Visual precedent). Additive
+  with a constant `DEFAULT` (no data migration); unindexed (never a query predicate).
+  Since ADR-0036 (M1) `duration_minutes`
   is an integer count of **working minutes** (the engine schedules in working-minute
   offsets over intraday shift calendars); milestones are `0`. The public API stays
   **day-denominated** (`durationDays`) — the service converts at the boundary by the plan
@@ -264,7 +281,7 @@ wide `ALTER TABLE` + backfill later):
   contract changed. A defensive `DEFAULT 480` (one 8 h day) applies only to a direct-DB
   insert; the service always sets the value explicitly.
 - **Progress** (`status`, `percent_complete`, `actual_start`, `actual_finish`,
-  `remaining_duration_minutes`, `suspend_date`, `resume_date`) —
+  `remaining_duration_minutes`, `suspend_date`, `resume_date`, `expected_finish`) —
   Contributor-updatable via a dedicated progress path, never via a definition
   update. `remaining_duration_minutes` (ADR-0035 §1, M2) is an **independent,
   P6-faithful** remaining-work count in working minutes: **`NULL` ⇒ the engine
@@ -277,11 +294,21 @@ wide `ALTER TABLE` + backfill later):
   `actual_start/finish`); a suspended activity's remaining work is floored at
   `max(data date, resume_date)`. All three are **additive & nullable** (no data
   migration); the engine does not consume them until the M2 engine tasks land.
+  `expected_finish` (ADR-0035 §9, M4 F5) is a **client-settable** (NOT engine-owned),
+  nullable target finish date for an in-progress activity (calendar day, `@db.Date`);
+  when the plan option `use_expected_finish_dates` is on, the engine's forward pass
+  recomputes `remaining_duration_minutes` so the early finish lands on it (floored per
+  the M2 data-date rule), otherwise it is ignored. It is additive & nullable (no data
+  migration) and unindexed (read only on the full-plan recalc load).
 - **CPM output — engine-owned** (`early_start`/`early_finish`,
-  `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`):
-  nullable/defaulted, **never accepted from a write DTO**. They are populated by
-  the CPM engine (a later slice); until then they read as null/false ("—" in the
-  UI). Storing them now avoids a wide migration when the engine lands.
+  `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`,
+  `constraint_violated`): nullable/defaulted, **never accepted from a write DTO**.
+  They are populated by the CPM engine; until a plan is recalculated they read as
+  null/false ("—" in the UI). `constraint_violated` (M4, ADR-0035 §7) is a
+  defaulted (`false`) **NOT NULL** boolean — true when a mandatory pin
+  (`MANDATORY_START`/`MANDATORY_FINISH`) drove the activity earlier than logic
+  allowed (produce-and-flag; the schedule is produced as pinned, never repaired).
+  Storing these avoids a wide migration when features that read them land.
 - **`calendar_id`** is the activity's own working-time calendar (**M5, ADR-0037**):
   a nullable, **client-settable** UUID FK to `calendars` (`onDelete: Restrict`),
   mirroring `Plan.calendar` exactly. `null` means **inherit the plan default** —
@@ -293,9 +320,9 @@ wide `ALTER TABLE` + backfill later):
   — is the real protection, `RESTRICT` is defence in depth. Backed by the partial
   `idx_activities_calendar_id`.
 
-Calendar-day fields (`constraint_date`, `actual_start/finish`, the CPM `*_start/
-finish` columns) are `@db.Date` (date-only, no timezone), like `Plan.planned_start`
-— a schedule day is a calendar day, not an instant.
+Calendar-day fields (`constraint_date`, `actual_start/finish`, `expected_finish`, the
+CPM `*_start/finish` columns) are `@db.Date` (date-only, no timezone), like
+`Plan.planned_start` — a schedule day is a calendar day, not an instant.
 
 `activities` is the first domain table with bounded numerics, so it is also the
 first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
@@ -307,11 +334,13 @@ remaining only; `NULL` is always legal, that is the derive path),
 (≥ 0), `ck_activities_resume_after_suspend` (**nullable-safe**: `resume_date IS
 NULL OR suspend_date IS NULL OR resume_date >= suspend_date` — enforced only when
 both suspend/resume dates are set, so it never blocks the common no-suspend path),
-and `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
+`ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
 and `constraint_date` are both set or both null (never one without the other), so a
 half-set constraint can never corrupt CPM scheduling even if a future code path
-bypasses the service. They are raw SQL in the migration (Prisma cannot express
-`CHECK`). `total_float` is deliberately unconstrained — negative float is valid.
+bypasses the service — and `ck_activities_secondary_constraint_pair`, the identical
+both-null-or-both-set invariant for the secondary pair (ADR-0035 §10, M4 F3). They
+are raw SQL in the migration (Prisma cannot express `CHECK`). `total_float` is
+deliberately unconstrained — negative float is valid.
 
 ### Dependency: the schedule edge
 

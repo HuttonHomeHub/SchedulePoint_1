@@ -180,6 +180,32 @@ export function useSetPlanRecalcMode(orgSlug: string) {
   });
 }
 
+/**
+ * Toggle a plan's `useExpectedFinishDates` (ADR-0035 §9, M4) — a targeted PATCH of just the boolean +
+ * `version`, so the settings toggle doesn't need the whole plan form. Mirrors {@link useSetPlanRecalcMode}:
+ * writes the returned plan into the detail cache (new value + fresh version) and invalidates the
+ * schedule summary so a later recalculation reflects it. It changes no dates itself; the next recalc
+ * resizes any expected-finish activity's remaining work.
+ */
+export function useSetPlanExpectedFinish(orgSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { planId: string; version: number; useExpectedFinishDates: boolean }) =>
+      apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          useExpectedFinishDates: input.useExpectedFinishDates,
+          version: input.version,
+        }),
+      }),
+    onSuccess: (updated, input) => {
+      queryClient.setQueryData(planKeys.detail(orgSlug, input.planId), updated);
+    },
+    onSettled: (_data, _error, input) =>
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
+  });
+}
+
 export function useDeletePlan(orgSlug: string, projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

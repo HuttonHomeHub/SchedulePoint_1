@@ -222,4 +222,101 @@ export const GOLDEN_CASES: GoldenCase[] = [
     },
     projectFinish: '2026-01-13',
   },
+  {
+    name: 'secondary-constraint-snet-fnlt',
+    description:
+      'A5200-style: A(2) carries a SNET primary (forward) + FNLT secondary (backward), both provably active, alongside a longer parallel B(5). SNET moves A’s early start; the FNLT tightens A’s late finish below the slack B would otherwise allow, taking A’s float to zero (ADR-0035 §10).',
+    activities: [
+      {
+        id: 'A',
+        durationMinutes: 2880,
+        type: 'TASK',
+        constraintType: 'SNET',
+        constraintDate: '2026-06-03',
+        secondaryConstraintType: 'FNLT',
+        secondaryConstraintDate: '2026-06-04',
+      },
+      task('B', 5),
+    ],
+    edges: [],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // Forward: SNET(06-03) pushes ES to offset 2 days (06-03); EF inclusive offset 3 = 06-04.
+      // Backward: without the secondary A would float to B’s finish (offset 5); FNLT(06-04) clamps the
+      // late finish to offset 4 (inclusive 06-04), so LS = 06-03 and A’s float is 0 (both active).
+      A: {
+        earlyStart: '2026-06-03',
+        earlyFinish: '2026-06-04',
+        lateStart: '2026-06-03',
+        lateFinish: '2026-06-04',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // B is the longest pole and drives the project finish (offset 5 → inclusive 06-05).
+      B: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-05',
+  },
+  {
+    name: 'alap-display-only',
+    description:
+      'A9400-style: A(2) flagged As-Late-As-Possible floats against a 5-day B. ALAP is display-only (ADR-0035 §11) — A’s pure early/late/float are unchanged; its LATE dates (06-04 → 06-05) are where an ALAP bar renders.',
+    activities: [
+      { id: 'A', durationMinutes: 2880, type: 'TASK', scheduleAsLateAsPossible: true },
+      task('B', 5),
+    ],
+    edges: [],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // ES 06-01, EF inclusive 06-02; floats 3 days against B → LS offset 3 (06-04), LF inclusive 06-05.
+      A: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-02',
+        lateStart: '2026-06-04',
+        lateFinish: '2026-06-05',
+        totalFloat: 4320,
+        isCritical: false,
+      },
+      B: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-05',
+  },
+  {
+    name: 'expected-finish-resize',
+    description:
+      'A6200-style: a not-started A(3d) carries an expected finish of 06-08 and the plan option is ON — its full duration is recomputed so the finish lands on 06-08 (not its 3-day plan) (ADR-0035 §9).',
+    activities: [{ id: 'A', durationMinutes: 4320, type: 'TASK', expectedFinish: '2026-06-08' }],
+    edges: [],
+    options: {
+      dataDate: ALL_DAYS_DATA_DATE,
+      calendar: allMinutesWorkCalendar,
+      useExpectedFinishDates: true,
+    },
+    expected: {
+      // ES data date 06-01; the remaining is resized to land the finish on 06-08 (offset 8 → inclusive 06-08).
+      A: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-08',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-08',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-08',
+  },
 ];

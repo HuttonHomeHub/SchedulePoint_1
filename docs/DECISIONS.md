@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-16 — M4-F8 duplicate-relationship policy: reject per-(pair, type), not per-pair
+
+**Decision.** The "duplicate relationship is rejected" contract (ADR-0035 §13, N04) is scoped to an
+**exact duplicate — the same ordered predecessor→successor pair _and_ the same relationship type**,
+enforced by the write-path partial-unique index `uq_dependencies_pred_succ_type`. A **different-type**
+relationship between the same pair (an FS **and** an SS) is **permitted**. A second FS on an existing
+A→B FS is rejected `409 DUPLICATE_DEPENDENCY`; an SS on that pair is allowed (`201`).
+
+**Why.** The fixture's N04 wording ("only one relationship per pair") was a simplification. P6 permits
+one relationship of **each of the four types** between a pair, and the FS+SS **ladder**/overlap is a
+standard construction technique (start B a bit after A starts, finish B a bit after A finishes) we
+deliberately keep. N04's actual intent — never silently dedupe, always reject a _true_ duplicate — is
+fully satisfied by per-(pair, type) uniqueness, so no destructive per-pair migration is warranted.
+
+**Consequences.** ADR-0035 §13 gains an M4-F8 amendment paragraph; the CAPABILITY_MATRIX N04 and
+section-1 topology rows flip to ✅. The behaviour already shipped with the dependency write-path — the
+existing `test/dependencies.e2e-spec.ts` case (dup FS → 409, SS on the same pair → 201) is the
+regression guard; the conformance N04 case points to it rather than duplicating the assertion.
+
 ### 2026-07-16 — M2 recalc modes: finish-side float + Actual-Dates = max(data date, actual start)
 
 **Decision.** Two semantics for M2 progress ingestion (ADR-0035 §1):
@@ -717,3 +736,32 @@ simply re-derives at the new scale on the next interaction frame. The viewport i
 out of its ref, so ADR-0026 D3 holds and the M2/M4/M5 gesture, hit-test and focus-follow paths
 are untouched. **No new ADR** (ADR-0026 governs the rendering/viewport/a11y architecture; this
 records the readability-layer seam within it).
+
+## M4 advanced constraints — acceptance gate & the violation-output contract (2026-07-16)
+
+M4 lands ADR-0035's constraint clauses; this records the decisions the milestone's design gate (F0)
+settles, so the engine slices that follow have a fixed contract. See ADR-0035 §7 amendment and the
+acceptance-status ledger.
+
+- **Violation output (§7, Q1).** Mandatory produce-and-flag replaces the current _silent parking_ of
+  `MANDATORY_START`/`MANDATORY_FINISH` as MSO/MFO. The engine gains an **engine-owned per-activity
+  `constraintViolated` boolean** (the pin overrides a stronger logic bound) and a plan-level
+  **`constraintViolationCount`** that **replaces `parkedConstraintCount`** (nothing is parked any
+  more). N15's soft case (a `START_ON_OR_AFTER` before the data date, honoured-and-noted) is a
+  separate plan-level **`constraintWarningCount`**. Produced, never repaired — the boundary neither
+  rejects nor rewrites a mandatory constraint. **No standalone ADR** (no new axis/invariant): recorded
+  as the ADR-0035 §7 amendment. `constraintViolated` is engine-owned like the other CPM outputs
+  (never client-settable), so the security posture matches `isCritical`/`totalFloat`.
+- **ALAP modelling (§11, Q3).** As-Late-As-Possible is a **boolean `scheduleAsLateAsPossible`**, not a
+  `ConstraintType` enum value — keeping `ConstraintType` strictly date-bearing. It is delivered as a
+  display-only zero-free-float placement pass (the free-float=0 _assertion_ defers to M6, matrix
+  "M4/M6").
+- **Expected Finish shape (§9, Q2).** A plan-level recalc **option** (`useExpectedFinishDates`,
+  mirroring M2's `progressRecalcMode`) plus a per-activity **`expectedFinish` date**, reusing M2's
+  remaining-duration seam to resize remaining work to hit the target — not a per-activity boolean.
+- **Zero-duration task ≠ milestone (§22).** The engine keys milestone-specific behaviour off an
+  **`isMilestone(type)`** predicate, not `duration === 0`, so a zero-duration `TASK` keeps a real
+  start+finish and loses the project-finish tie-break to a genuine finish milestone at the same
+  instant. Delivered first (F1) behind the byte-parity golden gate.
+- **Topology reporting (§13/§14) in scope.** F8 (duplicate-edge reject with the pair named; cycle
+  reports naming the exact members) is included in M4 as the last, droppable slice.

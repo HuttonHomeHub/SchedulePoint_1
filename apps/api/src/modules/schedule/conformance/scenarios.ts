@@ -15,6 +15,9 @@ const PROGRESS_MODE_BY_SCENARIO: Record<string, ProgressMode> = {
   S02_PROGRESSED_RETAINED_LOGIC: 'RETAINED_LOGIC',
   S03_PROGRESS_OVERRIDE: 'PROGRESS_OVERRIDE',
   S04_ACTUAL_DATES: 'ACTUAL_DATES',
+  // S12 runs the same progressed Retained-Logic network as S02, but with the Expected-Finish option
+  // ON — so `resultsDiffer(S12, S02)` isolates exactly that option (ADR-0035 §9, M4).
+  S12_EXPECTED_FINISH_OFF: 'RETAINED_LOGIC',
 };
 
 /**
@@ -79,8 +82,11 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: 'needs multiple-float-path analysis (ADR-0035 §19, M6)',
   },
   S12_EXPECTED_FINISH_OFF: {
-    runnable: false,
-    reason: 'needs expected-finish handling on progressed activities (ADR-0035 §9, M4)',
+    // M4 (ADR-0035 §9) landed Expected Finish: an incomplete activity's remaining work is resized to
+    // its expected finish when the option is on. S12 runs the S02 progressed network with the option
+    // ON, so it differs from S02 (the fixture's A6200 lands on its expected finish, not its logic finish).
+    runnable: true,
+    reason: '',
   },
   S13_TOTAL_FLOAT_START: {
     runnable: false,
@@ -119,12 +125,15 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
   const honorActivityCalendars = scenarioId === 'S05_LAG_CALENDAR_SUCCESSOR';
   const relationshipLagCalendar =
     scenarioId === 'S05_LAG_CALENDAR_SUCCESSOR' ? ('SUCCESSOR' as const) : ('PLAN' as const);
+  // S12 flips the Expected-Finish option on (ADR-0035 §9, M4); every other scenario leaves it off.
+  const useExpectedFinishDates = scenarioId === 'S12_EXPECTED_FINISH_OFF';
   const { activities, edges, options } = adaptFixture(fixture, {
     dataDate,
     honorLagCalendars,
     honorActivityCalendars,
     honorProgress,
     relationshipLagCalendar,
+    useExpectedFinishDates,
   });
   return {
     ran: true,

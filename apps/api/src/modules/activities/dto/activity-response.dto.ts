@@ -46,6 +46,24 @@ export class ActivityResponseDto implements ActivitySummary {
   constraintDate!: string | null;
 
   @ApiProperty({
+    enum: ConstraintType,
+    nullable: true,
+    description: 'Secondary constraint (ADR-0035 §10); drives the backward pass.',
+  })
+  secondaryConstraintType!: ConstraintType | null;
+
+  @ApiProperty({ format: 'date', nullable: true, type: String })
+  secondaryConstraintDate!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description: 'Expected-finish target (ADR-0035 §9), or null.',
+  })
+  expectedFinish!: string | null;
+
+  @ApiProperty({
     format: 'uuid',
     nullable: true,
     type: String,
@@ -115,6 +133,18 @@ export class ActivityResponseDto implements ActivitySummary {
   isNearCritical!: boolean;
 
   @ApiProperty({
+    description:
+      'Mandatory produce-and-flag (engine-owned, ADR-0035 §7): true when a mandatory pin drove the start earlier than logic allowed.',
+  })
+  constraintViolated!: boolean;
+
+  @ApiProperty({
+    description:
+      'Schedule As-Late-As-Possible (ADR-0035 §11): display-only placement preference; does not change early/late/float.',
+  })
+  scheduleAsLateAsPossible!: boolean;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -173,8 +203,11 @@ export class ActivityResponseDto implements ActivitySummary {
       durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),
+      secondaryConstraintType: entity.secondaryConstraintType,
+      secondaryConstraintDate: day(entity.secondaryConstraintDate),
       calendarId: entity.calendarId,
       laneIndex: entity.laneIndex,
+      scheduleAsLateAsPossible: entity.scheduleAsLateAsPossible,
       status: entity.status,
       percentComplete: entity.percentComplete,
       actualStart: day(entity.actualStart),
@@ -187,6 +220,7 @@ export class ActivityResponseDto implements ActivitySummary {
           : Math.round(entity.remainingDurationMinutes / MINUTES_PER_DAY),
       suspendDate: day(entity.suspendDate),
       resumeDate: day(entity.resumeDate),
+      expectedFinish: day(entity.expectedFinish),
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),
       lateStart: day(entity.lateStart),
@@ -194,6 +228,7 @@ export class ActivityResponseDto implements ActivitySummary {
       totalFloat: entity.totalFloat,
       isCritical: entity.isCritical,
       isNearCritical: entity.isNearCritical,
+      constraintViolated: entity.constraintViolated,
       visualStart: day(entity.visualStart),
       visualEffectiveStart: day(entity.visualEffectiveStart),
       visualEffectiveFinish: day(entity.visualEffectiveFinish),

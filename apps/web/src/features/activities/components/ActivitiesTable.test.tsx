@@ -17,8 +17,12 @@ const ACTIVITY: ActivitySummary = {
   durationDays: 5,
   constraintType: null,
   constraintDate: null,
+  secondaryConstraintType: null,
+  secondaryConstraintDate: null,
   calendarId: null,
   laneIndex: 0,
+  scheduleAsLateAsPossible: false,
+  expectedFinish: null,
   status: 'IN_PROGRESS',
   percentComplete: 40,
   actualStart: '2026-05-01',
@@ -33,6 +37,7 @@ const ACTIVITY: ActivitySummary = {
   totalFloat: null,
   isCritical: false,
   isNearCritical: false,
+  constraintViolated: false,
   visualStart: null,
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
@@ -131,6 +136,13 @@ describe('ActivitiesTable', () => {
     const rows = within(screen.getByRole('table')).getAllByRole('row');
     const cells = within(rows[rows.length - 1]!).getAllByRole('cell');
     expect(cells[5]).toHaveTextContent('—');
+  });
+
+  it('does not show the Conflict badge while VITE_ADVANCED_CONSTRAINTS is off, even when violated', () => {
+    // The engine flag is set on the row, but the badge is gated on the (default-off) feature flag —
+    // so the flag-off surface never surfaces it. (Flag-on behaviour is in the dedicated suite.)
+    renderTable(false, [{ ...ACTIVITY, constraintViolated: true }]);
+    expect(screen.queryByText('Conflict')).not.toBeInTheDocument();
   });
 
   it('shows computed dates, float and a Critical badge for a calculated activity', () => {

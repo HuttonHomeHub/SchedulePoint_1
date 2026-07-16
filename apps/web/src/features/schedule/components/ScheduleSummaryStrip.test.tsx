@@ -24,7 +24,8 @@ const summary = (overrides: Partial<PlanScheduleSummary> = {}): PlanScheduleSumm
   activityCount: 5,
   criticalCount: 4,
   nearCriticalCount: 1,
-  parkedConstraintCount: 0,
+  constraintViolationCount: 0,
+  constraintWarningCount: 0,
   ...overrides,
 });
 
@@ -42,22 +43,34 @@ describe('ScheduleSummaryStrip', () => {
     expect(screen.getByText('Project finish')).toBeInTheDocument();
   });
 
-  it('shows the parked-constraints figure with an explanation wired for AT when non-zero', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(summary({ parkedConstraintCount: 2 }));
+  it('shows the constraint-conflicts figure with an explanation wired for AT when non-zero', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(summary({ constraintViolationCount: 2 }));
     renderStrip();
-    await waitFor(() => expect(screen.getByText('Parked constraints')).toBeInTheDocument());
-    const note = screen.getByText(/mandatory constraints the scheduler applies as Must start on/i);
+    await waitFor(() => expect(screen.getByText('Constraint conflicts')).toBeInTheDocument());
+    const note = screen.getByText(/a mandatory constraint forces a date earlier than/i);
     // The figure's value is described by the explanatory note (the id link is real, not a typo).
-    expect(note).toHaveAttribute('id', 'parked-constraints-hint');
-    expect(screen.getByText('2')).toHaveAttribute('aria-describedby', 'parked-constraints-hint');
+    expect(note).toHaveAttribute('id', 'constraint-violations-hint');
+    expect(screen.getByText('2')).toHaveAttribute('aria-describedby', 'constraint-violations-hint');
   });
 
-  it('omits the parked-constraints figure and its note when zero', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(summary({ parkedConstraintCount: 0 }));
+  it('shows the constraint-warnings figure with an explanation wired for AT when non-zero', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(summary({ constraintWarningCount: 3 }));
+    renderStrip();
+    await waitFor(() => expect(screen.getByText('Constraint warnings')).toBeInTheDocument());
+    const note = screen.getByText(/Start-no-earlier-than constraints dated before the data date/i);
+    expect(note).toHaveAttribute('id', 'constraint-warnings-hint');
+    expect(screen.getByText('3')).toHaveAttribute('aria-describedby', 'constraint-warnings-hint');
+  });
+
+  it('omits the constraint figures and notes when zero', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      summary({ constraintViolationCount: 0, constraintWarningCount: 0 }),
+    );
     renderStrip();
     await waitFor(() => expect(screen.getByText('Critical')).toBeInTheDocument());
-    expect(screen.queryByText('Parked constraints')).not.toBeInTheDocument();
-    expect(screen.queryByText(/applies as Must start on/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Constraint conflicts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Constraint warnings')).not.toBeInTheDocument();
+    expect(screen.queryByText(/forces a date earlier than/i)).not.toBeInTheDocument();
   });
 
   it('shows a "not yet calculated" state with the data date when never computed', async () => {

@@ -31,14 +31,32 @@ export interface EngineActivity {
    * engine stays calendar-agnostic (it never sees an id or an enum).
    */
   calendar?: WorkingTimeCalendar;
-  /** Schedule constraint kind, if any. Honoured from Task A3 onward. */
+  /** Primary schedule constraint kind, if any. Drives the **forward** pass (early dates). */
   constraintType?: ConstraintType | null;
-  /** The constraint's calendar day (`YYYY-MM-DD`); required when a type is set. */
+  /** The primary constraint's calendar day (`YYYY-MM-DD`); required when a type is set. */
   constraintDate?: string | null;
+  /**
+   * Optional **secondary** constraint (ADR-0035 §10, M4). It drives the **backward** pass (late
+   * dates) only — the primary owns the forward pass unchanged. A secondary of a forward-only kind
+   * (`SNET`/`FNET`) is a documented no-op on the backward clamp (matches the clamp table); the
+   * intended pairing is a forward primary + a backward secondary (e.g. A5200: SNET + FNLT). Absent =
+   * no secondary (the byte-identical single-constraint path). Required together with its date.
+   */
+  secondaryConstraintType?: ConstraintType | null;
+  /** The secondary constraint's calendar day (`YYYY-MM-DD`); required when a secondary type is set. */
+  secondaryConstraintDate?: string | null;
   /** Visual Planning hand-placement (`YYYY-MM-DD`), ADR-0033. Advisory input to the
    * **effective-Visual pass only** — it never touches the pure forward/backward pass, so
    * `early*`/`late*`/float stay a pure function of the network. Absent = no placement. */
   visualStart?: string | null;
+  /**
+   * As-Late-As-Possible placement preference (ADR-0035 §11, M4-F4). A **display-only** hint, not a
+   * date constraint: it never touches the pure forward/backward pass, so `early*`/`late*`/float stay a
+   * pure function of the network. A flagged activity is rendered at its late-based position (its late
+   * dates, already computed here); the zero-**free**-float refinement (place only as late as successors
+   * allow) lands in M6. Absent/false = the ordinary early-based placement.
+   */
+  scheduleAsLateAsPossible?: boolean;
   /**
    * Progress actuals (M2, ADR-0035 §1–§2). Calendar days (`YYYY-MM-DD`). A **complete** activity
    * (`actualFinish` set) freezes on its actuals; an **in-progress** one (`actualStart` set, no
@@ -60,6 +78,15 @@ export interface EngineActivity {
    * pushes the remaining out to it. Ignored for a not-started/complete activity.
    */
   resumeDate?: string | null;
+  /**
+   * Expected-finish target (`YYYY-MM-DD`) for an **incomplete** activity (M4, ADR-0035 §9). Honoured
+   * only when {@link ComputeOptions.useExpectedFinishDates} is on: the forward pass then **recomputes**
+   * the work remaining from the scheduled start so the early finish lands on this date — for an
+   * in-progress activity its remaining, for a not-started one its full duration (the ADR §9 example
+   * A6200 is not-started). Floored at the start (a past target collapses to zero). Ignored for a
+   * complete activity or when the option is off, so the byte-identical path is unchanged.
+   */
+  expectedFinish?: string | null;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
@@ -113,6 +140,12 @@ export interface EngineResult {
   totalFloat: number;
   isCritical: boolean;
   isNearCritical: boolean;
+  /**
+   * Mandatory produce-and-flag (ADR-0035 §7): true when a `MANDATORY_START`/`MANDATORY_FINISH` pin
+   * overrode a stronger logic bound (drove the start earlier than the network-earliest). The schedule
+   * is produced as-pinned; this flags that it broke logic — engine-owned, never repaired.
+   */
+  constraintViolated: boolean;
   earlyStart: string;
   earlyFinish: string;
   lateStart: string;
@@ -139,10 +172,20 @@ export interface EngineSummary {
   criticalCount: number;
   nearCriticalCount: number;
   /**
-   * How many `MANDATORY_START` / `MANDATORY_FINISH` constraints were treated as
-   * their moderate equivalents (`MSO` / `MFO`) in this slice. Zero until A3.
+   * How many activities a mandatory pin drove into a broken relationship (`constraintViolated`) —
+   * the produce-and-flag count (ADR-0035 §7), replacing the old parked-mandatory count.
    */
-  parkedConstraintCount: number;
+  constraintViolationCount: number;
+  /**
+   * How many soft constraint warnings the plan carries — today the N15 case: a Start-No-Earlier-Than
+   * dated before the data date (honoured, but can't pull work before it). ADR-0035 §12.
+   */
+  constraintWarningCount: number;
+  /**
+   * How many incomplete activities had their remaining work resized to an **expected finish** this run
+   * (ADR-0035 §9) — zero unless the plan's `useExpectedFinishDates` option is on. Observability only.
+   */
+  expectedFinishAppliedCount: number;
   /** The project finish offset (max early-finish offset); null for an empty plan. */
   projectFinishOffset: number | null;
   /** The inclusive project finish display date; null for an empty plan. */

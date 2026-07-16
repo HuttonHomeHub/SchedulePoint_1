@@ -23,12 +23,12 @@ describe('conformance scenarios (differential scaffold)', () => {
     expect(Object.keys(SCENARIO_SUPPORT)).toHaveLength(fixture.scenarios.length);
   });
 
-  it('marks the baseline + the lag-calendar scenarios runnable; the rest are documented todo', () => {
+  it('marks the baseline + the wired scenarios runnable; the rest are documented todo', () => {
     const runnable = Object.entries(SCENARIO_SUPPORT)
       .filter(([, s]) => s.runnable)
       .map(([id]) => id);
     // S06 became runnable at M3 (24-Hour lag); S05 at M5 (per-activity calendars → successor lag);
-    // S02/S03/S04 at M2 (progress ingestion + the three recalc modes).
+    // S02/S03/S04 at M2 (progress ingestion + the three recalc modes); S12 at M4 (Expected Finish).
     expect(runnable).toEqual([
       'S01_BASELINE_UNPROGRESSED',
       'S02_PROGRESSED_RETAINED_LOGIC',
@@ -36,6 +36,7 @@ describe('conformance scenarios (differential scaffold)', () => {
       'S04_ACTUAL_DATES',
       'S05_LAG_CALENDAR_SUCCESSOR',
       'S06_LAG_CALENDAR_24H',
+      'S12_EXPECTED_FINISH_OFF',
     ]);
 
     for (const [id, support] of Object.entries(SCENARIO_SUPPORT)) {
@@ -80,6 +81,18 @@ describe('conformance scenarios (differential scaffold)', () => {
       // The definitive Retained-Logic vs Progress-Override discriminator: dropping A4220's incomplete
       // predecessor moves its downstream, so S03 ≠ S02 (ADR-0035 §1, fixture S03 assertion).
       expect(resultsDiffer(override.output, retained.output)).toBe(true);
+    }
+  });
+
+  it('runs S12 (Expected Finish) as a differential — turning the option on differs from S02 (M4)', () => {
+    const retained = runScenario(fixture, 'S02_PROGRESSED_RETAINED_LOGIC');
+    const expectedFinish = runScenario(fixture, 'S12_EXPECTED_FINISH_OFF');
+    expect(retained.ran && expectedFinish.ran).toBe(true);
+    if (retained.ran && expectedFinish.ran) {
+      // S12 runs the identical progressed Retained-Logic network as S02 with only the Expected-Finish
+      // option flipped ON, so the fixture's A6200 lands on its expected finish instead of its logic
+      // finish — the M4 differential (ADR-0035 §9): flip the one option, dates must move.
+      expect(resultsDiffer(expectedFinish.output, retained.output)).toBe(true);
     }
   });
 

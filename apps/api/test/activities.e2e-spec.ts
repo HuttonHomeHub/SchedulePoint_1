@@ -186,6 +186,48 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .post(base)
       .send({ name: 'D', constraintType: 'SNET', constraintDate: '2026-02-30' })
       .expect(422);
+    // The secondary constraint pair (ADR-0035 §10) is validated the same way.
+    await actor.agent.post(base).send({ name: 'E', secondaryConstraintType: 'FNLT' }).expect(422);
+    await actor.agent
+      .post(base)
+      .send({ name: 'F', secondaryConstraintDate: '2026-05-01' })
+      .expect(422);
+  });
+
+  it('round-trips a secondary constraint and enforces its pairing on update (ADR-0035 §10)', async () => {
+    const { actor, planId } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({
+        name: 'Two-constraint',
+        constraintType: 'SNET',
+        constraintDate: '2026-05-01',
+        secondaryConstraintType: 'FNLT',
+        secondaryConstraintDate: '2026-05-10',
+      })
+      .expect(201);
+    expect(created.body.data).toMatchObject({
+      secondaryConstraintType: 'FNLT',
+      secondaryConstraintDate: '2026-05-10',
+    });
+    const item = `/api/v1/organizations/acme/activities/${created.body.data.id as string}`;
+
+    // A lone secondary side is refused; clearing both is allowed.
+    const res = await actor.agent
+      .patch(item)
+      .send({ secondaryConstraintType: null, version: 1 })
+      .expect(422);
+    expect(res.body.error?.details?.reason).toBe('CONSTRAINT_PAIR_REQUIRED');
+    const cleared = await actor.agent
+      .patch(item)
+      .send({ secondaryConstraintType: null, secondaryConstraintDate: null, version: 1 })
+      .expect(200);
+    expect(cleared.body.data).toMatchObject({
+      secondaryConstraintType: null,
+      secondaryConstraintDate: null,
+      // The primary is untouched.
+      constraintType: 'SNET',
+    });
   });
 
   it('rejects a partial constraint update that omits one side (422), keeping the pair intact', async () => {

@@ -83,6 +83,17 @@ export const activityFormSchema = z
       .max(100000, 'Duration is too large.'),
     constraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
     constraintDate: z.string().optional(),
+    // Optional SECONDARY constraint (ADR-0035 §10, M4): the primary drives the forward pass, this the
+    // backward pass. Same shape and paired rule as the primary; only editable behind the
+    // `VITE_ADVANCED_CONSTRAINTS` flag, but always seeded from the row so a stored value round-trips
+    // even with the fields hidden.
+    secondaryConstraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
+    secondaryConstraintDate: z.string().optional(),
+    // As-late-as-possible (ADR-0035 §11): a display-only placement preference; never changes dates/float.
+    scheduleAsLateAsPossible: z.boolean().optional(),
+    // Expected-finish target (ADR-0035 §9): a calendar day the engine resizes remaining work to when the
+    // plan's `useExpectedFinishDates` is on. A raw `<input type="date">` value (`''` = none).
+    expectedFinish: z.string().optional(),
     // The activity's own working-time calendar (ADR-0037): `''` = inherit the plan default.
     // A raw `<select>` value; the choices are the org's calendar ids (+ inherit), so the id is
     // never free-typed — validation of the UUID/in-org is the API's job (mirrors `constraintDate`).
@@ -95,6 +106,11 @@ export const activityFormSchema = z
   .refine((v) => !v.constraintType || Boolean(v.constraintDate), {
     message: 'Choose a date for this constraint.',
     path: ['constraintDate'],
+  })
+  // The secondary constraint pairs the same way (the API enforces it too).
+  .refine((v) => !v.secondaryConstraintType || Boolean(v.secondaryConstraintDate), {
+    message: 'Choose a date for the secondary constraint.',
+    path: ['secondaryConstraintDate'],
   });
 
 export type ActivityFormValues = z.infer<typeof activityFormSchema>;

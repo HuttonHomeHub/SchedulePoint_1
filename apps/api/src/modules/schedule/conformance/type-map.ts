@@ -56,9 +56,11 @@ export function mapActivityType(type: FixtureActivityType): MapResult<ActivityTy
  * The fixture's P6 constraint vocabulary → the engine's constraint kinds. The
  * four moderate "on-or-after / on-or-before" kinds map 1:1; `*_ON` map to the
  * engine's mandatory-equivalent pins (`MSO`/`MFO`); the two hard mandatory kinds
- * pass through (the engine currently **parks** them as `MSO`/`MFO`, ADR-0023 §6,
- * un-parked by ADR-0035 §7 in M4). `AS_LATE_AS_POSSIBLE` is **not** a date
- * constraint the engine models yet (ADR-0035 §11, M6) — dropped with a reason.
+ * pass through and are honoured as **produce-and-flag** pins (ADR-0035 §7, M4 —
+ * no longer parked). `AS_LATE_AS_POSSIBLE` is **not a date constraint** at all: it
+ * is a placement preference the adapter maps to the activity's
+ * `scheduleAsLateAsPossible` flag (ADR-0035 §11, M4), so it is reported unsupported
+ * *as a constraint* here and handled separately in `adapter.ts`.
  */
 export function mapConstraintType(type: string): MapResult<ConstraintType> {
   switch (type) {
@@ -81,7 +83,8 @@ export function mapConstraintType(type: string): MapResult<ConstraintType> {
     case 'AS_LATE_AS_POSSIBLE':
       return {
         supported: false,
-        reason: 'as-late-as-possible is not a modelled constraint (ADR-0035 §11, M6)',
+        reason:
+          'as-late-as-possible is a placement flag, not a date constraint (mapped to scheduleAsLateAsPossible by the adapter, ADR-0035 §11, M4)',
       };
     default:
       return { supported: false, reason: `unknown constraint type "${type}"` };

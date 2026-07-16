@@ -128,8 +128,14 @@ export class ScheduleService {
               portFor(calIdByActivity.get(r.successorId) ?? null),
             ),
           ),
-          // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC.
-          { dataDate, calendar, progressMode: plan.progressRecalcMode },
+          // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC. The
+          // expected-finish option (M4, ADR-0035 §9) resizes in-progress remaining work when on.
+          {
+            dataDate,
+            calendar,
+            progressMode: plan.progressRecalcMode,
+            useExpectedFinishDates: plan.useExpectedFinishDates,
+          },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
@@ -161,7 +167,8 @@ export class ScheduleService {
         calendarId: plan.calendarId ?? null,
         activityCount: summary.activityCount,
         criticalCount: summary.criticalCount,
-        parkedConstraintCount: summary.parkedConstraintCount,
+        constraintViolationCount: summary.constraintViolationCount,
+        constraintWarningCount: summary.constraintWarningCount,
         lagCalendarOverrideCount,
         // How many DISTINCT per-activity calendars were built this recalc (ADR-0037, M5) — the
         // signal that per-activity calendars actually shaped the dates (0 on the all-inherit path).
@@ -169,6 +176,8 @@ export class ScheduleService {
         // Progress (M2, ADR-0035): the recalc mode and how many activities carried actuals.
         progressRecalcMode: plan.progressRecalcMode,
         progressedActivityCount,
+        // Expected-finish resizes applied this run (M4, ADR-0035 §9); 0 unless the option is on.
+        expectedFinishAppliedCount: summary.expectedFinishAppliedCount,
         durationMs: Date.now() - startedAt,
       },
       'schedule recalculated',
@@ -180,7 +189,8 @@ export class ScheduleService {
       activityCount: summary.activityCount,
       criticalCount: summary.criticalCount,
       nearCriticalCount: summary.nearCriticalCount,
-      parkedConstraintCount: summary.parkedConstraintCount,
+      constraintViolationCount: summary.constraintViolationCount,
+      constraintWarningCount: summary.constraintWarningCount,
     };
   }
 
@@ -208,7 +218,8 @@ export class ScheduleService {
       activityCount: aggregate.activityCount,
       criticalCount: aggregate.criticalCount,
       nearCriticalCount: aggregate.nearCriticalCount,
-      parkedConstraintCount: aggregate.parkedConstraintCount,
+      constraintViolationCount: aggregate.constraintViolationCount,
+      constraintWarningCount: aggregate.constraintWarningCount,
     };
   }
 
@@ -271,10 +282,16 @@ function toEngineActivity(
     type: row.type,
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
+    secondaryConstraintType: row.secondaryConstraintType,
+    secondaryConstraintDate: row.secondaryConstraintDate
+      ? formatCalendarDate(row.secondaryConstraintDate)
+      : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
+    scheduleAsLateAsPossible: row.scheduleAsLateAsPossible,
     actualStart: row.actualStart ? formatCalendarDate(row.actualStart) : null,
     actualFinish: row.actualFinish ? formatCalendarDate(row.actualFinish) : null,
     resumeDate: row.resumeDate ? formatCalendarDate(row.resumeDate) : null,
+    expectedFinish: row.expectedFinish ? formatCalendarDate(row.expectedFinish) : null,
     ...(remainingMinutes !== undefined ? { remainingMinutes } : {}),
     ...(calendar ? { calendar } : {}),
   };

@@ -408,6 +408,13 @@ model Plan {
   // until T2/T3). Like scheduling_mode, a single-row column read with the plan, never
   // filtered across plans, so no index.
   progressRecalcMode ProgressRecalcMode @default(RETAINED_LOGIC) @map("progress_recalc_mode")
+  // Expected-finish scheduling option (ADR-0035 §9, M4 F5). When true, the CPM engine's
+  // forward pass recomputes an in-progress activity's remaining duration to land on its
+  // `expected_finish` (the activity-level target date). Default false is behaviour-
+  // preserving (the engine ignores expected finishes). Like scheduling_mode/
+  // progress_recalc_mode, a single-row column read with the plan, never filtered across
+  // plans, so no index; additive with a constant DEFAULT (no data migration).
+  useExpectedFinishDates Boolean @default(false) @map("use_expected_finish_dates")
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
   // (ADR-0023). **Required + NOT NULL** as of ADR-0033 **M1** — the
@@ -491,9 +498,26 @@ model Activity {
   constraintType  ConstraintType? @map("constraint_type")
   // Calendar day (date-only, no timezone), like Plan.plannedStart.
   constraintDate  DateTime?       @map("constraint_date") @db.Date
+  // Secondary schedule constraint (ADR-0035 §10, M4 F3). Same shape as the primary
+  // pair above and equally client-settable (NOT engine-owned): the primary drives
+  // the forward pass, this secondary drives the backward pass. Both-null-or-both-set
+  // is enforced by ck_activities_secondary_constraint_pair (raw SQL in the migration,
+  // like the primary — Prisma can't express a CHECK). Unindexed like the primary:
+  // read only on the full-plan recalc load, never filtered/sorted on.
+  secondaryConstraintType ConstraintType? @map("secondary_constraint_type")
+  // Calendar day (date-only, no timezone), like constraint_date.
+  secondaryConstraintDate DateTime?       @map("secondary_constraint_date") @db.Date
   // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
   // persisted model per PROJECT_BRIEF §9, not a runtime concern.
   laneIndex       Int             @default(0) @map("lane_index")
+  // As-late-as-possible placement preference (ADR-0035 §11, M4 F4). CLIENT-SETTABLE
+  // Planner input (a user-facing write DTO sets it) — NOT engine-owned. It is a
+  // DISPLAY-ONLY placement preference: the ALAP pass sets the activity's shown start
+  // as late as its successors allow, leaving the pure early_*/late_*/total_float
+  // network untouched (the effective-Visual precedent). Defaulted false backfills
+  // every existing row, so the byte-parity golden path is unchanged. No index: read
+  // only on the full-plan recalc load, never a query predicate.
+  scheduleAsLateAsPossible Boolean @default(false) @map("schedule_as_late_as_possible")
 
   // Progress (Contributor-updatable via the progress path).
   status                   ActivityStatus @default(NOT_STARTED)
@@ -515,15 +539,36 @@ model Activity {
   // raw SQL in the migration.
   suspendDate              DateTime?      @map("suspend_date") @db.Date
   resumeDate               DateTime?      @map("resume_date") @db.Date
+  // Expected finish (ADR-0035 §9, M4 F5). A CLIENT-SETTABLE target finish date for an
+  // in-progress activity (calendar day, date-only like actual_start/finish) — NOT
+  // engine-owned. When the plan option `use_expected_finish_dates` is on, the engine's
+  // forward pass recomputes this activity's remaining duration so its early finish lands
+  // on this date (floored per the M2 data-date rule); off (or NULL) ⇒ ignored. Nullable
+  // with no default ⇒ every existing row reads "no expected finish" and the byte-parity
+  // golden path is unchanged. No index: read only on the full-plan recalc load.
+  expectedFinish           DateTime?      @map("expected_finish") @db.Date
 
   // CPM output — engine-owned (M6). Nullable/defaulted; never set from input.
-  earlyStart     DateTime? @map("early_start") @db.Date
-  earlyFinish    DateTime? @map("early_finish") @db.Date
-  lateStart      DateTime? @map("late_start") @db.Date
-  lateFinish     DateTime? @map("late_finish") @db.Date
-  totalFloat     Int?      @map("total_float")
-  isCritical     Boolean   @default(false) @map("is_critical")
-  isNearCritical Boolean   @default(false) @map("is_near_critical")
+  earlyStart         DateTime? @map("early_start") @db.Date
+  earlyFinish        DateTime? @map("early_finish") @db.Date
+  lateStart          DateTime? @map("late_start") @db.Date
+  lateFinish         DateTime? @map("late_finish") @db.Date
+  totalFloat         Int?      @map("total_float")
+  isCritical         Boolean   @default(false) @map("is_critical")
+  isNearCritical     Boolean   @default(false) @map("is_near_critical")
+  // Produce-and-flag violation output (ADR-0035 §7 amendment, M4). True when a mandatory
+  // pin (MANDATORY_START/MANDATORY_FINISH) overrode a stronger logic bound — a forward pin
+  // earlier than the network-earliest, or a backward pin that forced negative float. This
+  // un-parks the old silent MSO/MFO treatment: the engine produces the (possibly impossible)
+  // schedule and flags it, never repairs it. Engine-owned exactly like is_critical:
+  // defaulted false, never accepted from a write DTO, written only by the recalc's batched
+  // `unnest` UPDATE alongside the CPM columns above (never touching version/updated_at/
+  // updated_by, ADR-0022). Reads false until the plan is first calculated AND on the
+  // no-mandatory / all-inherit path, so existing rows stay byte-identical. No index: read
+  // as part of the already plan-scoped activity load ((plan_id, created_at, id)) and
+  // aggregated over that scope (constraintViolationCount) — no predicate targets it; a
+  // low-cardinality boolean index would only cost writes (mirrors is_critical/is_driving).
+  constraintViolated Boolean   @default(false) @map("constraint_violated")
 
   // Visual Planning placement (ADR-0033). `visual_start` is the ONLY Planner-owned
   // input here — the hand-placed calendar day a DTO may set (date-only, like

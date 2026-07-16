@@ -177,6 +177,12 @@ export interface PlanSummary {
    */
   progressRecalcMode: ProgressRecalcMode;
   /**
+   * Expected-finish scheduling option (M4, ADR-0035 §9). When true, the engine's forward pass resizes
+   * an incomplete activity's remaining work so its early finish lands on its `expectedFinish`. Default
+   * `false` (behaviour-preserving); the engine ignores expected finishes when off.
+   */
+  useExpectedFinishDates: boolean;
+  /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
    * historical/transitional reads; live plans always carry a value.
@@ -245,6 +251,13 @@ export interface ActivitySummary {
   constraintType: ConstraintType | null;
   constraintDate: string | null;
   /**
+   * Optional secondary schedule constraint (ADR-0035 §10). The primary drives the forward pass
+   * (early dates); the secondary drives the backward pass (late dates) — e.g. an SNET primary + an
+   * FNLT secondary. Both null when no secondary is set; paired (both-or-neither) like the primary.
+   */
+  secondaryConstraintType: ConstraintType | null;
+  secondaryConstraintDate: string | null;
+  /**
    * The activity's own working-time calendar (ADR-0037, M5), or `null` to **inherit** the plan
    * default (resolution: activity → plan → all-days-work). When set, the activity's duration is
    * measured, its float counted, and its dates derived on this calendar — so e.g. a 24/7 crew
@@ -253,6 +266,11 @@ export interface ActivitySummary {
   calendarId: string | null;
   /** Graphical y-lane for the TSLD canvas. */
   laneIndex: number;
+  /**
+   * Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference. When set, the
+   * activity renders at its late-based position; it never changes early/late/float. False by default.
+   */
+  scheduleAsLateAsPossible: boolean;
   status: ActivityStatus;
   /** 0–100. */
   percentComplete: number;
@@ -271,6 +289,13 @@ export interface ActivitySummary {
    */
   suspendDate: string | null;
   resumeDate: string | null;
+  /**
+   * Expected-finish target (ADR-0035 §9, M4): when the plan's `useExpectedFinishDates` is on, an
+   * incomplete activity's remaining work is resized so its early finish lands on this calendar day
+   * (`YYYY-MM-DD`). Null = no target. Ignored when the option is off, the activity is complete, or it
+   * has no duration (a milestone).
+   */
+  expectedFinish: string | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.
   earlyStart: string | null;
   earlyFinish: string | null;
@@ -279,6 +304,12 @@ export interface ActivitySummary {
   totalFloat: number | null;
   isCritical: boolean;
   isNearCritical: boolean;
+  /**
+   * Engine-owned (ADR-0035 §7): true when a mandatory pin (MANDATORY_START/FINISH) drove this
+   * activity's start earlier than its logic-earliest — produced as pinned and flagged, never
+   * repaired. False for every non-mandatory or non-conflicting activity.
+   */
+  constraintViolated: boolean;
   /**
    * Visual-Planning placement input (ADR-0033): the calendar day (`YYYY-MM-DD`) the planner
    * hand-placed this activity's start at, or null if unplaced. Feeds only the engine's
@@ -422,8 +453,9 @@ export interface DeletedHierarchyItem {
  * plan's start (`plannedStart`); it is null when the plan has no start date yet.
  * `projectFinish` is the latest computed finish across the plan (the max inclusive
  * `earlyFinish`); it is null until the plan has been calculated (or when empty).
- * `parkedConstraintCount` is how many mandatory constraints were treated as their
- * moderate equivalents (MSO/MFO). All dates are calendar days (`YYYY-MM-DD`).
+ * `constraintViolationCount` is how many activities a mandatory pin drove into a broken relationship
+ * (produce-and-flag, ADR-0035 §7); `constraintWarningCount` counts soft constraint warnings (today
+ * the N15 case: a SNET dated before the data date). All dates are calendar days (`YYYY-MM-DD`).
  */
 export interface PlanScheduleSummary {
   dataDate: string | null;
@@ -431,7 +463,8 @@ export interface PlanScheduleSummary {
   activityCount: number;
   criticalCount: number;
   nearCriticalCount: number;
-  parkedConstraintCount: number;
+  constraintViolationCount: number;
+  constraintWarningCount: number;
 }
 
 /**

@@ -35,6 +35,12 @@ export class PlanResponseDto implements PlanSummary {
   progressRecalcMode!: ProgressRecalcMode;
 
   @ApiProperty({
+    description:
+      'Expected-finish scheduling option (M4, ADR-0035 §9): when on, in-progress remaining work is resized to each activity’s expectedFinish.',
+  })
+  useExpectedFinishDates!: boolean;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -69,6 +75,7 @@ export class PlanResponseDto implements PlanSummary {
       status: entity.status,
       schedulingMode: entity.schedulingMode,
       progressRecalcMode: entity.progressRecalcMode,
+      useExpectedFinishDates: entity.useExpectedFinishDates,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

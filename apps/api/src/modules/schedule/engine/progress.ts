@@ -64,7 +64,7 @@ export interface ResolvedProgress {
 }
 
 /** The calendar day after `date` (`YYYY-MM-DD`), at 00:00 — the exclusive end of that day. */
-function nextCalendarDay(date: string): string {
+export function nextCalendarDay(date: string): string {
   const d = parseCalendarDate(date);
   d.setUTCDate(d.getUTCDate() + 1);
   return formatCalendarDate(d);
