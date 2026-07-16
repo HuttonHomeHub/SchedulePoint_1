@@ -280,6 +280,20 @@ enum SchedulingMode {
   VISUAL
 }
 
+// How the CPM engine reschedules remaining work when progress is out of sequence
+// (ADR-0035 §1, M2). RETAINED_LOGIC (default, behaviour-preserving in spirit) keeps
+// incomplete-predecessor logic bounding an in-progress activity's remaining start;
+// PROGRESS_OVERRIDE drops the incoming bound from incomplete predecessors (remaining
+// runs from the data date); ACTUAL_DATES follows the ADR-0035 §1 actual-dates
+// treatment. Stored now; the engine does not consume it until T2/T3. MUST stay in
+// lock-step with the TypeScript `ProgressRecalcMode` union in @repo/types (added in
+// a later M2 task).
+enum ProgressRecalcMode {
+  RETAINED_LOGIC
+  PROGRESS_OVERRIDE
+  ACTUAL_DATES
+}
+
 // The kind of schedule activity (PROJECT_BRIEF §8). All five are modelled so the
 // deferred slices (dependencies, CPM, canvas) never need an enum migration; the
 // web UI exposes only TASK + START/FINISH milestones in this slice — HAMMOCK and
@@ -379,36 +393,41 @@ model Project {
 }
 
 model Plan {
-  id             String         @id @default(uuid(7)) @db.Uuid
+  id                 String             @id @default(uuid(7)) @db.Uuid
   // Denormalised from the parent project (see the block comment above). RESTRICT.
-  organizationId String         @map("organization_id") @db.Uuid
-  projectId      String         @map("project_id") @db.Uuid
-  name           String
-  description    String?
-  status         PlanStatus     @default(DRAFT)
+  organizationId     String             @map("organization_id") @db.Uuid
+  projectId          String             @map("project_id") @db.Uuid
+  name               String
+  description        String?
+  status             PlanStatus         @default(DRAFT)
   // The scheduling mode (ADR-0033). Default EARLY is behaviour-preserving; a single-
   // row column read with the plan, never filtered across plans, so no index.
-  schedulingMode SchedulingMode @default(EARLY) @map("scheduling_mode")
+  schedulingMode     SchedulingMode     @default(EARLY) @map("scheduling_mode")
+  // The out-of-sequence progress recalc mode (ADR-0035 §1, M2). Default
+  // RETAINED_LOGIC is behaviour-preserving in spirit (the engine does not consume it
+  // until T2/T3). Like scheduling_mode, a single-row column read with the plan, never
+  // filtered across plans, so no index.
+  progressRecalcMode ProgressRecalcMode @default(RETAINED_LOGIC) @map("progress_recalc_mode")
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
   // (ADR-0023). **Required + NOT NULL** as of ADR-0033 **M1** — the
   // …_require_plan_planned_start migration backfilled every prior NULL (earliest
   // active constraint_date → earliest active actual_start → created_at::date →
   // today) then SET NOT NULL. That was the feature's one irreversible migration.
-  plannedStart   DateTime       @map("planned_start") @db.Date
+  plannedStart       DateTime           @map("planned_start") @db.Date
   // The plan's default working-day calendar (M5, ADR-0024). Nullable → all-days-work
   // (M6 back-compat); new plans default to the org's seeded Standard calendar. FK is
   // RESTRICT (calendars soft-delete only; the service in-use guard returns 409
   // CALENDAR_IN_USE before any delete). Backed by a partial index on (calendar_id)
   // WHERE deleted_at IS NULL — raw SQL in the migration.
-  calendarId     String?        @map("calendar_id") @db.Uuid
-  version        Int            @default(1)
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy      String?        @map("created_by")
-  updatedBy      String?        @map("updated_by")
-  deletedAt      DateTime?      @map("deleted_at") @db.Timestamptz(3)
-  deleteBatchId  String?        @map("delete_batch_id") @db.Uuid
+  calendarId         String?            @map("calendar_id") @db.Uuid
+  version            Int                @default(1)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy          String?            @map("created_by")
+  updatedBy          String?            @map("updated_by")
+  deletedAt          DateTime?          @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId      String?            @map("delete_batch_id") @db.Uuid
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   project      Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
@@ -477,10 +496,25 @@ model Activity {
   laneIndex       Int             @default(0) @map("lane_index")
 
   // Progress (Contributor-updatable via the progress path).
-  status          ActivityStatus @default(NOT_STARTED)
-  percentComplete Int            @default(0) @map("percent_complete")
-  actualStart     DateTime?      @map("actual_start") @db.Date
-  actualFinish    DateTime?      @map("actual_finish") @db.Date
+  status                   ActivityStatus @default(NOT_STARTED)
+  percentComplete          Int            @default(0) @map("percent_complete")
+  actualStart              DateTime?      @map("actual_start") @db.Date
+  actualFinish             DateTime?      @map("actual_finish") @db.Date
+  // Independent remaining duration in working MINUTES (ADR-0035, M2; P6-faithful,
+  // matches the fixture's `remaining_duration_h`). NULL ⇒ the engine DERIVES remaining
+  // from `percent_complete × duration_minutes`; non-null ⇒ this explicit remaining is
+  // used verbatim (decoupled from percent, so out-of-sequence productivity is faithful
+  // and the negative case N18 — remaining > 0 on a complete activity — is detectable).
+  // Day-denominated at the API boundary (ADR-0036 §7). A ck_activities_remaining_duration
+  // _minutes_nonneg (>= 0) CHECK is raw SQL in the migration (mirrors duration_minutes).
+  remainingDurationMinutes Int?           @map("remaining_duration_minutes")
+  // Suspend/resume (ADR-0035 §4, M2; engine wiring in T7). Calendar days (date-only,
+  // like actual_start/finish). A suspended activity's remaining work is floored at
+  // `max(data date, resume_date)`. A ck_activities_resume_after_suspend (nullable-safe:
+  // resume_date IS NULL OR suspend_date IS NULL OR resume_date >= suspend_date) CHECK is
+  // raw SQL in the migration.
+  suspendDate              DateTime?      @map("suspend_date") @db.Date
+  resumeDate               DateTime?      @map("resume_date") @db.Date
 
   // CPM output — engine-owned (M6). Nullable/defaulted; never set from input.
   earlyStart     DateTime? @map("early_start") @db.Date

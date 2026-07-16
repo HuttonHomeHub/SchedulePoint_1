@@ -238,6 +238,17 @@ migration transaction. This is a **forward-only, irreversible** change (the
 backfilled dates are indistinguishable from originals afterward); a plan with only
 soft-deleted activities falls through to `created_at::date`.
 
+`Plan` also carries two single-row **mode** enums read with the plan and never
+filtered across plans (so neither is indexed): `scheduling_mode` (`SchedulingMode`,
+default `EARLY`; ADR-0033) and `progress_recalc_mode` (`ProgressRecalcMode`, default
+`RETAINED_LOGIC`; ADR-0035 §1, M2). The recalc mode selects how the CPM engine
+reschedules **out-of-sequence** remaining work — `RETAINED_LOGIC` keeps
+incomplete-predecessor logic, `PROGRESS_OVERRIDE` drops the incoming bound from
+incomplete predecessors, `ACTUAL_DATES` follows the ADR-0035 §1 actual-dates
+treatment. `RETAINED_LOGIC` is behaviour-preserving in spirit; the column is
+additive with a constant `DEFAULT` (no data migration) and the engine does not
+consume it until the M2 engine tasks land.
+
 ### Activity: the schedule leaf
 
 `Activity` follows every standard above and adds three column groups the deferred
@@ -252,9 +263,20 @@ wide `ALTER TABLE` + backfill later):
   calendar's day length (factor `1440` for a full-day window; ADR-0036 §7), so no HTTP
   contract changed. A defensive `DEFAULT 480` (one 8 h day) applies only to a direct-DB
   insert; the service always sets the value explicitly.
-- **Progress** (`status`, `percent_complete`, `actual_start`, `actual_finish`) —
+- **Progress** (`status`, `percent_complete`, `actual_start`, `actual_finish`,
+  `remaining_duration_minutes`, `suspend_date`, `resume_date`) —
   Contributor-updatable via a dedicated progress path, never via a definition
-  update.
+  update. `remaining_duration_minutes` (ADR-0035 §1, M2) is an **independent,
+  P6-faithful** remaining-work count in working minutes: **`NULL` ⇒ the engine
+  derives remaining from `percent_complete × duration_minutes`**; **non-null ⇒ the
+  explicit value is used verbatim**, decoupled from percent so out-of-sequence
+  productivity stays faithful and the negative case **N18** (remaining `> 0` on a
+  complete activity) is detectable. It is day-denominated at the API boundary
+  (ADR-0036 §7), like `duration_minutes`. `suspend_date`/`resume_date` (ADR-0035 §4,
+  engine-wired in a later M2 task) are calendar days (`@db.Date`, like
+  `actual_start/finish`); a suspended activity's remaining work is floored at
+  `max(data date, resume_date)`. All three are **additive & nullable** (no data
+  migration); the engine does not consume them until the M2 engine tasks land.
 - **CPM output — engine-owned** (`early_start`/`early_finish`,
   `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`):
   nullable/defaulted, **never accepted from a write DTO**. They are populated by
@@ -278,8 +300,14 @@ finish` columns) are `@db.Date` (date-only, no timezone), like `Plan.planned_sta
 `activities` is the first domain table with bounded numerics, so it is also the
 first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
 invariants in the DB, not only in code): `ck_activities_percent_complete`
-(0–100), `ck_activities_duration_minutes_nonneg` (≥ 0), `ck_activities_lane_index_nonneg`
-(≥ 0), and `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
+(0–100), `ck_activities_duration_minutes_nonneg` (≥ 0),
+`ck_activities_remaining_duration_minutes_nonneg` (≥ 0 — bounds a **supplied**
+remaining only; `NULL` is always legal, that is the derive path),
+`ck_activities_lane_index_nonneg`
+(≥ 0), `ck_activities_resume_after_suspend` (**nullable-safe**: `resume_date IS
+NULL OR suspend_date IS NULL OR resume_date >= suspend_date` — enforced only when
+both suspend/resume dates are set, so it never blocks the common no-suspend path),
+and `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
 and `constraint_date` are both set or both null (never one without the other), so a
 half-set constraint can never corrupt CPM scheduling even if a future code path
 bypasses the service. They are raw SQL in the migration (Prisma cannot express
