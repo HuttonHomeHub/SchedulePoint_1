@@ -102,6 +102,20 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
     );
   });
 
+  it('speaks and labels a same-lane time overlap end to end (TECH_DEBT #24c)', () => {
+    // Two bars manually dropped into lane 0 with overlapping dates — the render pass flags both, and
+    // the wired listbox/announce carry the spoken cue (the accessible name is the Tier-1 line).
+    const p = activity({ id: 'p', name: 'Pour', laneIndex: 0, earlyStart: '2026-01-01', earlyFinish: '2026-01-05' }); // prettier-ignore
+    const q = activity({ id: 'q', name: 'Cure', laneIndex: 0, earlyStart: '2026-01-03', earlyFinish: '2026-01-08' }); // prettier-ignore
+    renderPanel([p, q], []);
+    expect(
+      screen.getByRole('option', { name: /Pour.*overlaps another activity in its lane/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: /Cure.*overlaps another activity in its lane/ }),
+    ).toBeInTheDocument();
+  });
+
   it('] jumps to the driving successor and announces the tie', () => {
     const { listbox } = renderPanel(); // focus on A (Survey)
     fireEvent.keyDown(listbox, { key: ']' });

@@ -223,11 +223,19 @@ const OVERLAP_BADGE_S = 5;
  * alone (WCAG 1.4.1); each square carries a foreground outline so it clears the 3:1 non-text-contrast
  * bar on any ground (WCAG 1.4.11). The legend names it and the listbox spells it out for AT.
  */
-function drawOverlapBadge(ctx: Ctx2D, centerX: number, barTop: number, palette: TsldPalette): void {
+function drawOverlapBadge(
+  ctx: Ctx2D,
+  centerX: number,
+  barTop: number,
+  palette: TsldPalette,
+  liftBy = 0,
+): void {
   const s = OVERLAP_BADGE_S;
   const off = 2;
   const leftX = Math.round(centerX - (s + off) / 2);
-  const topY = barTop - s - off - 1;
+  // `liftBy` stacks this badge above the constraint pin (which shares the bar-centre for a milestone)
+  // so a bar carrying both cues never draws them on top of each other.
+  const topY = barTop - s - off - 1 - liftBy;
   const square = (x: number, y: number): void => {
     ctx.fillStyle = palette.laneOverlap;
     ctx.fillRect(x, y, s, s);
@@ -393,7 +401,10 @@ export function paintScene(
     // in its lane. A stacked-squares badge above the bar's centre — width-independent (so a milestone
     // is marked too) and clear of the start-edge conflict/constraint cues.
     if (activity.laneOverlap) {
-      drawOverlapBadge(ctx, rect.x + rect.w / 2, rect.y, palette);
+      // Lift clear of the constraint pin when the bar also carries one (they share the bar centre for
+      // a milestone / a very narrow bar) so the two shape cues stack instead of colliding.
+      const lift = activity.constraint ? CONSTRAINT_PIN_H + 1 : 0;
+      drawOverlapBadge(ctx, rect.x + rect.w / 2, rect.y, palette, lift);
     }
   }
 

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { packLanes } from './auto-pack';
 import { laneOverlapIds, type LaneSpan } from './lane-overlap';
+
+/** A whole-day offset from 2026-01-01 as a `YYYY-MM-DD` string, to bridge auto-pack's day-number
+ * spans to this module's date-string spans in the cross-consistency test below. */
+function dayToIso(n: number): string {
+  return new Date(Date.UTC(2026, 0, 1 + n)).toISOString().slice(0, 10);
+}
 
 const span = (
   id: string,
@@ -75,5 +82,26 @@ describe('laneOverlapIds', () => {
 
   it('returns an empty set for a single-item lane', () => {
     expect(laneOverlapIds([span('a', 0, '2026-01-01', '2026-01-10')]).size).toBe(0);
+  });
+
+  it('agrees with auto-pack: applying its packing clears every overlap the detector would flag', () => {
+    // The two share the inclusive-span rule ("neither finishes strictly before the other starts").
+    // This guards the invariant that auto-arrange never leaves an overlap the cue would then show —
+    // if either implementation drifts, the packed arrangement would report a residual overlap here.
+    const items = [
+      { id: 'a', startDay: 0, endDay: 5, laneIndex: 0 },
+      { id: 'b', startDay: 3, endDay: 8, laneIndex: 0 },
+      { id: 'c', startDay: 6, endDay: 6, laneIndex: 0 },
+      { id: 'd', startDay: 1, endDay: 2, laneIndex: 0 },
+      { id: 'e', startDay: 9, endDay: 12, laneIndex: 0 },
+    ];
+    const packed = new Map(packLanes(items).map((c) => [c.id, c.laneIndex]));
+    const spans = items.map((it) => ({
+      id: it.id,
+      laneIndex: packed.get(it.id) ?? it.laneIndex,
+      start: dayToIso(it.startDay),
+      finish: dayToIso(it.endDay),
+    }));
+    expect(laneOverlapIds(spans).size).toBe(0);
   });
 });
