@@ -1,5 +1,93 @@
 # @repo/web
 
+## 0.25.0
+
+### Minor Changes
+
+- [#82](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/82) [`f382196`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f382196bc0d38fceec1938e8a30f5504389708ec) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Web activity calendar picker (M5, ADR-0037), behind `VITE_ACTIVITY_CALENDAR` (off by default). The
+  activity form gains a **Calendar** `Select` — "Plan default (inherit)" or a specific org calendar —
+  writing the activity's `calendarId`; the activities table shows an activity's own calendar when it
+  isn't inheriting the plan's. The picker ships dark until its component/accessibility/UX gates are
+  cleared; the underlying field, engine, and API are already live, so the flag only governs whether a
+  planner can pick a per-activity calendar in the UI. The dialog always seeds `calendarId` from the
+  row, so editing with the picker hidden round-trips the stored value unchanged.
+
+- [#86](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/86) [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Mandatory constraints now **produce-and-flag** instead of being silently parked (M4-F2, ADR-0035 §7).
+  `MANDATORY_START`/`MANDATORY_FINISH` still pin their date with the same MSO/MFO arithmetic, but when a
+  pin drives an activity earlier than its logic allows the engine now **produces the (impossible)
+  schedule as pinned and flags it** — a new engine-owned `constraintViolated` boolean on each activity —
+  surfacing the broken relationship as negative float on the predecessor, and never repairing it. A pin
+  the network can satisfy is not flagged.
+
+  The schedule summary's dishonest `parkedConstraintCount` is **replaced** by two honest counts:
+  `constraintViolationCount` (mandatory pins that broke logic) and `constraintWarningCount` (the N15 case
+  — a Start-No-Earlier-Than dated before the data date, honoured but unable to pull work back). The
+  recalc response, read summary, and structured recalc log all carry the new counts; the summary strip
+  shows "Constraint conflicts" / "Constraint warnings" figures with accessible explanations in place of
+  the old "Parked constraints" figure. Plans with no mandatory constraints are byte-identical (the
+  golden suite is unchanged) and report both counts as zero.
+
+- [#85](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/85) [`399afc8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/399afc8893dd2f50441a0a922edf3571961beab8) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Enable progress ingestion by default (`VITE_PROGRESS_INGESTION`, ADR-0035 M2).
+  The progress editor's remaining-duration + suspend/resume inputs and the
+  plan-level recalc-mode picker now ship on; set `VITE_PROGRESS_INGESTION=false` to
+  roll back to the percent-plus-actual-dates editor. No API or engine change — those
+  were already live regardless of the flag.
+
+- [#84](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/84) [`3111809`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3111809cb46eb8c51848493ff6837dad6f717fbd) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Progress ingestion web controls (M2, ADR-0035), behind `VITE_PROGRESS_INGESTION`
+  (off by default). When enabled:
+
+  - The progress editor gains a **remaining duration** input (blank derives it from
+    percent complete) plus **suspend / resume** dates for a paused activity — with
+    client-side validation mirroring the API (resume ≥ suspend).
+  - Plan settings gain a **recalc mode** picker — Retained Logic / Progress Override
+    / Actual Dates — persisted with a targeted PATCH and applied on the next
+    recalculation.
+
+  The activity read model now exposes `remainingDurationDays`, `suspendDate`, and
+  `resumeDate` (`@repo/types` + the activity response DTO), so the editor seeds and
+  round-trips a stored value even with the inputs hidden. The engine, the settable
+  API fields, and the plan recalc-mode column were already live; this slice only
+  adds the flag-gated authoring UI.
+
+- [#85](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/85) [`399afc8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/399afc8893dd2f50441a0a922edf3571961beab8) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Surface progress-repair warnings and clarify the progress editor (M2 follow-up,
+  ADR-0035 §6).
+
+  - The progress endpoint (`PATCH …/activities/:id/progress`) now returns
+    `meta.warnings` (a `ProgressWarning[]`) when it repairs a complete activity —
+    `COMPLETE_WITHOUT_FINISH` (finish set to the data date) or
+    `REMAINING_ON_COMPLETE` (remaining forced to zero). The write still succeeds and
+    `data` reflects the corrected value; an ordinary report omits `meta`. Adds a
+    reusable single-resource `ResourceEnvelope` for `{ data, meta }` responses.
+  - The web progress editor announces those repairs on save, and a note makes clear
+    the remaining/suspend/resume fields reschedule the remaining work rather than
+    change the derived status.
+
+- [#86](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/86) [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Web advanced-constraints editor (M4, ADR-0035 §7–§11), behind `VITE_ADVANCED_CONSTRAINTS` (off by
+  default). The activity form gains an **Advanced scheduling** group — a **secondary constraint**
+  (paired type + date, driving the backward pass), an **As-late-as-possible** toggle, and an
+  **expected-finish** date — and the plan settings gain an **Expected-finish scheduling** on/off
+  toggle (`useExpectedFinishDates`). An engine-flagged `constraintViolated` activity (a mandatory pin
+  produced-and-flagged against its logic) surfaces a **Conflict** badge in the activities table's
+  Constraint column. The editor ships dark until its component/accessibility/UX gates are cleared; the
+  underlying fields, engine passes, and API are already live, so the flag only governs whether a
+  planner can edit and see them in the UI. The dialog always seeds the advanced fields from the row,
+  so editing with them hidden round-trips a stored value unchanged.
+
+- [#82](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/82) [`f382196`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f382196bc0d38fceec1938e8a30f5504389708ec) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Per-activity working-time calendars (M5, ADR-0037). Each activity can now carry its own
+  `calendarId` (create/update/response API + shared `ActivitySummary`) — `null` inherits the plan
+  default. The CPM engine moved to an **absolute working-instant** axis so each activity's duration,
+  float, and dates are measured on **its own** calendar: a 24/7 commissioning activity inside a 5-day
+  plan works across weekends, and a relationship's `PREDECESSOR`/`SUCCESSOR` lag now resolves to the
+  endpoint activity's calendar (completing M3's forward-wiring). A plan where every activity inherits
+  the plan calendar recalculates **byte-identically** (the golden suite is the parity gate). The
+  activity calendar is validated in-org under the calendar advisory lock (like the plan picker), and
+  the recalculation resolves each distinct calendar once (O(distinct calendars), not O(activities)).
+
+### Patch Changes
+
+- Updated dependencies [[`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb), [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb), [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb), [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb), [`3111809`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3111809cb46eb8c51848493ff6837dad6f717fbd), [`3111809`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3111809cb46eb8c51848493ff6837dad6f717fbd), [`399afc8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/399afc8893dd2f50441a0a922edf3571961beab8), [`f382196`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f382196bc0d38fceec1938e8a30f5504389708ec)]:
+  - @repo/types@0.11.0
+
 ## 0.24.0
 
 ### Minor Changes

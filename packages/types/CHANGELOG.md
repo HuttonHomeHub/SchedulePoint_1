@@ -1,5 +1,109 @@
 # @repo/types
 
+## 0.11.0
+
+### Minor Changes
+
+- [#86](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/86) [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add **Expected Finish** scheduling (M4-F5, ADR-0035 §9). A new per-activity `expectedFinish` target
+  date plus a plan-level `useExpectedFinishDates` option: when the option is on, the CPM forward pass
+  **recomputes** an in-progress activity's remaining work so its early finish lands on its expected
+  finish (the day's working-end boundary), floored at the rescheduled start — a past target collapses the
+  remaining to zero. When the option is off, or for a not-started/complete activity, the target is
+  ignored and the schedule is byte-identical to the pure-progress path.
+
+  `expectedFinish` is client-settable on the activity create/update DTOs and exposed on the activity
+  response + shared `ActivitySummary`; `useExpectedFinishDates` is set via `UpdatePlanDto` and exposed on
+  the plan response + shared `Plan` type, threaded through the recalculate contract like the progress
+  recalc mode. The recalc log carries an `expectedFinishAppliedCount`. Two additive columns (a nullable
+  activity date and a defaulted plan boolean) — no data migration; the golden suite is unchanged. The
+  conformance golden (A6200) and the S12 on/off differential land with the F6 conformance slice.
+
+- [#86](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/86) [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Mandatory constraints now **produce-and-flag** instead of being silently parked (M4-F2, ADR-0035 §7).
+  `MANDATORY_START`/`MANDATORY_FINISH` still pin their date with the same MSO/MFO arithmetic, but when a
+  pin drives an activity earlier than its logic allows the engine now **produces the (impossible)
+  schedule as pinned and flags it** — a new engine-owned `constraintViolated` boolean on each activity —
+  surfacing the broken relationship as negative float on the predecessor, and never repairing it. A pin
+  the network can satisfy is not flagged.
+
+  The schedule summary's dishonest `parkedConstraintCount` is **replaced** by two honest counts:
+  `constraintViolationCount` (mandatory pins that broke logic) and `constraintWarningCount` (the N15 case
+  — a Start-No-Earlier-Than dated before the data date, honoured but unable to pull work back). The
+  recalc response, read summary, and structured recalc log all carry the new counts; the summary strip
+  shows "Constraint conflicts" / "Constraint warnings" figures with accessible explanations in place of
+  the old "Parked constraints" figure. Plans with no mandatory constraints are byte-identical (the
+  golden suite is unchanged) and report both counts as zero.
+
+- [#86](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/86) [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Activities can now be flagged **Schedule As-Late-As-Possible** (M4-F4, ADR-0035 §11). The new
+  `scheduleAsLateAsPossible` boolean is a **display-only** placement preference: a flagged activity is
+  rendered at its late-based position (its already-computed late dates), while the pure
+  `early*`/`late*`/`totalFloat` schedule stays a pure function of the network — it is never a date
+  constraint. The zero-**free**-float refinement (place only as late as successors allow) lands in M6;
+  until then the late-based position is the render target.
+
+  The flag is client-settable via the create/update DTOs, exposed read-only on the activity response and
+  the shared `ActivitySummary`, threaded into the engine seam, and read on the recalc load. Additive,
+  defaulted column — no data migration; the golden suite is unchanged (a new A9400-style golden pins the
+  non-interference contract). The on-canvas editor for the flag is a later slice.
+
+- [#86](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/86) [`a4ff745`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a4ff745def49f3ff70b463cd48884c16ad72bedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Activities can now carry a **secondary schedule constraint** (M4-F3, ADR-0035 §10). The primary
+  constraint drives the forward pass (early dates) as before; the new
+  `secondaryConstraintType`/`secondaryConstraintDate` pair drives the backward pass (late dates) — the
+  canonical pairing is a forward primary + a backward secondary (e.g. an SNET that moves the early start
+  plus an FNLT that tightens the late finish). A secondary of a forward-only kind (SNET/FNET) is a
+  documented no-op on the backward clamp, and an activity with no secondary is scheduled byte-identically
+  (the golden suite is unchanged).
+
+  The pair is client-settable via the create/update DTOs with the same both-or-neither pairing rule as
+  the primary (mirrored by a DB CHECK constraint), exposed read-only on the activity response and the
+  shared `ActivitySummary`, and read on the recalc load. Additive, nullable columns — no data migration.
+
+- [#84](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/84) [`3111809`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3111809cb46eb8c51848493ff6837dad6f717fbd) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Plan-level progress recalc mode (M2, ADR-0035 §1). Plans now carry a
+  `progressRecalcMode` — `RETAINED_LOGIC` (default), `PROGRESS_OVERRIDE`, or
+  `ACTUAL_DATES` — exposed on the plan response and settable via `PATCH` (like
+  `schedulingMode`), and threaded into the CPM recalculation. It governs how an
+  in-progress activity's remaining work treats predecessor logic when progress is
+  out of sequence. Behaviour-preserving by default; an unprogressed plan is
+  unaffected.
+
+- [#84](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/84) [`3111809`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3111809cb46eb8c51848493ff6837dad6f717fbd) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Progress ingestion web controls (M2, ADR-0035), behind `VITE_PROGRESS_INGESTION`
+  (off by default). When enabled:
+
+  - The progress editor gains a **remaining duration** input (blank derives it from
+    percent complete) plus **suspend / resume** dates for a paused activity — with
+    client-side validation mirroring the API (resume ≥ suspend).
+  - Plan settings gain a **recalc mode** picker — Retained Logic / Progress Override
+    / Actual Dates — persisted with a targeted PATCH and applied on the next
+    recalculation.
+
+  The activity read model now exposes `remainingDurationDays`, `suspendDate`, and
+  `resumeDate` (`@repo/types` + the activity response DTO), so the editor seeds and
+  round-trips a stored value even with the inputs hidden. The engine, the settable
+  API fields, and the plan recalc-mode column were already live; this slice only
+  adds the flag-gated authoring UI.
+
+- [#85](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/85) [`399afc8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/399afc8893dd2f50441a0a922edf3571961beab8) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Surface progress-repair warnings and clarify the progress editor (M2 follow-up,
+  ADR-0035 §6).
+
+  - The progress endpoint (`PATCH …/activities/:id/progress`) now returns
+    `meta.warnings` (a `ProgressWarning[]`) when it repairs a complete activity —
+    `COMPLETE_WITHOUT_FINISH` (finish set to the data date) or
+    `REMAINING_ON_COMPLETE` (remaining forced to zero). The write still succeeds and
+    `data` reflects the corrected value; an ordinary report omits `meta`. Adds a
+    reusable single-resource `ResourceEnvelope` for `{ data, meta }` responses.
+  - The web progress editor announces those repairs on save, and a note makes clear
+    the remaining/suspend/resume fields reschedule the remaining work rather than
+    change the derived status.
+
+- [#82](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/82) [`f382196`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f382196bc0d38fceec1938e8a30f5504389708ec) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Per-activity working-time calendars (M5, ADR-0037). Each activity can now carry its own
+  `calendarId` (create/update/response API + shared `ActivitySummary`) — `null` inherits the plan
+  default. The CPM engine moved to an **absolute working-instant** axis so each activity's duration,
+  float, and dates are measured on **its own** calendar: a 24/7 commissioning activity inside a 5-day
+  plan works across weekends, and a relationship's `PREDECESSOR`/`SUCCESSOR` lag now resolves to the
+  endpoint activity's calendar (completing M3's forward-wiring). A plan where every activity inherits
+  the plan calendar recalculates **byte-identically** (the golden suite is the parity gate). The
+  activity calendar is validated in-org under the calendar advisory lock (like the plan picker), and
+  the recalculation resolves each distinct calendar once (O(distinct calendars), not O(activities)).
+
 ## 0.10.0
 
 ### Minor Changes
