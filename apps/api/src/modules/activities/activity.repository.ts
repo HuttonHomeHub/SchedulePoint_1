@@ -25,6 +25,8 @@ export interface ActivityPatch {
   durationMinutes?: number;
   constraintType?: ConstraintType | null;
   constraintDate?: Date | null;
+  /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
+  calendarId?: string | null;
   laneIndex?: number;
   /** Visual-Planning placement (ADR-0033): hand-placed start, or null to clear it. */
   visualStart?: Date | null;

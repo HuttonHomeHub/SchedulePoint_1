@@ -55,6 +55,7 @@ const activityRow = (
   constraintType: null,
   constraintDate: null,
   visualStart: null,
+  calendarId: null,
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({
@@ -267,6 +268,32 @@ describe('ScheduleService.recalculate', () => {
     };
 
     expect(await bStart('TWENTY_FOUR_HOUR')).not.toBe(await bStart('PROJECT_DEFAULT'));
+  });
+
+  it('schedules an activity on its OWN calendar — a distinct calendar moves the date (M5, ADR-0037)', async () => {
+    // The plan is Mon–Fri; an activity assigned a 24/7 calendar works across weekends, so a long
+    // duration finishes on a different date than the same activity inheriting the 5-day plan.
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: 'cal-plan' }));
+    // cal-247 → a 24/7 week (works weekends); anything else (incl. the plan's cal-plan) → Mon–Fri.
+    schedule.loadPlanCalendar.mockImplementation((_org, calId) => {
+      const weekdays = calId === 'cal-247' ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4];
+      // Return the row synchronously (the service `await`s it) — the lint-clean mock idiom here.
+      return {
+        shifts: weekdays.map((weekday) => ({ weekday, startMinute: 0, endMinute: 1440 })),
+        exceptions: [],
+      };
+    });
+
+    const aFinish = async (calendarId: string | null) => {
+      schedule.writeResults.mockClear();
+      schedule.loadActivities.mockResolvedValue([activityRow('A', 8, { calendarId })]); // 8 days
+      schedule.loadEdges.mockResolvedValue([]);
+      await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+      const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+      return results.find((r) => r.activityId === 'A')!.earlyFinish;
+    };
+
+    expect(await aFinish('cal-247')).not.toBe(await aFinish(null));
   });
 });
 

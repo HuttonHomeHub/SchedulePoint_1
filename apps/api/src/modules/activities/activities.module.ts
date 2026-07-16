@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { HierarchyModule } from '../../common/hierarchy/hierarchy.module';
+import { CalendarsModule } from '../calendars/calendars.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
@@ -18,7 +19,7 @@ import { PlanActivitiesController } from './plan-activities.controller';
  * restore; an activity is a leaf, so delete cascades to nothing).
  */
 @Module({
-  imports: [OrganizationsModule, HierarchyModule, PlansModule, PlanLockModule],
+  imports: [OrganizationsModule, HierarchyModule, PlansModule, PlanLockModule, CalendarsModule],
   controllers: [PlanActivitiesController, ActivitiesController],
   providers: [ActivitiesService, ActivityRepository],
   exports: [ActivityRepository],

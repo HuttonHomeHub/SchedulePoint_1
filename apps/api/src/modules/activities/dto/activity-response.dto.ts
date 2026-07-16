@@ -45,6 +45,14 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ format: 'date', nullable: true, type: String })
   constraintDate!: string | null;
 
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description: "The activity's own calendar (ADR-0037), or null to inherit the plan default.",
+  })
+  calendarId!: string | null;
+
   @ApiProperty({ description: 'Graphical y-lane for the TSLD canvas.' })
   laneIndex!: number;
 
@@ -140,6 +148,7 @@ export class ActivityResponseDto implements ActivitySummary {
       durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),
+      calendarId: entity.calendarId,
       laneIndex: entity.laneIndex,
       status: entity.status,
       percentComplete: entity.percentComplete,

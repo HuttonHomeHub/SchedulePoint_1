@@ -73,6 +73,7 @@ export class ScheduleService {
     const startedAt = Date.now();
     let summary: EngineSummary;
     let lagCalendarOverrideCount = 0;
+    let activityCalendarCount = 0;
     try {
       summary = await this.prisma.$transaction(async (tx) => {
         // Serialise with dependency creates and other recalcs on this plan, then
@@ -89,13 +90,37 @@ export class ScheduleService {
         lagCalendarOverrideCount = edgeRows.filter(
           (e) => e.lagCalendar === 'TWENTY_FOUR_HOUR',
         ).length;
-        // Build the plan's working-day calendar once and inject it at the existing
-        // port seam (ADR-0023 §5) — the engine's pass code is unchanged (ADR-0024).
+        // Build the plan's working-time calendar once — the inherit default (ADR-0024).
         const calendar = await this.resolveCalendar(organization.id, plan.calendarId, tx);
 
+        // Per-activity calendars (ADR-0037, M5): resolve each DISTINCT non-inherit activity
+        // calendar ONCE (O(distinct calendars), not O(activities)). An activity with no calendar,
+        // or whose calendar IS the plan's, keeps the byte-identical fast path (undefined port).
+        const distinctActivityCalIds = [
+          ...new Set(
+            activityRows
+              .map((r) => r.calendarId)
+              .filter((id): id is string => id != null && id !== plan.calendarId),
+          ),
+        ];
+        const portByCalId = new Map<string, WorkingTimeCalendar>();
+        for (const calId of distinctActivityCalIds) {
+          portByCalId.set(calId, await this.resolveCalendar(organization.id, calId, tx));
+        }
+        activityCalendarCount = distinctActivityCalIds.length;
+        const portFor = (calId: string | null): WorkingTimeCalendar | undefined =>
+          calId == null || calId === plan.calendarId ? undefined : portByCalId.get(calId);
+        const calIdByActivity = new Map(activityRows.map((r) => [r.id, r.calendarId] as const));
+
         const output = computeSchedule(
-          activityRows.map(toEngineActivity),
-          edgeRows.map(toEngineEdge),
+          activityRows.map((r) => toEngineActivity(r, portFor(r.calendarId))),
+          edgeRows.map((r) =>
+            toEngineEdge(
+              r,
+              portFor(calIdByActivity.get(r.predecessorId) ?? null),
+              portFor(calIdByActivity.get(r.successorId) ?? null),
+            ),
+          ),
           { dataDate, calendar },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
@@ -130,6 +155,9 @@ export class ScheduleService {
         criticalCount: summary.criticalCount,
         parkedConstraintCount: summary.parkedConstraintCount,
         lagCalendarOverrideCount,
+        // How many DISTINCT per-activity calendars were built this recalc (ADR-0037, M5) — the
+        // signal that per-activity calendars actually shaped the dates (0 on the all-inherit path).
+        activityCalendarCount,
         durationMs: Date.now() - startedAt,
       },
       'schedule recalculated',
@@ -203,8 +231,15 @@ export class ScheduleService {
   }
 }
 
-/** Project a stored activity row onto the engine's input struct (durations are stored in minutes). */
-function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
+/**
+ * Project a stored activity row onto the engine's input struct (durations are stored in minutes).
+ * `calendar` is the activity's resolved own-calendar port (ADR-0037, M5) — undefined when it
+ * inherits the plan calendar, keeping the byte-identical fast path.
+ */
+function toEngineActivity(
+  row: ScheduleActivityRow,
+  calendar?: WorkingTimeCalendar,
+): EngineActivity {
   return {
     id: row.id,
     durationMinutes: row.durationMinutes,
@@ -212,24 +247,37 @@ function toEngineActivity(row: ScheduleActivityRow): EngineActivity {
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
+    ...(calendar ? { calendar } : {}),
   };
 }
 
 /**
- * Project a stored dependency row onto the engine's edge struct (lag is stored in minutes).
- * Resolve the per-relationship lag calendar (ADR-0036 §6, M3): `TWENTY_FOUR_HOUR` measures the
- * lag as **elapsed** time (the 24/7 `allMinutesWorkCalendar`); `PREDECESSOR`/`SUCCESSOR`/
- * `PROJECT_DEFAULT` leave it **undefined** — the engine's fast path measures the lag on the
- * plan calendar. Pred/Succ become distinct from the plan calendar only once per-activity
- * calendars land (M5); until then all three coincide.
+ * Project a stored dependency row onto the engine's edge struct (lag is stored in minutes) and
+ * resolve the per-relationship lag calendar (ADR-0036 §6 / ADR-0037): `TWENTY_FOUR_HOUR` measures
+ * the lag as **elapsed** time (the 24/7 `allMinutesWorkCalendar`); `PREDECESSOR`/`SUCCESSOR` resolve
+ * to the predecessor's / successor's own-calendar port (M5) — undefined when that endpoint inherits
+ * the plan calendar; `PROJECT_DEFAULT` is always undefined (the plan calendar). An undefined port is
+ * the engine's byte-identical fast path, so an all-inherit plan is unchanged from M3.
  */
-function toEngineEdge(row: ScheduleEdgeRow): EngineEdge {
+function toEngineEdge(
+  row: ScheduleEdgeRow,
+  predecessorCalendar?: WorkingTimeCalendar,
+  successorCalendar?: WorkingTimeCalendar,
+): EngineEdge {
+  const lagCalendar =
+    row.lagCalendar === 'TWENTY_FOUR_HOUR'
+      ? allMinutesWorkCalendar
+      : row.lagCalendar === 'PREDECESSOR'
+        ? predecessorCalendar
+        : row.lagCalendar === 'SUCCESSOR'
+          ? successorCalendar
+          : undefined;
   return {
     id: row.id,
     predecessorId: row.predecessorId,
     successorId: row.successorId,
     type: row.type,
     lagMinutes: row.lagMinutes,
-    ...(row.lagCalendar === 'TWENTY_FOUR_HOUR' ? { lagCalendar: allMinutesWorkCalendar } : {}),
+    ...(lagCalendar ? { lagCalendar } : {}),
   };
 }

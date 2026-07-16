@@ -19,6 +19,7 @@ const ACTIVITY: ActivitySummary = {
   durationDays: 5,
   constraintType: 'SNET',
   constraintDate: '2026-05-01',
+  calendarId: null,
   laneIndex: 0,
   status: 'NOT_STARTED',
   percentComplete: 0,
@@ -117,6 +118,7 @@ describe('ActivityFormDialog', () => {
       ...ACTIVITY,
       constraintType: 'MANDATORY_START',
       constraintDate: '2026-05-01',
+      calendarId: null,
     };
     renderDialog({ activity: parked });
     const select = screen.getByLabelText('Constraint (optional)');
@@ -140,6 +142,7 @@ describe('ActivityFormDialog', () => {
       ...ACTIVITY,
       constraintType: 'MANDATORY_FINISH',
       constraintDate: '2026-05-01',
+      calendarId: null,
     };
     renderDialog({ activity: parked });
     const select = screen.getByLabelText('Constraint (optional)');

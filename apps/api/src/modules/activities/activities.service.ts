@@ -4,6 +4,7 @@ import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import {
   ConflictError,
   ForbiddenError,
@@ -16,6 +17,7 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -69,11 +71,28 @@ export class ActivitiesService {
     private readonly organizations: OrganizationsService,
     private readonly plans: PlanRepository,
     private readonly activities: ActivityRepository,
+    private readonly calendars: CalendarRepository,
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
+
+  /**
+   * Validate a non-null `calendarId` is an ACTIVE calendar in the activity's own organisation
+   * (ADR-0037, mirrors PlansService). Taken under the same calendar advisory lock the delete-in-use
+   * guard uses, so an activity can never be assigned a calendar mid-deletion (no TOCTOU dangle). A
+   * foreign / deleted / unknown id is indistinguishable from missing (404), leaking nothing.
+   */
+  private async assertCalendarInOrg(
+    tx: Prisma.TransactionClient,
+    calendarId: string,
+    organizationId: string,
+  ): Promise<void> {
+    await acquireCalendarWriteLock(tx, calendarId);
+    const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organizationId, tx);
+    if (!calendar) throw new NotFoundError('Calendar not found.');
+  }
 
   async list(
     principal: Principal,
@@ -124,24 +143,36 @@ export class ActivitiesService {
     // if the client sent nothing (the DTO's cross-field validator only rejects a
     // non-zero duration that is explicitly present).
     const durationDays = MILESTONE_TYPES.includes(type) ? 0 : (dto.durationDays ?? 1);
+    // The activity's own calendar (ADR-0037); null/omitted inherits the plan default.
+    const calendarId = dto.calendarId ?? null;
 
     try {
-      const activity = await this.activities.create({
-        // Copy the organisation id from the parent plan, never from input.
-        organizationId: plan.organizationId,
-        planId: plan.id,
-        name: dto.name,
-        code: dto.code ?? null,
-        description: dto.description ?? null,
-        type,
-        durationMinutes: durationDays * MINUTES_PER_DAY,
-        ...(dto.constraintType ? { constraintType: dto.constraintType } : {}),
-        ...(dto.constraintDate ? { constraintDate: parseCalendarDate(dto.constraintDate) } : {}),
-        ...(dto.laneIndex !== undefined ? { laneIndex: dto.laneIndex } : {}),
-        // Visual-Planning placement input (ADR-0033): feeds only the effective-Visual pass.
-        ...(dto.visualStart ? { visualStart: parseCalendarDate(dto.visualStart) } : {}),
-        createdBy: principal.userId,
-        updatedBy: principal.userId,
+      const activity = await this.prisma.$transaction(async (tx) => {
+        // Validate a specific calendar in-org under the calendar lock before the insert (T4).
+        if (calendarId !== null) await this.assertCalendarInOrg(tx, calendarId, organization.id);
+        return this.activities.create(
+          {
+            // Copy the organisation id from the parent plan, never from input.
+            organizationId: plan.organizationId,
+            planId: plan.id,
+            name: dto.name,
+            code: dto.code ?? null,
+            description: dto.description ?? null,
+            type,
+            durationMinutes: durationDays * MINUTES_PER_DAY,
+            calendarId,
+            ...(dto.constraintType ? { constraintType: dto.constraintType } : {}),
+            ...(dto.constraintDate
+              ? { constraintDate: parseCalendarDate(dto.constraintDate) }
+              : {}),
+            ...(dto.laneIndex !== undefined ? { laneIndex: dto.laneIndex } : {}),
+            // Visual-Planning placement input (ADR-0033): feeds only the effective-Visual pass.
+            ...(dto.visualStart ? { visualStart: parseCalendarDate(dto.visualStart) } : {}),
+            createdBy: principal.userId,
+            updatedBy: principal.userId,
+          },
+          tx,
+        );
       });
       this.logger.info(
         {
@@ -202,6 +233,10 @@ export class ActivitiesService {
     if (dto.visualStart !== undefined) {
       patch.visualStart = dto.visualStart === null ? null : parseCalendarDate(dto.visualStart);
     }
+    // The activity's own calendar (ADR-0037): null clears to inherit the plan default; a specific
+    // id is validated in-org under the calendar lock inside the transaction below (T4).
+    const calendarId = dto.calendarId;
+    if (calendarId === null) patch.calendarId = null;
 
     // Keep the milestone invariant when the type changes to (or already is) a
     // milestone: a milestone always has duration 0, regardless of what was sent.
@@ -209,15 +244,24 @@ export class ActivitiesService {
     if (MILESTONE_TYPES.includes(effectiveType)) patch.durationMinutes = 0;
 
     try {
-      const changed = await this.activities.updateIfVersionMatches(
-        activityId,
-        dto.version,
-        patch,
-        principal.userId,
-      );
-      if (changed === 0) {
-        throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
-      }
+      await this.prisma.$transaction(async (tx) => {
+        // Assigning a specific calendar: validate it is active + in-org under the calendar lock,
+        // serialised with the delete-in-use guard (no TOCTOU dangling reference).
+        if (calendarId !== undefined && calendarId !== null) {
+          await this.assertCalendarInOrg(tx, calendarId, organization.id);
+          patch.calendarId = calendarId;
+        }
+        const changed = await this.activities.updateIfVersionMatches(
+          activityId,
+          dto.version,
+          patch,
+          principal.userId,
+          tx,
+        );
+        if (changed === 0) {
+          throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
+        }
+      });
     } catch (error) {
       throw this.mapWriteError(error);
     }

@@ -11,6 +11,7 @@ import {
 } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
@@ -117,6 +118,7 @@ describe('ActivitiesService', () => {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
     restoreBatch: ReturnType<typeof vi.fn>;
   };
+  let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: ActivitiesService;
 
@@ -136,13 +138,19 @@ describe('ActivitiesService', () => {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
       restoreBatch: vi.fn().mockResolvedValue({}),
     };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    // The tx carries `$executeRaw` for the calendar advisory lock (ADR-0037 validation path).
+    prisma = {
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+    };
     const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
+    // Activity calendars are validated in-org via this repo (ADR-0037); default: id resolves.
+    calendars = { findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: 'cal-1' }) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new ActivitiesService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       activities as unknown as ActivityRepository,
+      calendars as unknown as CalendarRepository,
       lifecycle as unknown as HierarchyLifecycleService,
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
@@ -159,7 +167,33 @@ describe('ActivitiesService', () => {
       expect(result.id).toBe(ACTIVITY_ID);
       expect(activities.create).toHaveBeenCalledWith(
         expect.objectContaining({ organizationId: ORG_ID, planId: PLAN_ID, name: 'Excavate' }),
+        expect.anything(), // the transaction client (calendar validation is serialised inside it)
       );
+    });
+
+    it('validates a specific calendar in-org and threads it into the insert (M5, ADR-0037)', async () => {
+      activities.create.mockResolvedValue(activity());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'Cure',
+        calendarId: 'cal-1',
+      });
+      expect(calendars.findActiveByIdInOrg).toHaveBeenCalledWith(
+        'cal-1',
+        ORG_ID,
+        expect.anything(),
+      );
+      expect(activities.create).toHaveBeenCalledWith(
+        expect.objectContaining({ calendarId: 'cal-1' }),
+        expect.anything(),
+      );
+    });
+
+    it('rejects a foreign/unknown activity calendar with 404 before the insert (M5)', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'Cure', calendarId: 'cal-x' }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(activities.create).not.toHaveBeenCalled();
     });
 
     it('defaults type to TASK and duration to 1 when omitted', async () => {
