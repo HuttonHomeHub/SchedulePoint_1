@@ -81,6 +81,7 @@ vi.mock('@/features/plans', async (importOriginal) => ({
       description: null,
     }),
   PlanCalendarPicker: () => <div data-testid="calendar-picker" />,
+  PlanRecalcModePicker: () => <div data-testid="recalc-mode-picker" />,
   PlanFormDialog: () => null,
 }));
 

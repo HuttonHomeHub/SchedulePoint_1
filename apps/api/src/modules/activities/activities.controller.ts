@@ -20,10 +20,12 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import type { ProgressWarning } from '@repo/types';
 
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ResourceEnvelope } from '../../common/dto/resource-envelope';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivitiesService } from './activities.service';
@@ -94,10 +96,19 @@ export class ActivitiesController {
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
     @Body() dto: UpdateActivityProgressDto,
-  ): Promise<ActivityResponseDto> {
-    return ActivityResponseDto.from(
-      await this.service.updateProgress(principal, orgSlug, activityId, dto),
+  ): Promise<
+    ActivityResponseDto | ResourceEnvelope<ActivityResponseDto, { warnings: ProgressWarning[] }>
+  > {
+    const { activity, warnings } = await this.service.updateProgress(
+      principal,
+      orgSlug,
+      activityId,
+      dto,
     );
+    const data = ActivityResponseDto.from(activity);
+    // Only carry `meta` when a repair actually happened, so an ordinary progress report keeps the
+    // bare `{ data }` shape (M2, ADR-0035 §6).
+    return warnings.length > 0 ? new ResourceEnvelope(data, { warnings }) : data;
   }
 
   @Delete(':activityId')

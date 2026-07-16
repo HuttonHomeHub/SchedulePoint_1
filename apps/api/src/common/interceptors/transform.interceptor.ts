@@ -8,12 +8,14 @@ import type { ApiResponse } from '@repo/types';
 import { map, type Observable } from 'rxjs';
 
 import { Paginated } from '../dto/paginated';
+import { ResourceEnvelope } from '../dto/resource-envelope';
 
 /**
  * Wraps every successful response in the standard `{ data, meta? }` envelope
- * (see docs/API.md). Handlers return resources/DTOs (wrapped as `data`) or a
- * {@link Paginated} result (rendered as `data` + `meta`). Errors are handled by
- * the exception filter, not here.
+ * (see docs/API.md). Handlers return resources/DTOs (wrapped as `data`), a
+ * {@link Paginated} list (rendered as `data` + `meta`), or a single-resource
+ * {@link ResourceEnvelope} when a non-list response also carries `meta`. Errors
+ * are handled by the exception filter, not here.
  */
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<
@@ -33,6 +35,10 @@ export class TransformInterceptor<T> implements NestInterceptor<
         if (value instanceof Paginated) {
           // `instanceof` narrows the generic meta to `any`; it is always an object
           // (PageMeta or a bounded-list roll-up), rendered verbatim into the envelope.
+          const meta = value.meta as Record<string, unknown>;
+          return { data: value.data as unknown, meta: { ...meta } };
+        }
+        if (value instanceof ResourceEnvelope) {
           const meta = value.meta as Record<string, unknown>;
           return { data: value.data as unknown, meta: { ...meta } };
         }

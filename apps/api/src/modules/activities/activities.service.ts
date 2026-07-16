@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Activity, type ActivityStatus, type ActivityType } from '@prisma/client';
-import type { PageMeta } from '@repo/types';
+import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -350,7 +350,7 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityProgressDto,
-  ): Promise<Activity> {
+  ): Promise<{ activity: Activity; warnings: ProgressWarning[] }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update_progress', organization.id);
 
@@ -398,16 +398,28 @@ export class ActivitiesService {
       }
     }
 
+    // Repairs that keep the report self-consistent are surfaced to the caller as `meta.warnings`
+    // (ADR-0035 §6): the write still succeeds and the resource reflects the corrected value, but the
+    // client gets a machine-readable signal that a field it sent (or implied) was overridden.
+    const warnings: ProgressWarning[] = [];
     const isComplete = actualFinish !== null || percentComplete >= 100;
     // N08 — complete without an actual finish (ADR-0035 §6): repair the finish to the data date + warn.
     if (isComplete && actualFinish === null && actualStart !== null && dataDate !== null) {
       actualFinish = dataDate;
       this.logger.warn({ activityId, reason: 'N08_COMPLETE_WITHOUT_FINISH' }, 'progress repaired');
+      warnings.push({
+        code: 'COMPLETE_WITHOUT_FINISH',
+        message: 'Actual finish was set to the data date because the activity is complete.',
+      });
     }
     // N18 — remaining > 0 on a complete activity (ADR-0035 §6): repair remaining to 0 + warn.
     if (isComplete && remainingDurationMinutes !== null && remainingDurationMinutes > 0) {
       remainingDurationMinutes = 0;
       this.logger.warn({ activityId, reason: 'N18_REMAINING_ON_COMPLETE' }, 'progress repaired');
+      warnings.push({
+        code: 'REMAINING_ON_COMPLETE',
+        message: 'Remaining duration was set to zero because the activity is complete.',
+      });
     }
 
     // Suspend / resume (ADR-0035 §4): resolve the pair (provided overrides stored; null clears) and
@@ -447,7 +459,7 @@ export class ActivitiesService {
 
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
-    return updated;
+    return { activity: updated, warnings };
   }
 
   /** A provided date field (parsed, or null to clear) overrides the stored one;

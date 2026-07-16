@@ -90,8 +90,12 @@ export function ActivityProgressDialog({
     update.mutate(
       { activityId: activity.id, version: activity.version, ...values },
       {
-        onSuccess: () => {
-          announce(`Progress for “${activity.name}” saved.`);
+        onSuccess: (result) => {
+          // Surface any server-side repairs (ADR-0035 §6) so a silent field override doesn't go
+          // unnoticed — e.g. "the finish was set to the data date because the activity is complete".
+          const warnings = result.meta?.warnings ?? [];
+          const suffix = warnings.length > 0 ? ` ${warnings.map((w) => w.message).join(' ')}` : '';
+          announce(`Progress for “${activity.name}” saved.${suffix}`);
           onClose();
         },
       },
@@ -134,6 +138,10 @@ export function ActivityProgressDialog({
         />
         {PROGRESS_INGESTION_ENABLED ? (
           <>
+            <p className="text-muted-foreground border-border border-t pt-3 text-sm">
+              These reschedule the remaining work on the next recalculation; they don’t change the
+              status (that stays derived from percent complete and the actual dates).
+            </p>
             <TextField
               label="Remaining duration (days, optional)"
               type="number"
