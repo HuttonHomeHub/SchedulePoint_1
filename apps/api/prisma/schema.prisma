@@ -491,6 +491,15 @@ model Activity {
   constraintType  ConstraintType? @map("constraint_type")
   // Calendar day (date-only, no timezone), like Plan.plannedStart.
   constraintDate  DateTime?       @map("constraint_date") @db.Date
+  // Secondary schedule constraint (ADR-0035 §10, M4 F3). Same shape as the primary
+  // pair above and equally client-settable (NOT engine-owned): the primary drives
+  // the forward pass, this secondary drives the backward pass. Both-null-or-both-set
+  // is enforced by ck_activities_secondary_constraint_pair (raw SQL in the migration,
+  // like the primary — Prisma can't express a CHECK). Unindexed like the primary:
+  // read only on the full-plan recalc load, never filtered/sorted on.
+  secondaryConstraintType ConstraintType? @map("secondary_constraint_type")
+  // Calendar day (date-only, no timezone), like constraint_date.
+  secondaryConstraintDate DateTime?       @map("secondary_constraint_date") @db.Date
   // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
   // persisted model per PROJECT_BRIEF §9, not a runtime concern.
   laneIndex       Int             @default(0) @map("lane_index")

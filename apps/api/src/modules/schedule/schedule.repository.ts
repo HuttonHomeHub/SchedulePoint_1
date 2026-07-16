@@ -20,6 +20,9 @@ export interface ScheduleActivityRow {
   type: ActivityType;
   constraintType: ConstraintType | null;
   constraintDate: Date | null;
+  /** Secondary constraint (ADR-0035 §10, M4): drives the backward pass only. */
+  secondaryConstraintType: ConstraintType | null;
+  secondaryConstraintDate: Date | null;
   /** Visual Planning hand-placement (ADR-0033); advisory input to the effective-Visual pass. */
   visualStart: Date | null;
   /** The activity's own calendar (ADR-0037, M5); null inherits the plan default. Resolved to a
@@ -108,6 +111,8 @@ export class ScheduleRepository {
         type: true,
         constraintType: true,
         constraintDate: true,
+        secondaryConstraintType: true,
+        secondaryConstraintDate: true,
         visualStart: true,
         calendarId: true,
         actualStart: true,

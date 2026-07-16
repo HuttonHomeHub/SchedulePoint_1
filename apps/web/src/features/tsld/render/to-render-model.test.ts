@@ -14,6 +14,8 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     durationDays: 3,
     constraintType: null,
     constraintDate: null,
+    secondaryConstraintType: null,
+    secondaryConstraintDate: null,
     calendarId: null,
     laneIndex: 2,
     status: 'NOT_STARTED',

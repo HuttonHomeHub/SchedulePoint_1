@@ -55,6 +55,8 @@ const activityRow = (
   type: 'TASK',
   constraintType: null,
   constraintDate: null,
+  secondaryConstraintType: null,
+  secondaryConstraintDate: null,
   visualStart: null,
   calendarId: null,
   actualStart: null,

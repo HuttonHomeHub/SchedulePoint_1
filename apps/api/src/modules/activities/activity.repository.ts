@@ -25,6 +25,9 @@ export interface ActivityPatch {
   durationMinutes?: number;
   constraintType?: ConstraintType | null;
   constraintDate?: Date | null;
+  /** Secondary constraint (ADR-0035 §10): drives the backward pass; paired like the primary. */
+  secondaryConstraintType?: ConstraintType | null;
+  secondaryConstraintDate?: Date | null;
   /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
   calendarId?: string | null;
   laneIndex?: number;

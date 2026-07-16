@@ -256,7 +256,11 @@ scheduling slices depend on, persisted **now** so those slices are additive (no
 wide `ALTER TABLE` + backfill later):
 
 - **Definition** (`type`, `duration_minutes`, `constraint_type`/`constraint_date`,
-  `lane_index`, optional `code`) — Planner-owned. Since ADR-0036 (M1) `duration_minutes`
+  `secondary_constraint_type`/`secondary_constraint_date`, `lane_index`, optional
+  `code`) — Planner-owned. The **secondary** constraint pair (ADR-0035 §10, M4 F3)
+  mirrors the primary pair exactly and is equally **client-settable** (NOT
+  engine-owned): the primary drives the CPM forward pass, the secondary drives the
+  backward pass. Since ADR-0036 (M1) `duration_minutes`
   is an integer count of **working minutes** (the engine schedules in working-minute
   offsets over intraday shift calendars); milestones are `0`. The public API stays
   **day-denominated** (`durationDays`) — the service converts at the boundary by the plan
@@ -311,11 +315,13 @@ remaining only; `NULL` is always legal, that is the derive path),
 (≥ 0), `ck_activities_resume_after_suspend` (**nullable-safe**: `resume_date IS
 NULL OR suspend_date IS NULL OR resume_date >= suspend_date` — enforced only when
 both suspend/resume dates are set, so it never blocks the common no-suspend path),
-and `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
+`ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
 and `constraint_date` are both set or both null (never one without the other), so a
 half-set constraint can never corrupt CPM scheduling even if a future code path
-bypasses the service. They are raw SQL in the migration (Prisma cannot express
-`CHECK`). `total_float` is deliberately unconstrained — negative float is valid.
+bypasses the service — and `ck_activities_secondary_constraint_pair`, the identical
+both-null-or-both-set invariant for the secondary pair (ADR-0035 §10, M4 F3). They
+are raw SQL in the migration (Prisma cannot express `CHECK`). `total_float` is
+deliberately unconstrained — negative float is valid.
 
 ### Dependency: the schedule edge
 

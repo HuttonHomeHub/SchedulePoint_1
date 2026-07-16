@@ -245,6 +245,13 @@ export interface ActivitySummary {
   constraintType: ConstraintType | null;
   constraintDate: string | null;
   /**
+   * Optional secondary schedule constraint (ADR-0035 §10). The primary drives the forward pass
+   * (early dates); the secondary drives the backward pass (late dates) — e.g. an SNET primary + an
+   * FNLT secondary. Both null when no secondary is set; paired (both-or-neither) like the primary.
+   */
+  secondaryConstraintType: ConstraintType | null;
+  secondaryConstraintDate: string | null;
+  /**
    * The activity's own working-time calendar (ADR-0037, M5), or `null` to **inherit** the plan
    * default (resolution: activity → plan → all-days-work). When set, the activity's duration is
    * measured, its float counted, and its dates derived on this calendar — so e.g. a 24/7 crew

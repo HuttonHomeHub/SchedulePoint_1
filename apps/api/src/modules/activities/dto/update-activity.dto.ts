@@ -80,6 +80,26 @@ export class UpdateActivityDto {
   @IsConstraintPaired()
   constraintDate?: string | null;
 
+  @ApiPropertyOptional({ enum: ConstraintType, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsEnum(ConstraintType)
+  @IsConstraintPaired({
+    typeField: 'secondaryConstraintType',
+    dateField: 'secondaryConstraintDate',
+  })
+  secondaryConstraintType?: ConstraintType | null;
+
+  @ApiPropertyOptional({ format: 'date', nullable: true, example: '2026-05-01' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  @IsConstraintPaired({
+    typeField: 'secondaryConstraintType',
+    dateField: 'secondaryConstraintDate',
+  })
+  secondaryConstraintDate?: string | null;
+
   @ApiPropertyOptional({
     format: 'uuid',
     nullable: true,

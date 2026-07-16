@@ -31,10 +31,20 @@ export interface EngineActivity {
    * engine stays calendar-agnostic (it never sees an id or an enum).
    */
   calendar?: WorkingTimeCalendar;
-  /** Schedule constraint kind, if any. Honoured from Task A3 onward. */
+  /** Primary schedule constraint kind, if any. Drives the **forward** pass (early dates). */
   constraintType?: ConstraintType | null;
-  /** The constraint's calendar day (`YYYY-MM-DD`); required when a type is set. */
+  /** The primary constraint's calendar day (`YYYY-MM-DD`); required when a type is set. */
   constraintDate?: string | null;
+  /**
+   * Optional **secondary** constraint (ADR-0035 §10, M4). It drives the **backward** pass (late
+   * dates) only — the primary owns the forward pass unchanged. A secondary of a forward-only kind
+   * (`SNET`/`FNET`) is a documented no-op on the backward clamp (matches the clamp table); the
+   * intended pairing is a forward primary + a backward secondary (e.g. A5200: SNET + FNLT). Absent =
+   * no secondary (the byte-identical single-constraint path). Required together with its date.
+   */
+  secondaryConstraintType?: ConstraintType | null;
+  /** The secondary constraint's calendar day (`YYYY-MM-DD`); required when a secondary type is set. */
+  secondaryConstraintDate?: string | null;
   /** Visual Planning hand-placement (`YYYY-MM-DD`), ADR-0033. Advisory input to the
    * **effective-Visual pass only** — it never touches the pure forward/backward pass, so
    * `early*`/`late*`/float stay a pure function of the network. Absent = no placement. */

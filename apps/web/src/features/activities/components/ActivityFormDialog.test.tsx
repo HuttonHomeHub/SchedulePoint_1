@@ -19,6 +19,8 @@ const ACTIVITY: ActivitySummary = {
   durationDays: 5,
   constraintType: 'SNET',
   constraintDate: '2026-05-01',
+  secondaryConstraintType: null,
+  secondaryConstraintDate: null,
   calendarId: null,
   laneIndex: 0,
   status: 'NOT_STARTED',

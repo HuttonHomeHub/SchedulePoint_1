@@ -1,5 +1,11 @@
 import { NEAR_CRITICAL_THRESHOLD_MINUTES } from './constants';
-import { clampBackwardFinish, clampForwardStart, isMandatory, isMilestone } from './constraints';
+import {
+  clampBackwardFinish,
+  clampForwardStart,
+  clampSecondaryBackwardFinish,
+  isMandatory,
+  isMilestone,
+} from './constraints';
 import { buildGraph } from './graph';
 import {
   advanceWorking,
@@ -286,6 +292,9 @@ export function computeSchedule(
       if (bound < upper) upper = bound;
     }
     upper = clampBackwardFinish(activity, upper, cal, dataDateAbs);
+    // The secondary constraint (ADR-0035 §10) drives the backward pass on top of the primary — a
+    // no-op unless a secondary is set (the byte-identical single-constraint path).
+    upper = clampSecondaryBackwardFinish(activity, upper, cal, dataDateAbs);
     let finish = rollBackwardToWorking(cal, dataDateAbs, upper);
     if (progress.status === 'IN_PROGRESS') {
       // The remaining work can't be scheduled to finish before its own early finish; the started

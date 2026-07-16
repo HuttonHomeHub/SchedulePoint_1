@@ -165,6 +165,13 @@ export class ActivitiesService {
             ...(dto.constraintDate
               ? { constraintDate: parseCalendarDate(dto.constraintDate) }
               : {}),
+            // Secondary constraint (ADR-0035 §10) — drives the backward pass; paired like the primary.
+            ...(dto.secondaryConstraintType
+              ? { secondaryConstraintType: dto.secondaryConstraintType }
+              : {}),
+            ...(dto.secondaryConstraintDate
+              ? { secondaryConstraintDate: parseCalendarDate(dto.secondaryConstraintDate) }
+              : {}),
             ...(dto.laneIndex !== undefined ? { laneIndex: dto.laneIndex } : {}),
             // Visual-Planning placement input (ADR-0033): feeds only the effective-Visual pass.
             ...(dto.visualStart ? { visualStart: parseCalendarDate(dto.visualStart) } : {}),
@@ -212,6 +219,16 @@ export class ActivitiesService {
         reason: 'CONSTRAINT_PAIR_REQUIRED',
       });
     }
+    // Same key-presence rule for the secondary pair (ADR-0035 §10).
+    if (
+      (dto.secondaryConstraintType !== undefined) !==
+      (dto.secondaryConstraintDate !== undefined)
+    ) {
+      throw new ValidationError(
+        'secondaryConstraintType and secondaryConstraintDate must be updated together.',
+        { reason: 'CONSTRAINT_PAIR_REQUIRED' },
+      );
+    }
 
     const patch: ActivityPatch = {};
     if (dto.name !== undefined) patch.name = dto.name;
@@ -225,6 +242,15 @@ export class ActivitiesService {
     if (dto.constraintDate !== undefined) {
       patch.constraintDate =
         dto.constraintDate === null ? null : parseCalendarDate(dto.constraintDate);
+    }
+    if (dto.secondaryConstraintType !== undefined) {
+      patch.secondaryConstraintType = dto.secondaryConstraintType;
+    }
+    if (dto.secondaryConstraintDate !== undefined) {
+      patch.secondaryConstraintDate =
+        dto.secondaryConstraintDate === null
+          ? null
+          : parseCalendarDate(dto.secondaryConstraintDate);
     }
     if (dto.laneIndex !== undefined) patch.laneIndex = dto.laneIndex;
     // Visual-Planning placement (ADR-0033): a date hand-places the bar; null clears it (revert to

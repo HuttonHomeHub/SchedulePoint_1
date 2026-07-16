@@ -274,6 +274,10 @@ function toEngineActivity(
     type: row.type,
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
+    secondaryConstraintType: row.secondaryConstraintType,
+    secondaryConstraintDate: row.secondaryConstraintDate
+      ? formatCalendarDate(row.secondaryConstraintDate)
+      : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
     actualStart: row.actualStart ? formatCalendarDate(row.actualStart) : null,
     actualFinish: row.actualFinish ? formatCalendarDate(row.actualFinish) : null,

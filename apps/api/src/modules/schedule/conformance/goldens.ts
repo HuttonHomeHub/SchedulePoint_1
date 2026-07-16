@@ -222,4 +222,46 @@ export const GOLDEN_CASES: GoldenCase[] = [
     },
     projectFinish: '2026-01-13',
   },
+  {
+    name: 'secondary-constraint-snet-fnlt',
+    description:
+      'A5200-style: A(2) carries a SNET primary (forward) + FNLT secondary (backward), both provably active, alongside a longer parallel B(5). SNET moves A’s early start; the FNLT tightens A’s late finish below the slack B would otherwise allow, taking A’s float to zero (ADR-0035 §10).',
+    activities: [
+      {
+        id: 'A',
+        durationMinutes: 2880,
+        type: 'TASK',
+        constraintType: 'SNET',
+        constraintDate: '2026-06-03',
+        secondaryConstraintType: 'FNLT',
+        secondaryConstraintDate: '2026-06-04',
+      },
+      task('B', 5),
+    ],
+    edges: [],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // Forward: SNET(06-03) pushes ES to offset 2 days (06-03); EF inclusive offset 3 = 06-04.
+      // Backward: without the secondary A would float to B’s finish (offset 5); FNLT(06-04) clamps the
+      // late finish to offset 4 (inclusive 06-04), so LS = 06-03 and A’s float is 0 (both active).
+      A: {
+        earlyStart: '2026-06-03',
+        earlyFinish: '2026-06-04',
+        lateStart: '2026-06-03',
+        lateFinish: '2026-06-04',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // B is the longest pole and drives the project finish (offset 5 → inclusive 06-05).
+      B: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-05',
+  },
 ];

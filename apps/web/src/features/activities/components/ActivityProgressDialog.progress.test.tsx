@@ -31,6 +31,8 @@ const ACTIVITY: ActivitySummary = {
   durationDays: 5,
   constraintType: null,
   constraintDate: null,
+  secondaryConstraintType: null,
+  secondaryConstraintDate: null,
   calendarId: null,
   laneIndex: 0,
   status: 'IN_PROGRESS',

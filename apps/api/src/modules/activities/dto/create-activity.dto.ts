@@ -88,6 +88,32 @@ export class CreateActivityDto {
   constraintDate?: string;
 
   @ApiPropertyOptional({
+    enum: ConstraintType,
+    description:
+      'Optional secondary schedule constraint (ADR-0035 §10); drives the backward pass. Set with a date.',
+  })
+  @IsOptional()
+  @IsEnum(ConstraintType)
+  @IsConstraintPaired({
+    typeField: 'secondaryConstraintType',
+    dateField: 'secondaryConstraintDate',
+  })
+  secondaryConstraintType?: ConstraintType;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description: 'Secondary constraint date (YYYY-MM-DD); required with a secondaryConstraintType.',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  @IsConstraintPaired({
+    typeField: 'secondaryConstraintType',
+    dateField: 'secondaryConstraintDate',
+  })
+  secondaryConstraintDate?: string;
+
+  @ApiPropertyOptional({
     format: 'uuid',
     nullable: true,
     description:

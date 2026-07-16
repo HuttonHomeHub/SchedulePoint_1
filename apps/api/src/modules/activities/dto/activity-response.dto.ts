@@ -46,6 +46,16 @@ export class ActivityResponseDto implements ActivitySummary {
   constraintDate!: string | null;
 
   @ApiProperty({
+    enum: ConstraintType,
+    nullable: true,
+    description: 'Secondary constraint (ADR-0035 §10); drives the backward pass.',
+  })
+  secondaryConstraintType!: ConstraintType | null;
+
+  @ApiProperty({ format: 'date', nullable: true, type: String })
+  secondaryConstraintDate!: string | null;
+
+  @ApiProperty({
     format: 'uuid',
     nullable: true,
     type: String,
@@ -179,6 +189,8 @@ export class ActivityResponseDto implements ActivitySummary {
       durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),
+      secondaryConstraintType: entity.secondaryConstraintType,
+      secondaryConstraintDate: day(entity.secondaryConstraintDate),
       calendarId: entity.calendarId,
       laneIndex: entity.laneIndex,
       status: entity.status,

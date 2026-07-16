@@ -53,6 +53,8 @@ const ACTIVITY: ActivitySummary = {
   durationDays: 5,
   constraintType: null,
   constraintDate: null,
+  secondaryConstraintType: null,
+  secondaryConstraintDate: null,
   calendarId: 'cal-247',
   laneIndex: 0,
   status: 'NOT_STARTED',

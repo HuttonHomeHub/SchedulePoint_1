@@ -62,6 +62,8 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     calendarId: null,
     constraintType: null,
     constraintDate: null,
+    secondaryConstraintType: null,
+    secondaryConstraintDate: null,
     laneIndex: 0,
     status: 'NOT_STARTED',
     percentComplete: 0,

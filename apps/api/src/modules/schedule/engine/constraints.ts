@@ -74,12 +74,13 @@ interface ResolvedConstraint {
   finishAbs: number;
 }
 
-function resolve(
-  activity: EngineActivity,
+function resolvePair(
+  constraintType: ConstraintType | null | undefined,
+  constraintDate: string | null | undefined,
+  durationMinutes: number,
   calendar: WorkingTimeCalendar,
   dataDateAbs: number,
 ): ResolvedConstraint | null {
-  const { constraintType, constraintDate, durationMinutes } = activity;
   if (!constraintType || !constraintDate) return null;
   const startAbs = rollForwardToWorking(calendar, instantToAbsMinutes(constraintDate));
   const finishAbs =
@@ -91,6 +92,21 @@ function resolve(
           instantToAbsMinutes(nextCalendarDay(constraintDate)),
         );
   return { kind: normaliseConstraint(constraintType), startAbs, finishAbs };
+}
+
+/** The activity's **primary** constraint (drives the forward pass), or null when none is set. */
+function resolve(
+  activity: EngineActivity,
+  calendar: WorkingTimeCalendar,
+  dataDateAbs: number,
+): ResolvedConstraint | null {
+  return resolvePair(
+    activity.constraintType,
+    activity.constraintDate,
+    activity.durationMinutes,
+    calendar,
+    dataDateAbs,
+  );
 }
 
 /**
@@ -136,9 +152,45 @@ export function clampBackwardFinish(
   calendar: WorkingTimeCalendar,
   dataDateAbs: number,
 ): number {
-  const constraint = resolve(activity, calendar, dataDateAbs);
+  return backwardClamp(
+    resolve(activity, calendar, dataDateAbs),
+    logicLateFinish,
+    activity.durationMinutes,
+    calendar,
+  );
+}
+
+/**
+ * Clamp the late finish for an activity's **secondary** constraint (ADR-0035 §10, M4-F3). The
+ * secondary drives the **backward** pass only, applied on top of the primary's backward clamp
+ * (`min` for the upper-bound kinds). A secondary of a forward-only kind (`SNET`/`FNET`) is a no-op
+ * here — matching the clamp table — and no secondary at all returns `logicLateFinish` unchanged, so
+ * the single-constraint golden path stays byte-identical.
+ */
+export function clampSecondaryBackwardFinish(
+  activity: EngineActivity,
+  logicLateFinish: number,
+  calendar: WorkingTimeCalendar,
+  dataDateAbs: number,
+): number {
+  const constraint = resolvePair(
+    activity.secondaryConstraintType,
+    activity.secondaryConstraintDate,
+    activity.durationMinutes,
+    calendar,
+    dataDateAbs,
+  );
+  return backwardClamp(constraint, logicLateFinish, activity.durationMinutes, calendar);
+}
+
+/** The backward-pass clamp switch, shared by the primary and secondary constraints. */
+function backwardClamp(
+  constraint: ResolvedConstraint | null,
+  logicLateFinish: number,
+  duration: number,
+  calendar: WorkingTimeCalendar,
+): number {
   if (!constraint) return logicLateFinish;
-  const duration = activity.durationMinutes;
   switch (constraint.kind) {
     case 'SNLT':
       return Math.min(logicLateFinish, advanceWorking(calendar, constraint.startAbs, duration));
