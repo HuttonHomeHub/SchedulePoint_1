@@ -3,6 +3,16 @@ import type { ActivityType, ConstraintType, DependencyType } from '@repo/types';
 import type { WorkingTimeCalendar } from './working-time-calendar';
 
 /**
+ * How the engine decides which activities are **critical** (M6-F2, ADR-0035 §17–§20).
+ * `TOTAL_FLOAT` (the P6 default, behaviour-preserving) marks an activity critical when its total float
+ * is ≤ the plan's threshold (default 0). `LONGEST_PATH` instead marks the contiguous chain of driving
+ * ties running back from the latest-finishing activities — so an open-ended, hugely-negative-float
+ * activity is **not** critical under Longest Path though it is under `TOTAL_FLOAT ≤ 0` (the fixture's
+ * A12700, scenario S07). The engine stays dependency-free; the service maps the plan enum to this union.
+ */
+export type CriticalPathDefinition = 'TOTAL_FLOAT' | 'LONGEST_PATH';
+
+/**
  * The pure CPM engine's input and output structs.
  *
  * The engine is a **dependency-free domain library**: it knows nothing about

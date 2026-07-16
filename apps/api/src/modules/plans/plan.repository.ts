@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
+  type CriticalPathDefinition,
   type Plan,
   type PlanStatus,
   type ProgressRecalcMode,
@@ -20,6 +21,10 @@ export interface PlanPatch {
   progressRecalcMode?: ProgressRecalcMode;
   /** Expected-finish scheduling option (M4, ADR-0035 §9). */
   useExpectedFinishDates?: boolean;
+  /** Critical-path definition (M6, ADR-0035 §17): TOTAL_FLOAT or LONGEST_PATH. */
+  criticalPathDefinition?: CriticalPathDefinition;
+  /** Total-float threshold in whole working days (M6, ADR-0035 §17). */
+  criticalFloatThreshold?: number;
   /** The mandatory CPM data date (ADR-0033 M1): may be moved, never cleared — so never null. */
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */

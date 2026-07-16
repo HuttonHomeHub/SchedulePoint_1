@@ -137,6 +137,14 @@ export type SchedulingMode = 'EARLY' | 'VISUAL';
  */
 export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUAL_DATES';
 
+/**
+ * How the CPM engine decides which activities are **critical** (M6, ADR-0035 §17–§20). `TOTAL_FLOAT`
+ * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThreshold`;
+ * `LONGEST_PATH` marks the contiguous chain of driving ties back from the latest-finishing activities.
+ * Mirrors the API's Prisma `CriticalPathDefinition` enum (kept in lock-step).
+ */
+export type CriticalPathDefinition = 'TOTAL_FLOAT' | 'LONGEST_PATH';
+
 /** A client (top level of the Org → Client → Project → Plan hierarchy). */
 export interface ClientSummary {
   id: string;
@@ -182,6 +190,16 @@ export interface PlanSummary {
    * `false` (behaviour-preserving); the engine ignores expected finishes when off.
    */
   useExpectedFinishDates: boolean;
+  /**
+   * Critical-path definition (M6, ADR-0035 §17): `TOTAL_FLOAT` (float ≤ threshold, default) or
+   * `LONGEST_PATH` (the driving chain). Behaviour-preserving default `TOTAL_FLOAT`.
+   */
+  criticalPathDefinition: CriticalPathDefinition;
+  /**
+   * Total-float threshold in whole working days (M6, ADR-0035 §17): at/below this an activity is
+   * critical under the `TOTAL_FLOAT` definition. Default 0 (P6/behaviour-preserving).
+   */
+  criticalFloatThreshold: number;
   /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1

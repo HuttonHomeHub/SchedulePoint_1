@@ -18,6 +18,8 @@ const PLAN: PlanSummary = {
   schedulingMode: 'EARLY',
   progressRecalcMode: 'RETAINED_LOGIC',
   useExpectedFinishDates: false,
+  criticalPathDefinition: 'TOTAL_FLOAT',
+  criticalFloatThreshold: 0,
   plannedStart: '2026-01-01',
   calendarId: 'cal-standard',
   version: 4,

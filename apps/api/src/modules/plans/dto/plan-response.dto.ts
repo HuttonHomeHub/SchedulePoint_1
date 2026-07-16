@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PlanStatus, ProgressRecalcMode, SchedulingMode, type Plan } from '@prisma/client';
+import {
+  CriticalPathDefinition,
+  PlanStatus,
+  ProgressRecalcMode,
+  SchedulingMode,
+  type Plan,
+} from '@prisma/client';
 import type { PlanSummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
@@ -41,6 +47,19 @@ export class PlanResponseDto implements PlanSummary {
   useExpectedFinishDates!: boolean;
 
   @ApiProperty({
+    enum: CriticalPathDefinition,
+    description:
+      'Critical-path definition (M6, ADR-0035 §17): TOTAL_FLOAT (float ≤ threshold, default) or LONGEST_PATH (driving chain).',
+  })
+  criticalPathDefinition!: CriticalPathDefinition;
+
+  @ApiProperty({
+    description:
+      'Total-float threshold in whole working days (M6, ADR-0035 §17): at/below this an activity is critical under TOTAL_FLOAT. Default 0.',
+  })
+  criticalFloatThreshold!: number;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -76,6 +95,8 @@ export class PlanResponseDto implements PlanSummary {
       schedulingMode: entity.schedulingMode,
       progressRecalcMode: entity.progressRecalcMode,
       useExpectedFinishDates: entity.useExpectedFinishDates,
+      criticalPathDefinition: entity.criticalPathDefinition,
+      criticalFloatThreshold: entity.criticalFloatThreshold,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

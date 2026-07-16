@@ -143,6 +143,12 @@ export class PlansService {
     if (dto.useExpectedFinishDates !== undefined) {
       patch.useExpectedFinishDates = dto.useExpectedFinishDates;
     }
+    if (dto.criticalPathDefinition !== undefined) {
+      patch.criticalPathDefinition = dto.criticalPathDefinition;
+    }
+    if (dto.criticalFloatThreshold !== undefined) {
+      patch.criticalFloatThreshold = dto.criticalFloatThreshold;
+    }
     // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
     // defined value is always a valid calendar date.
     if (dto.plannedStart !== undefined) {

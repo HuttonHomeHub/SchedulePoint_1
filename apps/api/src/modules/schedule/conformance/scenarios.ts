@@ -62,8 +62,12 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: '',
   },
   S07_LONGEST_PATH: {
-    runnable: false,
-    reason: 'needs the longest-path critical definition (ADR-0035 §17, M6)',
+    // M6-F2 (ADR-0035 §17–§20) landed the Longest-Path critical definition. S07 runs the same
+    // unprogressed network as S01 but with `criticalDefinition: LONGEST_PATH`, so the DATES are
+    // identical while the CRITICAL SET differs (the fixture's open-ended negative-float A12700 is
+    // critical under TF ≤ 0 but not on the longest path) — a criticality-only differential.
+    runnable: true,
+    reason: '',
   },
   S08_OPEN_ENDS_CRITICAL: {
     runnable: false,
@@ -127,6 +131,10 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
     scenarioId === 'S05_LAG_CALENDAR_SUCCESSOR' ? ('SUCCESSOR' as const) : ('PLAN' as const);
   // S12 flips the Expected-Finish option on (ADR-0035 §9, M4); every other scenario leaves it off.
   const useExpectedFinishDates = scenarioId === 'S12_EXPECTED_FINISH_OFF';
+  // S07 flips the critical DEFINITION to Longest Path (ADR-0035 §17–§20, M6-F2). It changes only which
+  // activities are flagged critical, never the dates — so it is asserted with `criticalSetDiffers`.
+  const criticalDefinition =
+    scenarioId === 'S07_LONGEST_PATH' ? ('LONGEST_PATH' as const) : undefined;
   const { activities, edges, options } = adaptFixture(fixture, {
     dataDate,
     honorLagCalendars,
@@ -141,6 +149,7 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
     output: computeSchedule(activities, edges, {
       ...options,
       ...(progressMode ? { progressMode } : {}),
+      ...(criticalDefinition ? { criticalDefinition } : {}),
     }),
   };
 }
@@ -164,6 +173,23 @@ export function resultsDiffer(a: EngineOutput, b: EngineOutput): boolean {
     ) {
       return true;
     }
+  }
+  return false;
+}
+
+/**
+ * Whether two engine outputs flag a **different set of critical activities** — the criticality-only
+ * differential (M6). Some options (S07 Longest Path, S08 open-ends) change only which activities are
+ * critical, not their dates, so `resultsDiffer` (dates) would miss them. This is kept SEPARATE from
+ * the date predicate (ADR-0034 §2, F2.T3) so a real date regression can never be masked by a
+ * criticality change: a wired criticality option asserts `criticalSetDiffers && !resultsDiffer`.
+ */
+export function criticalSetDiffers(a: EngineOutput, b: EngineOutput): boolean {
+  const index = new Map(b.results.map((r) => [r.activityId, r]));
+  for (const left of a.results) {
+    const right = index.get(left.activityId);
+    if (!right) continue;
+    if (left.isCritical !== right.isCritical) return true;
   }
   return false;
 }

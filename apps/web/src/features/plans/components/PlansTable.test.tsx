@@ -36,6 +36,8 @@ const PLANS: PlanSummary[] = [
     schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
+    criticalPathDefinition: 'TOTAL_FLOAT',
+    criticalFloatThreshold: 0,
     plannedStart: '2026-05-01',
     calendarId: null,
     version: 1,

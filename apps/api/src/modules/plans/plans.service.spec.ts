@@ -48,6 +48,10 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
+    criticalPathDefinition: 'TOTAL_FLOAT',
+    criticalFloatThreshold: 0,
+    totalFloatMode: 'FINISH',
+    makeOpenEndsCritical: false,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -240,6 +244,19 @@ describe('PlansService', () => {
       expect(
         (plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch).progressRecalcMode,
       ).toBe('PROGRESS_OVERRIDE');
+    });
+
+    it('persists the critical-path definition and float threshold (M6, ADR-0035 §17)', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      plans.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'pl1', {
+        criticalPathDefinition: 'LONGEST_PATH',
+        criticalFloatThreshold: 3,
+        version: 1,
+      });
+      const patch = plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch;
+      expect(patch.criticalPathDefinition).toBe('LONGEST_PATH');
+      expect(patch.criticalFloatThreshold).toBe(3);
     });
 
     it('assigns a same-org active calendar and clears it on explicit null', async () => {

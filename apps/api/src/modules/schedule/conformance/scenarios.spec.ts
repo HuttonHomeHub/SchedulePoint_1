@@ -1,7 +1,7 @@
 import { loadFixture } from '@repo/engine-conformance';
 import { describe, expect, it } from 'vitest';
 
-import { runScenario, resultsDiffer, SCENARIO_SUPPORT } from './scenarios';
+import { runScenario, resultsDiffer, criticalSetDiffers, SCENARIO_SUPPORT } from './scenarios';
 
 /**
  * Differential-tier scaffold (ADR-0034 §2, §8). Today only the unprogressed
@@ -36,6 +36,7 @@ describe('conformance scenarios (differential scaffold)', () => {
       'S04_ACTUAL_DATES',
       'S05_LAG_CALENDAR_SUCCESSOR',
       'S06_LAG_CALENDAR_24H',
+      'S07_LONGEST_PATH',
       'S12_EXPECTED_FINISH_OFF',
     ]);
 
@@ -96,6 +97,19 @@ describe('conformance scenarios (differential scaffold)', () => {
     }
   });
 
+  it('runs S07 (Longest Path) as a criticality-only differential — critical set differs, dates do not', () => {
+    const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
+    const longestPath = runScenario(fixture, 'S07_LONGEST_PATH');
+    expect(baseline.ran && longestPath.ran).toBe(true);
+    if (baseline.ran && longestPath.ran) {
+      // Flipping ONLY the critical definition to Longest Path (ADR-0035 §17–§20) changes which
+      // activities are critical — the fixture's open-ended negative-float A12700 drops off — while
+      // every date is unchanged. This is why the criticality predicate is separate from the date one.
+      expect(criticalSetDiffers(longestPath.output, baseline.output)).toBe(true);
+      expect(resultsDiffer(longestPath.output, baseline.output)).toBe(false);
+    }
+  });
+
   it('runs the S01 baseline against the real engine', () => {
     const run = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
     expect(run.ran).toBe(true);
@@ -106,8 +120,8 @@ describe('conformance scenarios (differential scaffold)', () => {
   });
 
   it('returns a todo (not a fabricated run) for a not-yet-supported scenario', () => {
-    // S07 (Longest Path) is an M6 rung — still honestly deferred.
-    const run = runScenario(fixture, 'S07_LONGEST_PATH');
+    // S08 (make open-ends critical) is a later M6 rung (F4) — still honestly deferred.
+    const run = runScenario(fixture, 'S08_OPEN_ENDS_CRITICAL');
     expect(run.ran).toBe(false);
     if (!run.ran) expect(run.todo).toContain('M6');
   });

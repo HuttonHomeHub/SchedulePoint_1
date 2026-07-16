@@ -54,6 +54,8 @@ const plans: PlanSummary[] = [
     schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
+    criticalPathDefinition: 'TOTAL_FLOAT',
+    criticalFloatThreshold: 0,
     plannedStart: null,
     calendarId: null,
     version: 1,

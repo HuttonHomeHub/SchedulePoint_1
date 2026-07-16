@@ -21,6 +21,7 @@ import {
   type ResolvedProgress,
 } from './progress';
 import type {
+  CriticalPathDefinition,
   EngineActivity,
   EngineEdge,
   EngineEdgeResult,
@@ -56,6 +57,19 @@ export interface ComputeOptions {
    * ignored and the schedule is byte-identical to the pure-progress path.
    */
   useExpectedFinishDates?: boolean;
+  /**
+   * How criticality is decided (M6-F2, ADR-0035 §17–§20). `TOTAL_FLOAT` (the default) marks an
+   * activity critical when its total float ≤ {@link criticalFloatThresholdMinutes}; `LONGEST_PATH`
+   * marks the driving chain back from the latest-finishing activities. Off/absent ⇒ `TOTAL_FLOAT`,
+   * byte-identical to the pre-M6 path.
+   */
+  criticalDefinition?: CriticalPathDefinition;
+  /**
+   * The total-float threshold (working **minutes**) at/below which an activity is critical under the
+   * `TOTAL_FLOAT` definition (ADR-0035 §17). Defaults to 0 (P6/behaviour-preserving); a positive value
+   * widens the critical band (e.g. treat ≤ 1 day of float as critical). Ignored under `LONGEST_PATH`.
+   */
+  criticalFloatThresholdMinutes?: number;
 }
 
 /**
@@ -106,6 +120,8 @@ export function computeSchedule(
   const { dataDate, calendar: planCalendar } = options;
   const progressMode: ProgressMode = options.progressMode ?? 'RETAINED_LOGIC';
   const useExpectedFinishDates = options.useExpectedFinishDates ?? false;
+  const criticalDefinition: CriticalPathDefinition = options.criticalDefinition ?? 'TOTAL_FLOAT';
+  const criticalThreshold = options.criticalFloatThresholdMinutes ?? 0;
   // How many in-progress activities had their remaining work resized to an expected finish (§9).
   let expectedFinishAppliedCount = 0;
   const graph = buildGraph(activities, edges);
@@ -304,6 +320,33 @@ export function computeSchedule(
     if (projectFinishInstant === null || ef > projectFinishInstant) projectFinishInstant = ef;
   }
 
+  // Longest-Path critical set (M6-F2, ADR-0035 §17–§20). Only built when the plan selects LONGEST_PATH.
+  // Seed every activity whose early finish IS the project finish (the latest-finishing activities — the
+  // true "finish drivers", including open ends that end last), then walk BACKWARD over the M3 driving
+  // edges. This is the contiguous chain of binding ties, which is why an open-ended, hugely-negative-
+  // float activity that no driving chain reaches is NOT on it (scenario S07's A12700), though it is
+  // critical under `TOTAL_FLOAT ≤ 0`. Reuses the per-edge driving flags — no extra pass over the dates.
+  const onLongestPath = new Set<string>();
+  if (criticalDefinition === 'LONGEST_PATH' && projectFinishInstant !== null) {
+    const drivingById = new Map<string, boolean>(edgeResults.map((e) => [e.edgeId, e.isDriving]));
+    const stack: string[] = [];
+    for (const id of graph.order) {
+      if (earlyFinish.get(id) === projectFinishInstant && !onLongestPath.has(id)) {
+        onLongestPath.add(id);
+        stack.push(id);
+      }
+    }
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      for (const edge of graph.incoming.get(id)!) {
+        if (drivingById.get(edge.id) === true && !onLongestPath.has(edge.predecessorId)) {
+          onLongestPath.add(edge.predecessorId);
+          stack.push(edge.predecessorId);
+        }
+      }
+    }
+  }
+
   // Backward pass (reverse topological order): latest finish/start INSTANTS. Open ends (no
   // successors) are seeded from the project finish. `lateFinish` is rolled back to the activity's
   // own working end boundary; `lateStart` is its own duration back from there.
@@ -391,8 +434,16 @@ export function computeSchedule(
       absMinutesToInstant(efInst),
       absMinutesToInstant(lfInst),
     );
-    const isCritical = totalFloat <= 0;
-    const isNearCritical = totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_MINUTES;
+    // Criticality by the plan's definition (M6-F2): the driving chain (LONGEST_PATH) or total float ≤
+    // the threshold (TOTAL_FLOAT, default; threshold 0 ⇒ byte-identical to the pre-M6 `totalFloat <= 0`).
+    const isCritical =
+      criticalDefinition === 'LONGEST_PATH'
+        ? onLongestPath.has(id)
+        : totalFloat <= criticalThreshold;
+    // Near-critical stays total-float-based and never overlaps critical: a positive-but-small float that
+    // is not already flagged critical. On the default path (threshold 0) this equals the old predicate.
+    const isNearCritical =
+      !isCritical && totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_MINUTES;
     if (isCritical) criticalCount += 1;
     if (isNearCritical) nearCriticalCount += 1;
 

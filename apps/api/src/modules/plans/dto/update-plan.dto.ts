@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PlanStatus, ProgressRecalcMode, SchedulingMode } from '@prisma/client';
+import {
+  CriticalPathDefinition,
+  PlanStatus,
+  ProgressRecalcMode,
+  SchedulingMode,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -72,6 +77,26 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsBoolean()
   useExpectedFinishDates?: boolean;
+
+  @ApiPropertyOptional({
+    enum: CriticalPathDefinition,
+    description:
+      'Critical-path definition (M6, ADR-0035 §17): TOTAL_FLOAT (float ≤ threshold) or LONGEST_PATH (driving chain).',
+  })
+  @IsOptional()
+  @IsEnum(CriticalPathDefinition)
+  criticalPathDefinition?: CriticalPathDefinition;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Total-float threshold in whole working days (M6, ADR-0035 §17): at/below this an activity is critical under TOTAL_FLOAT.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  criticalFloatThreshold?: number;
 
   @ApiPropertyOptional({
     format: 'date',
