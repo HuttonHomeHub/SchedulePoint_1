@@ -419,47 +419,71 @@ describe('ActivitiesService', () => {
     it('repairs a complete activity with no actual finish to the data date (M2 N08)', async () => {
       activities.updateIfVersionMatches.mockResolvedValue(1);
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
-      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
-        percentComplete: 100,
-        actualStart: '2026-05-01',
-        version: 1, // no actualFinish, but 100% ⇒ complete
-      });
+      const { warnings } = await service.updateProgress(
+        principalWith(PROGRESS),
+        'acme',
+        ACTIVITY_ID,
+        {
+          percentComplete: 100,
+          actualStart: '2026-05-01',
+          version: 1, // no actualFinish, but 100% ⇒ complete
+        },
+      );
       const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
         actualFinish: Date;
         status: string;
       };
       expect(patch.status).toBe('COMPLETE');
       expect(patch.actualFinish.toISOString()).toBe('2026-12-31T00:00:00.000Z'); // repaired to data date
+      // The repair is surfaced to the caller as a machine-readable warning (ADR-0035 §6).
+      expect(warnings).toEqual([
+        { code: 'COMPLETE_WITHOUT_FINISH', message: expect.any(String) as string },
+      ]);
     });
 
     it('repairs remaining > 0 on a complete activity to 0 (M2 N18)', async () => {
       activities.updateIfVersionMatches.mockResolvedValue(1);
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
-      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
-        percentComplete: 100,
-        actualStart: '2026-05-01',
-        actualFinish: '2026-06-01',
-        remainingDurationDays: 3, // contradicts completeness → repaired to 0
-        version: 1,
-      });
+      const { warnings } = await service.updateProgress(
+        principalWith(PROGRESS),
+        'acme',
+        ACTIVITY_ID,
+        {
+          percentComplete: 100,
+          actualStart: '2026-05-01',
+          actualFinish: '2026-06-01',
+          remainingDurationDays: 3, // contradicts completeness → repaired to 0
+          version: 1,
+        },
+      );
       const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
         remainingDurationMinutes: number;
       };
       expect(patch.remainingDurationMinutes).toBe(0);
+      expect(warnings).toEqual([
+        { code: 'REMAINING_ON_COMPLETE', message: expect.any(String) as string },
+      ]);
     });
 
-    it('converts remaining days to stored minutes for an in-progress activity (M2)', async () => {
+    it('converts remaining days to stored minutes for an in-progress activity (M2), no warnings', async () => {
       activities.updateIfVersionMatches.mockResolvedValue(1);
       activities.findActiveByIdInOrg.mockResolvedValue(activity({ percentComplete: 0 }));
-      await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
-        actualStart: '2026-05-01',
-        remainingDurationDays: 2,
-        version: 1,
-      });
+      const { warnings } = await service.updateProgress(
+        principalWith(PROGRESS),
+        'acme',
+        ACTIVITY_ID,
+        {
+          actualStart: '2026-05-01',
+          remainingDurationDays: 2,
+          version: 1,
+        },
+      );
       const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
         remainingDurationMinutes: number;
       };
       expect(patch.remainingDurationMinutes).toBe(2 * 1440);
+      // An ordinary in-progress report repairs nothing.
+      expect(warnings).toEqual([]);
     });
 
     it('forbids a caller without activity:update_progress', async () => {

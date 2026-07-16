@@ -302,6 +302,21 @@ export interface ActivitySummary {
 }
 
 /**
+ * A repair the progress endpoint applied to keep a progress report self-consistent (M2, ADR-0035 §6).
+ * The write still succeeds and the returned resource reflects the corrected value; this is the
+ * machine-readable signal — surfaced in the response `meta.warnings` — that a field the caller sent
+ * (or left implied) was overridden, so a client can tell "did exactly what you asked" from "we
+ * adjusted one of your fields". `COMPLETE_WITHOUT_FINISH` → the finish was set to the data date;
+ * `REMAINING_ON_COMPLETE` → the remaining duration was forced to zero.
+ */
+export type ProgressWarningCode = 'COMPLETE_WITHOUT_FINISH' | 'REMAINING_ON_COMPLETE';
+
+export interface ProgressWarning {
+  code: ProgressWarningCode;
+  message: string;
+}
+
+/**
  * Dependency (logic-tie) types, in the CPM/GPM tradition (FS finish-to-start,
  * SS start-to-start, FF finish-to-finish, SF start-to-finish). Const-array
  * source-of-truth (like {@link ORGANIZATION_ROLES}) kept in lock-step with the

@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityProgressDialog } from './ActivityProgressDialog';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetchEnvelope } from '@/lib/api/client';
 
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchEnvelope: vi.fn() }));
 
 const ACTIVITY: ActivitySummary = {
   id: 'a1',
@@ -62,7 +62,7 @@ function renderDialog(activity: ActivitySummary = ACTIVITY) {
 
 describe('ActivityProgressDialog', () => {
   beforeEach(() => {
-    vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
+    vi.mocked(apiFetchEnvelope).mockReset().mockResolvedValue({ data: ACTIVITY });
   });
 
   it('PATCHes the progress endpoint with the percentage, date and version', async () => {
@@ -71,8 +71,8 @@ describe('ActivityProgressDialog', () => {
     fireEvent.change(screen.getByLabelText(/Actual start/), { target: { value: '2026-05-01' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
 
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    await waitFor(() => expect(apiFetchEnvelope).toHaveBeenCalled());
+    const [path, init] = vi.mocked(apiFetchEnvelope).mock.calls[0]!;
     expect(path).toBe('/organizations/acme/activities/a1/progress');
     expect(init?.method).toBe('PATCH');
     expect(JSON.parse(init?.body as string)).toMatchObject({
@@ -101,7 +101,7 @@ describe('ActivityProgressDialog', () => {
     await waitFor(() =>
       expect(screen.getAllByText(/Finish cannot be before the start/).length).toBeGreaterThan(0),
     );
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(apiFetchEnvelope).not.toHaveBeenCalled();
   });
 
   it('hides the progress-ingestion inputs when the flag is off but round-trips a seeded value', async () => {
@@ -117,11 +117,13 @@ describe('ActivityProgressDialog', () => {
     expect(screen.queryByLabelText(/Suspend date/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    expect(JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string)).toMatchObject({
-      remainingDurationDays: 2,
-      suspendDate: '2026-05-08',
-      resumeDate: '2026-05-12',
-    });
+    await waitFor(() => expect(apiFetchEnvelope).toHaveBeenCalled());
+    expect(JSON.parse(vi.mocked(apiFetchEnvelope).mock.calls[0]![1]?.body as string)).toMatchObject(
+      {
+        remainingDurationDays: 2,
+        suspendDate: '2026-05-08',
+        resumeDate: '2026-05-12',
+      },
+    );
   });
 });

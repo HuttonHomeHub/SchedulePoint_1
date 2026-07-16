@@ -428,6 +428,32 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(422);
   });
 
+  it('surfaces a repair as meta.warnings, and omits meta on an ordinary report (M2, ADR-0035 §6)', async () => {
+    const { planId, actor } = await setup(); // plan data date is 2026-01-01
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Pour', durationDays: 5 })
+      .expect(201);
+    const item = `/api/v1/organizations/acme/activities/${created.body.data.id as string}`;
+
+    // An ordinary in-progress report repairs nothing → the bare { data } envelope, no meta.
+    const plain = await actor.agent
+      .patch(`${item}/progress`)
+      .send({ percentComplete: 40, actualStart: '2025-12-01', version: 1 })
+      .expect(200);
+    expect(plain.body.meta).toBeUndefined();
+
+    // Marking it 100% with no actual finish repairs the finish to the data date (N08) and reports it.
+    const repaired = await actor.agent
+      .patch(`${item}/progress`)
+      .send({ percentComplete: 100, version: 2 })
+      .expect(200);
+    expect(repaired.body.data).toMatchObject({ status: 'COMPLETE', actualFinish: '2026-01-01' });
+    expect(repaired.body.meta.warnings).toEqual([
+      { code: 'COMPLETE_WITHOUT_FINISH', message: expect.any(String) as string },
+    ]);
+  });
+
   describe('batch lane positions (M4)', () => {
     async function makeAct(actor: Actor, planId: string, name: string) {
       const res = await actor.agent

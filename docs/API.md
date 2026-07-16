@@ -38,6 +38,16 @@ Successful responses wrap the payload (see `@repo/types`):
 }
 ```
 
+`meta` is present only when a handler has something to add — pagination
+(`nextCursor`/`hasMore`), a bounded-list roll-up, or **`warnings`**: a
+machine-readable list of adjustments the server applied to keep a write
+self-consistent (the write still succeeds and `data` reflects the corrected
+value). Today the progress endpoint (`PATCH …/activities/:id/progress`) emits
+`meta.warnings` (`{ code, message }`, `ProgressWarning`) when it repairs a
+complete activity — `COMPLETE_WITHOUT_FINISH` (finish set to the data date) or
+`REMAINING_ON_COMPLETE` (remaining forced to zero) — per ADR-0035 §6. An
+ordinary write omits `meta` entirely.
+
 ## Errors
 
 A single, predictable error shape (`ApiError` in `@repo/types`):

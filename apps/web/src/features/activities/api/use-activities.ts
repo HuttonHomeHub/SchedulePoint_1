@@ -1,4 +1,4 @@
-import type { ActivitySummary, ActivityType, ConstraintType } from '@repo/types';
+import type { ActivitySummary, ActivityType, ConstraintType, ProgressWarning } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -14,7 +14,7 @@ import {
   type ProgressFormValues,
 } from '../schemas/activity-schemas';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
 import { activityKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
 export { activityKeys };
@@ -253,9 +253,11 @@ function progressBody(input: ProgressFormValues & { version: number }) {
 
 export function useUpdateActivityProgress(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
+  // Uses the envelope form so the caller can read `meta.warnings` — the server-side repairs it
+  // applied to keep the report self-consistent (M2, ADR-0035 §6). An ordinary report has no meta.
   return useMutation({
     mutationFn: (input: { activityId: string; version: number } & ProgressFormValues) =>
-      apiFetch<ActivitySummary>(
+      apiFetchEnvelope<ActivitySummary, { warnings?: ProgressWarning[] }>(
         `/organizations/${orgSlug}/activities/${input.activityId}/progress`,
         {
           method: 'PATCH',
