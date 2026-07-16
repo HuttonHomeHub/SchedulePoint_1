@@ -142,6 +142,11 @@ export function computeSchedule(
       const bound = forwardLowerBound(edge, predStart, predFinish, cal, duration, planCalendar);
       if (bound > lower) lower = bound;
     }
+    // Suspend/resume (§4): a resume date floors the remaining at max(data date, resume date), so a
+    // resume AFTER the data date pushes the remaining work out to it. Applies to all recalc modes.
+    if (inProgress && progress.resumeInst !== null && progress.resumeInst > lower) {
+      lower = progress.resumeInst;
+    }
     // Actual Dates additionally floors the remaining at the actual start — max(data date, actual
     // start) — so a FUTURE actual start schedules its remaining from that date (ADR-0035 §1/§6).
     // Under N07 (no actual after the data date) the actual start ≤ the data date, so this is a no-op

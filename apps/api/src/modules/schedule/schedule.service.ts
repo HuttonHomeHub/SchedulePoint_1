@@ -274,6 +274,7 @@ function toEngineActivity(
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
     actualStart: row.actualStart ? formatCalendarDate(row.actualStart) : null,
     actualFinish: row.actualFinish ? formatCalendarDate(row.actualFinish) : null,
+    resumeDate: row.resumeDate ? formatCalendarDate(row.resumeDate) : null,
     ...(remainingMinutes !== undefined ? { remainingMinutes } : {}),
     ...(calendar ? { calendar } : {}),
   };

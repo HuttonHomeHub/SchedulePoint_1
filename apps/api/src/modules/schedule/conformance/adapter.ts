@@ -312,7 +312,10 @@ function adaptActivity(
   // service) and the in-progress remaining (hours → working minutes). The engine classifies from
   // the actuals (a set actual finish ⇒ complete). Off (the S01 baseline), progress is dropped with
   // a note and the clean unprogressed network schedules from the planned start.
-  let progress: Pick<EngineActivity, 'actualStart' | 'actualFinish' | 'remainingMinutes'> = {};
+  let progress: Pick<
+    EngineActivity,
+    'actualStart' | 'actualFinish' | 'remainingMinutes' | 'resumeDate'
+  > = {};
   if (honorProgress) {
     const actualStart = activity.actual_start ? activity.actual_start.slice(0, 10) : null;
     const actualFinish = activity.actual_finish ? activity.actual_finish.slice(0, 10) : null;
@@ -321,7 +324,11 @@ function adaptActivity(
       actualFinish,
       // Remaining only matters for an in-progress activity; a completed one uses its actual finish.
       ...(activity.status === 'IN_PROGRESS'
-        ? { remainingMinutes: Math.round(activity.remaining_duration_h * MINUTES_PER_HOUR) }
+        ? {
+            remainingMinutes: Math.round(activity.remaining_duration_h * MINUTES_PER_HOUR),
+            // Suspend/resume (§4): a resume date floors the remaining (e.g. A4230's 2026-03-09).
+            ...(activity.resume_date ? { resumeDate: activity.resume_date.slice(0, 10) } : {}),
+          }
         : {}),
     };
   } else if (activity.status !== 'NOT_STARTED') {

@@ -61,6 +61,7 @@ const activityRow = (
   actualFinish: null,
   percentComplete: 0,
   remainingDurationMinutes: null,
+  resumeDate: null,
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({

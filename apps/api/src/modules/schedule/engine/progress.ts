@@ -52,6 +52,8 @@ export interface ResolvedProgress {
   actualStartInst: number | null;
   /** Frozen actual **finish** instant (working end boundary); null unless complete. */
   actualFinishInst: number | null;
+  /** Resume instant (a working-minute start) for a suspended in-progress activity; else null. */
+  resumeInst: number | null;
   /**
    * Remaining working minutes for an IN_PROGRESS activity (0 when complete or a milestone). The
    * service resolves this (explicit `remainingDurationMinutes`, else derived from
@@ -78,7 +80,7 @@ export function resolveProgress(
   calendar: WorkingTimeCalendar,
   dataDateAbs: number,
 ): ResolvedProgress {
-  const { actualStart, actualFinish, durationMinutes, remainingMinutes } = activity;
+  const { actualStart, actualFinish, durationMinutes, remainingMinutes, resumeDate } = activity;
   const started = actualStart != null;
   const finished = actualFinish != null;
   const status: ProgressStatus = finished ? 'COMPLETE' : started ? 'IN_PROGRESS' : 'NOT_STARTED';
@@ -93,11 +95,16 @@ export function resolveProgress(
         instantToAbsMinutes(nextCalendarDay(actualFinish)),
       )
     : null;
+  // Resume floors the remaining work (§4); only meaningful for an in-progress activity.
+  const resumeInst =
+    status === 'IN_PROGRESS' && resumeDate != null
+      ? rollForwardToWorking(calendar, instantToAbsMinutes(resumeDate))
+      : null;
 
   // Remaining work only matters for the in-progress branch: complete/milestone ⇒ 0; else the
   // service-resolved remaining, falling back to the full duration when none was reported.
   const remaining =
     status !== 'IN_PROGRESS' || durationMinutes === 0 ? 0 : (remainingMinutes ?? durationMinutes);
 
-  return { status, actualStartInst, actualFinishInst, remainingMinutes: remaining };
+  return { status, actualStartInst, actualFinishInst, resumeInst, remainingMinutes: remaining };
 }

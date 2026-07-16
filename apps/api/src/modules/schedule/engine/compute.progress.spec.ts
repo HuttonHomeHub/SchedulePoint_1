@@ -162,6 +162,30 @@ describe('progress ingestion (M2, ADR-0035 §1–§2)', () => {
     expect(actual.earlyFinish).not.toBe(override.earlyFinish);
   });
 
+  it('floors an in-progress activity’s remaining at a resume date after the data date (§4)', () => {
+    // A started Mon 12-29 with 2 days left, suspended and resuming Thu 01-08 (after the data date Mon
+    // 01-05). The remaining schedules from the resume date, not the data date → Thu 01-08 + 2d = Fri 01-09.
+    const resumed = run([
+      task('A', 5 * DAY, {
+        actualStart: '2025-12-29',
+        remainingMinutes: 2 * DAY,
+        resumeDate: '2026-01-08',
+      }),
+    ]).get('A')!;
+    expect(resumed.earlyStart).toBe('2025-12-29'); // frozen actual start
+    expect(resumed.earlyFinish).toBe('2026-01-09'); // resume Thu 01-08 + 2 working days
+
+    // A resume BEFORE the data date is a no-op — the data-date floor still governs (Tue 01-06).
+    const early = run([
+      task('A', 5 * DAY, {
+        actualStart: '2025-12-29',
+        remainingMinutes: 2 * DAY,
+        resumeDate: '2025-12-30',
+      }),
+    ]).get('A')!;
+    expect(early.earlyFinish).toBe('2026-01-06');
+  });
+
   it('is byte-identical to the pre-progress result when no activity carries actuals', () => {
     // Sanity: a network with progress fields all absent matches the plain planned computation
     // (the same guarantee the golden suite enforces across the whole fixture).

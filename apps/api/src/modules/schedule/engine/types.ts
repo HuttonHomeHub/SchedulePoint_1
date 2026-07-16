@@ -54,6 +54,12 @@ export interface EngineActivity {
    * engine falls back to the full `durationMinutes`.
    */
   remainingMinutes?: number;
+  /**
+   * Resume date (`YYYY-MM-DD`) for a suspended in-progress activity (M2, ADR-0035 §4). When set, the
+   * remaining work is floored at `max(data date, resume date)` — a resume date after the data date
+   * pushes the remaining out to it. Ignored for a not-started/complete activity.
+   */
+  resumeDate?: string | null;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */

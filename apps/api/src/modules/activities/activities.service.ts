@@ -410,11 +410,24 @@ export class ActivitiesService {
       this.logger.warn({ activityId, reason: 'N18_REMAINING_ON_COMPLETE' }, 'progress repaired');
     }
 
+    // Suspend / resume (ADR-0035 §4): resolve the pair (provided overrides stored; null clears) and
+    // reject a resume before the suspend. These are NOT bounded by the data date (a resume may be in
+    // the future — that pushes the remaining work out, §4).
+    const suspendDate = this.resolveDate(dto.suspendDate, existing.suspendDate);
+    const resumeDate = this.resolveDate(dto.resumeDate, existing.resumeDate);
+    if (suspendDate !== null && resumeDate !== null && resumeDate < suspendDate) {
+      throw new ValidationError('Resume date cannot precede the suspend date.', {
+        reason: 'RESUME_BEFORE_SUSPEND',
+      });
+    }
+
     const patch: ActivityPatch = {
       percentComplete,
       actualStart,
       actualFinish,
       remainingDurationMinutes,
+      suspendDate,
+      resumeDate,
       status: deriveStatus(percentComplete, actualStart, actualFinish),
     };
 
