@@ -7,6 +7,15 @@ import { activityKeys } from '../api/use-activities';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
+// This is the BASE table suite — the M4/M5 flag surfaces (Conflict badge, per-activity calendar
+// column) are on by default, so pin both off here; their flag-on behaviour lives in the dedicated
+// `ActivitiesTable.constraint-violation.test.tsx` / `.calendar.test.tsx` suites.
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ADVANCED_CONSTRAINTS_ENABLED: false,
+  ACTIVITY_CALENDAR_ENABLED: false,
+}));
+
 const ACTIVITY: ActivitySummary = {
   id: 'a1',
   planId: 'pl1',
