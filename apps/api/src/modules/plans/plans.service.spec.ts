@@ -229,6 +229,18 @@ describe('PlansService', () => {
       expect(patch.plannedStart.toISOString()).toBe('2026-09-01T00:00:00.000Z');
     });
 
+    it('persists the progress recalc mode (M2, ADR-0035)', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      plans.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'pl1', {
+        progressRecalcMode: 'PROGRESS_OVERRIDE',
+        version: 1,
+      });
+      expect(
+        (plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch).progressRecalcMode,
+      ).toBe('PROGRESS_OVERRIDE');
+    });
+
     it('assigns a same-org active calendar and clears it on explicit null', async () => {
       plans.findActiveByIdInOrg.mockResolvedValue(plan());
       plans.updateIfVersionMatches.mockResolvedValue(1);
