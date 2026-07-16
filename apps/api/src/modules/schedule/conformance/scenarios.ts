@@ -85,8 +85,11 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: 'needs resource levelling (ADR-0035 §21–§23, M7 — deferred)',
   },
   S11_MULTIPLE_FLOAT_PATHS: {
-    runnable: false,
-    reason: 'needs multiple-float-path analysis (ADR-0035 §19, M6)',
+    // M6-F6 (ADR-0035 §19) landed `computeFloatPaths`. S11 runs the plain unprogressed network like
+    // S01; the float-path analysis into the target (A12500) is a SEPARATE read-only pass asserted for
+    // its path-SHAPE (contiguous chains, path 0 driving, non-decreasing relative float) in the spec.
+    runnable: true,
+    reason: '',
   },
   S12_EXPECTED_FINISH_OFF: {
     // M4 (ADR-0035 §9) landed Expected Finish: an incomplete activity's remaining work is resized to

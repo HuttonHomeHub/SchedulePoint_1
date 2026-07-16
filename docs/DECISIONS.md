@@ -775,3 +775,14 @@ acceptance-status ledger.
   start-float). P6's start-vs-finish split measures the two sides on different _neighbour_ calendars —
   a multi-calendar-measurement artefact we don't adopt (north-star, not parity). Recorded as the
   ADR-0035 §18 semantic; no standalone ADR (a consequence of ADR-0037's own-calendar-float decision).
+- **Float-path output contract (§19, M6-F6).** `computeFloatPaths(activities, edges, options, target,
+maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving chains** into a target
+  (not activities sorted by total float): `{ index, relativeFloat, activityIds }`, target-first.
+  **Path 0** is the target's driving chain (`relativeFloat` 0); each activity's **non-driving**
+  predecessors seed a frontier, and later paths pop the lowest-total-float branch and walk ITS driving
+  chain through still-unassigned nodes — so every activity belongs to exactly one path and branch paths
+  come out by non-decreasing relative float. `relativeFloat` = the entry activity's total float minus the
+  target's; it may be **negative** when a branch is more critical than a floating target (a
+  constraint-broken predecessor). Bounded by `maxPaths` + a per-chain depth guard (no blow-up on dense
+  graphs). Engine-only for now — the read endpoint (`GET .../schedule/float-paths`) is deferred
+  (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing schedule + driving edges).

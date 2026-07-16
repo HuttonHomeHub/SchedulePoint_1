@@ -15,6 +15,7 @@ export {
   type WeeklyPattern,
 } from './working-time-calendar';
 export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
+export { computeFloatPaths, type FloatPath } from './float-paths';
 export type { ProgressMode, ProgressStatus } from './progress';
 export { buildGraph, type ScheduleGraph } from './graph';
 export { ScheduleGraphNotADagError, UnknownActivityError } from './errors';
