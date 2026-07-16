@@ -25,6 +25,8 @@ export interface ScheduleActivityRow {
   secondaryConstraintDate: Date | null;
   /** Visual Planning hand-placement (ADR-0033); advisory input to the effective-Visual pass. */
   visualStart: Date | null;
+  /** As-Late-As-Possible placement preference (ADR-0035 §11, M4): display-only, never the pure passes. */
+  scheduleAsLateAsPossible: boolean;
   /** The activity's own calendar (ADR-0037, M5); null inherits the plan default. Resolved to a
    * port in the service and attached per-activity to the engine. */
   calendarId: string | null;
@@ -114,6 +116,7 @@ export class ScheduleRepository {
         secondaryConstraintType: true,
         secondaryConstraintDate: true,
         visualStart: true,
+        scheduleAsLateAsPossible: true,
         calendarId: true,
         actualStart: true,
         actualFinish: true,

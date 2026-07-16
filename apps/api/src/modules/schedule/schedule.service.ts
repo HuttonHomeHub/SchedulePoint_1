@@ -279,6 +279,7 @@ function toEngineActivity(
       ? formatCalendarDate(row.secondaryConstraintDate)
       : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
+    scheduleAsLateAsPossible: row.scheduleAsLateAsPossible,
     actualStart: row.actualStart ? formatCalendarDate(row.actualStart) : null,
     actualFinish: row.actualFinish ? formatCalendarDate(row.actualFinish) : null,
     resumeDate: row.resumeDate ? formatCalendarDate(row.resumeDate) : null,

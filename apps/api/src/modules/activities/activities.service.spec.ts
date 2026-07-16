@@ -65,6 +65,7 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     secondaryConstraintType: null,
     secondaryConstraintDate: null,
     laneIndex: 0,
+    scheduleAsLateAsPossible: false,
     status: 'NOT_STARTED',
     percentComplete: 0,
     actualStart: null,

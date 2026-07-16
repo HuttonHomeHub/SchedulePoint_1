@@ -50,6 +50,14 @@ export interface EngineActivity {
    * `early*`/`late*`/float stay a pure function of the network. Absent = no placement. */
   visualStart?: string | null;
   /**
+   * As-Late-As-Possible placement preference (ADR-0035 §11, M4-F4). A **display-only** hint, not a
+   * date constraint: it never touches the pure forward/backward pass, so `early*`/`late*`/float stay a
+   * pure function of the network. A flagged activity is rendered at its late-based position (its late
+   * dates, already computed here); the zero-**free**-float refinement (place only as late as successors
+   * allow) lands in M6. Absent/false = the ordinary early-based placement.
+   */
+  scheduleAsLateAsPossible?: boolean;
+  /**
    * Progress actuals (M2, ADR-0035 §1–§2). Calendar days (`YYYY-MM-DD`). A **complete** activity
    * (`actualFinish` set) freezes on its actuals; an **in-progress** one (`actualStart` set, no
    * finish) keeps its frozen start while its remaining work reschedules forward from the data date.

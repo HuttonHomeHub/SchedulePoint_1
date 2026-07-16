@@ -264,4 +264,35 @@ export const GOLDEN_CASES: GoldenCase[] = [
     },
     projectFinish: '2026-06-05',
   },
+  {
+    name: 'alap-display-only',
+    description:
+      'A9400-style: A(2) flagged As-Late-As-Possible floats against a 5-day B. ALAP is display-only (ADR-0035 §11) — A’s pure early/late/float are unchanged; its LATE dates (06-04 → 06-05) are where an ALAP bar renders.',
+    activities: [
+      { id: 'A', durationMinutes: 2880, type: 'TASK', scheduleAsLateAsPossible: true },
+      task('B', 5),
+    ],
+    edges: [],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // ES 06-01, EF inclusive 06-02; floats 3 days against B → LS offset 3 (06-04), LF inclusive 06-05.
+      A: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-02',
+        lateStart: '2026-06-04',
+        lateFinish: '2026-06-05',
+        totalFloat: 4320,
+        isCritical: false,
+      },
+      B: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-05',
+  },
 ];

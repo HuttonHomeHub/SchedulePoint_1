@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ActivityType, ConstraintType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -120,6 +121,14 @@ export class UpdateActivityDto {
   @Min(0)
   @Max(10000)
   laneIndex?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference. Does not change early/late/float.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  scheduleAsLateAsPossible?: boolean;
 
   @ApiPropertyOptional({
     format: 'date',

@@ -31,6 +31,8 @@ export interface ActivityPatch {
   /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
   calendarId?: string | null;
   laneIndex?: number;
+  /** As-Late-As-Possible placement preference (ADR-0035 §11): display-only, never the pure passes. */
+  scheduleAsLateAsPossible?: boolean;
   /** Visual-Planning placement (ADR-0033): hand-placed start, or null to clear it. */
   visualStart?: Date | null;
   // Progress

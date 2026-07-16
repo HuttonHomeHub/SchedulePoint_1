@@ -58,6 +58,7 @@ const activityRow = (
   secondaryConstraintType: null,
   secondaryConstraintDate: null,
   visualStart: null,
+  scheduleAsLateAsPossible: false,
   calendarId: null,
   actualStart: null,
   actualFinish: null,

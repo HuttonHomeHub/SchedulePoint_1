@@ -57,6 +57,7 @@ const ACTIVITY: ActivitySummary = {
   secondaryConstraintDate: null,
   calendarId: 'cal-247',
   laneIndex: 0,
+  scheduleAsLateAsPossible: false,
   status: 'NOT_STARTED',
   percentComplete: 0,
   actualStart: null,

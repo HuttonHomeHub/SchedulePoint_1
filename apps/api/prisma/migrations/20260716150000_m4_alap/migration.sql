@@ -1,0 +1,30 @@
+-- M4 as-late-as-possible: a per-activity placement preference
+-- (Engine Conformance Framework, ADR-0035 §11, M4 Task F4).
+--
+-- `schedule_as_late_as_possible` is CLIENT-SETTABLE Planner input (a user-facing
+-- write DTO sets it) — NOT engine-owned, and NOT a constraint. It is a DISPLAY-ONLY
+-- placement preference: when set, the engine's ALAP placement pass shows the
+-- activity's start as late as its successors allow while the pure early_*/late_*/
+-- total_float network stays untouched (the effective-Visual precedent, ADR-0033).
+-- Unlike the engine-owned booleans (is_critical/is_near_critical/constraint_violated),
+-- it is a Planner input, so it is written from the definition write DTO, not by the
+-- CPM engine's batched UPDATE.
+--
+-- Fully additive and reversible. The constant DEFAULT false backfills every existing
+-- row in the same statement (rows read "not ALAP" until a Planner opts in, and on the
+-- all-inherit path), so existing data and the byte-parity golden path are unchanged.
+-- On Postgres 11+ an ADD COLUMN with a constant DEFAULT is a metadata-only change — no
+-- table rewrite, no full-table scan, no lock held beyond a brief ACCESS EXCLUSIVE for
+-- the catalog update — so this is fast and safe at any data volume (same posture as
+-- constraint_violated / add_dependency_is_driving; docs/DATABASE.md).
+--
+-- No new index: the flag is read only as part of the already plan-scoped activity load
+-- (WHERE organization_id / plan_id / deleted_at, served by the existing
+-- (plan_id, created_at, id) index) and consumed by the engine's full-plan recalc; no
+-- query ever filters or sorts by it. An index on a low-cardinality boolean that no
+-- query targets would only cost writes (docs/DATABASE.md: index real query patterns,
+-- not columns).
+ALTER TABLE "activities" ADD COLUMN "schedule_as_late_as_possible" BOOLEAN NOT NULL DEFAULT false;
+
+-- Down (forward-only in prod; documented for completeness): fully reversible —
+--   ALTER TABLE "activities" DROP COLUMN "schedule_as_late_as_possible";

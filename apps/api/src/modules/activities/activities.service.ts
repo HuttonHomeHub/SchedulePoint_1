@@ -173,6 +173,10 @@ export class ActivitiesService {
               ? { secondaryConstraintDate: parseCalendarDate(dto.secondaryConstraintDate) }
               : {}),
             ...(dto.laneIndex !== undefined ? { laneIndex: dto.laneIndex } : {}),
+            // As-Late-As-Possible (ADR-0035 §11): a display-only placement preference.
+            ...(dto.scheduleAsLateAsPossible !== undefined
+              ? { scheduleAsLateAsPossible: dto.scheduleAsLateAsPossible }
+              : {}),
             // Visual-Planning placement input (ADR-0033): feeds only the effective-Visual pass.
             ...(dto.visualStart ? { visualStart: parseCalendarDate(dto.visualStart) } : {}),
             createdBy: principal.userId,
@@ -253,6 +257,9 @@ export class ActivitiesService {
           : parseCalendarDate(dto.secondaryConstraintDate);
     }
     if (dto.laneIndex !== undefined) patch.laneIndex = dto.laneIndex;
+    if (dto.scheduleAsLateAsPossible !== undefined) {
+      patch.scheduleAsLateAsPossible = dto.scheduleAsLateAsPossible;
+    }
     // Visual-Planning placement (ADR-0033): a date hand-places the bar; null clears it (revert to
     // computed). Planner-owned definition input — feeds only the effective-Visual pass, never the
     // pure-network pass, and never travels the progress path (it's absent from the progress DTO).

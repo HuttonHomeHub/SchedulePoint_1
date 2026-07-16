@@ -503,6 +503,14 @@ model Activity {
   // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
   // persisted model per PROJECT_BRIEF §9, not a runtime concern.
   laneIndex       Int             @default(0) @map("lane_index")
+  // As-late-as-possible placement preference (ADR-0035 §11, M4 F4). CLIENT-SETTABLE
+  // Planner input (a user-facing write DTO sets it) — NOT engine-owned. It is a
+  // DISPLAY-ONLY placement preference: the ALAP pass sets the activity's shown start
+  // as late as its successors allow, leaving the pure early_*/late_*/total_float
+  // network untouched (the effective-Visual precedent). Defaulted false backfills
+  // every existing row, so the byte-parity golden path is unchanged. No index: read
+  // only on the full-plan recalc load, never a query predicate.
+  scheduleAsLateAsPossible Boolean @default(false) @map("schedule_as_late_as_possible")
 
   // Progress (Contributor-updatable via the progress path).
   status                   ActivityStatus @default(NOT_STARTED)

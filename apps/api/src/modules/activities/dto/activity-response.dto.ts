@@ -131,6 +131,12 @@ export class ActivityResponseDto implements ActivitySummary {
   constraintViolated!: boolean;
 
   @ApiProperty({
+    description:
+      'Schedule As-Late-As-Possible (ADR-0035 §11): display-only placement preference; does not change early/late/float.',
+  })
+  scheduleAsLateAsPossible!: boolean;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -193,6 +199,7 @@ export class ActivityResponseDto implements ActivitySummary {
       secondaryConstraintDate: day(entity.secondaryConstraintDate),
       calendarId: entity.calendarId,
       laneIndex: entity.laneIndex,
+      scheduleAsLateAsPossible: entity.scheduleAsLateAsPossible,
       status: entity.status,
       percentComplete: entity.percentComplete,
       actualStart: day(entity.actualStart),

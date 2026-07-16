@@ -260,6 +260,11 @@ export interface ActivitySummary {
   calendarId: string | null;
   /** Graphical y-lane for the TSLD canvas. */
   laneIndex: number;
+  /**
+   * Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference. When set, the
+   * activity renders at its late-based position; it never changes early/late/float. False by default.
+   */
+  scheduleAsLateAsPossible: boolean;
   status: ActivityStatus;
   /** 0–100. */
   percentComplete: number;

@@ -256,11 +256,18 @@ scheduling slices depend on, persisted **now** so those slices are additive (no
 wide `ALTER TABLE` + backfill later):
 
 - **Definition** (`type`, `duration_minutes`, `constraint_type`/`constraint_date`,
-  `secondary_constraint_type`/`secondary_constraint_date`, `lane_index`, optional
+  `secondary_constraint_type`/`secondary_constraint_date`, `lane_index`,
+  `schedule_as_late_as_possible`, optional
   `code`) — Planner-owned. The **secondary** constraint pair (ADR-0035 §10, M4 F3)
   mirrors the primary pair exactly and is equally **client-settable** (NOT
   engine-owned): the primary drives the CPM forward pass, the secondary drives the
-  backward pass. Since ADR-0036 (M1) `duration_minutes`
+  backward pass. `schedule_as_late_as_possible` (ADR-0035 §11, M4 F4) is a defaulted
+  (`false`) **NOT NULL** boolean that is likewise **client-settable** (NOT
+  engine-owned) — a **display-only** placement preference: the ALAP pass shows the
+  activity's start as late as its successors allow while the pure `early_*`/`late_*`/
+  `total_float` network stays untouched (the effective-Visual precedent). Additive
+  with a constant `DEFAULT` (no data migration); unindexed (never a query predicate).
+  Since ADR-0036 (M1) `duration_minutes`
   is an integer count of **working minutes** (the engine schedules in working-minute
   offsets over intraday shift calendars); milestones are `0`. The public API stays
   **day-denominated** (`durationDays`) — the service converts at the boundary by the plan
@@ -301,9 +308,9 @@ wide `ALTER TABLE` + backfill later):
   — is the real protection, `RESTRICT` is defence in depth. Backed by the partial
   `idx_activities_calendar_id`.
 
-Calendar-day fields (`constraint_date`, `actual_start/finish`, the CPM `*_start/
-finish` columns) are `@db.Date` (date-only, no timezone), like `Plan.planned_start`
-— a schedule day is a calendar day, not an instant.
+Calendar-day fields (`constraint_date`, `actual_start/finish`, the
+CPM `*_start/finish` columns) are `@db.Date` (date-only, no timezone), like
+`Plan.planned_start` — a schedule day is a calendar day, not an instant.
 
 `activities` is the first domain table with bounded numerics, so it is also the
 first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
