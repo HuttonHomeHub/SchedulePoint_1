@@ -70,4 +70,27 @@ describe('PlanRecalcModePicker', () => {
     expect(screen.queryByLabelText('Recalc mode')).not.toBeInTheDocument();
     expect(screen.getByText('Retained Logic')).toBeInTheDocument();
   });
+
+  it('disables the select while the save is in flight', async () => {
+    // Hold the mutation open so the picker stays busy (optimistic value != stale server value).
+    let resolve: (plan: unknown) => void = () => {};
+    vi.mocked(apiFetch).mockReturnValue(new Promise((r) => (resolve = r)));
+    renderPicker();
+    const select = screen.getByLabelText('Recalc mode');
+    fireEvent.change(select, { target: { value: 'ACTUAL_DATES' } });
+
+    await waitFor(() => expect(select).toBeDisabled());
+    expect(select).toHaveAttribute('aria-busy', 'true');
+    resolve({ ...PLAN, progressRecalcMode: 'ACTUAL_DATES', version: 5 });
+  });
+
+  it('rolls the choice back and surfaces an error when the save fails', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(new Error('Version conflict.'));
+    renderPicker();
+    fireEvent.change(screen.getByLabelText('Recalc mode'), { target: { value: 'ACTUAL_DATES' } });
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Version conflict.'));
+    // The visible choice rolled back to the server value (not stuck on the failed pick).
+    expect(screen.getByLabelText('Recalc mode')).toHaveValue('RETAINED_LOGIC');
+  });
 });

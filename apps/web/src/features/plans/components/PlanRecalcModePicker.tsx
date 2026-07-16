@@ -1,7 +1,8 @@
 import type { PlanSummary, ProgressRecalcMode } from '@repo/types';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 
 import { useSetPlanRecalcMode } from '../api/use-plans';
+import { useOptimisticSelect } from '../hooks/use-optimistic-select';
 import { PROGRESS_RECALC_MODE_LABELS, PROGRESS_RECALC_MODES } from '../schemas/plan-schemas';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -15,10 +16,10 @@ import { Select } from '@/components/ui/select';
  * Writers (`canEdit`) pick from the three; everyone else sees the assigned mode read-only. Changing it
  * persists immediately (a targeted PATCH); a later Recalculate applies it to the dates.
  *
- * Mirrors {@link PlanCalendarPicker}'s optimistic pattern: the picked value is held locally and shown
- * straight away, so the control never snaps back to the stale cache mid-save, and the field stays busy
- * until the invalidated plan query refetches the new `version` (closing the optimistic-lock race a
- * rapid re-edit would hit). Focus is restored after the busy state clears.
+ * Shares the optimistic/busy/focus-restore machinery with {@link PlanCalendarPicker} via
+ * {@link useOptimisticSelect}: the picked value is held locally and shown straight away, the field
+ * stays busy until the invalidated plan query refetches the new `version` (closing the optimistic-lock
+ * race a rapid re-edit would hit), and focus is restored after the busy state clears.
  */
 export function PlanRecalcModePicker({
   orgSlug,
@@ -34,34 +35,10 @@ export function PlanRecalcModePicker({
   const selectId = useId();
   const hintId = useId();
   const errorId = useId();
-  const selectRef = useRef<HTMLSelectElement>(null);
-  const wasBusy = useRef(false);
-  // The just-picked value, shown until the refetched plan confirms it (or a failure rolls it back);
-  // null means "no pending choice".
-  const [optimistic, setOptimistic] = useState<ProgressRecalcMode | null>(null);
-
-  const serverValue = plan.progressRecalcMode;
-  // Drop the optimistic value once the server truth catches up — the documented
-  // "reset state during render" pattern (no effect, no extra committed render).
-  if (optimistic !== null && optimistic === serverValue) setOptimistic(null);
-
-  // Busy from the change until the plan cache reflects the new value (not just until the mutation
-  // settles), so a second change can't send a stale version.
-  const busy = setMode.isPending || (optimistic !== null && optimistic !== serverValue);
-  const displayed = optimistic ?? serverValue;
-
-  // Disabling the focused select drops focus to <body>; restore it once busy clears (WCAG 2.4.3),
-  // but only if focus was actually lost (not moved away by the user).
-  useEffect(() => {
-    if (
-      wasBusy.current &&
-      !busy &&
-      (document.activeElement === document.body || document.activeElement === null)
-    ) {
-      selectRef.current?.focus();
-    }
-    wasBusy.current = busy;
-  }, [busy]);
+  const { displayed, busy, selectRef, choose, rollback } = useOptimisticSelect<ProgressRecalcMode>({
+    serverValue: plan.progressRecalcMode,
+    isPending: setMode.isPending,
+  });
 
   if (!canEdit) {
     return (
@@ -75,14 +52,14 @@ export function PlanRecalcModePicker({
   const onChange = (event: React.ChangeEvent<HTMLSelectElement>): void => {
     if (busy) return;
     const value = event.target.value as ProgressRecalcMode;
-    setOptimistic(value);
+    choose(value);
     setMode.mutate(
       { planId: plan.id, version: plan.version, progressRecalcMode: value },
       {
         onSuccess: () =>
           announce(`Recalc mode set to ${PROGRESS_RECALC_MODE_LABELS[value].label}.`),
         // Roll the visible choice back to the server value on failure (the error shows).
-        onError: () => setOptimistic(null),
+        onError: () => rollback(),
       },
     );
   };

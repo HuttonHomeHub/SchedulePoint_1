@@ -138,6 +138,7 @@ export function ActivityProgressDialog({
               label="Remaining duration (days, optional)"
               type="number"
               min={0}
+              max={10000}
               hint="Leave blank to derive it from percent complete."
               error={errors.remainingDurationDays?.message}
               {...register('remainingDurationDays', {

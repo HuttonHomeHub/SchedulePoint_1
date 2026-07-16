@@ -125,7 +125,7 @@ export const progressFormSchema = z
       .number({ message: 'Enter a whole number of days.' })
       .int('Enter a whole number of days.')
       .min(0, 'Remaining cannot be negative.')
-      .max(100000, 'Remaining is too large.')
+      .max(10000, 'Remaining is too large.')
       .optional(),
     suspendDate: z.string().optional(),
     resumeDate: z.string().optional(),
