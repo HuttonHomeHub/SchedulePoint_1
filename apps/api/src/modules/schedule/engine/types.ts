@@ -138,6 +138,14 @@ export interface EngineResult {
   lateStartOffset: number;
   lateFinishOffset: number;
   totalFloat: number;
+  /**
+   * Free float (M6-F1, ADR-0035 §17–§20): the working time this activity can slip **without delaying the
+   * early start of any successor** — measured on the activity's **own** calendar (ADR-0037 §4, P6),
+   * like total float. It is the tightest gap, across the outgoing edges, between this activity's early
+   * finish and the point at which it would begin pushing that successor's early start. An **open end**
+   * (no successors) takes its total float (the standard tail identity FF = TF). Always ≤ total float.
+   */
+  freeFloat: number;
   isCritical: boolean;
   isNearCritical: boolean;
   /**

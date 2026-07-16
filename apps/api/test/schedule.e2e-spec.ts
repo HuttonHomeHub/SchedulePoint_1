@@ -187,8 +187,17 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       earlyFinish: '2026-01-03',
       isCritical: true,
       totalFloat: 0,
+      // Free float (M6-F1): A's successors start the instant it finishes, so it can't slip at all.
+      freeFloat: 0,
     });
-    expect(acts.get('C')).toMatchObject({ isCritical: false, isNearCritical: true, totalFloat: 2 });
+    // C carries 2 days of both total and FREE float: B drives D, so C can slip 2 days before its own
+    // finish would push D's early start (free float here equals total float — C's slack is its own).
+    expect(acts.get('C')).toMatchObject({
+      isCritical: false,
+      isNearCritical: true,
+      totalFloat: 2,
+      freeFloat: 2,
+    });
     expect(acts.get('E')).toMatchObject({ earlyFinish: '2026-01-13', isCritical: true });
 
     // M3: the engine flags the driving ties on recalc, surfaced on the dependency GET.

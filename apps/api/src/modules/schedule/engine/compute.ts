@@ -396,6 +396,30 @@ export function computeSchedule(
     if (isCritical) criticalCount += 1;
     if (isNearCritical) nearCriticalCount += 1;
 
+    // Free float (M6-F1, ADR-0035 §17–§20): how far the activity can slip its finish without delaying the
+    // EARLY start of ANY successor. For each outgoing edge, `backwardUpperBound` seeded with the
+    // SUCCESSOR'S EARLY dates (rather than its late dates) yields the finish instant beyond which this
+    // activity would push that successor's early start; the tightest such gap — working time on the
+    // activity's OWN calendar (P6/ADR-0037 §4) — is the free float. An OPEN END (no successors) can
+    // slip up to its total float, so it takes that (the standard tail identity FF = TF). Free float
+    // can never exceed total float (a universal CPM identity), so the result is capped at it.
+    const effDurationForFF = effectiveDurationById.get(id) ?? duration;
+    const outgoing = graph.outgoing.get(id)!;
+    let freeFloat: number;
+    if (outgoing.length === 0) {
+      freeFloat = totalFloat;
+    } else {
+      let minGap = Infinity;
+      for (const edge of outgoing) {
+        const succEs = earlyStart.get(edge.successorId)!;
+        const succEf = earlyFinish.get(edge.successorId)!;
+        const bound = backwardUpperBound(edge, succEs, succEf, cal, effDurationForFF, planCalendar);
+        const gap = cal.workingTimeBetween(absMinutesToInstant(efInst), absMinutesToInstant(bound));
+        if (gap < minGap) minGap = gap;
+      }
+      freeFloat = Math.min(minGap, totalFloat);
+    }
+
     // Own-calendar offsets (for the inclusive-date mapping) and plan-frame offsets (exposed).
     const esOwn = offsetFromDataDate(cal, dataDateAbs, esInst);
     const efOwn = offsetFromDataDate(cal, dataDateAbs, efInst);
@@ -442,6 +466,7 @@ export function computeSchedule(
       lateStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, lsInst),
       lateFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, lfInst),
       totalFloat,
+      freeFloat,
       isCritical,
       isNearCritical,
       constraintViolated: constraintViolated.get(id) ?? false,

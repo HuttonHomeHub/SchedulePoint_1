@@ -302,6 +302,12 @@ export interface ActivitySummary {
   lateStart: string | null;
   lateFinish: string | null;
   totalFloat: number | null;
+  /**
+   * Free float in working days (engine-owned, ADR-0035 §17–§20, M6-F1): how far the activity can slip
+   * without delaying the early start of any successor. An open end (no successors) carries its total
+   * float. Always ≤ `totalFloat`. Null until the plan is first calculated.
+   */
+  freeFloat: number | null;
   isCritical: boolean;
   isNearCritical: boolean;
   /**

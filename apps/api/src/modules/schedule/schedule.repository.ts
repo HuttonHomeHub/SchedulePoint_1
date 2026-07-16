@@ -88,7 +88,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the twelve engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the thirteen engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -234,7 +234,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the twelve engine
+   * id can never write across a plan or tenant). Sets only the thirteen engine
    * columns; a no-op for an empty result set.
    */
   async writeResults(
@@ -254,6 +254,8 @@ export class ScheduleRepository {
     // `total_float` / `visual_drift_days` are kept unchanged (ADR-0036 §7) by dividing
     // by the fixed M = 1440 factor. Exact for the full-day compat calendar (M1).
     const totalFloat = results.map((r) => Math.round(r.totalFloat / MINUTES_PER_DAY));
+    // Free float (M6-F1, ADR-0035 §17–§20) — engine-owned like total_float, day-denominated (ADR-0036 §7).
+    const freeFloat = results.map((r) => Math.round(r.freeFloat / MINUTES_PER_DAY));
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
     const constraintViolated = results.map((r) => r.constraintViolated);
@@ -274,6 +276,7 @@ export class ScheduleRepository {
         late_start = v.late_start,
         late_finish = v.late_finish,
         total_float = v.total_float,
+        free_float = v.free_float,
         is_critical = v.is_critical,
         is_near_critical = v.is_near_critical,
         constraint_violated = v.constraint_violated,
@@ -288,6 +291,7 @@ export class ScheduleRepository {
         ${lateStart}::date[],
         ${lateFinish}::date[],
         ${totalFloat}::int[],
+        ${freeFloat}::int[],
         ${isCritical}::boolean[],
         ${isNearCritical}::boolean[],
         ${constraintViolated}::boolean[],
@@ -297,7 +301,7 @@ export class ScheduleRepository {
         ${visualDriftDays}::int[]
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
-        total_float, is_critical, is_near_critical, constraint_violated,
+        total_float, free_float, is_critical, is_near_critical, constraint_violated,
         visual_effective_start, visual_effective_finish, visual_conflict, visual_drift_days
       )
       WHERE a.id = v.id

@@ -1,0 +1,31 @@
+-- M6 free float: the per-activity free-float CPM output
+-- (Engine Conformance Framework, ADR-0035 §17–§20, M6 Task F1).
+--
+-- `free_float` is engine-owned CPM output — free float in whole working days
+-- (day-denominated at the API boundary, ADR-0036 §7). It is the direct analogue of
+-- the existing `total_float` engine column: written ONLY by the CPM engine's batched
+-- `unnest` UPDATE (schedule.repository writeResults), NEVER set from a user-facing
+-- write DTO, and — like every engine column — that UPDATE touches engine columns
+-- alone (never version/updated_at/updated_by) so a recalc stays invisible to
+-- optimistic locking (ADR-0022). Free float is normally >= 0 (0 is valid) and never
+-- negative in practice, but the column is UNCONSTRAINED — no CHECK — mirroring
+-- total_float exactly.
+--
+-- Fully additive and reversible; no data migration. free_float is nullable with no
+-- DEFAULT (mirroring total_float) ⇒ every existing activity reads NULL ("not yet
+-- calculated") and the byte-parity golden path is unchanged, so no backfill is needed.
+-- On Postgres 11+ a nullable ADD COLUMN with no DEFAULT is a metadata-only catalog
+-- change — no table rewrite, no full-table scan, no lock held beyond a brief ACCESS
+-- EXCLUSIVE for the catalog update — so this is fast and non-locking at any data volume
+-- (same posture as m4_expected_finish; docs/DATABASE.md).
+--
+-- No new index: free_float is read only as part of the already plan-scoped activity
+-- load (WHERE organization_id / plan_id / deleted_at, served by the existing
+-- (plan_id, created_at, id) index) and consumed by the engine's full-plan recalc; no
+-- query ever filters or sorts by it, so an index would only cost writes for no read
+-- benefit (docs/DATABASE.md: index real query patterns, not columns). This mirrors
+-- total_float, which is likewise unindexed.
+ALTER TABLE "activities" ADD COLUMN "free_float" INTEGER;
+
+-- Down (forward-only in prod; documented for completeness): fully reversible —
+--   ALTER TABLE "activities" DROP COLUMN "free_float";
