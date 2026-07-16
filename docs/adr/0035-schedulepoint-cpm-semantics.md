@@ -8,6 +8,24 @@
 > engine will implement and self-baseline as a golden (ADR-0034). A decision moves to **Accepted**
 > when its owning capability milestone lands it. Until then it is the design target, not shipped code.
 
+## Acceptance status
+
+Clauses accept per owning milestone as that milestone lands (they are not all-or-nothing); the ADR
+stays **Proposed** overall until every clause is built. Current state:
+
+| Clauses                            | Owning milestone | Status       |
+| ---------------------------------- | ---------------- | ------------ |
+| §1–§6 (progress & the data date)   | M2               | **Accepted** |
+| §7–§11 (constraints), §12 (N15)    | M4               | **Accepted** |
+| §13–§14 (duplicate/cycle report)   | M4 (F8)          | **Accepted** |
+| §22 (zero-duration task)           | M4               | **Accepted** |
+| §17–§20 (float & critical)         | M6               | Proposed     |
+| §21, §23–§24 (LOE, resource, WBS)  | M5-epic          | Proposed     |
+| §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
+
+¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
+is folded into the next conformance pass that asserts them as goldens (out of M4 scope).
+
 ## Context
 
 The conformance fixture (ADR-0034) specifies inputs and intended behaviours but **no golden dates**,
@@ -54,6 +72,19 @@ We will implement the following semantics. Each cites the milestone that will bu
    relationship yields **negative float propagating backward**, and the engine **produces the
    (possibly impossible) schedule and flags the violation — it never silently "fixes" it** (N10).
    This **un-parks** the current MSO/MFO treatment.
+
+   > **§7 amendment — the violation-output contract (M4).** Produce-and-flag needs a machine-readable
+   > output, so the engine gains an **engine-owned per-activity `constraintViolated` boolean** (true
+   > when a mandatory pin overrides a stronger logic bound — a forward pin earlier than the
+   > network-earliest, or a backward pin that forces negative float) and a plan-level
+   > **`constraintViolationCount`**, which **replaces the current `parkedConstraintCount`** (mandatory
+   > is no longer silently parked, so a "parked" count is obsolete). §12's N15 soft case — a
+   > `START_ON_OR_AFTER` earlier than the data date — is reported separately via a plan-level
+   > **`constraintWarningCount`** (a warning, not a violation: it is honoured-and-noted, not broken).
+   > These are **produced, never repaired**; the boundary neither rejects nor rewrites a mandatory
+   > constraint. Recorded here (no standalone ADR — no new axis/invariant) per the M4 acceptance gate;
+   > see `docs/DECISIONS.md`.
+
 8. **Start-On / Finish-On pin both passes** (early = late); the forward pass may not move them later
    nor the backward pass earlier.
 9. **Expected Finish:** with the option on, remaining duration is **recalculated** so the activity

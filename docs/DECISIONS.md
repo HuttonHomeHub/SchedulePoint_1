@@ -717,3 +717,32 @@ simply re-derives at the new scale on the next interaction frame. The viewport i
 out of its ref, so ADR-0026 D3 holds and the M2/M4/M5 gesture, hit-test and focus-follow paths
 are untouched. **No new ADR** (ADR-0026 governs the rendering/viewport/a11y architecture; this
 records the readability-layer seam within it).
+
+## M4 advanced constraints — acceptance gate & the violation-output contract (2026-07-16)
+
+M4 lands ADR-0035's constraint clauses; this records the decisions the milestone's design gate (F0)
+settles, so the engine slices that follow have a fixed contract. See ADR-0035 §7 amendment and the
+acceptance-status ledger.
+
+- **Violation output (§7, Q1).** Mandatory produce-and-flag replaces the current _silent parking_ of
+  `MANDATORY_START`/`MANDATORY_FINISH` as MSO/MFO. The engine gains an **engine-owned per-activity
+  `constraintViolated` boolean** (the pin overrides a stronger logic bound) and a plan-level
+  **`constraintViolationCount`** that **replaces `parkedConstraintCount`** (nothing is parked any
+  more). N15's soft case (a `START_ON_OR_AFTER` before the data date, honoured-and-noted) is a
+  separate plan-level **`constraintWarningCount`**. Produced, never repaired — the boundary neither
+  rejects nor rewrites a mandatory constraint. **No standalone ADR** (no new axis/invariant): recorded
+  as the ADR-0035 §7 amendment. `constraintViolated` is engine-owned like the other CPM outputs
+  (never client-settable), so the security posture matches `isCritical`/`totalFloat`.
+- **ALAP modelling (§11, Q3).** As-Late-As-Possible is a **boolean `scheduleAsLateAsPossible`**, not a
+  `ConstraintType` enum value — keeping `ConstraintType` strictly date-bearing. It is delivered as a
+  display-only zero-free-float placement pass (the free-float=0 _assertion_ defers to M6, matrix
+  "M4/M6").
+- **Expected Finish shape (§9, Q2).** A plan-level recalc **option** (`useExpectedFinishDates`,
+  mirroring M2's `progressRecalcMode`) plus a per-activity **`expectedFinish` date**, reusing M2's
+  remaining-duration seam to resize remaining work to hit the target — not a per-activity boolean.
+- **Zero-duration task ≠ milestone (§22).** The engine keys milestone-specific behaviour off an
+  **`isMilestone(type)`** predicate, not `duration === 0`, so a zero-duration `TASK` keeps a real
+  start+finish and loses the project-finish tie-break to a genuine finish milestone at the same
+  instant. Delivered first (F1) behind the byte-parity golden gate.
+- **Topology reporting (§13/§14) in scope.** F8 (duplicate-edge reject with the pair named; cycle
+  reports naming the exact members) is included in M4 as the last, droppable slice.

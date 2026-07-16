@@ -331,12 +331,15 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   the negative-case reject/repair/report contract; TS-port-not-Python-in-CI; and the
   `packages/engine-conformance` (engine-free) + `apps/api` (harness) split. See
   [`docs/specs/engine-conformance-framework/`](docs/specs/engine-conformance-framework/).
-- **ADR-0035** _(Proposed)_ — SchedulePoint CPM semantics: the documented golden contract for the
-  fixture's ambiguous behaviours (P6-aligned defaults) — Retained-Logic default + data-date floor +
-  suspend/resume, mandatory-constraints-break-logic (produce-and-flag), duplicate-edge reject, named
-  cycle members, SF arithmetic, Expected-Finish/secondary/ALAP, TF≤0 default critical +
+- **ADR-0035** _(Proposed overall; §1–§6 Accepted with M2, §7–§14/§22 Accepted with M4)_ —
+  SchedulePoint CPM semantics: the documented golden contract for the fixture's ambiguous behaviours
+  (P6-aligned defaults) — Retained-Logic default + data-date floor + suspend/resume,
+  mandatory-constraints-break-logic (produce-and-flag; engine-owned `constraintViolated` +
+  `constraintViolationCount`, §7 amendment), duplicate-edge reject, named cycle members, SF
+  arithmetic, Expected-Finish/secondary/ALAP, TF≤0 default critical +
   Longest-Path/multiple-paths/start-finish-smallest options, LOE/zero-task/resource-dependent/WBS
-  rules. Each decision Accepts with its owning milestone (M2/M4/M6).
+  rules. Each decision Accepts with its owning milestone (M2/M4/M6); see the ADR's acceptance-status
+  ledger.
 - **ADR-0036** _(Accepted)_ — Hour/shift-granular calendars & durations: the **gating** M1 rework
   amending ADR-0023 (working-day → working-**minute** offsets) and ADR-0024 (weekday mask → intraday
   shift patterns + time-window exceptions + window-only base weeks); durations/lag in minutes,
