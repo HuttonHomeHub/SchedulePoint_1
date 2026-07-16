@@ -165,12 +165,19 @@ export class CalendarsService {
     // delete (no TOCTOU dangling reference).
     await this.prisma.$transaction(async (tx) => {
       await acquireCalendarWriteLock(tx, calendarId);
-      const inUse = await this.calendars.countActivePlansUsing(calendarId, tx);
+      // In-use = active plans OR active activities that reference this calendar (ADR-0037, M5).
+      const [planCount, activityCount] = await Promise.all([
+        this.calendars.countActivePlansUsing(calendarId, tx),
+        this.calendars.countActiveActivitiesUsing(calendarId, tx),
+      ]);
+      const inUse = planCount + activityCount;
       if (inUse > 0) {
-        throw new ConflictError(
-          `This calendar is in use by ${inUse} active plan${inUse === 1 ? '' : 's'}.`,
-          { reason: CALENDAR_CONFLICT.CALENDAR_IN_USE, count: inUse },
-        );
+        throw new ConflictError(this.inUseMessage(planCount, activityCount), {
+          reason: CALENDAR_CONFLICT.CALENDAR_IN_USE,
+          count: inUse,
+          plans: planCount,
+          activities: activityCount,
+        });
       }
       await this.calendars.softDeleteWithExceptions(calendarId, principal.userId, tx);
     });
@@ -290,6 +297,14 @@ export class CalendarsService {
     return new ConflictError('An exception for this date already exists on this calendar.', {
       reason: CALENDAR_CONFLICT.DUPLICATE_EXCEPTION,
     });
+  }
+
+  /** A human count of what still references a calendar, unioning plans + activities (ADR-0037). */
+  private inUseMessage(plans: number, activities: number): string {
+    const parts: string[] = [];
+    if (plans > 0) parts.push(`${plans} active plan${plans === 1 ? '' : 's'}`);
+    if (activities > 0) parts.push(`${activities} active activit${activities === 1 ? 'y' : 'ies'}`);
+    return `This calendar is in use by ${parts.join(' and ')}.`;
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {

@@ -163,6 +163,18 @@ export class CalendarRepository {
     return db.plan.count({ where: { calendarId, deletedAt: null } });
   }
 
+  /**
+   * Count the ACTIVE activities whose own calendar is `calendarId` (M5, ADR-0037) — the other
+   * half of the delete-in-use guard. A soft-deleted activity does not count (RESTRICT stays as
+   * DB defence in depth). Backed by the partial `idx_activities_calendar_id`.
+   */
+  countActiveActivitiesUsing(
+    calendarId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.activity.count({ where: { calendarId, deletedAt: null } });
+  }
+
   /** A page of an organisation's active calendars with their shift rows (keyset cursor by id). */
   findManyActiveByOrg(params: {
     organizationId: string;

@@ -127,7 +127,7 @@ export class CalendarsController {
   @ApiNoContentResponse()
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({
-    description: 'The calendar is in use by an active plan (CALENDAR_IN_USE).',
+    description: 'The calendar is in use by an active plan or activity (CALENDAR_IN_USE).',
   })
   async remove(
     @CurrentUser() principal: Principal,
