@@ -356,7 +356,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const b = await makeActivity(actor, planId, 'B', 2);
     await link(actor, planId, a, b);
     await actor.agent
-      .patch(`/api/v1/organizations/acme/plans/${planId}/activities/${b}`)
+      .patch(`/api/v1/organizations/acme/activities/${b}`)
       .send({ constraintType: 'MANDATORY_START', constraintDate: '2026-01-02' })
       .expect(200);
 
