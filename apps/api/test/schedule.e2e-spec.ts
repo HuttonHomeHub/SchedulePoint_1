@@ -357,7 +357,8 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await link(actor, planId, a, b);
     await actor.agent
       .patch(`/api/v1/organizations/acme/activities/${b}`)
-      .send({ constraintType: 'MANDATORY_START', constraintDate: '2026-01-02' })
+      // version 1: b was just created and adding a dependency doesn't bump the activity row.
+      .send({ constraintType: 'MANDATORY_START', constraintDate: '2026-01-02', version: 1 })
       .expect(200);
 
     const res = await actor.agent.post(recalcUrl(planId)).expect(200);
