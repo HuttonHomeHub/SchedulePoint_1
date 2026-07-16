@@ -179,14 +179,13 @@ export const SCHEDULING_MODES_ENABLED =
 export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_CALENDAR);
 
 /**
- * Progress ingestion — retained-logic recalc (ADR-0035, M2). **OFF by default**: the extra progress
- * inputs ship dark until their quality gates clear, then flip default-on per-environment. When on,
- * the progress editor gains a **remaining duration** input plus **suspend / resume** dates, and the
- * plan settings gain a **recalc mode** picker (Retained Logic / Progress Override / Actual Dates).
- * Everything behind it — the settable API fields, the engine's progress classification, and the
- * conformance proof (S02/S03/S04) — is already live; only these controls are gated. Set
- * `VITE_PROGRESS_INGESTION=true` to enable. The engine ingests actuals and honours the plan's stored
- * recalc mode regardless of this flag; the flag only governs whether a planner can *edit* the new
- * fields in the web UI (percent + actual dates were always editable).
+ * Progress ingestion — retained-logic recalc (ADR-0035, M2). **ON by default** (quality gates cleared
+ * — component/a11y/ux reviews and the repair-warnings follow-up). When on, the progress editor gains a
+ * **remaining duration** input plus **suspend / resume** dates, and the plan settings gain a **recalc
+ * mode** picker (Retained Logic / Progress Override / Actual Dates). Everything behind it — the
+ * settable API fields, the engine's progress classification, and the conformance proof (S02/S03/S04) —
+ * is already live; the flag only governs whether a planner can *edit* the new fields in the web UI
+ * (percent + actual dates were always editable). Set `VITE_PROGRESS_INGESTION=false` to roll back to
+ * the percent-plus-actual-dates editor.
  */
-export const PROGRESS_INGESTION_ENABLED = flagDefaultOff(import.meta.env.VITE_PROGRESS_INGESTION);
+export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PROGRESS_INGESTION);

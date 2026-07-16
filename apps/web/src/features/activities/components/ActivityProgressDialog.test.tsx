@@ -7,6 +7,13 @@ import { ActivityProgressDialog } from './ActivityProgressDialog';
 
 import { apiFetchEnvelope } from '@/lib/api/client';
 
+// Progress ingestion is default-on now; this suite covers the flag-OFF editor (percent + actual
+// dates only), so pin it off. The flag-ON inputs live in `ActivityProgressDialog.progress.test.tsx`.
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  PROGRESS_INGESTION_ENABLED: false,
+}));
+
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchEnvelope: vi.fn() }));
 
 const ACTIVITY: ActivitySummary = {
