@@ -169,6 +169,14 @@ describe('describeActivity (Tier 1)', () => {
       'Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1',
     );
   });
+
+  it('speaks a same-lane overlap only when the caller flags it (the spoken badge equivalent)', () => {
+    expect(describeActivity(activity(), { overlapsInLane: true })).toContain(
+      ', overlaps another activity in its lane',
+    );
+    expect(describeActivity(activity(), { overlapsInLane: false })).not.toContain('overlaps');
+    expect(describeActivity(activity())).not.toContain('overlaps');
+  });
 });
 
 describe('summarizeLogic (Tier 2)', () => {

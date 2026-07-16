@@ -89,6 +89,10 @@ export interface RenderActivity {
   visualConflict?: boolean;
   /** Engine-owned (ADR-0033): working-day drift of the placement from the early start (signed). */
   visualDriftDays?: number | null;
+  /** True when this bar shares a lane with a time-overlapping neighbour (TECH_DEBT #24c) — a manual
+   * lane drop can create one (auto-arrange never does). Derived at the mapping seam from the drawn
+   * dates + lane (`laneOverlapIds`); the painter marks it and the listbox speaks it. */
+  laneOverlap?: boolean;
   /** Which edge a set date constraint pins (start/finish), or null when unconstrained —
    * the painter marks that edge with a small pin. Pre-derived from `constraintType` at the
    * mapping seam so the render model stays free of constraint-kind logic (ADR-0026 D8,

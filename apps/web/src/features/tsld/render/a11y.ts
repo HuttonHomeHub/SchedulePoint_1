@@ -49,7 +49,7 @@ export function activityBarLabel(a: {
  * uncomputed (null). A zero-duration milestone carries no duration clause; an unscheduled activity
  * says its duration and that it is not scheduled, nothing more.
  */
-export function describeActivity(a: ActivitySummary): string {
+export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: boolean }): string {
   const name = activityLabel(a);
   const duration =
     a.durationDays > 0
@@ -79,7 +79,11 @@ export function describeActivity(a: ActivitySummary): string {
           Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
         } before its earliest feasible start`
       : '';
-  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}`;
+  // Same-lane time-overlap cue (TECH_DEBT #24c): the spoken equivalent of the stacked-squares badge
+  // on a bar a manual lane drop left overlapping another in its lane (WCAG 1.1.1). Derived (not a
+  // persisted field), so the caller passes it — computed at the mapping seam (`laneOverlapIds`).
+  const overlapPart = opts?.overlapsInLane ? ', overlaps another activity in its lane' : '';
+  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}${overlapPart}`;
 }
 
 /**

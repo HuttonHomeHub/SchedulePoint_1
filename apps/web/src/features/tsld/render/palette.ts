@@ -30,6 +30,9 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // Visual-Planning conflict cue — the warning hue, drawn as a distinct triangle shape so it never
     // relies on colour alone (WCAG 1.4.1); shares the token with near-critical but a different shape.
     conflict: token('--color-warning', '#d29628'),
+    // Same-lane time-overlap cue — the warning hue, drawn as a distinct stacked-squares shape (not the
+    // conflict triangle), disambiguated by shape + legend, never colour alone (WCAG 1.4.1).
+    laneOverlap: token('--color-warning', '#d29628'),
     // Label text: inside-bar text uses each fill's paired *-foreground token (so it contrasts on
     // that fill in both themes); beside-bar text uses the page foreground over the canvas ground.
     labelInside: token('--color-primary-foreground', '#ffffff'),

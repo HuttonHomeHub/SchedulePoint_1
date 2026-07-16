@@ -54,6 +54,9 @@ export interface TsldPalette {
   /** Visual-Planning conflict cue (ADR-0033): a placement earlier than its feasible start. The
    * warning hue, drawn as a distinct **triangle badge** (shape, not colour-only) at the bar's start. */
   conflict: string;
+  /** Same-lane time-overlap cue (TECH_DEBT #24c): a manual lane drop left two bars overlapping. The
+   * warning hue, drawn as a distinct **stacked-squares badge** (shape, not colour-only) above the bar. */
+  laneOverlap: string;
   // Label text colours (ADR-0026 D1). Inside-bar text uses the fill's paired *-foreground token so
   // it contrasts against that fill in both themes; beside text uses the page foreground.
   labelInside: string;
@@ -210,6 +213,32 @@ function drawConflictBadge(ctx: Ctx2D, startX: number, barTop: number, palette: 
   ctx.stroke();
 }
 
+/** Side (px) of each little square in the stacked-squares lane-overlap badge. */
+const OVERLAP_BADGE_S = 5;
+
+/**
+ * Two small offset outlined squares ("stacked bars") centred just above a bar, marking that it
+ * shares a lane with a time-overlapping neighbour (TECH_DEBT #24c). A **shape** cue in the warning
+ * hue — distinct from the conflict triangle and the constraint pin — so it never relies on colour
+ * alone (WCAG 1.4.1); each square carries a foreground outline so it clears the 3:1 non-text-contrast
+ * bar on any ground (WCAG 1.4.11). The legend names it and the listbox spells it out for AT.
+ */
+function drawOverlapBadge(ctx: Ctx2D, centerX: number, barTop: number, palette: TsldPalette): void {
+  const s = OVERLAP_BADGE_S;
+  const off = 2;
+  const leftX = Math.round(centerX - (s + off) / 2);
+  const topY = barTop - s - off - 1;
+  const square = (x: number, y: number): void => {
+    ctx.fillStyle = palette.laneOverlap;
+    ctx.fillRect(x, y, s, s);
+    ctx.strokeStyle = palette.outline;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
+  };
+  square(leftX + off, topY + off); // back square (down-right)
+  square(leftX, topY); // front square (up-left)
+}
+
 /**
  * Paint one frame of the TSLD onto `ctx` from the pure render model (ADR-0026). The
  * order is grid → dependency edges → activity bars/milestones → selection ring, so
@@ -359,6 +388,12 @@ export function paintScene(
     // this to VISUAL mode, so EARLY/late bars never show it).
     if (activity.visualConflict) {
       drawConflictBadge(ctx, rect.x, rect.y, palette);
+    }
+    // Same-lane time-overlap (TECH_DEBT #24c): a manual lane drop left this bar overlapping another
+    // in its lane. A stacked-squares badge above the bar's centre — width-independent (so a milestone
+    // is marked too) and clear of the start-edge conflict/constraint cues.
+    if (activity.laneOverlap) {
+      drawOverlapBadge(ctx, rect.x + rect.w / 2, rect.y, palette);
     }
   }
 

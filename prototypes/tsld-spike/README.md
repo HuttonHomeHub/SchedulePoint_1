@@ -46,6 +46,25 @@ not the signal: draw is <5% of each frame interval, so the remaining ~95% is hea
 throttle, and a real device with GPU compositing sustains far higher fps at this draw
 cost.
 
+### On-canvas labels re-verification (2026-07-13, ADR-0026 D1)
+
+The rows above are **labels-off**. On-canvas activity labels (`{code} {name} · {n}d`) are
+the dominant draw cost (ADR-0026 D1 — "text is the dominant cost, and is budgeted"), so
+the labels pass (`renderer.js` Layer 3.6 — a faithful copy of the shipped painter, running
+the real truncation + width-cache + lane-placement path, not a bare `fillText`) was
+re-measured before enabling labels by default:
+
+| 2,000 activities | Draw median | Draw p95 | Budget | Verdict  |
+| ---------------- | ----------- | -------- | ------ | -------- |
+| Labels **off**   | ~3 ms       | 3.6 ms   | ≤16 ms | **PASS** |
+| Labels **on**    | 6 ms        | 9.4 ms   | ≤16 ms | **PASS** |
+
+Labels-on costs **9.4 ms p95** at the 2,000-activity ceiling — still comfortably inside the
+ADR-0026 60 fps CPU draw budget (≤16 ms) with ~40% headroom. (An earlier "3.9 ms" figure was
+a labels-off draw mislabelled as with-labels, before the harness's label path was corrected;
+see `docs/DECISIONS.md` 2026-07-13.) This is the evidence gate for `VITE_TSLD_EDITING`
+labels-on-by-default; final device-fps confirmation folds into M1 on real hardware.
+
 **Conclusion:** Canvas 2D + viewport culling + layering clears the performance budget
 with large headroom at the v1 data ceiling. **No WebGL escalation is warranted** —
 consistent with ADR-0026's decision. Final device-fps confirmation (mid-tier laptop +

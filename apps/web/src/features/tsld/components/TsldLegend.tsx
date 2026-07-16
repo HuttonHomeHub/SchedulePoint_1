@@ -15,7 +15,8 @@ type LegendItem =
   | { label: string; line: 'solid' | 'dashed' }
   | { label: string; pin: true }
   | { label: string; today: true }
-  | { label: string; conflict: true };
+  | { label: string; conflict: true }
+  | { label: string; overlap: true };
 
 const LEGEND: ReadonlyArray<LegendItem> = [
   {
@@ -36,6 +37,9 @@ const LEGEND: ReadonlyArray<LegendItem> = [
   // A set date constraint marks its pinned edge with a small pin, matching the canvas (a
   // shape cue, not colour — WCAG 1.4.1).
   { label: 'Constraint', pin: true },
+  // A manual lane drop can leave two bars overlapping in time in one lane — a stacked-squares badge
+  // marks each, matching the canvas (a shape cue, not colour — WCAG 1.4.1, TECH_DEBT #24c).
+  { label: 'Lane overlap', overlap: true },
   // Non-working (weekend/holiday) columns are washed in the muted tone; today is a dashed
   // vertical in the destructive tone. Both toggleable in the view controls.
   {
@@ -104,6 +108,32 @@ export function TsldLegend({
                   borderLeft: '4px solid transparent',
                   borderRight: '4px solid transparent',
                   borderBottom: '6px solid var(--color-warning)',
+                  outline: '0.5px solid var(--color-foreground)',
+                }}
+              />
+            </span>
+          ) : 'overlap' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 justify-center">
+              {/* Two small offset squares ("stacked bars"), matching the canvas badge. */}
+              <span
+                className="absolute"
+                style={{
+                  width: 5,
+                  height: 5,
+                  top: 4,
+                  left: 12,
+                  backgroundColor: 'var(--color-warning)',
+                  outline: '0.5px solid var(--color-foreground)',
+                }}
+              />
+              <span
+                className="absolute"
+                style={{
+                  width: 5,
+                  height: 5,
+                  top: 2,
+                  left: 8,
+                  backgroundColor: 'var(--color-warning)',
                   outline: '0.5px solid var(--color-foreground)',
                 }}
               />

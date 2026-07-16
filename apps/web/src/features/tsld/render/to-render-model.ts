@@ -1,6 +1,7 @@
 import type { ActivitySummary, DependencySummary, SchedulingMode } from '@repo/types';
 
 import { activityBarLabel } from './a11y';
+import { laneOverlapIds } from './lane-overlap';
 import type { RenderActivity, RenderEdge } from './render-model';
 
 import { activeConstraintAnchor } from '@/lib/constraint-format';
@@ -37,27 +38,41 @@ export function toRenderActivities(
   activities: readonly ActivitySummary[],
   source: BarDateSource = 'early',
 ): RenderActivity[] {
-  return activities.map((a) => {
-    const barStart =
-      source === 'visual' ? a.visualEffectiveStart : source === 'late' ? a.lateStart : a.earlyStart;
-    const barFinish =
+  const barDates = activities.map((a) => ({
+    barStart:
+      source === 'visual' ? a.visualEffectiveStart : source === 'late' ? a.lateStart : a.earlyStart,
+    barFinish:
       source === 'visual'
         ? a.visualEffectiveFinish
         : source === 'late'
           ? a.lateFinish
-          : a.earlyFinish;
+          : a.earlyFinish,
+  }));
+  // A manual lane drop can leave two bars overlapping in time in one lane (TECH_DEBT #24c) — flag
+  // both, computed on the same dates the bars draw at so the cue matches the picture in every mode.
+  const overlapping = laneOverlapIds(
+    activities.map((a, i) => ({
+      id: a.id,
+      laneIndex: a.laneIndex,
+      start: barDates[i]!.barStart,
+      finish: barDates[i]!.barFinish,
+    })),
+  );
+
+  return activities.map((a, i) => {
     return {
       id: a.id,
       type: a.type,
       laneIndex: a.laneIndex,
-      earlyStart: barStart,
-      earlyFinish: barFinish,
+      earlyStart: barDates[i]!.barStart,
+      earlyFinish: barDates[i]!.barFinish,
       isCritical: a.isCritical,
       isNearCritical: a.isNearCritical,
       // The conflict cue + drift are meaningful only in VISUAL mode — the engine computes them for
       // every plan, so gate them to the visual source here (EARLY/late bars never show the cue).
       visualConflict: source === 'visual' ? a.visualConflict : false,
       visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
+      laneOverlap: overlapping.has(a.id),
       constraint: activeConstraintAnchor(a),
       label: activityBarLabel(a),
     };
