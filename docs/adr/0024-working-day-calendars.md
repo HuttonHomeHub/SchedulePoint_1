@@ -7,6 +7,11 @@
 > **Amended by [ADR-0036](0036-hour-granular-calendars-and-durations.md) (M1):** the weekday-mask +
 > whole-day-exception model is replaced by intraday **shift windows** + time-window exception ranges;
 > the O(log) week-arithmetic + binary-search calendar port survives at minute granularity.
+>
+> **Superseded in part by [ADR-0037](0037-per-activity-calendars-and-instant-axis.md) (M5):** §4's
+> deferral of **per-activity** calendars is lifted — the reserved `activities.calendar_id` is activated
+> and each activity schedules on its own resolved calendar port (the engine moves to an absolute-instant
+> axis); the org calendar library + per-plan default described here are otherwise unchanged.
 
 ## Context
 

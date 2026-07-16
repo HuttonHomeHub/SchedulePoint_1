@@ -22,6 +22,9 @@ export interface ScheduleActivityRow {
   constraintDate: Date | null;
   /** Visual Planning hand-placement (ADR-0033); advisory input to the effective-Visual pass. */
   visualStart: Date | null;
+  /** The activity's own calendar (ADR-0037, M5); null inherits the plan default. Resolved to a
+   * port in the service and attached per-activity to the engine. */
+  calendarId: string | null;
 }
 
 /** The minimal dependency shape the CPM engine reads (a plan's active edges). */
@@ -93,6 +96,7 @@ export class ScheduleRepository {
         constraintType: true,
         constraintDate: true,
         visualStart: true,
+        calendarId: true,
       },
     });
   }

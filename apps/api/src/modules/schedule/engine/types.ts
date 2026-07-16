@@ -10,9 +10,10 @@ import type { WorkingTimeCalendar } from './working-time-calendar';
  * loading the plan's active activities and dependencies, translating them into
  * these plain structs, running the engine, and writing the results back. Dates
  * that cross the boundary are calendar days in strict `YYYY-MM-DD` form; the
- * engine works internally in **continuous working-day offsets** from the data
- * date and only maps back to inclusive display dates through the
- * {@link WorkingDayCalendar} port (see ADR-0023).
+ * engine works internally on the **absolute working-instant** axis (ADR-0037) so
+ * each activity schedules on its own {@link WorkingTimeCalendar} port, mapping back
+ * to inclusive display dates on that calendar (ADR-0023). The exposed `*Offset`
+ * fields project onto a common plan-calendar frame; float is on the activity's own.
  */
 
 /** An activity node the engine schedules. */
@@ -21,6 +22,15 @@ export interface EngineActivity {
   /** Working **minutes** of work (ADR-0036). Milestones (START/FINISH_MILESTONE) are 0. */
   durationMinutes: number;
   type: ActivityType;
+  /**
+   * The activity's own working-time calendar (ADR-0037, M5). **Undefined = inherit the plan
+   * calendar** (`ComputeOptions.calendar`) — the default, byte-identical path. When set, the
+   * activity's duration is advanced, its float measured, and its dates derived on **this**
+   * calendar, so e.g. a 24/7 crew activity inside a 5-day plan works across weekends. The
+   * service resolves the port from `activity.calendarId` and caches it per recalculation; the
+   * engine stays calendar-agnostic (it never sees an id or an enum).
+   */
+  calendar?: WorkingTimeCalendar;
   /** Schedule constraint kind, if any. Honoured from Task A3 onward. */
   constraintType?: ConstraintType | null;
   /** The constraint's calendar day (`YYYY-MM-DD`); required when a type is set. */
@@ -65,13 +75,13 @@ export interface EngineEdgeResult {
 }
 
 /**
- * The computed schedule for one activity. Offsets are continuous working-**minute**
- * positions from the data date (ADR-0036; a start offset of 0 means the activity
- * starts at the data date's first working minute); the paired dates are the
- * inclusive display dates mapped via the calendar port. Total float is
- * `lateStartOffset − earlyStartOffset` (working minutes); it may be negative when a
- * constraint cannot be satisfied (surfaced, not an error). The service layer maps
- * these minute quantities back to the day-denominated public API (ADR-0036 §7).
+ * The computed schedule for one activity. The `*Offset` fields are working-**minute**
+ * positions from the data date projected onto the **plan** calendar (ADR-0036/ADR-0037) — a
+ * common frame across activities; the paired dates are the inclusive display dates mapped on the
+ * activity's **own** calendar. Total float is measured on the activity's **own** calendar
+ * (ADR-0037 §4, P6) — equal to `lateStartOffset − earlyStartOffset` when the activity inherits
+ * the plan calendar; it may be negative when a constraint cannot be satisfied (surfaced, not an
+ * error). The service maps these minute quantities back to the day-denominated public API.
  */
 export interface EngineResult {
   activityId: string;

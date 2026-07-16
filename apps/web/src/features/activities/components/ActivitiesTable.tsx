@@ -1,5 +1,5 @@
-import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
-import { useRef, useState } from 'react';
+import type { ActivitySummary, BaselineVarianceRow, CalendarSummary } from '@repo/types';
+import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useActivities, useDeleteActivity } from '../api/use-activities';
@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { ACTIVITY_CALENDAR_ENABLED } from '@/config/env';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
@@ -78,6 +79,9 @@ export function ActivitiesTable({
   canReportProgress = false,
   onOpenLogic,
   varianceByActivityId,
+  calendars = [],
+  calendarsLoading = false,
+  calendarsError = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -95,9 +99,24 @@ export function ActivitiesTable({
    * (a shared `@repo/types` shape, no cross-feature import).
    */
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow>;
+  /**
+   * The org's calendars (ADR-0037), route-composed like `varianceByActivityId` — used to name an
+   * activity's own calendar in the "Calendar" column (shown only when `ACTIVITY_CALENDAR_ENABLED`)
+   * and threaded into the edit dialog's picker. A shared `@repo/types` shape, so activities stays
+   * dependency-free of the calendars feature.
+   */
+  calendars?: CalendarSummary[];
+  /** The calendars list is still loading (an assigned calendar reads "Loading…", not "inherit"). */
+  calendarsLoading?: boolean;
+  /** The calendars list failed to load — forwarded to the edit dialog's picker to surface it. */
+  calendarsError?: boolean;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
+  const calendarNameById = useMemo(
+    () => new Map(calendars.map((c) => [c.id, c.name])),
+    [calendars],
+  );
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -153,6 +172,31 @@ export function ActivitiesTable({
         );
       },
     },
+    // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. An em
+    // dash means "inherits the plan's calendar" — so a row that HAS a calendar must never fall back
+    // to one: while the library is still loading it reads "Loading…", and if that fetch fails/omits
+    // it "Unnamed" (with the id as a title), keeping the assigned case visibly distinct from a
+    // genuine inherit. Conditional spread (not a post-hoc splice) so its position can't silently
+    // drift. Hidden below `lg` like the other definition detail columns.
+    ...(ACTIVITY_CALENDAR_ENABLED
+      ? [
+          {
+            header: 'Calendar',
+            headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+            cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+            cell: (activity: ActivitySummary) => {
+              if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
+              const name = calendarNameById.get(activity.calendarId);
+              if (name) return <span className="text-muted-foreground">{name}</span>;
+              return (
+                <span className="text-muted-foreground italic" title={activity.calendarId}>
+                  {calendarsLoading ? 'Loading…' : 'Unnamed'}
+                </span>
+              );
+            },
+          } satisfies Column<ActivitySummary>,
+        ]
+      : []),
     // Engine-owned computed columns (M6, read-only). Null renders as an em dash
     // until the plan is recalculated. Late dates hide first on narrow screens.
     scheduleColumn('Early start', (a) => a.earlyStart, 'md'),
@@ -312,6 +356,9 @@ export function ActivitiesTable({
             planId={planId}
             open={editing !== undefined}
             onClose={() => setEditingId(null)}
+            calendars={calendars}
+            calendarsLoading={calendarsLoading}
+            calendarsError={calendarsError}
             {...(editing ? { activity: editing } : {})}
           />
           <ConfirmDialog

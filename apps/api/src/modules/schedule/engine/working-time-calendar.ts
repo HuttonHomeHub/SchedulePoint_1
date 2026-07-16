@@ -63,6 +63,22 @@ const MINUTES_PER_DAY = 1440;
 /** Hard cap on the binary-search span: no calendar has working time this far out (ADR-0036 §5). */
 const HORIZON_DAYS = 366 * 200; // ~200 years — the N11/N16 "no working time in horizon" backstop.
 
+/**
+ * Minutes-from-epoch of a `YYYY-MM-DDTHH:MM` (or bare `YYYY-MM-DD`) instant — the engine's
+ * **absolute working-instant axis** (ADR-0037). Calendar-agnostic and monotonic, so it is a
+ * common frame in which activities on different calendars are comparable (a plain offset on
+ * one plan calendar is not — see ADR-0037's lossiness argument). Exported so `compute.ts` can
+ * represent positions as instants and compare them.
+ */
+export function instantToAbsMinutes(instant: string): number {
+  return toAbsMinutes(instant);
+}
+
+/** `YYYY-MM-DDTHH:MM` (or bare `YYYY-MM-DD`) for a minutes-from-epoch value — the inverse of {@link instantToAbsMinutes}. */
+export function absMinutesToInstant(abs: number): string {
+  return fromAbsMinutes(abs);
+}
+
 /** Minutes-from-epoch of a `YYYY-MM-DDTHH:MM` (or bare `YYYY-MM-DD`) instant. */
 function toAbsMinutes(instant: string): number {
   const datePart = instant.slice(0, 10);

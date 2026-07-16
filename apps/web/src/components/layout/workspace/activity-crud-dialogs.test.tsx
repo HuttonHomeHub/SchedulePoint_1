@@ -26,6 +26,7 @@ function makeModel(over: Partial<Record<string, unknown>> = {}): PlanWorkspaceMo
     orgSlug: 'acme',
     planId: 'p1',
     activities: { data: ACTIVITIES },
+    calendars: { data: [], isPending: false, isError: false },
     editActivityId: null,
     deleteActivityId: null,
     setEditActivityId: vi.fn(),

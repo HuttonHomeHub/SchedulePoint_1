@@ -57,6 +57,9 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         planId={planId}
         open={editing !== undefined}
         onClose={() => model.setEditActivityId(null)}
+        calendars={model.calendars.data ?? []}
+        calendarsLoading={model.calendars.isPending}
+        calendarsError={model.calendars.isError}
         {...(editing ? { activity: editing } : {})}
       />
       <ConfirmDialog

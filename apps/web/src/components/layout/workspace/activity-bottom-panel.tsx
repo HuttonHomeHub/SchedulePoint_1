@@ -53,7 +53,13 @@ export function ActivityBottomPanel({
         </div>
         <div className="flex items-center gap-2">
           {model.canEditSchedule ? (
-            <CreateActivityButton orgSlug={model.orgSlug} planId={model.planId} />
+            <CreateActivityButton
+              orgSlug={model.orgSlug}
+              planId={model.planId}
+              calendars={model.calendars.data ?? []}
+              calendarsLoading={model.calendars.isPending}
+              calendarsError={model.calendars.isError}
+            />
           ) : null}
           {onCollapse ? (
             <Button
@@ -75,6 +81,9 @@ export function ActivityBottomPanel({
           canWrite={model.canEditSchedule}
           canReportProgress={model.canProgress}
           onOpenLogic={model.setLogicActivity}
+          calendars={model.calendars.data ?? []}
+          calendarsLoading={model.calendars.isPending}
+          calendarsError={model.calendars.isError}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
             : {})}

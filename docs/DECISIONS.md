@@ -10,6 +10,29 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-16 — M5 per-activity calendars: float on the activity's own calendar; activity → plan → 24/7 resolution
+
+**Decision.** With per-activity calendars (ADR-0037), two semantics are locked:
+
+1. **Total float** is measured on the **activity's own** calendar
+   (`activityCalendar.workingTimeBetween(earlyStart, lateStart)`), not the plan calendar — matching
+   P6 / ADR-0035. It is identical to today when an activity inherits the plan calendar, and changes
+   the meaning of the day-denominated `total_float` column only for **mixed-calendar** plans.
+2. **Calendar resolution order** is `activity.calendarId → plan.calendarId → null (all-days-work)`.
+   A null activity calendar inherits the plan default; a null plan calendar is 24/7.
+
+**Why.** Float in the activity's own working time is what a planner on that crew's calendar expects
+("3 days of slack" = 3 of _their_ working days). Inheritance keeps the common case zero-config and the
+all-inherit path byte-identical (the golden-suite parity gate). Both are the least-surprising choices
+and match the P6 model the conformance fixture benchmarks against.
+
+**Consequences.** The engine moved to an absolute-instant axis (ADR-0037) so the two calendars can
+coexist. S05 (successor-calendar lag) became a runnable conformance differential; the per-relationship
+lag-calendar capability row is now ✅. Resource calendars / LOE / WBS-summary remain separate M5-epic
+rungs. Window-only calendars (turnaround/crane-hire) are honoured per-activity only once in-window
+placement lands (an M5-epic edge case) — the conformance adapter keeps those on the plan calendar and
+notes it, never silently mis-scheduling.
+
 ### 2026-07-15 — M3 lag-calendar scope: only the 24-Hour half is a differential (setting-sensitive → M5)
 
 **Decision.** M3 (per-relationship lag calendars, ADR-0036 §6) realises **only the 24-Hour

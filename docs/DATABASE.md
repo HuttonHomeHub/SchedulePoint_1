@@ -191,6 +191,7 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `idx_projects_delete_batch_id`                | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 | `idx_plans_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 | `idx_plans_calendar_id`                       | `(calendar_id)`                        | partial        | the delete-in-use guard's active-plan count `WHERE calendar_id = ? AND deleted_at IS NULL` (`WHERE deleted_at IS NULL AND calendar_id IS NOT NULL`); calendars are soft-deleted only, so the FK RESTRICT check never fires |
+| `idx_activities_calendar_id`                  | `(calendar_id)`                        | partial        | the delete-in-use guard's active-**activity** count `WHERE calendar_id = ? AND deleted_at IS NULL` (`WHERE deleted_at IS NULL AND calendar_id IS NOT NULL`); the activity twin of `idx_plans_calendar_id` (M5, ADR-0037)   |
 | `idx_activities_delete_batch_id`              | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 | `dependencies_plan_id_created_at_id_idx`      | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + plan-level dependency list + cursor sort — subsumes a standalone plan index                                                                                                                                 |
 | `dependencies_predecessor_id_idx`             | `(predecessor_id)`                     | full           | `predecessor_id` FK + "successors of X" list (edges out of X) + the cycle-walk adjacency load                                                                                                                              |
@@ -259,9 +260,16 @@ wide `ALTER TABLE` + backfill later):
   nullable/defaulted, **never accepted from a write DTO**. They are populated by
   the CPM engine (a later slice); until then they read as null/false ("—" in the
   UI). Storing them now avoids a wide migration when the engine lands.
-- **`calendar_id`** is a **reserved** nullable UUID column with **no FK relation
-  yet** — the Calendars slice adds the FK and makes it settable. It is not client-
-  settable in this slice.
+- **`calendar_id`** is the activity's own working-time calendar (**M5, ADR-0037**):
+  a nullable, **client-settable** UUID FK to `calendars` (`onDelete: Restrict`),
+  mirroring `Plan.calendar` exactly. `null` means **inherit the plan default** —
+  resolution order `activity.calendarId → plan.calendarId → all-minutes`. The FK
+  alone does **not** enforce same-org (a cross-org `calendarId` satisfies it), so the
+  org-scope check stays in the service (like the plan picker). `RESTRICT` never
+  actually fires (calendars soft-delete only); the `CALENDAR_IN_USE` service guard —
+  which now unions active plans **and** active activities (`WHERE deleted_at IS NULL`)
+  — is the real protection, `RESTRICT` is defence in depth. Backed by the partial
+  `idx_activities_calendar_id`.
 
 Calendar-day fields (`constraint_date`, `actual_start/finish`, the CPM `*_start/
 finish` columns) are `@db.Date` (date-only, no timezone), like `Plan.planned_start`
@@ -403,13 +411,18 @@ house standard (UUID v7 PK, snake_case via `@map`, timestamptz UTC, soft delete 
 - **Cascade.** Both FKs are `RESTRICT`; calendars/exceptions are never hard-deleted.
   Soft-deleting a calendar stamps it and its exceptions with one `delete_batch_id` so
   restore brings the set back — the same service-owned mechanism as the hierarchy. A
-  **delete-in-use guard** (`CalendarsService`) counts active plans referencing the
-  calendar and returns **409 `CALENDAR_IN_USE`** before any delete, so a calendar
-  referenced by an active plan can never be removed (soft delete never trips the DB FK, so
-  the service check is the real guard; `RESTRICT` is defence in depth). The reserved
-  `activities.calendar_id`
-  column stays reserved — **per-activity calendars are deferred** (they break the engine's
-  continuous-offset arithmetic; ADR-0024).
+  **delete-in-use guard** (`CalendarsService`) counts active plans **and (M5, ADR-0037)
+  active activities** referencing the calendar and returns **409 `CALENDAR_IN_USE`**
+  before any delete, so a calendar referenced by an active plan or activity can never be
+  removed (soft delete never trips the DB FK, so the service check is the real guard;
+  `RESTRICT` is defence in depth). The guard counts only **active** referencers
+  (`WHERE deleted_at IS NULL`): a soft-deleted plan or activity must not block a calendar
+  delete — an asymmetry the DB-level `RESTRICT` cannot express (it fires on **any**
+  referencing row regardless of soft-delete), which is exactly why the service guard,
+  not the FK, is the enforcement point. `activities.calendar_id` is now an **active**,
+  client-settable FK (**M5, ADR-0037** activated the reserved ADR-0024 column) —
+  `RESTRICT`, backed by the partial `idx_activities_calendar_id`, the activity twin of
+  `idx_plans_calendar_id`.
 
 ### Baseline & BaselineActivity: the plan-of-record snapshot
 

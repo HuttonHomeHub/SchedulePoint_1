@@ -230,6 +230,13 @@ export interface ActivitySummary {
   durationDays: number;
   constraintType: ConstraintType | null;
   constraintDate: string | null;
+  /**
+   * The activity's own working-time calendar (ADR-0037, M5), or `null` to **inherit** the plan
+   * default (resolution: activity → plan → all-days-work). When set, the activity's duration is
+   * measured, its float counted, and its dates derived on this calendar — so e.g. a 24/7 crew
+   * activity inside a 5-day plan works across weekends.
+   */
+  calendarId: string | null;
   /** Graphical y-lane for the TSLD canvas. */
   laneIndex: number;
   status: ActivityStatus;

@@ -7,12 +7,15 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 import { IsCalendarDate } from '../../../common/validation/calendar-date';
+import { UUID_REGEX } from '../../../common/validation/uuid';
 
 import { IsConstraintPaired, IsZeroWhenMilestone } from './activity-validators';
 
@@ -83,6 +86,20 @@ export class CreateActivityDto {
   @IsCalendarDate()
   @IsConstraintPaired()
   constraintDate?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      "The activity's own working-time calendar (ADR-0037, M5) — must be an active calendar in " +
+      'the same organisation. Omit or null to inherit the plan default. Validated service-side.',
+  })
+  @IsOptional()
+  // Allow an explicit null (inherit); validate the shape only for a value. @Matches(UUID_REGEX),
+  // not @IsUUID, because our ids are UUID v7 which some class-validator versions reject.
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
+  calendarId?: string | null;
 
   @ApiPropertyOptional({ minimum: 0, default: 0, description: 'Graphical y-lane for the TSLD.' })
   @IsOptional()

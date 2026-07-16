@@ -28,6 +28,14 @@ export const ACTIVITY_TYPES = Object.keys(ACTIVITY_TYPE_LABELS) as [
   ...ActivityType[],
 ];
 
+/**
+ * The activity-calendar picker's "inherit" option label (ADR-0037): the empty `Select` value maps
+ * to a null `calendarId`, i.e. the activity schedules on the plan's default calendar. Used by the
+ * form's calendar Select (the table shows a bare em dash for the inherit case, matching its other
+ * "nothing to show" columns).
+ */
+export const INHERIT_CALENDAR_LABEL = 'Plan default (inherit)';
+
 /** Types with no duration (a point in time) — duration is always 0, matching the API. */
 export const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
 
@@ -75,6 +83,10 @@ export const activityFormSchema = z
       .max(100000, 'Duration is too large.'),
     constraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
     constraintDate: z.string().optional(),
+    // The activity's own working-time calendar (ADR-0037): `''` = inherit the plan default.
+    // A raw `<select>` value; the choices are the org's calendar ids (+ inherit), so the id is
+    // never free-typed — validation of the UUID/in-org is the API's job (mirrors `constraintDate`).
+    calendarId: z.string().optional(),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
   })
   // Only the type→date direction needs a rule: the dialog hides the date field

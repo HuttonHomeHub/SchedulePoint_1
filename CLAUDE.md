@@ -342,6 +342,12 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   shift patterns + time-window exceptions + window-only base weeks); durations/lag in minutes,
   elapsed durations, per-relationship lag-calendar seam, O(log) walker + iteration cap/horizon
   (N11/N16), and a day→minute storage migration.
+- **ADR-0037** _(Accepted)_ — Per-activity calendars & the engine's absolute-instant axis: the **gating**
+  M5 decision moving the engine's internal frame from plan-calendar **offsets** to **absolute
+  working-instants** (amends ADR-0023/0036 §1) so each activity schedules on its own resolved calendar
+  port (activates the reserved `activities.calendar_id`, supersedes ADR-0024 §4's deferral); total float
+  measured in the **activity's own** calendar (P6/ADR-0035); PRED/SUCC lag resolves to the endpoint
+  calendar (completing M3); all-inherit path stays byte-identical (golden-suite parity gate).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

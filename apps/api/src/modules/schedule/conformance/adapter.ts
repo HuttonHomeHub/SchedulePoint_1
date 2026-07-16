@@ -95,6 +95,20 @@ export interface AdaptOptions {
    * today; a Predecessor/Successor calendar needs per-activity calendars (M5).
    */
   honorLagCalendars?: boolean;
+  /**
+   * Attach each activity's own fixture calendar as its engine calendar port (ADR-0037, M5).
+   * Default **false** — the S01 baseline schedules the whole network on the plan default
+   * calendar (non-default assignments noted), so a scenario that flips this on differs. When
+   * **true**, each activity schedules on its own resolved calendar.
+   */
+  honorActivityCalendars?: boolean;
+  /**
+   * The global "calendar for scheduling relationship lag" setting (fixture S05). `SUCCESSOR`/
+   * `PREDECESSOR` resolve a relationship's lag on that endpoint activity's calendar (requires
+   * per-activity calendars); `PLAN` (default) measures it on the plan calendar. An explicit
+   * per-edge `24H` always wins over this setting.
+   */
+  relationshipLagCalendar?: 'PLAN' | 'PREDECESSOR' | 'SUCCESSOR';
 }
 
 const MINUTES_PER_HOUR = 60;
@@ -119,20 +133,45 @@ function normaliseLagCalendar(value: string): 'TWENTY_FOUR_HOUR' | null {
 export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {}): AdaptedNetwork {
   const dataDate = opts.dataDate ?? toCalendarDay(fixture.project.planned_start);
   const honorLagCalendars = opts.honorLagCalendars ?? true;
+  const honorActivityCalendars = opts.honorActivityCalendars ?? false;
+  const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
 
   const defaultCalendarId = fixture.project.default_calendar;
-  const defaultCalendar = fixture.calendars.find((c) => c.id === defaultCalendarId);
-  const calendar = defaultCalendar
-    ? fixtureCalendarToWorkingTime(defaultCalendar)
-    : allMinutesWorkCalendar;
+  // Build every fixture calendar once (ADR-0037 M5: O(distinct calendars)); the plan default is
+  // one of them. An activity/edge that inherits the default gets an undefined port (fast path).
+  const portById = new Map<string, WorkingTimeCalendar>();
+  for (const cal of fixture.calendars) portById.set(cal.id, fixtureCalendarToWorkingTime(cal));
+  const calendar = portById.get(defaultCalendarId) ?? allMinutesWorkCalendar;
+  // Window-only calendars (empty base week — the turnaround/crane-hire calendars) work only during
+  // a dated window; an activity whose start is pushed past that window has no reachable finish
+  // (the ADR-0036 §5 N16 case). Honouring these per-activity needs in-window placement, an
+  // M5-epic edge case, so they stay on the plan calendar here (noted, never silently mis-scheduled).
+  const windowOnly = new Set(
+    fixture.calendars
+      .filter((c) => !WEEKDAY_KEYS.some((k) => c.workweek[k].length > 0))
+      .map((c) => c.id),
+  );
+  /** The activity's own calendar port, or undefined when it inherits the plan default / is window-only. */
+  const activityPort = (calId: string): WorkingTimeCalendar | undefined =>
+    honorActivityCalendars && calId !== defaultCalendarId && !windowOnly.has(calId)
+      ? portById.get(calId)
+      : undefined;
 
   const supportedIds = new Set<string>();
+  const calIdByActivity = new Map<string, string>();
   const activities: EngineActivity[] = [];
   for (const activity of fixture.activities) {
-    const adapted = adaptActivity(activity, defaultCalendarId, notes);
+    const adapted = adaptActivity(
+      activity,
+      defaultCalendarId,
+      honorActivityCalendars,
+      activityPort,
+      notes,
+    );
     if (adapted) {
       supportedIds.add(activity.id);
+      calIdByActivity.set(activity.id, activity.calendar);
       activities.push(adapted);
     }
   }
@@ -140,7 +179,10 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const edges: EngineEdge[] = [];
   let excludedRelationships = 0;
   for (const rel of fixture.relationships) {
-    const adapted = adaptRelationship(rel, supportedIds, honorLagCalendars, notes);
+    const adapted = adaptRelationship(rel, supportedIds, honorLagCalendars, notes, {
+      relationshipLagCalendar,
+      portFor: (id) => activityPort(calIdByActivity.get(id) ?? defaultCalendarId),
+    });
     if (adapted) edges.push(adapted);
     else excludedRelationships += 1;
   }
@@ -153,11 +195,13 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     supportedRelationships: edges.length,
     excludedRelationships,
     approximations: [
-      `every activity is scheduled on the project default calendar ${defaultCalendarId}; per-activity shift/24h/window calendars are not applied (ADR-0024/ADR-0036, M5)`,
+      honorActivityCalendars
+        ? `each activity schedules on its own resolved calendar (ADR-0037, M5); relationship lag resolves on the ${relationshipLagCalendar.toLowerCase()} calendar`
+        : `every activity is scheduled on the project default calendar ${defaultCalendarId}; per-activity shift/24h/window calendars are not applied (ADR-0037, M5 baseline)`,
       'progress, actuals, suspend/resume and the data-date floor are ignored (ADR-0035 §1–§6, M2)',
       honorLagCalendars
-        ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag); Predecessor/Successor lag calendars coincide with the plan calendar until per-activity calendars (ADR-0036 §6, M5)'
-        : 'per-relationship lag calendars are ignored; lag is measured on the plan calendar (ADR-0036 §6, M3)',
+        ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag)'
+        : 'per-relationship lag calendars are ignored; lag is measured on the plan calendar (ADR-0036 §6, M3 baseline)',
       'the data date and constraint dates are taken at day granularity (the shift calendar restores intraday working time within the day)',
     ],
     notes,
@@ -204,6 +248,8 @@ function fixtureCalendarToWorkingTime(cal: FixtureCalendar): WorkingTimeCalendar
 function adaptActivity(
   activity: FixtureActivity,
   defaultCalendarId: string,
+  honorActivityCalendars: boolean,
+  activityPort: (calId: string) => WorkingTimeCalendar | undefined,
   notes: AdaptationNote[],
 ): EngineActivity | null {
   const typeResult = mapActivityType(activity.activity_type);
@@ -236,14 +282,19 @@ function adaptActivity(
     }
   }
 
-  // Per-activity calendars are M5: an activity assigned to a non-default calendar is
-  // still scheduled on the plan (default) calendar — noted, never silently applied.
-  if (activity.calendar !== defaultCalendarId) {
+  // Per-activity calendars (ADR-0037, M5): when honoured, attach the activity's own resolved
+  // port so its duration/float/dates land on its calendar; otherwise (the baseline) it schedules
+  // on the plan default and the non-default assignment is noted, never silently applied.
+  const ownPort =
+    activity.calendar !== defaultCalendarId ? activityPort(activity.calendar) : undefined;
+  if (activity.calendar !== defaultCalendarId && !ownPort) {
     notes.push({
       entity: 'activity',
       id: activity.id,
       kind: 'activity-calendar-substituted',
-      reason: `assigned calendar ${activity.calendar} scheduled on the plan default ${defaultCalendarId} (per-activity calendars are M5)`,
+      reason: honorActivityCalendars
+        ? `assigned window-only calendar ${activity.calendar} scheduled on the plan default ${defaultCalendarId} (in-window placement is an M5-epic edge case)`
+        : `assigned calendar ${activity.calendar} scheduled on the plan default ${defaultCalendarId} (per-activity calendars off — baseline)`,
     });
   }
 
@@ -260,6 +311,7 @@ function adaptActivity(
     id: activity.id,
     durationMinutes,
     type,
+    ...(ownPort ? { calendar: ownPort } : {}),
   };
 
   if (activity.secondary_constraint) {
@@ -303,6 +355,10 @@ function adaptRelationship(
   supportedIds: ReadonlySet<string>,
   honorLagCalendars: boolean,
   notes: AdaptationNote[],
+  lag: {
+    relationshipLagCalendar: 'PLAN' | 'PREDECESSOR' | 'SUCCESSOR';
+    portFor: (activityId: string) => WorkingTimeCalendar | undefined;
+  },
 ): EngineEdge | null {
   if (!supportedIds.has(rel.predecessor) || !supportedIds.has(rel.successor)) {
     notes.push({
@@ -336,10 +392,11 @@ function adaptRelationship(
   };
 
   if (rel.lag_calendar) {
+    // An EXPLICIT per-edge lag calendar (24H) always wins over the global setting (ADR-0036 §6).
     const source = normaliseLagCalendar(rel.lag_calendar);
     if (honorLagCalendars && source === 'TWENTY_FOUR_HOUR') {
-      // Measure this lag as ELAPSED time on the 24/7 calendar (ADR-0036 §6, M3) — the
-      // concrete-cure A4430→A4440 FS + 168h case: 7 elapsed days, not 7 working days.
+      // Measure this lag as ELAPSED time on the 24/7 calendar (M3) — the concrete-cure
+      // A4430→A4440 FS + 168h case: 7 elapsed days, not 7 working days.
       edge.lagCalendar = allMinutesWorkCalendar;
     } else {
       notes.push({
@@ -351,6 +408,14 @@ function adaptRelationship(
           : `lag calendar "${rel.lag_calendar}" ignored; lag measured on the plan calendar (baseline)`,
       });
     }
+  } else if (lag.relationshipLagCalendar === 'PREDECESSOR') {
+    // Global setting (fixture S05): resolve the lag on the endpoint activity's calendar (ADR-0037,
+    // M5). Undefined = that endpoint inherits the plan calendar (the byte-identical fast path).
+    const port = lag.portFor(rel.predecessor);
+    if (port) edge.lagCalendar = port;
+  } else if (lag.relationshipLagCalendar === 'SUCCESSOR') {
+    const port = lag.portFor(rel.successor);
+    if (port) edge.lagCalendar = port;
   }
 
   return edge;

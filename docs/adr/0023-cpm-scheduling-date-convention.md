@@ -6,6 +6,10 @@
 
 > **Amended by [ADR-0036](0036-hour-granular-calendars-and-durations.md) (M1):** the continuous-internal
 > unit is now the working-**minute** (was the working-day); the inclusive-display convention is unchanged.
+>
+> **Amended by [ADR-0037](0037-per-activity-calendars-and-instant-axis.md) (M5):** the engine's internal
+> reference frame moves from a plan-calendar **offset** to an **absolute working-instant** (so each
+> activity can be measured on its own calendar); the inclusive-display convention is unchanged.
 
 ## Context
 
