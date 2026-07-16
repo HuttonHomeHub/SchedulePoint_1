@@ -4,6 +4,7 @@ import {
   PlanStatus,
   ProgressRecalcMode,
   SchedulingMode,
+  TotalFloatMode,
 } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -97,6 +98,14 @@ export class UpdatePlanDto {
   @IsInt()
   @Min(0)
   criticalFloatThreshold?: number;
+
+  @ApiPropertyOptional({
+    enum: TotalFloatMode,
+    description: 'Total-float measure (M6, ADR-0035 §18): FINISH (default), START, or SMALLEST.',
+  })
+  @IsOptional()
+  @IsEnum(TotalFloatMode)
+  totalFloatMode?: TotalFloatMode;
 
   @ApiPropertyOptional({
     format: 'date',

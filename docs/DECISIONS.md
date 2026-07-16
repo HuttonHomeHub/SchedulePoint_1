@@ -765,3 +765,13 @@ acceptance-status ledger.
   instant. Delivered first (F1) behind the byte-parity golden gate.
 - **Topology reporting (§13/§14) in scope.** F8 (duplicate-edge reject with the pair named; cycle
   reports naming the exact members) is included in M4 as the last, droppable slice.
+- **Total-float mode coincidence (§18, M6-F3).** The plan-level `totalFloatMode`
+  (`START`/`FINISH`/`SMALLEST`, default `FINISH`) is implemented, but SchedulePoint measures total
+  float on the activity's **own** calendar for **both** the start and finish sides (ADR-0037 §4), so
+  the three modes **coincide for every unprogressed activity** — advancing start and finish by the
+  duration on one calendar preserves the working-time gap. Consequently the conformance fixture's
+  mixed-calendar S13 divergence (`A4340/A7710/A11100/A5500`) is **deliberately not reproduced**
+  (verified 0/4). The modes diverge only for a **progressed** activity (frozen actual start ⇒ zero
+  start-float). P6's start-vs-finish split measures the two sides on different _neighbour_ calendars —
+  a multi-calendar-measurement artefact we don't adopt (north-star, not parity). Recorded as the
+  ADR-0035 §18 semantic; no standalone ADR (a consequence of ADR-0037's own-calendar-float decision).

@@ -6,6 +6,7 @@ import {
   type PlanStatus,
   type ProgressRecalcMode,
   type SchedulingMode,
+  type TotalFloatMode,
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -25,6 +26,8 @@ export interface PlanPatch {
   criticalPathDefinition?: CriticalPathDefinition;
   /** Total-float threshold in whole working days (M6, ADR-0035 §17). */
   criticalFloatThreshold?: number;
+  /** Total-float measure (M6, ADR-0035 §18): FINISH / START / SMALLEST. */
+  totalFloatMode?: TotalFloatMode;
   /** The mandatory CPM data date (ADR-0033 M1): may be moved, never cleared — so never null. */
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */

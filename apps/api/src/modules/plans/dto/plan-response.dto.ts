@@ -4,6 +4,7 @@ import {
   PlanStatus,
   ProgressRecalcMode,
   SchedulingMode,
+  TotalFloatMode,
   type Plan,
 } from '@prisma/client';
 import type { PlanSummary } from '@repo/types';
@@ -60,6 +61,12 @@ export class PlanResponseDto implements PlanSummary {
   criticalFloatThreshold!: number;
 
   @ApiProperty({
+    enum: TotalFloatMode,
+    description: 'Total-float measure (M6, ADR-0035 §18): FINISH (default), START, or SMALLEST.',
+  })
+  totalFloatMode!: TotalFloatMode;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -97,6 +104,7 @@ export class PlanResponseDto implements PlanSummary {
       useExpectedFinishDates: entity.useExpectedFinishDates,
       criticalPathDefinition: entity.criticalPathDefinition,
       criticalFloatThreshold: entity.criticalFloatThreshold,
+      totalFloatMode: entity.totalFloatMode,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

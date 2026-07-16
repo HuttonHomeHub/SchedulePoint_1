@@ -140,6 +140,7 @@ export class ScheduleService {
             useExpectedFinishDates: plan.useExpectedFinishDates,
             criticalDefinition: plan.criticalPathDefinition,
             criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
+            totalFloatMode: plan.totalFloatMode,
           },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);

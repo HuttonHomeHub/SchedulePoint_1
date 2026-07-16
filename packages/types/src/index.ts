@@ -145,6 +145,14 @@ export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUA
  */
 export type CriticalPathDefinition = 'TOTAL_FLOAT' | 'LONGEST_PATH';
 
+/**
+ * How the CPM engine measures total float (M6, ADR-0035 §18). `FINISH` (the P6 default) is late−early
+ * finish; `START` is late−early start; `SMALLEST` is the lesser. They diverge only when an activity
+ * runs on a different calendar from its neighbours or is progressed. Mirrors the API's Prisma
+ * `TotalFloatMode` enum (kept in lock-step).
+ */
+export type TotalFloatMode = 'START' | 'FINISH' | 'SMALLEST';
+
 /** A client (top level of the Org → Client → Project → Plan hierarchy). */
 export interface ClientSummary {
   id: string;
@@ -200,6 +208,11 @@ export interface PlanSummary {
    * critical under the `TOTAL_FLOAT` definition. Default 0 (P6/behaviour-preserving).
    */
   criticalFloatThreshold: number;
+  /**
+   * How total float is measured (M6, ADR-0035 §18): `FINISH` (default), `START`, or `SMALLEST`.
+   * Behaviour-preserving default `FINISH`.
+   */
+  totalFloatMode: TotalFloatMode;
   /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1

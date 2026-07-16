@@ -20,6 +20,7 @@ const PLAN: PlanSummary = {
   useExpectedFinishDates: false,
   criticalPathDefinition: 'TOTAL_FLOAT',
   criticalFloatThreshold: 0,
+  totalFloatMode: 'FINISH',
   plannedStart: '2026-01-01',
   calendarId: 'cal-standard',
   version: 4,

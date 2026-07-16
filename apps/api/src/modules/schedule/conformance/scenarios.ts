@@ -93,8 +93,16 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: '',
   },
   S13_TOTAL_FLOAT_START: {
+    // The total-float MODE option is implemented (M6-F3, ADR-0035 §18) and changes a **progressed**
+    // activity's float. But S13's specific divergence does NOT reproduce here — and by design: it
+    // measures total float on the activity's OWN calendar (ADR-0037 §4, P6-total-float), where
+    // advancing both the start and finish by the duration preserves the working-time gap, so start-
+    // and finish-float coincide for every UNPROGRESSED activity (verified: 0/4 of the fixture's named
+    // activities diverge). P6's start-vs-finish split comes from measuring the two sides on different
+    // NEIGHBOUR calendars — a multi-calendar-measurement artefact we deliberately don't reproduce.
     runnable: false,
-    reason: 'needs the total-float-as-start/smallest option (ADR-0035 §18, M6)',
+    reason:
+      "own-calendar float (ADR-0037 §4) makes start-float == finish-float for unprogressed work, so S13's mixed-calendar divergence doesn't reproduce (documented semantic difference, ADR-0035 §18, M6-F3)",
   },
 };
 

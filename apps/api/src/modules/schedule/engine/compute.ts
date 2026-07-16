@@ -27,6 +27,7 @@ import type {
   EngineEdgeResult,
   EngineResult,
   EngineSummary,
+  TotalFloatMode,
 } from './types';
 import {
   absMinutesToInstant,
@@ -70,6 +71,12 @@ export interface ComputeOptions {
    * widens the critical band (e.g. treat ≤ 1 day of float as critical). Ignored under `LONGEST_PATH`.
    */
   criticalFloatThresholdMinutes?: number;
+  /**
+   * How total float is measured (M6-F3, ADR-0035 §18): `FINISH` (late−early finish, the default),
+   * `START` (late−early start), or `SMALLEST` (the lesser). Off/absent ⇒ `FINISH`, byte-identical to
+   * the pre-M6 path. Diverges from `FINISH` only on mixed calendars / progressed activities.
+   */
+  totalFloatMode?: TotalFloatMode;
 }
 
 /**
@@ -122,6 +129,7 @@ export function computeSchedule(
   const useExpectedFinishDates = options.useExpectedFinishDates ?? false;
   const criticalDefinition: CriticalPathDefinition = options.criticalDefinition ?? 'TOTAL_FLOAT';
   const criticalThreshold = options.criticalFloatThresholdMinutes ?? 0;
+  const totalFloatMode: TotalFloatMode = options.totalFloatMode ?? 'FINISH';
   // How many in-progress activities had their remaining work resized to an expected finish (§9).
   let expectedFinishAppliedCount = 0;
   const graph = buildGraph(activities, edges);
@@ -425,15 +433,26 @@ export function computeSchedule(
     const lsInst = lateStart.get(id)!;
     const lfInst = lateFinish.get(id)!;
 
-    // Float is the working time from early to late FINISH on the activity's OWN calendar (P6).
-    // Measured on the finish side so a progressed activity's float reflects its remaining work
-    // (its early→late START span differs from a full duration once it is under way); for an
-    // unprogressed activity the start-side and finish-side spans are equal, so this is byte-identical
-    // to the pre-M2 `lateStart − earlyStart` (the golden-suite parity gate).
-    const totalFloat = cal.workingTimeBetween(
+    // Float is the working time between the early and late positions on the activity's OWN calendar
+    // (P6). Both the finish-side (LF−EF) and start-side (LS−ES) spans are computed; the plan's
+    // `totalFloatMode` (M6-F3, ADR-0035 §18) selects which is exposed as `totalFloat`. `FINISH` (the
+    // default) matches the pre-M6 value — and, for a progressed activity, reflects the remaining work
+    // (its start-side span collapses on the frozen actual start). On the all-inherit, unprogressed
+    // path the two spans are equal, so every mode is byte-identical to the pre-M2 `lateStart − earlyStart`.
+    const finishFloat = cal.workingTimeBetween(
       absMinutesToInstant(efInst),
       absMinutesToInstant(lfInst),
     );
+    const startFloat = cal.workingTimeBetween(
+      absMinutesToInstant(esInst),
+      absMinutesToInstant(lsInst),
+    );
+    const totalFloat =
+      totalFloatMode === 'START'
+        ? startFloat
+        : totalFloatMode === 'SMALLEST'
+          ? Math.min(startFloat, finishFloat)
+          : finishFloat;
     // Criticality by the plan's definition (M6-F2): the driving chain (LONGEST_PATH) or total float ≤
     // the threshold (TOTAL_FLOAT, default; threshold 0 ⇒ byte-identical to the pre-M6 `totalFloat <= 0`).
     const isCritical =

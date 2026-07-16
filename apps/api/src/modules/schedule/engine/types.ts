@@ -13,6 +13,15 @@ import type { WorkingTimeCalendar } from './working-time-calendar';
 export type CriticalPathDefinition = 'TOTAL_FLOAT' | 'LONGEST_PATH';
 
 /**
+ * How total float is measured (M6-F3, ADR-0035 §18). `FINISH` (the P6 default) is late-finish minus
+ * early-finish; `START` is late-start minus early-start; `SMALLEST` is the lesser of the two. On the
+ * all-inherit, unprogressed path the start- and finish-side spans are equal, so the three coincide
+ * (the byte-identical default) — they diverge only when an activity runs on a **different calendar**
+ * from its logic neighbours (ADR-0037) or is progressed. Measured on the activity's own calendar.
+ */
+export type TotalFloatMode = 'START' | 'FINISH' | 'SMALLEST';
+
+/**
  * The pure CPM engine's input and output structs.
  *
  * The engine is a **dependency-free domain library**: it knows nothing about

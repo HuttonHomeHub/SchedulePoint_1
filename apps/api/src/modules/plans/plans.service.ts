@@ -149,6 +149,7 @@ export class PlansService {
     if (dto.criticalFloatThreshold !== undefined) {
       patch.criticalFloatThreshold = dto.criticalFloatThreshold;
     }
+    if (dto.totalFloatMode !== undefined) patch.totalFloatMode = dto.totalFloatMode;
     // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
     // defined value is always a valid calendar date.
     if (dto.plannedStart !== undefined) {
