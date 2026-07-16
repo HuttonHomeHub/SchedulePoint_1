@@ -74,6 +74,7 @@ export class ScheduleService {
     let summary: EngineSummary;
     let lagCalendarOverrideCount = 0;
     let activityCalendarCount = 0;
+    let progressedActivityCount = 0;
     try {
       summary = await this.prisma.$transaction(async (tx) => {
         // Serialise with dependency creates and other recalcs on this plan, then
@@ -112,6 +113,12 @@ export class ScheduleService {
           calId == null || calId === plan.calendarId ? undefined : portByCalId.get(calId);
         const calIdByActivity = new Map(activityRows.map((r) => [r.id, r.calendarId] as const));
 
+        // Progressed activities this recalc consumes (M2, ADR-0035): the signal that progress
+        // actually shaped the dates (0 = an unprogressed plan, the byte-identical path).
+        progressedActivityCount = activityRows.filter(
+          (r) => r.actualStart != null || r.actualFinish != null,
+        ).length;
+
         const output = computeSchedule(
           activityRows.map((r) => toEngineActivity(r, portFor(r.calendarId))),
           edgeRows.map((r) =>
@@ -121,7 +128,8 @@ export class ScheduleService {
               portFor(calIdByActivity.get(r.successorId) ?? null),
             ),
           ),
-          { dataDate, calendar },
+          // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC.
+          { dataDate, calendar, progressMode: plan.progressRecalcMode },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
@@ -158,6 +166,9 @@ export class ScheduleService {
         // How many DISTINCT per-activity calendars were built this recalc (ADR-0037, M5) — the
         // signal that per-activity calendars actually shaped the dates (0 on the all-inherit path).
         activityCalendarCount,
+        // Progress (M2, ADR-0035): the recalc mode and how many activities carried actuals.
+        progressRecalcMode: plan.progressRecalcMode,
+        progressedActivityCount,
         durationMs: Date.now() - startedAt,
       },
       'schedule recalculated',
@@ -232,14 +243,28 @@ export class ScheduleService {
 }
 
 /**
+ * The engine's remaining working minutes for an **in-progress** activity (M2, ADR-0035 §1): the
+ * explicit `remainingDurationMinutes` when set, else derived from `durationMinutes × (1 −
+ * percentComplete)` (rounded, floored at 0). Undefined for a not-started or complete activity — the
+ * engine ignores it there (a complete activity uses its actual finish; not-started, its full duration).
+ */
+function resolveRemainingMinutes(row: ScheduleActivityRow): number | undefined {
+  if (row.actualStart == null || row.actualFinish != null) return undefined;
+  if (row.remainingDurationMinutes != null) return row.remainingDurationMinutes;
+  return Math.max(0, Math.round(row.durationMinutes * (1 - row.percentComplete / 100)));
+}
+
+/**
  * Project a stored activity row onto the engine's input struct (durations are stored in minutes).
  * `calendar` is the activity's resolved own-calendar port (ADR-0037, M5) — undefined when it
- * inherits the plan calendar, keeping the byte-identical fast path.
+ * inherits the plan calendar, keeping the byte-identical fast path. Progress actuals (M2) cross as
+ * `YYYY-MM-DD`; `remainingMinutes` is the service-resolved remaining for an in-progress activity.
  */
 function toEngineActivity(
   row: ScheduleActivityRow,
   calendar?: WorkingTimeCalendar,
 ): EngineActivity {
+  const remainingMinutes = resolveRemainingMinutes(row);
   return {
     id: row.id,
     durationMinutes: row.durationMinutes,
@@ -247,6 +272,9 @@ function toEngineActivity(
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
+    actualStart: row.actualStart ? formatCalendarDate(row.actualStart) : null,
+    actualFinish: row.actualFinish ? formatCalendarDate(row.actualFinish) : null,
+    ...(remainingMinutes !== undefined ? { remainingMinutes } : {}),
     ...(calendar ? { calendar } : {}),
   };
 }
