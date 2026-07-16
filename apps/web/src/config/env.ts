@@ -206,3 +206,17 @@ export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PRO
 export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ADVANCED_CONSTRAINTS,
 );
+
+/**
+ * Float & critical plan settings (ADR-0035 §17/§18/§20, M6). **OFF by default** — a new surface whose
+ * picker ships dark on `main` and is turned on per-environment during rollout, then flipped default-on
+ * once its quality gates clear. When on, the plan settings gain three controls: a **critical-path
+ * definition** (Total float / Longest path), a **total-float measure** (Finish / Start / Smallest), and
+ * a **make-open-ends-critical** toggle. Everything behind it — the settable API fields, the engine's
+ * float & critical computation, and the conformance proof (S07/S08/S11/S13) — is already live; the flag
+ * only governs whether a planner can *edit and see* the three options in the web UI. Set
+ * `VITE_FLOAT_CRITICAL_SETTINGS=true` to enable.
+ */
+export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_FLOAT_CRITICAL_SETTINGS,
+);

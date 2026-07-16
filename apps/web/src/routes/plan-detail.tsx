@@ -13,6 +13,7 @@ import { Spinner } from '@/components/ui/spinner';
 import {
   ADVANCED_CONSTRAINTS_ENABLED,
   CANVAS_WORKSPACE_ENABLED,
+  FLOAT_CRITICAL_SETTINGS_ENABLED,
   PROGRESS_INGESTION_ENABLED,
 } from '@/config/env';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
@@ -23,6 +24,7 @@ import {
   PlanCalendarPicker,
   PlanExpectedFinishToggle,
   PlanRecalcModePicker,
+  PlanScheduleSettings,
 } from '@/features/plans';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
@@ -152,7 +154,7 @@ function LegacyPlanLayout({
       </div>
       <p className="text-muted-foreground mt-1 text-sm">
         The computed critical path and early/late dates. Recalculate after changing activities,
-        durations, logic or the calendar to bring them up to date.
+        durations, logic, the calendar or any scheduling setting below to bring them up to date.
       </p>
       {/* The single "who holds the pen" surface — governs all schedule-model editing below
           (ADR-0028). Renders nothing when the pen layer is flag-off. */}
@@ -179,6 +181,11 @@ function LegacyPlanLayout({
       {ADVANCED_CONSTRAINTS_ENABLED ? (
         <div className="mt-3">
           <PlanExpectedFinishToggle orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+        </div>
+      ) : null}
+      {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
+        <div className="mt-3">
+          <PlanScheduleSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
         </div>
       ) : null}
       <div className="mt-3">

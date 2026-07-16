@@ -19,7 +19,7 @@ stays **Proposed** overall until every clause is built. Current state:
 | §7–§11 (constraints), §12 (N15)    | M4               | **Accepted** |
 | §13–§14 (duplicate/cycle report)   | M4 (F8)          | **Accepted** |
 | §22 (zero-duration task)           | M4               | **Accepted** |
-| §17–§20 (float & critical)         | M6               | Proposed     |
+| §17–§20 (float & critical)         | M6               | **Accepted** |
 | §21, §23–§24 (LOE, resource, WBS)  | M5-epic          | Proposed     |
 | §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
 

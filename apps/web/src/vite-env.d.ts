@@ -23,4 +23,6 @@ interface ImportMetaEnv {
   readonly VITE_PROGRESS_INGESTION?: string;
   /** Advanced schedule constraints — secondary/ALAP/expected-finish + violation badge (ADR-0035, M4). On by default; "false"/"0" disables it. */
   readonly VITE_ADVANCED_CONSTRAINTS?: string;
+  /** Float & critical plan settings — critical definition/total-float measure/open-ends toggle (ADR-0035, M6). "true"/"1" enables it; off by default. */
+  readonly VITE_FLOAT_CRITICAL_SETTINGS?: string;
 }
