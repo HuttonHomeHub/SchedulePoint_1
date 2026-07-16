@@ -1,10 +1,21 @@
 import type { ConformanceFixture } from '@repo/engine-conformance';
 
 import { computeSchedule } from '../engine';
-import type { EngineOutput } from '../engine';
+import type { EngineOutput, ProgressMode } from '../engine';
 
 import { adaptFixture } from './adapter';
 import { toCalendarDay } from './type-map';
+
+/**
+ * The progressed scenarios (M2, ADR-0035 §1) and the recalc mode each flips. Presence in this map
+ * is what makes a scenario feed the fixture's actuals at the data date; the others run the clean
+ * unprogressed network at the planned start.
+ */
+const PROGRESS_MODE_BY_SCENARIO: Record<string, ProgressMode> = {
+  S02_PROGRESSED_RETAINED_LOGIC: 'RETAINED_LOGIC',
+  S03_PROGRESS_OVERRIDE: 'PROGRESS_OVERRIDE',
+  S04_ACTUAL_DATES: 'ACTUAL_DATES',
+};
 
 /**
  * Scenario representability for the **differential tier** (ADR-0034 §2). Each
@@ -29,18 +40,12 @@ export interface ScenarioSupport {
 /** Every fixture scenario id → whether today's engine can execute it, and why not. */
 export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
   S01_BASELINE_UNPROGRESSED: { runnable: true, reason: '' },
-  S02_PROGRESSED_RETAINED_LOGIC: {
-    runnable: false,
-    reason: 'needs progress ingestion + data-date floor + retained logic (ADR-0035 §1–§2, M2)',
-  },
-  S03_PROGRESS_OVERRIDE: {
-    runnable: false,
-    reason: 'needs the progress-override recalc mode (ADR-0035 §1, M2)',
-  },
-  S04_ACTUAL_DATES: {
-    runnable: false,
-    reason: 'needs the actual-dates recalc mode (ADR-0035 §1, M2)',
-  },
+  // M2 (ADR-0035 §1–§2) landed progress ingestion + the data-date floor + the three recalc modes,
+  // so the progressed scenarios run as differentials: each feeds the fixture's actuals at the data
+  // date (2026-03-02) and flips one recalc mode, moving dates vs the unprogressed S01 baseline.
+  S02_PROGRESSED_RETAINED_LOGIC: { runnable: true, reason: '' },
+  S03_PROGRESS_OVERRIDE: { runnable: true, reason: '' },
+  S04_ACTUAL_DATES: { runnable: true, reason: '' },
   S05_LAG_CALENDAR_SUCCESSOR: {
     // M5 (ADR-0037) lands per-activity calendars, so a relationship's lag can resolve on the
     // SUCCESSOR's calendar (distinct from the predecessor's / the plan's) — the differential is
@@ -98,13 +103,18 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
   if (!support) return { ran: false, scenarioId, todo: `unknown scenario "${scenarioId}"` };
   if (!support.runnable) return { ran: false, scenarioId, todo: support.reason };
 
-  // Anchor at planned start (S01's override sets data_date = planned_start and strips all
-  // actuals — which the adapter does by construction, since the engine ignores progress).
-  const dataDate = toCalendarDay(fixture.project.planned_start);
+  // The progressed scenarios (M2) run AT THE FIXTURE'S DATA DATE with the actuals fed in; the rest
+  // anchor at the planned start on the clean unprogressed network (S01's convention).
+  const progressMode = PROGRESS_MODE_BY_SCENARIO[scenarioId];
+  const honorProgress = progressMode !== undefined;
+  const dataDate = toCalendarDay(
+    honorProgress ? fixture.project.data_date : fixture.project.planned_start,
+  );
   // Each differential flips exactly one option vs the S01 baseline (all-plan-calendar), so
   // `resultsDiffer(Sx, S01)` proves that option is wired (ADR-0034 §2):
   //   S06 → the 24-Hour per-relationship lag calendar (elapsed lag).
   //   S05 → per-ACTIVITY calendars + relationship lag resolved on the SUCCESSOR's calendar (M5).
+  //   S02/S03/S04 → progress ingestion at the data date + the retained/override/actual-dates mode (M2).
   const honorLagCalendars = scenarioId === 'S06_LAG_CALENDAR_24H';
   const honorActivityCalendars = scenarioId === 'S05_LAG_CALENDAR_SUCCESSOR';
   const relationshipLagCalendar =
@@ -113,9 +123,17 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
     dataDate,
     honorLagCalendars,
     honorActivityCalendars,
+    honorProgress,
     relationshipLagCalendar,
   });
-  return { ran: true, scenarioId, output: computeSchedule(activities, edges, options) };
+  return {
+    ran: true,
+    scenarioId,
+    output: computeSchedule(activities, edges, {
+      ...options,
+      ...(progressMode ? { progressMode } : {}),
+    }),
+  };
 }
 
 /**

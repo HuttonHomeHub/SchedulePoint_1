@@ -28,26 +28,29 @@ a **living document** — each capability milestone updates its rows in the PR t
 Engine reality verified against `apps/api/src/modules/schedule/engine/` (see
 [feature-spec.md §3](feature-spec.md)). **Updated after M1 (ADR-0036) landed:** the engine now works in
 **integer working-minute** offsets over **intraday shift calendars** (durations/lag in minutes, elapsed
-durations, midnight-crossing nights, window-only calendars, an hour-granular horizon). It still **ingests
-no actuals** (M2), and per-**activity/resource** calendars are still single-plan-calendar (M5), so the
-fixture's per-activity-calendar scheduling isn't fully asserted yet.
+durations, midnight-crossing nights, window-only calendars, an hour-granular horizon). **M2 (ADR-0035)
+landed progress ingestion** — actuals with a data-date floor, frozen completions, in-progress remaining,
+and the three recalc modes (retained/override/actual-dates); only suspend/resume remains. Per-**resource**
+calendars and LOE/WBS-summary rollup remain single-plan-calendar (M5-epic rungs).
 
 ## Summary
 
 | Status       | Capability groups |
 | ------------ | ----------------- |
-| ✅ Supported | 13                |
+| ✅ Supported | 14                |
 | 🟡 Partial   | 3                 |
-| ❌ Missing   | 11                |
+| ❌ Missing   | 10                |
 | ⚪ Deferred  | 4                 |
 
 **M1 (hour/shift-granular calendars + minute-based durations, ADR-0036) has landed**; **M3 wired the
 24-Hour (elapsed) per-relationship lag calendar**; and **M5 (per-activity calendars, ADR-0037) moved the
 engine to an absolute-instant axis** so each activity schedules on its own calendar and a relationship's
 lag resolves on the endpoint activity's calendar — the per-relationship-lag row is now ✅ (both halves),
-with **S05** (successor-calendar lag) and **S06** (24-Hour lag) both runnable differentials. The remaining
-❌ rows sit behind **M2** (progress/actuals), **M4** (mandatory/expected/secondary/ALAP constraints), **M5-epic**
-(LOE / resource-dependent / WBS-summary — separate rungs) and **M6** (longest-path / multi-path float).
+with **S05** (successor-calendar lag) and **S06** (24-Hour lag) both runnable differentials. **M2 (ADR-0035)
+added progress ingestion** — S02/S03/S04 are runnable differentials (S03 ≠ S02 is the definitive
+retained-logic-vs-override discriminator). The remaining ❌ rows sit behind **M4** (mandatory/expected/
+secondary/ALAP constraints), **M5-epic** (LOE / resource-dependent / WBS-summary — separate rungs) and
+**M6** (longest-path / multi-path float).
 
 ## 1. Capability matrix (by group)
 
@@ -73,7 +76,7 @@ with **S05** (successor-calendar lag) and **S06** (24-Hour lag) both runnable di
 | Intraday shift calendars                                   | `cal_split_shift` `cal_24h` `cal_night_crosses_midnight` `cal_asymmetric_week` `cal_forces_split` | ✅     | M1 ✓             | Engine + storage model per-weekday `[start,end)` minute windows: split shifts, 24h, midnight-crossing (adjacent windows), asymmetric weeks (ADR-0036). Authoring UI is a follow-on.                                                                                                                                                                                     |
 | Window-only / empty base week                              | `cal_window_only` `cal_empty_base_week` `cal_positive_exception`                                  | ✅     | M1 ✓             | An empty base week is valid; working time comes from positive time-window exception ranges (ADR-0036).                                                                                                                                                                                                                                                                  |
 | Elapsed durations                                          | `elapsed_duration`                                                                                | ✅     | M1 ✓             | Durations stored in minutes: `168h` over a 24h calendar reads as 7 elapsed days; over a 6-day calendar it stretches (ADR-0036 §3).                                                                                                                                                                                                                                      |
-| Progress ingestion + retained-logic/override/actual-dates  | `prog_*`, `retained_logic_vs_progress_override`                                                   | ❌     | M2 (ADR-0035)    | The engine ingests **no actuals** — no data-date floor, no out-of-sequence handling, no suspend/resume.                                                                                                                                                                                                                                                                 |
+| Progress ingestion + retained-logic/override/actual-dates  | `prog_*`, `retained_logic_vs_progress_override`                                                   | ✅     | M2 ✓ (ADR-0035)  | Actuals ingested with a **data-date floor**; completed activities frozen, in-progress remaining rescheduled; the three **recalc modes** (retained/override/actual-dates) wired — S02/S03/S04 are runnable differentials (S03 ≠ S02 is the definitive override discriminator). Suspend/resume is the one remaining M2 clause.                                            |
 | Duration types                                             | `dt_fixed_units` `dt_fixed_units_time` `dt_fixed_dur_units`                                       | ⚪     | M7               | Needs the resource/units model.                                                                                                                                                                                                                                                                                                                                         |
 | Percent-complete types (physical/units/steps)              | `pct_physical` `pct_units` `code_steps`                                                           | ⚪     | M7               | EV/%-complete model deferred.                                                                                                                                                                                                                                                                                                                                           |
 | Negative float                                             | `float_negative`, `float_negative_driver`                                                         | ✅     | —                | `TF = LS − ES`; negative float propagates on the driving chain.                                                                                                                                                                                                                                                                                                         |
@@ -94,9 +97,9 @@ subset now and marks the rest `todo` against the owning milestone.
 | Scenario                                     | Flips                                       | Status | Owner                                                                          |
 | -------------------------------------------- | ------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
 | S01 Baseline unprogressed                    | data date = project start, actuals stripped | 🟡     | M1 — the pure network computes, but day-granular and with no actuals to strip. |
-| **S02 Progressed, retained logic** (primary) | —                                           | ❌     | M2 — needs actuals ingestion + data-date floor.                                |
-| S03 Progress override                        | out-of-sequence remaining from data date    | ❌     | M2 (ADR-0035)                                                                  |
-| S04 Actual dates                             | out-of-sequence, actuals frozen             | ❌     | M2 (ADR-0035)                                                                  |
+| **S02 Progressed, retained logic** (primary) | —                                           | ✅     | M2 ✓ — actuals at the data date; runnable differential vs S01.                 |
+| S03 Progress override                        | out-of-sequence remaining from data date    | ✅     | M2 ✓ — incomplete predecessors dropped; runnable, S03 ≠ S02.                   |
+| S04 Actual dates                             | out-of-sequence, actuals frozen             | ✅     | M2 ✓ — remaining floored at max(data date, actual start); runnable vs S01.     |
 | S05 Lag calendar = successor                 | lag resolved on successor calendar          | ✅     | M5 ✓ — per-activity calendars; runnable differential vs S01.                   |
 | S06 Lag calendar = 24-hour                   | lag on 24h globally                         | ✅     | M3 ✓ — 24-Hour elapsed lag; runnable differential vs S01.                      |
 | S07 Longest-path critical                    | critical definition                         | ❌     | M6                                                                             |
@@ -119,19 +122,19 @@ The contract: **reject, repair or report — never hang, crash, or silently prod
 | N03 SS/FF cycle                                | reject + name members               | 🟡     | Caught by the directed topo-sort; member naming per ADR-0035.                                                           |
 | N04 duplicate relationship                     | reject / dedupe / most-constraining | 🟡     | Validator flags it; **policy chosen in ADR-0035.**                                                                      |
 | N05 dangling reference                         | reject                              | ✅     | FK / referential-integrity reject.                                                                                      |
-| N06 actual finish before start                 | reject                              | ❌     | M2 (no actuals yet).                                                                                                    |
-| N07 actual in the future                       | reject / warn                       | ❌     | M2.                                                                                                                     |
-| N08 complete, no actual finish                 | repair / warn                       | ❌     | M2.                                                                                                                     |
+| N06 actual finish before start                 | reject                              | ✅     | M2 ✓ — rejected at the progress boundary (`FINISH_BEFORE_START`).                                                       |
+| N07 actual in the future                       | reject / warn                       | ✅     | M2 ✓ — an actual after the data date is rejected (`ACTUAL_AFTER_DATA_DATE`).                                            |
+| N08 complete, no actual finish                 | repair / warn                       | ✅     | M2 ✓ — finish repaired to the data date + logged warning.                                                               |
 | N09 negative duration                          | reject                              | 🟡     | Rejected at the API DTO boundary; an engine-level assert is confirmed in M1.                                            |
 | N10 impossible mandatory pair                  | schedule + report violation         | ❌     | M4 (ADR-0035) — must not "fix" it.                                                                                      |
 | N11 zero-working-hour calendar (**hang test**) | reject at load / terminate safely   | 🟡     | Day-level all-non-working guard exists; the hour-granular iteration cap + "no working time within N years" lands in M1. |
 | N12 LOE with no span                           | reject / warn                       | 🟡     | Structural validator catches it; engine LOE is M5.                                                                      |
-| N13 lead before data date                      | clamp to data date                  | ❌     | M2 — needs the remaining-work data-date floor.                                                                          |
+| N13 lead before data date                      | clamp to data date                  | ✅     | M2 ✓ — a lead into remaining work is clamped to the data-date floor.                                                    |
 | N14 negative units                             | reject                              | ⚪     | M7 (resources deferred).                                                                                                |
 | N15 constraint before project start            | warn, don't pull back               | 🟡     | The data-date origin prevents pulling before it; the _warning_ is added with M4.                                        |
 | N16 lag exceeds horizon                        | reject / warn                       | 🟡     | Bounded day-search; hour horizon + explicit report in M1/M3.                                                            |
 | N17 milestone with a duration                  | reject / coerce                     | 🟡     | Validator flags it; engine coercion confirmed in M1.                                                                    |
-| N18 remaining-duration > 0 on complete         | repair / warn                       | ❌     | M2.                                                                                                                     |
+| N18 remaining-duration > 0 on complete         | repair / warn                       | ✅     | M2 ✓ — remaining repaired to 0 + logged warning.                                                                        |
 
 ## References
 

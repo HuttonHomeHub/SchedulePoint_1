@@ -10,6 +10,29 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-16 — M2 recalc modes: finish-side float + Actual-Dates = max(data date, actual start)
+
+**Decision.** Two semantics for M2 progress ingestion (ADR-0035 §1):
+
+1. **Total float is measured on the finish side** — `workingTimeBetween(earlyFinish, lateFinish)` on
+   the activity's own calendar, replacing the previous start-side `lateStart − earlyStart`. For an
+   **unprogressed** activity the two spans are equal (byte-identical goldens), but for a **progressed**
+   activity the early-start-to-early-finish span is the _remaining_ work, so only the finish side
+   reports float on the work that's left.
+2. **Actual Dates mode** schedules an in-progress activity's remaining from **`max(data date, actual
+start)`** (dropping all predecessor logic). Because N07 forbids an actual after the data date, the
+   actual start is always ≤ the data date, so Actual Dates **coincides with Progress Override for the
+   fixture's past-dated actuals** (S04 differs from S01 but equals S03 here). The two modes diverge
+   only for a future actual start — an engine-level case the boundary rejects.
+
+**Why.** Finish-side float is the P6 meaning for progressed work and is provably parity-preserving for
+the planned case. Scheduling remaining from the actual start (rather than into the past) is the only
+physically-sensible "actuals never move" reading; there is **no external oracle** (ADR-0034), so this is
+SchedulePoint's documented golden and may be revised if a specific P6 behaviour is later required.
+
+**Consequences.** S02/S03/S04 are runnable conformance differentials; S03 ≠ S02 is the definitive
+retained-vs-override discriminator. Suspend/resume (ADR-0035 §4) is the one M2 clause still open.
+
 ### 2026-07-16 — M5 per-activity calendars: float on the activity's own calendar; activity → plan → 24/7 resolution
 
 **Decision.** With per-activity calendars (ADR-0037), two semantics are locked:

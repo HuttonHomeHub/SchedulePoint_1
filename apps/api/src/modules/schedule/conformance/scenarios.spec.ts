@@ -27,9 +27,13 @@ describe('conformance scenarios (differential scaffold)', () => {
     const runnable = Object.entries(SCENARIO_SUPPORT)
       .filter(([, s]) => s.runnable)
       .map(([id]) => id);
-    // S06 became runnable at M3 (24-Hour lag); S05 at M5 (per-activity calendars → successor lag).
+    // S06 became runnable at M3 (24-Hour lag); S05 at M5 (per-activity calendars → successor lag);
+    // S02/S03/S04 at M2 (progress ingestion + the three recalc modes).
     expect(runnable).toEqual([
       'S01_BASELINE_UNPROGRESSED',
+      'S02_PROGRESSED_RETAINED_LOGIC',
+      'S03_PROGRESS_OVERRIDE',
+      'S04_ACTUAL_DATES',
       'S05_LAG_CALENDAR_SUCCESSOR',
       'S06_LAG_CALENDAR_24H',
     ]);
@@ -62,6 +66,23 @@ describe('conformance scenarios (differential scaffold)', () => {
     }
   });
 
+  it('runs the M2 progressed scenarios as differentials — S02 differs from S01, S03 from S02', () => {
+    const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
+    const retained = runScenario(fixture, 'S02_PROGRESSED_RETAINED_LOGIC');
+    const override = runScenario(fixture, 'S03_PROGRESS_OVERRIDE');
+    const actual = runScenario(fixture, 'S04_ACTUAL_DATES');
+    expect(baseline.ran && retained.ran && override.ran && actual.ran).toBe(true);
+    if (baseline.ran && retained.ran && override.ran && actual.ran) {
+      // Feeding the fixture's progress at the data date (ADR-0035 §1–§2) moves dates vs the clean
+      // unprogressed baseline — the M2 differential.
+      expect(resultsDiffer(retained.output, baseline.output)).toBe(true);
+      expect(resultsDiffer(actual.output, baseline.output)).toBe(true);
+      // The definitive Retained-Logic vs Progress-Override discriminator: dropping A4220's incomplete
+      // predecessor moves its downstream, so S03 ≠ S02 (ADR-0035 §1, fixture S03 assertion).
+      expect(resultsDiffer(override.output, retained.output)).toBe(true);
+    }
+  });
+
   it('runs the S01 baseline against the real engine', () => {
     const run = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
     expect(run.ran).toBe(true);
@@ -72,9 +93,10 @@ describe('conformance scenarios (differential scaffold)', () => {
   });
 
   it('returns a todo (not a fabricated run) for a not-yet-supported scenario', () => {
-    const run = runScenario(fixture, 'S02_PROGRESSED_RETAINED_LOGIC');
+    // S07 (Longest Path) is an M6 rung — still honestly deferred.
+    const run = runScenario(fixture, 'S07_LONGEST_PATH');
     expect(run.ran).toBe(false);
-    if (!run.ran) expect(run.todo).toContain('M2');
+    if (!run.ran) expect(run.todo).toContain('M6');
   });
 
   it('resultsDiffer detects identity — the S01 run does not differ from itself', () => {
