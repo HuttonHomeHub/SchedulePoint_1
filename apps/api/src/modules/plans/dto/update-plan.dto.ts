@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PlanStatus, ProgressRecalcMode, SchedulingMode } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -63,6 +64,14 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsEnum(ProgressRecalcMode)
   progressRecalcMode?: ProgressRecalcMode;
+
+  @ApiPropertyOptional({
+    description:
+      'Expected-finish scheduling option (M4, ADR-0035 §9): when on, an in-progress activity’s remaining work is resized so its early finish lands on its expectedFinish.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  useExpectedFinishDates?: boolean;
 
   @ApiPropertyOptional({
     format: 'date',

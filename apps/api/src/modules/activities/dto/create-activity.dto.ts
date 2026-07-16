@@ -115,6 +115,16 @@ export class CreateActivityDto {
   secondaryConstraintDate?: string;
 
   @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description:
+      'Expected-finish target (ADR-0035 §9): when the plan option useExpectedFinishDates is on, an in-progress activity’s remaining work is resized so its early finish lands on this date.',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  expectedFinish?: string;
+
+  @ApiPropertyOptional({
     format: 'uuid',
     nullable: true,
     description:

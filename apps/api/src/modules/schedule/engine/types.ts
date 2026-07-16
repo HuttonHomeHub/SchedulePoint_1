@@ -78,6 +78,14 @@ export interface EngineActivity {
    * pushes the remaining out to it. Ignored for a not-started/complete activity.
    */
   resumeDate?: string | null;
+  /**
+   * Expected-finish target (`YYYY-MM-DD`) for an in-progress activity (M4, ADR-0035 §9). Honoured only
+   * when {@link ComputeOptions.useExpectedFinishDates} is on: the forward pass then **recomputes** the
+   * remaining work so the early finish lands on this date (floored at the data date — a past target
+   * collapses to zero remaining). Ignored for a not-started/complete activity or when the option is
+   * off, so the byte-identical path is unchanged.
+   */
+  expectedFinish?: string | null;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
@@ -172,6 +180,11 @@ export interface EngineSummary {
    * dated before the data date (honoured, but can't pull work before it). ADR-0035 §12.
    */
   constraintWarningCount: number;
+  /**
+   * How many in-progress activities had their remaining work resized to an **expected finish** this
+   * run (ADR-0035 §9) — zero unless the plan's `useExpectedFinishDates` option is on. Observability only.
+   */
+  expectedFinishAppliedCount: number;
   /** The project finish offset (max early-finish offset); null for an empty plan. */
   projectFinishOffset: number | null;
   /** The inclusive project finish display date; null for an empty plan. */

@@ -1,0 +1,36 @@
+-- M4 expected finish: a per-activity target finish date + a plan-level scheduling
+-- option (Engine Conformance Framework, ADR-0035 §9, M4 Task F5).
+--
+-- `activities.expected_finish` is a CLIENT-SETTABLE target finish date for an
+-- in-progress activity (a user-facing write DTO sets it) — NOT engine-owned. It is a
+-- calendar day (DATE, date-only, no timezone), like actual_start/actual_finish and
+-- the other schedule-day columns (ADR-0023). `plans.use_expected_finish_dates` is a
+-- plan-level scheduling option (like scheduling_mode / progress_recalc_mode): when
+-- true, the engine's forward pass recomputes an in-progress activity's remaining
+-- duration so its early finish lands on `expected_finish` (floored per the M2
+-- data-date rule); off (or a NULL expected_finish) ⇒ ignored, so the default is
+-- behaviour-preserving.
+--
+-- Fully additive and reversible; no data migration.
+--   * expected_finish is nullable with no DEFAULT ⇒ every existing activity reads
+--     "no expected finish" and the byte-parity golden path is unchanged.
+--   * use_expected_finish_dates has a constant DEFAULT false ⇒ it backfills every
+--     existing plan in the same statement (the engine ignores expected finishes).
+-- On Postgres 11+ a nullable ADD COLUMN (no DEFAULT) and an ADD COLUMN with a constant
+-- DEFAULT are BOTH metadata-only catalog changes — no table rewrite, no full-table
+-- scan, no lock held beyond a brief ACCESS EXCLUSIVE for the catalog update — so this
+-- is fast and non-locking at any data volume (same posture as add_scheduling_modes
+-- _columns and constraint_violated; docs/DATABASE.md).
+--
+-- No new index on either column: expected_finish is read only on the full-plan recalc
+-- load (WHERE organization_id / plan_id / deleted_at, served by the existing
+-- (plan_id, created_at, id) index), and use_expected_finish_dates is a single-row plan
+-- column read with the plan, never filtered across plans (like scheduling_mode). No
+-- query filters or sorts by either, so an index would only cost writes (docs/DATABASE.md:
+-- index real query patterns, not columns).
+ALTER TABLE "activities" ADD COLUMN "expected_finish" DATE;
+ALTER TABLE "plans" ADD COLUMN "use_expected_finish_dates" BOOLEAN NOT NULL DEFAULT false;
+
+-- Down (forward-only in prod; documented for completeness): fully reversible —
+--   ALTER TABLE "plans" DROP COLUMN "use_expected_finish_dates";
+--   ALTER TABLE "activities" DROP COLUMN "expected_finish";

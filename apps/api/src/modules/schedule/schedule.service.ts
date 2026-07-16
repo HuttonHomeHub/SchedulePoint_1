@@ -128,8 +128,14 @@ export class ScheduleService {
               portFor(calIdByActivity.get(r.successorId) ?? null),
             ),
           ),
-          // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC.
-          { dataDate, calendar, progressMode: plan.progressRecalcMode },
+          // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC. The
+          // expected-finish option (M4, ADR-0035 §9) resizes in-progress remaining work when on.
+          {
+            dataDate,
+            calendar,
+            progressMode: plan.progressRecalcMode,
+            useExpectedFinishDates: plan.useExpectedFinishDates,
+          },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
@@ -170,6 +176,8 @@ export class ScheduleService {
         // Progress (M2, ADR-0035): the recalc mode and how many activities carried actuals.
         progressRecalcMode: plan.progressRecalcMode,
         progressedActivityCount,
+        // Expected-finish resizes applied this run (M4, ADR-0035 §9); 0 unless the option is on.
+        expectedFinishAppliedCount: summary.expectedFinishAppliedCount,
         durationMs: Date.now() - startedAt,
       },
       'schedule recalculated',
@@ -283,6 +291,7 @@ function toEngineActivity(
     actualStart: row.actualStart ? formatCalendarDate(row.actualStart) : null,
     actualFinish: row.actualFinish ? formatCalendarDate(row.actualFinish) : null,
     resumeDate: row.resumeDate ? formatCalendarDate(row.resumeDate) : null,
+    expectedFinish: row.expectedFinish ? formatCalendarDate(row.expectedFinish) : null,
     ...(remainingMinutes !== undefined ? { remainingMinutes } : {}),
     ...(calendar ? { calendar } : {}),
   };

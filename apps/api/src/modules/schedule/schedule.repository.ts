@@ -40,6 +40,8 @@ export interface ScheduleActivityRow {
   remainingDurationMinutes: number | null;
   /** Resume date for a suspended in-progress activity (M2, ADR-0035 §4); floors the remaining work. */
   resumeDate: Date | null;
+  /** Expected-finish target (M4, ADR-0035 §9); resizes remaining work when the plan option is on. */
+  expectedFinish: Date | null;
 }
 
 /** The minimal dependency shape the CPM engine reads (a plan's active edges). */
@@ -123,6 +125,7 @@ export class ScheduleRepository {
         percentComplete: true,
         remainingDurationMinutes: true,
         resumeDate: true,
+        expectedFinish: true,
       },
     });
   }

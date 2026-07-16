@@ -102,6 +102,17 @@ export class UpdateActivityDto {
   secondaryConstraintDate?: string | null;
 
   @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-01',
+    description: 'Expected-finish target (ADR-0035 §9), or null to clear it.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  expectedFinish?: string | null;
+
+  @ApiPropertyOptional({
     format: 'uuid',
     nullable: true,
     description:

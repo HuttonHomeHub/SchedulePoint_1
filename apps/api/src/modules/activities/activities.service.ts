@@ -172,6 +172,10 @@ export class ActivitiesService {
             ...(dto.secondaryConstraintDate
               ? { secondaryConstraintDate: parseCalendarDate(dto.secondaryConstraintDate) }
               : {}),
+            // Expected-finish target (ADR-0035 §9); honoured only when the plan option is on.
+            ...(dto.expectedFinish
+              ? { expectedFinish: parseCalendarDate(dto.expectedFinish) }
+              : {}),
             ...(dto.laneIndex !== undefined ? { laneIndex: dto.laneIndex } : {}),
             // As-Late-As-Possible (ADR-0035 §11): a display-only placement preference.
             ...(dto.scheduleAsLateAsPossible !== undefined
@@ -259,6 +263,10 @@ export class ActivitiesService {
     if (dto.laneIndex !== undefined) patch.laneIndex = dto.laneIndex;
     if (dto.scheduleAsLateAsPossible !== undefined) {
       patch.scheduleAsLateAsPossible = dto.scheduleAsLateAsPossible;
+    }
+    if (dto.expectedFinish !== undefined) {
+      patch.expectedFinish =
+        dto.expectedFinish === null ? null : parseCalendarDate(dto.expectedFinish);
     }
     // Visual-Planning placement (ADR-0033): a date hand-places the bar; null clears it (revert to
     // computed). Planner-owned definition input — feeds only the effective-Visual pass, never the

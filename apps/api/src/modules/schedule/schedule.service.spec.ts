@@ -33,6 +33,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     calendarId: null,
     schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
+    useExpectedFinishDates: false,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -65,6 +66,7 @@ const activityRow = (
   percentComplete: 0,
   remainingDurationMinutes: null,
   resumeDate: null,
+  expectedFinish: null,
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({
@@ -218,6 +220,27 @@ describe('ScheduleService.recalculate', () => {
     // Override drops the incomplete predecessor P → B's remaining from data date 01-01 + 2d = 01-02
     // (under Retained Logic it would wait for P's 01-05 finish and land on 01-07).
     expect(b.earlyFinish).toBe('2026-01-02');
+  });
+
+  it('threads the plan’s expected-finish option into the engine (M4, ADR-0035 §9)', async () => {
+    // An in-progress activity (2 days left) that carries an expectedFinish. With the plan option ON
+    // its remaining is resized so the early finish lands on the target (01-08); OFF it runs 2 days
+    // from the data date (01-02). The service must thread `useExpectedFinishDates` through.
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ useExpectedFinishDates: true }));
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 10, {
+        actualStart: new Date('2025-12-20'),
+        remainingDurationMinutes: 2 * 1440,
+        expectedFinish: new Date('2026-01-08'),
+      }),
+    ]);
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    expect(summary.projectFinish).toBe('2026-01-08');
+
+    // Option OFF ⇒ the 2 remaining days run from the data date → 2026-01-02 (a different finish).
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ useExpectedFinishDates: false }));
+    const off = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    expect(off.projectFinish).toBe('2026-01-02');
   });
 
   it('takes the plan lock BEFORE loading the graph', async () => {

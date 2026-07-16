@@ -247,7 +247,13 @@ incomplete-predecessor logic, `PROGRESS_OVERRIDE` drops the incoming bound from
 incomplete predecessors, `ACTUAL_DATES` follows the ADR-0035 §1 actual-dates
 treatment. `RETAINED_LOGIC` is behaviour-preserving in spirit; the column is
 additive with a constant `DEFAULT` (no data migration) and the engine does not
-consume it until the M2 engine tasks land.
+consume it until the M2 engine tasks land. `Plan` also carries the single-row
+boolean scheduling option `use_expected_finish_dates` (default `false`; ADR-0035
+§9, M4 F5): when on, the engine's forward pass recomputes an in-progress activity's
+remaining duration so its early finish lands on the activity's `expected_finish`
+(see _Activity_ below). Like the mode enums it is read with the plan, never filtered
+across plans (so unindexed), and additive with a constant `DEFAULT` (no data
+migration) — default `false` is behaviour-preserving.
 
 ### Activity: the schedule leaf
 
@@ -275,7 +281,7 @@ wide `ALTER TABLE` + backfill later):
   contract changed. A defensive `DEFAULT 480` (one 8 h day) applies only to a direct-DB
   insert; the service always sets the value explicitly.
 - **Progress** (`status`, `percent_complete`, `actual_start`, `actual_finish`,
-  `remaining_duration_minutes`, `suspend_date`, `resume_date`) —
+  `remaining_duration_minutes`, `suspend_date`, `resume_date`, `expected_finish`) —
   Contributor-updatable via a dedicated progress path, never via a definition
   update. `remaining_duration_minutes` (ADR-0035 §1, M2) is an **independent,
   P6-faithful** remaining-work count in working minutes: **`NULL` ⇒ the engine
@@ -288,6 +294,12 @@ wide `ALTER TABLE` + backfill later):
   `actual_start/finish`); a suspended activity's remaining work is floored at
   `max(data date, resume_date)`. All three are **additive & nullable** (no data
   migration); the engine does not consume them until the M2 engine tasks land.
+  `expected_finish` (ADR-0035 §9, M4 F5) is a **client-settable** (NOT engine-owned),
+  nullable target finish date for an in-progress activity (calendar day, `@db.Date`);
+  when the plan option `use_expected_finish_dates` is on, the engine's forward pass
+  recomputes `remaining_duration_minutes` so the early finish lands on it (floored per
+  the M2 data-date rule), otherwise it is ignored. It is additive & nullable (no data
+  migration) and unindexed (read only on the full-plan recalc load).
 - **CPM output — engine-owned** (`early_start`/`early_finish`,
   `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`,
   `constraint_violated`): nullable/defaulted, **never accepted from a write DTO**.
@@ -308,7 +320,7 @@ wide `ALTER TABLE` + backfill later):
   — is the real protection, `RESTRICT` is defence in depth. Backed by the partial
   `idx_activities_calendar_id`.
 
-Calendar-day fields (`constraint_date`, `actual_start/finish`, the
+Calendar-day fields (`constraint_date`, `actual_start/finish`, `expected_finish`, the
 CPM `*_start/finish` columns) are `@db.Date` (date-only, no timezone), like
 `Plan.planned_start` — a schedule day is a calendar day, not an instant.
 

@@ -22,6 +22,7 @@ const ACTIVITY: ActivitySummary = {
   calendarId: null,
   laneIndex: 0,
   scheduleAsLateAsPossible: false,
+  expectedFinish: null,
   status: 'IN_PROGRESS',
   percentComplete: 40,
   actualStart: '2026-05-01',

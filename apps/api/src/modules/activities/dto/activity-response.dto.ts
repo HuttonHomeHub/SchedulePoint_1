@@ -56,6 +56,14 @@ export class ActivityResponseDto implements ActivitySummary {
   secondaryConstraintDate!: string | null;
 
   @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description: 'Expected-finish target (ADR-0035 §9), or null.',
+  })
+  expectedFinish!: string | null;
+
+  @ApiProperty({
     format: 'uuid',
     nullable: true,
     type: String,
@@ -212,6 +220,7 @@ export class ActivityResponseDto implements ActivitySummary {
           : Math.round(entity.remainingDurationMinutes / MINUTES_PER_DAY),
       suspendDate: day(entity.suspendDate),
       resumeDate: day(entity.resumeDate),
+      expectedFinish: day(entity.expectedFinish),
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),
       lateStart: day(entity.lateStart),

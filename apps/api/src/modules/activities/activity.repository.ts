@@ -45,6 +45,8 @@ export interface ActivityPatch {
   /** Suspend / resume dates (M2, ADR-0035 §4); resume floors the remaining work. */
   suspendDate?: Date | null;
   resumeDate?: Date | null;
+  /** Expected-finish target (M4, ADR-0035 §9); resizes remaining work when the plan option is on. */
+  expectedFinish?: Date | null;
 }
 
 /**

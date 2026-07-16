@@ -177,6 +177,12 @@ export interface PlanSummary {
    */
   progressRecalcMode: ProgressRecalcMode;
   /**
+   * Expected-finish scheduling option (M4, ADR-0035 §9). When true, the engine's forward pass resizes
+   * an in-progress activity's remaining work so its early finish lands on its `expectedFinish`. Default
+   * `false` (behaviour-preserving); the engine ignores expected finishes when off.
+   */
+  useExpectedFinishDates: boolean;
+  /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
    * historical/transitional reads; live plans always carry a value.
@@ -283,6 +289,12 @@ export interface ActivitySummary {
    */
   suspendDate: string | null;
   resumeDate: string | null;
+  /**
+   * Expected-finish target (ADR-0035 §9, M4): when the plan's `useExpectedFinishDates` is on, an
+   * in-progress activity's remaining work is resized so its early finish lands on this calendar day
+   * (`YYYY-MM-DD`). Null = no target. Ignored when the option is off or the activity isn't in progress.
+   */
+  expectedFinish: string | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.
   earlyStart: string | null;
   earlyFinish: string | null;

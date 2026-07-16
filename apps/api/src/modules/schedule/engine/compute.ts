@@ -14,6 +14,7 @@ import {
   rollForwardToWorking,
 } from './instants';
 import {
+  nextCalendarDay,
   remainingHonoursPredecessor,
   resolveProgress,
   type ProgressMode,
@@ -48,6 +49,13 @@ export interface ComputeOptions {
    * Defaults to `RETAINED_LOGIC` (the P6 default, behaviour-preserving).
    */
   progressMode?: ProgressMode;
+  /**
+   * Expected-finish scheduling option (M4, ADR-0035 §9). When true, an in-progress activity that
+   * carries an {@link EngineActivity.expectedFinish} has its remaining work recomputed so its early
+   * finish lands on that date (floored at the data date). Off (the default) ⇒ expected finishes are
+   * ignored and the schedule is byte-identical to the pure-progress path.
+   */
+  useExpectedFinishDates?: boolean;
 }
 
 /**
@@ -97,6 +105,9 @@ export function computeSchedule(
 ): EngineOutput {
   const { dataDate, calendar: planCalendar } = options;
   const progressMode: ProgressMode = options.progressMode ?? 'RETAINED_LOGIC';
+  const useExpectedFinishDates = options.useExpectedFinishDates ?? false;
+  // How many in-progress activities had their remaining work resized to an expected finish (§9).
+  let expectedFinishAppliedCount = 0;
   const graph = buildGraph(activities, edges);
   const dataDateAbs = instantToAbsMinutes(dataDate);
   const calendarOf = (activity: EngineActivity): WorkingTimeCalendar =>
@@ -175,12 +186,24 @@ export function computeSchedule(
       // Frozen actual start; the REMAINING work reschedules forward from the ties retained by the
       // recalc mode, floored at the data date (§2) — `workStart` above.
       earlyStart.set(id, progress.actualStartInst!);
-      earlyFinish.set(
-        id,
-        progress.remainingMinutes === 0
-          ? workStart
-          : advanceWorking(cal, workStart, progress.remainingMinutes),
-      );
+      // Expected Finish (§9): with the plan option on, RECOMPUTE the remaining so the early finish
+      // lands on the target date (its working-end boundary, like an actual finish). Floored at
+      // `workStart` — a target on/before the rescheduled start collapses the remaining to zero (the
+      // data-date floor governs), never negative. Off/absent ⇒ the pure-progress remaining stands.
+      let remaining = progress.remainingMinutes;
+      if (useExpectedFinishDates && activity.expectedFinish != null && duration > 0) {
+        const efInst = rollBackwardToWorking(
+          cal,
+          dataDateAbs,
+          instantToAbsMinutes(nextCalendarDay(activity.expectedFinish)),
+        );
+        remaining = Math.max(
+          0,
+          cal.workingTimeBetween(absMinutesToInstant(workStart), absMinutesToInstant(efInst)),
+        );
+        expectedFinishAppliedCount += 1;
+      }
+      earlyFinish.set(id, remaining === 0 ? workStart : advanceWorking(cal, workStart, remaining));
     } else {
       // NOT_STARTED — the ordinary planned path (byte-identical to the pre-M2 engine).
       earlyStart.set(id, workStart);
@@ -422,6 +445,7 @@ export function computeSchedule(
     nearCriticalCount,
     constraintViolationCount,
     constraintWarningCount,
+    expectedFinishAppliedCount,
     projectFinishOffset:
       projectFinishInstant === null
         ? null

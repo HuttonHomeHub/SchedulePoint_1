@@ -25,6 +25,7 @@ function activity(id: string, name: string): ActivitySummary {
     calendarId: null,
     laneIndex: 0,
     scheduleAsLateAsPossible: false,
+    expectedFinish: null,
     status: 'NOT_STARTED',
     percentComplete: 0,
     actualStart: null,

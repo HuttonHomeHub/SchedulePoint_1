@@ -32,6 +32,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     calendarId: null,
     laneIndex: 0,
     scheduleAsLateAsPossible: false,
+    expectedFinish: null,
     status: 'NOT_STARTED',
     percentComplete: 0,
     actualStart: null,
