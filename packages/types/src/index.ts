@@ -128,6 +128,15 @@ export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
  */
 export type SchedulingMode = 'EARLY' | 'VISUAL';
 
+/**
+ * A plan's **out-of-sequence recalc mode** (M2, ADR-0035 §1). Governs how an in-progress activity's
+ * remaining work treats predecessor logic: `RETAINED_LOGIC` (the P6 default — remaining waits for
+ * incomplete predecessors), `PROGRESS_OVERRIDE` (remaining runs from the data date, ignoring
+ * incomplete predecessors), or `ACTUAL_DATES` (remaining floored at the actual start). Mirrors the
+ * API's Prisma `ProgressRecalcMode` enum.
+ */
+export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUAL_DATES';
+
 /** A client (top level of the Org → Client → Project → Plan hierarchy). */
 export interface ClientSummary {
   id: string;
@@ -162,6 +171,11 @@ export interface PlanSummary {
    * Defaults to `EARLY` (behaviour-preserving).
    */
   schedulingMode: SchedulingMode;
+  /**
+   * The out-of-sequence recalc mode (M2, ADR-0035 §1). Defaults to `RETAINED_LOGIC` (the P6 default,
+   * behaviour-preserving); governs how a progressed activity's remaining work treats predecessor logic.
+   */
+  progressRecalcMode: ProgressRecalcMode;
   /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
@@ -244,6 +258,19 @@ export interface ActivitySummary {
   percentComplete: number;
   actualStart: string | null;
   actualFinish: string | null;
+  /**
+   * Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035 §2), or null to
+   * derive it from `percentComplete`. The engine schedules this remaining from the data date (never
+   * before it).
+   */
+  remainingDurationDays: number | null;
+  /**
+   * Suspend / resume calendar days (`YYYY-MM-DD`) for a paused in-progress activity (M2, ADR-0035 §4),
+   * or null. A resume after the data date floors the remaining work at the resume day; a resume on or
+   * before the data date is a no-op (the data-date floor governs).
+   */
+  suspendDate: string | null;
+  resumeDate: string | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.
   earlyStart: string | null;
   earlyFinish: string | null;

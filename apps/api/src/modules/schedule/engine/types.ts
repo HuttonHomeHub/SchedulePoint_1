@@ -39,6 +39,27 @@ export interface EngineActivity {
    * **effective-Visual pass only** — it never touches the pure forward/backward pass, so
    * `early*`/`late*`/float stay a pure function of the network. Absent = no placement. */
   visualStart?: string | null;
+  /**
+   * Progress actuals (M2, ADR-0035 §1–§2). Calendar days (`YYYY-MM-DD`). A **complete** activity
+   * (`actualFinish` set) freezes on its actuals; an **in-progress** one (`actualStart` set, no
+   * finish) keeps its frozen start while its remaining work reschedules forward from the data date.
+   * Both absent = the ordinary planned activity (the byte-identical unprogressed path).
+   */
+  actualStart?: string | null;
+  actualFinish?: string | null;
+  /**
+   * Resolved remaining working **minutes** for an in-progress activity — the service resolves it
+   * (explicit `remainingDurationMinutes`, else `percentComplete × durationMinutes`) and passes it
+   * here. Ignored unless the activity is in progress (started, not finished); absent then, the
+   * engine falls back to the full `durationMinutes`.
+   */
+  remainingMinutes?: number;
+  /**
+   * Resume date (`YYYY-MM-DD`) for a suspended in-progress activity (M2, ADR-0035 §4). When set, the
+   * remaining work is floored at `max(data date, resume date)` — a resume date after the data date
+   * pushes the remaining out to it. Ignored for a not-started/complete activity.
+   */
+  resumeDate?: string | null;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */

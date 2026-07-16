@@ -45,6 +45,46 @@ export class UpdateActivityProgressDto {
   @IsCalendarDate()
   actualFinish?: string | null;
 
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 10000,
+    nullable: true,
+    example: 3,
+    description:
+      'Remaining work in whole days for an in-progress activity (M2, ADR-0035). Null derives it from percent complete.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  remainingDurationDays?: number | null;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-10',
+    description:
+      'Suspend date (YYYY-MM-DD) for a paused in-progress activity (M2), or null to clear.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  suspendDate?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-20',
+    description:
+      'Resume date (YYYY-MM-DD); the remaining work is floored at max(data date, resume) (M2, ADR-0035 §4).',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  resumeDate?: string | null;
+
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)
   @IsInt()

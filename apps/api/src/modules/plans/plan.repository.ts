@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Plan, type PlanStatus, type SchedulingMode } from '@prisma/client';
+import {
+  Prisma,
+  type Plan,
+  type PlanStatus,
+  type ProgressRecalcMode,
+  type SchedulingMode,
+} from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -10,6 +16,8 @@ export interface PlanPatch {
   status?: PlanStatus;
   /** Scheduling mode (ADR-0033): EARLY or VISUAL. */
   schedulingMode?: SchedulingMode;
+  /** Out-of-sequence recalc mode (M2, ADR-0035): RETAINED_LOGIC / PROGRESS_OVERRIDE / ACTUAL_DATES. */
+  progressRecalcMode?: ProgressRecalcMode;
   /** The mandatory CPM data date (ADR-0033 M1): may be moved, never cleared — so never null. */
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */

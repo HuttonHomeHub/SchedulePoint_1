@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PlanStatus, SchedulingMode } from '@prisma/client';
+import { PlanStatus, ProgressRecalcMode, SchedulingMode } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
@@ -54,6 +54,15 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsEnum(SchedulingMode)
   schedulingMode?: SchedulingMode;
+
+  @ApiPropertyOptional({
+    enum: ProgressRecalcMode,
+    description:
+      'Out-of-sequence recalc mode (M2, ADR-0035): RETAINED_LOGIC, PROGRESS_OVERRIDE, or ACTUAL_DATES.',
+  })
+  @IsOptional()
+  @IsEnum(ProgressRecalcMode)
+  progressRecalcMode?: ProgressRecalcMode;
 
   @ApiPropertyOptional({
     format: 'date',

@@ -357,14 +357,26 @@ export class ActivitiesService {
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
 
+    // The plan's data date bounds the actuals (M2, ADR-0035 §6) — load it (404s on a foreign/deleted plan).
+    const plan = await this.loadActivePlan(existing.planId, organization.id);
+    const dataDate = plan.plannedStart;
+
     // Resolve the effective values: a provided field overrides the stored one; an
     // omitted field keeps it. This lets us re-derive status and check the
     // date invariants against the FINAL state, not just what was sent.
     const percentComplete = dto.percentComplete ?? existing.percentComplete;
     const actualStart = this.resolveDate(dto.actualStart, existing.actualStart);
-    const actualFinish = this.resolveDate(dto.actualFinish, existing.actualFinish);
+    let actualFinish = this.resolveDate(dto.actualFinish, existing.actualFinish);
+    // Explicit remaining in minutes (day-denominated at the boundary): provided overrides stored,
+    // null clears (derive), omitted keeps.
+    let remainingDurationMinutes =
+      dto.remainingDurationDays === undefined
+        ? existing.remainingDurationMinutes
+        : dto.remainingDurationDays === null
+          ? null
+          : dto.remainingDurationDays * MINUTES_PER_DAY;
 
-    // You cannot finish what you never started, and a finish cannot precede a start.
+    // You cannot finish what you never started, and a finish cannot precede a start (N06).
     if (actualFinish !== null && actualStart === null) {
       throw new ValidationError('An actual finish needs an actual start.', {
         reason: 'FINISH_WITHOUT_START',
@@ -376,10 +388,46 @@ export class ActivitiesService {
       });
     }
 
+    // N07 — an actual date may not be in the future beyond the data date (ADR-0035 §6): reject.
+    if (dataDate !== null) {
+      const future = [actualStart, actualFinish].find((d) => d !== null && d > dataDate);
+      if (future) {
+        throw new ValidationError('An actual date cannot be after the plan’s data date.', {
+          reason: 'ACTUAL_AFTER_DATA_DATE',
+        });
+      }
+    }
+
+    const isComplete = actualFinish !== null || percentComplete >= 100;
+    // N08 — complete without an actual finish (ADR-0035 §6): repair the finish to the data date + warn.
+    if (isComplete && actualFinish === null && actualStart !== null && dataDate !== null) {
+      actualFinish = dataDate;
+      this.logger.warn({ activityId, reason: 'N08_COMPLETE_WITHOUT_FINISH' }, 'progress repaired');
+    }
+    // N18 — remaining > 0 on a complete activity (ADR-0035 §6): repair remaining to 0 + warn.
+    if (isComplete && remainingDurationMinutes !== null && remainingDurationMinutes > 0) {
+      remainingDurationMinutes = 0;
+      this.logger.warn({ activityId, reason: 'N18_REMAINING_ON_COMPLETE' }, 'progress repaired');
+    }
+
+    // Suspend / resume (ADR-0035 §4): resolve the pair (provided overrides stored; null clears) and
+    // reject a resume before the suspend. These are NOT bounded by the data date (a resume may be in
+    // the future — that pushes the remaining work out, §4).
+    const suspendDate = this.resolveDate(dto.suspendDate, existing.suspendDate);
+    const resumeDate = this.resolveDate(dto.resumeDate, existing.resumeDate);
+    if (suspendDate !== null && resumeDate !== null && resumeDate < suspendDate) {
+      throw new ValidationError('Resume date cannot precede the suspend date.', {
+        reason: 'RESUME_BEFORE_SUSPEND',
+      });
+    }
+
     const patch: ActivityPatch = {
       percentComplete,
       actualStart,
       actualFinish,
+      remainingDurationMinutes,
+      suspendDate,
+      resumeDate,
       status: deriveStatus(percentComplete, actualStart, actualFinish),
     };
 

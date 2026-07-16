@@ -109,6 +109,13 @@ export interface AdaptOptions {
    * per-edge `24H` always wins over this setting.
    */
   relationshipLagCalendar?: 'PLAN' | 'PREDECESSOR' | 'SUCCESSOR';
+  /**
+   * Feed each activity's progress (actual start/finish, remaining duration) to the engine (M2,
+   * ADR-0035). Off by default (the S01 baseline schedules the clean unprogressed network); on for
+   * the progressed scenarios (S02/S03/S04), where the caller also sets `dataDate` to the fixture's
+   * data date and the recalc `progressMode`.
+   */
+  honorProgress?: boolean;
 }
 
 const MINUTES_PER_HOUR = 60;
@@ -134,6 +141,7 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const dataDate = opts.dataDate ?? toCalendarDay(fixture.project.planned_start);
   const honorLagCalendars = opts.honorLagCalendars ?? true;
   const honorActivityCalendars = opts.honorActivityCalendars ?? false;
+  const honorProgress = opts.honorProgress ?? false;
   const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
 
@@ -166,6 +174,7 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       activity,
       defaultCalendarId,
       honorActivityCalendars,
+      honorProgress,
       activityPort,
       notes,
     );
@@ -249,6 +258,7 @@ function adaptActivity(
   activity: FixtureActivity,
   defaultCalendarId: string,
   honorActivityCalendars: boolean,
+  honorProgress: boolean,
   activityPort: (calId: string) => WorkingTimeCalendar | undefined,
   notes: AdaptationNote[],
 ): EngineActivity | null {
@@ -298,12 +308,35 @@ function adaptActivity(
     });
   }
 
-  if (activity.status !== 'NOT_STARTED') {
+  // Progress (M2, ADR-0035): when honoured, feed the fixture's actuals (day-denominated, like the
+  // service) and the in-progress remaining (hours → working minutes). The engine classifies from
+  // the actuals (a set actual finish ⇒ complete). Off (the S01 baseline), progress is dropped with
+  // a note and the clean unprogressed network schedules from the planned start.
+  let progress: Pick<
+    EngineActivity,
+    'actualStart' | 'actualFinish' | 'remainingMinutes' | 'resumeDate'
+  > = {};
+  if (honorProgress) {
+    const actualStart = activity.actual_start ? activity.actual_start.slice(0, 10) : null;
+    const actualFinish = activity.actual_finish ? activity.actual_finish.slice(0, 10) : null;
+    progress = {
+      actualStart,
+      actualFinish,
+      // Remaining only matters for an in-progress activity; a completed one uses its actual finish.
+      ...(activity.status === 'IN_PROGRESS'
+        ? {
+            remainingMinutes: Math.round(activity.remaining_duration_h * MINUTES_PER_HOUR),
+            // Suspend/resume (§4): a resume date floors the remaining (e.g. A4230's 2026-03-09).
+            ...(activity.resume_date ? { resumeDate: activity.resume_date.slice(0, 10) } : {}),
+          }
+        : {}),
+    };
+  } else if (activity.status !== 'NOT_STARTED') {
     notes.push({
       entity: 'activity',
       id: activity.id,
       kind: 'progress-ignored',
-      reason: `status ${activity.status}: progress/actuals ignored (engine has no progress model, M2)`,
+      reason: `status ${activity.status}: progress/actuals ignored (S01 baseline — unprogressed)`,
     });
   }
 
@@ -311,6 +344,7 @@ function adaptActivity(
     id: activity.id,
     durationMinutes,
     type,
+    ...progress,
     ...(ownPort ? { calendar: ownPort } : {}),
   };
 

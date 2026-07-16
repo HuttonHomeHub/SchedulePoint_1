@@ -1,0 +1,200 @@
+import type { DependencyType } from '@repo/types';
+import { describe, expect, it } from 'vitest';
+
+import { computeSchedule } from './compute';
+import type { ProgressMode } from './progress';
+import type { EngineActivity, EngineEdge, EngineResult } from './types';
+import {
+  buildWorkingTimeCalendar,
+  fullDayWeek,
+  type WorkingTimeCalendar,
+} from './working-time-calendar';
+
+/**
+ * Progress-ingestion tests (M2, ADR-0035 §1–§2). A **complete** activity freezes on its actual
+ * start/finish (logic and the data date never move it); an **in-progress** one keeps its frozen
+ * actual start while its remaining work reschedules forward, floored at the data date; an activity
+ * with no actuals is the ordinary planned case (byte-identical — the golden suite is the gate).
+ *
+ * Plan calendar: **Mon–Fri, full days**. `DATA_DATE = 2026-01-05` is a Monday; `DAY = 1440`
+ * working-minutes = one full day. Reference weekdays: 12-29 Mon … 01-02 Fri, 01-05 Mon … 01-09 Fri.
+ */
+const DATA_DATE = '2026-01-05';
+const DAY = 1440;
+const FIVE_DAY: WorkingTimeCalendar = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
+
+function task(
+  id: string,
+  durationMinutes: number,
+  progress: Partial<EngineActivity> = {},
+): EngineActivity {
+  return { id, durationMinutes, type: 'TASK', ...progress };
+}
+
+function edge(
+  predecessorId: string,
+  successorId: string,
+  type: DependencyType = 'FS',
+  lagMinutes = 0,
+): EngineEdge {
+  return { id: `${predecessorId}-${successorId}`, predecessorId, successorId, type, lagMinutes };
+}
+
+function run(
+  activities: readonly EngineActivity[],
+  edges: readonly EngineEdge[] = [],
+  progressMode?: ProgressMode,
+) {
+  const output = computeSchedule(activities, edges, {
+    dataDate: DATA_DATE,
+    calendar: FIVE_DAY,
+    ...(progressMode ? { progressMode } : {}),
+  });
+  return new Map<string, EngineResult>(output.results.map((r) => [r.activityId, r]));
+}
+
+describe('progress ingestion (M2, ADR-0035 §1–§2)', () => {
+  it('freezes a completed activity on its actual dates, ignoring the data date and duration', () => {
+    // A finished Mon 12-29 → Fri 01-02 (before the data date). Its planned duration is irrelevant:
+    // it is frozen on the actuals, unlike an unprogressed activity which starts at the data date.
+    const complete = run([
+      task('A', 5 * DAY, { actualStart: '2025-12-29', actualFinish: '2026-01-02' }),
+    ]).get('A')!;
+    expect(complete.earlyStart).toBe('2025-12-29');
+    expect(complete.earlyFinish).toBe('2026-01-02');
+    expect(complete.totalFloat).toBe(0); // a completed activity carries zero float
+
+    const planned = run([task('A', 5 * DAY)]).get('A')!;
+    expect(planned.earlyStart).toBe('2026-01-05'); // the unprogressed baseline differs
+    expect(complete.earlyStart).not.toBe(planned.earlyStart);
+  });
+
+  it('gates a not-started successor off the completed predecessor’s ACTUAL finish (retained logic)', () => {
+    // A completed early (Mon–Tue actual, though planned 5 days). B (not started) starts the next
+    // working day after A's ACTUAL finish — earlier than if A ran its full planned duration.
+    const byId = run(
+      [
+        task('A', 5 * DAY, { actualStart: '2026-01-05', actualFinish: '2026-01-06' }),
+        task('B', 3 * DAY),
+      ],
+      [edge('A', 'B')],
+    );
+    expect(byId.get('B')!.earlyStart).toBe('2026-01-07'); // Wed, day after the Tue actual finish
+    expect(byId.get('B')!.earlyFinish).toBe('2026-01-09'); // + 3 working days
+
+    // If A were unprogressed (Mon 01-05 → Fri 01-09), B would not start until Mon 01-12.
+    const plannedB = run([task('A', 5 * DAY), task('B', 3 * DAY)], [edge('A', 'B')]).get('B')!;
+    expect(plannedB.earlyStart).toBe('2026-01-12');
+  });
+
+  it('floors an in-progress activity’s REMAINING work at the data date, keeping the frozen start', () => {
+    // A started Mon 12-29 with 2 days of work left. Its start is frozen in the past; the remaining
+    // 2 days schedule from the data date (Mon 01-05) → inclusive Tue 01-06 — never before the data date.
+    const inProgress = run([
+      task('A', 5 * DAY, { actualStart: '2025-12-29', remainingMinutes: 2 * DAY }),
+    ]).get('A')!;
+    expect(inProgress.earlyStart).toBe('2025-12-29'); // frozen actual start (before the data date)
+    expect(inProgress.earlyFinish).toBe('2026-01-06'); // data date + 2 remaining working days
+
+    // Distinct from a full 5-day activity from the data date (which finishes Fri 01-09).
+    expect(inProgress.earlyFinish).not.toBe(run([task('A', 5 * DAY)]).get('A')!.earlyFinish);
+  });
+
+  it('honours the explicit remaining duration over the planned duration', () => {
+    // Same planned 5-day activity, two different remainings → different finishes from the data date.
+    const oneLeft = run([
+      task('A', 5 * DAY, { actualStart: '2025-12-29', remainingMinutes: 1 * DAY }),
+    ]).get('A')!;
+    const fourLeft = run([
+      task('A', 5 * DAY, { actualStart: '2025-12-29', remainingMinutes: 4 * DAY }),
+    ]).get('A')!;
+    expect(oneLeft.earlyFinish).toBe('2026-01-05'); // 1 day from Mon 01-05 = Mon 01-05
+    expect(fourLeft.earlyFinish).toBe('2026-01-08'); // 4 days from Mon 01-05 = Thu 01-08
+  });
+
+  it('clamps a lead (negative lag) into remaining work to the data date (N13)', () => {
+    // B is in progress with a 1-day lead (FS −1d) from A, which finished in the past. The lead would
+    // pull the remaining work before the data date; it is clamped to the data date (ADR-0035 §2).
+    const byId = run(
+      [
+        task('A', 2 * DAY, { actualStart: '2025-12-29', actualFinish: '2025-12-31' }),
+        task('B', 5 * DAY, { actualStart: '2025-12-30', remainingMinutes: 2 * DAY }),
+      ],
+      [edge('A', 'B', 'FS', -1 * DAY)],
+    );
+    expect(byId.get('B')!.earlyStart).toBe('2025-12-30'); // frozen actual start
+    expect(byId.get('B')!.earlyFinish).toBe('2026-01-06'); // remaining floored at data date, +2d
+  });
+
+  it('applies the recalc mode to an out-of-sequence activity’s remaining (retained vs override)', () => {
+    // P is in progress with 5 days of work left (remaining finishes Fri 01-09). B started out of
+    // sequence (before P finished) with an FS tie to P and 2 days left.
+    const net = (): EngineActivity[] => [
+      task('P', 5 * DAY, { actualStart: '2025-12-29', remainingMinutes: 5 * DAY }),
+      task('B', 5 * DAY, { actualStart: '2025-12-30', remainingMinutes: 2 * DAY }),
+    ];
+    const edges = [edge('P', 'B')]; // FS: under retained logic B waits for P's remaining finish
+    const retained = run(net(), edges, 'RETAINED_LOGIC').get('B')!;
+    const override = run(net(), edges, 'PROGRESS_OVERRIDE').get('B')!;
+    const actual = run(net(), edges, 'ACTUAL_DATES').get('B')!;
+
+    // Retained: B's remaining waits for P (finishes Fri 01-09) → starts Mon 01-12, +2d → Tue 01-13.
+    expect(retained.earlyFinish).toBe('2026-01-13');
+    // Override drops the INCOMPLETE predecessor P → B's remaining runs from the data date, +2d → Tue 01-06.
+    expect(override.earlyFinish).toBe('2026-01-06');
+    // The definitive Retained-Logic vs Progress-Override discriminator (ADR-0035 §1).
+    expect(retained.earlyFinish).not.toBe(override.earlyFinish);
+    // Actual Dates coincides with Override for a PAST actual start (N07 forbids future actuals).
+    expect(actual.earlyFinish).toBe(override.earlyFinish);
+  });
+
+  it('schedules a future actual start’s remaining from the actual start under Actual Dates (vs the data date under Override)', () => {
+    // Engine-level isolation of Actual Dates vs Progress Override: a future actual start (Wed 01-07,
+    // after the data date) — the boundary rejects this via N07, but the engine is N07-agnostic, so
+    // this is where the two modes provably diverge. 2 days of work remain.
+    const net = (): EngineActivity[] => [
+      task('A', 5 * DAY, { actualStart: '2026-01-07', remainingMinutes: 2 * DAY }),
+    ];
+    const override = run(net(), [], 'PROGRESS_OVERRIDE').get('A')!;
+    const actual = run(net(), [], 'ACTUAL_DATES').get('A')!;
+    expect(override.earlyFinish).toBe('2026-01-06'); // floored at the data date (Mon 01-05) + 2d
+    expect(actual.earlyFinish).toBe('2026-01-08'); // floored at the actual start (Wed 01-07) + 2d
+    expect(actual.earlyFinish).not.toBe(override.earlyFinish);
+  });
+
+  it('floors an in-progress activity’s remaining at a resume date after the data date (§4)', () => {
+    // A started Mon 12-29 with 2 days left, suspended and resuming Thu 01-08 (after the data date Mon
+    // 01-05). The remaining schedules from the resume date, not the data date → Thu 01-08 + 2d = Fri 01-09.
+    const resumed = run([
+      task('A', 5 * DAY, {
+        actualStart: '2025-12-29',
+        remainingMinutes: 2 * DAY,
+        resumeDate: '2026-01-08',
+      }),
+    ]).get('A')!;
+    expect(resumed.earlyStart).toBe('2025-12-29'); // frozen actual start
+    expect(resumed.earlyFinish).toBe('2026-01-09'); // resume Thu 01-08 + 2 working days
+
+    // A resume BEFORE the data date is a no-op — the data-date floor still governs (Tue 01-06).
+    const early = run([
+      task('A', 5 * DAY, {
+        actualStart: '2025-12-29',
+        remainingMinutes: 2 * DAY,
+        resumeDate: '2025-12-30',
+      }),
+    ]).get('A')!;
+    expect(early.earlyFinish).toBe('2026-01-06');
+  });
+
+  it('is byte-identical to the pre-progress result when no activity carries actuals', () => {
+    // Sanity: a network with progress fields all absent matches the plain planned computation
+    // (the same guarantee the golden suite enforces across the whole fixture).
+    const edges = [edge('A', 'B'), edge('B', 'C')];
+    const activities = [task('A', 2 * DAY), task('B', 3 * DAY), task('C', 1 * DAY)];
+    const byId = run(activities, edges);
+    expect(byId.get('A')!.earlyStart).toBe('2026-01-05');
+    expect(byId.get('C')!.earlyFinish).toBe('2026-01-12'); // A(2d)+B(3d)+C(1d) across the weekend
+    // Every activity on this simple chain is on the single critical path → zero float.
+    expect(byId.get('B')!.totalFloat).toBe(0);
+  });
+});

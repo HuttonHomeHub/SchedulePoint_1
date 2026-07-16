@@ -52,6 +52,7 @@ const plans: PlanSummary[] = [
     description: null,
     status: 'DRAFT',
     schedulingMode: 'EARLY',
+    progressRecalcMode: 'RETAINED_LOGIC',
     plannedStart: null,
     calendarId: null,
     version: 1,

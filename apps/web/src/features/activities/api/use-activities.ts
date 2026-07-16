@@ -241,6 +241,12 @@ function progressBody(input: ProgressFormValues & { version: number }) {
     // A blank date field clears the value (null), matching the API.
     actualStart: input.actualStart ? input.actualStart : null,
     actualFinish: input.actualFinish ? input.actualFinish : null,
+    // M2 progress-ingestion fields (ADR-0035). The dialog seeds these from the row, so a stored
+    // value round-trips even with the inputs hidden; a cleared field sends null (derive remaining
+    // from percent / drop the suspend/resume pause).
+    remainingDurationDays: input.remainingDurationDays ?? null,
+    suspendDate: input.suspendDate ? input.suspendDate : null,
+    resumeDate: input.resumeDate ? input.resumeDate : null,
     version: input.version,
   };
 }

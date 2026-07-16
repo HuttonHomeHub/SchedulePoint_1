@@ -32,6 +32,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     plannedStart: new Date('2026-01-01T00:00:00.000Z'),
     calendarId: null,
     schedulingMode: 'EARLY',
+    progressRecalcMode: 'RETAINED_LOGIC',
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -56,6 +57,11 @@ const activityRow = (
   constraintDate: null,
   visualStart: null,
   calendarId: null,
+  actualStart: null,
+  actualFinish: null,
+  percentComplete: 0,
+  remainingDurationMinutes: null,
+  resumeDate: null,
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({
@@ -171,6 +177,43 @@ describe('ScheduleService.recalculate', () => {
       activityCount: 0,
       criticalCount: 0,
     });
+  });
+
+  it('resolves an in-progress activity’s remaining from percent complete and floors it at the data date (M2)', async () => {
+    // 5-day activity, 60% done, started before the data date → 2 days remain (derived), scheduled
+    // from the data date 2026-01-01 (all-days calendar) → inclusive finish 2026-01-02; start frozen.
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 5, { actualStart: new Date('2025-12-20'), percentComplete: 60 }),
+    ]);
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const a = results.find((r) => r.activityId === 'A')!;
+    expect(a.earlyStart).toBe('2025-12-20'); // frozen actual start
+    expect(a.earlyFinish).toBe('2026-01-02'); // data date + 2 remaining days
+    expect(summary.projectFinish).toBe('2026-01-02');
+  });
+
+  it('threads the plan’s progress recalc mode into the engine (M2)', async () => {
+    // P (in progress, 5 days left) FS→ B (in progress out of sequence, 2 days left). Under
+    // PROGRESS_OVERRIDE B ignores the incomplete P and its remaining runs from the data date.
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ progressRecalcMode: 'PROGRESS_OVERRIDE' }));
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('P', 5, {
+        actualStart: new Date('2025-12-20'),
+        remainingDurationMinutes: 5 * 1440,
+      }),
+      activityRow('B', 5, {
+        actualStart: new Date('2025-12-21'),
+        remainingDurationMinutes: 2 * 1440,
+      }),
+    ]);
+    schedule.loadEdges.mockResolvedValue([edgeRow('P', 'B')]);
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const b = results.find((r) => r.activityId === 'B')!;
+    // Override drops the incomplete predecessor P → B's remaining from data date 01-01 + 2d = 01-02
+    // (under Retained Logic it would wait for P's 01-05 finish and land on 01-07).
+    expect(b.earlyFinish).toBe('2026-01-02');
   });
 
   it('takes the plan lock BEFORE loading the graph', async () => {

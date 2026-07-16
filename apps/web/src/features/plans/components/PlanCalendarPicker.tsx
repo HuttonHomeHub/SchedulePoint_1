@@ -1,7 +1,8 @@
 import type { CalendarSummary, PlanSummary } from '@repo/types';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 
 import { useSetPlanCalendar } from '../api/use-plans';
+import { useOptimisticSelect } from '../hooks/use-optimistic-select';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Label } from '@/components/ui/label';
@@ -42,43 +43,20 @@ export function PlanCalendarPicker({
   const selectId = useId();
   const hintId = useId();
   const errorId = useId();
-  const selectRef = useRef<HTMLSelectElement>(null);
-  const wasBusy = useRef(false);
-  // The just-picked value, shown until the refetched plan confirms it (or a failure
-  // rolls it back). '' means "None"; null means "no pending choice".
-  const [optimistic, setOptimistic] = useState<string | null>(null);
+  // The optimistic/busy/focus-restore machinery is shared with the recalc-mode picker
+  // (`useOptimisticSelect`); the calendar picker also stays busy while the calendars list loads
+  // (can't pick from an incomplete list). '' means "None".
+  const { displayed, busy, selectRef, choose, rollback } = useOptimisticSelect<string>({
+    serverValue: plan.calendarId ?? '',
+    isPending: setCalendar.isPending,
+    extraBusy: calendarsLoading,
+  });
 
-  const serverValue = plan.calendarId ?? '';
-  // Drop the optimistic value once the server truth catches up — the documented
-  // "reset state during render" pattern (no effect, no extra committed render).
-  if (optimistic !== null && optimistic === serverValue) setOptimistic(null);
-
-  // Busy from the moment of change until the plan cache reflects the new value (not just
-  // until the mutation settles), so a second change can't send a stale version; also
-  // while the calendars list is still loading (can't pick from an incomplete list).
-  const busy =
-    setCalendar.isPending ||
-    calendarsLoading ||
-    (optimistic !== null && optimistic !== serverValue);
-  const displayed = optimistic ?? serverValue;
   // The delete-in-use guard means a plan's calendar is always in the org list once
   // loaded, so an unmatched non-empty value only happens while `calendars` is still
   // loading. Inject a synthetic option for it so the Select shows the calendar as
   // selected (not silently blank, which would read as "None").
   const missingCurrent = displayed !== '' && !calendars.some((c) => c.id === displayed);
-
-  // Disabling the focused select drops focus to <body>; restore it once busy clears
-  // (WCAG 2.4.3), but only if focus was actually lost (not moved away by the user).
-  useEffect(() => {
-    if (
-      wasBusy.current &&
-      !busy &&
-      (document.activeElement === document.body || document.activeElement === null)
-    ) {
-      selectRef.current?.focus();
-    }
-    wasBusy.current = busy;
-  }, [busy]);
 
   const selectedName = plan.calendarId
     ? (calendars.find((calendar) => calendar.id === plan.calendarId)?.name ?? '—')
@@ -96,7 +74,7 @@ export function PlanCalendarPicker({
   const onChange = (event: React.ChangeEvent<HTMLSelectElement>): void => {
     if (busy) return;
     const value = event.target.value;
-    setOptimistic(value);
+    choose(value);
     const calendarId = value === '' ? null : value;
     setCalendar.mutate(
       { planId: plan.id, version: plan.version, calendarId },
@@ -108,7 +86,7 @@ export function PlanCalendarPicker({
           announce(`Plan calendar set to ${name}.`);
         },
         // Roll the visible choice back to the server value on failure (the error shows).
-        onError: () => setOptimistic(null),
+        onError: () => rollback(),
       },
     );
   };

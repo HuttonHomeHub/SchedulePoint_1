@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PlanStatus, SchedulingMode, type Plan } from '@prisma/client';
+import { PlanStatus, ProgressRecalcMode, SchedulingMode, type Plan } from '@prisma/client';
 import type { PlanSummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
@@ -26,6 +26,13 @@ export class PlanResponseDto implements PlanSummary {
     description: 'Scheduling mode (ADR-0033): EARLY (computed-earliest) or VISUAL (hand-placed).',
   })
   schedulingMode!: SchedulingMode;
+
+  @ApiProperty({
+    enum: ProgressRecalcMode,
+    description:
+      'Out-of-sequence recalc mode (M2, ADR-0035): RETAINED_LOGIC, PROGRESS_OVERRIDE, or ACTUAL_DATES.',
+  })
+  progressRecalcMode!: ProgressRecalcMode;
 
   @ApiProperty({
     format: 'date',
@@ -61,6 +68,7 @@ export class PlanResponseDto implements PlanSummary {
       description: entity.description,
       status: entity.status,
       schedulingMode: entity.schedulingMode,
+      progressRecalcMode: entity.progressRecalcMode,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

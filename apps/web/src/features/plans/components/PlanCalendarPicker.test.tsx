@@ -16,6 +16,7 @@ const PLAN: PlanSummary = {
   description: null,
   status: 'DRAFT',
   schedulingMode: 'EARLY',
+  progressRecalcMode: 'RETAINED_LOGIC',
   plannedStart: '2026-01-01',
   calendarId: 'cal-standard',
   version: 4,

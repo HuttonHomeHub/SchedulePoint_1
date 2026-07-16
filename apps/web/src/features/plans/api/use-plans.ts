@@ -1,4 +1,4 @@
-import type { PlanSummary, SchedulingMode } from '@repo/types';
+import type { PlanSummary, ProgressRecalcMode, SchedulingMode } from '@repo/types';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import type { PlanFormValues } from '../schemas/plan-schemas';
@@ -140,6 +140,37 @@ export function useSetPlanSchedulingMode(orgSlug: string) {
       apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
         method: 'PATCH',
         body: JSON.stringify({ schedulingMode: input.schedulingMode, version: input.version }),
+      }),
+    onSuccess: (updated, input) => {
+      queryClient.setQueryData(planKeys.detail(orgSlug, input.planId), updated);
+    },
+    onSettled: (_data, _error, input) =>
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
+  });
+}
+
+/**
+ * Switch a plan's `progressRecalcMode` (ADR-0035, M2) — RETAINED_LOGIC / PROGRESS_OVERRIDE /
+ * ACTUAL_DATES — as a targeted PATCH of just `progressRecalcMode` + `version`, so the settings
+ * picker doesn't need the whole plan form. Mirrors {@link useSetPlanSchedulingMode}: writes the
+ * returned plan into the detail cache (new mode + fresh version) and invalidates the schedule summary
+ * so a later recalculation reflects the mode. It changes no dates itself; the next recalc re-applies
+ * the retained-logic rules to any in-progress activities.
+ */
+export function useSetPlanRecalcMode(orgSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      planId: string;
+      version: number;
+      progressRecalcMode: ProgressRecalcMode;
+    }) =>
+      apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          progressRecalcMode: input.progressRecalcMode,
+          version: input.version,
+        }),
       }),
     onSuccess: (updated, input) => {
       queryClient.setQueryData(planKeys.detail(orgSlug, input.planId), updated);

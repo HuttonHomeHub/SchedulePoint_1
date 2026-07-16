@@ -1,4 +1,4 @@
-import type { PlanStatus } from '@repo/types';
+import type { PlanStatus, ProgressRecalcMode } from '@repo/types';
 import { z } from 'zod';
 
 /**
@@ -14,6 +14,36 @@ export const PLAN_STATUS_LABELS: Record<PlanStatus, string> = {
 
 /** Plan lifecycle states, in order — derived from the labels so it stays exhaustive. */
 export const PLAN_STATUSES = Object.keys(PLAN_STATUS_LABELS) as [PlanStatus, ...PlanStatus[]];
+
+/**
+ * Human labels + one-line descriptions for the progress recalc modes (ADR-0035 §1), the
+ * source of truth for the web (a `Record<ProgressRecalcMode, …>`, so a new mode fails to
+ * compile until it is described). The mode governs how in-progress activities reschedule
+ * against their predecessors when the plan is recalculated.
+ */
+export const PROGRESS_RECALC_MODE_LABELS: Record<
+  ProgressRecalcMode,
+  { label: string; description: string }
+> = {
+  RETAINED_LOGIC: {
+    label: 'Retained Logic',
+    description: 'Remaining work still waits for every predecessor (the default).',
+  },
+  PROGRESS_OVERRIDE: {
+    label: 'Progress Override',
+    description: 'Remaining work ignores predecessors that are not yet complete.',
+  },
+  ACTUAL_DATES: {
+    label: 'Actual Dates',
+    description: 'Remaining work drops all predecessor ties and runs from the data date.',
+  },
+};
+
+/** Progress recalc modes, in order — derived from the labels so it stays exhaustive. */
+export const PROGRESS_RECALC_MODES = Object.keys(PROGRESS_RECALC_MODE_LABELS) as [
+  ProgressRecalcMode,
+  ...ProgressRecalcMode[],
+];
 
 /**
  * Plan create/edit form schema — mirrors the API DTO. `plannedStart` is the raw

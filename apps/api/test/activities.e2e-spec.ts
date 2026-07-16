@@ -380,13 +380,15 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     await prisma.orgMember.create({
       data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
     });
+    // Actuals fall on or before the plan data date (2026-01-01) — an actual after "now"/the data
+    // date is rejected by N07 (ADR-0035 §6), so progress is reported against dates already elapsed.
     const progressed = await contributor.agent
       .patch(`${item}/progress`)
-      .send({ percentComplete: 40, actualStart: '2026-05-01', version: 1 })
+      .send({ percentComplete: 40, actualStart: '2025-12-01', version: 1 })
       .expect(200);
     expect(progressed.body.data).toMatchObject({
       percentComplete: 40,
-      actualStart: '2026-05-01',
+      actualStart: '2025-12-01',
       status: 'IN_PROGRESS', // derived from the numbers, not sent
       version: 2,
     });
@@ -394,14 +396,14 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     // Completing it (100% + finish date) derives COMPLETE.
     const done = await contributor.agent
       .patch(`${item}/progress`)
-      .send({ percentComplete: 100, actualFinish: '2026-06-01', version: 2 })
+      .send({ percentComplete: 100, actualFinish: '2025-12-15', version: 2 })
       .expect(200);
-    expect(done.body.data).toMatchObject({ status: 'COMPLETE', actualFinish: '2026-06-01' });
+    expect(done.body.data).toMatchObject({ status: 'COMPLETE', actualFinish: '2025-12-15' });
 
     // A finish before the start, or without one, is rejected.
     await contributor.agent
       .patch(`${item}/progress`)
-      .send({ actualStart: '2026-07-01', actualFinish: '2026-06-01', version: 3 })
+      .send({ actualStart: '2025-12-20', actualFinish: '2025-12-10', version: 3 })
       .expect(422);
 
     // A Viewer cannot report progress.

@@ -1,8 +1,9 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Dialog } from '@/components/ui/dialog';
+import { PROGRESS_INGESTION_ENABLED } from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
-import { PLAN_STATUS_LABELS, PlanCalendarPicker } from '@/features/plans';
+import { PLAN_STATUS_LABELS, PlanCalendarPicker, PlanRecalcModePicker } from '@/features/plans';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The lower-frequency plan-chrome surfaces reachable from either layout's overflow. */
@@ -59,13 +60,18 @@ export function PlanChromeDialogs({
         title="Working-day calendar"
         description="The calendar that sets which days are working days (and holidays) for this plan's schedule."
       >
-        <PlanCalendarPicker
-          orgSlug={model.orgSlug}
-          plan={plan}
-          calendars={model.calendars.data ?? []}
-          calendarsLoading={model.calendars.isPending}
-          canEdit={model.canWrite}
-        />
+        <div className="flex flex-col gap-6">
+          <PlanCalendarPicker
+            orgSlug={model.orgSlug}
+            plan={plan}
+            calendars={model.calendars.data ?? []}
+            calendarsLoading={model.calendars.isPending}
+            canEdit={model.canWrite}
+          />
+          {PROGRESS_INGESTION_ENABLED ? (
+            <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          ) : null}
+        </div>
       </Dialog>
     </>
   );

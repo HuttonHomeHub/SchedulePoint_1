@@ -25,6 +25,16 @@ export interface ScheduleActivityRow {
   /** The activity's own calendar (ADR-0037, M5); null inherits the plan default. Resolved to a
    * port in the service and attached per-activity to the engine. */
   calendarId: string | null;
+  /** Progress actuals (M2, ADR-0035 §1). The engine freezes a complete activity on these and
+   * reschedules an in-progress one's remaining work. */
+  actualStart: Date | null;
+  actualFinish: Date | null;
+  /** Reported progress; the service resolves the engine's `remainingMinutes` from
+   * `remainingDurationMinutes` (explicit) else `durationMinutes × (1 − percentComplete)`. */
+  percentComplete: number;
+  remainingDurationMinutes: number | null;
+  /** Resume date for a suspended in-progress activity (M2, ADR-0035 §4); floors the remaining work. */
+  resumeDate: Date | null;
 }
 
 /** The minimal dependency shape the CPM engine reads (a plan's active edges). */
@@ -97,6 +107,11 @@ export class ScheduleRepository {
         constraintDate: true,
         visualStart: true,
         calendarId: true,
+        actualStart: true,
+        actualFinish: true,
+        percentComplete: true,
+        remainingDurationMinutes: true,
+        resumeDate: true,
       },
     });
   }
