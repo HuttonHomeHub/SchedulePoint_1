@@ -102,7 +102,8 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await progressButton.click();
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Percent complete').fill('40');
-  await dialog.getByLabel(/Actual start/).fill('2026-05-01');
+  // On/before the plan data date (2026-01-05) — an actual after "now" is rejected by N07 (ADR-0035 §6).
+  await dialog.getByLabel(/Actual start/).fill('2026-01-02');
   await expect(dialog.getByText('In progress')).toBeVisible();
   await dialog.getByRole('button', { name: 'Save progress' }).click();
 
