@@ -121,11 +121,12 @@
   `integer`/`bigint` minor units + currency code. Identifiers: `uuid`. Enums:
   Postgres enums via Prisma.
 - **Money is `BIGINT` minor units + a currency code (EV1, ADR-0042).** The first
-  money columns land with the cost/earned-value rung: `resources.cost_per_unit`
-  (a P6 "Price/Unit" rate), `resource_assignments.budgeted_cost`/`actual_cost`,
+  money columns land with the cost/earned-value rung: the stored amounts
+  `resource_assignments.budgeted_cost`/`actual_cost`,
   `activities.budgeted_expense`/`actual_expense`, and
   `baseline_activities.budgeted_cost` are all **`BIGINT` minor units** (e.g.
-  pence/cents) in the plan's currency; `plans.currency_code` is `CHAR(3)`
+  pence/cents) in the plan's currency (`resources.cost_per_unit` is a **rate**, not
+  a stored amount — see the house rule below); `plans.currency_code` is `CHAR(3)`
   ISO-4217 (a genuine fixed-width code — the "text unless a real limit applies"
   exception — format-guarded, nullable = inherit the org default). `BIGINT` (not
   `INTEGER`) because construction BACs exceed the ~£21M `INT` minor-unit ceiling;
