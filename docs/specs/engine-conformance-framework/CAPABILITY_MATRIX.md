@@ -30,16 +30,17 @@ Engine reality verified against `apps/api/src/modules/schedule/engine/` (see
 **integer working-minute** offsets over **intraday shift calendars** (durations/lag in minutes, elapsed
 durations, midnight-crossing nights, window-only calendars, an hour-granular horizon). **M2 (ADR-0035)
 landed progress ingestion** — actuals with a data-date floor, frozen completions, in-progress remaining,
-the three recalc modes (retained/override/actual-dates), and suspend/resume (§4). Per-**resource**
-calendars and LOE/WBS-summary rollup remain single-plan-calendar (M5-epic rungs).
+the three recalc modes (retained/override/actual-dates), and suspend/resume (§4). **M5-epic landed
+Level-of-Effort** (span-derived hammocks, never-drive/critical, N12 produce-and-flag). Per-**resource**
+scheduling and WBS-summary rollup remain the open M5-epic rungs.
 
 ## Summary
 
 | Status       | Capability groups |
 | ------------ | ----------------- |
-| ✅ Supported | 19                |
+| ✅ Supported | 20                |
 | 🟡 Partial   | 3                 |
-| ❌ Missing   | 5                 |
+| ❌ Missing   | 4                 |
 | ⚪ Deferred  | 4                 |
 
 **M1 (hour/shift-granular calendars + minute-based durations, ADR-0036) has landed**; **M3 wired the
@@ -51,9 +52,9 @@ added progress ingestion** — S02/S03/S04 are runnable differentials (S03 ≠ S
 retained-logic-vs-override discriminator). **M4 (ADR-0035) landed the advanced constraints** —
 mandatory **produce-and-flag** (`constraintViolated`), **secondary** constraints, **expected finish**
 (S12 runnable differential) and the **as-late-as-possible** placement flag (now ✅ with the M6-F5 zero-free-float
-pass), plus the zero-duration-task distinction and the N10/N15 negatives. The remaining ❌ rows sit
-behind **M5-epic** (LOE / resource-dependent / WBS-summary — separate rungs) and **M6** (longest-path /
-multi-path float).
+pass), plus the zero-duration-task distinction and the N10/N12/N15 negatives. **M6** (longest-path /
+multi-path float) and **M5-epic Level-of-Effort** have since landed; the remaining ❌ rows sit behind the
+open **M5-epic** rungs (resource-dependent / WBS-summary — separate rungs).
 
 ## 1. Capability matrix (by group)
 
@@ -72,7 +73,7 @@ multi-path float).
 | As-late-as-possible                                        | `con_alap`                                                                                        | ✅     | M4 ✓ / M6 ✓ (F5)        | Placement **flag** honoured (M4); the zero-**free**-float refinement landed (M6-F5): a flagged activity is placed as late as its successors allow, so its **`freeFloat` is 0** while `early*`/`late*`/`totalFloat` stay pure.                                                                                                                                                                          |
 | Start / Finish milestones                                  | `type_start_ms` `type_finish_ms`                                                                  | ✅     | —                       | Zero-duration, start = finish.                                                                                                                                                                                                                                                                                                                                                                         |
 | Zero-duration **task** (≠ milestone)                       | `net_zero_duration_task`                                                                          | ✅     | M4 ✓ (ADR-0035 §22)     | A zero-duration TASK keeps a genuine start + finish and is never coerced to a milestone; the project-finish tie-break keys off the milestone **type**, not `duration === 0` (M4 ✓, `isMilestone`).                                                                                                                                                                                                     |
-| Level of effort                                            | `type_loe`, `loe_*`                                                                               | ❌     | M5                      | No LOE; duration-from-span, never-drive, never-critical semantics absent.                                                                                                                                                                                                                                                                                                                              |
+| Level of effort                                            | `type_loe`, `loe_*`                                                                               | ✅     | M5-epic ✓ (F1–F3)       | LOE dates derived from the span (earliest SS-pred start … latest FF-succ finish); never drives, never critical, never negative float (late pinned to early). No-span LOE produced-and-flagged (`loeNoSpan`, N12). Adapter includes the 5 fixture LOEs (A1010/A1030 goldens).                                                                                                                           |
 | Resource-dependent scheduling                              | `type_resource_dependent`, `res_calendar_drives`, `res_driving`                                   | ❌     | M5 (needs M1)           | Activities always schedule on the activity calendar; no resource-calendar drive.                                                                                                                                                                                                                                                                                                                       |
 | WBS-summary rollup                                         | `type_wbs_summary`                                                                                | ❌     | M5                      | No summary-bar date rollup.                                                                                                                                                                                                                                                                                                                                                                            |
 | Weekday / holiday / shutdown calendars                     | `cal_5day` `cal_6day` `cal_4day_week` `cal_holidays` `cal_shutdown`                               | ✅     | —                       | 7-bit weekday mask + whole-day dated exceptions (day granularity).                                                                                                                                                                                                                                                                                                                                     |
@@ -131,7 +132,7 @@ The contract: **reject, repair or report — never hang, crash, or silently prod
 | N09 negative duration                          | reject                              | 🟡     | Rejected at the API DTO boundary; an engine-level assert is confirmed in M1.                                                                                                                           |
 | N10 impossible mandatory pair                  | schedule + report violation         | ✅     | M4 ✓ — produced as pinned and flagged (`constraintViolated`), never "fixed" (runnable negative).                                                                                                       |
 | N11 zero-working-hour calendar (**hang test**) | reject at load / terminate safely   | 🟡     | Day-level all-non-working guard exists; the hour-granular iteration cap + "no working time within N years" lands in M1.                                                                                |
-| N12 LOE with no span                           | reject / warn                       | 🟡     | Structural validator catches it; engine LOE is M5.                                                                                                                                                     |
+| N12 LOE with no span                           | reject / warn                       | ✅     | Engine produce-and-flag (M5-epic F2): a no-span LOE is scheduled at a fallback and flagged (`loeNoSpan`/`loeNoSpanCount`), never thrown; the structural validator still catches it at the boundary.    |
 | N13 lead before data date                      | clamp to data date                  | ✅     | M2 ✓ — a lead into remaining work is clamped to the data-date floor.                                                                                                                                   |
 | N14 negative units                             | reject                              | ⚪     | M7 (resources deferred).                                                                                                                                                                               |
 | N15 constraint before project start            | warn, don't pull back               | ✅     | M4 ✓ — the data-date floor prevents the pull-back and a soft warning is counted (`constraintWarningCount`).                                                                                            |

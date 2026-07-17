@@ -8,7 +8,7 @@ import { adaptFixture } from './adapter';
 /**
  * Adapter tests (ADR-0034 §2, §7). Two jobs: prove the adapter's **classification
  * is honest** (the right rows are excluded/approximated, for the right reasons),
- * and prove the supported subset **schedules structurally** — a 119-activity real
+ * and prove the supported subset **schedules structurally** — a 124-activity real
  * network exercising all four relationship kinds runs clean, which is the
  * structural-regression half of the M1 safety net (dates here are a degradation,
  * not a golden — see `goldens.ts` for date assertions).
@@ -18,37 +18,38 @@ describe('conformance adapter', () => {
   const network = adaptFixture(fixture);
 
   it('classifies the fixture into the supported subset with honest counts', () => {
-    // 103 TASK + 4 START_MS + 12 FINISH_MS supported; 5 LOE + 3 WBS + 2 RESOURCE_DEPENDENT excluded.
-    expect(network.report.supportedActivities).toBe(119);
-    expect(network.report.excludedActivities).toBe(10);
-    expect(network.report.supportedRelationships).toBe(169);
-    expect(network.report.excludedRelationships).toBe(19);
-    expect(network.activities).toHaveLength(119);
-    expect(network.edges).toHaveLength(169);
+    // 103 TASK + 4 START_MS + 12 FINISH_MS + 5 LOE supported (M5-epic); 3 WBS + 2 RESOURCE_DEPENDENT excluded.
+    expect(network.report.supportedActivities).toBe(124);
+    expect(network.report.excludedActivities).toBe(5);
+    expect(network.report.supportedRelationships).toBe(179);
+    expect(network.report.excludedRelationships).toBe(9);
+    expect(network.activities).toHaveLength(124);
+    expect(network.edges).toHaveLength(179);
   });
 
   it('records why each unsupported feature was dropped, never faking it', () => {
     const kinds = new Set(network.report.notes.map((n) => n.kind));
-    // Unsupported activity types are excluded with a reason.
-    expect(network.report.notes.filter((n) => n.kind === 'type-unsupported')).toHaveLength(10);
+    // Unsupported activity types are excluded with a reason (3 WBS + 2 RESOURCE_DEPENDENT; LOE now supported).
+    expect(network.report.notes.filter((n) => n.kind === 'type-unsupported')).toHaveLength(5);
     // Durations/lags are now minute-EXACT (hours × 60, M1/ADR-0036) — nothing rounds away.
     expect(network.report.notes.filter((n) => n.kind === 'duration-rounded')).toHaveLength(0);
     expect(network.report.notes.filter((n) => n.kind === 'lag-rounded')).toHaveLength(0);
-    // The honest M5 gap surfaced per-row: 88 supported activities are assigned a calendar
-    // other than the plan default (CAL-01) and are scheduled on the default instead.
+    // The honest M5 gap surfaced per-row: 90 supported activities are assigned a calendar
+    // other than the plan default (CAL-01) and are scheduled on the default instead (now incl. the
+    // two LOE hammocks A1030/A3100 on CAL-02).
     expect(
       network.report.notes.filter((n) => n.kind === 'activity-calendar-substituted'),
-    ).toHaveLength(88);
-    // Sixteen progressed activities have their progress ignored (no progress model yet).
-    expect(network.report.notes.filter((n) => n.kind === 'progress-ignored')).toHaveLength(16);
+    ).toHaveLength(90);
+    // Twenty progressed activities have their progress ignored here (now incl. the four in-progress LOEs).
+    expect(network.report.notes.filter((n) => n.kind === 'progress-ignored')).toHaveLength(20);
     // The one 24H lag-calendar override is now HONOURED (M3) — no longer dropped.
     expect(network.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(0);
     // M4 (ADR-0035 §7/§9/§10/§11) feeds the advanced constraints instead of dropping them: the
     // secondary constraint, expected finish and as-late-as-possible are no longer degradation notes,
     // and every fixture constraint kind is representable, so nothing drops as an unmodelled constraint.
     expect(network.report.notes.filter((n) => n.kind === 'constraint-dropped')).toHaveLength(0);
-    // Every edge dropped for an excluded endpoint is recorded.
-    expect(network.report.notes.filter((n) => n.kind === 'endpoint-excluded')).toHaveLength(19);
+    // Every edge dropped for an excluded endpoint is recorded (9 now that LOE ties are retained).
+    expect(network.report.notes.filter((n) => n.kind === 'endpoint-excluded')).toHaveLength(9);
     // The plan-wide degradations are spelled out.
     expect(network.report.approximations.length).toBeGreaterThanOrEqual(4);
     expect(kinds.has('type-unsupported')).toBe(true);
@@ -107,8 +108,8 @@ describe('conformance adapter', () => {
 
   it('schedules the supported subset without error and produces complete dates', () => {
     const output = computeSchedule(network.activities, network.edges, network.options);
-    expect(output.summary.activityCount).toBe(119);
-    expect(output.results).toHaveLength(119);
+    expect(output.summary.activityCount).toBe(124);
+    expect(output.results).toHaveLength(124);
     expect(output.summary.projectFinish).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     for (const result of output.results) {
       expect(result.earlyStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);

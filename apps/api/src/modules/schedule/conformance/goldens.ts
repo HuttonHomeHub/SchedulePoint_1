@@ -55,6 +55,14 @@ const task = (id: string, durationMinutes: number): EngineActivity => ({
   type: 'TASK',
 });
 
+/** A Level-of-Effort hammock (ADR-0035 §21): duration 0 (the engine derives its span from SS/FF ties). */
+const loe = (id: string, calendar?: EngineActivity['calendar']): EngineActivity => ({
+  id,
+  durationMinutes: 0,
+  type: 'LEVEL_OF_EFFORT',
+  ...(calendar ? { calendar } : {}),
+});
+
 export const GOLDEN_CASES: GoldenCase[] = [
   {
     name: 'fs-chain',
@@ -322,5 +330,92 @@ export const GOLDEN_CASES: GoldenCase[] = [
       },
     },
     projectFinish: '2026-06-08',
+  },
+  {
+    name: 'loe-spans-project',
+    description:
+      'A1010-style: an LOE hammock H hangs off the A→B chain by SS-from-A + FF-to-B. Its span is derived from A’s start to B’s finish; it never drives, is never critical, and carries a non-negative 0 float (ADR-0035 §21).',
+    activities: [task('A', 5), task('B', 3), loe('H')],
+    edges: [
+      { id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 0 },
+      { id: 'e2', predecessorId: 'A', successorId: 'H', type: 'SS', lagMinutes: 0 },
+      { id: 'e3', predecessorId: 'H', successorId: 'B', type: 'FF', lagMinutes: 0 },
+    ],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // The A→B critical chain is byte-identical to fs-chain — the LOE hangs off it, never bounds it.
+      A: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      B: {
+        earlyStart: '2026-06-06',
+        earlyFinish: '2026-06-08',
+        lateStart: '2026-06-06',
+        lateFinish: '2026-06-08',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // H spans A’s start (06-01) to B’s finish (06-08); late is pinned to early ⇒ float 0, free float 0,
+      // never critical.
+      H: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-08',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-08',
+        totalFloat: 0,
+        isCritical: false,
+        freeFloat: 0,
+      },
+    },
+    // The LOE never carries the project finish; B does (06-08).
+    projectFinish: '2026-06-08',
+  },
+  {
+    name: 'loe-cross-calendar',
+    description:
+      'A1030-style: the span ends A→B run on a Mon–Fri calendar (B starts after the weekend), while the LOE H runs on a 7-day calendar. H’s dates are pinned to the span-end INSTANTS regardless of its own calendar — it spans A’s Monday start to B’s finish across the weekend (ADR-0035 §21 on the activity’s own calendar, ADR-0037).',
+    activities: [task('A', 5), task('B', 3), loe('H', allMinutesWorkCalendar)],
+    edges: [
+      { id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 0 },
+      { id: 'e2', predecessorId: 'A', successorId: 'H', type: 'SS', lagMinutes: 0 },
+      { id: 'e3', predecessorId: 'H', successorId: 'B', type: 'FF', lagMinutes: 0 },
+    ],
+    options: { dataDate: MONDAY_DATA_DATE, calendar: monFri },
+    expected: {
+      // A: Mon 01-05 → Fri 01-09 (5 working days). B: FS-after A skips the weekend, Mon 01-12 → Wed 01-14.
+      A: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-09',
+        lateStart: '2026-01-05',
+        lateFinish: '2026-01-09',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      B: {
+        earlyStart: '2026-01-12',
+        earlyFinish: '2026-01-14',
+        lateStart: '2026-01-12',
+        lateFinish: '2026-01-14',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // H (7-day calendar) starts at A’s Monday-start instant (01-05) and finishes at B’s finish instant
+      // (Wed 01-14) — its span crosses the weekend the span ends skip. Late pinned to early ⇒ float 0.
+      H: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-14',
+        lateStart: '2026-01-05',
+        lateFinish: '2026-01-14',
+        totalFloat: 0,
+        isCritical: false,
+        freeFloat: 0,
+      },
+    },
+    projectFinish: '2026-01-14',
   },
 ];

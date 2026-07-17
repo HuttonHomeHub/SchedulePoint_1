@@ -21,10 +21,10 @@ import type { ActivityType, ConstraintType } from '@repo/types';
 export type MapResult<T> = { supported: true; value: T } | { supported: false; reason: string };
 
 /**
- * The fixture's P6 activity types that today's day-granular engine can schedule.
- * `RESOURCE_DEPENDENT` (resource-calendar driven, ADR-0035 §23), `LEVEL_OF_EFFORT`
- * (span-derived, §21) and `WBS_SUMMARY` (roll-up, §24) are **not** — they are
- * excluded with a reason until their owning milestone builds them.
+ * The fixture's P6 activity types that today's engine can schedule. `LEVEL_OF_EFFORT` (span-derived,
+ * ADR-0035 §21) is now supported (M5-epic F1–F3). `RESOURCE_DEPENDENT` (resource-calendar driven, §23)
+ * and `WBS_SUMMARY` (roll-up, §24) are **not** yet — they are excluded with a reason until their owning
+ * milestone builds them.
  */
 export function mapActivityType(type: FixtureActivityType): MapResult<ActivityType> {
   switch (type) {
@@ -34,15 +34,14 @@ export function mapActivityType(type: FixtureActivityType): MapResult<ActivityTy
       return { supported: true, value: 'START_MILESTONE' };
     case 'FINISH_MILESTONE':
       return { supported: true, value: 'FINISH_MILESTONE' };
+    case 'LEVEL_OF_EFFORT':
+      // Span-derived hammock (ADR-0035 §21, M5-epic): the engine derives its dates from its SS/FF ties
+      // and excludes it from driving/criticality; a no-span LOE is produced-and-flagged (N12).
+      return { supported: true, value: 'LEVEL_OF_EFFORT' };
     case 'RESOURCE_DEPENDENT':
       return {
         supported: false,
         reason: 'resource-dependent scheduling is not implemented (ADR-0035 §23, M5)',
-      };
-    case 'LEVEL_OF_EFFORT':
-      return {
-        supported: false,
-        reason: 'level-of-effort span derivation is not implemented (ADR-0035 §21, M5)',
       };
     case 'WBS_SUMMARY':
       return {

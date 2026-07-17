@@ -20,7 +20,8 @@ stays **Proposed** overall until every clause is built. Current state:
 | §13–§14 (duplicate/cycle report)   | M4 (F8)          | **Accepted** |
 | §22 (zero-duration task)           | M4               | **Accepted** |
 | §17–§20 (float & critical)         | M6               | **Accepted** |
-| §21, §23–§24 (LOE, resource, WBS)  | M5-epic          | Proposed     |
+| §21 (level of effort)              | M5-epic          | **Accepted** |
+| §23–§24 (resource, WBS)            | M5-epic          | Proposed     |
 | §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
