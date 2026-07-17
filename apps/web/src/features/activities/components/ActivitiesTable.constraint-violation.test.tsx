@@ -52,6 +52,7 @@ const BASE: ActivitySummary = {
   isNearCritical: false,
   constraintViolated: false,
   loeNoSpan: false,
+  parentId: null,
   visualStart: null,
   visualEffectiveStart: null,
   visualEffectiveFinish: null,

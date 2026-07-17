@@ -42,6 +42,7 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     isNearCritical: false,
     constraintViolated: false,
     loeNoSpan: false,
+    parentId: null,
     visualStart: null,
     visualEffectiveStart: null,
     visualEffectiveFinish: null,

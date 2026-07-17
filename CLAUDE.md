@@ -351,6 +351,12 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   port (activates the reserved `activities.calendar_id`, supersedes ADR-0024 §4's deferral); total float
   measured in the **activity's own** calendar (P6/ADR-0035); PRED/SUCC lag resolves to the endpoint
   calendar (completing M3); all-inherit path stays byte-identical (golden-suite parity gate).
+- **ADR-0038** _(Accepted)_ — WBS activity hierarchy: an **adjacency-list `parentId` self-FK** on
+  `activities` + a `WBS_SUMMARY` activity type, the foundation for WBS-summary rollup (ADR-0035 §24,
+  M5-epic). Invariants (service-enforced): the parent tree is **acyclic** and **same-plan**, only a
+  `WBS_SUMMARY` may be a parent, and a **summary carries no logic** (never a dependency endpoint). The
+  parent tree is orthogonal to the dependency DAG (ADR-0021); soft-deleting a summary cascades to its
+  subtree. Rejected: a materialized `wbs_code` path and an engine-only proof.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

@@ -53,3 +53,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0027](0027-per-package-release-tagging.md)                | Per-package release tagging & versions     | Accepted |
 | [0028](0028-plan-edit-lock.md)                             | Single-editor plan edit-lock               | Accepted |
 | [0029](0029-persistent-hierarchy-navigator.md)             | Persistent app-shell & hierarchy navigator | Proposed |
+| [0038](0038-wbs-activity-hierarchy.md)                     | WBS activity hierarchy (parent tree)       | Accepted |

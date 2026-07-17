@@ -125,6 +125,17 @@ export class UpdateActivityDto {
   @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
   calendarId?: string | null;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'WBS parent (ADR-0038, M5-epic): the id of a WBS_SUMMARY activity in the same plan, or null for ' +
+      'top-level. Must be a summary, same-plan, and introduce no cycle — validated service-side.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'parentId must be a valid UUID.' })
+  parentId?: string | null;
+
   @ApiPropertyOptional({ minimum: 0 })
   @IsOptional()
   @Type(() => Number)

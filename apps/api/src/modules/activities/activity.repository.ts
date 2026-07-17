@@ -30,6 +30,8 @@ export interface ActivityPatch {
   secondaryConstraintDate?: Date | null;
   /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
   calendarId?: string | null;
+  /** WBS parent (ADR-0038, M5-epic); a WBS_SUMMARY in the same plan, or null for top-level. */
+  parentId?: string | null;
   laneIndex?: number;
   /** As-Late-As-Possible placement preference (ADR-0035 §11): display-only, never the pure passes. */
   scheduleAsLateAsPossible?: boolean;

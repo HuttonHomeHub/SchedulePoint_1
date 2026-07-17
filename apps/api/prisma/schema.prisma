@@ -316,16 +316,23 @@ enum TotalFloatMode {
   SMALLEST
 }
 
-// The kind of schedule activity (PROJECT_BRIEF §8). All five are modelled so the
-// deferred slices (dependencies, CPM, canvas) never need an enum migration; the
-// web UI exposes only TASK + START/FINISH milestones in this slice — HAMMOCK and
-// LEVEL_OF_EFFORT derive their duration from dependencies that don't exist yet.
+// The kind of schedule activity (PROJECT_BRIEF §8). Modelled up front so the
+// deferred slices (dependencies, CPM, canvas) never need an enum migration.
+// TASK + START/FINISH milestones are the everyday types the web UI exposes;
+// LEVEL_OF_EFFORT is built (M5, ADR-0035 §21) — its span is DERIVED from an SS
+// predecessor and an FF successor (the engine owns loeNoSpan when that span is
+// missing); HAMMOCK is the same derived-duration idea and is still deferred (its
+// engine wiring does not exist yet). WBS_SUMMARY (M5, ADR-0038) is a hierarchy
+// SUMMARY: it carries NO logic (never an endpoint of a dependency edge) and its
+// dates roll up from its branch's earliest start / latest finish (engine work is
+// F6). MUST stay in lock-step with the `ActivityType` union in @repo/types.
 enum ActivityType {
   TASK
   START_MILESTONE
   FINISH_MILESTONE
   HAMMOCK
   LEVEL_OF_EFFORT
+  WBS_SUMMARY
 }
 
 // Progress state of an activity. Set via the progress path (Contributor+), never
@@ -596,6 +603,26 @@ model Activity {
   // golden path is unchanged. No index: read only on the full-plan recalc load.
   expectedFinish           DateTime?      @map("expected_finish") @db.Date
 
+  // WBS hierarchy — the adjacency-list parent link (M5, ADR-0038). A nullable
+  // self-FK: null = a top-level activity (no WBS parent); non-null = this activity
+  // is grouped under the referenced WBS_SUMMARY. The parent tree groups activities
+  // into a Work Breakdown Structure and is ORTHOGONAL to the dependency DAG
+  // (ADR-0021) — a WBS parent is NOT a logic tie. Three invariants live in the
+  // service (the FK alone cannot express them): (a) the parent tree is ACYCLIC — no
+  // activity is its own ancestor (a service-layer ancestor walk on reparent; the
+  // ck_activities_parent_not_self CHECK, raw SQL in the migration, backs only the
+  // trivial self-parent parent_id <> id); (b) parent and child share the SAME plan
+  // AND organization (the FK scopes only to `activities`, not to a plan); (c) only a
+  // WBS_SUMMARY may be a parent and a SUMMARY carries NO logic (never a dependency
+  // endpoint — ADR-0035 §24). Client-settable. onDelete: Restrict — a summary with
+  // children can never be hard-deleted out from under them (defence in depth; the
+  // real delete path is the service-owned cascade soft-delete, which stamps the
+  // summary and its whole active subtree with one delete_batch_id, ADR-0038). Rollup
+  // (a summary's dates = its branch's earliest start / latest finish) is engine work
+  // (F6); this slice is schema + validation only. Backed by the partial index on
+  // (parent_id) WHERE deleted_at IS NULL — raw SQL in the migration.
+  parentId String? @map("parent_id") @db.Uuid
+
   // CPM output — engine-owned (M6). Nullable/defaulted; never set from input.
   earlyStart         DateTime? @map("early_start") @db.Date
   earlyFinish        DateTime? @map("early_finish") @db.Date
@@ -691,6 +718,15 @@ model Activity {
   predecessorLinks ActivityDependency[] @relation("DependencyPredecessor")
   successorLinks   ActivityDependency[] @relation("DependencySuccessor")
 
+  // The WBS adjacency-list self-relation (M5, ADR-0038): `parent` is this activity's
+  // WBS_SUMMARY container (null = top-level), `children` are the activities grouped
+  // under it (empty for a leaf). onDelete: Restrict guards against an accidental hard
+  // delete orphaning children; the normal delete is the service-owned cascade
+  // soft-delete (delete_batch_id), never a DB CASCADE. Same-plan/same-org and
+  // acyclicity are service-enforced (see the parentId comment above).
+  parent   Activity?  @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Activity[] @relation("ActivityHierarchy")
+
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
   // deleted_at IS NULL [AND code IS NOT NULL]), raw SQL in the migration.
@@ -698,8 +734,17 @@ model Activity {
   // (plan_id, created_at, id) covers the plan FK, the list-activities-under-a-plan
   // query and its cursor sort in one. organization_id is indexed on its own for
   // its FK (RESTRICT) and org-scoped IDOR loads.
+  //
+  // (parent_id) backs the parent self-FK (RESTRICT) and the "children of this
+  // summary" load the rollup + navigator walk over. It is a PARTIAL index filtered
+  // on deleted_at IS NULL (raw SQL in the migration — Prisma cannot express the
+  // WHERE): only the minority of rows that are grouped under a summary and live
+  // carry a value, so the partial keeps it tiny (the delete_batch_id / calendar_id
+  // partial-index precedent). The @@index below declares it to Prisma; the migration
+  // replaces it with the partial form.
   @@index([planId, createdAt, id])
   @@index([organizationId])
+  @@index([parentId])
   @@map("activities")
 }
 

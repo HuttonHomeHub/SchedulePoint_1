@@ -138,6 +138,18 @@ export class CreateActivityDto {
   @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
   calendarId?: string | null;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'WBS parent (ADR-0038, M5-epic): the id of a WBS_SUMMARY activity in the same plan this rolls up ' +
+      'into. Omit or null for a top-level activity. The parent must be a summary, in the same plan, and ' +
+      'introduce no cycle — validated service-side.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'parentId must be a valid UUID.' })
+  parentId?: string | null;
+
   @ApiPropertyOptional({ minimum: 0, default: 0, description: 'Graphical y-lane for the TSLD.' })
   @IsOptional()
   @Type(() => Number)

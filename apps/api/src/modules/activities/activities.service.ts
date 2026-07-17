@@ -94,6 +94,46 @@ export class ActivitiesService {
     if (!calendar) throw new NotFoundError('Calendar not found.');
   }
 
+  /**
+   * Validate a non-null WBS `parentId` (ADR-0038, M5-epic §24): the parent must be an ACTIVE
+   * `WBS_SUMMARY` activity in the **same plan** (a cross-plan / foreign / deleted / unknown id reads as
+   * 404, leaking nothing), and — when re-parenting an EXISTING activity (`selfId` set) — must not sit
+   * inside `selfId`'s own subtree, which would make the WBS parent tree cyclic. Only a summary may be a
+   * parent, and the tree is otherwise acyclic, so the ancestor walk terminates. Runs inside the write
+   * transaction alongside the insert/update.
+   */
+  private async assertValidParent(
+    tx: Prisma.TransactionClient,
+    parentId: string,
+    organizationId: string,
+    planId: string,
+    selfId: string | null,
+  ): Promise<void> {
+    if (selfId !== null && parentId === selfId) {
+      throw new ValidationError('An activity cannot be its own WBS parent.', {
+        reason: 'PARENT_CYCLE',
+      });
+    }
+    const parent = await this.activities.findActiveByIdInOrg(parentId, organizationId, tx);
+    if (!parent || parent.planId !== planId) throw new NotFoundError('Parent activity not found.');
+    if (parent.type !== 'WBS_SUMMARY') {
+      throw new ValidationError('A WBS parent must be a summary activity.', {
+        reason: 'PARENT_NOT_SUMMARY',
+      });
+    }
+    // Walk up the parent chain: reaching `selfId` means the new parent is inside self's subtree (cycle).
+    let ancestorId: string | null = parent.parentId;
+    while (ancestorId !== null) {
+      if (ancestorId === selfId) {
+        throw new ConflictError('The chosen parent would create a WBS cycle.', {
+          reason: 'PARENT_CYCLE',
+        });
+      }
+      const ancestor = await this.activities.findActiveByIdInOrg(ancestorId, organizationId, tx);
+      ancestorId = ancestor?.parentId ?? null;
+    }
+  }
+
   async list(
     principal: Principal,
     orgSlug: string,
@@ -145,11 +185,16 @@ export class ActivitiesService {
     const durationDays = MILESTONE_TYPES.includes(type) ? 0 : (dto.durationDays ?? 1);
     // The activity's own calendar (ADR-0037); null/omitted inherits the plan default.
     const calendarId = dto.calendarId ?? null;
+    // The WBS parent (ADR-0038); null/omitted is top-level.
+    const parentId = dto.parentId ?? null;
 
     try {
       const activity = await this.prisma.$transaction(async (tx) => {
         // Validate a specific calendar in-org under the calendar lock before the insert (T4).
         if (calendarId !== null) await this.assertCalendarInOrg(tx, calendarId, organization.id);
+        // Validate the WBS parent is a same-plan summary (no cycle possible on a brand-new activity).
+        if (parentId !== null)
+          await this.assertValidParent(tx, parentId, organization.id, plan.id, null);
         return this.activities.create(
           {
             // Copy the organisation id from the parent plan, never from input.
@@ -161,6 +206,7 @@ export class ActivitiesService {
             type,
             durationMinutes: durationDays * MINUTES_PER_DAY,
             calendarId,
+            ...(parentId !== null ? { parentId } : {}),
             ...(dto.constraintType ? { constraintType: dto.constraintType } : {}),
             ...(dto.constraintDate
               ? { constraintDate: parseCalendarDate(dto.constraintDate) }
@@ -278,6 +324,10 @@ export class ActivitiesService {
     // id is validated in-org under the calendar lock inside the transaction below (T4).
     const calendarId = dto.calendarId;
     if (calendarId === null) patch.calendarId = null;
+    // The WBS parent (ADR-0038): null clears to top-level; a specific id is validated (same-plan
+    // summary, no cycle) inside the transaction below.
+    const parentId = dto.parentId;
+    if (parentId === null) patch.parentId = null;
 
     // Keep the milestone invariant when the type changes to (or already is) a
     // milestone: a milestone always has duration 0, regardless of what was sent.
@@ -291,6 +341,11 @@ export class ActivitiesService {
         if (calendarId !== undefined && calendarId !== null) {
           await this.assertCalendarInOrg(tx, calendarId, organization.id);
           patch.calendarId = calendarId;
+        }
+        // Re-parenting to a specific summary: validate same-plan + no cycle inside the write tx.
+        if (parentId !== undefined && parentId !== null) {
+          await this.assertValidParent(tx, parentId, organization.id, existing.planId, activityId);
+          patch.parentId = parentId;
         }
         const changed = await this.activities.updateIfVersionMatches(
           activityId,

@@ -242,7 +242,7 @@ export interface PlanSummary {
  * (as the web does for plan statuses) to avoid importing runtime values here.
  */
 export type ActivityType =
-  'TASK' | 'START_MILESTONE' | 'FINISH_MILESTONE' | 'HAMMOCK' | 'LEVEL_OF_EFFORT';
+  'TASK' | 'START_MILESTONE' | 'FINISH_MILESTONE' | 'HAMMOCK' | 'LEVEL_OF_EFFORT' | 'WBS_SUMMARY';
 export type ActivityStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
 export type ConstraintType =
   'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO' | 'MANDATORY_START' | 'MANDATORY_FINISH';
@@ -300,6 +300,13 @@ export interface ActivitySummary {
    * activity inside a 5-day plan works across weekends.
    */
   calendarId: string | null;
+  /**
+   * WBS parent (ADR-0038, M5-epic §24): the `id` of the `WBS_SUMMARY` activity this one rolls up into,
+   * or null for a top-level activity. The parent tree is an adjacency list, kept acyclic and same-plan by
+   * the service; it is orthogonal to the dependency DAG (ADR-0021). A `WBS_SUMMARY` activity's dates roll
+   * up from its branch (engine work, F6).
+   */
+  parentId: string | null;
   /** Graphical y-lane for the TSLD canvas. */
   laneIndex: number;
   /**
@@ -432,6 +439,7 @@ export const DEPENDENCY_CONFLICT_MESSAGES = {
   SELF: 'A dependency cannot link an activity to itself.',
   CYCLE: 'This dependency would create a cycle in the schedule.',
   DUPLICATE: 'A dependency of this type already exists between these activities.',
+  SUMMARY_NO_LOGIC: 'A WBS summary carries no logic — it cannot be linked by a dependency.',
 } as const;
 
 /**

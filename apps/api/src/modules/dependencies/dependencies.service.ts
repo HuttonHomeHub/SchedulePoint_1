@@ -42,6 +42,8 @@ export const DEPENDENCY_CONFLICT = {
   CYCLE_DETECTED: 'CYCLE_DETECTED',
   /** predecessor and successor are the same activity. */
   SELF_DEPENDENCY: 'SELF_DEPENDENCY',
+  /** An endpoint is a WBS_SUMMARY, which carries no logic (ADR-0035 §24 / ADR-0038). */
+  SUMMARY_HAS_NO_LOGIC: 'SUMMARY_HAS_NO_LOGIC',
 } as const;
 
 /**
@@ -156,8 +158,15 @@ export class DependenciesService {
     }
 
     // Both endpoints must be active activities IN THIS PLAN (anti-IDOR, no cross-plan).
-    await this.loadEndpointInPlan(dto.predecessorId, organization.id, planId);
-    await this.loadEndpointInPlan(dto.successorId, organization.id, planId);
+    const predecessor = await this.loadEndpointInPlan(dto.predecessorId, organization.id, planId);
+    const successor = await this.loadEndpointInPlan(dto.successorId, organization.id, planId);
+
+    // A WBS summary carries no logic (ADR-0035 §24 / ADR-0038): it may not be a dependency endpoint.
+    if (predecessor.type === 'WBS_SUMMARY' || successor.type === 'WBS_SUMMARY') {
+      throw new ValidationError(DEPENDENCY_CONFLICT_MESSAGES.SUMMARY_NO_LOGIC, {
+        reason: DEPENDENCY_CONFLICT.SUMMARY_HAS_NO_LOGIC,
+      });
+    }
 
     try {
       // Load-check-insert runs in ONE transaction under a plan-scoped advisory lock

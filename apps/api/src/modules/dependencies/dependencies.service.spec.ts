@@ -85,6 +85,7 @@ function activity(id: string, overrides: Partial<Activity> = {}): Activity {
     isNearCritical: false,
     constraintViolated: false,
     loeNoSpan: false,
+    parentId: null,
     visualStart: null,
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
@@ -232,6 +233,19 @@ describe('DependenciesService', () => {
         service.create(principalWith(ALL), 'acme', PLAN_ID, {
           predecessorId: PRED_ID,
           successorId: PRED_ID,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(deps.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a link whose endpoint is a WBS summary (422 — a summary carries no logic)', async () => {
+      activities.findActiveByIdInOrg
+        .mockResolvedValueOnce(activity(PRED_ID, { type: 'WBS_SUMMARY' }))
+        .mockResolvedValueOnce(activity(SUCC_ID));
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, {
+          predecessorId: PRED_ID,
+          successorId: SUCC_ID,
         }),
       ).rejects.toBeInstanceOf(ValidationError);
       expect(deps.create).not.toHaveBeenCalled();

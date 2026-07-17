@@ -85,6 +85,7 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     isNearCritical: false,
     constraintViolated: false,
     loeNoSpan: false,
+    parentId: null,
     visualStart: null,
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
@@ -209,6 +210,37 @@ describe('ActivitiesService', () => {
       calendars.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(
         service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'Cure', calendarId: 'cal-x' }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(activities.create).not.toHaveBeenCalled();
+    });
+
+    it('threads a valid same-plan WBS_SUMMARY parent into the insert (ADR-0038)', async () => {
+      activities.create.mockResolvedValue(activity());
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }),
+      );
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'Task',
+        parentId: 'sum-1',
+      });
+      expect(activities.create).toHaveBeenCalledWith(
+        expect.objectContaining({ parentId: 'sum-1' }),
+        expect.anything(),
+      );
+    });
+
+    it('rejects a non-summary WBS parent with a 422 before the insert (PARENT_NOT_SUMMARY)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ id: 't-1', type: 'TASK' }));
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'X', parentId: 't-1' }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(activities.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown / cross-plan WBS parent with a 404', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'X', parentId: 'ghost' }),
       ).rejects.toBeInstanceOf(NotFoundError);
       expect(activities.create).not.toHaveBeenCalled();
     });

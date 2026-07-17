@@ -71,6 +71,15 @@ export class ActivityResponseDto implements ActivitySummary {
   })
   calendarId!: string | null;
 
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
+      'WBS parent (ADR-0038): the WBS_SUMMARY activity this rolls up into, or null for top-level.',
+  })
+  parentId!: string | null;
+
   @ApiProperty({ description: 'Graphical y-lane for the TSLD canvas.' })
   laneIndex!: number;
 
@@ -220,6 +229,7 @@ export class ActivityResponseDto implements ActivitySummary {
       secondaryConstraintType: entity.secondaryConstraintType,
       secondaryConstraintDate: day(entity.secondaryConstraintDate),
       calendarId: entity.calendarId,
+      parentId: entity.parentId,
       laneIndex: entity.laneIndex,
       scheduleAsLateAsPossible: entity.scheduleAsLateAsPossible,
       status: entity.status,
