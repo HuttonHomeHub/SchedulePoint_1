@@ -51,6 +51,12 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
   })
   loeNoSpanCount!: number;
 
+  @ApiProperty({
+    description:
+      'RESOURCE_DEPENDENT activities with no driving resource assignment — produced-and-flagged, scheduled on the fallback calendar (ADR-0035 §23 / ADR-0039).',
+  })
+  resourceDriverMissingCount!: number;
+
   static from(summary: PlanScheduleSummary): PlanScheduleSummaryDto {
     return {
       dataDate: summary.dataDate,
@@ -61,6 +67,7 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
       constraintViolationCount: summary.constraintViolationCount,
       constraintWarningCount: summary.constraintWarningCount,
       loeNoSpanCount: summary.loeNoSpanCount,
+      resourceDriverMissingCount: summary.resourceDriverMissingCount,
     };
   }
 }

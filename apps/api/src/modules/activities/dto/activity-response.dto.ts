@@ -163,6 +163,12 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({
     description:
+      'Resource-dependent driver-missing produce-and-flag (engine-owned, ADR-0035 §23 / ADR-0039): true when a RESOURCE_DEPENDENT activity has no driving resource assignment (scheduled on the fallback calendar and flagged).',
+  })
+  resourceDriverMissing!: boolean;
+
+  @ApiProperty({
+    description:
       'Schedule As-Late-As-Possible (ADR-0035 §11): display-only placement preference; does not change early/late/float.',
   })
   scheduleAsLateAsPossible!: boolean;
@@ -255,6 +261,7 @@ export class ActivityResponseDto implements ActivitySummary {
       isNearCritical: entity.isNearCritical,
       constraintViolated: entity.constraintViolated,
       loeNoSpan: entity.loeNoSpan,
+      resourceDriverMissing: entity.resourceDriverMissing,
       visualStart: day(entity.visualStart),
       visualEffectiveStart: day(entity.visualEffectiveStart),
       visualEffectiveFinish: day(entity.visualEffectiveFinish),

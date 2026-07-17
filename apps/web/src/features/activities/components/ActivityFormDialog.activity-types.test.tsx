@@ -55,6 +55,7 @@ const BASE_LOE: ActivitySummary = {
   isNearCritical: false,
   constraintViolated: false,
   loeNoSpan: false,
+  resourceDriverMissing: false,
   parentId: null,
   visualStart: null,
   visualEffectiveStart: null,

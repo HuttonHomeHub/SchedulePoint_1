@@ -81,6 +81,8 @@ export interface ScheduleAggregate {
   constraintWarningCount: number;
   /** Level-of-Effort activities with no resolvable span (N12, ADR-0035 §21). */
   loeNoSpanCount: number;
+  /** Resource-dependent activities with no driving resource (ADR-0035 §23 / ADR-0039). */
+  resourceDriverMissingCount: number;
   /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
   projectFinish: string | null;
 }
@@ -133,6 +135,36 @@ export class ScheduleRepository {
   }
 
   /**
+   * The driving resource calendar for each `RESOURCE_DEPENDENT` activity in a plan (M7.2, ADR-0035
+   * §23 / ADR-0039). Returns one row per activity that has an **active** driving assignment to an
+   * **active** resource (the DB partial-unique guarantees ≤1 driver, so at most one row per activity);
+   * `resourceCalendarId` is the driving resource's own calendar, or null when it inherits. An activity
+   * with no active driving assignment is absent — the service reads that as driver-missing (§23
+   * produce-and-flag) and falls back to the activity's own calendar. Backed by
+   * `uq_resource_assignments_activity_driving` + `idx_resources_calendar_id`.
+   */
+  async loadDrivingResourceCalendars(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Array<{ activityId: string; resourceCalendarId: string | null }>> {
+    const rows = await db.resourceAssignment.findMany({
+      where: {
+        organizationId,
+        isDriving: true,
+        deletedAt: null,
+        activity: { planId, deletedAt: null, type: 'RESOURCE_DEPENDENT' },
+        resource: { deletedAt: null },
+      },
+      select: { activityId: true, resource: { select: { calendarId: true } } },
+    });
+    return rows.map((r) => ({
+      activityId: r.activityId,
+      resourceCalendarId: r.resource.calendarId,
+    }));
+  }
+
+  /**
    * A single grouped aggregate over a plan's active activities' persisted engine
    * columns — no recompute, no N+1. `early_finish` is cast to text so the date
    * crosses the boundary as `YYYY-MM-DD` with no timezone reinterpretation.
@@ -146,6 +178,7 @@ export class ScheduleRepository {
         constraint_violation_count: bigint;
         constraint_warning_count: bigint;
         loe_no_span_count: bigint;
+        resource_driver_missing_count: bigint;
         project_finish: string | null;
       }>
     >`
@@ -164,6 +197,9 @@ export class ScheduleRepository {
         -- LOE no-span produce-and-flag (N12, ADR-0035 §21): the engine-written flag, read back like
         -- constraint_violated, aggregated over the same plan-scoped active set.
         COUNT(*) FILTER (WHERE loe_no_span) AS loe_no_span_count,
+        -- Resource-dependent driver-missing produce-and-flag (ADR-0035 §23 / ADR-0039): the
+        -- engine-written flag, read back like loe_no_span over the same plan-scoped active set.
+        COUNT(*) FILTER (WHERE resource_driver_missing) AS resource_driver_missing_count,
         to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
       FROM activities
       WHERE plan_id = ${planId}::uuid
@@ -178,6 +214,7 @@ export class ScheduleRepository {
       constraintViolationCount: Number(row.constraint_violation_count),
       constraintWarningCount: Number(row.constraint_warning_count),
       loeNoSpanCount: Number(row.loe_no_span_count),
+      resourceDriverMissingCount: Number(row.resource_driver_missing_count),
       projectFinish: row.project_finish,
     };
   }
@@ -268,6 +305,8 @@ export class ScheduleRepository {
     const constraintViolated = results.map((r) => r.constraintViolated);
     // LOE no-span produce-and-flag (N12, ADR-0035 §21) — engine-owned like constraint_violated.
     const loeNoSpan = results.map((r) => r.loeNoSpan);
+    // Resource-dependent driver-missing produce-and-flag (ADR-0035 §23 / ADR-0039) — engine-owned.
+    const resourceDriverMissing = results.map((r) => r.resourceDriverMissing);
     // Effective-Visual outputs (ADR-0033) — written by the same batch as the CPM columns, so they
     // stay engine-owned and out of the version/updated_at optimistic-lock path.
     const visualEffectiveStart = results.map((r) => r.visualEffectiveStart);
@@ -290,6 +329,7 @@ export class ScheduleRepository {
         is_near_critical = v.is_near_critical,
         constraint_violated = v.constraint_violated,
         loe_no_span = v.loe_no_span,
+        resource_driver_missing = v.resource_driver_missing,
         visual_effective_start = v.visual_effective_start,
         visual_effective_finish = v.visual_effective_finish,
         visual_conflict = v.visual_conflict,
@@ -306,6 +346,7 @@ export class ScheduleRepository {
         ${isNearCritical}::boolean[],
         ${constraintViolated}::boolean[],
         ${loeNoSpan}::boolean[],
+        ${resourceDriverMissing}::boolean[],
         ${visualEffectiveStart}::date[],
         ${visualEffectiveFinish}::date[],
         ${visualConflict}::boolean[],
@@ -313,7 +354,8 @@ export class ScheduleRepository {
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
-        loe_no_span, visual_effective_start, visual_effective_finish, visual_conflict, visual_drift_days
+        loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
+        visual_conflict, visual_drift_days
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid

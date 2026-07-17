@@ -126,6 +126,7 @@ export class ScheduleService {
         criticalCount: summary.criticalCount,
         constraintViolationCount: summary.constraintViolationCount,
         constraintWarningCount: summary.constraintWarningCount,
+        resourceDriverMissingCount: summary.resourceDriverMissingCount,
         lagCalendarOverrideCount,
         // How many DISTINCT per-activity calendars were built this recalc (ADR-0037, M5) — the
         // signal that per-activity calendars actually shaped the dates (0 on the all-inherit path).
@@ -149,6 +150,7 @@ export class ScheduleService {
       constraintViolationCount: summary.constraintViolationCount,
       constraintWarningCount: summary.constraintWarningCount,
       loeNoSpanCount: summary.loeNoSpanCount,
+      resourceDriverMissingCount: summary.resourceDriverMissingCount,
     };
   }
 
@@ -179,6 +181,7 @@ export class ScheduleService {
       constraintViolationCount: aggregate.constraintViolationCount,
       constraintWarningCount: aggregate.constraintWarningCount,
       loeNoSpanCount: aggregate.loeNoSpanCount,
+      resourceDriverMissingCount: aggregate.resourceDriverMissingCount,
     };
   }
 
@@ -264,11 +267,45 @@ export class ScheduleService {
     // Build the plan's working-time calendar once — the inherit default (ADR-0024).
     const calendar = await this.resolveCalendar(organizationId, plan.calendarId, tx);
 
-    // Per-activity calendars (ADR-0037, M5): resolve each DISTINCT non-inherit activity calendar ONCE.
+    // Resource-dependent scheduling (M7.2, ADR-0035 §23 / ADR-0039): a RESOURCE_DEPENDENT activity
+    // schedules on its DRIVING resource's calendar instead of its own. Resolve the driving-resource
+    // calendar per such activity (the DB guarantees ≤1 driver). Only queried when the plan actually has
+    // a RESOURCE_DEPENDENT activity, so a plan without one keeps the byte-identical fast path.
+    const hasResourceDependent = activityRows.some((r) => r.type === 'RESOURCE_DEPENDENT');
+    const drivingResourceCalByActivity = new Map<string, string | null>();
+    if (hasResourceDependent) {
+      for (const row of await this.schedule.loadDrivingResourceCalendars(
+        organizationId,
+        plan.id,
+        tx,
+      )) {
+        drivingResourceCalByActivity.set(row.activityId, row.resourceCalendarId);
+      }
+    }
+    // The EFFECTIVE calendar id an activity schedules on, and whether its driving resource is missing.
+    // Fallback order (ADR-0039 §4): driving-resource calendar → activity calendar → plan default. A
+    // RESOURCE_DEPENDENT activity with no active driver is produced-and-flagged (`resourceDriverMissing`)
+    // and falls back to its own calendar; every other type keeps its own calendar unchanged (so the
+    // A5500 contrast — a TASK ignoring an assigned resource's calendar — is type-gated for free).
+    const effectiveOf = (
+      r: ScheduleActivityRow,
+    ): { calId: string | null; driverMissing: boolean } => {
+      if (r.type !== 'RESOURCE_DEPENDENT') return { calId: r.calendarId, driverMissing: false };
+      if (!drivingResourceCalByActivity.has(r.id))
+        return { calId: r.calendarId, driverMissing: true };
+      return {
+        calId: drivingResourceCalByActivity.get(r.id) ?? r.calendarId,
+        driverMissing: false,
+      };
+    };
+    const effectiveByActivity = new Map(activityRows.map((r) => [r.id, effectiveOf(r)] as const));
+
+    // Per-activity calendars (ADR-0037, M5) + the resource-driving calendar (M7.2): resolve each
+    // DISTINCT non-inherit EFFECTIVE calendar ONCE (so a shared crane calendar is built at most once).
     const distinctActivityCalIds = [
       ...new Set(
-        activityRows
-          .map((r) => r.calendarId)
+        [...effectiveByActivity.values()]
+          .map((e) => e.calId)
           .filter((id): id is string => id != null && id !== plan.calendarId),
       ),
     ];
@@ -278,14 +315,21 @@ export class ScheduleService {
     }
     const portFor = (calId: string | null): WorkingTimeCalendar | undefined =>
       calId == null || calId === plan.calendarId ? undefined : portByCalId.get(calId);
-    const calIdByActivity = new Map(activityRows.map((r) => [r.id, r.calendarId] as const));
+    // Edges resolve their PRED/SUCC lag calendar on the endpoint's EFFECTIVE calendar too (a
+    // RESOURCE_DEPENDENT endpoint's lag rides its resource calendar, consistent with its scheduling).
+    const calIdByActivity = new Map(
+      activityRows.map((r) => [r.id, effectiveByActivity.get(r.id)!.calId] as const),
+    );
 
     // Progressed activities this recalc consumes (M2, ADR-0035): 0 = an unprogressed plan.
     const progressedActivityCount = activityRows.filter(
       (r) => r.actualStart != null || r.actualFinish != null,
     ).length;
 
-    const activities = activityRows.map((r) => toEngineActivity(r, portFor(r.calendarId)));
+    const activities = activityRows.map((r) => {
+      const { calId, driverMissing } = effectiveByActivity.get(r.id)!;
+      return toEngineActivity(r, portFor(calId), driverMissing);
+    });
     const edges = edgeRows.map((r) =>
       toEngineEdge(
         r,
@@ -369,6 +413,7 @@ function resolveRemainingMinutes(row: ScheduleActivityRow): number | undefined {
 function toEngineActivity(
   row: ScheduleActivityRow,
   calendar?: WorkingTimeCalendar,
+  resourceDriverMissing = false,
 ): EngineActivity {
   const remainingMinutes = resolveRemainingMinutes(row);
   return {
@@ -389,6 +434,9 @@ function toEngineActivity(
     expectedFinish: row.expectedFinish ? formatCalendarDate(row.expectedFinish) : null,
     ...(remainingMinutes !== undefined ? { remainingMinutes } : {}),
     ...(calendar ? { calendar } : {}),
+    // Resource-dependent driver-missing (M7.2, ADR-0035 §23): the service sets this for a
+    // RESOURCE_DEPENDENT activity with no active driver; the engine carries it to its result.
+    ...(resourceDriverMissing ? { resourceDriverMissing: true } : {}),
   };
 }
 

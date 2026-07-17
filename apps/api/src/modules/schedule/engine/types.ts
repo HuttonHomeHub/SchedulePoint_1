@@ -115,6 +115,16 @@ export interface EngineActivity {
    * complete activity or when the option is off, so the byte-identical path is unchanged.
    */
   expectedFinish?: string | null;
+  /**
+   * Resource-dependent driver-missing input (M7.2, ADR-0035 §23 / ADR-0039). Set by the **service**
+   * for a `RESOURCE_DEPENDENT` activity that has no driving resource assignment, so no resource
+   * calendar could be resolved (the DB guarantees ≤1 driver, so the only missing case is zero). The
+   * engine does not compute it — it carries this flag straight to {@link EngineResult.resourceDriverMissing}
+   * (produce-and-flag) and schedules the activity on the fallback calendar the service still supplies
+   * via {@link calendar}. Absent/false for every other case (the byte-identical path). §23 is about the
+   * driving *calendar*; the engine treats `RESOURCE_DEPENDENT` exactly like `TASK` for logic.
+   */
+  resourceDriverMissing?: boolean;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
@@ -190,6 +200,15 @@ export interface EngineResult {
    * for an LOE with a complete span.
    */
   loeNoSpan: boolean;
+  /**
+   * Resource-dependent driver-missing produce-and-flag (M7.2, ADR-0035 §23 / ADR-0039): true when a
+   * `RESOURCE_DEPENDENT` activity has no driving resource assignment, so its driving calendar could not
+   * be resolved. The activity is still scheduled (on the fallback calendar — activity own → plan
+   * default) and flagged rather than rejected, mirroring the LOE §21 / mandatory §7 produce-and-flag.
+   * Carried straight from {@link EngineActivity.resourceDriverMissing}; always false for a non-resource-
+   * dependent activity and for a resource-dependent one with a driver.
+   */
+  resourceDriverMissing: boolean;
   earlyStart: string;
   earlyFinish: string;
   lateStart: string;
@@ -230,6 +249,12 @@ export interface EngineSummary {
    * produce-and-flag count. Zero unless the plan has an LOE missing an SS predecessor or FF successor.
    */
   loeNoSpanCount: number;
+  /**
+   * How many `RESOURCE_DEPENDENT` activities had no driving resource assignment this run (ADR-0035 §23 /
+   * ADR-0039) — the produce-and-flag count. Zero unless the plan has a resource-dependent activity with
+   * no driver.
+   */
+  resourceDriverMissingCount: number;
   /**
    * How many incomplete activities had their remaining work resized to an **expected finish** this run
    * (ADR-0035 §9) — zero unless the plan's `useExpectedFinishDates` option is on. Observability only.

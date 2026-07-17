@@ -27,6 +27,7 @@ const summary = (overrides: Partial<PlanScheduleSummary> = {}): PlanScheduleSumm
   constraintViolationCount: 0,
   constraintWarningCount: 0,
   loeNoSpanCount: 0,
+  resourceDriverMissingCount: 0,
   ...overrides,
 });
 

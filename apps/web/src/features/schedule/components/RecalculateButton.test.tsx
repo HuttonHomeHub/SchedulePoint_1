@@ -23,6 +23,7 @@ const SUMMARY: PlanScheduleSummary = {
   constraintViolationCount: 0,
   constraintWarningCount: 0,
   loeNoSpanCount: 0,
+  resourceDriverMissingCount: 0,
 };
 
 function renderButton(canCalculate = true) {

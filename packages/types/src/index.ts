@@ -373,6 +373,13 @@ export interface ActivitySummary {
    */
   loeNoSpan: boolean;
   /**
+   * Engine-owned (ADR-0035 §23 / ADR-0039, M7): true when this `RESOURCE_DEPENDENT` activity has no
+   * driving resource assignment, so its driving calendar could not be resolved — the engine still
+   * scheduled it (on the fallback calendar) and flagged it (produce-and-flag). False for every
+   * non-resource-dependent activity and for a resource-dependent one with a driver.
+   */
+  resourceDriverMissing: boolean;
+  /**
    * Visual-Planning placement input (ADR-0033): the calendar day (`YYYY-MM-DD`) the planner
    * hand-placed this activity's start at, or null if unplaced. Feeds only the engine's
    * effective-Visual pass; ignored by the pure-network (early/late/float) pass.
@@ -531,6 +538,12 @@ export interface PlanScheduleSummary {
   constraintViolationCount: number;
   constraintWarningCount: number;
   loeNoSpanCount: number;
+  /**
+   * How many `RESOURCE_DEPENDENT` activities had no driving resource assignment this run (ADR-0035 §23 /
+   * ADR-0039) — produce-and-flag: they still schedule (on the fallback calendar) but are flagged. Zero
+   * unless the plan has a resource-dependent activity with no driver.
+   */
+  resourceDriverMissingCount: number;
 }
 
 /**
