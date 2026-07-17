@@ -28,6 +28,10 @@ const summary = (overrides: Partial<PlanScheduleSummary> = {}): PlanScheduleSumm
   constraintWarningCount: 0,
   loeNoSpanCount: 0,
   resourceDriverMissingCount: 0,
+  leveledActivityCount: 0,
+  levelingWindowExceededCount: 0,
+  selfOverAllocatedCount: 0,
+  leveledProjectFinish: null,
   ...overrides,
 });
 
