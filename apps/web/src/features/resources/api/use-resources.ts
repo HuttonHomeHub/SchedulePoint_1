@@ -1,4 +1,4 @@
-import type { ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
+import type { EditedField, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -10,7 +10,7 @@ import {
 import type { AssignmentFormValues, ResourceFormValues } from '../schemas/resource-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { assignmentKeys, resourceKeys } from '@/lib/query/hierarchy-keys';
+import { activityKeys, assignmentKeys, resourceKeys } from '@/lib/query/hierarchy-keys';
 
 export { assignmentKeys, resourceKeys };
 
@@ -135,6 +135,10 @@ export function useCreateAssignment(orgSlug: string, activityId: string) {
           body: JSON.stringify({
             resourceId: input.resourceId,
             budgetedUnits: input.budgetedUnits,
+            // Set an initial rate when given (ADR-0040); no `editedField` on create, so the triad stays
+            // inert — a plain store. The duration derivation happens later, on an explicit units/rate
+            // edit in the row editor, where the "edited field" is unambiguous.
+            ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             isDriving: input.isDriving,
           }),
         },
@@ -155,6 +159,14 @@ export function useUpdateAssignment(orgSlug: string) {
       version: number;
       budgetedUnits: number;
       isDriving: boolean;
+      /** Set/change the driving assignment's rate (ADR-0040); omit to leave it unchanged. */
+      unitsPerHour?: number;
+      /**
+       * Which triad quantity the planner edited (ADR-0040) — sent only for a units/rate edit on the
+       * driving assignment, so the server holds it and recomputes the dependent (a same-row Units/Rate,
+       * or the owning activity's duration for a units-driven type). Omitted = a plain store.
+       */
+      editedField?: EditedField;
     }) =>
       apiFetch<ResourceAssignmentSummary>(
         `/organizations/${orgSlug}/assignments/${input.assignmentId}`,
@@ -162,6 +174,8 @@ export function useUpdateAssignment(orgSlug: string) {
           method: 'PATCH',
           body: JSON.stringify({
             budgetedUnits: input.budgetedUnits,
+            ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
+            ...(input.editedField ? { editedField: input.editedField } : {}),
             isDriving: input.isDriving,
             version: input.version,
           }),
@@ -170,9 +184,18 @@ export function useUpdateAssignment(orgSlug: string) {
     // Refetch on settle so a 409 refreshes the row's version — setting one driving
     // resource also moves the flag off another, so the whole activity list refetches.
     onSettled: (_data, _error, input) =>
-      queryClient.invalidateQueries({
-        queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
+        }),
+        // A duration-type recompute (editedField present) can derive a new activity duration server-side
+        // (ADR-0040), moving the activity's dates/version — refresh the org's activity lists/details so
+        // the table + any open activity view aren't stale. Scoped to `activities` and only when a
+        // recompute was actually requested, so a plain units edit keeps its existing behaviour.
+        ...(input.editedField
+          ? [queryClient.invalidateQueries({ queryKey: activityKeys.all(orgSlug) })]
+          : []),
+      ]),
   });
 }
 

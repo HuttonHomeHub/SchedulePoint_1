@@ -15,7 +15,7 @@ import {
 } from '../schemas/activity-schemas';
 
 import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
-import { activityKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
+import { activityKeys, assignmentKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
 export { activityKeys };
 
@@ -66,6 +66,10 @@ function createBody(input: ActivityFormValues) {
     type: input.type,
     // A milestone has no duration — the API rejects a non-zero one.
     durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
+    // The P6 duration type (ADR-0040). A plain activity attribute like `type`; always sent (the form
+    // seeds it from the row) — the API default equals the form default, so this stays inert until a
+    // driving assignment carries a rate.
+    durationType: input.durationType,
     description: optional(input.description),
     ...(hasConstraint
       ? { constraintType: input.constraintType, constraintDate: input.constraintDate }
@@ -95,6 +99,10 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     code: optional(input.code) ?? null,
     type: input.type,
     durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
+    // The P6 duration type (ADR-0040), always sent (seeded from the row so a hidden picker round-trips).
+    // Editing the duration on an activity with a driving assignment carrying a rate recomputes that
+    // assignment's units/rate server-side per this type — see the assignment refetch in onSettled.
+    durationType: input.durationType,
     description: optional(input.description) ?? null,
     // Clear both sides together when the constraint is removed (API pairs them).
     constraintType: hasConstraint ? input.constraintType : null,
@@ -182,8 +190,16 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
         method: 'PATCH',
         body: JSON.stringify(updateBody(input)),
       }),
+    // A definition edit can change the duration, which (ADR-0040) recomputes the driving assignment's
+    // units/rate server-side — so refresh this activity's assignments too, alongside the list + detail,
+    // in case the resource editor holds a now-stale row. A no-op unless that query is mounted.
     onSettled: (_data, _error, input) =>
-      invalidateActivity(queryClient, orgSlug, planId, input.activityId),
+      Promise.all([
+        invalidateActivity(queryClient, orgSlug, planId, input.activityId),
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
+        }),
+      ]),
   });
 }
 

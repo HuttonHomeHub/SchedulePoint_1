@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  DURATION_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
   isParkedConstraintType,
   type ActivitySummary,
@@ -12,6 +13,7 @@ import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import {
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
+  DURATION_TYPE_LABELS,
   INHERIT_CALENDAR_LABEL,
   activityFormSchema,
   isDurationDerivedType,
@@ -29,6 +31,7 @@ import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
+  DURATION_TYPES_ENABLED,
 } from '@/config/env';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
@@ -105,6 +108,7 @@ export function ActivityFormDialog({
       name: '',
       code: '',
       type: 'TASK',
+      durationType: 'FIXED_DURATION_AND_UNITS_TIME',
       durationDays: 1,
       constraintType: '',
       constraintDate: '',
@@ -124,6 +128,9 @@ export function ActivityFormDialog({
         name: activity?.name ?? '',
         code: activity?.code ?? '',
         type: activity?.type ?? 'TASK',
+        // Always seed from the row so a stored value round-trips even when the picker is hidden
+        // (flag off) — an edit then never silently resets the duration type. Defaults to the API default.
+        durationType: activity?.durationType ?? 'FIXED_DURATION_AND_UNITS_TIME',
         durationDays: activity?.durationDays ?? 1,
         constraintType: activity?.constraintType ?? '',
         constraintDate: activity?.constraintDate ?? '',
@@ -261,6 +268,30 @@ export function ActivityFormDialog({
             {...register('durationDays', { valueAsNumber: true })}
           />
         )}
+        {/* Duration type governs the resource-units triad (ADR-0040), so it is meaningless for a type
+            with no entered duration/units (a milestone, LOE or WBS summary) — hidden for those, mirroring
+            the Duration field. */}
+        {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="activity-duration-type">Duration type</Label>
+            <Select
+              id="activity-duration-type"
+              aria-describedby="activity-duration-type-help"
+              {...register('durationType')}
+            >
+              {DURATION_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {DURATION_TYPE_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+            <p id="activity-duration-type-help" className="text-muted-foreground text-sm">
+              How editing one of duration, units or units/time recomputes the others (keeping units
+              = duration × units/time). With “Fixed units” or “Fixed units/time”, the driving
+              resource’s units ÷ rate derive this activity’s duration.
+            </p>
+          </div>
+        ) : null}
         {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="activity-parent">WBS summary (optional)</Label>

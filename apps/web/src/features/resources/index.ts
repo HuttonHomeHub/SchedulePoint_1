@@ -23,4 +23,6 @@ export {
   RESOURCE_KIND_LABELS,
   resourceFormSchema,
   assignmentFormSchema,
+  validateUnitsPerHour,
 } from './schemas/resource-schemas';
+export { previewDerivedDuration, formatDurationDays } from './schemas/duration-triad';

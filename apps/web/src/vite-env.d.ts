@@ -29,4 +29,6 @@ interface ImportMetaEnv {
   readonly VITE_ADVANCED_ACTIVITY_TYPES?: string;
   /** Web resource surface — library screen + per-activity assignments (M7.1, ADR-0039). "true"/"1" enables it; off by default. */
   readonly VITE_RESOURCES?: string;
+  /** Duration types & the resource-units triad — the activity duration-type picker + the driving assignment's units/time rate (M7 rung 4, ADR-0040). "true"/"1" enables it; off by default. */
+  readonly VITE_DURATION_TYPES?: string;
 }

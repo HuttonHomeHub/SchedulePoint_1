@@ -250,3 +250,20 @@ export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
  * `VITE_RESOURCES=true` to enable it in an environment.
  */
 export const RESOURCES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCES);
+
+/**
+ * Duration types & the resource-units triad (M7 rung 4, ADR-0040). **OFF by default** — a new dark
+ * surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden
+ * on `main` and is turned on per-environment during rollout, then flipped default-on once cleared (the
+ * `VITE_RESOURCES` / `VITE_NAV_TREE` pattern). When on, the activity form gains a **duration type**
+ * picker (Fixed Duration & Units/Time (default) / Fixed Duration & Units / Fixed Units / Fixed
+ * Units/Time) and — inside the per-activity resource assignment editor (itself behind
+ * {@link RESOURCES_ENABLED}) — a **units/time (rate)** field on the driving assignment, with a live
+ * preview of the duration the server will derive for a units-driven type. Everything behind it — the
+ * settable `durationType` / `unitsPerHour` fields, the write-boundary `resolveTriad` recompute, and the
+ * conformance proof — is already live; the flag only governs whether the web UI exposes it. The rate
+ * field is meaningful only alongside the resource surface, so it appears only when BOTH this flag and
+ * {@link RESOURCES_ENABLED} are on; the duration-type picker (a plain activity attribute) needs only
+ * this flag. Set `VITE_DURATION_TYPES=true` to enable it in an environment.
+ */
+export const DURATION_TYPES_ENABLED = flagDefaultOff(import.meta.env.VITE_DURATION_TYPES);

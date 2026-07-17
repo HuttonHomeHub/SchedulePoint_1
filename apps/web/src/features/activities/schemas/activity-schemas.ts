@@ -1,9 +1,11 @@
 import {
+  DURATION_TYPES,
   PARKED_CONSTRAINT_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
+  type DurationType,
 } from '@repo/types';
 import { z } from 'zod';
 
@@ -54,6 +56,18 @@ export function isMilestoneType(type: ActivityType): boolean {
 export function isDurationDerivedType(type: ActivityType): boolean {
   return isMilestoneType(type) || type === 'LEVEL_OF_EFFORT' || type === 'WBS_SUMMARY';
 }
+
+/**
+ * Human labels for the P6 duration type (M7 rung 4, ADR-0040). Exhaustive
+ * `Record<DurationType, …>` so a new type fails to compile until a label is added. The default
+ * (`FIXED_DURATION_AND_UNITS_TIME`) is called out in the picker's help, not the label.
+ */
+export const DURATION_TYPE_LABELS: Record<DurationType, string> = {
+  FIXED_DURATION_AND_UNITS_TIME: 'Fixed duration & units/time',
+  FIXED_DURATION_AND_UNITS: 'Fixed duration & units',
+  FIXED_UNITS: 'Fixed units',
+  FIXED_UNITS_TIME: 'Fixed units/time',
+};
 
 /** The activity types the form's Type picker always offers — the three with full engine support. */
 export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
@@ -118,6 +132,11 @@ export const activityFormSchema = z
     name: z.string().trim().min(1, 'Name is required.').max(200, 'Name is too long.'),
     code: z.string().trim().max(32, 'Code is too long.').optional(),
     type: z.enum(ACTIVITY_TYPES),
+    // The P6 duration type (ADR-0040): how a future edit to one of {duration, units, units/time}
+    // recomputes the others so `Units = Duration × Units/Time` stays true. A `<select>` over the four
+    // values; only editable behind `VITE_DURATION_TYPES`, but always seeded from the row so a stored
+    // value round-trips even with the picker hidden. Defaults to the API default.
+    durationType: z.enum(DURATION_TYPES),
     // Registered with `valueAsNumber`, so this is a number (NaN for an empty
     // field, which `.int()` rejects with the message below).
     durationDays: z

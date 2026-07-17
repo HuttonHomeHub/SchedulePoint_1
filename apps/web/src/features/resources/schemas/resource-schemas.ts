@@ -50,6 +50,18 @@ export const assignmentFormSchema = z.object({
       (value) => Number.isFinite(value) && Math.round(value * 10000) === value * 10000,
       'Use at most 4 decimal places.',
     ),
+  // Planned rate — the Units/Time term of the triad (M7 rung 4, ADR-0040), on the DRIVING assignment.
+  // Optional (blank = no rate, the triad stays inert); `>= 0` (N19) with at most 4 decimal places
+  // (DECIMAL(18,4)). Registered with a `setValueAs` that maps a blank field to `undefined`, so an
+  // empty rate is "absent", not `NaN`.
+  unitsPerHour: z
+    .number({ message: 'Enter a number.' })
+    .min(0, 'Rate cannot be negative.')
+    .refine(
+      (value) => Number.isFinite(value) && Math.round(value * 10000) === value * 10000,
+      'Use at most 4 decimal places.',
+    )
+    .optional(),
   isDriving: z.boolean(),
 });
 
@@ -67,6 +79,23 @@ export function validateBudgetedUnits(raw: string): { value: number } | { error:
   const value = Number(trimmed);
   if (!Number.isFinite(value)) return { error: 'Enter a number.' };
   if (value < 0) return { error: 'Budgeted units cannot be negative.' };
+  if (Math.round(value * 10000) !== value * 10000)
+    return { error: 'Use at most 4 decimal places.' };
+  return { value };
+}
+
+/**
+ * Validate a raw units/time (rate) string from the inline row editor against the same rule as the
+ * assign form's `unitsPerHour` (`>= 0`, `<= 4` decimal places, N19). A rate is required to Save here
+ * (the API cannot clear a rate to null, ADR-0040), so a blank field is an error — never a silent skip.
+ * Returns the parsed number or a human message.
+ */
+export function validateUnitsPerHour(raw: string): { value: number } | { error: string } {
+  const trimmed = raw.trim();
+  if (trimmed === '') return { error: 'Enter a number.' };
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return { error: 'Enter a number.' };
+  if (value < 0) return { error: 'Rate cannot be negative.' };
   if (Math.round(value * 10000) !== value * 10000)
     return { error: 'Use at most 4 decimal places.' };
   return { value };

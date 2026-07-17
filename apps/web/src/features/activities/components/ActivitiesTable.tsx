@@ -407,7 +407,11 @@ export function ActivitiesTable({
           onClose={() => setResourcesId(null)}
           canWrite={canWrite}
           {...(managingResources
-            ? { activityId: managingResources.id, activityName: managingResources.name }
+            ? {
+                activityId: managingResources.id,
+                activityName: managingResources.name,
+                activityDurationType: managingResources.durationType,
+              }
             : {})}
         />
       ) : null}
