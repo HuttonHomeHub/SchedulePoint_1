@@ -30,6 +30,8 @@ const PLAN: PlanSummary = {
   criticalFloatThreshold: 0,
   totalFloatMode: 'FINISH',
   makeOpenEndsCritical: false,
+  levelResources: false,
+  levelWithinFloatOnly: false,
   plannedStart: '2026-01-01',
   calendarId: 'cal-standard',
   version: 4,

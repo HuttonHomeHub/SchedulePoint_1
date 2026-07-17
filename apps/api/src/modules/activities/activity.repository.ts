@@ -40,6 +40,8 @@ export interface ActivityPatch {
   scheduleAsLateAsPossible?: boolean;
   /** Visual-Planning placement (ADR-0033): hand-placed start, or null to clear it. */
   visualStart?: Date | null;
+  /** Resource-levelling tie-break (ADR-0041 §1): client-settable Planner input; null clears to unset. */
+  levelingPriority?: number | null;
   // Progress
   status?: ActivityStatus;
   percentComplete?: number;

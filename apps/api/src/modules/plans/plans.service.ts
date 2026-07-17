@@ -153,6 +153,11 @@ export class PlansService {
     if (dto.makeOpenEndsCritical !== undefined) {
       patch.makeOpenEndsCritical = dto.makeOpenEndsCritical;
     }
+    // Resource-levelling plan options (ADR-0041 §7/§4): client-settable; dark until L2 wires the pass.
+    if (dto.levelResources !== undefined) patch.levelResources = dto.levelResources;
+    if (dto.levelWithinFloatOnly !== undefined) {
+      patch.levelWithinFloatOnly = dto.levelWithinFloatOnly;
+    }
     // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
     // defined value is always a valid calendar date.
     if (dto.plannedStart !== undefined) {

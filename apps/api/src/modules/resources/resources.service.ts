@@ -90,6 +90,8 @@ export class ResourcesService {
             description: dto.description ?? null,
             kind: dto.kind,
             calendarId,
+            // Capacity ceiling (ADR-0041 §2); null/omitted = uncapped. Client-settable; dark until L2.
+            maxUnitsPerHour: dto.maxUnitsPerHour ?? null,
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -127,6 +129,8 @@ export class ResourcesService {
       patch.description = dto.description === '' ? null : dto.description;
     }
     if (dto.kind !== undefined) patch.kind = dto.kind;
+    // Capacity ceiling (ADR-0041 §2): client-settable; null clears to uncapped. Dark until L2.
+    if (dto.maxUnitsPerHour !== undefined) patch.maxUnitsPerHour = dto.maxUnitsPerHour;
     // The resource's own calendar: null clears to inherit the plan default; a specific id
     // is validated in-org under the calendar lock inside the transaction below.
     const calendarId = dto.calendarId;

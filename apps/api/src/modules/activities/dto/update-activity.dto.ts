@@ -178,6 +178,19 @@ export class UpdateActivityDto {
   @IsCalendarDate()
   visualStart?: string | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Resource-levelling tie-break (ADR-0041 §1): LOWER = HIGHER priority. Send null to clear it ' +
+      '(unset — no expressed preference). Read by the levelling pass only when the plan opts in.',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to unset); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  levelingPriority?: number | null;
+
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)
   @IsInt()

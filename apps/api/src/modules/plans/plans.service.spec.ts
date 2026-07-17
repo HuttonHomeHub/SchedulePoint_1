@@ -52,6 +52,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     criticalFloatThreshold: 0,
     totalFloatMode: 'FINISH',
     makeOpenEndsCritical: false,
+    levelResources: false,
+    levelWithinFloatOnly: false,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),

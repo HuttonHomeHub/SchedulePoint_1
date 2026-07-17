@@ -1,13 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceKind } from '@prisma/client';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
 
@@ -67,4 +69,17 @@ export class CreateResourceDto {
   @ValidateIf((_, value) => value !== null)
   @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
   calendarId?: string | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Capacity ceiling — the maximum units available per working hour (ADR-0041 §2). Exact numeric ' +
+      '(>= 0, N21); omit for uncapped (no ceiling). Read by the levelling pass when the plan opts in.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  maxUnitsPerHour?: number;
 }

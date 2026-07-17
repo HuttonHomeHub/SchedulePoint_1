@@ -219,6 +219,20 @@ export interface PlanSummary {
    */
   makeOpenEndsCritical: boolean;
   /**
+   * Resource-levelling opt-in switch (ADR-0041 §7). When true (and the plan has assignments), the
+   * recalc runs the opt-in second levelling pass that resolves over-allocation into the engine-owned
+   * `leveled_*` overlay. Default `false` is the PARITY gate: off ⇒ the pass never runs and the recalc
+   * is byte-identical to today. Consumed by the L2 engine pass; dark in this L1 slice.
+   */
+  levelResources: boolean;
+  /**
+   * Level-within-float-only option (ADR-0041 §4, matching P6's off-by-default "level only within
+   * float"). When true, levelling may delay an activity only WITHIN its total float (preserving the
+   * project finish) and never extends the schedule; residual over-allocation is flagged, not resolved.
+   * Default `false` (behaviour-preserving; only relevant when `levelResources` is on).
+   */
+  levelWithinFloatOnly: boolean;
+  /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
    * historical/transitional reads; live plans always carry a value.
@@ -327,6 +341,13 @@ export interface ActivitySummary {
    * activity renders at its late-based position; it never changes early/late/float. False by default.
    */
   scheduleAsLateAsPossible: boolean;
+  /**
+   * Resource-levelling tie-break (ADR-0041 §1). LOWER = HIGHER priority: when two activities contend
+   * for a capacity-constrained resource, the levelling pass places the lower `levelingPriority` first.
+   * Client-settable Planner input (NOT engine-owned). `null` = unset (no expressed preference),
+   * distinct from an explicit 0. Levelling-read only when the plan opts in; dark until L2.
+   */
+  levelingPriority: number | null;
   status: ActivityStatus;
   /** 0–100. */
   percentComplete: number;
@@ -403,6 +424,27 @@ export interface ActivitySummary {
   visualConflict: boolean;
   /** Engine-owned (ADR-0033): working-day offset of the placement from the early start (signed), or null. */
   visualDriftDays: number | null;
+  // Resource-levelling overlay — engine-owned (ADR-0041 §3/§6 / Q2). The opt-in second levelling pass
+  // (plan `levelResources`) runs AFTER the pure CPM network pass and produces these additive positions;
+  // the pure early/late/float/critical are NOT recomputed on the leveled dates (network float stays
+  // authoritative). Response-echo only — NEVER accepted from a create/update DTO. All null/false until
+  // the plan opts in AND is first levelled.
+  /** Engine-owned (ADR-0041 §3): the delayed start the levelling pass placed this activity at, or null. */
+  leveledStart: string | null;
+  /** Engine-owned (ADR-0041 §3): the delayed finish the levelling pass placed this activity at, or null. */
+  leveledFinish: string | null;
+  /** Engine-owned (ADR-0041 §3): the applied delay in whole working days (leveledStart − earlyStart), or null. */
+  levelingDelayDays: number | null;
+  /**
+   * Engine-owned produce-and-flag (ADR-0041 §6, Q1): true when serialising pushed this activity PAST a
+   * resource's availability window (the engine extends and flags, never hangs). False until levelled.
+   */
+  levelingWindowExceeded: boolean;
+  /**
+   * Engine-owned produce-and-flag (ADR-0041 §2): true when this activity's OWN single-activity demand
+   * exceeds the resource capacity — a delay cannot fix it (reported, never resolved). False until levelled.
+   */
+  selfOverAllocated: boolean;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -926,6 +968,12 @@ export interface ResourceSummary {
   description: string | null;
   kind: ResourceKind;
   calendarId: string | null;
+  /**
+   * Capacity ceiling — the maximum units of this resource available per working hour (ADR-0041 §2).
+   * Client-settable Planner input; `null` = uncapped (no ceiling). Read by the L2 levelling pass when
+   * the plan opts in; dark until L2.
+   */
+  maxUnitsPerHour: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;

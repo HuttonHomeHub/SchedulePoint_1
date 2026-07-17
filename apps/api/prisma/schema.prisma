@@ -509,6 +509,23 @@ model Plan {
   // task (F4). Like scheduling_mode, a single-row column read with the plan, never
   // filtered across plans, so no index; additive with a constant DEFAULT.
   makeOpenEndsCritical   Boolean                @default(false) @map("make_open_ends_critical")
+  // Resource-levelling opt-in switch (ADR-0041 §7). When true (and the plan has
+  // assignments), the recalc runs the opt-in second levelling pass that resolves
+  // over-allocation into the engine-owned leveled_* overlay. Default FALSE is the
+  // PARITY gate: off ⇒ the pass never runs and the recalc is byte-identical to today
+  // (no server feature flag needed — the ADR-0040 opt-in precedent). Like
+  // scheduling_mode/use_expected_finish_dates, a single-row column read with the plan,
+  // never filtered across plans, so no index; additive with a constant DEFAULT (no data
+  // migration). Consumed by the L2 engine pass; dark in this L1 slice.
+  levelResources         Boolean                @default(false) @map("level_resources")
+  // Level-within-float-only option (ADR-0041 §4, matching P6's off-by-default "level
+  // only within float"). When true, levelling may delay an activity only WITHIN its
+  // total float (preserving the project finish) and never EXTENDS the schedule; any
+  // residual over-allocation is flagged rather than resolved. Default FALSE is
+  // behaviour-preserving (and only relevant when level_resources is on). Like the other
+  // plan options, a single-row column read with the plan, never filtered across plans,
+  // so no index; additive with a constant DEFAULT. Consumed by the L2 engine pass.
+  levelWithinFloatOnly   Boolean                @default(false) @map("level_within_float_only")
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
   // (ADR-0023). **Required + NOT NULL** as of ADR-0033 **M1** — the
@@ -623,6 +640,20 @@ model Activity {
   // every existing row, so the byte-parity golden path is unchanged. No index: read
   // only on the full-plan recalc load, never a query predicate.
   scheduleAsLateAsPossible Boolean         @default(false) @map("schedule_as_late_as_possible")
+  // The resource-levelling TIE-BREAK input (ADR-0041 §1). LOWER = HIGHER priority: when
+  // two activities contend for a capacity-constrained resource, the serial priority-list
+  // pass places the lower `leveling_priority` first (then total-float asc → early-start
+  // asc → id asc). CLIENT-SETTABLE Planner input (a write DTO sets it), NOT engine-owned.
+  // NULLABLE with NO default — NULL = UNSET (the planner has expressed no preference),
+  // distinct from an explicit 0 (which, lower=higher, would mean "top priority"). The
+  // engine defines NULL ordering (NULL sorts LAST / neutral, after every explicit value),
+  // documented in ADR-0035 §28. Nullable-no-default mirrors the other optional Planner
+  // inputs (expected_finish / visual_start): a DEFAULT is deliberately omitted so we
+  // never conflate "unset" with an arbitrary sentinel priority, and existing rows read
+  // NULL (metadata-only add, no backfill, byte-parity). No index — read only on the
+  // full-plan recalc load, never a query predicate (plan-scoped load only). MUST stay in
+  // lock-step with @repo/types. LEVELLING-READ ONLY when the plan opts in; dark until L2.
+  levelingPriority         Int?            @map("leveling_priority")
 
   // Progress (Contributor-updatable via the progress path).
   status                   ActivityStatus @default(NOT_STARTED)
@@ -756,6 +787,43 @@ model Activity {
   visualEffectiveFinish DateTime? @map("visual_effective_finish") @db.Date
   visualConflict        Boolean   @default(false) @map("visual_conflict")
   visualDriftDays       Int?      @map("visual_drift_days")
+
+  // Resource-levelling OVERLAY — engine-owned (ADR-0041 §3, Q2). The opt-in second pass
+  // (plans.level_resources) runs AFTER the pure CPM network pass and produces these
+  // additive leveled positions; the pure early_*/late_*/total_float/is_critical are
+  // NOT recomputed on the leveled dates (network float stays authoritative — ADR-0041
+  // Q2). Written ONLY by the recalc's batched `unnest` UPDATE alongside the CPM columns
+  // above; NEVER accepted from a write DTO and NEVER touching version/updated_at/
+  // updated_by (the ADR-0022 engine-owned-column contract), exactly like early_*/
+  // is_critical/constraint_violated/resource_driver_missing.
+  //   * leveled_start/leveled_finish — the delayed positions the levelling pass placed
+  //     this activity at (calendar day, date-only like early_start/early_finish).
+  //     Nullable/no-default ⇒ NULL = "not levelled" (levelling off, or the plan has no
+  //     over-allocation), mirroring early_start/early_finish.
+  //   * leveling_delay_minutes — the applied delay in WORKING MINUTES on the activity's
+  //     own calendar (leveled_start − early_start; day-denominated at the API boundary,
+  //     ADR-0036 §7). Nullable/no-default ⇒ NULL = "not yet levelled", mirroring the
+  //     engine-owned nullable ints total_float/free_float/visual_drift_days.
+  //   * leveling_window_exceeded — produce-and-flag bool (ADR-0041 §6, Q1 =
+  //     extend-past-window-and-flag): true when serialising pushed this activity PAST a
+  //     resource's availability window (e.g. the crane-hire window's end); the engine
+  //     extends and FLAGS, never hangs, never silently succeeds. Mirrors
+  //     constraint_violated exactly (defaulted false, engine-owned).
+  //   * self_over_allocated — produce-and-flag bool (ADR-0041 §2): true when this
+  //     activity's OWN single-activity demand exceeds the resource capacity — an
+  //     over-allocation delay cannot fix (not split in this rung); reported, never
+  //     resolved. Mirrors constraint_violated/resource_driver_missing exactly.
+  // All read false/NULL until the plan opts in AND is first levelled, so existing rows
+  // stay byte-identical (parity). No index: read as part of the already plan-scoped
+  // activity load ((plan_id, created_at, id)) and the bools aggregated over that scope
+  // (plan-level counts, computed in the schedule summary — no plan column, the
+  // constraint_violated precedent); no predicate targets them, and a low-cardinality
+  // boolean index would only cost writes. Dark until L2 wires the pass.
+  leveledStart           DateTime? @map("leveled_start") @db.Date
+  leveledFinish          DateTime? @map("leveled_finish") @db.Date
+  levelingDelayMinutes   Int?      @map("leveling_delay_minutes")
+  levelingWindowExceeded Boolean   @default(false) @map("leveling_window_exceeded")
+  selfOverAllocated      Boolean   @default(false) @map("self_over_allocated")
 
   // Housekeeping (as Project/Plan): TEXT audit ids (Better Auth ids are TEXT),
   // optimistic-lock version, soft delete + restore-batch correlation.
@@ -1315,17 +1383,17 @@ model PlanLock {
 // ---------------------------------------------------------------------------
 
 model Resource {
-  id             String       @id @default(uuid(7)) @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
-  name           String
+  id              String       @id @default(uuid(7)) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  name            String
   // Optional short human handle (e.g. "CR600", "CREW-A"). Unique per org among ACTIVE
   // rows where set — a partial unique uq_resources_org_code (WHERE deleted_at IS NULL
   // AND code IS NOT NULL), raw SQL in the migration; NULL codes are exempt. Mirrors
   // activities.code / uq_activities_plan_code — a natural-key handle (docs/DATABASE.md:
   // unique constraints for natural keys).
-  code           String?
-  description    String?
-  kind           ResourceKind
+  code            String?
+  description     String?
+  kind            ResourceKind
   // The resource's OWN working-time calendar (ADR-0039; the ADR-0037 port seam rung 2
   // rides). Nullable → the resource inherits the plan calendar at schedule time (the
   // driving-calendar fallback order: driving-resource calendar → activity calendar →
@@ -1335,7 +1403,22 @@ model Resource {
   // soft-delete only; the CALENDAR_IN_USE guard — extended to count active resources
   // too — is the real protection, RESTRICT is defence in depth). Backed by the partial
   // idx_resources_calendar_id (WHERE deleted_at IS NULL AND calendar_id IS NOT NULL).
-  calendarId     String?      @map("calendar_id") @db.Uuid
+  calendarId      String?      @map("calendar_id") @db.Uuid
+  // The per-resource CAPACITY ceiling — the max units of work this resource can supply
+  // per working hour (ADR-0041 §2, activating the column ADR-0039 RESERVED "for
+  // levelling"). An EXACT numeric (DECIMAL(18,4)) like the assignment quantities.
+  // NULLABLE with NO default — NULL = UNCAPPED, the parity-preserving default: an
+  // uncapped resource is never over-allocated, so the levelling pass has nothing to
+  // resolve and the default recalc stays byte-identical (never add a DEFAULT — a
+  // DEFAULT 0 would mean "zero capacity" and silently over-allocate every existing
+  // resource). Client-settable (a Planner sets the hire ceiling). `max_units_per_hour
+  // IS NULL OR >= 0` is enforced by ck_resources_max_units_per_hour_nonneg (raw SQL —
+  // nullable-safe), the DB backstop behind the DTO @Min(0) boundary reject (N21,
+  // ADR-0035 §25), mirroring resource_assignments.budgeted_units/units_per_hour
+  // (N14/N19). No index: read only on the full-plan recalc demand load, never a query
+  // predicate. MUST stay in lock-step with @repo/types. LEVELLING-READ ONLY when the
+  // plan opts in (plans.level_resources); dark until L2 wires the pass.
+  maxUnitsPerHour Decimal?     @map("max_units_per_hour") @db.Decimal(18, 4)
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)

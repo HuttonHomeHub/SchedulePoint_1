@@ -239,6 +239,11 @@ export class ActivitiesService {
               : {}),
             // Visual-Planning placement input (ADR-0033): feeds only the effective-Visual pass.
             ...(dto.visualStart ? { visualStart: parseCalendarDate(dto.visualStart) } : {}),
+            // Resource-levelling tie-break (ADR-0041 §1); omit to leave NULL (unset). Client-settable;
+            // the engine-owned leveled_* overlay is never set from input (dark until L2).
+            ...(dto.levelingPriority !== undefined
+              ? { levelingPriority: dto.levelingPriority }
+              : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -331,6 +336,9 @@ export class ActivitiesService {
     if (dto.visualStart !== undefined) {
       patch.visualStart = dto.visualStart === null ? null : parseCalendarDate(dto.visualStart);
     }
+    // Resource-levelling tie-break (ADR-0041 §1): client-settable; null clears to unset. The
+    // engine-owned leveled_* overlay is never patched here (dark until L2).
+    if (dto.levelingPriority !== undefined) patch.levelingPriority = dto.levelingPriority;
     // The activity's own calendar (ADR-0037): null clears to inherit the plan default; a specific
     // id is validated in-org under the calendar lock inside the transaction below (T4).
     const calendarId = dto.calendarId;

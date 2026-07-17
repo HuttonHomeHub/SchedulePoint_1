@@ -225,6 +225,52 @@ export class ActivityResponseDto implements ActivitySummary {
   })
   visualDriftDays!: number | null;
 
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Resource-levelling tie-break (ADR-0041 §1): LOWER = HIGHER priority. Client-settable; null = unset.',
+  })
+  levelingPriority!: number | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Resource-levelling delayed start (engine-owned, ADR-0041 §3), or null until levelled.',
+  })
+  leveledStart!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Resource-levelling delayed finish (engine-owned, ADR-0041 §3), or null until levelled.',
+  })
+  leveledFinish!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Resource-levelling applied delay in whole working days (engine-owned, ADR-0041 §3), or null.',
+  })
+  levelingDelayDays!: number | null;
+
+  @ApiProperty({
+    description:
+      'Levelling window-exceeded produce-and-flag (engine-owned, ADR-0041 §6): serialising pushed the activity past a resource availability window.',
+  })
+  levelingWindowExceeded!: boolean;
+
+  @ApiProperty({
+    description:
+      'Self over-allocated produce-and-flag (engine-owned, ADR-0041 §2): the activity’s own demand exceeds the resource capacity (a delay cannot fix it).',
+  })
+  selfOverAllocated!: boolean;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -283,6 +329,18 @@ export class ActivityResponseDto implements ActivitySummary {
       visualEffectiveFinish: day(entity.visualEffectiveFinish),
       visualConflict: entity.visualConflict,
       visualDriftDays: entity.visualDriftDays,
+      // Resource-levelling overlay (ADR-0041) — client-settable priority + engine-owned overlay.
+      levelingPriority: entity.levelingPriority,
+      leveledStart: day(entity.leveledStart),
+      leveledFinish: day(entity.leveledFinish),
+      // Stored in working-minutes (ADR-0036 §7); the public field stays whole working days. Null
+      // until levelled — the same day↔minute conversion this DTO uses for durationDays/remaining.
+      levelingDelayDays:
+        entity.levelingDelayMinutes === null
+          ? null
+          : Math.round(entity.levelingDelayMinutes / MINUTES_PER_DAY),
+      levelingWindowExceeded: entity.levelingWindowExceeded,
+      selfOverAllocated: entity.selfOverAllocated,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

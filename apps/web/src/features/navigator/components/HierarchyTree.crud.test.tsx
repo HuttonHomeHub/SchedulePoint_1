@@ -58,6 +58,8 @@ const plans: PlanSummary[] = [
     criticalFloatThreshold: 0,
     totalFloatMode: 'FINISH',
     makeOpenEndsCritical: false,
+    levelResources: false,
+    levelWithinFloatOnly: false,
     plannedStart: null,
     calendarId: null,
     version: 1,

@@ -13,6 +13,8 @@ export interface CreateResourceInput {
   description: string | null;
   kind: ResourceKind;
   calendarId: string | null;
+  /** Capacity ceiling in units/working-hour (ADR-0041 §2); null = uncapped. Stored as DECIMAL(18,4). */
+  maxUnitsPerHour: number | null;
   createdBy: string;
   updatedBy: string;
 }
@@ -24,6 +26,8 @@ export interface ResourcePatch {
   description?: string | null;
   kind?: ResourceKind;
   calendarId?: string | null;
+  /** Capacity ceiling in units/working-hour (ADR-0041 §2); null clears to uncapped. */
+  maxUnitsPerHour?: number | null;
 }
 
 /**
@@ -55,6 +59,7 @@ export class ResourceRepository {
         description: input.description,
         kind: input.kind,
         calendarId: input.calendarId,
+        maxUnitsPerHour: input.maxUnitsPerHour,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
       },

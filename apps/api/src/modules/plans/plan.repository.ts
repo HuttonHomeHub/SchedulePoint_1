@@ -30,6 +30,10 @@ export interface PlanPatch {
   totalFloatMode?: TotalFloatMode;
   /** Make open-ended activities critical (M6, ADR-0035 §20). */
   makeOpenEndsCritical?: boolean;
+  /** Resource-levelling opt-in switch (ADR-0041 §7). */
+  levelResources?: boolean;
+  /** Level-within-float-only option (ADR-0041 §4). */
+  levelWithinFloatOnly?: boolean;
   /** The mandatory CPM data date (ADR-0033 M1): may be moved, never cleared — so never null. */
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */

@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -62,6 +63,21 @@ export class UpdateResourceDto {
   @ValidateIf((_, value) => value !== null)
   @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
   calendarId?: string | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    description:
+      'Capacity ceiling in units per working hour (ADR-0041 §2), or null to clear (uncapped). ' +
+      'Exact numeric (>= 0, N21).',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to uncapped); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  maxUnitsPerHour?: number | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

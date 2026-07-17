@@ -190,4 +190,15 @@ export class CreateActivityDto {
   @IsOptional()
   @IsCalendarDate()
   visualStart?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Resource-levelling tie-break (ADR-0041 §1): LOWER = HIGHER priority when two activities contend ' +
+      'for a capacity-constrained resource. Omit for unset (no expressed preference). Read by the ' +
+      'levelling pass only when the plan opts in.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  levelingPriority?: number;
 }
