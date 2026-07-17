@@ -27,4 +27,6 @@ interface ImportMetaEnv {
   readonly VITE_FLOAT_CRITICAL_SETTINGS?: string;
   /** Advanced activity types — the Level-of-Effort (later WBS-summary) option in the Type picker (ADR-0035 §21/§24, M5-epic). "true"/"1" enables it; off by default. */
   readonly VITE_ADVANCED_ACTIVITY_TYPES?: string;
+  /** Web resource surface — library screen + per-activity assignments (M7.1, ADR-0039). "true"/"1" enables it; off by default. */
+  readonly VITE_RESOURCES?: string;
 }

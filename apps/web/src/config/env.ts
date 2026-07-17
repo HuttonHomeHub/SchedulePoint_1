@@ -236,3 +236,17 @@ export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOn(
 export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ADVANCED_ACTIVITY_TYPES,
 );
+
+/**
+ * Web resource surface (M7.1, ADR-0039). **OFF by default** — a brand-new dark surface whose quality
+ * gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and is
+ * turned on per-environment during rollout, then flipped default-on once cleared (the pattern
+ * `VITE_NAV_TREE` / `VITE_TSLD_EDITING` each began with). When on, the app gains an org-scoped
+ * **Resources** library screen (list/create/edit/delete resources) reachable from the top nav, and a
+ * per-activity **Resources** row action that opens an assignment editor (assign/edit/unassign, with a
+ * driving-resource toggle that a MATERIAL resource can never take — ADR-0039 `MATERIAL_CANNOT_DRIVE`).
+ * Everything behind it — the resource library + assignment API and the driving-resource-calendar
+ * engine wiring — is already live; the flag only governs whether the web UI exposes it. Set
+ * `VITE_RESOURCES=true` to enable it in an environment.
+ */
+export const RESOURCES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCES);

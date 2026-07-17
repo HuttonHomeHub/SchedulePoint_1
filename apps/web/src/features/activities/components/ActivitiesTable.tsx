@@ -17,7 +17,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { ACTIVITY_CALENDAR_ENABLED, ADVANCED_CONSTRAINTS_ENABLED } from '@/config/env';
+import {
+  ACTIVITY_CALENDAR_ENABLED,
+  ADVANCED_CONSTRAINTS_ENABLED,
+  RESOURCES_ENABLED,
+} from '@/config/env';
+import { ActivityResourcesDialog } from '@/features/resources';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
@@ -121,11 +126,15 @@ export function ActivitiesTable({
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [progressId, setProgressId] = useState<string | null>(null);
+  const [resourcesId, setResourcesId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const editing = editingId ? activities.data?.find((a) => a.id === editingId) : undefined;
   const reporting = progressId ? activities.data?.find((a) => a.id === progressId) : undefined;
+  const managingResources = resourcesId
+    ? activities.data?.find((a) => a.id === resourcesId)
+    : undefined;
 
   const columns: Column<ActivitySummary>[] = [
     {
@@ -280,7 +289,7 @@ export function ActivitiesTable({
       varianceColumn('Float variance', 'float', 'lg'),
     );
   }
-  if (canWrite || canReportProgress || onOpenLogic) {
+  if (canWrite || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
     columns.push({
       header: 'Actions',
       srHeader: true,
@@ -306,6 +315,18 @@ export function ActivitiesTable({
               aria-label={`Report progress for ${activity.name}`}
             >
               Progress
+            </Button>
+          ) : null}
+          {/* Dark surface (ADR-0039): any member may open the assignments editor (reads are
+              member-level); writes inside it are gated on `canWrite`. */}
+          {RESOURCES_ENABLED ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setResourcesId(activity.id)}
+              aria-label={`Resources for ${activity.name}`}
+            >
+              Resources
             </Button>
           ) : null}
           {canWrite ? (
@@ -376,6 +397,18 @@ export function ActivitiesTable({
           open={reporting !== undefined}
           onClose={() => setProgressId(null)}
           {...(reporting ? { activity: reporting } : {})}
+        />
+      ) : null}
+
+      {RESOURCES_ENABLED ? (
+        <ActivityResourcesDialog
+          orgSlug={orgSlug}
+          open={managingResources !== undefined}
+          onClose={() => setResourcesId(null)}
+          canWrite={canWrite}
+          {...(managingResources
+            ? { activityId: managingResources.id, activityName: managingResources.name }
+            : {})}
         />
       ) : null}
 
