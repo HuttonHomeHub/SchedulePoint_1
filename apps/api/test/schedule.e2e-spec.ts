@@ -486,13 +486,16 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await actor.agent.get(floatPathsUrl(planId, randomUUID())).expect(404);
   });
 
-  it('400s when the target query param is missing or not a uuid', async () => {
+  it('422s when the target query param is missing or not a uuid', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');
+    // A missing / malformed `target` is a DTO validation failure (FloatPathsQueryDto), which the
+    // global ValidationPipe surfaces as 422 — matching every other validation error in the API
+    // (docs/API.md; cf. the "validates the id (422)" case above), not a 400 malformed-request.
     await actor.agent
       .get(`/api/v1/organizations/acme/plans/${planId}/schedule/float-paths`)
-      .expect(400);
-    await actor.agent.get(floatPathsUrl(planId, 'not-a-uuid')).expect(400);
+      .expect(422);
+    await actor.agent.get(floatPathsUrl(planId, 'not-a-uuid')).expect(422);
   });
 
   it('a mandatory pin that breaks logic is produced, flagged, and counted (ADR-0035 §7)', async () => {
