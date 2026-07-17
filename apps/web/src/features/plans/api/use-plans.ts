@@ -206,6 +206,36 @@ export function useSetPlanExpectedFinish(orgSlug: string) {
   });
 }
 
+/**
+ * Set one or more of a plan's **float & critical** scheduling options (ADR-0035 §17/§18/§20, M6) —
+ * `criticalPathDefinition`, `totalFloatMode`, `makeOpenEndsCritical` — as a targeted PATCH of just the
+ * changed field(s) + `version`, so the settings picker doesn't need the whole plan form. Mirrors
+ * {@link useSetPlanExpectedFinish}: writes the returned plan into the detail cache (new value + fresh
+ * version) and invalidates the schedule summary so a later recalculation reflects it. It changes no
+ * dates itself; the next Recalculate applies the new definition/measure to the computed critical path.
+ */
+export function useSetPlanScheduleOption(orgSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      planId: string;
+      version: number;
+      patch: Partial<
+        Pick<PlanSummary, 'criticalPathDefinition' | 'totalFloatMode' | 'makeOpenEndsCritical'>
+      >;
+    }) =>
+      apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ...input.patch, version: input.version }),
+      }),
+    onSuccess: (updated, input) => {
+      queryClient.setQueryData(planKeys.detail(orgSlug, input.planId), updated);
+    },
+    onSettled: (_data, _error, input) =>
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
+  });
+}
+
 export function useDeletePlan(orgSlug: string, projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

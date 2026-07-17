@@ -126,6 +126,14 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ nullable: true, type: Number, description: 'CPM total float (engine-owned).' })
   totalFloat!: number | null;
 
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'CPM free float in working days (engine-owned, ADR-0035 §17–§20): slip that delays no successor. Always ≤ total float.',
+  })
+  freeFloat!: number | null;
+
   @ApiProperty({ description: 'CPM critical flag (engine-owned).' })
   isCritical!: boolean;
 
@@ -226,6 +234,7 @@ export class ActivityResponseDto implements ActivitySummary {
       lateStart: day(entity.lateStart),
       lateFinish: day(entity.lateFinish),
       totalFloat: entity.totalFloat,
+      freeFloat: entity.freeFloat,
       isCritical: entity.isCritical,
       isNearCritical: entity.isNearCritical,
       constraintViolated: entity.constraintViolated,

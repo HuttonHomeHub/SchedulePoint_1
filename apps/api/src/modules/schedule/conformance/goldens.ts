@@ -28,6 +28,8 @@ export interface GoldenExpectation {
   lateFinish: string;
   totalFloat: number;
   isCritical: boolean;
+  /** Optional free-float assertion (M6-F1/F5); compared only when a case specifies it. */
+  freeFloat?: number;
 }
 
 export interface GoldenCase {
@@ -267,7 +269,7 @@ export const GOLDEN_CASES: GoldenCase[] = [
   {
     name: 'alap-display-only',
     description:
-      'A9400-style: A(2) flagged As-Late-As-Possible floats against a 5-day B. ALAP is display-only (ADR-0035 §11) — A’s pure early/late/float are unchanged; its LATE dates (06-04 → 06-05) are where an ALAP bar renders.',
+      'A9400-style: A(2) flagged As-Late-As-Possible floats against a 5-day B. ALAP is display-only (ADR-0035 §11) — A’s pure early/late/float are unchanged, but as an ALAP placement its FREE FLOAT is 0 (M6-F5).',
     activities: [
       { id: 'A', durationMinutes: 2880, type: 'TASK', scheduleAsLateAsPossible: true },
       task('B', 5),
@@ -283,6 +285,8 @@ export const GOLDEN_CASES: GoldenCase[] = [
         lateFinish: '2026-06-05',
         totalFloat: 4320,
         isCritical: false,
+        // ALAP placement consumes its slack → free float 0 (M6-F5), though total float stays 3 days.
+        freeFloat: 0,
       },
       B: {
         earlyStart: '2026-06-01',

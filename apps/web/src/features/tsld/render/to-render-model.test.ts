@@ -32,6 +32,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 0,
+    freeFloat: null,
     isCritical: true,
     isNearCritical: false,
     constraintViolated: false,
@@ -61,6 +62,20 @@ describe('toRenderActivities', () => {
       visualConflict: false,
       visualDriftDays: null,
     });
+  });
+
+  it('flags both bars of a same-lane time overlap, and neither when they clear each other', () => {
+    const overlapping = toRenderActivities([
+      activity({ id: 'a', laneIndex: 0, earlyStart: '2026-01-01', earlyFinish: '2026-01-10' }),
+      activity({ id: 'b', laneIndex: 0, earlyStart: '2026-01-05', earlyFinish: '2026-01-15' }),
+    ]);
+    expect(overlapping.map((r) => r.laneOverlap)).toEqual([true, true]);
+
+    const clear = toRenderActivities([
+      activity({ id: 'a', laneIndex: 0, earlyStart: '2026-01-01', earlyFinish: '2026-01-10' }),
+      activity({ id: 'b', laneIndex: 1, earlyStart: '2026-01-05', earlyFinish: '2026-01-15' }),
+    ]);
+    expect(clear.map((r) => r.laneOverlap)).toEqual([false, false]);
   });
 
   it('pre-builds the on-canvas label (code + name + duration) at the seam', () => {

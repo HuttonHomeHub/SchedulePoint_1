@@ -1,4 +1,9 @@
-import type { PlanStatus, ProgressRecalcMode } from '@repo/types';
+import type {
+  CriticalPathDefinition,
+  PlanStatus,
+  ProgressRecalcMode,
+  TotalFloatMode,
+} from '@repo/types';
 import { z } from 'zod';
 
 /**
@@ -43,6 +48,60 @@ export const PROGRESS_RECALC_MODE_LABELS: Record<
 export const PROGRESS_RECALC_MODES = Object.keys(PROGRESS_RECALC_MODE_LABELS) as [
   ProgressRecalcMode,
   ...ProgressRecalcMode[],
+];
+
+/**
+ * Human labels + one-line descriptions for the **critical-path definition** (ADR-0035 §17, M6) —
+ * how the engine decides which activities are critical. `Record<CriticalPathDefinition, …>`, so a
+ * new definition fails to compile until it is described.
+ */
+export const CRITICAL_PATH_DEFINITION_LABELS: Record<
+  CriticalPathDefinition,
+  { label: string; description: string }
+> = {
+  TOTAL_FLOAT: {
+    label: 'Total float',
+    description: 'Critical when total float is at or below the threshold (P6 default).',
+  },
+  LONGEST_PATH: {
+    label: 'Longest path',
+    description: 'Critical along the longest chain of driving relationships to the finish.',
+  },
+};
+
+/** Critical-path definitions, in order — derived from the labels so it stays exhaustive. */
+export const CRITICAL_PATH_DEFINITIONS = Object.keys(CRITICAL_PATH_DEFINITION_LABELS) as [
+  CriticalPathDefinition,
+  ...CriticalPathDefinition[],
+];
+
+/**
+ * Human labels + one-line descriptions for the **total-float measure** (ADR-0035 §18, M6) — how the
+ * engine measures an activity's total float. `Record<TotalFloatMode, …>`, so a new mode fails to
+ * compile until it is described.
+ */
+export const TOTAL_FLOAT_MODE_LABELS: Record<
+  TotalFloatMode,
+  { label: string; description: string }
+> = {
+  FINISH: {
+    label: 'Finish float',
+    description: 'Late finish minus early finish (P6 default).',
+  },
+  START: {
+    label: 'Start float',
+    description: 'Late start minus early start.',
+  },
+  SMALLEST: {
+    label: 'Smallest',
+    description: 'The lesser of start and finish float.',
+  },
+};
+
+/** Total-float measures, in order — derived from the labels so it stays exhaustive. */
+export const TOTAL_FLOAT_MODES = Object.keys(TOTAL_FLOAT_MODE_LABELS) as [
+  TotalFloatMode,
+  ...TotalFloatMode[],
 ];
 
 /**

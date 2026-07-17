@@ -40,6 +40,7 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 2,
+    freeFloat: null,
     isCritical: false,
     isNearCritical: true,
     constraintViolated: false,

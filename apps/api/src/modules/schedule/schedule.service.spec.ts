@@ -34,6 +34,10 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
+    criticalPathDefinition: 'TOTAL_FLOAT',
+    criticalFloatThreshold: 0,
+    totalFloatMode: 'FINISH',
+    makeOpenEndsCritical: false,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -241,6 +245,29 @@ describe('ScheduleService.recalculate', () => {
     plans.findActiveByIdInOrg.mockResolvedValue(plan({ useExpectedFinishDates: false }));
     const off = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
     expect(off.projectFinish).toBe('2026-01-02');
+  });
+
+  it('threads the plan’s critical-path definition into the engine (M6, ADR-0035 §17)', async () => {
+    // Spine A(2)→B(4) plus an OPEN-ENDED X(3) with an early FNLT that forces negative float. Under
+    // TOTAL_FLOAT (default) X is critical (3 critical); under LONGEST_PATH it drops off the driving
+    // chain (2 critical). The service must thread `criticalPathDefinition` through to the engine.
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 2),
+      activityRow('B', 4),
+      activityRow('X', 3, {
+        constraintType: 'FNLT',
+        constraintDate: new Date('2026-01-02'),
+      }),
+    ]);
+    schedule.loadEdges.mockResolvedValue([edgeRow('A', 'B')]);
+
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ criticalPathDefinition: 'TOTAL_FLOAT' }));
+    const totalFloat = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    expect(totalFloat.criticalCount).toBe(3);
+
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ criticalPathDefinition: 'LONGEST_PATH' }));
+    const longestPath = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    expect(longestPath.criticalCount).toBe(2);
   });
 
   it('takes the plan lock BEFORE loading the graph', async () => {

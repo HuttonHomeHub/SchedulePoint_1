@@ -14,6 +14,7 @@ const PALETTE: TsldPalette = {
   nonWorking: '#222',
   today: '#f00',
   conflict: '#fa0',
+  laneOverlap: '#fa0',
   labelInside: '#fff',
   labelInsideCritical: '#fff',
   labelInsideNearCritical: '#000',

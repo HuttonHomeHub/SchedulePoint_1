@@ -269,10 +269,17 @@ export function TsldPanel({
   // `activities` only — NOT on selection or unrelated parent re-renders. Without this, any parent
   // render (e.g. every pointermove while dragging the workspace's activity-panel resizer) re-ran
   // `describeActivity` for every row, which measured ~1.3s at 2,000 activities (ADR-0030 perf).
-  const optionDescriptions = useMemo(
-    () => new Map(activities.map((a) => [a.id, describeActivity(a)])),
-    [activities],
-  );
+  const optionDescriptions = useMemo(() => {
+    // Which activities the render pass flagged as sharing a lane with a time-overlapping neighbour
+    // (TECH_DEBT #24c) — computed once on the drawn dates, so the spoken cue matches the canvas badge.
+    const overlap = new Map(renderActivities.map((r) => [r.id, r.laneOverlap ?? false]));
+    return new Map(
+      activities.map((a) => [
+        a.id,
+        describeActivity(a, { overlapsInLane: overlap.get(a.id) ?? false }),
+      ]),
+    );
+  }, [activities, renderActivities]);
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
   // computed schedule (`isCalculated`), but canvas-first authoring (ADR-0032) mounts a **blank,
@@ -319,8 +326,10 @@ export function TsldPanel({
   const select = (id: string | null): void => {
     setSelectedId(id);
     if (id) {
-      const activity = activities.find((a) => a.id === id);
-      if (activity) announce(describeActivity(activity));
+      // Reuse the memoised Tier-1 line (it already carries the lane-overlap clause) rather than
+      // recomputing describeActivity here, so the spoken line matches the listbox exactly.
+      const description = optionDescriptions.get(id);
+      if (description) announce(description);
     }
   };
 

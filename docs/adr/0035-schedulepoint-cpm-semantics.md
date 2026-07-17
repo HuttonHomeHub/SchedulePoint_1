@@ -19,7 +19,7 @@ stays **Proposed** overall until every clause is built. Current state:
 | §7–§11 (constraints), §12 (N15)    | M4               | **Accepted** |
 | §13–§14 (duplicate/cycle report)   | M4 (F8)          | **Accepted** |
 | §22 (zero-duration task)           | M4               | **Accepted** |
-| §17–§20 (float & critical)         | M6               | Proposed     |
+| §17–§20 (float & critical)         | M6               | **Accepted** |
 | §21, §23–§24 (LOE, resource, WBS)  | M5-epic          | Proposed     |
 | §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
 
@@ -123,8 +123,16 @@ We will implement the following semantics. Each cites the milestone that will bu
     computed as **Finish Float** by default (P6 default). **Longest Path** is a selectable alternative
     definition (S07): under Longest Path a hugely-negative-float but **open-ended** activity (A12700)
     is **not** critical, whereas under TF ≤ 0 it is — the cleanest discriminator between the two.
-18. **Total Float as Start / Finish / Smallest** is selectable (S13); the activities where these
-    diverge are those whose calendar differs from their predecessors'.
+18. **Total Float as Start / Finish / Smallest** is selectable (S13) via a plan-level `totalFloatMode`
+    (default `FINISH`, the P6 default). **SchedulePoint semantic (M6-F3):** total float is measured on
+    the activity's **own** calendar (ADR-0037 §4), on **both** the start and finish sides. Because
+    advancing an activity's start and finish by its duration on that one calendar preserves the
+    working-time gap, **start-float and finish-float coincide for every _unprogressed_ activity** — so
+    the three modes agree, and the fixture's mixed-calendar S13 divergence (`A4340/A7710/A11100/A5500`)
+    is **deliberately not reproduced** (verified: 0/4 diverge). The modes diverge only for a
+    **progressed** activity, whose late start is frozen on its actual start (start-float collapses to 0) while its finish-float reflects the remaining work. P6's start-vs-finish split instead measures
+    the two sides on different _neighbour_ calendars — a multi-calendar-measurement artefact we do not
+    adopt (north-star, not parity — ADR-0034).
 19. **Multiple float paths** (S11) are **contiguous driving chains** to the target activity, not
     activities sorted by total float.
 20. **"Make open-ended activities critical"** is an option, **default off** (P6 default); on (S08) it

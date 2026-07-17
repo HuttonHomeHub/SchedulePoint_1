@@ -21,11 +21,13 @@ import {
   type ResolvedProgress,
 } from './progress';
 import type {
+  CriticalPathDefinition,
   EngineActivity,
   EngineEdge,
   EngineEdgeResult,
   EngineResult,
   EngineSummary,
+  TotalFloatMode,
 } from './types';
 import {
   absMinutesToInstant,
@@ -56,6 +58,32 @@ export interface ComputeOptions {
    * ignored and the schedule is byte-identical to the pure-progress path.
    */
   useExpectedFinishDates?: boolean;
+  /**
+   * How criticality is decided (M6-F2, ADR-0035 §17–§20). `TOTAL_FLOAT` (the default) marks an
+   * activity critical when its total float ≤ {@link criticalFloatThresholdMinutes}; `LONGEST_PATH`
+   * marks the driving chain back from the latest-finishing activities. Off/absent ⇒ `TOTAL_FLOAT`,
+   * byte-identical to the pre-M6 path.
+   */
+  criticalDefinition?: CriticalPathDefinition;
+  /**
+   * The total-float threshold (working **minutes**) at/below which an activity is critical under the
+   * `TOTAL_FLOAT` definition (ADR-0035 §17). Defaults to 0 (P6/behaviour-preserving); a positive value
+   * widens the critical band (e.g. treat ≤ 1 day of float as critical). Ignored under `LONGEST_PATH`.
+   */
+  criticalFloatThresholdMinutes?: number;
+  /**
+   * How total float is measured (M6-F3, ADR-0035 §18): `FINISH` (late−early finish, the default),
+   * `START` (late−early start), or `SMALLEST` (the lesser). Off/absent ⇒ `FINISH`, byte-identical to
+   * the pre-M6 path. Diverges from `FINISH` only on mixed calendars / progressed activities.
+   */
+  totalFloatMode?: TotalFloatMode;
+  /**
+   * Make open-ended activities critical (M6-F4, ADR-0035 §20). When true, every **open end** — an
+   * activity with no predecessors OR no successors (a dangling either end, e.g. the fixture's
+   * A9500/A3900/A12700) — is flagged critical, **OR-ed** with the active definition (so it never drops
+   * an already-critical member). Off (the default) ⇒ byte-identical to the pre-M6 path (P6 default off).
+   */
+  makeOpenEndsCritical?: boolean;
 }
 
 /**
@@ -106,6 +134,10 @@ export function computeSchedule(
   const { dataDate, calendar: planCalendar } = options;
   const progressMode: ProgressMode = options.progressMode ?? 'RETAINED_LOGIC';
   const useExpectedFinishDates = options.useExpectedFinishDates ?? false;
+  const criticalDefinition: CriticalPathDefinition = options.criticalDefinition ?? 'TOTAL_FLOAT';
+  const criticalThreshold = options.criticalFloatThresholdMinutes ?? 0;
+  const totalFloatMode: TotalFloatMode = options.totalFloatMode ?? 'FINISH';
+  const makeOpenEndsCritical = options.makeOpenEndsCritical ?? false;
   // How many in-progress activities had their remaining work resized to an expected finish (§9).
   let expectedFinishAppliedCount = 0;
   const graph = buildGraph(activities, edges);
@@ -304,6 +336,33 @@ export function computeSchedule(
     if (projectFinishInstant === null || ef > projectFinishInstant) projectFinishInstant = ef;
   }
 
+  // Longest-Path critical set (M6-F2, ADR-0035 §17–§20). Only built when the plan selects LONGEST_PATH.
+  // Seed every activity whose early finish IS the project finish (the latest-finishing activities — the
+  // true "finish drivers", including open ends that end last), then walk BACKWARD over the M3 driving
+  // edges. This is the contiguous chain of binding ties, which is why an open-ended, hugely-negative-
+  // float activity that no driving chain reaches is NOT on it (scenario S07's A12700), though it is
+  // critical under `TOTAL_FLOAT ≤ 0`. Reuses the per-edge driving flags — no extra pass over the dates.
+  const onLongestPath = new Set<string>();
+  if (criticalDefinition === 'LONGEST_PATH' && projectFinishInstant !== null) {
+    const drivingById = new Map<string, boolean>(edgeResults.map((e) => [e.edgeId, e.isDriving]));
+    const stack: string[] = [];
+    for (const id of graph.order) {
+      if (earlyFinish.get(id) === projectFinishInstant && !onLongestPath.has(id)) {
+        onLongestPath.add(id);
+        stack.push(id);
+      }
+    }
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      for (const edge of graph.incoming.get(id)!) {
+        if (drivingById.get(edge.id) === true && !onLongestPath.has(edge.predecessorId)) {
+          onLongestPath.add(edge.predecessorId);
+          stack.push(edge.predecessorId);
+        }
+      }
+    }
+  }
+
   // Backward pass (reverse topological order): latest finish/start INSTANTS. Open ends (no
   // successors) are seeded from the project finish. `lateFinish` is rolled back to the activity's
   // own working end boundary; `lateStart` is its own duration back from there.
@@ -382,19 +441,73 @@ export function computeSchedule(
     const lsInst = lateStart.get(id)!;
     const lfInst = lateFinish.get(id)!;
 
-    // Float is the working time from early to late FINISH on the activity's OWN calendar (P6).
-    // Measured on the finish side so a progressed activity's float reflects its remaining work
-    // (its early→late START span differs from a full duration once it is under way); for an
-    // unprogressed activity the start-side and finish-side spans are equal, so this is byte-identical
-    // to the pre-M2 `lateStart − earlyStart` (the golden-suite parity gate).
-    const totalFloat = cal.workingTimeBetween(
+    // Float is the working time between the early and late positions on the activity's OWN calendar
+    // (P6). Both the finish-side (LF−EF) and start-side (LS−ES) spans are computed; the plan's
+    // `totalFloatMode` (M6-F3, ADR-0035 §18) selects which is exposed as `totalFloat`. `FINISH` (the
+    // default) matches the pre-M6 value — and, for a progressed activity, reflects the remaining work
+    // (its start-side span collapses on the frozen actual start). On the all-inherit, unprogressed
+    // path the two spans are equal, so every mode is byte-identical to the pre-M2 `lateStart − earlyStart`.
+    const finishFloat = cal.workingTimeBetween(
       absMinutesToInstant(efInst),
       absMinutesToInstant(lfInst),
     );
-    const isCritical = totalFloat <= 0;
-    const isNearCritical = totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_MINUTES;
+    const startFloat = cal.workingTimeBetween(
+      absMinutesToInstant(esInst),
+      absMinutesToInstant(lsInst),
+    );
+    const totalFloat =
+      totalFloatMode === 'START'
+        ? startFloat
+        : totalFloatMode === 'SMALLEST'
+          ? Math.min(startFloat, finishFloat)
+          : finishFloat;
+    // Criticality by the plan's definition (M6-F2): the driving chain (LONGEST_PATH) or total float ≤
+    // the threshold (TOTAL_FLOAT, default; threshold 0 ⇒ byte-identical to the pre-M6 `totalFloat <= 0`).
+    const byDefinition =
+      criticalDefinition === 'LONGEST_PATH'
+        ? onLongestPath.has(id)
+        : totalFloat <= criticalThreshold;
+    // Make-open-ends-critical (M6-F4): OR an open end (no predecessors or no successors) into the
+    // definition when the option is on — never dropping an already-critical member. Off ⇒ unchanged.
+    const isOpenEnd = graph.incoming.get(id)!.length === 0 || graph.outgoing.get(id)!.length === 0;
+    const isCritical = byDefinition || (makeOpenEndsCritical && isOpenEnd);
+    // Near-critical stays total-float-based and never overlaps critical: a positive-but-small float that
+    // is not already flagged critical. On the default path (threshold 0) this equals the old predicate.
+    const isNearCritical =
+      !isCritical && totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_MINUTES;
     if (isCritical) criticalCount += 1;
     if (isNearCritical) nearCriticalCount += 1;
+
+    // Free float (M6-F1, ADR-0035 §17–§20): how far the activity can slip its finish without delaying the
+    // EARLY start of ANY successor. For each outgoing edge, `backwardUpperBound` seeded with the
+    // SUCCESSOR'S EARLY dates (rather than its late dates) yields the finish instant beyond which this
+    // activity would push that successor's early start; the tightest such gap — working time on the
+    // activity's OWN calendar (P6/ADR-0037 §4) — is the free float. An OPEN END (no successors) can
+    // slip up to its total float, so it takes that (the standard tail identity FF = TF). Free float
+    // can never exceed total float (a universal CPM identity), so the result is capped at it.
+    const effDurationForFF = effectiveDurationById.get(id) ?? duration;
+    const outgoing = graph.outgoing.get(id)!;
+    let freeFloat: number;
+    if (outgoing.length === 0) {
+      freeFloat = totalFloat;
+    } else {
+      let minGap = Infinity;
+      for (const edge of outgoing) {
+        const succEs = earlyStart.get(edge.successorId)!;
+        const succEf = earlyFinish.get(edge.successorId)!;
+        const bound = backwardUpperBound(edge, succEs, succEf, cal, effDurationForFF, planCalendar);
+        const gap = cal.workingTimeBetween(absMinutesToInstant(efInst), absMinutesToInstant(bound));
+        if (gap < minGap) minGap = gap;
+      }
+      freeFloat = Math.min(minGap, totalFloat);
+    }
+    // ALAP zero-free-float refinement (M6-F5, ADR-0035 §11). A flagged As-Late-As-Possible activity is
+    // DISPLAYED as late as its successors allow — its effective placement consumes its free float, so at
+    // that placement free float is 0. This is display-only: `early*`/`late*`/`totalFloat` stay a pure
+    // function of the network (the placement start is `earlyStart + freeFloat`; an open end, with no
+    // successors, falls back to its late dates per §11). Reporting `freeFloat = 0` is the machine-readable
+    // signal of that placement.
+    if (activity.scheduleAsLateAsPossible) freeFloat = 0;
 
     // Own-calendar offsets (for the inclusive-date mapping) and plan-frame offsets (exposed).
     const esOwn = offsetFromDataDate(cal, dataDateAbs, esInst);
@@ -442,6 +555,7 @@ export function computeSchedule(
       lateStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, lsInst),
       lateFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, lfInst),
       totalFloat,
+      freeFloat,
       isCritical,
       isNearCritical,
       constraintViolated: constraintViolated.get(id) ?? false,

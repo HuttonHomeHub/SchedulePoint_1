@@ -765,3 +765,24 @@ acceptance-status ledger.
   instant. Delivered first (F1) behind the byte-parity golden gate.
 - **Topology reporting (§13/§14) in scope.** F8 (duplicate-edge reject with the pair named; cycle
   reports naming the exact members) is included in M4 as the last, droppable slice.
+- **Total-float mode coincidence (§18, M6-F3).** The plan-level `totalFloatMode`
+  (`START`/`FINISH`/`SMALLEST`, default `FINISH`) is implemented, but SchedulePoint measures total
+  float on the activity's **own** calendar for **both** the start and finish sides (ADR-0037 §4), so
+  the three modes **coincide for every unprogressed activity** — advancing start and finish by the
+  duration on one calendar preserves the working-time gap. Consequently the conformance fixture's
+  mixed-calendar S13 divergence (`A4340/A7710/A11100/A5500`) is **deliberately not reproduced**
+  (verified 0/4). The modes diverge only for a **progressed** activity (frozen actual start ⇒ zero
+  start-float). P6's start-vs-finish split measures the two sides on different _neighbour_ calendars —
+  a multi-calendar-measurement artefact we don't adopt (north-star, not parity). Recorded as the
+  ADR-0035 §18 semantic; no standalone ADR (a consequence of ADR-0037's own-calendar-float decision).
+- **Float-path output contract (§19, M6-F6).** `computeFloatPaths(activities, edges, options, target,
+maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving chains** into a target
+  (not activities sorted by total float): `{ index, relativeFloat, activityIds }`, target-first.
+  **Path 0** is the target's driving chain (`relativeFloat` 0); each activity's **non-driving**
+  predecessors seed a frontier, and later paths pop the lowest-total-float branch and walk ITS driving
+  chain through still-unassigned nodes — so every activity belongs to exactly one path and branch paths
+  come out by non-decreasing relative float. `relativeFloat` = the entry activity's total float minus the
+  target's; it may be **negative** when a branch is more critical than a floating target (a
+  constraint-broken predecessor). Bounded by `maxPaths` + a per-chain depth guard (no blow-up on dense
+  graphs). Engine-only for now — the read endpoint (`GET .../schedule/float-paths`) is deferred
+  (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing schedule + driving edges).

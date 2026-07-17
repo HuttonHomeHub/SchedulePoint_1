@@ -47,6 +47,7 @@ const BASE: ActivitySummary = {
   lateStart: null,
   lateFinish: null,
   totalFloat: null,
+  freeFloat: null,
   isCritical: false,
   isNearCritical: false,
   constraintViolated: false,

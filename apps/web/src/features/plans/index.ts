@@ -9,6 +9,7 @@ export {
   useSetPlanStart,
   useSetPlanSchedulingMode,
   useSetPlanRecalcMode,
+  useSetPlanScheduleOption,
   plansQueryOptions,
   planQueryOptions,
   planKeys,
@@ -19,4 +20,5 @@ export { PlanFormDialog } from './components/PlanFormDialog';
 export { PlanCalendarPicker } from './components/PlanCalendarPicker';
 export { PlanRecalcModePicker } from './components/PlanRecalcModePicker';
 export { PlanExpectedFinishToggle } from './components/PlanExpectedFinishToggle';
+export { PlanScheduleSettings } from './components/PlanScheduleSettings';
 export { PLAN_STATUS_LABELS } from './schemas/plan-schemas';

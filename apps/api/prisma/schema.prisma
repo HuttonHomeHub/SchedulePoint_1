@@ -294,6 +294,28 @@ enum ProgressRecalcMode {
   ACTUAL_DATES
 }
 
+// How the CPM engine decides which activities are critical (ADR-0035 §17, M6 F2).
+// TOTAL_FLOAT (default, P6/behaviour-preserving) marks an activity critical when its
+// total float is at or below `critical_float_threshold`; LONGEST_PATH marks the
+// driving chain back from the finish drivers instead. The engine consumes this in
+// M6-F2. MUST stay in lock-step with the TypeScript `CriticalPathDefinition` union in
+// @repo/types (added in a later M6 task).
+enum CriticalPathDefinition {
+  TOTAL_FLOAT
+  LONGEST_PATH
+}
+
+// Which float an activity's total float is measured from (ADR-0035 §18, M6 F3).
+// FINISH (default, P6/behaviour-preserving — the engine currently computes finish
+// float) vs START vs SMALLEST (the smaller of the two). Stored now; the engine does
+// not consume it until a later M6 task (F3). MUST stay in lock-step with the
+// TypeScript `TotalFloatMode` union in @repo/types (added in a later M6 task).
+enum TotalFloatMode {
+  START
+  FINISH
+  SMALLEST
+}
+
 // The kind of schedule activity (PROJECT_BRIEF §8). All five are modelled so the
 // deferred slices (dependencies, CPM, canvas) never need an enum migration; the
 // web UI exposes only TASK + START/FINISH milestones in this slice — HAMMOCK and
@@ -393,48 +415,74 @@ model Project {
 }
 
 model Plan {
-  id                 String             @id @default(uuid(7)) @db.Uuid
+  id                     String                 @id @default(uuid(7)) @db.Uuid
   // Denormalised from the parent project (see the block comment above). RESTRICT.
-  organizationId     String             @map("organization_id") @db.Uuid
-  projectId          String             @map("project_id") @db.Uuid
-  name               String
-  description        String?
-  status             PlanStatus         @default(DRAFT)
+  organizationId         String                 @map("organization_id") @db.Uuid
+  projectId              String                 @map("project_id") @db.Uuid
+  name                   String
+  description            String?
+  status                 PlanStatus             @default(DRAFT)
   // The scheduling mode (ADR-0033). Default EARLY is behaviour-preserving; a single-
   // row column read with the plan, never filtered across plans, so no index.
-  schedulingMode     SchedulingMode     @default(EARLY) @map("scheduling_mode")
+  schedulingMode         SchedulingMode         @default(EARLY) @map("scheduling_mode")
   // The out-of-sequence progress recalc mode (ADR-0035 §1, M2). Default
   // RETAINED_LOGIC is behaviour-preserving in spirit (the engine does not consume it
   // until T2/T3). Like scheduling_mode, a single-row column read with the plan, never
   // filtered across plans, so no index.
-  progressRecalcMode ProgressRecalcMode @default(RETAINED_LOGIC) @map("progress_recalc_mode")
+  progressRecalcMode     ProgressRecalcMode     @default(RETAINED_LOGIC) @map("progress_recalc_mode")
   // Expected-finish scheduling option (ADR-0035 §9, M4 F5). When true, the CPM engine's
   // forward pass recomputes an in-progress activity's remaining duration to land on its
   // `expected_finish` (the activity-level target date). Default false is behaviour-
   // preserving (the engine ignores expected finishes). Like scheduling_mode/
   // progress_recalc_mode, a single-row column read with the plan, never filtered across
   // plans, so no index; additive with a constant DEFAULT (no data migration).
-  useExpectedFinishDates Boolean @default(false) @map("use_expected_finish_dates")
+  useExpectedFinishDates Boolean                @default(false) @map("use_expected_finish_dates")
+  // How criticality is decided (ADR-0035 §17, M6 F2). Default TOTAL_FLOAT is
+  // P6/behaviour-preserving (total float <= critical_float_threshold). Like
+  // scheduling_mode/progress_recalc_mode, a single-row column read with the plan, never
+  // filtered across plans, so no index; additive with a constant DEFAULT (no data
+  // migration). The engine (M6-F2) already consumes it. MUST stay in lock-step with the
+  // TypeScript `CriticalPathDefinition` union in @repo/types.
+  criticalPathDefinition CriticalPathDefinition @default(TOTAL_FLOAT) @map("critical_path_definition")
+  // The TOTAL_FLOAT criticality threshold in whole WORKING DAYS (day-denominated public
+  // option, ADR-0036 §7; the service multiplies by 1440 to hand the engine working
+  // minutes, mirroring duration_days<->duration_minutes). At/below this float an activity
+  // is critical under TOTAL_FLOAT. Default 0 is P6/behaviour-preserving. Unconstrained
+  // like the other option ints (0 and positive expected). Single-row column read with the
+  // plan, never filtered across plans, so no index; additive with a constant DEFAULT.
+  criticalFloatThreshold Int                    @default(0) @map("critical_float_threshold")
+  // Which float total float is measured from (ADR-0035 §18, M6 F3). Default FINISH is
+  // the P6 default and behaviour-preserving (the engine currently computes finish float).
+  // Stored now; the engine consumes it in a later M6 task (F3). Like scheduling_mode, a
+  // single-row column read with the plan, never filtered across plans, so no index;
+  // additive with a constant DEFAULT. MUST stay in lock-step with the TypeScript
+  // `TotalFloatMode` union in @repo/types.
+  totalFloatMode         TotalFloatMode         @default(FINISH) @map("total_float_mode")
+  // Mark open-ended activities (no successors) critical (ADR-0035 §20, M6 F4). Default
+  // false is P6/behaviour-preserving. Stored now; the engine consumes it in a later M6
+  // task (F4). Like scheduling_mode, a single-row column read with the plan, never
+  // filtered across plans, so no index; additive with a constant DEFAULT.
+  makeOpenEndsCritical   Boolean                @default(false) @map("make_open_ends_critical")
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
   // (ADR-0023). **Required + NOT NULL** as of ADR-0033 **M1** — the
   // …_require_plan_planned_start migration backfilled every prior NULL (earliest
   // active constraint_date → earliest active actual_start → created_at::date →
   // today) then SET NOT NULL. That was the feature's one irreversible migration.
-  plannedStart       DateTime           @map("planned_start") @db.Date
+  plannedStart           DateTime               @map("planned_start") @db.Date
   // The plan's default working-day calendar (M5, ADR-0024). Nullable → all-days-work
   // (M6 back-compat); new plans default to the org's seeded Standard calendar. FK is
   // RESTRICT (calendars soft-delete only; the service in-use guard returns 409
   // CALENDAR_IN_USE before any delete). Backed by a partial index on (calendar_id)
   // WHERE deleted_at IS NULL — raw SQL in the migration.
-  calendarId         String?            @map("calendar_id") @db.Uuid
-  version            Int                @default(1)
-  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy          String?            @map("created_by")
-  updatedBy          String?            @map("updated_by")
-  deletedAt          DateTime?          @map("deleted_at") @db.Timestamptz(3)
-  deleteBatchId      String?            @map("delete_batch_id") @db.Uuid
+  calendarId             String?                @map("calendar_id") @db.Uuid
+  version                Int                    @default(1)
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy              String?                @map("created_by")
+  updatedBy              String?                @map("updated_by")
+  deletedAt              DateTime?              @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId          String?                @map("delete_batch_id") @db.Uuid
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   project      Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
@@ -478,14 +526,14 @@ model Activity {
   planId         String @map("plan_id") @db.Uuid
 
   // Definition (Planner-owned).
-  code            String?
-  name            String
-  description     String?
-  type            ActivityType    @default(TASK)
+  code                     String?
+  name                     String
+  description              String?
+  type                     ActivityType    @default(TASK)
   // Working MINUTES of work (ADR-0036); milestones are 0. The public API is still
   // day-denominated (ADR-0036 §7) — the service scales days↔minutes at the boundary.
   // A ck_activities_duration_minutes_nonneg (>= 0) CHECK is raw SQL in the migration.
-  durationMinutes Int             @default(480) @map("duration_minutes")
+  durationMinutes          Int             @default(480) @map("duration_minutes")
   // The activity's own working-time calendar (M5, ADR-0037). Nullable → inherit the
   // plan default (resolution: activity.calendarId → plan.calendarId → all-minutes).
   // Client-settable, but the FK alone does NOT enforce same-org — a cross-org
@@ -494,22 +542,22 @@ model Activity {
   // service guard, which now unions active plans + active activities, is the real
   // protection — RESTRICT is defence in depth). Backed by a partial index on
   // (calendar_id) WHERE deleted_at IS NULL — raw SQL in the migration.
-  calendarId      String?         @map("calendar_id") @db.Uuid
-  constraintType  ConstraintType? @map("constraint_type")
+  calendarId               String?         @map("calendar_id") @db.Uuid
+  constraintType           ConstraintType? @map("constraint_type")
   // Calendar day (date-only, no timezone), like Plan.plannedStart.
-  constraintDate  DateTime?       @map("constraint_date") @db.Date
+  constraintDate           DateTime?       @map("constraint_date") @db.Date
   // Secondary schedule constraint (ADR-0035 §10, M4 F3). Same shape as the primary
   // pair above and equally client-settable (NOT engine-owned): the primary drives
   // the forward pass, this secondary drives the backward pass. Both-null-or-both-set
   // is enforced by ck_activities_secondary_constraint_pair (raw SQL in the migration,
   // like the primary — Prisma can't express a CHECK). Unindexed like the primary:
   // read only on the full-plan recalc load, never filtered/sorted on.
-  secondaryConstraintType ConstraintType? @map("secondary_constraint_type")
+  secondaryConstraintType  ConstraintType? @map("secondary_constraint_type")
   // Calendar day (date-only, no timezone), like constraint_date.
-  secondaryConstraintDate DateTime?       @map("secondary_constraint_date") @db.Date
+  secondaryConstraintDate  DateTime?       @map("secondary_constraint_date") @db.Date
   // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
   // persisted model per PROJECT_BRIEF §9, not a runtime concern.
-  laneIndex       Int             @default(0) @map("lane_index")
+  laneIndex                Int             @default(0) @map("lane_index")
   // As-late-as-possible placement preference (ADR-0035 §11, M4 F4). CLIENT-SETTABLE
   // Planner input (a user-facing write DTO sets it) — NOT engine-owned. It is a
   // DISPLAY-ONLY placement preference: the ALAP pass sets the activity's shown start
@@ -517,7 +565,7 @@ model Activity {
   // network untouched (the effective-Visual precedent). Defaulted false backfills
   // every existing row, so the byte-parity golden path is unchanged. No index: read
   // only on the full-plan recalc load, never a query predicate.
-  scheduleAsLateAsPossible Boolean @default(false) @map("schedule_as_late_as_possible")
+  scheduleAsLateAsPossible Boolean         @default(false) @map("schedule_as_late_as_possible")
 
   // Progress (Contributor-updatable via the progress path).
   status                   ActivityStatus @default(NOT_STARTED)
@@ -554,6 +602,19 @@ model Activity {
   lateStart          DateTime? @map("late_start") @db.Date
   lateFinish         DateTime? @map("late_finish") @db.Date
   totalFloat         Int?      @map("total_float")
+  // Free float in whole working days (ADR-0035 §17–§20, M6-F1; day-denominated public
+  // column per ADR-0036 §7). Engine-owned CPM output exactly like total_float:
+  // written ONLY by the recalc's batched `unnest` UPDATE (schedule.repository
+  // writeResults), NEVER accepted from a write DTO, and NEVER touching version/
+  // updated_at/updated_by so a recalc stays invisible to optimistic locking
+  // (ADR-0022). Free float is normally >= 0 (0 is valid) and never negative in
+  // practice, but the column is unconstrained — no CHECK — mirroring total_float.
+  // Nullable with no default ⇒ every existing row reads NULL ("not yet calculated"),
+  // so no backfill is needed and the byte-parity golden path is unchanged. No index:
+  // read only as part of the already plan-scoped activity load ((plan_id, created_at,
+  // id)); no query filters or sorts by it (docs/DATABASE.md: index query patterns,
+  // not columns).
+  freeFloat          Int?      @map("free_float")
   isCritical         Boolean   @default(false) @map("is_critical")
   isNearCritical     Boolean   @default(false) @map("is_near_critical")
   // Produce-and-flag violation output (ADR-0035 §7 amendment, M4). True when a mandatory

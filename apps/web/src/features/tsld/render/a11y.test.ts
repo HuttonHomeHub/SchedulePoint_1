@@ -39,6 +39,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 0,
+    freeFloat: null,
     isCritical: false,
     isNearCritical: false,
     constraintViolated: false,
@@ -142,6 +143,7 @@ describe('describeActivity (Tier 1)', () => {
           visualConflict: false,
           visualDriftDays: null,
           totalFloat: 2,
+          freeFloat: null,
         }),
       ),
     ).toContain(', near-critical, 2 days float');
@@ -168,6 +170,14 @@ describe('describeActivity (Tier 1)', () => {
     expect(describeActivity(activity({ totalFloat: null }))).toBe(
       'Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1',
     );
+  });
+
+  it('speaks a same-lane overlap only when the caller flags it (the spoken badge equivalent)', () => {
+    expect(describeActivity(activity(), { overlapsInLane: true })).toContain(
+      ', overlaps another activity in its lane',
+    );
+    expect(describeActivity(activity(), { overlapsInLane: false })).not.toContain('overlaps');
+    expect(describeActivity(activity())).not.toContain('overlaps');
   });
 });
 

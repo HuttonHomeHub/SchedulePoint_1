@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PlanStatus, ProgressRecalcMode, SchedulingMode } from '@prisma/client';
+import {
+  CriticalPathDefinition,
+  PlanStatus,
+  ProgressRecalcMode,
+  SchedulingMode,
+  TotalFloatMode,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -72,6 +78,42 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsBoolean()
   useExpectedFinishDates?: boolean;
+
+  @ApiPropertyOptional({
+    enum: CriticalPathDefinition,
+    description:
+      'Critical-path definition (M6, ADR-0035 §17): TOTAL_FLOAT (float ≤ threshold) or LONGEST_PATH (driving chain).',
+  })
+  @IsOptional()
+  @IsEnum(CriticalPathDefinition)
+  criticalPathDefinition?: CriticalPathDefinition;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Total-float threshold in whole working days (M6, ADR-0035 §17): at/below this an activity is critical under TOTAL_FLOAT.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  criticalFloatThreshold?: number;
+
+  @ApiPropertyOptional({
+    enum: TotalFloatMode,
+    description: 'Total-float measure (M6, ADR-0035 §18): FINISH (default), START, or SMALLEST.',
+  })
+  @IsOptional()
+  @IsEnum(TotalFloatMode)
+  totalFloatMode?: TotalFloatMode;
+
+  @ApiPropertyOptional({
+    description:
+      'Make open-ended activities critical (M6, ADR-0035 §20): when on, activities with no predecessors/successors are flagged critical.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  makeOpenEndsCritical?: boolean;
 
   @ApiPropertyOptional({
     format: 'date',

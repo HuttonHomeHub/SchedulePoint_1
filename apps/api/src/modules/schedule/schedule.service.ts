@@ -11,6 +11,7 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
+import { MINUTES_PER_DAY } from './day-compat-calendar';
 import {
   allMinutesWorkCalendar,
   computeSchedule,
@@ -130,11 +131,17 @@ export class ScheduleService {
           ),
           // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC. The
           // expected-finish option (M4, ADR-0035 §9) resizes in-progress remaining work when on.
+          // The critical-path definition + float threshold (M6, ADR-0035 §17) select how criticality
+          // is decided; the day-denominated threshold is converted to working minutes for the engine.
           {
             dataDate,
             calendar,
             progressMode: plan.progressRecalcMode,
             useExpectedFinishDates: plan.useExpectedFinishDates,
+            criticalDefinition: plan.criticalPathDefinition,
+            criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
+            totalFloatMode: plan.totalFloatMode,
+            makeOpenEndsCritical: plan.makeOpenEndsCritical,
           },
         );
         await this.schedule.writeResults(organization.id, planId, output.results, tx);

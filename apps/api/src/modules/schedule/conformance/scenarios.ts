@@ -62,12 +62,19 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: '',
   },
   S07_LONGEST_PATH: {
-    runnable: false,
-    reason: 'needs the longest-path critical definition (ADR-0035 §17, M6)',
+    // M6-F2 (ADR-0035 §17–§20) landed the Longest-Path critical definition. S07 runs the same
+    // unprogressed network as S01 but with `criticalDefinition: LONGEST_PATH`, so the DATES are
+    // identical while the CRITICAL SET differs (the fixture's open-ended negative-float A12700 is
+    // critical under TF ≤ 0 but not on the longest path) — a criticality-only differential.
+    runnable: true,
+    reason: '',
   },
   S08_OPEN_ENDS_CRITICAL: {
-    runnable: false,
-    reason: 'needs the make-open-ends-critical option (ADR-0035 §20, M6)',
+    // M6-F4 (ADR-0035 §20) landed the make-open-ends-critical option. S08 runs the same unprogressed
+    // network as S01 with `makeOpenEndsCritical: true`, so the DATES are identical while the CRITICAL
+    // SET gains the open ends (the fixture's A9500/A3900/A12700) — a criticality-only differential.
+    runnable: true,
+    reason: '',
   },
   S09_IGNORE_EXTERNAL: {
     runnable: false,
@@ -78,8 +85,11 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: 'needs resource levelling (ADR-0035 §21–§23, M7 — deferred)',
   },
   S11_MULTIPLE_FLOAT_PATHS: {
-    runnable: false,
-    reason: 'needs multiple-float-path analysis (ADR-0035 §19, M6)',
+    // M6-F6 (ADR-0035 §19) landed `computeFloatPaths`. S11 runs the plain unprogressed network like
+    // S01; the float-path analysis into the target (A12500) is a SEPARATE read-only pass asserted for
+    // its path-SHAPE (contiguous chains, path 0 driving, non-decreasing relative float) in the spec.
+    runnable: true,
+    reason: '',
   },
   S12_EXPECTED_FINISH_OFF: {
     // M4 (ADR-0035 §9) landed Expected Finish: an incomplete activity's remaining work is resized to
@@ -89,8 +99,16 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: '',
   },
   S13_TOTAL_FLOAT_START: {
+    // The total-float MODE option is implemented (M6-F3, ADR-0035 §18) and changes a **progressed**
+    // activity's float. But S13's specific divergence does NOT reproduce here — and by design: it
+    // measures total float on the activity's OWN calendar (ADR-0037 §4, P6-total-float), where
+    // advancing both the start and finish by the duration preserves the working-time gap, so start-
+    // and finish-float coincide for every UNPROGRESSED activity (verified: 0/4 of the fixture's named
+    // activities diverge). P6's start-vs-finish split comes from measuring the two sides on different
+    // NEIGHBOUR calendars — a multi-calendar-measurement artefact we deliberately don't reproduce.
     runnable: false,
-    reason: 'needs the total-float-as-start/smallest option (ADR-0035 §18, M6)',
+    reason:
+      "own-calendar float (ADR-0037 §4) makes start-float == finish-float for unprogressed work, so S13's mixed-calendar divergence doesn't reproduce (documented semantic difference, ADR-0035 §18, M6-F3)",
   },
 };
 
@@ -127,6 +145,13 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
     scenarioId === 'S05_LAG_CALENDAR_SUCCESSOR' ? ('SUCCESSOR' as const) : ('PLAN' as const);
   // S12 flips the Expected-Finish option on (ADR-0035 §9, M4); every other scenario leaves it off.
   const useExpectedFinishDates = scenarioId === 'S12_EXPECTED_FINISH_OFF';
+  // S07 flips the critical DEFINITION to Longest Path (ADR-0035 §17–§20, M6-F2). It changes only which
+  // activities are flagged critical, never the dates — so it is asserted with `criticalSetDiffers`.
+  const criticalDefinition =
+    scenarioId === 'S07_LONGEST_PATH' ? ('LONGEST_PATH' as const) : undefined;
+  // S08 flips make-open-ends-critical on (ADR-0035 §20, M6-F4). Like S07 it changes only the critical
+  // set (the open ends), never the dates — asserted with `criticalSetDiffers`.
+  const makeOpenEndsCritical = scenarioId === 'S08_OPEN_ENDS_CRITICAL' ? true : undefined;
   const { activities, edges, options } = adaptFixture(fixture, {
     dataDate,
     honorLagCalendars,
@@ -141,6 +166,8 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
     output: computeSchedule(activities, edges, {
       ...options,
       ...(progressMode ? { progressMode } : {}),
+      ...(criticalDefinition ? { criticalDefinition } : {}),
+      ...(makeOpenEndsCritical ? { makeOpenEndsCritical } : {}),
     }),
   };
 }
@@ -164,6 +191,23 @@ export function resultsDiffer(a: EngineOutput, b: EngineOutput): boolean {
     ) {
       return true;
     }
+  }
+  return false;
+}
+
+/**
+ * Whether two engine outputs flag a **different set of critical activities** — the criticality-only
+ * differential (M6). Some options (S07 Longest Path, S08 open-ends) change only which activities are
+ * critical, not their dates, so `resultsDiffer` (dates) would miss them. This is kept SEPARATE from
+ * the date predicate (ADR-0034 §2, F2.T3) so a real date regression can never be masked by a
+ * criticality change: a wired criticality option asserts `criticalSetDiffers && !resultsDiffer`.
+ */
+export function criticalSetDiffers(a: EngineOutput, b: EngineOutput): boolean {
+  const index = new Map(b.results.map((r) => [r.activityId, r]));
+  for (const left of a.results) {
+    const right = index.get(left.activityId);
+    if (!right) continue;
+    if (left.isCritical !== right.isCritical) return true;
   }
   return false;
 }

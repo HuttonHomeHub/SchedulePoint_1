@@ -3,6 +3,25 @@ import type { ActivityType, ConstraintType, DependencyType } from '@repo/types';
 import type { WorkingTimeCalendar } from './working-time-calendar';
 
 /**
+ * How the engine decides which activities are **critical** (M6-F2, ADR-0035 §17–§20).
+ * `TOTAL_FLOAT` (the P6 default, behaviour-preserving) marks an activity critical when its total float
+ * is ≤ the plan's threshold (default 0). `LONGEST_PATH` instead marks the contiguous chain of driving
+ * ties running back from the latest-finishing activities — so an open-ended, hugely-negative-float
+ * activity is **not** critical under Longest Path though it is under `TOTAL_FLOAT ≤ 0` (the fixture's
+ * A12700, scenario S07). The engine stays dependency-free; the service maps the plan enum to this union.
+ */
+export type CriticalPathDefinition = 'TOTAL_FLOAT' | 'LONGEST_PATH';
+
+/**
+ * How total float is measured (M6-F3, ADR-0035 §18). `FINISH` (the P6 default) is late-finish minus
+ * early-finish; `START` is late-start minus early-start; `SMALLEST` is the lesser of the two. On the
+ * all-inherit, unprogressed path the start- and finish-side spans are equal, so the three coincide
+ * (the byte-identical default) — they diverge only when an activity runs on a **different calendar**
+ * from its logic neighbours (ADR-0037) or is progressed. Measured on the activity's own calendar.
+ */
+export type TotalFloatMode = 'START' | 'FINISH' | 'SMALLEST';
+
+/**
  * The pure CPM engine's input and output structs.
  *
  * The engine is a **dependency-free domain library**: it knows nothing about
@@ -138,6 +157,14 @@ export interface EngineResult {
   lateStartOffset: number;
   lateFinishOffset: number;
   totalFloat: number;
+  /**
+   * Free float (M6-F1, ADR-0035 §17–§20): the working time this activity can slip **without delaying the
+   * early start of any successor** — measured on the activity's **own** calendar (ADR-0037 §4, P6),
+   * like total float. It is the tightest gap, across the outgoing edges, between this activity's early
+   * finish and the point at which it would begin pushing that successor's early start. An **open end**
+   * (no successors) takes its total float (the standard tail identity FF = TF). Always ≤ total float.
+   */
+  freeFloat: number;
   isCritical: boolean;
   isNearCritical: boolean;
   /**

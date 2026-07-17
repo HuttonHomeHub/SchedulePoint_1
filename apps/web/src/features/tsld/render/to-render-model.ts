@@ -1,6 +1,7 @@
 import type { ActivitySummary, DependencySummary, SchedulingMode } from '@repo/types';
 
 import { activityBarLabel } from './a11y';
+import { laneOverlapIds } from './lane-overlap';
 import type { RenderActivity, RenderEdge } from './render-model';
 
 import { activeConstraintAnchor } from '@/lib/constraint-format';
@@ -37,31 +38,46 @@ export function toRenderActivities(
   activities: readonly ActivitySummary[],
   source: BarDateSource = 'early',
 ): RenderActivity[] {
-  return activities.map((a) => {
-    const barStart =
-      source === 'visual' ? a.visualEffectiveStart : source === 'late' ? a.lateStart : a.earlyStart;
-    const barFinish =
+  // Resolve each bar's drawn span once (source-dependent), then reuse it for both the overlap pass
+  // and the final render shape — one map over `activities`, no positional re-indexing.
+  const bars = activities.map((a) => ({
+    activity: a,
+    start:
+      source === 'visual' ? a.visualEffectiveStart : source === 'late' ? a.lateStart : a.earlyStart,
+    finish:
       source === 'visual'
         ? a.visualEffectiveFinish
         : source === 'late'
           ? a.lateFinish
-          : a.earlyFinish;
-    return {
-      id: a.id,
-      type: a.type,
-      laneIndex: a.laneIndex,
-      earlyStart: barStart,
-      earlyFinish: barFinish,
-      isCritical: a.isCritical,
-      isNearCritical: a.isNearCritical,
-      // The conflict cue + drift are meaningful only in VISUAL mode — the engine computes them for
-      // every plan, so gate them to the visual source here (EARLY/late bars never show the cue).
-      visualConflict: source === 'visual' ? a.visualConflict : false,
-      visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
-      constraint: activeConstraintAnchor(a),
-      label: activityBarLabel(a),
-    };
-  });
+          : a.earlyFinish,
+  }));
+  // A manual lane drop can leave two bars overlapping in time in one lane (TECH_DEBT #24c) — flag
+  // both, computed on the same dates the bars draw at so the cue matches the picture in every mode.
+  const overlapping = laneOverlapIds(
+    bars.map((b) => ({
+      id: b.activity.id,
+      laneIndex: b.activity.laneIndex,
+      start: b.start,
+      finish: b.finish,
+    })),
+  );
+
+  return bars.map(({ activity: a, start, finish }) => ({
+    id: a.id,
+    type: a.type,
+    laneIndex: a.laneIndex,
+    earlyStart: start,
+    earlyFinish: finish,
+    isCritical: a.isCritical,
+    isNearCritical: a.isNearCritical,
+    // The conflict cue + drift are meaningful only in VISUAL mode — the engine computes them for
+    // every plan, so gate them to the visual source here (EARLY/late bars never show the cue).
+    visualConflict: source === 'visual' ? a.visualConflict : false,
+    visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
+    laneOverlap: overlapping.has(a.id),
+    constraint: activeConstraintAnchor(a),
+    label: activityBarLabel(a),
+  }));
 }
 
 export function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[] {
