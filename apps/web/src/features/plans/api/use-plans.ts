@@ -207,23 +207,33 @@ export function useSetPlanExpectedFinish(orgSlug: string) {
 }
 
 /**
- * Set one or more of a plan's **float & critical** scheduling options (ADR-0035 §17/§18/§20, M6) —
- * `criticalPathDefinition`, `totalFloatMode`, `makeOpenEndsCritical` — as a targeted PATCH of just the
- * changed field(s) + `version`, so the settings picker doesn't need the whole plan form. Mirrors
+ * The plan scheduling options this targeted PATCH can set: the **float & critical** trio (ADR-0035
+ * §17/§18/§20, M6) and the **resource-levelling** switches (ADR-0041) — each a simple scalar edited by
+ * its own optimistic `<select>`, sent as just the changed field(s) + `version`.
+ */
+export type PlanScheduleOptionPatch = Partial<
+  Pick<
+    PlanSummary,
+    | 'criticalPathDefinition'
+    | 'totalFloatMode'
+    | 'makeOpenEndsCritical'
+    | 'levelResources'
+    | 'levelWithinFloatOnly'
+  >
+>;
+
+/**
+ * Set one or more of a plan's scheduling options — the **float & critical** trio (ADR-0035 §17/§18/§20,
+ * M6) or the **resource-levelling** switches (ADR-0041) — as a targeted PATCH of just the changed
+ * field(s) + `version`, so a settings picker doesn't need the whole plan form. Mirrors
  * {@link useSetPlanExpectedFinish}: writes the returned plan into the detail cache (new value + fresh
  * version) and invalidates the schedule summary so a later recalculation reflects it. It changes no
- * dates itself; the next Recalculate applies the new definition/measure to the computed critical path.
+ * dates itself; the next Recalculate applies the new definition/measure/levelling to the schedule.
  */
 export function useSetPlanScheduleOption(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
-      planId: string;
-      version: number;
-      patch: Partial<
-        Pick<PlanSummary, 'criticalPathDefinition' | 'totalFloatMode' | 'makeOpenEndsCritical'>
-      >;
-    }) =>
+    mutationFn: (input: { planId: string; version: number; patch: PlanScheduleOptionPatch }) =>
       apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
         method: 'PATCH',
         body: JSON.stringify({ ...input.patch, version: input.version }),

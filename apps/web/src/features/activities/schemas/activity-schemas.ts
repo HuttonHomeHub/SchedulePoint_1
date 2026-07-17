@@ -166,6 +166,18 @@ export const activityFormSchema = z
     // parent). A raw `<select>` value picked from the plan's existing summaries; the API validates it
     // is an active `WBS_SUMMARY` in the same plan and that re-parenting introduces no cycle.
     parentId: z.string().optional(),
+    // Resource-levelling tie-break (ADR-0041): a lower number wins the resource when two activities
+    // contend for a capacity-constrained resource. Optional (blank = lowest priority — placed after
+    // any prioritised peer); a whole number 0–1,000,000 (bounded to match the API). Only editable
+    // behind `VITE_RESOURCE_LEVELLING`, but always seeded from the row so a stored value round-trips
+    // even with the field hidden. Registered with a `setValueAs` that maps a blank field to
+    // `undefined`, so an empty priority is "absent", not `NaN`.
+    levelingPriority: z
+      .number({ message: 'Enter a whole number.' })
+      .int('Enter a whole number.')
+      .min(0, 'Priority cannot be negative.')
+      .max(1000000, 'Priority is too large.')
+      .optional(),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
   })
   // Only the type→date direction needs a rule: the dialog hides the date field

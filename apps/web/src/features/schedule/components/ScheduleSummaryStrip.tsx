@@ -2,6 +2,7 @@ import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { RESOURCE_LEVELLING_ENABLED } from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** One labelled figure in the strip. `hintId` links an explanatory footnote for AT. */
@@ -63,6 +64,16 @@ export function ScheduleSummaryStrip({
 
   const { dataDate, projectFinish, activityCount, criticalCount, nearCriticalCount } = summary.data;
   const { constraintViolationCount, constraintWarningCount } = summary.data;
+  const {
+    leveledProjectFinish,
+    leveledActivityCount,
+    levelingWindowExceededCount,
+    selfOverAllocatedCount,
+  } = summary.data;
+  // The plan has levelled once the engine has written a levelled finish (`levelResources` on + a
+  // recalculation has run). Off / never-levelled leaves it null, so the whole overlay stays hidden
+  // even with the flag on — nothing to show until a levelled recalculation exists.
+  const hasLevelled = RESOURCE_LEVELLING_ENABLED && leveledProjectFinish !== null;
 
   // No computed finish yet → the plan has never been recalculated (or is empty).
   if (projectFinish === null) {
@@ -100,6 +111,26 @@ export function ScheduleSummaryStrip({
             hintId="constraint-warnings-hint"
           />
         ) : null}
+        {hasLevelled ? (
+          <>
+            <Stat label="Levelled finish" value={formatCalendarDate(leveledProjectFinish)} />
+            <Stat label="Levelled activities" value={leveledActivityCount} />
+            {levelingWindowExceededCount > 0 ? (
+              <Stat
+                label="Window exceeded"
+                value={levelingWindowExceededCount}
+                hintId="leveling-window-hint"
+              />
+            ) : null}
+            {selfOverAllocatedCount > 0 ? (
+              <Stat
+                label="Over capacity"
+                value={selfOverAllocatedCount}
+                hintId="leveling-self-over-hint"
+              />
+            ) : null}
+          </>
+        ) : null}
       </dl>
       {constraintViolationCount > 0 ? (
         <p id="constraint-violations-hint" className="text-muted-foreground text-xs">
@@ -111,6 +142,26 @@ export function ScheduleSummaryStrip({
         <p id="constraint-warnings-hint" className="text-muted-foreground text-xs">
           Constraint warnings are Start-no-earlier-than constraints dated before the data date. They
           are honoured but cannot pull work before the data date.
+        </p>
+      ) : null}
+      {hasLevelled ? (
+        <p className="text-muted-foreground text-xs">
+          Levelling delayed {leveledActivityCount}{' '}
+          {leveledActivityCount === 1 ? 'activity' : 'activities'} so resource demand stays within
+          capacity; the levelled finish is the latest finish under levelling. The critical path and
+          floats above stay the pure-network result.
+        </p>
+      ) : null}
+      {hasLevelled && levelingWindowExceededCount > 0 ? (
+        <p id="leveling-window-hint" className="text-muted-foreground text-xs">
+          Window exceeded counts activities whose resource had no free window in time, so levelling
+          extended the schedule past their total float to place them.
+        </p>
+      ) : null}
+      {hasLevelled && selfOverAllocatedCount > 0 ? (
+        <p id="leveling-self-over-hint" className="text-muted-foreground text-xs">
+          Over capacity counts activities whose own demand exceeds the resource’s capacity — a delay
+          can’t resolve it, so it is reported for you to review the assignment or capacity.
         </p>
       ) : null}
     </div>,

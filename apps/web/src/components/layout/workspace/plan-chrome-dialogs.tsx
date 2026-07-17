@@ -1,12 +1,17 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Dialog } from '@/components/ui/dialog';
-import { ADVANCED_CONSTRAINTS_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
+import {
+  ADVANCED_CONSTRAINTS_ENABLED,
+  PROGRESS_INGESTION_ENABLED,
+  RESOURCE_LEVELLING_ENABLED,
+} from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
 import {
   PLAN_STATUS_LABELS,
   PlanCalendarPicker,
   PlanExpectedFinishToggle,
+  PlanLevellingSettings,
   PlanRecalcModePicker,
 } from '@/features/plans';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -82,6 +87,9 @@ export function PlanChromeDialogs({
               plan={plan}
               canEdit={model.canWrite}
             />
+          ) : null}
+          {RESOURCE_LEVELLING_ENABLED ? (
+            <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
           ) : null}
         </div>
       </Dialog>

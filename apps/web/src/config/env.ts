@@ -267,3 +267,26 @@ export const RESOURCES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCES);
  * this flag. Set `VITE_DURATION_TYPES=true` to enable it in an environment.
  */
 export const DURATION_TYPES_ENABLED = flagDefaultOff(import.meta.env.VITE_DURATION_TYPES);
+
+/**
+ * Resource levelling (ADR-0041, the M7 levelling rung). **OFF by default** — a new dark surface whose
+ * quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and
+ * is turned on per-environment during rollout, then flipped default-on once cleared (the
+ * `VITE_RESOURCES` / `VITE_DURATION_TYPES` pattern). When on, the web UI exposes the levelling controls:
+ *
+ * - **Plan levelling settings** — a `Level resources` toggle (the opt-in switch for the second
+ *   levelling pass) and, when it is on, a `Level within float only` toggle (delay only within total
+ *   float, never extending the schedule).
+ * - **Resource capacity** — a `Max units/hour` field on the resource form (the availability ceiling
+ *   the levelling pass respects; blank = uncapped).
+ * - **Activity levelling priority** — a `Levelling priority` field on the activity form (lower wins the
+ *   resource when two activities contend; blank = lowest priority).
+ * - **Levelled overlay** — the schedule summary gains the levelled project finish and the levelled /
+ *   window-exceeded / self-over-allocated counts once a plan has levelled.
+ *
+ * Everything behind it — the plan `levelResources`/`levelWithinFloatOnly` options, resource
+ * `maxUnitsPerHour`, activity `levelingPriority`, the opt-in second engine pass and its engine-owned
+ * levelled overlay + summary counts — is already live; the flag only governs whether the web UI exposes
+ * it. Set `VITE_RESOURCE_LEVELLING=true` to enable it in an environment.
+ */
+export const RESOURCE_LEVELLING_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCE_LEVELLING);

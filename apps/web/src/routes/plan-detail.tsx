@@ -15,6 +15,7 @@ import {
   CANVAS_WORKSPACE_ENABLED,
   FLOAT_CRITICAL_SETTINGS_ENABLED,
   PROGRESS_INGESTION_ENABLED,
+  RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary } from '@/features/baselines';
@@ -23,6 +24,7 @@ import {
   PLAN_STATUS_LABELS,
   PlanCalendarPicker,
   PlanExpectedFinishToggle,
+  PlanLevellingSettings,
   PlanRecalcModePicker,
   PlanScheduleSettings,
 } from '@/features/plans';
@@ -186,6 +188,11 @@ function LegacyPlanLayout({
       {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
         <div className="mt-3">
           <PlanScheduleSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+        </div>
+      ) : null}
+      {RESOURCE_LEVELLING_ENABLED ? (
+        <div className="mt-3">
+          <PlanLevellingSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
         </div>
       ) : null}
       <div className="mt-3">

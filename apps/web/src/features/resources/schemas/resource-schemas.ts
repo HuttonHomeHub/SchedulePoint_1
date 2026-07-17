@@ -30,6 +30,19 @@ export const resourceFormSchema = z.object({
   kind: z.enum(RESOURCE_KINDS),
   // A blank select value is "inherit the plan calendar"; a chosen id round-trips.
   calendarId: z.string().optional(),
+  // Levelling capacity — the max units/hour the resource can supply at once (ADR-0041; the reserved
+  // `max_units_per_hour` the levelling pass reads as its ceiling). Optional (blank = uncapped, the
+  // triad stays capless); `>= 0` (N21) with at most 4 decimal places (DECIMAL(18,4)). Registered
+  // with a `setValueAs` that maps a blank field to `undefined`, so an empty capacity is "absent",
+  // not `NaN`.
+  maxUnitsPerHour: z
+    .number({ message: 'Enter a number.' })
+    .min(0, 'Capacity cannot be negative.')
+    .refine(
+      (value) => Number.isFinite(value) && Math.round(value * 10000) === value * 10000,
+      'Use at most 4 decimal places.',
+    )
+    .optional(),
 });
 
 export type ResourceFormValues = z.infer<typeof resourceFormSchema>;

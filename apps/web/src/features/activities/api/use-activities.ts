@@ -88,6 +88,8 @@ function createBody(input: ActivityFormValues) {
     ...(input.calendarId ? { calendarId: input.calendarId } : {}),
     // `''` = top-level → omit (absent = no WBS parent). The picker offers only the plan's summaries.
     ...(input.parentId ? { parentId: input.parentId } : {}),
+    // Levelling priority (ADR-0041): omit when blank so an unprioritised activity stays unprioritised.
+    ...(input.levelingPriority === undefined ? {} : { levelingPriority: input.levelingPriority }),
   };
 }
 
@@ -119,6 +121,9 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     // `''` (top-level) clears the WBS parent → null. Seeded from the row so an edit with the picker
     // hidden (flag off) round-trips the stored parent unchanged rather than silently un-nesting it.
     parentId: input.parentId ? input.parentId : null,
+    // Levelling priority (ADR-0041): a blank field clears the tie-break → null. Seeded from the row
+    // so an edit with the field hidden (flag off) round-trips the stored value unchanged.
+    levelingPriority: input.levelingPriority === undefined ? null : input.levelingPriority,
     // Carry a lane change through the same write when a free-2D drag moved both axes (M4); the
     // canvas is the only caller that sets this — the form dialog never sends it.
     ...(input.laneIndex !== undefined ? { laneIndex: input.laneIndex } : {}),

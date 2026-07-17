@@ -27,6 +27,8 @@ function createResourceBody(input: ResourceFormValues) {
     code: optional(input.code),
     description: optional(input.description),
     calendarId: optional(input.calendarId),
+    // Levelling capacity (ADR-0041): omit when blank so an uncapped resource stays uncapped.
+    ...(input.maxUnitsPerHour === undefined ? {} : { maxUnitsPerHour: input.maxUnitsPerHour }),
   };
 }
 
@@ -37,6 +39,10 @@ function updateResourceBody(input: ResourceFormValues & { version: number }) {
     code: optional(input.code) ?? null,
     description: optional(input.description) ?? null,
     calendarId: optional(input.calendarId) ?? null,
+    // Levelling capacity (ADR-0041): a blank field clears the ceiling → null (uncapped). The form
+    // always seeds this from the row (even with the field hidden), so an edit round-trips the stored
+    // value rather than silently clearing it.
+    maxUnitsPerHour: input.maxUnitsPerHour === undefined ? null : input.maxUnitsPerHour,
     version: input.version,
   };
 }

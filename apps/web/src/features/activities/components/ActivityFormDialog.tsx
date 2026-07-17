@@ -32,6 +32,7 @@ import {
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
   DURATION_TYPES_ENABLED,
+  RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
@@ -118,6 +119,7 @@ export function ActivityFormDialog({
       expectedFinish: '',
       calendarId: '',
       parentId: '',
+      levelingPriority: undefined,
       description: '',
     },
   });
@@ -146,6 +148,9 @@ export function ActivityFormDialog({
         // Seeded from the row so a stored WBS parent round-trips even with the picker hidden
         // (flag off) — an edit then never silently un-nests the activity. '' = top-level.
         parentId: activity?.parentId ?? '',
+        // Always seed from the row so a stored levelling priority round-trips even with the field
+        // hidden (flag off) — an edit then never silently clears it. `null` → undefined (blank).
+        levelingPriority: activity?.levelingPriority ?? undefined,
         description: activity?.description ?? '',
       });
       mutation.reset();
@@ -386,6 +391,23 @@ export function ActivityFormDialog({
               </p>
             ) : null}
           </div>
+        ) : null}
+        {/* Levelling priority (ADR-0041) only breaks ties when levelling delays over-allocated
+            activities, so it is meaningless for a type levelling never moves (a milestone, LOE or WBS
+            summary) — hidden for those, mirroring the Duration/Duration-type fields. */}
+        {RESOURCE_LEVELLING_ENABLED && !isDurationDerivedType(type) ? (
+          <TextField
+            label="Levelling priority (optional)"
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
+            error={errors.levelingPriority?.message}
+            {...register('levelingPriority', {
+              setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+            })}
+          />
         ) : null}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="activity-constraint-type">Constraint (optional)</Label>

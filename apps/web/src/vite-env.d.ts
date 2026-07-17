@@ -31,4 +31,6 @@ interface ImportMetaEnv {
   readonly VITE_RESOURCES?: string;
   /** Duration types & the resource-units triad — the activity duration-type picker + the driving assignment's units/time rate (M7 rung 4, ADR-0040). "true"/"1" enables it; off by default. */
   readonly VITE_DURATION_TYPES?: string;
+  /** Resource levelling — plan level-resources/within-float toggles, resource max units/hour, activity levelling priority, levelled summary overlay (ADR-0041). "true"/"1" enables it; off by default. */
+  readonly VITE_RESOURCE_LEVELLING?: string;
 }
