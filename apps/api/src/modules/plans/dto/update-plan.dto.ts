@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   CriticalPathDefinition,
+  EacMethod,
   PlanStatus,
   ProgressRecalcMode,
   SchedulingMode,
@@ -130,6 +131,31 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsBoolean()
   levelWithinFloatOnly?: boolean;
+
+  @ApiPropertyOptional({
+    enum: EacMethod,
+    description:
+      'The Earned-Value EAC forecast method (EV1, ADR-0042, Q3): CPI (default, BAC / CPI), ' +
+      'REMAINING_AT_BUDGET, or CPI_TIMES_SPI. Read by the EV read (EV2b); dark in EV1.',
+  })
+  @IsOptional()
+  @IsEnum(EacMethod)
+  eacMethod?: EacMethod;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 'GBP',
+    description:
+      "The plan's ISO-4217 currency code (three upper-case letters) for all money columns (EV1, " +
+      'ADR-0042, Q6). Send null to clear (inherit the org default at read time).',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to inherit); validate the format only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Matches(/^[A-Z]{3}$/, {
+    message: 'currencyCode must be a 3-letter upper-case ISO-4217 code (e.g. GBP).',
+  })
+  currencyCode?: string | null;
 
   @ApiPropertyOptional({
     format: 'date',

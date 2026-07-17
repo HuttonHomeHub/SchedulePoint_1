@@ -158,6 +158,10 @@ export class PlansService {
     if (dto.levelWithinFloatOnly !== undefined) {
       patch.levelWithinFloatOnly = dto.levelWithinFloatOnly;
     }
+    // Earned-Value plan options (EV1, ADR-0042): client-settable passthrough; currencyCode null clears
+    // to inherit the org default. Dark until the EV read (EV2b); nothing computes EV yet.
+    if (dto.eacMethod !== undefined) patch.eacMethod = dto.eacMethod;
+    if (dto.currencyCode !== undefined) patch.currencyCode = dto.currencyCode;
     // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
     // defined value is always a valid calendar date.
     if (dto.plannedStart !== undefined) {

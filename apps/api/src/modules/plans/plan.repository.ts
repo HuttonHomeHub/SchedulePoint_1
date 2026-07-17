@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   Prisma,
   type CriticalPathDefinition,
+  type EacMethod,
   type Plan,
   type PlanStatus,
   type ProgressRecalcMode,
@@ -34,6 +35,10 @@ export interface PlanPatch {
   levelResources?: boolean;
   /** Level-within-float-only option (ADR-0041 §4). */
   levelWithinFloatOnly?: boolean;
+  /** Earned-Value EAC forecast method (EV1, ADR-0042). */
+  eacMethod?: EacMethod;
+  /** The plan's ISO-4217 currency code, or null to clear (inherit). */
+  currencyCode?: string | null;
   /** The mandatory CPM data date (ADR-0033 M1): may be moved, never cleared — so never null. */
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */

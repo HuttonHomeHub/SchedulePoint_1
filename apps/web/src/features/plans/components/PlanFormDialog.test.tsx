@@ -24,6 +24,8 @@ const PLAN: PlanSummary = {
   makeOpenEndsCritical: false,
   levelResources: false,
   levelWithinFloatOnly: false,
+  eacMethod: 'CPI',
+  currencyCode: null,
   plannedStart: '2026-05-01',
   calendarId: null,
   version: 4,

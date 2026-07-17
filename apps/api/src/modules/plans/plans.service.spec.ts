@@ -267,6 +267,19 @@ describe('PlansService', () => {
       expect(patch.makeOpenEndsCritical).toBe(true);
     });
 
+    it('persists the Earned-Value plan options; currencyCode clears on null (EV1, ADR-0042)', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      plans.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'pl1', {
+        eacMethod: 'CPI_TIMES_SPI',
+        currencyCode: null,
+        version: 1,
+      });
+      const patch = plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch;
+      expect(patch.eacMethod).toBe('CPI_TIMES_SPI');
+      expect(patch.currencyCode).toBeNull();
+    });
+
     it('assigns a same-org active calendar and clears it on explicit null', async () => {
       plans.findActiveByIdInOrg.mockResolvedValue(plan());
       plans.updateIfVersionMatches.mockResolvedValue(1);

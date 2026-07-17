@@ -14,6 +14,12 @@ export interface CreateAssignmentInput {
   /** Planned rate (units/time), the triad's Units/Time term (M7 rung 4, ADR-0040); null = no rate. */
   unitsPerHour: number | null;
   isDriving: boolean;
+  /** Optional budgeted-cost override in minor units (EV1, ADR-0042); null = derive at read time. BIGINT. */
+  budgetedCost: number | null;
+  /** Actual cost spent in minor units (EV1, ADR-0042); defaults to 0. Stored as BIGINT. */
+  actualCost: number;
+  /** Quantity of work actually done (EV1, ADR-0042); defaults to 0. Stored as DECIMAL(18,4). */
+  actualUnits: number;
   createdBy: string;
   updatedBy: string;
 }
@@ -24,6 +30,12 @@ export interface AssignmentPatch {
   /** Planned rate (units/time), the triad's Units/Time term (M7 rung 4, ADR-0040); null = no rate. */
   unitsPerHour?: number | null;
   isDriving?: boolean;
+  /** Optional budgeted-cost override in minor units (EV1, ADR-0042); null clears to derive-at-read. */
+  budgetedCost?: number | null;
+  /** Actual cost spent in minor units (EV1, ADR-0042). Stored as BIGINT. */
+  actualCost?: number;
+  /** Quantity of work actually done (EV1, ADR-0042). Stored as DECIMAL(18,4). */
+  actualUnits?: number;
 }
 
 /**
@@ -56,6 +68,9 @@ export class ResourceAssignmentRepository {
         budgetedUnits: input.budgetedUnits,
         unitsPerHour: input.unitsPerHour,
         isDriving: input.isDriving,
+        budgetedCost: input.budgetedCost,
+        actualCost: input.actualCost,
+        actualUnits: input.actualUnits,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
       },

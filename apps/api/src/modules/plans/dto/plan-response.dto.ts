@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   CriticalPathDefinition,
+  EacMethod,
   PlanStatus,
   ProgressRecalcMode,
   SchedulingMode,
@@ -85,6 +86,23 @@ export class PlanResponseDto implements PlanSummary {
   levelWithinFloatOnly!: boolean;
 
   @ApiProperty({
+    enum: EacMethod,
+    description:
+      'The Earned-Value EAC forecast method (EV1, ADR-0042): CPI (default), REMAINING_AT_BUDGET, or ' +
+      'CPI_TIMES_SPI. Read by the EV read (EV2b); dark in EV1.',
+  })
+  eacMethod!: EacMethod;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      "The plan's ISO-4217 currency code (three upper-case letters) for all money columns (EV1, " +
+      'ADR-0042), or null when unset (inherit the org default at read time).',
+  })
+  currencyCode!: string | null;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -126,6 +144,9 @@ export class PlanResponseDto implements PlanSummary {
       makeOpenEndsCritical: entity.makeOpenEndsCritical,
       levelResources: entity.levelResources,
       levelWithinFloatOnly: entity.levelWithinFloatOnly,
+      // Earned-Value plan options (EV1, ADR-0042): passthrough echo; currencyCode null = inherit.
+      eacMethod: entity.eacMethod,
+      currencyCode: entity.currencyCode,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

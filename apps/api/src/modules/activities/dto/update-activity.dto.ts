@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
+import { ActivityType, ConstraintType, DurationType, PercentCompleteType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -77,6 +77,61 @@ export class UpdateActivityDto {
   @IsOptional()
   @IsEnum(DurationType)
   durationType?: DurationType;
+
+  @ApiPropertyOptional({
+    enum: PercentCompleteType,
+    description:
+      'The %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION, UNITS, or PHYSICAL. ' +
+      'Selects the EV performance measure only — it never changes a CPM date.',
+  })
+  @IsOptional()
+  @IsEnum(PercentCompleteType)
+  percentCompleteType?: PercentCompleteType;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 100,
+    nullable: true,
+    description:
+      'Hand-entered physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL. ' +
+      'Integer 0–100 (N23); send null to clear (unset).',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to unset); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  physicalPercentComplete?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    description:
+      'Activity-level lump-sum BUDGET for non-resourced work (EV1, ADR-0042), a component of BAC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); send null to clear.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  budgetedExpense?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    description:
+      'Activity-level lump-sum ACTUAL spent for non-resourced work (EV1, ADR-0042), a component of AC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); send null to clear.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  actualExpense?: number | null;
 
   @ApiPropertyOptional({ enum: ConstraintType, nullable: true })
   @IsOptional()

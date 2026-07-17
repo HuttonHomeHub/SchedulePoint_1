@@ -158,6 +158,19 @@ describe('ResourceAssignmentService', () => {
       );
     });
 
+    it('threads Earned-Value cost inputs into the create; a null budgetedCost stays null (EV1, ADR-0042)', async () => {
+      await service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
+        resourceId: RESOURCE_ID,
+        budgetedUnits: 40,
+        actualCost: 12000,
+        actualUnits: 8,
+      });
+      expect(assignments.create).toHaveBeenCalledWith(
+        expect.objectContaining({ budgetedCost: null, actualCost: 12000, actualUnits: 8 }),
+        expect.anything(),
+      );
+    });
+
     it('forbids a caller without resource:assign', async () => {
       await expect(
         service.create(principalWith(['resource:read']), 'acme', ACTIVITY_ID, {
@@ -281,6 +294,24 @@ describe('ResourceAssignmentService', () => {
         expect.anything(),
         'asg-1',
       );
+    });
+
+    it('patches Earned-Value cost inputs; a null budgetedCost clears to derive-at-read (EV1, ADR-0042)', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      await service.update(principalWith(ALL), 'acme', 'asg-1', {
+        budgetedCost: null,
+        actualCost: 9000,
+        actualUnits: 3,
+        version: 1,
+      });
+      const patch = assignments.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        budgetedCost: number | null;
+        actualCost: number;
+        actualUnits: number;
+      };
+      expect(patch.budgetedCost).toBeNull();
+      expect(patch.actualCost).toBe(9000);
+      expect(patch.actualUnits).toBe(3);
     });
   });
 

@@ -233,6 +233,18 @@ export interface PlanSummary {
    */
   levelWithinFloatOnly: boolean;
   /**
+   * The Earned-Value EAC forecast method (EV1, ADR-0042, Q3). Client-settable plan option; default
+   * `CPI` (P6's headline EAC = BAC / CPI). Read by the EV2 read module (a query param may override
+   * per-request); dark in EV1 — nothing computes EV yet. Kept in lock-step with the Prisma `EacMethod`.
+   */
+  eacMethod: EacMethod;
+  /**
+   * The plan's ISO-4217 currency code (`AAA`, three upper-case letters) for all money columns (EV1,
+   * ADR-0042, Q6). Client-settable; `null` = unset (inherit the org default at read time). Single
+   * currency per plan (multi-currency/FX is out of scope). Money reads as minor units + this code.
+   */
+  currencyCode: string | null;
+  /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
    * historical/transitional reads; live plans always carry a value.
@@ -373,6 +385,17 @@ export interface ActivitySummary {
    * has no duration (a milestone).
    */
   expectedFinish: string | null;
+  /**
+   * The %-complete measure that feeds Earned Value (EV1, ADR-0042). Client-settable definition field
+   * (default `DURATION`, behaviour-preserving); selects which measure drives EV performance % —
+   * `DURATION`, `UNITS`, or `PHYSICAL`. It NEVER changes a CPM date. Dark until the EV2 read reads it.
+   */
+  percentCompleteType: PercentCompleteType;
+  /**
+   * Hand-entered physical % complete (EV1, ADR-0042), used only when `percentCompleteType` is
+   * `PHYSICAL`. Contributor progress input, integer 0–100, or `null` = unset (distinct from 0).
+   */
+  physicalPercentComplete: number | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.
   earlyStart: string | null;
   earlyFinish: string | null;
@@ -971,6 +994,29 @@ export const EDITED_FIELDS = ['DURATION', 'UNITS', 'UNITS_PER_HOUR'] as const;
 export type EditedField = (typeof EDITED_FIELDS)[number];
 
 /**
+ * The %-complete measure that feeds Earned Value for an activity (EV1, ADR-0042 / ADR-0035 §29).
+ * `DURATION` (default, behaviour-preserving — today's `percentComplete` is duration-based) derives EV
+ * performance % from elapsed vs total working time; `UNITS` from actual vs budgeted work
+ * (`actualUnits / budgetedUnits`); `PHYSICAL` from the hand-entered `physicalPercentComplete`. It
+ * selects the EV performance measure ONLY — it NEVER changes a CPM date. Const-array source-of-truth
+ * (like {@link DURATION_TYPES}) kept in lock-step with the API's Prisma `PercentCompleteType` enum.
+ */
+export const PERCENT_COMPLETE_TYPES = ['DURATION', 'UNITS', 'PHYSICAL'] as const;
+
+export type PercentCompleteType = (typeof PERCENT_COMPLETE_TYPES)[number];
+
+/**
+ * The Estimate-at-Completion forecast method a plan's EV read uses (EV1, ADR-0042 / ADR-0035 §29, Q3).
+ * `CPI` (default, P6's "typical/performance-factor" EAC = BAC / CPI); `REMAINING_AT_BUDGET` (the
+ * "atypical" EAC = AC + (BAC − EV)); `CPI_TIMES_SPI` (schedule-and-cost adjusted EAC = AC + (BAC − EV) /
+ * (CPI × SPI)). Read by the EV2 read module; dark in EV1. Const-array source-of-truth kept in lock-step
+ * with the API's Prisma `EacMethod` enum.
+ */
+export const EAC_METHODS = ['CPI', 'REMAINING_AT_BUDGET', 'CPI_TIMES_SPI'] as const;
+
+export type EacMethod = (typeof EAC_METHODS)[number];
+
+/**
  * A resource in the org-scoped resource library (M7.1, ADR-0039) — a reusable
  * sibling of the calendar library. The list/detail shape mirrors the other
  * `*Summary` types. `code` is an optional natural-key handle (unique per org among
@@ -1013,6 +1059,11 @@ export interface ResourceAssignmentSummary {
   budgetedUnits: number;
   unitsPerHour: number | null;
   isDriving: boolean;
+  /**
+   * Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. An exact quantity
+   * carried as a `number` (`DECIMAL(18,4)`; `>= 0`, N14). Defaults to 0. Dark until the EV2 read reads it.
+   */
+  actualUnits: number;
   version: number;
   createdAt: string;
   updatedAt: string;

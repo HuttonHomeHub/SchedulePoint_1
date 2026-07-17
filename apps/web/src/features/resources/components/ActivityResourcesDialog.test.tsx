@@ -41,6 +41,7 @@ function assignment(overrides: Partial<ResourceAssignmentSummary> = {}): Resourc
     budgetedUnits: 5,
     unitsPerHour: null,
     isDriving: false,
+    actualUnits: 0,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',

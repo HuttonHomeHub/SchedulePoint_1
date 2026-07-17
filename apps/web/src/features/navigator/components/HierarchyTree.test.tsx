@@ -64,6 +64,8 @@ const plans: PlanSummary[] = [
     makeOpenEndsCritical: false,
     levelResources: false,
     levelWithinFloatOnly: false,
+    eacMethod: 'CPI',
+    currencyCode: null,
     plannedStart: null,
     calendarId: null,
     version: 1,

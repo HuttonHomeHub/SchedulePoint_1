@@ -58,6 +58,8 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     levelingDelayDays: null,
     levelingWindowExceeded: false,
     selfOverAllocated: false,
+    percentCompleteType: 'DURATION',
+    physicalPercentComplete: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -82,6 +84,8 @@ const B = activity({
   levelingDelayDays: null,
   levelingWindowExceeded: false,
   selfOverAllocated: false,
+  percentCompleteType: 'DURATION',
+  physicalPercentComplete: null,
   totalFloat: 2,
   freeFloat: null,
 });

@@ -4,6 +4,7 @@ import {
   ActivityType,
   ConstraintType,
   DurationType,
+  PercentCompleteType,
   type Activity,
 } from '@prisma/client';
 import type { ActivitySummary } from '@repo/types';
@@ -77,6 +78,24 @@ export class ActivityResponseDto implements ActivitySummary {
     description: 'Expected-finish target (ADR-0035 §9), or null.',
   })
   expectedFinish!: string | null;
+
+  @ApiProperty({
+    enum: PercentCompleteType,
+    description:
+      'The %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION (default), UNITS, or ' +
+      'PHYSICAL. Selects the EV performance measure only — it never changes a CPM date.',
+  })
+  percentCompleteType!: PercentCompleteType;
+
+  @ApiProperty({
+    minimum: 0,
+    maximum: 100,
+    nullable: true,
+    type: Number,
+    description:
+      'Hand-entered physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL, or null.',
+  })
+  physicalPercentComplete!: number | null;
 
   @ApiProperty({
     format: 'uuid',
@@ -313,6 +332,10 @@ export class ActivityResponseDto implements ActivitySummary {
       suspendDate: day(entity.suspendDate),
       resumeDate: day(entity.resumeDate),
       expectedFinish: day(entity.expectedFinish),
+      // Earned-Value progress measures (EV1, ADR-0042): passthrough echo. The money amount fields
+      // are cost data, read only by the cost:read-gated EV read (EV2b) — never these general GETs.
+      percentCompleteType: entity.percentCompleteType,
+      physicalPercentComplete: entity.physicalPercentComplete,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),
       lateStart: day(entity.lateStart),

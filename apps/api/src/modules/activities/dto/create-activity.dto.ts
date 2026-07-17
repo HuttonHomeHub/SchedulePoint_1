@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
+import { ActivityType, ConstraintType, DurationType, PercentCompleteType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -84,6 +84,56 @@ export class CreateActivityDto {
   @IsOptional()
   @IsEnum(DurationType)
   durationType?: DurationType;
+
+  @ApiPropertyOptional({
+    enum: PercentCompleteType,
+    default: PercentCompleteType.DURATION,
+    description:
+      'The %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION (default, ' +
+      'behaviour-preserving), UNITS, or PHYSICAL. Selects the EV performance measure only — it NEVER ' +
+      'changes a CPM date. Dark until the EV read (EV2b).',
+  })
+  @IsOptional()
+  @IsEnum(PercentCompleteType)
+  percentCompleteType?: PercentCompleteType;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 100,
+    description:
+      'Hand-entered physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL. ' +
+      'Integer 0–100 (N23); omit for unset.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  physicalPercentComplete?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Activity-level lump-sum BUDGET for non-resourced work (EV1, ADR-0042), a component of BAC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); omit for no expense (parity).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  budgetedExpense?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Activity-level lump-sum ACTUAL spent for non-resourced work (EV1, ADR-0042), a component of AC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); omit for none.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  actualExpense?: number;
 
   @ApiPropertyOptional({ enum: ConstraintType, description: 'Schedule constraint (with a date).' })
   @IsOptional()

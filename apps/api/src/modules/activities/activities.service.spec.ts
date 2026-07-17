@@ -260,6 +260,26 @@ describe('ActivitiesService', () => {
       );
     });
 
+    it('threads Earned-Value inputs into the insert (EV1, ADR-0042 — passthrough)', async () => {
+      activities.create.mockResolvedValue(activity());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'Fit-out',
+        percentCompleteType: 'PHYSICAL',
+        physicalPercentComplete: 40,
+        budgetedExpense: 150000,
+        actualExpense: 60000,
+      });
+      expect(activities.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          percentCompleteType: 'PHYSICAL',
+          physicalPercentComplete: 40,
+          budgetedExpense: 150000,
+          actualExpense: 60000,
+        }),
+        expect.anything(),
+      );
+    });
+
     it('rejects a non-summary WBS parent with a 422 before the insert (PARENT_NOT_SUMMARY)', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity({ id: 't-1', type: 'TASK' }));
       await expect(
@@ -376,6 +396,28 @@ describe('ActivitiesService', () => {
       expect(patch.description).toBeNull();
       expect(patch.constraintType).toBeNull();
       expect(patch.constraintDate).toBeNull();
+    });
+
+    it('patches Earned-Value inputs and clears the nullable ones on null (EV1, ADR-0042)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      activities.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+        percentCompleteType: 'UNITS',
+        physicalPercentComplete: null,
+        budgetedExpense: 250000,
+        actualExpense: null,
+        version: 1,
+      });
+      const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        percentCompleteType: string;
+        physicalPercentComplete: number | null;
+        budgetedExpense: number | null;
+        actualExpense: number | null;
+      };
+      expect(patch.percentCompleteType).toBe('UNITS');
+      expect(patch.physicalPercentComplete).toBeNull();
+      expect(patch.budgetedExpense).toBe(250000);
+      expect(patch.actualExpense).toBeNull();
     });
 
     it('coerces duration to 0 when the type is changed to a milestone', async () => {

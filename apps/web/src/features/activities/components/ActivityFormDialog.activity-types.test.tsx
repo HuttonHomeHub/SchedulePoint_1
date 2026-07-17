@@ -69,6 +69,8 @@ const BASE_LOE: ActivitySummary = {
   levelingDelayDays: null,
   levelingWindowExceeded: false,
   selfOverAllocated: false,
+  percentCompleteType: 'DURATION',
+  physicalPercentComplete: null,
   version: 3,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',

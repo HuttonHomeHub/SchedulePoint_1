@@ -148,6 +148,11 @@ export class ResourceAssignmentService {
             budgetedUnits: storedUnits,
             unitsPerHour: storedRate,
             isDriving,
+            // Earned-Value cost inputs (EV1, ADR-0042): passthrough only, no derivation (that is EV2b).
+            // budgetedCost null/omitted = derive at read time; actualCost/actualUnits default 0.
+            budgetedCost: dto.budgetedCost ?? null,
+            actualCost: dto.actualCost ?? 0,
+            actualUnits: dto.actualUnits ?? 0,
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -190,6 +195,11 @@ export class ResourceAssignmentService {
     if (dto.budgetedUnits !== undefined) patch.budgetedUnits = dto.budgetedUnits;
     if (dto.unitsPerHour !== undefined) patch.unitsPerHour = dto.unitsPerHour;
     if (dto.isDriving !== undefined) patch.isDriving = dto.isDriving;
+    // Earned-Value cost inputs (EV1, ADR-0042): passthrough only. budgetedCost null clears to
+    // derive-at-read; actualCost/actualUnits are NOT NULL, so no clearing. No derivation here (EV2b).
+    if (dto.budgetedCost !== undefined) patch.budgetedCost = dto.budgetedCost;
+    if (dto.actualCost !== undefined) patch.actualCost = dto.actualCost;
+    if (dto.actualUnits !== undefined) patch.actualUnits = dto.actualUnits;
 
     // A MATERIAL resource may never drive (invariant (b)): re-check the resource's kind
     // when this update sets the driver on.

@@ -33,6 +33,11 @@ export class ResourceAssignmentResponseDto implements ResourceAssignmentSummary 
   @ApiProperty({ description: 'Whether this is THE driving resource of the activity.' })
   isDriving!: boolean;
 
+  @ApiProperty({
+    description: 'Quantity of work actually done (exact numeric, >= 0) — EV1, ADR-0042.',
+  })
+  actualUnits!: number;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -51,6 +56,7 @@ export class ResourceAssignmentResponseDto implements ResourceAssignmentSummary 
       budgetedUnits: entity.budgetedUnits.toNumber(),
       unitsPerHour: entity.unitsPerHour === null ? null : entity.unitsPerHour.toNumber(),
       isDriving: entity.isDriving,
+      actualUnits: entity.actualUnits.toNumber(),
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

@@ -6,6 +6,7 @@ import {
   type ActivityType,
   type ConstraintType,
   type DurationType,
+  type PercentCompleteType,
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -42,6 +43,14 @@ export interface ActivityPatch {
   visualStart?: Date | null;
   /** Resource-levelling tie-break (ADR-0041 §1): client-settable Planner input; null clears to unset. */
   levelingPriority?: number | null;
+  /** %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION default; never a CPM date. */
+  percentCompleteType?: PercentCompleteType;
+  /** Physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL; null clears. */
+  physicalPercentComplete?: number | null;
+  /** Activity-level lump-sum budget in minor units (EV1, ADR-0042); null clears. Stored as BIGINT. */
+  budgetedExpense?: number | null;
+  /** Activity-level lump-sum actual in minor units (EV1, ADR-0042); null clears. Stored as BIGINT. */
+  actualExpense?: number | null;
   // Progress
   status?: ActivityStatus;
   percentComplete?: number;

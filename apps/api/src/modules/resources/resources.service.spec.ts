@@ -160,6 +160,19 @@ describe('ResourcesService', () => {
         service.create(principalWith(ALL), 'acme', { name: 'Dup', kind: 'LABOUR' }),
       ).rejects.toMatchObject({ details: { reason: 'DUPLICATE_RESOURCE' } });
     });
+
+    it('threads the costPerUnit cost rate into the insert (EV1, ADR-0042 — passthrough)', async () => {
+      resources.create.mockResolvedValue(resource());
+      await service.create(principalWith(ALL), 'acme', {
+        name: 'Crew B',
+        kind: 'LABOUR',
+        costPerUnit: 5237.5,
+      });
+      expect(resources.create).toHaveBeenCalledWith(
+        expect.objectContaining({ costPerUnit: 5237.5 }),
+        expect.anything(),
+      );
+    });
   });
 
   describe('get', () => {
@@ -195,6 +208,16 @@ describe('ResourcesService', () => {
       await expect(
         service.update(principalWith(ALL), 'acme', 'res-1', { name: 'Taken', version: 1 }),
       ).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it('patches costPerUnit and clears it on null (EV1, ADR-0042)', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource());
+      resources.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'res-1', { costPerUnit: null, version: 1 });
+      const patch = resources.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        costPerUnit: number | null;
+      };
+      expect(patch.costPerUnit).toBeNull();
     });
   });
 

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsNumber, IsOptional, Matches, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, Matches, Min } from 'class-validator';
 
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
@@ -62,6 +62,46 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsIn(ASSIGNMENT_EDITED_FIELDS)
   editedField?: AssignmentEditedField;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Optional OVERRIDE of the derived budgeted cost (EV1, ADR-0042). Minor units in the plan currency ' +
+      '(integer >= 0, N22); omit for null = derive at read time (budgetedUnits × resource.costPerUnit). ' +
+      'The derivation is EV2b — a passthrough store keeps null as null.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  budgetedCost?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    default: 0,
+    description:
+      'Cost actually spent on this assignment (EV1, ADR-0042). Minor units in the plan currency ' +
+      '(integer >= 0, N22); defaults to 0.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  actualCost?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    default: 0,
+    description:
+      'Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. Exact numeric ' +
+      '(>= 0, N14; DECIMAL(18,4)); defaults to 0.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  actualUnits?: number;
 
   @ApiPropertyOptional({
     default: false,

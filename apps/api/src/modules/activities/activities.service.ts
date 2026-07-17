@@ -244,6 +244,15 @@ export class ActivitiesService {
             ...(dto.levelingPriority !== undefined
               ? { levelingPriority: dto.levelingPriority }
               : {}),
+            // Earned-Value inputs (EV1, ADR-0042): passthrough only, no derivation. Omit to take the
+            // parity defaults (percentCompleteType DURATION; the money/physical columns NULL). Dark
+            // until the EV read (EV2b); none feed the CPM engine.
+            ...(dto.percentCompleteType ? { percentCompleteType: dto.percentCompleteType } : {}),
+            ...(dto.physicalPercentComplete !== undefined
+              ? { physicalPercentComplete: dto.physicalPercentComplete }
+              : {}),
+            ...(dto.budgetedExpense !== undefined ? { budgetedExpense: dto.budgetedExpense } : {}),
+            ...(dto.actualExpense !== undefined ? { actualExpense: dto.actualExpense } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -339,6 +348,14 @@ export class ActivitiesService {
     // Resource-levelling tie-break (ADR-0041 §1): client-settable; null clears to unset. The
     // engine-owned leveled_* overlay is never patched here (dark until L2).
     if (dto.levelingPriority !== undefined) patch.levelingPriority = dto.levelingPriority;
+    // Earned-Value inputs (EV1, ADR-0042): passthrough only; percentCompleteType is never a CPM date,
+    // the physical/money columns clear on an explicit null. No derivation here (that is EV2b).
+    if (dto.percentCompleteType !== undefined) patch.percentCompleteType = dto.percentCompleteType;
+    if (dto.physicalPercentComplete !== undefined) {
+      patch.physicalPercentComplete = dto.physicalPercentComplete;
+    }
+    if (dto.budgetedExpense !== undefined) patch.budgetedExpense = dto.budgetedExpense;
+    if (dto.actualExpense !== undefined) patch.actualExpense = dto.actualExpense;
     // The activity's own calendar (ADR-0037): null clears to inherit the plan default; a specific
     // id is validated in-org under the calendar lock inside the transaction below (T4).
     const calendarId = dto.calendarId;
