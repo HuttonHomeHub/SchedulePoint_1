@@ -53,6 +53,18 @@ export function isMilestone(type: ActivityType): boolean {
   return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
 }
 
+/**
+ * A **Level-of-Effort** type (ADR-0035 §21) — a hammock whose duration is *derived* from the span of
+ * its SS-predecessor's start to its FF-successor's finish, rather than an input. An LOE **never drives
+ * a successor, never appears on the critical path, and never inherits negative float**: the engine
+ * excludes LOE ties from the bounds/driving of other activities, excludes LOEs from criticality and the
+ * project-finish tie-break, and pins the LOE's late dates to its early dates so its float is a
+ * non-negative 0. Keyed off the **type**, so an all-`TASK`/milestone plan is byte-identical.
+ */
+export function isLoe(type: ActivityType): boolean {
+  return type === 'LEVEL_OF_EFFORT';
+}
+
 /** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
 function nextCalendarDay(date: string): string {
   const d = parseCalendarDate(date);
