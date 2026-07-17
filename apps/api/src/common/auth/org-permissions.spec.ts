@@ -152,6 +152,31 @@ describe('permissionsForRole — calendar library (read vs write)', () => {
   });
 });
 
+describe('permissionsForRole — resource library + assignments (read vs write)', () => {
+  it('grants resource:read to every member role', () => {
+    for (const role of Object.values(OrganizationRole)) {
+      expect(permissionsForRole(role)).toContain('resource:read');
+    }
+  });
+
+  it('grants resource create/update/delete/assign to Planner + Org Admin only (NOT Contributor)', () => {
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      const perms = permissionsForRole(role);
+      expect(perms).not.toContain('resource:create');
+      expect(perms).not.toContain('resource:update');
+      expect(perms).not.toContain('resource:delete');
+      expect(perms).not.toContain('resource:assign');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      const perms = permissionsForRole(role);
+      expect(perms).toContain('resource:create');
+      expect(perms).toContain('resource:update');
+      expect(perms).toContain('resource:delete');
+      expect(perms).toContain('resource:assign');
+    }
+  });
+});
+
 describe('permissionsForRole — plan edit-lock (coordinate vs override)', () => {
   it('grants acquire + request-control to Planner + Org Admin only', () => {
     for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {

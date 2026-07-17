@@ -219,6 +219,20 @@ export interface PlanSummary {
    */
   makeOpenEndsCritical: boolean;
   /**
+   * Resource-levelling opt-in switch (ADR-0041 §7). When true (and the plan has assignments), the
+   * recalc runs the opt-in second levelling pass that resolves over-allocation into the engine-owned
+   * `leveled_*` overlay. Default `false` is the PARITY gate: off ⇒ the pass never runs and the recalc
+   * is byte-identical to today. Consumed by the L2 engine pass; dark in this L1 slice.
+   */
+  levelResources: boolean;
+  /**
+   * Level-within-float-only option (ADR-0041 §4, matching P6's off-by-default "level only within
+   * float"). When true, levelling may delay an activity only WITHIN its total float (preserving the
+   * project finish) and never extends the schedule; residual over-allocation is flagged, not resolved.
+   * Default `false` (behaviour-preserving; only relevant when `levelResources` is on).
+   */
+  levelWithinFloatOnly: boolean;
+  /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
    * historical/transitional reads; live plans always carry a value.
@@ -242,7 +256,13 @@ export interface PlanSummary {
  * (as the web does for plan statuses) to avoid importing runtime values here.
  */
 export type ActivityType =
-  'TASK' | 'START_MILESTONE' | 'FINISH_MILESTONE' | 'HAMMOCK' | 'LEVEL_OF_EFFORT';
+  | 'TASK'
+  | 'START_MILESTONE'
+  | 'FINISH_MILESTONE'
+  | 'HAMMOCK'
+  | 'LEVEL_OF_EFFORT'
+  | 'WBS_SUMMARY'
+  | 'RESOURCE_DEPENDENT';
 export type ActivityStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
 export type ConstraintType =
   'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO' | 'MANDATORY_START' | 'MANDATORY_FINISH';
@@ -294,12 +314,26 @@ export interface ActivitySummary {
   secondaryConstraintType: ConstraintType | null;
   secondaryConstraintDate: string | null;
   /**
+   * The P6 duration type (ADR-0040, M7 rung 4): which of {Duration, Units, Units/Time} recomputes vs
+   * holds when the planner edits another, keeping `Units = Duration × Units/Time` true. Client-settable
+   * definition field (default `FIXED_DURATION_AND_UNITS_TIME`); the recompute is resolved server-side at
+   * write time — the CPM engine reads the resulting duration.
+   */
+  durationType: DurationType;
+  /**
    * The activity's own working-time calendar (ADR-0037, M5), or `null` to **inherit** the plan
    * default (resolution: activity → plan → all-days-work). When set, the activity's duration is
    * measured, its float counted, and its dates derived on this calendar — so e.g. a 24/7 crew
    * activity inside a 5-day plan works across weekends.
    */
   calendarId: string | null;
+  /**
+   * WBS parent (ADR-0038, M5-epic §24): the `id` of the `WBS_SUMMARY` activity this one rolls up into,
+   * or null for a top-level activity. The parent tree is an adjacency list, kept acyclic and same-plan by
+   * the service; it is orthogonal to the dependency DAG (ADR-0021). A `WBS_SUMMARY` activity's dates roll
+   * up from its branch (engine work, F6).
+   */
+  parentId: string | null;
   /** Graphical y-lane for the TSLD canvas. */
   laneIndex: number;
   /**
@@ -307,6 +341,13 @@ export interface ActivitySummary {
    * activity renders at its late-based position; it never changes early/late/float. False by default.
    */
   scheduleAsLateAsPossible: boolean;
+  /**
+   * Resource-levelling tie-break (ADR-0041 §1). LOWER = HIGHER priority: when two activities contend
+   * for a capacity-constrained resource, the levelling pass places the lower `levelingPriority` first.
+   * Client-settable Planner input (NOT engine-owned). `null` = unset (no expressed preference),
+   * distinct from an explicit 0. Levelling-read only when the plan opts in; dark until L2.
+   */
+  levelingPriority: number | null;
   status: ActivityStatus;
   /** 0–100. */
   percentComplete: number;
@@ -353,6 +394,20 @@ export interface ActivitySummary {
    */
   constraintViolated: boolean;
   /**
+   * Engine-owned (ADR-0035 §21, M5-epic): true when this Level-of-Effort activity has no resolvable
+   * span — it is missing an SS predecessor or an FF successor — so the engine placed it at a defined
+   * fallback and flagged it (N12 produce-and-flag), never rejecting. False for every non-LOE activity
+   * and for an LOE with a complete span.
+   */
+  loeNoSpan: boolean;
+  /**
+   * Engine-owned (ADR-0035 §23 / ADR-0039, M7): true when this `RESOURCE_DEPENDENT` activity has no
+   * driving resource assignment, so its driving calendar could not be resolved — the engine still
+   * scheduled it (on the fallback calendar) and flagged it (produce-and-flag). False for every
+   * non-resource-dependent activity and for a resource-dependent one with a driver.
+   */
+  resourceDriverMissing: boolean;
+  /**
    * Visual-Planning placement input (ADR-0033): the calendar day (`YYYY-MM-DD`) the planner
    * hand-placed this activity's start at, or null if unplaced. Feeds only the engine's
    * effective-Visual pass; ignored by the pure-network (early/late/float) pass.
@@ -369,6 +424,27 @@ export interface ActivitySummary {
   visualConflict: boolean;
   /** Engine-owned (ADR-0033): working-day offset of the placement from the early start (signed), or null. */
   visualDriftDays: number | null;
+  // Resource-levelling overlay — engine-owned (ADR-0041 §3/§6 / Q2). The opt-in second levelling pass
+  // (plan `levelResources`) runs AFTER the pure CPM network pass and produces these additive positions;
+  // the pure early/late/float/critical are NOT recomputed on the leveled dates (network float stays
+  // authoritative). Response-echo only — NEVER accepted from a create/update DTO. All null/false until
+  // the plan opts in AND is first levelled.
+  /** Engine-owned (ADR-0041 §3): the delayed start the levelling pass placed this activity at, or null. */
+  leveledStart: string | null;
+  /** Engine-owned (ADR-0041 §3): the delayed finish the levelling pass placed this activity at, or null. */
+  leveledFinish: string | null;
+  /** Engine-owned (ADR-0041 §3): the applied delay in whole working days (leveledStart − earlyStart), or null. */
+  levelingDelayDays: number | null;
+  /**
+   * Engine-owned produce-and-flag (ADR-0041 §6, Q1): true when serialising pushed this activity PAST a
+   * resource's availability window (the engine extends and flags, never hangs). False until levelled.
+   */
+  levelingWindowExceeded: boolean;
+  /**
+   * Engine-owned produce-and-flag (ADR-0041 §2): true when this activity's OWN single-activity demand
+   * exceeds the resource capacity — a delay cannot fix it (reported, never resolved). False until levelled.
+   */
+  selfOverAllocated: boolean;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -425,6 +501,7 @@ export const DEPENDENCY_CONFLICT_MESSAGES = {
   SELF: 'A dependency cannot link an activity to itself.',
   CYCLE: 'This dependency would create a cycle in the schedule.',
   DUPLICATE: 'A dependency of this type already exists between these activities.',
+  SUMMARY_NO_LOGIC: 'A WBS summary carries no logic — it cannot be linked by a dependency.',
 } as const;
 
 /**
@@ -497,7 +574,9 @@ export interface DeletedHierarchyItem {
  * `earlyFinish`); it is null until the plan has been calculated (or when empty).
  * `constraintViolationCount` is how many activities a mandatory pin drove into a broken relationship
  * (produce-and-flag, ADR-0035 §7); `constraintWarningCount` counts soft constraint warnings (today
- * the N15 case: a SNET dated before the data date). All dates are calendar days (`YYYY-MM-DD`).
+ * the N15 case: a SNET dated before the data date); `loeNoSpanCount` counts Level-of-Effort activities
+ * with no resolvable span (N12 produce-and-flag, ADR-0035 §21). All dates are calendar days
+ * (`YYYY-MM-DD`).
  */
 export interface PlanScheduleSummary {
   dataDate: string | null;
@@ -507,6 +586,54 @@ export interface PlanScheduleSummary {
   nearCriticalCount: number;
   constraintViolationCount: number;
   constraintWarningCount: number;
+  loeNoSpanCount: number;
+  /**
+   * How many `RESOURCE_DEPENDENT` activities had no driving resource assignment this run (ADR-0035 §23 /
+   * ADR-0039) — produce-and-flag: they still schedule (on the fallback calendar) but are flagged. Zero
+   * unless the plan has a resource-dependent activity with no driver.
+   */
+  resourceDriverMissingCount: number;
+  /**
+   * Resource-levelling roll-up (ADR-0041 / ADR-0035 §28). `leveledActivityCount` is how many activities
+   * the opt-in levelling pass delayed (`levelingDelay > 0`); `levelingWindowExceededCount` how many were
+   * pushed past a resource's availability window (produce-and-flag, §6); `selfOverAllocatedCount` how many
+   * carry an unfixable single-activity over-allocation (§2). All **0** when the plan does not level
+   * (`levelResources` off) — the parity path never populates a leveled overlay.
+   */
+  leveledActivityCount: number;
+  levelingWindowExceededCount: number;
+  selfOverAllocatedCount: number;
+  /**
+   * The inclusive leveled project finish (`YYYY-MM-DD`) — the latest finish under levelling — or **null**
+   * when the plan does not level (ADR-0041). Independent of `projectFinish`, which stays the pure-network
+   * finish (the network layer is never recomputed, Q2).
+   */
+  leveledProjectFinish: string | null;
+}
+
+/**
+ * One **float path** into a target activity (M6-F6, ADR-0035 §19): a maximal contiguous chain of
+ * activities linked by logic, ranked by how much float it carries above the driving path. `index` 0
+ * is the driving path (`relativeFloat` 0); higher indices are increasingly floaty. `activityIds` are
+ * **target-first** (the target … the chain's driving root). `relativeFloat` is in **working days**
+ * (the API's day convention) — the entry activity's total float minus the target's; it can be
+ * **negative** when a branch is more critical than a floating target (a real signal, not an error).
+ */
+export interface PlanFloatPath {
+  index: number;
+  relativeFloat: number;
+  activityIds: string[];
+}
+
+/**
+ * The ranked contiguous float paths into a target activity — a read-only CPM analysis over the
+ * live-computed schedule (P6 "multiple float paths"). `targetActivityId` echoes the requested target;
+ * `paths` is ordered by non-decreasing `relativeFloat`, path 0 being the target's own driving chain,
+ * bounded by the requested `maxPaths`.
+ */
+export interface PlanFloatPaths {
+  targetActivityId: string;
+  paths: PlanFloatPath[];
 }
 
 /**
@@ -800,5 +927,128 @@ export interface PlanEditLockErrorDetails {
   /** Who currently holds the pen, when known (helps the UI say "Jane is editing"). */
   holder?: PlanEditLockActor | null;
 }
+
+/**
+ * The kind of a resource (M7.1, ADR-0039). LABOUR = a crew / trade; EQUIPMENT =
+ * plant / machinery (the conformance fixture's NONLABOUR maps here); MATERIAL = a
+ * consumable quantity (concrete m³, steel te). Kept in lock-step with the API's
+ * Prisma `ResourceKind` enum. A MATERIAL resource may be assigned to an activity but
+ * may NEVER be the driving resource of its dates (see {@link RESOURCE_ERROR}).
+ */
+export const RESOURCE_KINDS = ['LABOUR', 'EQUIPMENT', 'MATERIAL'] as const;
+
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+
+/**
+ * The P6 duration type of an activity (M7 rung 4, ADR-0040). It names which of the triad
+ * {Duration, Units, Units/Time} is **recomputed** (and which held) when a planner edits
+ * another, keeping the identity `Units = Duration × Units/Time` true: with
+ * `FIXED_DURATION_AND_UNITS_TIME` (the **default**) duration & rate are held and units
+ * absorb; `FIXED_DURATION_AND_UNITS` holds duration & units and rate absorbs; `FIXED_UNITS`
+ * holds units so **duration derives** on a rate edit; `FIXED_UNITS_TIME` holds rate so
+ * **duration derives** on a units edit. Const-array source-of-truth (like
+ * {@link RESOURCE_KINDS}) kept in lock-step with the API's Prisma `DurationType` enum; the
+ * recompute is a service-boundary concern, the CPM engine reads the resolved duration.
+ */
+export const DURATION_TYPES = [
+  'FIXED_DURATION_AND_UNITS_TIME',
+  'FIXED_DURATION_AND_UNITS',
+  'FIXED_UNITS',
+  'FIXED_UNITS_TIME',
+] as const;
+
+export type DurationType = (typeof DURATION_TYPES)[number];
+
+/**
+ * Which quantity of the `Units = Duration × Units/Time` triad a planner edited (M7 rung 4,
+ * ADR-0040). The write path names the edited field so the service holds it and recomputes the
+ * dependent per the activity's {@link DurationType}: `DURATION` (activity duration edit), `UNITS`
+ * (a driving assignment's `budgetedUnits`), or `UNITS_PER_HOUR` (its rate). Shared so the API DTOs
+ * and the client-side recompute preview agree on one vocabulary.
+ */
+export const EDITED_FIELDS = ['DURATION', 'UNITS', 'UNITS_PER_HOUR'] as const;
+
+export type EditedField = (typeof EDITED_FIELDS)[number];
+
+/**
+ * A resource in the org-scoped resource library (M7.1, ADR-0039) — a reusable
+ * sibling of the calendar library. The list/detail shape mirrors the other
+ * `*Summary` types. `code` is an optional natural-key handle (unique per org among
+ * active rows). `calendarId` is the resource's own working-time calendar — null
+ * inherits the plan calendar at schedule time.
+ */
+export interface ResourceSummary {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  kind: ResourceKind;
+  calendarId: string | null;
+  /**
+   * Capacity ceiling — the maximum units of this resource available per working hour (ADR-0041 §2).
+   * Client-settable Planner input; `null` = uncapped (no ceiling). Read by the L2 levelling pass when
+   * the plan opts in; dark until L2.
+   */
+  maxUnitsPerHour: number | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A resource assignment tying an activity to a resource with a budgeted quantity
+ * (M7.1, ADR-0039). `budgetedUnits` is an exact quantity carried as a `number` in the
+ * API (the DB stores `DECIMAL(18,4)`; `>= 0`, N14). `isDriving` designates THE driving
+ * resource of a RESOURCE_DEPENDENT activity — at most one per activity, and a MATERIAL
+ * resource may never drive. `unitsPerHour` (M7 rung 4, ADR-0040) is the planned **rate**
+ * (units of work per working hour) — the `Units/Time` term of the triad
+ * `Units = Duration × Units/Time`; a `number` in the API (`DECIMAL(18,4)`; `>= 0`, N19),
+ * or `null` when no rate is set (the triad is inert — parity). Only the driving assignment
+ * participates in the triad.
+ */
+export interface ResourceAssignmentSummary {
+  id: string;
+  activityId: string;
+  resourceId: string;
+  budgetedUnits: number;
+  unitsPerHour: number | null;
+  isDriving: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Canonical resource-module conflict / validation reasons + messages (M7.1, ADR-0039),
+ * shared like {@link DEPENDENCY_CONFLICT_MESSAGES} so the same rejection reads
+ * identically wherever it surfaces. The key is the machine-readable reason carried in a
+ * domain error's `details.reason`; the value is the human message.
+ */
+export const RESOURCE_ERROR = {
+  /** A resource name or code collides with an active resource in the same org (→ 409). */
+  DUPLICATE_RESOURCE: 'A resource with this name or code already exists.',
+  /** Deleting a resource still assigned to an active activity (→ 409). */
+  RESOURCE_IN_USE: 'This resource is assigned to one or more active activities.',
+  /** The (activity, resource) pair already has an active assignment (→ 409). */
+  DUPLICATE_ASSIGNMENT: 'This resource is already assigned to this activity.',
+  /** A MATERIAL resource cannot be the driving resource of an activity (→ 422). */
+  MATERIAL_CANNOT_DRIVE: 'A material resource cannot drive an activity’s dates.',
+  /**
+   * A `unitsPerHour` of 0 on a units-driven recompute (`Duration := Units ÷ Units/Time`) would
+   * divide by zero (N20, M7 rung 4 / ADR-0040 §5). Rejected before any division so the pure
+   * `resolveTriad` never yields Infinity/NaN (→ 422).
+   */
+  UNITS_PER_HOUR_ZERO:
+    'The rate (units/time) must be greater than zero to drive an activity’s duration.',
+  /** The referenced resource does not exist in this organisation (→ 404). */
+  RESOURCE_NOT_FOUND: 'Resource not found.',
+  /** The referenced assignment does not exist in this organisation (→ 404). */
+  ASSIGNMENT_NOT_FOUND: 'Assignment not found.',
+  /** The resource's `calendarId` is not an active calendar in the same org (→ 404). */
+  RESOURCE_CALENDAR_NOT_FOUND: 'Calendar not found.',
+} as const;
+
+/** A machine-readable resource-module error reason (a key of {@link RESOURCE_ERROR}). */
+export type ResourceErrorReason = keyof typeof RESOURCE_ERROR;
 
 export {};

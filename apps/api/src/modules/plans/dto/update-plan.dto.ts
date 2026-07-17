@@ -116,6 +116,22 @@ export class UpdatePlanDto {
   makeOpenEndsCritical?: boolean;
 
   @ApiPropertyOptional({
+    description:
+      'Resource-levelling opt-in switch (ADR-0041 §7): when on (and the plan has assignments), the recalc runs the opt-in levelling pass into the engine-owned leveled_* overlay. Default false is byte-parity. Dark until L2.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  levelResources?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Level-within-float-only option (ADR-0041 §4): when on, levelling may delay an activity only within its total float (never extends the schedule); residual over-allocation is flagged. Only relevant when levelResources is on.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  levelWithinFloatOnly?: boolean;
+
+  @ApiPropertyOptional({
     format: 'date',
     example: '2026-05-01',
     description: 'Calendar day (YYYY-MM-DD). May be changed but not cleared (ADR-0033 M1).',

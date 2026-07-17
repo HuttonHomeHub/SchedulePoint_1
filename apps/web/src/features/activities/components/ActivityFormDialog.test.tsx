@@ -9,13 +9,14 @@ import { apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
-// This is the BASE form suite — the M4/M5 flag surfaces (advanced constraints, per-activity calendar)
-// are on by default, so pin both off here; their flag-on behaviour lives in the dedicated
-// `ActivityFormDialog.advanced-constraints.test.tsx` / `.calendar.test.tsx` suites.
+// This is the BASE form suite — the M4/M5 flag surfaces (advanced constraints, per-activity calendar,
+// advanced activity types) are on by default, so pin them off here; their flag-on behaviour lives in the
+// dedicated `.advanced-constraints.test.tsx` / `.calendar.test.tsx` / `.activity-types.test.tsx` suites.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ADVANCED_CONSTRAINTS_ENABLED: false,
   ACTIVITY_CALENDAR_ENABLED: false,
+  ADVANCED_ACTIVITY_TYPES_ENABLED: false,
 }));
 
 const ACTIVITY: ActivitySummary = {
@@ -50,11 +51,21 @@ const ACTIVITY: ActivitySummary = {
   isCritical: false,
   isNearCritical: false,
   constraintViolated: false,
+  loeNoSpan: false,
+  resourceDriverMissing: false,
+  durationType: 'FIXED_DURATION_AND_UNITS_TIME',
+  parentId: null,
   visualStart: null,
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
   visualDriftDays: null,
+  levelingPriority: null,
+  leveledStart: null,
+  leveledFinish: null,
+  levelingDelayDays: null,
+  levelingWindowExceeded: false,
+  selfOverAllocated: false,
   version: 4,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
@@ -101,6 +112,36 @@ describe('ActivityFormDialog', () => {
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
     expect(body).toMatchObject({ type: 'START_MILESTONE', durationDays: 0 });
+  });
+
+  it('does not offer advanced activity types (Level of effort) while the flag is off', () => {
+    // This suite pins VITE_ADVANCED_ACTIVITY_TYPES off (it defaults on), so the picker shows only the
+    // three fully-supported types — no Level of effort (or Hammock).
+    renderDialog();
+    expect(screen.queryByRole('option', { name: 'Level of effort' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Hammock' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Task' })).toBeInTheDocument();
+  });
+
+  it('still shows a seeded Level-of-effort value when editing with the flag off (honest selector)', () => {
+    // Editing an LOE activity while the flag is off keeps its own type visible and selected rather than
+    // silently coercing it — the same honest-selector rule the parked-constraint case follows.
+    renderDialog({ activity: { ...ACTIVITY, type: 'LEVEL_OF_EFFORT', durationDays: 0 } });
+    expect(screen.getByLabelText('Type')).toHaveValue('LEVEL_OF_EFFORT');
+    expect(screen.getByRole('option', { name: 'Level of effort' })).toBeInTheDocument();
+  });
+
+  it('round-trips a seeded WBS parentId on a no-op save with the flag off', async () => {
+    // The WBS parent picker is hidden (flag off), but the dialog seeds parentId from the row so editing
+    // something else must never silently un-nest the activity — same rule as the calendar/constraint seeds.
+    renderDialog({ activity: { ...ACTIVITY, parentId: 'wbs-parent-1' } });
+    expect(screen.queryByLabelText('WBS summary (optional)')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
+    expect(body.parentId).toBe('wbs-parent-1');
+    expect(body.version).toBe(4);
   });
 
   it('reveals the date once a constraint is chosen and sends the pair', async () => {

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType } from '@prisma/client';
+import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -67,6 +67,17 @@ export class UpdateActivityDto {
   @IsZeroWhenMilestone()
   durationDays?: number;
 
+  @ApiPropertyOptional({
+    enum: DurationType,
+    description:
+      'P6 duration type (M7 rung 4, ADR-0040). Setting it alone does NOT recompute a quantity; ' +
+      'when sent together with durationDays, the edit holds the (new) duration and recomputes the ' +
+      'dependent per this type on the driving assignment.',
+  })
+  @IsOptional()
+  @IsEnum(DurationType)
+  durationType?: DurationType;
+
   @ApiPropertyOptional({ enum: ConstraintType, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
@@ -125,6 +136,17 @@ export class UpdateActivityDto {
   @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
   calendarId?: string | null;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'WBS parent (ADR-0038, M5-epic): the id of a WBS_SUMMARY activity in the same plan, or null for ' +
+      'top-level. Must be a summary, same-plan, and introduce no cycle — validated service-side.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'parentId must be a valid UUID.' })
+  parentId?: string | null;
+
   @ApiPropertyOptional({ minimum: 0 })
   @IsOptional()
   @Type(() => Number)
@@ -155,6 +177,21 @@ export class UpdateActivityDto {
   @ValidateIf((_, value) => value !== null)
   @IsCalendarDate()
   visualStart?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Resource-levelling tie-break (ADR-0041 §1): LOWER = HIGHER priority. Send null to clear it ' +
+      '(unset — no expressed preference). Read by the levelling pass only when the plan opts in.',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to unset); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  levelingPriority?: number | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

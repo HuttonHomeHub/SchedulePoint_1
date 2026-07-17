@@ -73,6 +73,18 @@ export class PlanResponseDto implements PlanSummary {
   makeOpenEndsCritical!: boolean;
 
   @ApiProperty({
+    description:
+      'Resource-levelling opt-in switch (ADR-0041 §7): when on, the recalc runs the opt-in levelling pass. Default false (byte-parity).',
+  })
+  levelResources!: boolean;
+
+  @ApiProperty({
+    description:
+      'Level-within-float-only option (ADR-0041 §4): when on, levelling delays only within total float and never extends the schedule. Default false.',
+  })
+  levelWithinFloatOnly!: boolean;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -112,6 +124,8 @@ export class PlanResponseDto implements PlanSummary {
       criticalFloatThreshold: entity.criticalFloatThreshold,
       totalFloatMode: entity.totalFloatMode,
       makeOpenEndsCritical: entity.makeOpenEndsCritical,
+      levelResources: entity.levelResources,
+      levelWithinFloatOnly: entity.levelWithinFloatOnly,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       version: entity.version,

@@ -7,6 +7,7 @@ import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { ResourceRepository } from '../resources/resource.repository';
 
 import type { CalendarRepository } from './calendar.repository';
 import { CalendarsService } from './calendars.service';
@@ -94,6 +95,7 @@ describe('CalendarsService', () => {
     softDeleteException: ReturnType<typeof vi.fn>;
     touchVersion: ReturnType<typeof vi.fn>;
   };
+  let resources: { countActiveResourcesUsingCalendar: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: CalendarsService;
 
@@ -115,6 +117,7 @@ describe('CalendarsService', () => {
       softDeleteException: vi.fn(),
       touchVersion: vi.fn(),
     };
+    resources = { countActiveResourcesUsingCalendar: vi.fn().mockResolvedValue(0) };
     // The tx handle exposes $executeRaw (the calendar advisory lock used by remove).
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
@@ -123,6 +126,7 @@ describe('CalendarsService', () => {
     service = new CalendarsService(
       organizations as unknown as OrganizationsService,
       calendars as unknown as CalendarRepository,
+      resources as unknown as ResourceRepository,
       prisma as unknown as PrismaService,
       logger,
     );
@@ -245,6 +249,17 @@ describe('CalendarsService', () => {
       calendars.countActiveActivitiesUsing.mockResolvedValue(3);
       await expect(service.remove(principalWith(ALL), 'acme', 'cal-1')).rejects.toMatchObject({
         details: { count: 3, plans: 0, activities: 3 },
+      });
+      expect(calendars.softDeleteWithExceptions).not.toHaveBeenCalled();
+    });
+
+    it('409s (CALENDAR_IN_USE) when an active RESOURCE references the calendar (M7, ADR-0039)', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
+      calendars.countActivePlansUsing.mockResolvedValue(0);
+      calendars.countActiveActivitiesUsing.mockResolvedValue(0);
+      resources.countActiveResourcesUsingCalendar.mockResolvedValue(2);
+      await expect(service.remove(principalWith(ALL), 'acme', 'cal-1')).rejects.toMatchObject({
+        details: { count: 2, plans: 0, activities: 0, resources: 2 },
       });
       expect(calendars.softDeleteWithExceptions).not.toHaveBeenCalled();
     });

@@ -7,6 +7,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 
+import { RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
@@ -22,6 +23,7 @@ import { OrgHomeScreen } from '@/routes/org-home';
 import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
 import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
+import { ResourcesScreen } from '@/routes/resources';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
 
@@ -137,6 +139,14 @@ const calendarsRoute = createRoute({
   component: CalendarsScreen,
 });
 
+/** Resources library (behind `RESOURCES_ENABLED`; only added to the tree when on). */
+const resourcesRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/resources',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: ResourcesScreen,
+});
+
 /** A client's projects. */
 const clientDetailRoute = createRoute({
   getParentRoute: () => authedRoute,
@@ -193,6 +203,9 @@ const routeTree = rootRoute.addChildren([
     projectDetailRoute,
     planDetailRoute,
     recentlyDeletedRoute,
+    // Dark surface (ADR-0039): the resources route joins the tree only when the flag is on, so the
+    // app is byte-identical when off (no route, no nav link, no row action).
+    ...(RESOURCES_ENABLED ? [resourcesRoute] : []),
   ]),
 ]);
 

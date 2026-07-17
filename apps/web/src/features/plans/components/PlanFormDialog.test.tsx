@@ -22,6 +22,8 @@ const PLAN: PlanSummary = {
   criticalFloatThreshold: 0,
   totalFloatMode: 'FINISH',
   makeOpenEndsCritical: false,
+  levelResources: false,
+  levelWithinFloatOnly: false,
   plannedStart: '2026-05-01',
   calendarId: null,
   version: 4,

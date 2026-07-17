@@ -45,6 +45,45 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
   })
   constraintWarningCount!: number;
 
+  @ApiProperty({
+    description:
+      'Level-of-Effort activities with no resolvable span (missing an SS predecessor or FF successor) — produced at a fallback placement and flagged (N12, ADR-0035 §21).',
+  })
+  loeNoSpanCount!: number;
+
+  @ApiProperty({
+    description:
+      'RESOURCE_DEPENDENT activities with no driving resource assignment — produced-and-flagged, scheduled on the fallback calendar (ADR-0035 §23 / ADR-0039).',
+  })
+  resourceDriverMissingCount!: number;
+
+  @ApiProperty({
+    description:
+      'Activities the opt-in resource-levelling pass delayed to resolve over-allocation (levelingDelay > 0); 0 when the plan does not level (ADR-0041 / ADR-0035 §28).',
+  })
+  leveledActivityCount!: number;
+
+  @ApiProperty({
+    description:
+      'Activities levelling pushed past a resource’s availability window — produced-and-flagged (ADR-0041 §6); 0 when the plan does not level.',
+  })
+  levelingWindowExceededCount!: number;
+
+  @ApiProperty({
+    description:
+      'Activities carrying an unfixable single-activity over-allocation (own demand exceeds a resource’s capacity) — produced-and-flagged (ADR-0041 §2); 0 when the plan does not level.',
+  })
+  selfOverAllocatedCount!: number;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'The inclusive leveled project finish — the latest finish under levelling; null when the plan does not level (ADR-0041).',
+  })
+  leveledProjectFinish!: string | null;
+
   static from(summary: PlanScheduleSummary): PlanScheduleSummaryDto {
     return {
       dataDate: summary.dataDate,
@@ -54,6 +93,12 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
       nearCriticalCount: summary.nearCriticalCount,
       constraintViolationCount: summary.constraintViolationCount,
       constraintWarningCount: summary.constraintWarningCount,
+      loeNoSpanCount: summary.loeNoSpanCount,
+      resourceDriverMissingCount: summary.resourceDriverMissingCount,
+      leveledActivityCount: summary.leveledActivityCount,
+      levelingWindowExceededCount: summary.levelingWindowExceededCount,
+      selfOverAllocatedCount: summary.selfOverAllocatedCount,
+      leveledProjectFinish: summary.leveledProjectFinish,
     };
   }
 }

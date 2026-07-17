@@ -14,9 +14,9 @@ import type { EngineActivity, EngineEdge } from '../engine';
  * Negative-case contract (ADR-0034 §4): a hostile input must **reject, repair, or
  * report — never hang, crash, or silently produce nonsense**. These assert the
  * behaviour of *today's* pure engine for the cases it owns (topology + calendar
- * walkers); the input-validity cases (negative duration, milestone-with-duration,
- * LOE-with-no-span) are **API-boundary** concerns (ADR-0035 §25) validated at the
- * DTO/service layer, not the pure engine — they are marked `todo` here so the
+ * walkers + produce-and-flag); the remaining input-validity cases (negative duration,
+ * milestone-with-duration) are **API-boundary** concerns (ADR-0035 §25) validated at
+ * the DTO/service layer, not the pure engine — they are marked `todo` here so the
  * engine-level gap is visible, and are covered by API e2e as those land.
  *
  * Fixture references: `fixtures/negative_cases.json` (N01–N18).
@@ -181,7 +181,23 @@ describe('negative-case contract (engine-owned cases)', () => {
   // N04 (duplicate relationship) is a write-path concern, not the pure engine: an exact (pair+type)
   // duplicate is rejected 409 DUPLICATE_DEPENDENCY and a different-type ladder is allowed — covered in
   // `test/dependencies.e2e-spec.ts` (ADR-0035 §13 amendment). Cycle-member naming (N01/N03) is above.
+  it('N12: a level-of-effort with no span is PRODUCED and flagged, never thrown (ADR-0035 §21)', () => {
+    // N12A is an LOE with no predecessor and no successor — it has nothing to span. Like the mandatory
+    // produce-and-flag (N10), the engine schedules it at a defined fallback (the data date, zero length)
+    // and flags it, rather than rejecting or crashing. The API boundary may additionally warn (§25).
+    const output = computeSchedule(
+      [{ id: 'N12A', durationMinutes: 0, type: 'LEVEL_OF_EFFORT' }],
+      [],
+      { dataDate, calendar: allMinutesWorkCalendar },
+    );
+    const a = output.results.find((r) => r.activityId === 'N12A')!;
+    expect(a.loeNoSpan).toBe(true);
+    expect(a.earlyStart).toBe('2026-06-01'); // data-date fallback, produced not thrown
+    expect(a.earlyFinish).toBe('2026-06-01'); // zero length
+    expect(a.isCritical).toBe(false);
+    expect(output.summary.loeNoSpanCount).toBe(1);
+  });
+
   it.todo('N09: negative duration is rejected at the API boundary (ADR-0035 §25)');
-  it.todo('N12: a level-of-effort with no span is rejected/warned (ADR-0035 §21, M5)');
   it.todo('N17: a milestone with a non-zero duration is coerced to zero (ADR-0035 §25)');
 });

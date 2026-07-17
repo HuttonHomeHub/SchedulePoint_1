@@ -10,6 +10,37 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-17 — L1 resource-levelling schema: `leveling_priority` is nullable (NULL = unset), not defaulted
+
+**Decision.** The client-settable levelling tie-break `activities.leveling_priority` (ADR-0041 §1,
+lower = higher priority) is stored **`INT?` — NULLABLE with NO default**, where **NULL = unset** (the
+planner has expressed no priority preference). The engine defines NULL ordering: **NULL sorts last /
+neutral**, after every explicit integer (documented as ADR-0035 §28). The engine-owned leveled overlay
+follows the established engine-column precedents: `leveled_start`/`leveled_finish` are `DATE?` mirroring
+`early_start`/`early_finish`; `leveling_delay_minutes` is `INT?` (NULL = "not yet levelled") mirroring the
+nullable engine ints `total_float`/`free_float`/`visual_drift_days`; `leveling_window_exceeded` and
+`self_over_allocated` are `BOOLEAN NOT NULL DEFAULT false` mirroring `constraint_violated`/
+`resource_driver_missing`. `resources.max_units_per_hour` is `DECIMAL(18,4)?` with **NULL = uncapped**
+and a nullable-safe `>= 0` CHECK (N21). The two plan flags are `BOOLEAN NOT NULL DEFAULT false`.
+
+**Why.** A `DEFAULT` on `leveling_priority` was deliberately rejected: since lower = higher, a `DEFAULT 0`
+would silently make every existing activity **top priority**, and any other constant is an arbitrary
+sentinel — either way conflating "no preference" with a real priority value. Nullable-no-default is the
+optional-Planner-input precedent already set by `expected_finish`/`visual_start` (vs the always-present
+`lane_index`/`schedule_as_late_as_possible` zero/false defaults), keeps the add metadata-only (no backfill),
+and lets the engine own NULL ordering in one documented place. NULL `max_units_per_hour` = uncapped is the
+parity-preserving default (an uncapped resource is never over-allocated, so the levelling pass has nothing
+to resolve and the default recalc stays byte-identical); a `DEFAULT 0` would mean "zero capacity" and
+silently over-allocate every existing resource. No plan-level count columns were added: the over-allocation
+counts are computed in the schedule summary at read time, exactly like `constraintViolationCount`.
+
+**Consequences.** L1 is fully additive and dark — nothing reads the new columns until the L2 engine pass
+lands, and the migration replays clean (verified: `migrate deploy` + an empty schema diff apart from the
+pre-existing `parent_id` partial-index declaration drift, and the N21 CHECK rejects a negative
+`max_units_per_hour` while accepting NULL and 0). ADR-0035 gains a §28 (levelling semantics, incl. the
+NULL-priority ordering) + N21, Accepted with the L3 conformance rung. `@repo/types`/DTOs (L1 later task)
+must keep `leveling_priority` nullable and omit the engine-owned leveled columns from write DTOs.
+
 ### 2026-07-16 — M4-F8 duplicate-relationship policy: reject per-(pair, type), not per-pair
 
 **Decision.** The "duplicate relationship is rejected" contract (ADR-0035 §13, N04) is scoped to an
@@ -784,5 +815,8 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   come out by non-decreasing relative float. `relativeFloat` = the entry activity's total float minus the
   target's; it may be **negative** when a branch is more critical than a floating target (a
   constraint-broken predecessor). Bounded by `maxPaths` + a per-chain depth guard (no blow-up on dense
-  graphs). Engine-only for now — the read endpoint (`GET .../schedule/float-paths`) is deferred
-  (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing schedule + driving edges).
+  graphs). The read endpoint `GET .../schedule/float-paths?target=&maxPaths=` (schedule:read; relative
+  float in working days; 422 if the plan has no start date; 404 for a target not in the plan) now exposes
+  it — the analysis recomputes the schedule live via the shared engine-input builder, so it can never
+  drift from a recalculate (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing
+  schedule + driving edges).

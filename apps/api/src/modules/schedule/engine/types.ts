@@ -42,6 +42,15 @@ export interface EngineActivity {
   durationMinutes: number;
   type: ActivityType;
   /**
+   * The activity's **WBS parent** (ADR-0038), for the summary-rollup pass (ADR-0035 §24). The engine
+   * rolls a `WBS_SUMMARY` activity's dates up from the activities whose `parentId` points at it — its
+   * DIRECT children — deepest-first, so nested summaries resolve child-before-parent. Absent/null = a
+   * top-level node. This is **orthogonal to the dependency graph**: it is a containment tree, never a
+   * logic edge (a summary carries no dependencies), so on a plan with no summary it is inert and the
+   * schedule is byte-identical.
+   */
+  parentId?: string | null;
+  /**
    * The activity's own working-time calendar (ADR-0037, M5). **Undefined = inherit the plan
    * calendar** (`ComputeOptions.calendar`) — the default, byte-identical path. When set, the
    * activity's duration is advanced, its float measured, and its dates derived on **this**
@@ -106,6 +115,66 @@ export interface EngineActivity {
    * complete activity or when the option is off, so the byte-identical path is unchanged.
    */
   expectedFinish?: string | null;
+  /**
+   * Resource-dependent driver-missing input (M7.2, ADR-0035 §23 / ADR-0039). Set by the **service**
+   * for a `RESOURCE_DEPENDENT` activity that has no driving resource assignment, so no resource
+   * calendar could be resolved (the DB guarantees ≤1 driver, so the only missing case is zero). The
+   * engine does not compute it — it carries this flag straight to {@link EngineResult.resourceDriverMissing}
+   * (produce-and-flag) and schedules the activity on the fallback calendar the service still supplies
+   * via {@link calendar}. Absent/false for every other case (the byte-identical path). §23 is about the
+   * driving *calendar*; the engine treats `RESOURCE_DEPENDENT` exactly like `TASK` for logic.
+   */
+  resourceDriverMissing?: boolean;
+  /**
+   * Levelling priority (ADR-0041 §1), client-settable — **lower = higher priority** (placed first by
+   * the serial priority-list pass). Consumed only by {@link levelSchedule} (the opt-in second pass),
+   * never by the pure CPM network pass, so it never affects `early*`/`late*`/float. **NULL/undefined
+   * sorts LAST** (treated as +∞) in the composite ordering key. Ignored when levelling is off.
+   */
+  levelingPriority?: number | null;
+}
+
+/**
+ * A single unit of resource **demand** for the levelling pass (ADR-0041 §2): one active assignment of
+ * a resource to an activity, contributing `unitsPerHour` of concurrent demand while the activity runs.
+ * **Every** assignment consumes capacity (not only the schedule-driving one). Built by the service from
+ * the plan's active `ResourceAssignment` rows; the pure engine never touches Prisma.
+ */
+export interface EngineAssignment {
+  activityId: string;
+  resourceId: string;
+  /** The per-working-hour demand rate (ADR-0040). The service resolves a NULL DB rate to 0 (no demand). */
+  unitsPerHour: number;
+}
+
+/**
+ * A resource's **capacity** input for the levelling pass (ADR-0041 §2): the per-working-hour ceiling
+ * (`resource.max_units_per_hour`) and the resource's own resolved working calendar (ADR-0037/0039). A
+ * `null` capacity is **UNCAPPED** — the parity-preserving default: an uncapped resource never
+ * constrains, so a plan whose resources are all uncapped levels to byte-identical network dates.
+ */
+export interface EngineResource {
+  id: string;
+  /** Max units per working hour; **null = uncapped** (never over-allocated). */
+  capacity: number | null;
+  /** The resource's own working calendar (ADR-0037); undefined = the plan calendar. Used to detect a
+   * window-only resource running out of availability (`levelingWindowExceeded`, ADR-0041 §6). */
+  calendar?: WorkingTimeCalendar;
+}
+
+/** Options governing the levelling pass ({@link levelSchedule}). */
+export interface LevelingOptions {
+  /**
+   * Level **within total float only** (ADR-0041 §4). When `true`, an activity is never delayed past its
+   * total float: if the earliest capacity-feasible slot would push its finish beyond `lateFinishOffset`,
+   * it is left at its within-float cap and the residual over-allocation is left **unresolved** (see
+   * {@link levelSchedule} for the exact contract). Default `false` (P6 "level only within float" off).
+   */
+  levelWithinFloatOnly: boolean;
+  /** The data date (`YYYY-MM-DD`) — the schedule's earliest instant, matching {@link EngineOutput}. */
+  dataDate: string;
+  /** The **plan** working-time calendar — the frame the exposed `*Offset` fields project onto. */
+  planCalendar: WorkingTimeCalendar;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
@@ -173,6 +242,23 @@ export interface EngineResult {
    * is produced as-pinned; this flags that it broke logic — engine-owned, never repaired.
    */
   constraintViolated: boolean;
+  /**
+   * LOE no-span produce-and-flag (N12, ADR-0035 §21): true when a `LEVEL_OF_EFFORT` activity has no
+   * resolvable span — it is missing an SS predecessor or an FF successor (or both). The engine places it
+   * at a defined fallback (its SS end if present, else the data date; zero length) and flags it rather
+   * than rejecting, mirroring the mandatory §7 produce-and-flag. Always false for a non-LOE activity and
+   * for an LOE with a complete span.
+   */
+  loeNoSpan: boolean;
+  /**
+   * Resource-dependent driver-missing produce-and-flag (M7.2, ADR-0035 §23 / ADR-0039): true when a
+   * `RESOURCE_DEPENDENT` activity has no driving resource assignment, so its driving calendar could not
+   * be resolved. The activity is still scheduled (on the fallback calendar — activity own → plan
+   * default) and flagged rather than rejected, mirroring the LOE §21 / mandatory §7 produce-and-flag.
+   * Carried straight from {@link EngineActivity.resourceDriverMissing}; always false for a non-resource-
+   * dependent activity and for a resource-dependent one with a driver.
+   */
+  resourceDriverMissing: boolean;
   earlyStart: string;
   earlyFinish: string;
   lateStart: string;
@@ -191,6 +277,27 @@ export interface EngineResult {
   visualEffectiveFinish: string;
   visualConflict: boolean;
   visualDriftMinutes: number | null;
+  /**
+   * Resource-levelling overlay (ADR-0041 §3, Q2) — **additive**: produced by the opt-in
+   * {@link levelSchedule} second pass and merged onto the network result; the pure
+   * `early*`/`late*`/`totalFloat`/`isCritical` above are **never recomputed** on the leveled dates
+   * (the network float stays authoritative). These fields are **OPTIONAL and absent** on a plain
+   * `computeSchedule` result (the byte-identical parity path — the network pass never emits them);
+   * they are present only after levelling runs, and even then are non-null only for an activity that
+   * assigns a **finite-capacity** resource (a levelling participant). `leveledStartOffset` /
+   * `leveledFinishOffset` are plan-frame working-minute offsets from the data date (like `early*`);
+   * `levelingDelay` is the applied delay in working minutes on the activity's own calendar (0 when not
+   * delayed); `leveledStart`/`leveledFinish` are the inclusive display dates (same mapping as `early*`).
+   */
+  leveledStartOffset?: number | null;
+  leveledFinishOffset?: number | null;
+  levelingDelay?: number;
+  leveledStart?: string | null;
+  leveledFinish?: string | null;
+  /** Produce-and-flag (ADR-0041 §6, Q1): serialising pushed this activity past a resource's window. */
+  levelingWindowExceeded?: boolean;
+  /** Produce-and-flag (ADR-0041 §2): this activity's own single-activity demand exceeds a capacity. */
+  selfOverAllocated?: boolean;
 }
 
 /** Plan-level roll-up of an engine run. */
@@ -209,6 +316,17 @@ export interface EngineSummary {
    */
   constraintWarningCount: number;
   /**
+   * How many Level-of-Effort activities had no resolvable span this run (N12, ADR-0035 §21) — the
+   * produce-and-flag count. Zero unless the plan has an LOE missing an SS predecessor or FF successor.
+   */
+  loeNoSpanCount: number;
+  /**
+   * How many `RESOURCE_DEPENDENT` activities had no driving resource assignment this run (ADR-0035 §23 /
+   * ADR-0039) — the produce-and-flag count. Zero unless the plan has a resource-dependent activity with
+   * no driver.
+   */
+  resourceDriverMissingCount: number;
+  /**
    * How many incomplete activities had their remaining work resized to an **expected finish** this run
    * (ADR-0035 §9) — zero unless the plan's `useExpectedFinishDates` option is on. Observability only.
    */
@@ -217,4 +335,19 @@ export interface EngineSummary {
   projectFinishOffset: number | null;
   /** The inclusive project finish display date; null for an empty plan. */
   projectFinish: string | null;
+  /**
+   * Resource-levelling roll-up (ADR-0041) — **optional/absent** on a plain `computeSchedule` result
+   * (the parity path), populated by {@link levelSchedule} and merged in by the service. `null` when
+   * levelling did not run.
+   */
+  /** How many activities the levelling pass delayed (`levelingDelay > 0`). */
+  leveledActivityCount?: number | null;
+  /** How many activities were pushed past a resource's availability window (ADR-0041 §6). */
+  levelingWindowExceededCount?: number | null;
+  /** How many activities carry an unfixable single-activity over-allocation (ADR-0041 §2). */
+  selfOverAllocatedCount?: number | null;
+  /** The leveled project finish offset (max leveled/early finish under levelling); null when off. */
+  leveledProjectFinishOffset?: number | null;
+  /** The inclusive leveled project finish display date; null when off. */
+  leveledProjectFinish?: string | null;
 }

@@ -5,6 +5,7 @@ import {
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
+  type DurationType,
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -23,6 +24,8 @@ export interface ActivityPatch {
   description?: string | null;
   type?: ActivityType;
   durationMinutes?: number;
+  /** P6 duration type (M7 rung 4, ADR-0040): governs which triad field recomputes on a quantity edit. */
+  durationType?: DurationType;
   constraintType?: ConstraintType | null;
   constraintDate?: Date | null;
   /** Secondary constraint (ADR-0035 §10): drives the backward pass; paired like the primary. */
@@ -30,11 +33,15 @@ export interface ActivityPatch {
   secondaryConstraintDate?: Date | null;
   /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
   calendarId?: string | null;
+  /** WBS parent (ADR-0038, M5-epic); a WBS_SUMMARY in the same plan, or null for top-level. */
+  parentId?: string | null;
   laneIndex?: number;
   /** As-Late-As-Possible placement preference (ADR-0035 §11): display-only, never the pure passes. */
   scheduleAsLateAsPossible?: boolean;
   /** Visual-Planning placement (ADR-0033): hand-placed start, or null to clear it. */
   visualStart?: Date | null;
+  /** Resource-levelling tie-break (ADR-0041 §1): client-settable Planner input; null clears to unset. */
+  levelingPriority?: number | null;
   // Progress
   status?: ActivityStatus;
   percentComplete?: number;

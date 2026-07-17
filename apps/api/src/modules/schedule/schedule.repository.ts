@@ -42,6 +42,25 @@ export interface ScheduleActivityRow {
   resumeDate: Date | null;
   /** Expected-finish target (M4, ADR-0035 §9); resizes remaining work when the plan option is on. */
   expectedFinish: Date | null;
+  /** Levelling priority (ADR-0041 §1); lower = placed first. Consumed only by the opt-in levelling pass. */
+  levelingPriority: number | null;
+}
+
+/** A plan's active resource assignment as the levelling pass reads it (ADR-0041 §2). */
+export interface ScheduleAssignmentRow {
+  activityId: string;
+  resourceId: string;
+  /** The per-working-hour demand rate (ADR-0040); NULL = no rate (resolved to zero demand). */
+  unitsPerHour: Prisma.Decimal | null;
+}
+
+/** A resource assigned in a plan, as the levelling pass reads it (ADR-0041 §2). */
+export interface ScheduleResourceRow {
+  id: string;
+  /** The per-working-hour capacity ceiling (ADR-0041 §2); NULL = uncapped (never over-allocated). */
+  maxUnitsPerHour: Prisma.Decimal | null;
+  /** The resource's own working calendar (ADR-0039); NULL = inherit the plan calendar. */
+  calendarId: string | null;
 }
 
 /** The minimal dependency shape the CPM engine reads (a plan's active edges). */
@@ -79,6 +98,17 @@ export interface ScheduleAggregate {
   constraintViolationCount: number;
   /** Soft constraint warnings (today N15: a SNET dated before the data date). ADR-0035 §12. */
   constraintWarningCount: number;
+  /** Level-of-Effort activities with no resolvable span (N12, ADR-0035 §21). */
+  loeNoSpanCount: number;
+  /** Resource-dependent activities with no driving resource (ADR-0035 §23 / ADR-0039). */
+  resourceDriverMissingCount: number;
+  /** Resource-levelling roll-up (ADR-0041 / ADR-0035 §28), read back from the engine-owned leveled
+   * columns; all 0 / null when the plan does not level. */
+  leveledActivityCount: number;
+  levelingWindowExceededCount: number;
+  selfOverAllocatedCount: number;
+  /** Max inclusive leveled finish as `YYYY-MM-DD`; null when the plan does not level. */
+  leveledProjectFinish: string | null;
   /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
   projectFinish: string | null;
 }
@@ -88,7 +118,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the thirteen engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the nineteen engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -126,8 +156,80 @@ export class ScheduleRepository {
         remainingDurationMinutes: true,
         resumeDate: true,
         expectedFinish: true,
+        levelingPriority: true,
       },
     });
+  }
+
+  /**
+   * A plan's active resource assignments for the levelling pass (ADR-0041 §2) — one row per active
+   * assignment of an active resource to an active activity in the plan. Only loaded when the plan opts
+   * in (`levelResources`), so the default recalc never runs this query (the byte-identical fast path).
+   */
+  loadResourceAssignments(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ScheduleAssignmentRow[]> {
+    return db.resourceAssignment.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        activity: { planId, deletedAt: null },
+        resource: { deletedAt: null },
+      },
+      select: { activityId: true, resourceId: true, unitsPerHour: true },
+    });
+  }
+
+  /**
+   * The active resources assigned in a plan, with their capacity ceiling and own calendar (ADR-0041
+   * §2). Only loaded when the plan opts in (`levelResources`). Backed by the ADR-0039 assignment
+   * indexes; a single batched query (no N+1 per assignment).
+   */
+  loadLevellingResources(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ScheduleResourceRow[]> {
+    return db.resource.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        assignments: { some: { deletedAt: null, activity: { planId, deletedAt: null } } },
+      },
+      select: { id: true, maxUnitsPerHour: true, calendarId: true },
+    });
+  }
+
+  /**
+   * The driving resource calendar for each `RESOURCE_DEPENDENT` activity in a plan (M7.2, ADR-0035
+   * §23 / ADR-0039). Returns one row per activity that has an **active** driving assignment to an
+   * **active** resource (the DB partial-unique guarantees ≤1 driver, so at most one row per activity);
+   * `resourceCalendarId` is the driving resource's own calendar, or null when it inherits. An activity
+   * with no active driving assignment is absent — the service reads that as driver-missing (§23
+   * produce-and-flag) and falls back to the activity's own calendar. Backed by
+   * `uq_resource_assignments_activity_driving` + `idx_resources_calendar_id`.
+   */
+  async loadDrivingResourceCalendars(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Array<{ activityId: string; resourceCalendarId: string | null }>> {
+    const rows = await db.resourceAssignment.findMany({
+      where: {
+        organizationId,
+        isDriving: true,
+        deletedAt: null,
+        activity: { planId, deletedAt: null, type: 'RESOURCE_DEPENDENT' },
+        resource: { deletedAt: null },
+      },
+      select: { activityId: true, resource: { select: { calendarId: true } } },
+    });
+    return rows.map((r) => ({
+      activityId: r.activityId,
+      resourceCalendarId: r.resource.calendarId,
+    }));
   }
 
   /**
@@ -143,6 +245,12 @@ export class ScheduleRepository {
         near_critical_count: bigint;
         constraint_violation_count: bigint;
         constraint_warning_count: bigint;
+        loe_no_span_count: bigint;
+        resource_driver_missing_count: bigint;
+        leveled_activity_count: bigint;
+        leveling_window_exceeded_count: bigint;
+        self_over_allocated_count: bigint;
+        leveled_project_finish: string | null;
         project_finish: string | null;
       }>
     >`
@@ -158,6 +266,26 @@ export class ScheduleRepository {
           WHERE constraint_type = 'SNET'
             AND constraint_date < (SELECT planned_start FROM plans WHERE id = ${planId}::uuid)
         ) AS constraint_warning_count,
+        -- LOE no-span produce-and-flag (N12, ADR-0035 §21): the engine-written flag, read back like
+        -- constraint_violated, aggregated over the same plan-scoped active set.
+        COUNT(*) FILTER (WHERE loe_no_span) AS loe_no_span_count,
+        -- Resource-dependent driver-missing produce-and-flag (ADR-0035 §23 / ADR-0039): the
+        -- engine-written flag, read back like loe_no_span over the same plan-scoped active set.
+        COUNT(*) FILTER (WHERE resource_driver_missing) AS resource_driver_missing_count,
+        -- Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): read back from the engine-owned leveled
+        -- columns, aggregated like the produce-and-flag counts above. A plan that does not level has
+        -- every leveled column null/false ⇒ these are 0 and the leveled finish is null (the parity path).
+        COUNT(*) FILTER (WHERE leveling_delay_minutes > 0) AS leveled_activity_count,
+        COUNT(*) FILTER (WHERE leveling_window_exceeded) AS leveling_window_exceeded_count,
+        COUNT(*) FILTER (WHERE self_over_allocated) AS self_over_allocated_count,
+        -- The leveled project finish is the latest finish under levelling (a participant's leveled
+        -- finish, else its network early finish). Null unless at least one activity carries a leveled
+        -- overlay, so a non-levelled plan reports null (distinct from the pure-network project_finish).
+        CASE
+          WHEN COUNT(*) FILTER (WHERE leveled_finish IS NOT NULL) > 0
+          THEN to_char(MAX(COALESCE(leveled_finish, early_finish)), 'YYYY-MM-DD')
+          ELSE NULL
+        END AS leveled_project_finish,
         to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
       FROM activities
       WHERE plan_id = ${planId}::uuid
@@ -171,6 +299,12 @@ export class ScheduleRepository {
       nearCriticalCount: Number(row.near_critical_count),
       constraintViolationCount: Number(row.constraint_violation_count),
       constraintWarningCount: Number(row.constraint_warning_count),
+      loeNoSpanCount: Number(row.loe_no_span_count),
+      resourceDriverMissingCount: Number(row.resource_driver_missing_count),
+      leveledActivityCount: Number(row.leveled_activity_count),
+      levelingWindowExceededCount: Number(row.leveling_window_exceeded_count),
+      selfOverAllocatedCount: Number(row.self_over_allocated_count),
+      leveledProjectFinish: row.leveled_project_finish,
       projectFinish: row.project_finish,
     };
   }
@@ -234,7 +368,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the thirteen engine
+   * id can never write across a plan or tenant). Sets only the nineteen engine
    * columns; a no-op for an empty result set.
    */
   async writeResults(
@@ -259,6 +393,10 @@ export class ScheduleRepository {
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
     const constraintViolated = results.map((r) => r.constraintViolated);
+    // LOE no-span produce-and-flag (N12, ADR-0035 §21) — engine-owned like constraint_violated.
+    const loeNoSpan = results.map((r) => r.loeNoSpan);
+    // Resource-dependent driver-missing produce-and-flag (ADR-0035 §23 / ADR-0039) — engine-owned.
+    const resourceDriverMissing = results.map((r) => r.resourceDriverMissing);
     // Effective-Visual outputs (ADR-0033) — written by the same batch as the CPM columns, so they
     // stay engine-owned and out of the version/updated_at optimistic-lock path.
     const visualEffectiveStart = results.map((r) => r.visualEffectiveStart);
@@ -267,6 +405,23 @@ export class ScheduleRepository {
     const visualDriftDays = results.map((r) =>
       r.visualDriftMinutes === null ? null : Math.round(r.visualDriftMinutes / MINUTES_PER_DAY),
     );
+    // Resource-levelling overlay (ADR-0041 §3/§7) — engine-owned, written by this same batch so it
+    // stays out of the version/updated_at optimistic-lock path. Null/false on every activity when
+    // levelling is off (the pass never ran), which also CLEARS a stale overlay from a prior run.
+    // `leveling_delay_minutes` is stored in WORKING MINUTES (day-denominated only at the API boundary).
+    // On the parity path (levelling off) every activity's leveled date is null, so these are ALL-NULL
+    // arrays. Prisma serializes an all-null array with no element-type hint, which Postgres infers as
+    // `integer[]` — and `integer[] → date[]` is an illegal cast. Casting through `text[]` first
+    // (`::text[]::date[]` at the unnest) makes the empty/all-null case resolve to `date[]`; a populated
+    // array is already text[] there, so the extra cast is a no-op. (The CPM date columns above never hit
+    // this because the engine always writes real dates for them.)
+    const leveledStart = results.map((r) => r.leveledStart ?? null);
+    const leveledFinish = results.map((r) => r.leveledFinish ?? null);
+    const levelingDelayMinutes = results.map((r) =>
+      r.leveledStart == null ? null : (r.levelingDelay ?? 0),
+    );
+    const levelingWindowExceeded = results.map((r) => r.levelingWindowExceeded ?? false);
+    const selfOverAllocated = results.map((r) => r.selfOverAllocated ?? false);
 
     const updated = await db.$executeRaw`
       UPDATE activities AS a
@@ -280,10 +435,17 @@ export class ScheduleRepository {
         is_critical = v.is_critical,
         is_near_critical = v.is_near_critical,
         constraint_violated = v.constraint_violated,
+        loe_no_span = v.loe_no_span,
+        resource_driver_missing = v.resource_driver_missing,
         visual_effective_start = v.visual_effective_start,
         visual_effective_finish = v.visual_effective_finish,
         visual_conflict = v.visual_conflict,
-        visual_drift_days = v.visual_drift_days
+        visual_drift_days = v.visual_drift_days,
+        leveled_start = v.leveled_start,
+        leveled_finish = v.leveled_finish,
+        leveling_delay_minutes = v.leveling_delay_minutes,
+        leveling_window_exceeded = v.leveling_window_exceeded,
+        self_over_allocated = v.self_over_allocated
       FROM unnest(
         ${ids}::uuid[],
         ${earlyStart}::date[],
@@ -295,14 +457,23 @@ export class ScheduleRepository {
         ${isCritical}::boolean[],
         ${isNearCritical}::boolean[],
         ${constraintViolated}::boolean[],
+        ${loeNoSpan}::boolean[],
+        ${resourceDriverMissing}::boolean[],
         ${visualEffectiveStart}::date[],
         ${visualEffectiveFinish}::date[],
         ${visualConflict}::boolean[],
-        ${visualDriftDays}::int[]
+        ${visualDriftDays}::int[],
+        ${leveledStart}::text[]::date[],
+        ${leveledFinish}::text[]::date[],
+        ${levelingDelayMinutes}::int[],
+        ${levelingWindowExceeded}::boolean[],
+        ${selfOverAllocated}::boolean[]
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
-        visual_effective_start, visual_effective_finish, visual_conflict, visual_drift_days
+        loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
+        visual_conflict, visual_drift_days, leveled_start, leveled_finish,
+        leveling_delay_minutes, leveling_window_exceeded, self_over_allocated
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid

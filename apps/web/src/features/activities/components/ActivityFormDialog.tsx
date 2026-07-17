@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  DURATION_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
   isParkedConstraintType,
   type ActivitySummary,
@@ -10,12 +11,13 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import {
-  ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
+  DURATION_TYPE_LABELS,
   INHERIT_CALENDAR_LABEL,
   activityFormSchema,
-  isMilestoneType,
+  isDurationDerivedType,
+  selectableActivityTypes,
   type ActivityFormValues,
 } from '../schemas/activity-schemas';
 
@@ -25,7 +27,12 @@ import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField, FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { ACTIVITY_CALENDAR_ENABLED, ADVANCED_CONSTRAINTS_ENABLED } from '@/config/env';
+import {
+  ACTIVITY_CALENDAR_ENABLED,
+  ADVANCED_ACTIVITY_TYPES_ENABLED,
+  ADVANCED_CONSTRAINTS_ENABLED,
+  DURATION_TYPES_ENABLED,
+} from '@/config/env';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
 /**
@@ -49,6 +56,9 @@ export function ActivityFormDialog({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
+  planActivities = [],
+  planActivitiesLoading = false,
+  planActivitiesError = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -61,12 +71,30 @@ export function ActivityFormDialog({
   calendarsLoading?: boolean;
   /** The calendars list failed to load — surface it rather than silently offering only "inherit". */
   calendarsError?: boolean;
+  /**
+   * The plan's activities — the pool the WBS-nesting picker draws valid parents from (the summaries
+   * within it, ADR-0038, F8). The **unfiltered** list: the dialog derives the summaries (and excludes
+   * the activity being edited — it can't parent itself, and the API rejects it too). Route-composed
+   * like {@link calendars} (reusing the plan's warm activities query), so the dialog stays a pure
+   * presentation component. Only consulted when the WBS surface (`VITE_ADVANCED_ACTIVITY_TYPES`) is on.
+   */
+  planActivities?: ActivitySummary[];
+  /** The plan activities are still loading (the parent options aren't complete yet). */
+  planActivitiesLoading?: boolean;
+  /** The plan activities failed to load — surface it rather than reading as a confirmed "no summaries". */
+  planActivitiesError?: boolean;
 }): React.ReactElement {
   const isEdit = activity !== undefined;
   const create = useCreateActivity(orgSlug, planId);
   const update = useUpdateActivity(orgSlug, planId);
   const mutation = isEdit ? update : create;
   const announce = useAnnounce();
+
+  // The valid WBS parents: the plan's summaries minus the activity being edited (no self-parent; the
+  // API rejects it too), derived from the unfiltered plan-activities pool.
+  const parentOptions = planActivities.filter(
+    (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
+  );
 
   const {
     register,
@@ -80,6 +108,7 @@ export function ActivityFormDialog({
       name: '',
       code: '',
       type: 'TASK',
+      durationType: 'FIXED_DURATION_AND_UNITS_TIME',
       durationDays: 1,
       constraintType: '',
       constraintDate: '',
@@ -88,6 +117,7 @@ export function ActivityFormDialog({
       scheduleAsLateAsPossible: false,
       expectedFinish: '',
       calendarId: '',
+      parentId: '',
       description: '',
     },
   });
@@ -98,6 +128,9 @@ export function ActivityFormDialog({
         name: activity?.name ?? '',
         code: activity?.code ?? '',
         type: activity?.type ?? 'TASK',
+        // Always seed from the row so a stored value round-trips even when the picker is hidden
+        // (flag off) — an edit then never silently resets the duration type. Defaults to the API default.
+        durationType: activity?.durationType ?? 'FIXED_DURATION_AND_UNITS_TIME',
         durationDays: activity?.durationDays ?? 1,
         constraintType: activity?.constraintType ?? '',
         constraintDate: activity?.constraintDate ?? '',
@@ -110,6 +143,9 @@ export function ActivityFormDialog({
         // Always seed from the row so the value round-trips even when the picker is hidden
         // (flag off) — an edit then never silently clears an assigned calendar. '' = inherit.
         calendarId: activity?.calendarId ?? '',
+        // Seeded from the row so a stored WBS parent round-trips even with the picker hidden
+        // (flag off) — an edit then never silently un-nests the activity. '' = top-level.
+        parentId: activity?.parentId ?? '',
         description: activity?.description ?? '',
       });
       mutation.reset();
@@ -121,6 +157,11 @@ export function ActivityFormDialog({
   const constraintType = useWatch({ control, name: 'constraintType' });
   const secondaryConstraintType = useWatch({ control, name: 'secondaryConstraintType' });
   const calendarId = useWatch({ control, name: 'calendarId' });
+  const parentId = useWatch({ control, name: 'parentId' });
+  // A seeded parent that isn't in the fetched summary list (still loading, or the parent was itself
+  // deleted/changed): keep it visible as an honest one-off option so opening the form never silently
+  // un-nests the activity — the same honest-selector pattern as the calendar picker.
+  const missingParent = Boolean(parentId) && !parentOptions.some((p) => p.id === parentId);
   // A seeded non-inherit value that doesn't match any option (the list is still loading, or failed
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
@@ -191,7 +232,7 @@ export function ActivityFormDialog({
             aria-describedby={errors.type ? 'activity-type-error' : undefined}
             {...register('type')}
           >
-            {ACTIVITY_TYPES.map((value) => (
+            {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
               <option key={value} value={value}>
                 {ACTIVITY_TYPE_LABELS[value]}
               </option>
@@ -203,7 +244,22 @@ export function ActivityFormDialog({
             </p>
           ) : null}
         </div>
-        {isMilestoneType(type) ? null : (
+        {isDurationDerivedType(type) ? (
+          type === 'LEVEL_OF_EFFORT' ? (
+            <p className="text-muted-foreground text-sm">
+              A level-of-effort activity’s duration is derived from its span — the start of its
+              earliest start-to-start predecessor to the finish of its latest finish-to-finish
+              successor. Add those links, then Recalculate.
+            </p>
+          ) : type === 'WBS_SUMMARY' ? (
+            <p className="text-muted-foreground text-sm">
+              A WBS summary’s dates roll up from the activities grouped under it — the earliest
+              start to the latest finish of its branch. It carries no logic of its own (no
+              dependencies). To fill it, open each activity in the branch and set its WBS summary to
+              this one, then Recalculate.
+            </p>
+          ) : null
+        ) : (
           <TextField
             label="Duration (working days)"
             type="number"
@@ -212,6 +268,82 @@ export function ActivityFormDialog({
             {...register('durationDays', { valueAsNumber: true })}
           />
         )}
+        {/* Duration type governs the resource-units triad (ADR-0040), so it is meaningless for a type
+            with no entered duration/units (a milestone, LOE or WBS summary) — hidden for those, mirroring
+            the Duration field. */}
+        {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="activity-duration-type">Duration type</Label>
+            <Select
+              id="activity-duration-type"
+              aria-describedby="activity-duration-type-help"
+              {...register('durationType')}
+            >
+              {DURATION_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {DURATION_TYPE_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+            <p id="activity-duration-type-help" className="text-muted-foreground text-sm">
+              Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or
+              units/time recomputes the others so units = duration × units/time stays true — e.g. a
+              crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or
+              “Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s
+              duration; with the two fixed-duration types, editing the duration here also updates
+              the driving resource’s units or rate.
+            </p>
+          </div>
+        ) : null}
+        {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="activity-parent">WBS summary (optional)</Label>
+            <Select
+              id="activity-parent"
+              disabled={planActivitiesLoading}
+              aria-busy={planActivitiesLoading}
+              aria-invalid={planActivitiesError ? true : undefined}
+              aria-describedby={
+                planActivitiesError
+                  ? 'activity-parent-help activity-parent-error'
+                  : 'activity-parent-help'
+              }
+              {...register('parentId')}
+            >
+              <option value="">None (top-level)</option>
+              {/* A seeded parent not in the list stays selected under an honest label so the form
+                  never silently un-nests the activity (never blank, which reads as "top-level"). */}
+              {missingParent ? (
+                <option value={parentId}>
+                  {planActivitiesLoading ? 'Loading…' : 'Unavailable'}
+                </option>
+              ) : null}
+              {parentOptions.map((summary) => (
+                <option key={summary.id} value={summary.id}>
+                  {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
+                </option>
+              ))}
+            </Select>
+            {/* Primary help is invariant to loading (mirrors the calendar picker), so it never
+                asserts a false state while the plan activities are still resolving. The
+                "no summaries yet" guidance is a distinct, appended clause shown only once the list
+                has resolved empty — not conflated with loading or a load failure. */}
+            <p id="activity-parent-help" className="text-muted-foreground text-sm">
+              Groups this activity under a WBS summary, whose dates roll up from its members.
+              {!planActivitiesLoading &&
+              !planActivitiesError &&
+              parentOptions.length === 0 &&
+              !missingParent
+                ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
+                : ''}
+            </p>
+            {planActivitiesError ? (
+              <p id="activity-parent-error" role="alert" className="text-destructive-text text-sm">
+                Couldn’t load the plan’s activities, so no WBS summaries are available to choose.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {ACTIVITY_CALENDAR_ENABLED ? (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="activity-calendar">Calendar (optional)</Label>
@@ -361,9 +493,10 @@ export function ActivityFormDialog({
               hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
               {...register('scheduleAsLateAsPossible')}
             />
-            {/* Expected finish sizes work to a target finish, so it's meaningless for a milestone
-                (a point in time, 0 duration) — hidden for those types, mirroring the Duration field. */}
-            {isMilestoneType(type) ? null : (
+            {/* Expected finish sizes work to a target finish, so it's meaningless for a type whose
+                duration isn't entered — a milestone (a point in time) or a level-of-effort (span-
+                derived) — hidden for those, mirroring the Duration field. */}
+            {isDurationDerivedType(type) ? null : (
               <TextField
                 label="Expected finish (optional)"
                 type="date"

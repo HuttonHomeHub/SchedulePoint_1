@@ -25,4 +25,10 @@ interface ImportMetaEnv {
   readonly VITE_ADVANCED_CONSTRAINTS?: string;
   /** Float & critical plan settings — critical definition/total-float measure/open-ends toggle (ADR-0035, M6). "true"/"1" enables it; off by default. */
   readonly VITE_FLOAT_CRITICAL_SETTINGS?: string;
+  /** Advanced activity types — the Level-of-Effort (later WBS-summary) option in the Type picker (ADR-0035 §21/§24, M5-epic). "true"/"1" enables it; off by default. */
+  readonly VITE_ADVANCED_ACTIVITY_TYPES?: string;
+  /** Web resource surface — library screen + per-activity assignments (M7.1, ADR-0039). "true"/"1" enables it; off by default. */
+  readonly VITE_RESOURCES?: string;
+  /** Duration types & the resource-units triad — the activity duration-type picker + the driving assignment's units/time rate (M7 rung 4, ADR-0040). "true"/"1" enables it; off by default. */
+  readonly VITE_DURATION_TYPES?: string;
 }

@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { RESOURCES_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { OrgSwitcher } from '@/features/organizations';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
@@ -76,6 +77,11 @@ export function AppHeader(): React.ReactElement {
             <Link to="/orgs/$orgSlug/calendars" params={{ orgSlug }} className={NAV_LINK_CLASS}>
               Calendars
             </Link>
+            {RESOURCES_ENABLED ? (
+              <Link to="/orgs/$orgSlug/resources" params={{ orgSlug }} className={NAV_LINK_CLASS}>
+                Resources
+              </Link>
+            ) : null}
             <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
               Members
             </Link>

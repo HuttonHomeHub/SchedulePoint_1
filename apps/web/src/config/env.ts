@@ -208,15 +208,62 @@ export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
 );
 
 /**
- * Float & critical plan settings (ADR-0035 §17/§18/§20, M6). **OFF by default** — a new surface whose
- * picker ships dark on `main` and is turned on per-environment during rollout, then flipped default-on
- * once its quality gates clear. When on, the plan settings gain three controls: a **critical-path
- * definition** (Total float / Longest path), a **total-float measure** (Finish / Start / Smallest), and
- * a **make-open-ends-critical** toggle. Everything behind it — the settable API fields, the engine's
- * float & critical computation, and the conformance proof (S07/S08/S11/S13) — is already live; the flag
- * only governs whether a planner can *edit and see* the three options in the web UI. Set
- * `VITE_FLOAT_CRITICAL_SETTINGS=true` to enable.
+ * Float & critical plan settings (ADR-0035 §17/§18/§20, M6). **ON by default** now that its quality
+ * gates have cleared (component/ux/a11y reviews folded in during M6-F7) — the picker is a plan-settings
+ * card built on the same reviewed primitives as the other plan settings. When on, the plan settings gain
+ * three controls: a **critical-path definition** (Total float / Longest path), a **total-float measure**
+ * (Finish / Start / Smallest), and a **make-open-ends-critical** toggle. Everything behind it — the
+ * settable API fields, the engine's float & critical computation, and the conformance proof
+ * (S07/S08/S11/S13) — is already live; the flag only governs whether a planner can *edit and see* the
+ * three options in the web UI. Set `VITE_FLOAT_CRITICAL_SETTINGS=false` to hide them (rollback / opt-out).
  */
-export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOff(
+export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_FLOAT_CRITICAL_SETTINGS,
 );
+
+/**
+ * Advanced activity types (ADR-0035 §21/§24, M5-epic). **ON by default** now that its quality gates have
+ * cleared — the LOE (F4) and WBS (F8) web surfaces went through the component/ux/a11y reviews (F8's
+ * blocking copy/state findings folded in). Gates whether the activity form's Type picker offers
+ * **Level of Effort** (a span-derived hammock: duration from its SS-predecessor start to its
+ * FF-successor finish, never driving or critical) and **WBS summary** (a branch roll-up: dates from the
+ * earliest start / latest finish of the activities grouped under it, carrying no logic), plus the WBS
+ * **parent** picker that nests activities under a summary. The engine, API and conformance proof for both
+ * are live (F1–F7); the flag only governs whether a planner can *pick* them. Set
+ * `VITE_ADVANCED_ACTIVITY_TYPES=false` to hide them (rollback / opt-out). The deferred canvas summary/LOE
+ * span-bars and navigator visual nesting (TECH_DEBT #37) are independent of this picker.
+ */
+export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
+  import.meta.env.VITE_ADVANCED_ACTIVITY_TYPES,
+);
+
+/**
+ * Web resource surface (M7.1, ADR-0039). **OFF by default** — a brand-new dark surface whose quality
+ * gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and is
+ * turned on per-environment during rollout, then flipped default-on once cleared (the pattern
+ * `VITE_NAV_TREE` / `VITE_TSLD_EDITING` each began with). When on, the app gains an org-scoped
+ * **Resources** library screen (list/create/edit/delete resources) reachable from the top nav, and a
+ * per-activity **Resources** row action that opens an assignment editor (assign/edit/unassign, with a
+ * driving-resource toggle that a MATERIAL resource can never take — ADR-0039 `MATERIAL_CANNOT_DRIVE`).
+ * Everything behind it — the resource library + assignment API and the driving-resource-calendar
+ * engine wiring — is already live; the flag only governs whether the web UI exposes it. Set
+ * `VITE_RESOURCES=true` to enable it in an environment.
+ */
+export const RESOURCES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCES);
+
+/**
+ * Duration types & the resource-units triad (M7 rung 4, ADR-0040). **OFF by default** — a new dark
+ * surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden
+ * on `main` and is turned on per-environment during rollout, then flipped default-on once cleared (the
+ * `VITE_RESOURCES` / `VITE_NAV_TREE` pattern). When on, the activity form gains a **duration type**
+ * picker (Fixed Duration & Units/Time (default) / Fixed Duration & Units / Fixed Units / Fixed
+ * Units/Time) and — inside the per-activity resource assignment editor (itself behind
+ * {@link RESOURCES_ENABLED}) — a **units/time (rate)** field on the driving assignment, with a live
+ * preview of the duration the server will derive for a units-driven type. Everything behind it — the
+ * settable `durationType` / `unitsPerHour` fields, the write-boundary `resolveTriad` recompute, and the
+ * conformance proof — is already live; the flag only governs whether the web UI exposes it. The rate
+ * field is meaningful only alongside the resource surface, so it appears only when BOTH this flag and
+ * {@link RESOURCES_ENABLED} are on; the duration-type picker (a plain activity attribute) needs only
+ * this flag. Set `VITE_DURATION_TYPES=true` to enable it in an environment.
+ */
+export const DURATION_TYPES_ENABLED = flagDefaultOff(import.meta.env.VITE_DURATION_TYPES);

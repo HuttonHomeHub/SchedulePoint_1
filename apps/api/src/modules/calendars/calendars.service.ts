@@ -9,6 +9,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '../../common/error
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { ResourceRepository } from '../resources/resource.repository';
 
 import {
   CalendarRepository,
@@ -46,6 +47,7 @@ export class CalendarsService {
   constructor(
     private readonly organizations: OrganizationsService,
     private readonly calendars: CalendarRepository,
+    private readonly resources: ResourceRepository,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(CalendarsService.name) private readonly logger: PinoLogger,
   ) {}
@@ -165,18 +167,21 @@ export class CalendarsService {
     // delete (no TOCTOU dangling reference).
     await this.prisma.$transaction(async (tx) => {
       await acquireCalendarWriteLock(tx, calendarId);
-      // In-use = active plans OR active activities that reference this calendar (ADR-0037, M5).
-      const [planCount, activityCount] = await Promise.all([
+      // In-use = active plans OR active activities OR active resources that reference this
+      // calendar (ADR-0037 M5 + ADR-0039 M7 — a resource is the third referencer).
+      const [planCount, activityCount, resourceCount] = await Promise.all([
         this.calendars.countActivePlansUsing(calendarId, tx),
         this.calendars.countActiveActivitiesUsing(calendarId, tx),
+        this.resources.countActiveResourcesUsingCalendar(calendarId, tx),
       ]);
-      const inUse = planCount + activityCount;
+      const inUse = planCount + activityCount + resourceCount;
       if (inUse > 0) {
-        throw new ConflictError(this.inUseMessage(planCount, activityCount), {
+        throw new ConflictError(this.inUseMessage(planCount, activityCount, resourceCount), {
           reason: CALENDAR_CONFLICT.CALENDAR_IN_USE,
           count: inUse,
           plans: planCount,
           activities: activityCount,
+          resources: resourceCount,
         });
       }
       await this.calendars.softDeleteWithExceptions(calendarId, principal.userId, tx);
@@ -299,11 +304,12 @@ export class CalendarsService {
     });
   }
 
-  /** A human count of what still references a calendar, unioning plans + activities (ADR-0037). */
-  private inUseMessage(plans: number, activities: number): string {
+  /** A human count of what still references a calendar, unioning plans + activities + resources (ADR-0037/0039). */
+  private inUseMessage(plans: number, activities: number, resources: number): string {
     const parts: string[] = [];
     if (plans > 0) parts.push(`${plans} active plan${plans === 1 ? '' : 's'}`);
     if (activities > 0) parts.push(`${activities} active activit${activities === 1 ? 'y' : 'ies'}`);
+    if (resources > 0) parts.push(`${resources} active resource${resources === 1 ? '' : 's'}`);
     return `This calendar is in use by ${parts.join(' and ')}.`;
   }
 

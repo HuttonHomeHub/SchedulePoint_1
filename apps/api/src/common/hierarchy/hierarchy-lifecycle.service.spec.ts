@@ -141,10 +141,17 @@ describe('HierarchyLifecycleService', () => {
     });
 
     it('deletes an activity alone as a leaf (no descendants)', async () => {
+      // A leaf has no `parent_id` children, so the subtree resolves to just itself.
+      tx.activity.findMany.mockResolvedValue([]);
       tx.activity.updateMany.mockResolvedValue({ count: 1 });
       const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      // The subtree walk queries children by parent_id, then finds none.
+      expect(tx.activity.findMany).toHaveBeenCalledWith({
+        where: { parentId: { in: ['a1'] }, deletedAt: null },
+        select: { id: true },
+      });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
-        where: { id: 'a1', deletedAt: null },
+        where: { id: { in: ['a1'] }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
       expect(result.counts).toEqual({
@@ -158,14 +165,50 @@ describe('HierarchyLifecycleService', () => {
     });
 
     it("also soft-deletes an activity's incident links (both directions) in its batch", async () => {
+      tx.activity.findMany.mockResolvedValue([]);
       tx.activity.updateMany.mockResolvedValue({ count: 1 });
       tx.activityDependency.updateMany.mockResolvedValue({ count: 2 });
       const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
       expect(result.counts.dependencies).toBe(2);
       expect(tx.activityDependency.updateMany).toHaveBeenCalledWith({
-        where: { deletedAt: null, OR: [{ predecessorId: 'a1' }, { successorId: 'a1' }] },
+        where: {
+          deletedAt: null,
+          OR: [{ predecessorId: { in: ['a1'] } }, { successorId: { in: ['a1'] } }],
+        },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
+    });
+
+    it('cascades a WBS summary to its whole parent_id subtree in one batch (ADR-0038)', async () => {
+      // W1 (summary) parents A1 + A2; A1 in turn parents A1a — a two-level subtree.
+      // The BFS resolves { W1 } → children { A1, A2 } → children of those { A1a } → none.
+      tx.activity.findMany
+        .mockResolvedValueOnce([{ id: 'A1' }, { id: 'A2' }])
+        .mockResolvedValueOnce([{ id: 'A1a' }])
+        .mockResolvedValueOnce([]);
+      tx.activity.updateMany.mockResolvedValue({ count: 4 });
+      tx.activityDependency.updateMany.mockResolvedValue({ count: 3 });
+
+      const result = await service.cascadeSoftDelete(asTx(), 'activity', 'W1', ACTOR);
+
+      // Every activity in the subtree is stamped with the one batch id.
+      expect(tx.activity.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['W1', 'A1', 'A2', 'A1a'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+      // Links incident to ANY subtree member (the summary carries none, its descendants do).
+      expect(tx.activityDependency.updateMany).toHaveBeenCalledWith({
+        where: {
+          deletedAt: null,
+          OR: [
+            { predecessorId: { in: ['W1', 'A1', 'A2', 'A1a'] } },
+            { successorId: { in: ['W1', 'A1', 'A2', 'A1a'] } },
+          ],
+        },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+      expect(result.counts.activities).toBe(4);
+      expect(result.counts.dependencies).toBe(3);
     });
 
     it("sweeps a plan's contained links into the batch when the plan is deleted", async () => {
@@ -297,6 +340,37 @@ describe('HierarchyLifecycleService', () => {
     it('rejects restoring an activity whose plan is still deleted (PARENT_DELETED)', async () => {
       tx.activity.findFirst.mockResolvedValue({ deleteBatchId: 'batch-a', planId: 'pl1' });
       tx.plan.findFirst.mockResolvedValue(null); // parent plan deleted
+
+      const error = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR).catch((e) => e);
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).details).toEqual({
+        reason: HIERARCHY_CONFLICT.PARENT_DELETED,
+      });
+      expect(tx.activity.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('restores an activity whose plan AND WBS-summary parent are both active', async () => {
+      // loadDeletedRoot reads the row (with its WBS parentId); then the plan check and the
+      // summary check both run — the summary findFirst is the SECOND activity.findFirst call.
+      tx.activity.findFirst
+        .mockResolvedValueOnce({ deleteBatchId: 'batch-a', planId: 'pl1', parentId: 'W1' })
+        .mockResolvedValueOnce({ id: 'W1' }); // summary parent active
+      tx.plan.findFirst.mockResolvedValue({ id: 'pl1' });
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+
+      const counts = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR);
+
+      expect(counts.activities).toBe(1);
+      expect(tx.activity.findFirst).toHaveBeenLastCalledWith({
+        where: { id: 'W1', deletedAt: null },
+      });
+    });
+
+    it('rejects restoring a child whose WBS-summary parent is still deleted (PARENT_DELETED)', async () => {
+      tx.activity.findFirst
+        .mockResolvedValueOnce({ deleteBatchId: 'batch-a', planId: 'pl1', parentId: 'W1' })
+        .mockResolvedValueOnce(null); // summary parent still deleted
+      tx.plan.findFirst.mockResolvedValue({ id: 'pl1' }); // plan is active…
 
       const error = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR).catch((e) => e);
       expect(error).toBeInstanceOf(ConflictError);

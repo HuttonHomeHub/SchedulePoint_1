@@ -15,14 +15,18 @@ export {
   type WeeklyPattern,
 } from './working-time-calendar';
 export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
+export { levelSchedule } from './level';
 export { computeFloatPaths, type FloatPath } from './float-paths';
 export type { ProgressMode, ProgressStatus } from './progress';
 export { buildGraph, type ScheduleGraph } from './graph';
 export { ScheduleGraphNotADagError, UnknownActivityError } from './errors';
 export type {
   EngineActivity,
+  EngineAssignment,
   EngineEdge,
   EngineEdgeResult,
+  EngineResource,
   EngineResult,
   EngineSummary,
+  LevelingOptions,
 } from './types';

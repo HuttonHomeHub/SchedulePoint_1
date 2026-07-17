@@ -58,6 +58,21 @@ export const calendarKeys = {
     [...calendarKeys.all(orgSlug), 'detail', calendarId] as const,
 };
 
+export const resourceKeys = {
+  all: (orgSlug: string) => ['resources', orgSlug] as const,
+  list: (orgSlug: string) => [...resourceKeys.all(orgSlug), 'list'] as const,
+  detail: (orgSlug: string, resourceId: string) =>
+    [...resourceKeys.all(orgSlug), 'detail', resourceId] as const,
+};
+
+export const assignmentKeys = {
+  all: (orgSlug: string) => ['assignments', orgSlug] as const,
+  // Keyed by the activity the assignments hang off — assign / edit / unassign all
+  // invalidate the one activity's list (ADR-0039).
+  listByActivity: (orgSlug: string, activityId: string) =>
+    [...assignmentKeys.all(orgSlug), 'activity', activityId] as const,
+};
+
 export const scheduleKeys = {
   all: (orgSlug: string) => ['schedule', orgSlug] as const,
   summary: (orgSlug: string, planId: string) =>

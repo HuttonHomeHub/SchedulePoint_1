@@ -48,6 +48,21 @@ complete activity — `COMPLETE_WITHOUT_FINISH` (finish set to the data date) or
 `REMAINING_ON_COMPLETE` (remaining forced to zero) — per ADR-0035 §6. An
 ordinary write omits `meta` entirely.
 
+### Cross-resource recompute (a write that mutates a sibling)
+
+A few writes deterministically mutate a **second** resource in the same
+transaction to keep a shared invariant true; the response body is still the
+addressed resource only. The **duration-type triad** (ADR-0040) is the current
+case: editing an activity's `durationDays` (when it has a driving resource
+assignment with a `unitsPerHour`) recomputes and persists that assignment's
+units/rate, and editing a driving assignment's units/rate (with an `editedField`)
+can recompute and persist the owning activity's duration — each bumping the
+sibling's optimistic-lock `version`. This is documented per-endpoint in the
+OpenAPI `description`, and a client that also holds the sibling should **refetch
+it** (its `version` has moved, or a later unrelated write to it will 409). The
+whole recompute is inert — a plain single-row write — until a driving assignment
+carries a rate, so it never surprises a plan that doesn't use resource units.
+
 ## Errors
 
 A single, predictable error shape (`ApiError` in `@repo/types`):

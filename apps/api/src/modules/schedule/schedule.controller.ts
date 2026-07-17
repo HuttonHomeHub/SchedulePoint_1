@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -15,6 +15,8 @@ import { ApiLockedResponse } from '../../common/decorators/api-locked-response.d
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
+import { FloatPathsQueryDto } from './dto/float-paths-query.dto';
+import { PlanFloatPathsDto } from './dto/plan-float-paths.dto';
 import { PlanScheduleSummaryDto } from './dto/plan-schedule-summary.dto';
 import { ScheduleService } from './schedule.service';
 
@@ -57,5 +59,27 @@ export class ScheduleController {
     @Param('planId', ParseUuidPipe) planId: string,
   ): Promise<PlanScheduleSummaryDto> {
     return PlanScheduleSummaryDto.from(await this.service.summary(principal, orgSlug, planId));
+  }
+
+  @Get('float-paths')
+  @ApiOperation({
+    summary: 'Ranked contiguous float paths into a target activity (any member, ADR-0035 §19).',
+  })
+  @ApiOkResponse({ type: PlanFloatPathsDto })
+  @ApiNotFoundResponse({
+    description: 'Plan not found, or the target activity is not in the plan.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description: 'The plan has no start date (PLAN_START_REQUIRED).',
+  })
+  async floatPaths(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Query() query: FloatPathsQueryDto,
+  ): Promise<PlanFloatPathsDto> {
+    return PlanFloatPathsDto.from(
+      await this.service.floatPaths(principal, orgSlug, planId, query.target, query.maxPaths),
+    );
   }
 }

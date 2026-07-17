@@ -1,5 +1,8 @@
-import type { ActivityType as FixtureActivityType } from '@repo/engine-conformance';
-import type { ActivityType, ConstraintType } from '@repo/types';
+import type {
+  ActivityType as FixtureActivityType,
+  FixtureActivity,
+} from '@repo/engine-conformance';
+import type { ActivityType, ConstraintType, DurationType } from '@repo/types';
 
 /**
  * Pure fixture→engine vocabulary mapping for the conformance harness (ADR-0034).
@@ -21,10 +24,11 @@ import type { ActivityType, ConstraintType } from '@repo/types';
 export type MapResult<T> = { supported: true; value: T } | { supported: false; reason: string };
 
 /**
- * The fixture's P6 activity types that today's day-granular engine can schedule.
- * `RESOURCE_DEPENDENT` (resource-calendar driven, ADR-0035 §23), `LEVEL_OF_EFFORT`
- * (span-derived, §21) and `WBS_SUMMARY` (roll-up, §24) are **not** — they are
- * excluded with a reason until their owning milestone builds them.
+ * The fixture's P6 activity types that today's engine can schedule. `LEVEL_OF_EFFORT` (span-derived,
+ * ADR-0035 §21) and `WBS_SUMMARY` (branch roll-up, §24) are supported (M5-epic F1–F3 / F6–F7).
+ * `RESOURCE_DEPENDENT` (resource-calendar driven, §23) is now supported (M7): the engine treats it
+ * exactly like a `TASK` for logic, and the adapter resolves its driving resource's calendar as its
+ * scheduling calendar (see `adapter.ts`).
  */
 export function mapActivityType(type: FixtureActivityType): MapResult<ActivityType> {
   switch (type) {
@@ -34,22 +38,37 @@ export function mapActivityType(type: FixtureActivityType): MapResult<ActivityTy
       return { supported: true, value: 'START_MILESTONE' };
     case 'FINISH_MILESTONE':
       return { supported: true, value: 'FINISH_MILESTONE' };
-    case 'RESOURCE_DEPENDENT':
-      return {
-        supported: false,
-        reason: 'resource-dependent scheduling is not implemented (ADR-0035 §23, M5)',
-      };
     case 'LEVEL_OF_EFFORT':
-      return {
-        supported: false,
-        reason: 'level-of-effort span derivation is not implemented (ADR-0035 §21, M5)',
-      };
+      // Span-derived hammock (ADR-0035 §21, M5-epic): the engine derives its dates from its SS/FF ties
+      // and excludes it from driving/criticality; a no-span LOE is produced-and-flagged (N12).
+      return { supported: true, value: 'LEVEL_OF_EFFORT' };
     case 'WBS_SUMMARY':
-      return {
-        supported: false,
-        reason: 'WBS-summary roll-up is not implemented (ADR-0035 §24)',
-      };
+      // Branch roll-up (ADR-0035 §24, M5-epic F6–F7): a summary carries no logic and the engine derives
+      // its dates from the earliest start / latest finish over its `parentId` children, excluding it
+      // from driving/criticality/project-finish. The adapter builds the `parentId` tree from `wbs` codes.
+      return { supported: true, value: 'WBS_SUMMARY' };
+    case 'RESOURCE_DEPENDENT':
+      // Resource-calendar driven (ADR-0035 §23 / ADR-0039, M7): identical to a TASK for logic; the
+      // adapter substitutes the driving resource's calendar as its scheduling calendar (or flags it
+      // driver-missing and falls back), so the type itself maps straight through.
+      return { supported: true, value: 'RESOURCE_DEPENDENT' };
   }
+}
+
+/**
+ * The fixture's P6 duration-type vocabulary → SchedulePoint's `DurationType` (M7 rung 4, ADR-0040).
+ * The two enums carry the **same four labels** (`FIXED_DURATION_AND_UNITS_TIME` |
+ * `FIXED_DURATION_AND_UNITS` | `FIXED_UNITS` | `FIXED_UNITS_TIME`), so this is a **1:1 total** map — it
+ * never fails (unlike `mapActivityType`/`mapConstraintType`, every fixture value is representable). The
+ * seam still exists so a future fixture-vs-domain divergence is a typed, single-point change, and so the
+ * adapter reads the fixture's `duration_type` through one named vocabulary boundary.
+ *
+ * Duration types are a **write-boundary** concern (ADR-0040 §3/§6): the engine has no `durationType`
+ * field. This mapper feeds the adapter's optional `resolveTriad` derivation (see `adapter.ts`
+ * `honorDurationTypes`), which resolves a `durationMinutes` — the engine still reads only that.
+ */
+export function mapDurationType(type: FixtureActivity['duration_type']): DurationType {
+  return type;
 }
 
 /**

@@ -109,14 +109,16 @@ keep `main` releasable.
 The remaining clauses of the CPM semantics contract (ADR-0035), each with clear fixture
 discriminators. Each becomes a spec/plan before build:
 
-- **M6 — Float & critical (ADR-0035 §17–§20).** A selectable **Longest-Path** critical
-  definition (vs today's Total-Float ≤ 0), **Total Float as start / finish / smallest**,
-  **multiple float paths** (contiguous driving chains), a **make-open-ends-critical**
-  option, and the **zero-free-float** refinement that completes the as-late-as-possible
-  flag. Engine + a few plan options + web toggles.
-- **M5-epic — Advanced activity types (ADR-0035 §21, §23–§24).** **Level-of-Effort**
-  (duration-from-span, never drives, never critical), **resource-dependent** scheduling
-  (needs a resource model first), and **WBS-summary** rollup.
+- **M6 — Float & critical (ADR-0035 §17–§20).** **Delivered & enabled** (`VITE_FLOAT_CRITICAL_SETTINGS`
+  on by default): a selectable **Longest-Path** critical definition (vs Total-Float ≤ 0), **Total Float
+  as start / finish / smallest**, **multiple float paths** (contiguous driving chains), a
+  **make-open-ends-critical** option, and the **zero-free-float** refinement that completes the
+  as-late-as-possible flag. Engine + plan options + web toggles.
+- **M5-epic — Advanced activity types (ADR-0035 §21, §23–§24).** **Level-of-Effort** (§21) and
+  **WBS-summary** rollup (§24) are **delivered & enabled** (`VITE_ADVANCED_ACTIVITY_TYPES` on by default —
+  engine, API, conformance, and the flagged web type/parent pickers; ADR-0038 for the WBS parent tree).
+  **Still pending: resource-dependent** scheduling (§23) — deferred, needs a resource model first. Canvas
+  summary/LOE span-bars + navigator visual nesting are a deferred visualisation follow-on (TECH_DEBT #37).
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 

@@ -4,30 +4,48 @@ import type {
   FixtureCalendar,
   FixtureRelationship,
 } from '@repo/engine-conformance';
-import type { ConstraintType } from '@repo/types';
+import type { ConstraintType, DurationType, EditedField } from '@repo/types';
 
-import { allMinutesWorkCalendar, buildWorkingTimeCalendar } from '../engine';
+import { resolveTriad } from '../duration-type/resolve-triad';
+import {
+  allMinutesWorkCalendar,
+  buildWorkingTimeCalendar,
+  computeSchedule,
+  levelSchedule,
+} from '../engine';
 import type {
   ComputeOptions,
   EngineActivity,
+  EngineAssignment,
   EngineEdge,
+  EngineOutput,
+  EngineResource,
   ShiftWindow,
   TimeException,
   WeeklyPattern,
   WorkingTimeCalendar,
 } from '../engine';
 
-import { mapActivityType, mapConstraintType, toCalendarDay } from './type-map';
+import { mapActivityType, mapConstraintType, mapDurationType, toCalendarDay } from './type-map';
 
 /**
  * The **differential adapter** (ADR-0034 §7): maps the P6-class conformance
  * fixture onto the inputs today's engine can actually consume, and — the whole
  * point — **reports every place it had to skip or approximate rather than faking a
  * value** (ADR-0034 §2–§3). What the engine still cannot represent
- * (resource-dependent/LOE/summary activities, external relationships) is recorded,
- * not invented. M4 added the advanced constraints — mandatory produce-and-flag,
+ * (external/multi-project relationships) is recorded, not invented — LOE (§21),
+ * WBS-summary (§24) and resource-dependent (§23, M7) activities are now scheduled,
+ * not skipped (a resource activity on its driving resource's calendar). M4
+ * added the advanced constraints — mandatory produce-and-flag,
  * secondary constraints, expected finish and as-late-as-possible — which the
  * adapter now feeds through instead of dropping.
+ *
+ * M7 rung 4 (ADR-0040) adds an optional `honorDurationTypes` pass: for a UNITS-DRIVEN
+ * activity with a driving assignment it resolves `durationMinutes` through the pure
+ * `resolveTriad` (`Units ÷ Units/Time`), the same function the write paths use. On this
+ * fixture the pass is inert (no duration-type activity has a driving assignment; the
+ * durations are self-consistent), so it is proven by first-principles goldens, not a
+ * fixture differential — recorded honestly in `approximations`, never faked.
  *
  * Since M1 (ADR-0036) the engine computes in working-**minutes** over intraday
  * shift calendars, so the adapter now feeds the fixture's **hour** durations/lags
@@ -53,7 +71,10 @@ export interface AdaptationNote {
     | 'endpoint-excluded'
     | 'lag-rounded'
     | 'lag-calendar-dropped'
-    | 'activity-calendar-substituted';
+    | 'activity-calendar-substituted'
+    | 'resource-calendar-substituted'
+    | 'resource-driver-missing'
+    | 'duration-derived';
   reason: string;
 }
 
@@ -73,12 +94,32 @@ export interface AdaptationReport {
   notes: AdaptationNote[];
 }
 
+/**
+ * The resource-**levelling** demand model (ADR-0041 §2), built from the fixture only when
+ * `honorLevelling` is on. `resources` carries each resource's capacity ceiling (`max_units_per_hour`,
+ * NULL = uncapped) + its own resolved calendar port; `assignments` carries every active assignment's
+ * per-hour demand (all assignments consume capacity, not only the driving one). `levelWithinFloatOnly`
+ * threads the plan-level intent for the scenario. Fed to {@link levelSchedule} after
+ * {@link computeSchedule}; absent on the default (parity) adaptation.
+ */
+export interface LevelingModel {
+  resources: EngineResource[];
+  assignments: EngineAssignment[];
+  levelWithinFloatOnly: boolean;
+}
+
 /** The adapted, engine-ready network plus the honesty report. */
 export interface AdaptedNetwork {
   activities: EngineActivity[];
   edges: EngineEdge[];
   options: ComputeOptions;
   report: AdaptationReport;
+  /**
+   * The resource-levelling demand model (ADR-0041), present only when `honorLevelling` is on. When
+   * absent the network levels to byte-identical CPM dates (the parity path); {@link computeLeveledSchedule}
+   * runs the opt-in second pass when it is present.
+   */
+  leveling?: LevelingModel;
 }
 
 export interface AdaptOptions {
@@ -104,6 +145,16 @@ export interface AdaptOptions {
    */
   honorActivityCalendars?: boolean;
   /**
+   * Substitute each `RESOURCE_DEPENDENT` activity's **driving resource's calendar** as its scheduling
+   * calendar (ADR-0035 §23 / ADR-0039, M7). Default **false** — the baseline schedules a resource
+   * activity on its own/plan calendar like any other, so a scenario that flips this on differs for the
+   * resource activities whose driving resource works a distinct calendar. The driving resource is the
+   * assignment tagged `res_driving`; with no driving assignment the activity is flagged
+   * `resourceDriverMissing` and falls back to its activity calendar → plan default. Type-gated: a
+   * non-resource activity never picks up its assigned resource's calendar (the A5500 contrast).
+   */
+  honorResourceCalendars?: boolean;
+  /**
    * The global "calendar for scheduling relationship lag" setting (fixture S05). `SUCCESSOR`/
    * `PREDECESSOR` resolve a relationship's lag on that endpoint activity's calendar (requires
    * per-activity calendars); `PLAN` (default) measures it on the plan calendar. An explicit
@@ -123,9 +174,58 @@ export interface AdaptOptions {
    * (the S12 differential flips it on; the baseline leaves it off). See `ComputeOptions`.
    */
   useExpectedFinishDates?: boolean;
+  /**
+   * Resolve each activity's `durationMinutes` through the pure `resolveTriad` (ADR-0040 / ADR-0035
+   * §26/§27, M7 rung 4) instead of taking the fixture's `original_duration_h × 60` verbatim. Default
+   * **false** (parity). When **true**, a `FIXED_UNITS` / `FIXED_UNITS_TIME` activity that has a
+   * **driving** assignment (`res_driving`) carrying a rate derives its duration from
+   * `Units ÷ Units/Time` (the two units-driven types; the other two hold the duration by construction,
+   * so the flag is a no-op for them). Only the **driving** assignment participates (ADR-0040 §3), and
+   * duration types are a **write-boundary** concern — the engine has no `durationType` field and reads
+   * only the resolved `durationMinutes`.
+   *
+   * **Inert on this fixture (documented, not faked).** None of the fixture's duration-type activities
+   * (A4330/A4430/A7100/A7200 units-driven, A3010/A7400 held) carries a `res_driving` assignment, and
+   * their units/duration/rate are internally self-consistent (e.g. A7100 `FIXED_UNITS` 300 h; its
+   * LAB-PIPE assignment 2 400 u ÷ 8 u/h = 300 h). So deriving reproduces the fixture durations
+   * **byte-for-byte** — the same S13/A8300-style capacity/self-consistency the harness is honest about.
+   * The capability is proven by the first-principles `resolveTriad` goldens (`goldens.ts`) and the
+   * write-path service tests, **not** by a fixture date-differential. Recorded in `approximations`.
+   */
+  honorDurationTypes?: boolean;
+  /**
+   * Build the resource-**levelling** demand model from the fixture and expose it as
+   * {@link AdaptedNetwork.leveling} (ADR-0041, M7). Default **false** = parity: the model is absent and
+   * the network levels to byte-identical CPM dates (the whole existing golden/adapter suite is
+   * unchanged — the parity gate). When **true** the adapter reads each resource's `max_units_per_hour`
+   * as the capacity ceiling (NULL = uncapped) + its own calendar port, and every active assignment's
+   * `units_per_hour` as demand (all assignments consume capacity, ADR-0041 §2). {@link computeLeveledSchedule}
+   * then runs {@link levelSchedule} after {@link computeSchedule} and merges the additive overlay. Only
+   * the S10 differential turns this on; the pure early/late/float layer is never recomputed (Q2).
+   *
+   * **Levelling priority.** The fixture's `leveling_priority` is not carried through the loader schema
+   * (every fixture value is `null`), so the deterministic composite tie-break — total-float asc →
+   * early-start asc → id asc (ADR-0041 §1) — decides serialisation order here. Recorded in `approximations`.
+   */
+  honorLevelling?: boolean;
+  /**
+   * Level within total float only (ADR-0041 §4) — the plan-level intent threaded into
+   * {@link LevelingModel.levelWithinFloatOnly}. Default **false** (P6's off-by-default). Consulted only
+   * when `honorLevelling` is on.
+   */
+  levelWithinFloatOnly?: boolean;
 }
 
 const MINUTES_PER_HOUR = 60;
+/**
+ * The `editedField` whose recompute **derives the duration** for each units-driven type (ADR-0035 §26
+ * truth table): `FIXED_UNITS` derives on a rate edit (`D := U/R`), `FIXED_UNITS_TIME` on a units edit
+ * (`D := U/R`). The two held types are absent — they never auto-derive the duration.
+ */
+const DURATION_DERIVING_EDIT: Partial<Record<DurationType, EditedField>> = {
+  FIXED_UNITS: 'UNITS_PER_HOUR',
+  FIXED_UNITS_TIME: 'UNITS',
+};
 const WEEKDAY_KEYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
 
 /** Normalise a fixture `lag_calendar` string to a `LagCalendarSource`, or null if unmappable. */
@@ -148,10 +248,34 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const dataDate = opts.dataDate ?? toCalendarDay(fixture.project.planned_start);
   const honorLagCalendars = opts.honorLagCalendars ?? true;
   const honorActivityCalendars = opts.honorActivityCalendars ?? false;
+  const honorResourceCalendars = opts.honorResourceCalendars ?? false;
   const honorProgress = opts.honorProgress ?? false;
   const useExpectedFinishDates = opts.useExpectedFinishDates ?? false;
+  const honorDurationTypes = opts.honorDurationTypes ?? false;
+  const honorLevelling = opts.honorLevelling ?? false;
+  const levelWithinFloatOnly = opts.levelWithinFloatOnly ?? false;
   const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
+
+  // Driving-resource calendar + units/rate per activity (ADR-0035 §23 / ADR-0039 / ADR-0040, M7). The
+  // fixture marks the driving assignment with the `res_driving` test tag (the product carries an
+  // explicit `isDriving` flag); resolve it to the resource's own calendar id and capture its units +
+  // rate for the duration-type triad. At most one driver per activity, mirroring the DB partial-unique.
+  // The calendar is only consulted when `honorResourceCalendars` is on; the units/rate only when
+  // `honorDurationTypes` is on.
+  const resourceCalById = new Map(fixture.resources.map((r) => [r.id, r.calendar]));
+  const drivingResourceCalByActivity = new Map<string, string>();
+  const drivingUnitsByActivity = new Map<string, { budgetedUnits: number; unitsPerHour: number }>();
+  for (const asg of fixture.assignments) {
+    if (!asg.test_tags.includes('res_driving')) continue;
+    const resourceCalendarId = resourceCalById.get(asg.resource);
+    if (resourceCalendarId !== undefined)
+      drivingResourceCalByActivity.set(asg.activity, resourceCalendarId);
+    drivingUnitsByActivity.set(asg.activity, {
+      budgetedUnits: asg.budgeted_units,
+      unitsPerHour: asg.units_per_hour,
+    });
+  }
 
   const defaultCalendarId = fixture.project.default_calendar;
   // Build every fixture calendar once (ADR-0037 M5: O(distinct calendars)); the plan default is
@@ -168,25 +292,55 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       .filter((c) => !WEEKDAY_KEYS.some((k) => c.workweek[k].length > 0))
       .map((c) => c.id),
   );
-  /** The activity's own calendar port, or undefined when it inherits the plan default / is window-only. */
+  /** A representable non-default port for a calendar id, or undefined if it inherits the default / is window-only. */
+  const portForCal = (calId: string): WorkingTimeCalendar | undefined =>
+    calId !== defaultCalendarId && !windowOnly.has(calId) ? portById.get(calId) : undefined;
+  /** The activity's own calendar port, gated on `honorActivityCalendars` (the M5 baseline is off). */
   const activityPort = (calId: string): WorkingTimeCalendar | undefined =>
-    honorActivityCalendars && calId !== defaultCalendarId && !windowOnly.has(calId)
-      ? portById.get(calId)
-      : undefined;
+    honorActivityCalendars ? portForCal(calId) : undefined;
+
+  // Build the WBS containment tree (ADR-0035 §24, M5-epic F7) from the fixture's `wbs` code strings.
+  // The product carries `parentId` directly; the fixture instead expresses hierarchy through dotted
+  // `wbs` codes (`TT.4`, `TT.4.1`), so here each activity's `parentId` is the nearest ANCESTOR summary —
+  // the `WBS_SUMMARY` whose `wbs` code is a strict (proper, segment-aligned) prefix of this activity's
+  // code, taking the longest such match when summaries nest. Conformance-only; the engine consumes the
+  // resulting `parentId` exactly as the product would.
+  const summaryWbsCodes = fixture.activities
+    .filter((a) => a.activity_type === 'WBS_SUMMARY')
+    .map((a) => ({ code: a.wbs, id: a.id }));
+  const resolveParentId = (wbsCode: string): string | undefined => {
+    let best: { code: string; id: string } | undefined;
+    for (const candidate of summaryWbsCodes) {
+      // Strict, segment-aligned prefix: `TT.4` is an ancestor of `TT.4.1` but not of `TT.40` (nor of
+      // its own equal code). The longest matching ancestor is the NEAREST parent.
+      if (
+        wbsCode.startsWith(`${candidate.code}.`) &&
+        (best === undefined || candidate.code.length > best.code.length)
+      ) {
+        best = candidate;
+      }
+    }
+    return best?.id;
+  };
 
   const supportedIds = new Set<string>();
   const calIdByActivity = new Map<string, string>();
   const activities: EngineActivity[] = [];
   for (const activity of fixture.activities) {
-    const adapted = adaptActivity(
-      activity,
+    const adapted = adaptActivity(activity, {
       defaultCalendarId,
       honorActivityCalendars,
+      honorResourceCalendars,
+      honorDurationTypes,
+      portForCal,
       honorProgress,
-      activityPort,
+      drivingResourceCalId: drivingResourceCalByActivity.get(activity.id),
+      drivingUnits: drivingUnitsByActivity.get(activity.id),
       notes,
-    );
+    });
     if (adapted) {
+      const parentId = resolveParentId(activity.wbs);
+      if (parentId !== undefined) adapted.parentId = parentId;
       supportedIds.add(activity.id);
       calIdByActivity.set(activity.id, activity.calendar);
       activities.push(adapted);
@@ -204,6 +358,33 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     else excludedRelationships += 1;
   }
 
+  // Resource-levelling demand model (ADR-0041, M7): built only when opted in (default off = parity).
+  // Capacity = each resource's `max_units_per_hour` (NULL = uncapped); the resource's own calendar port
+  // (built above in `portById`) is attached when it is not the plan default — including window-only
+  // resource calendars (RCAL-CRANE600), which is exactly how the pass detects a serialisation pushed past
+  // a resource's availability window (`levelingWindowExceeded`, §6). Every active assignment contributes
+  // its `units_per_hour` demand (all assignments consume capacity, not only the driving one, §2). This
+  // mirrors ScheduleService.buildEngineGraph's model-load (portFor(r.calendarId) + all assignments).
+  let leveling: LevelingModel | undefined;
+  if (honorLevelling) {
+    const resources: EngineResource[] = fixture.resources.map((r) => {
+      const port = r.calendar !== defaultCalendarId ? portById.get(r.calendar) : undefined;
+      return {
+        id: r.id,
+        capacity: r.max_units_per_hour,
+        ...(port ? { calendar: port } : {}),
+      };
+    });
+    const assignments: EngineAssignment[] = fixture.assignments
+      .filter((asg) => supportedIds.has(asg.activity))
+      .map((asg) => ({
+        activityId: asg.activity,
+        resourceId: asg.resource,
+        unitsPerHour: asg.units_per_hour,
+      }));
+    leveling = { resources, assignments, levelWithinFloatOnly };
+  }
+
   const report: AdaptationReport = {
     dataDate,
     planCalendarId: defaultCalendarId,
@@ -215,6 +396,15 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       honorActivityCalendars
         ? `each activity schedules on its own resolved calendar (ADR-0037, M5); relationship lag resolves on the ${relationshipLagCalendar.toLowerCase()} calendar`
         : `every activity is scheduled on the project default calendar ${defaultCalendarId}; per-activity shift/24h/window calendars are not applied (ADR-0037, M5 baseline)`,
+      honorResourceCalendars
+        ? 'each RESOURCE_DEPENDENT activity schedules on its driving resource’s calendar (ADR-0035 §23 / ADR-0039, M7); a driver-less one is flagged and falls back to the plan default'
+        : 'RESOURCE_DEPENDENT activities schedule like any other activity; driving-resource calendars are not applied (ADR-0039, M7 baseline)',
+      honorDurationTypes
+        ? 'FIXED_UNITS / FIXED_UNITS_TIME activities with a driving assignment carrying a rate derive their duration via resolveTriad (Units ÷ Units/Time → working minutes; ADR-0040 / ADR-0035 §26/§27); on this fixture no duration-type activity has a driving assignment and their units/duration/rate are self-consistent, so the derivation is inert and durations stay byte-identical (documented, not faked — the S13/A8300 self-consistency)'
+        : 'duration types are not resolved; each activity keeps its fixture duration (ADR-0040, M7 rung 4 baseline)',
+      honorLevelling
+        ? 'resource levelling is honoured (ADR-0041, §28): the opt-in serial priority-list second pass runs after the CPM network pass and serialises over-allocations (NL-CRANE600 A6100/A6200, NL-HYDROPUMP A7700/A7730) into a leveled overlay; the fixture carries no leveling_priority (the schema strips it), so the composite tie-break (total-float → early-start → id) orders placement; the pure early/late/float layer is never recomputed (Q2)'
+        : 'resource levelling is not applied; the schedule is the pure CPM network with no leveled overlay (ADR-0041, M7 baseline / the byte-identical parity path)',
       'progress, actuals, suspend/resume and the data-date floor are ignored (ADR-0035 §1–§6, M2)',
       honorLagCalendars
         ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag)'
@@ -229,6 +419,36 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     edges,
     options: { dataDate, calendar, ...(useExpectedFinishDates ? { useExpectedFinishDates } : {}) },
     report,
+    ...(leveling ? { leveling } : {}),
+  };
+}
+
+/**
+ * Compute the pure CPM network schedule, then — when the network carries a levelling demand model
+ * ({@link AdaptOptions.honorLevelling}) — run the opt-in {@link levelSchedule} second pass and merge its
+ * **additive overlay** (leveled start/finish + `levelingDelay` + the produce-and-flag flags + plan
+ * counts) onto the result. This mirrors `ScheduleService.recalculate`'s compute→level→merge under the
+ * ADR-0041 contract: the pure `early*`/`late*`/`totalFloat`/`isCritical` are **never recomputed** (Q2),
+ * so with no `leveling` model present this is exactly `computeSchedule` (the byte-identical parity path).
+ */
+export function computeLeveledSchedule(network: AdaptedNetwork): EngineOutput {
+  const output = computeSchedule(network.activities, network.edges, network.options);
+  if (!network.leveling) return output;
+  const leveled = levelSchedule(
+    network.activities,
+    output,
+    network.leveling.assignments,
+    network.leveling.resources,
+    {
+      levelWithinFloatOnly: network.leveling.levelWithinFloatOnly,
+      dataDate: network.options.dataDate,
+      planCalendar: network.options.calendar,
+    },
+  );
+  return {
+    ...output,
+    results: leveled.results,
+    summary: { ...output.summary, ...leveled.summary },
   };
 }
 
@@ -299,15 +519,36 @@ function applyConstraint(
   set(mapped.value, toCalendarDay(constraint.date));
 }
 
+interface AdaptActivityContext {
+  defaultCalendarId: string;
+  honorActivityCalendars: boolean;
+  honorResourceCalendars: boolean;
+  honorDurationTypes: boolean;
+  honorProgress: boolean;
+  portForCal: (calId: string) => WorkingTimeCalendar | undefined;
+  /** The driving resource's calendar id for this activity (undefined = no driving assignment). */
+  drivingResourceCalId: string | undefined;
+  /** The driving assignment's units + rate for the duration-type triad (undefined = no driving assignment). */
+  drivingUnits: { budgetedUnits: number; unitsPerHour: number } | undefined;
+  notes: AdaptationNote[];
+}
+
 /** Adapt one activity, or return null (with a note) if its type is unsupported. */
 function adaptActivity(
   activity: FixtureActivity,
-  defaultCalendarId: string,
-  honorActivityCalendars: boolean,
-  honorProgress: boolean,
-  activityPort: (calId: string) => WorkingTimeCalendar | undefined,
-  notes: AdaptationNote[],
+  ctx: AdaptActivityContext,
 ): EngineActivity | null {
+  const {
+    defaultCalendarId,
+    honorActivityCalendars,
+    honorResourceCalendars,
+    honorDurationTypes,
+    honorProgress,
+    portForCal,
+    drivingResourceCalId,
+    drivingUnits,
+    notes,
+  } = ctx;
   const typeResult = mapActivityType(activity.activity_type);
   if (!typeResult.supported) {
     notes.push({
@@ -336,21 +577,92 @@ function adaptActivity(
         reason: `${activity.original_duration_h}h rounded to ${durationMinutes} working minutes`,
       });
     }
+
+    // Duration-type derivation (ADR-0040 / ADR-0035 §26/§27, M7 rung 4). For the two UNITS-DRIVEN types
+    // (FIXED_UNITS / FIXED_UNITS_TIME) with a DRIVING assignment carrying a rate, the duration is derived
+    // from `Units ÷ Units/Time` via the SAME pure `resolveTriad` the write paths use — so the fixture and
+    // the API agree by construction. The held types (FIXED_DURATION_AND_UNITS[_TIME]) are absent from
+    // DURATION_DERIVING_EDIT and keep their entered duration. Only consulted when `honorDurationTypes` is
+    // on; only the driving assignment participates (ADR-0040 §3).
+    //
+    // On THIS fixture the derivation is INERT: no duration-type activity carries a `res_driving`
+    // assignment, so `drivingUnits` is undefined for all of them (A4330/A4430/A7100/A7200 are
+    // units-driven but driver-less; A6100/A8300 have a driver but are the default held type). Their
+    // units/duration/rate are self-consistent, so were a driver present the derivation would reproduce
+    // the fixture duration anyway (the S13/A8300 self-consistency). This branch is therefore dead on the
+    // fixture — proven by the first-principles `resolveTriad` goldens, not a fixture date-differential.
+    if (honorDurationTypes && drivingUnits) {
+      const edit = DURATION_DERIVING_EDIT[mapDurationType(activity.duration_type)];
+      if (edit) {
+        const resolved = resolveTriad(mapDurationType(activity.duration_type), edit, {
+          durationMinutes,
+          budgetedUnits: drivingUnits.budgetedUnits,
+          unitsPerHour: drivingUnits.unitsPerHour,
+        });
+        // A units-driven derive can only fail on N20 (zero rate); that is a BOUNDARY reject (§25), so we
+        // never fake a value — leave the fixture duration and let the write-path/DTO own the reject.
+        if (resolved.ok) {
+          if (resolved.durationMinutes !== durationMinutes) {
+            notes.push({
+              entity: 'activity',
+              id: activity.id,
+              kind: 'duration-derived',
+              reason: `${activity.duration_type}: duration derived from the driving assignment's units ÷ rate to ${resolved.durationMinutes} working minutes (ADR-0040 / ADR-0035 §26)`,
+            });
+          }
+          durationMinutes = resolved.durationMinutes;
+        }
+      }
+    }
   }
 
-  // Per-activity calendars (ADR-0037, M5): when honoured, attach the activity's own resolved
-  // port so its duration/float/dates land on its calendar; otherwise (the baseline) it schedules
-  // on the plan default and the non-default assignment is noted, never silently applied.
-  const ownPort =
-    activity.calendar !== defaultCalendarId ? activityPort(activity.calendar) : undefined;
-  if (activity.calendar !== defaultCalendarId && !ownPort) {
+  // Scheduling calendar (ADR-0035 §23 / ADR-0039 fallback: driving resource → activity → plan default).
+  // A RESOURCE_DEPENDENT activity schedules on its DRIVING resource's calendar when resource calendars
+  // are honoured; with no driving assignment it is produced-and-flagged and falls back to its activity
+  // calendar. Any other type schedules on its own calendar (type-gated — a TASK with a resource
+  // assignment never picks up the resource's calendar; the A5500 contrast). When resource calendars are
+  // honoured the resource port applies regardless of the per-activity-calendar gate (they are distinct
+  // knobs); the activity's own calendar still only applies under `honorActivityCalendars`.
+  const isResourceDependent = type === 'RESOURCE_DEPENDENT';
+  let resourceDriverMissing = false;
+  let schedulingCalId = activity.calendar;
+  let resourceDriven = false;
+  if (isResourceDependent && honorResourceCalendars) {
+    if (drivingResourceCalId !== undefined) {
+      schedulingCalId = drivingResourceCalId;
+      resourceDriven = true;
+    } else {
+      resourceDriverMissing = true;
+      notes.push({
+        entity: 'activity',
+        id: activity.id,
+        kind: 'resource-driver-missing',
+        reason: `no driving resource assignment; scheduled on the fallback calendar and flagged (ADR-0035 §23)`,
+      });
+    }
+  }
+
+  // Apply the port under the right gate: a resource-driven calendar under `honorResourceCalendars`,
+  // an own calendar under `honorActivityCalendars`. `portForCal` returns undefined for the plan
+  // default or a window-only calendar (which is then substituted onto the plan default + noted).
+  const gateOn = resourceDriven ? honorResourceCalendars : honorActivityCalendars;
+  const ownPort = gateOn ? portForCal(schedulingCalId) : undefined;
+  if (gateOn && schedulingCalId !== defaultCalendarId && !ownPort) {
+    notes.push({
+      entity: 'activity',
+      id: activity.id,
+      kind: resourceDriven ? 'resource-calendar-substituted' : 'activity-calendar-substituted',
+      reason: resourceDriven
+        ? `driving resource calendar ${schedulingCalId} is window-only; scheduled on the plan default ${defaultCalendarId} (in-window placement is an M5-epic edge case)`
+        : `assigned window-only calendar ${schedulingCalId} scheduled on the plan default ${defaultCalendarId} (in-window placement is an M5-epic edge case)`,
+    });
+  } else if (!gateOn && schedulingCalId !== defaultCalendarId) {
+    // The baseline (per-activity calendars off): a non-default assignment is noted, never applied.
     notes.push({
       entity: 'activity',
       id: activity.id,
       kind: 'activity-calendar-substituted',
-      reason: honorActivityCalendars
-        ? `assigned window-only calendar ${activity.calendar} scheduled on the plan default ${defaultCalendarId} (in-window placement is an M5-epic edge case)`
-        : `assigned calendar ${activity.calendar} scheduled on the plan default ${defaultCalendarId} (per-activity calendars off — baseline)`,
+      reason: `assigned calendar ${schedulingCalId} scheduled on the plan default ${defaultCalendarId} (per-activity calendars off — baseline)`,
     });
   }
 
@@ -392,6 +704,7 @@ function adaptActivity(
     type,
     ...progress,
     ...(ownPort ? { calendar: ownPort } : {}),
+    ...(resourceDriverMissing ? { resourceDriverMissing: true } : {}),
   };
 
   // Expected finish (ADR-0035 §9, M4): fed unconditionally; the engine only acts on it when the plan

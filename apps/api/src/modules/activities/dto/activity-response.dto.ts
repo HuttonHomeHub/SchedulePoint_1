@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ActivityStatus, ActivityType, ConstraintType, type Activity } from '@prisma/client';
+import {
+  ActivityStatus,
+  ActivityType,
+  ConstraintType,
+  DurationType,
+  type Activity,
+} from '@prisma/client';
 import type { ActivitySummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
@@ -39,6 +45,15 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ description: 'Working days (milestones are 0).' })
   durationDays!: number;
 
+  @ApiProperty({
+    enum: DurationType,
+    description:
+      'Duration type (ADR-0040): which of {duration, units, units/time} recomputes when a planner ' +
+      'edits another. Default FIXED_DURATION_AND_UNITS_TIME; FIXED_UNITS/FIXED_UNITS_TIME let a ' +
+      'driving resource’s units drive the duration.',
+  })
+  durationType!: DurationType;
+
   @ApiProperty({ enum: ConstraintType, nullable: true })
   constraintType!: ConstraintType | null;
 
@@ -70,6 +85,15 @@ export class ActivityResponseDto implements ActivitySummary {
     description: "The activity's own calendar (ADR-0037), or null to inherit the plan default.",
   })
   calendarId!: string | null;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
+      'WBS parent (ADR-0038): the WBS_SUMMARY activity this rolls up into, or null for top-level.',
+  })
+  parentId!: string | null;
 
   @ApiProperty({ description: 'Graphical y-lane for the TSLD canvas.' })
   laneIndex!: number;
@@ -148,6 +172,18 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({
     description:
+      'LOE no-span produce-and-flag (engine-owned, ADR-0035 §21): true when a Level-of-Effort activity has no resolvable span (missing an SS predecessor or FF successor).',
+  })
+  loeNoSpan!: boolean;
+
+  @ApiProperty({
+    description:
+      'Resource-dependent driver-missing produce-and-flag (engine-owned, ADR-0035 §23 / ADR-0039): true when a RESOURCE_DEPENDENT activity has no driving resource assignment (scheduled on the fallback calendar and flagged).',
+  })
+  resourceDriverMissing!: boolean;
+
+  @ApiProperty({
+    description:
       'Schedule As-Late-As-Possible (ADR-0035 §11): display-only placement preference; does not change early/late/float.',
   })
   scheduleAsLateAsPossible!: boolean;
@@ -189,6 +225,52 @@ export class ActivityResponseDto implements ActivitySummary {
   })
   visualDriftDays!: number | null;
 
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Resource-levelling tie-break (ADR-0041 §1): LOWER = HIGHER priority. Client-settable; null = unset.',
+  })
+  levelingPriority!: number | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Resource-levelling delayed start (engine-owned, ADR-0041 §3), or null until levelled.',
+  })
+  leveledStart!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Resource-levelling delayed finish (engine-owned, ADR-0041 §3), or null until levelled.',
+  })
+  leveledFinish!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Resource-levelling applied delay in whole working days (engine-owned, ADR-0041 §3), or null.',
+  })
+  levelingDelayDays!: number | null;
+
+  @ApiProperty({
+    description:
+      'Levelling window-exceeded produce-and-flag (engine-owned, ADR-0041 §6): serialising pushed the activity past a resource availability window.',
+  })
+  levelingWindowExceeded!: boolean;
+
+  @ApiProperty({
+    description:
+      'Self over-allocated produce-and-flag (engine-owned, ADR-0041 §2): the activity’s own demand exceeds the resource capacity (a delay cannot fix it).',
+  })
+  selfOverAllocated!: boolean;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -209,11 +291,13 @@ export class ActivityResponseDto implements ActivitySummary {
       type: entity.type,
       // Stored in working-minutes (ADR-0036); the public field stays whole working days.
       durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
+      durationType: entity.durationType,
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),
       secondaryConstraintType: entity.secondaryConstraintType,
       secondaryConstraintDate: day(entity.secondaryConstraintDate),
       calendarId: entity.calendarId,
+      parentId: entity.parentId,
       laneIndex: entity.laneIndex,
       scheduleAsLateAsPossible: entity.scheduleAsLateAsPossible,
       status: entity.status,
@@ -238,11 +322,25 @@ export class ActivityResponseDto implements ActivitySummary {
       isCritical: entity.isCritical,
       isNearCritical: entity.isNearCritical,
       constraintViolated: entity.constraintViolated,
+      loeNoSpan: entity.loeNoSpan,
+      resourceDriverMissing: entity.resourceDriverMissing,
       visualStart: day(entity.visualStart),
       visualEffectiveStart: day(entity.visualEffectiveStart),
       visualEffectiveFinish: day(entity.visualEffectiveFinish),
       visualConflict: entity.visualConflict,
       visualDriftDays: entity.visualDriftDays,
+      // Resource-levelling overlay (ADR-0041) — client-settable priority + engine-owned overlay.
+      levelingPriority: entity.levelingPriority,
+      leveledStart: day(entity.leveledStart),
+      leveledFinish: day(entity.leveledFinish),
+      // Stored in working-minutes (ADR-0036 §7); the public field stays whole working days. Null
+      // until levelled — the same day↔minute conversion this DTO uses for durationDays/remaining.
+      levelingDelayDays:
+        entity.levelingDelayMinutes === null
+          ? null
+          : Math.round(entity.levelingDelayMinutes / MINUTES_PER_DAY),
+      levelingWindowExceeded: entity.levelingWindowExceeded,
+      selfOverAllocated: entity.selfOverAllocated,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

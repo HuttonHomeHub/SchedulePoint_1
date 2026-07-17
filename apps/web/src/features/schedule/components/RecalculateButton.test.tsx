@@ -22,6 +22,12 @@ const SUMMARY: PlanScheduleSummary = {
   nearCriticalCount: 0,
   constraintViolationCount: 0,
   constraintWarningCount: 0,
+  loeNoSpanCount: 0,
+  resourceDriverMissingCount: 0,
+  leveledActivityCount: 0,
+  levelingWindowExceededCount: 0,
+  selfOverAllocatedCount: 0,
+  leveledProjectFinish: null,
 };
 
 function renderButton(canCalculate = true) {

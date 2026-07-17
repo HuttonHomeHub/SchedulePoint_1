@@ -9,13 +9,13 @@ import {
 } from '@tanstack/react-query';
 
 import {
-  isMilestoneType,
+  isDurationDerivedType,
   type ActivityFormValues,
   type ProgressFormValues,
 } from '../schemas/activity-schemas';
 
 import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
-import { activityKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
+import { activityKeys, assignmentKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
 export { activityKeys };
 
@@ -65,7 +65,11 @@ function createBody(input: ActivityFormValues) {
     code: optional(input.code),
     type: input.type,
     // A milestone has no duration — the API rejects a non-zero one.
-    durationDays: isMilestoneType(input.type) ? 0 : input.durationDays,
+    durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
+    // The P6 duration type (ADR-0040). A plain activity attribute like `type`; always sent (the form
+    // seeds it from the row) — the API default equals the form default, so this stays inert until a
+    // driving assignment carries a rate.
+    durationType: input.durationType,
     description: optional(input.description),
     ...(hasConstraint
       ? { constraintType: input.constraintType, constraintDate: input.constraintDate }
@@ -82,6 +86,8 @@ function createBody(input: ActivityFormValues) {
     ...(input.expectedFinish ? { expectedFinish: input.expectedFinish } : {}),
     // `''` = inherit the plan calendar → omit the field (the API treats absent as inherit).
     ...(input.calendarId ? { calendarId: input.calendarId } : {}),
+    // `''` = top-level → omit (absent = no WBS parent). The picker offers only the plan's summaries.
+    ...(input.parentId ? { parentId: input.parentId } : {}),
   };
 }
 
@@ -92,7 +98,11 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     name: input.name,
     code: optional(input.code) ?? null,
     type: input.type,
-    durationDays: isMilestoneType(input.type) ? 0 : input.durationDays,
+    durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
+    // The P6 duration type (ADR-0040), always sent (seeded from the row so a hidden picker round-trips).
+    // Editing the duration on an activity with a driving assignment carrying a rate recomputes that
+    // assignment's units/rate server-side per this type — see the assignment refetch in onSettled.
+    durationType: input.durationType,
     description: optional(input.description) ?? null,
     // Clear both sides together when the constraint is removed (API pairs them).
     constraintType: hasConstraint ? input.constraintType : null,
@@ -106,6 +116,9 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     // `''` (inherit) clears the activity's own calendar → null. The dialog always seeds this from
     // the row (even with the picker hidden), so an edit round-trips the stored value unchanged.
     calendarId: input.calendarId ? input.calendarId : null,
+    // `''` (top-level) clears the WBS parent → null. Seeded from the row so an edit with the picker
+    // hidden (flag off) round-trips the stored parent unchanged rather than silently un-nesting it.
+    parentId: input.parentId ? input.parentId : null,
     // Carry a lane change through the same write when a free-2D drag moved both axes (M4); the
     // canvas is the only caller that sets this — the form dialog never sends it.
     ...(input.laneIndex !== undefined ? { laneIndex: input.laneIndex } : {}),
@@ -177,8 +190,16 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
         method: 'PATCH',
         body: JSON.stringify(updateBody(input)),
       }),
+    // A definition edit can change the duration, which (ADR-0040) recomputes the driving assignment's
+    // units/rate server-side — so refresh this activity's assignments too, alongside the list + detail,
+    // in case the resource editor holds a now-stale row. A no-op unless that query is mounted.
     onSettled: (_data, _error, input) =>
-      invalidateActivity(queryClient, orgSlug, planId, input.activityId),
+      Promise.all([
+        invalidateActivity(queryClient, orgSlug, planId, input.activityId),
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
+        }),
+      ]),
   });
 }
 

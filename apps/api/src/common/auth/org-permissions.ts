@@ -80,6 +80,18 @@ export type OrgPermission =
   | 'baseline:create'
   | 'baseline:activate'
   | 'baseline:delete'
+  // The org-scoped resource library + activity resource assignments (M7.1, ADR-0039).
+  // Read is granted to every member (browse the resources a plan can use, see an
+  // activity's assignments); create/update/delete of a resource and assign/unassign
+  // ("write") to Planner + Org Admin — the same rule as the calendar library, and
+  // deliberately NOT Contributor (managing resources / assignments ≠ reporting progress).
+  // `resource:assign` covers the assignment lifecycle (assign / update units+driver /
+  // unassign) as one code, mirroring how the assignment is one write surface.
+  | 'resource:read'
+  | 'resource:create'
+  | 'resource:update'
+  | 'resource:delete'
+  | 'resource:assign'
   // Plan edit-lock coordination — the single-editor "pen" (ADR-0028). Acquiring/
   // heartbeating/releasing the lock and handing it off, and requesting control of
   // a live lock (the graceful peer hand-off, Q-A), are Planner + Org Admin — the
@@ -101,6 +113,7 @@ const HIERARCHY_READ: readonly OrgPermission[] = [
   'schedule:read',
   'calendar:read',
   'baseline:read',
+  'resource:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -131,6 +144,10 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'baseline:create',
   'baseline:activate',
   'baseline:delete',
+  'resource:create',
+  'resource:update',
+  'resource:delete',
+  'resource:assign',
 ];
 
 /**

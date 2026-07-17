@@ -1,4 +1,4 @@
-import type { Plan } from '@prisma/client';
+import { Prisma, type Plan } from '@prisma/client';
 import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,6 +38,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     criticalFloatThreshold: 0,
     totalFloatMode: 'FINISH',
     makeOpenEndsCritical: false,
+    levelResources: false,
+    levelWithinFloatOnly: false,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -71,6 +73,7 @@ const activityRow = (
   remainingDurationMinutes: null,
   resumeDate: null,
   expectedFinish: null,
+  levelingPriority: null,
   ...extra,
 });
 const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow => ({
@@ -96,6 +99,8 @@ describe('ScheduleService.recalculate', () => {
     loadActivities: ReturnType<typeof vi.fn>;
     loadEdges: ReturnType<typeof vi.fn>;
     loadPlanCalendar: ReturnType<typeof vi.fn>;
+    loadResourceAssignments: ReturnType<typeof vi.fn>;
+    loadLevellingResources: ReturnType<typeof vi.fn>;
     writeResults: ReturnType<typeof vi.fn>;
     writeDrivingFlags: ReturnType<typeof vi.fn>;
     summarise: ReturnType<typeof vi.fn>;
@@ -113,6 +118,8 @@ describe('ScheduleService.recalculate', () => {
       loadActivities: vi.fn().mockResolvedValue([]),
       loadEdges: vi.fn().mockResolvedValue([]),
       loadPlanCalendar: vi.fn().mockResolvedValue(null),
+      loadResourceAssignments: vi.fn().mockResolvedValue([]),
+      loadLevellingResources: vi.fn().mockResolvedValue([]),
       writeResults: vi.fn().mockResolvedValue(undefined),
       writeDrivingFlags: vi.fn().mockResolvedValue(undefined),
       summarise: vi.fn().mockResolvedValue({
@@ -391,6 +398,65 @@ describe('ScheduleService.recalculate', () => {
     };
 
     expect(await aFinish('cal-247')).not.toBe(await aFinish(null));
+  });
+
+  it('does not run levelling and writes no leveled overlay when levelResources is off (parity, ADR-0041 §7)', async () => {
+    // The default plan has levelResources false. The demand model must never be loaded and the
+    // persisted results must carry no leveled overlay — byte-identical to the pre-levelling recalc.
+    schedule.loadActivities.mockResolvedValue([activityRow('A', 3), activityRow('B', 2)]);
+    schedule.loadEdges.mockResolvedValue([edgeRow('A', 'B')]);
+
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+
+    expect(schedule.loadResourceAssignments).not.toHaveBeenCalled();
+    expect(schedule.loadLevellingResources).not.toHaveBeenCalled();
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    for (const r of results) {
+      expect(r.leveledStart).toBeUndefined();
+      expect(r.levelingDelay).toBeUndefined();
+      expect(r.levelingWindowExceeded).toBeUndefined();
+    }
+    // The network dates are exactly what the pre-levelling engine produced.
+    const byId = new Map(results.map((r) => [r.activityId, r]));
+    expect(byId.get('A')!.earlyFinish).toBe('2026-01-03');
+    expect(byId.get('B')!.earlyFinish).toBe('2026-01-05');
+  });
+
+  it('runs levelling and persists the leveled columns via the engine-owned write when opted in (ADR-0041)', async () => {
+    // levelResources on. A and B (each 2 days) both demand a capacity-1 resource → B is serialised
+    // behind A. The leveled overlay is written through the same writeResults path as early_*/is_critical
+    // (which never touches version/updated_at — the ADR-0022 engine-owned contract).
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ levelResources: true }));
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 2, { levelingPriority: 1 }),
+      activityRow('B', 2, { levelingPriority: 2 }),
+    ]);
+    schedule.loadEdges.mockResolvedValue([]);
+    schedule.loadResourceAssignments.mockResolvedValue([
+      { activityId: 'A', resourceId: 'R', unitsPerHour: new Prisma.Decimal(1) },
+      { activityId: 'B', resourceId: 'R', unitsPerHour: new Prisma.Decimal(1) },
+    ]);
+    schedule.loadLevellingResources.mockResolvedValue([
+      { id: 'R', maxUnitsPerHour: new Prisma.Decimal(1), calendarId: null },
+    ]);
+
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+
+    expect(schedule.loadResourceAssignments).toHaveBeenCalledWith(
+      ORG_ID,
+      PLAN_ID,
+      expect.anything(),
+    );
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const byId = new Map(results.map((r) => [r.activityId, r]));
+    // A keeps its network position; B is delayed by exactly A's 2-day duration.
+    expect(byId.get('A')!.leveledStart).toBe('2026-01-01');
+    expect(byId.get('A')!.levelingDelay).toBe(0);
+    expect(byId.get('B')!.leveledStart).toBe('2026-01-03');
+    expect(byId.get('B')!.levelingDelay).toBe(2 * 1440);
+    // The pure network is untouched (Q2): both still start at the data date.
+    expect(byId.get('A')!.earlyStart).toBe('2026-01-01');
+    expect(byId.get('B')!.earlyStart).toBe('2026-01-01');
   });
 });
 

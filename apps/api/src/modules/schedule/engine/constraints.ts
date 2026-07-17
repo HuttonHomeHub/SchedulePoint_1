@@ -53,6 +53,32 @@ export function isMilestone(type: ActivityType): boolean {
   return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
 }
 
+/**
+ * A **Level-of-Effort** type (ADR-0035 §21) — a hammock whose duration is *derived* from the span of
+ * its SS-predecessor's start to its FF-successor's finish, rather than an input. An LOE **never drives
+ * a successor, never appears on the critical path, and never inherits negative float**: the engine
+ * excludes LOE ties from the bounds/driving of other activities, excludes LOEs from criticality and the
+ * project-finish tie-break, and pins the LOE's late dates to its early dates so its float is a
+ * non-negative 0. Keyed off the **type**, so an all-`TASK`/milestone plan is byte-identical.
+ */
+export function isLoe(type: ActivityType): boolean {
+  return type === 'LEVEL_OF_EFFORT';
+}
+
+/**
+ * A **WBS-summary** type (ADR-0035 §24) — a roll-up bar that *carries no logic* (F5 rejects any
+ * dependency touching one, so a summary has no incoming/outgoing edges) and whose dates are **derived**
+ * from its branch: the earliest start and latest finish over its descendants in the `parentId` tree,
+ * not from an input duration. A summary **never drives a successor, never appears on the critical path,
+ * never defines the project finish, and never lands on the longest path**: the engine excludes summaries
+ * from the project-finish/longest-path passes and pins their late dates to their (rolled-up) early
+ * dates so their float is a by-convention 0. Keyed off the **type**, so a plan with no summary is
+ * byte-identical.
+ */
+export function isSummary(type: ActivityType): boolean {
+  return type === 'WBS_SUMMARY';
+}
+
 /** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
 function nextCalendarDay(date: string): string {
   const d = parseCalendarDate(date);

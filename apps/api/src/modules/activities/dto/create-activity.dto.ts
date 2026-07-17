@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType } from '@prisma/client';
+import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -72,6 +72,19 @@ export class CreateActivityDto {
   @IsZeroWhenMilestone()
   durationDays?: number;
 
+  @ApiPropertyOptional({
+    enum: DurationType,
+    default: DurationType.FIXED_DURATION_AND_UNITS_TIME,
+    description:
+      'P6 duration type (M7 rung 4, ADR-0040) — names which of {Duration, Units, Units/Time} is ' +
+      'recomputed when a planner edits another (keeping Units = Duration × Units/Time true). Default ' +
+      'FIXED_DURATION_AND_UNITS_TIME. Setting it alone does NOT retroactively re-solve the triad; it ' +
+      'governs future edits.',
+  })
+  @IsOptional()
+  @IsEnum(DurationType)
+  durationType?: DurationType;
+
   @ApiPropertyOptional({ enum: ConstraintType, description: 'Schedule constraint (with a date).' })
   @IsOptional()
   @IsEnum(ConstraintType)
@@ -138,6 +151,18 @@ export class CreateActivityDto {
   @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
   calendarId?: string | null;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'WBS parent (ADR-0038, M5-epic): the id of a WBS_SUMMARY activity in the same plan this rolls up ' +
+      'into. Omit or null for a top-level activity. The parent must be a summary, in the same plan, and ' +
+      'introduce no cycle — validated service-side.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'parentId must be a valid UUID.' })
+  parentId?: string | null;
+
   @ApiPropertyOptional({ minimum: 0, default: 0, description: 'Graphical y-lane for the TSLD.' })
   @IsOptional()
   @Type(() => Number)
@@ -165,4 +190,17 @@ export class CreateActivityDto {
   @IsOptional()
   @IsCalendarDate()
   visualStart?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Resource-levelling tie-break (ADR-0041 §1): LOWER = HIGHER priority when two activities contend ' +
+      'for a capacity-constrained resource. Omit for unset (no expressed preference). Read by the ' +
+      'levelling pass only when the plan opts in.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  levelingPriority?: number;
 }

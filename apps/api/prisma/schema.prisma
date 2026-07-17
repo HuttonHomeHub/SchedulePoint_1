@@ -115,48 +115,53 @@ enum OrganizationRole {
 }
 
 model Organization {
-  id                 String               @id @default(uuid(7)) @db.Uuid
-  name               String
+  id                  String               @id @default(uuid(7)) @db.Uuid
+  name                String
   // URL-safe, unique per deployment, immutable in v1. Uniqueness is enforced by
   // a PARTIAL unique index that ignores soft-deleted rows (uq_organizations_slug
   // WHERE deleted_at IS NULL) — Prisma cannot express partial indexes, so it is
   // added as raw SQL in the migration. This index also serves slug lookups
   // (which always filter deleted_at IS NULL), so no separate @@index is needed.
-  slug               String
-  version            Int                  @default(1)
-  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy          String?              @map("created_by")
-  updatedBy          String?              @map("updated_by")
-  deletedAt          DateTime?            @map("deleted_at") @db.Timestamptz(3)
-  members            OrgMember[]
-  invitations        Invitation[]
+  slug                String
+  version             Int                  @default(1)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy           String?              @map("created_by")
+  updatedBy           String?              @map("updated_by")
+  deletedAt           DateTime?            @map("deleted_at") @db.Timestamptz(3)
+  members             OrgMember[]
+  invitations         Invitation[]
   // Domain hierarchy owned by this organisation. Project/Plan back-relations
   // exist because those tables carry a denormalised organization_id FK (see the
   // Client/Project/Plan models below), not because the org is their direct
   // parent — the tree is Organization → Client → Project → Plan.
-  clients            Client[]
-  projects           Project[]
-  plans              Plan[]
-  activities         Activity[]
+  clients             Client[]
+  projects            Project[]
+  plans               Plan[]
+  activities          Activity[]
   // Denormalised scope back-relation: dependencies carry organization_id directly
   // (copied from their endpoints), like Activity — see the ActivityDependency model.
-  dependencies       ActivityDependency[]
+  dependencies        ActivityDependency[]
   // Org-scoped calendar library + its dated exceptions (M5, ADR-0024). Calendar's
   // organization_id is native (the org is its direct parent, like Client);
   // CalendarException's is denormalised from its parent calendar (like Activity).
-  calendars          Calendar[]
-  calendarExceptions CalendarException[]
+  calendars           Calendar[]
+  calendarExceptions  CalendarException[]
+  // Org-scoped resource library + activity assignments (M7.1, ADR-0039). Resource's
+  // organization_id is native (the org is its direct parent, like Calendar);
+  // ResourceAssignment's is denormalised from its endpoints (like Activity/Dependency).
+  resources           Resource[]
+  resourceAssignments ResourceAssignment[]
   // Plan-of-record snapshots (M7, ADR-0025). Baseline's organization_id is
   // denormalised from its plan; BaselineActivity's from its parent baseline — both
   // copied by the service, never client input (the Activity pattern), so an org-scope
   // / IDOR check and the cascade batch filter one indexed column.
-  baselines          Baseline[]
-  baselineActivities BaselineActivity[]
+  baselines           Baseline[]
+  baselineActivities  BaselineActivity[]
   // Ephemeral per-plan edit-lock coordination rows (ADR-0028). organization_id is
   // denormalised from the plan (copied by the service, never client input) purely as
   // a scope tag for scoped reads/audit; the row itself is owned by its plan.
-  planLocks          PlanLock[]
+  planLocks           PlanLock[]
 
   @@map("organizations")
 }
@@ -316,16 +321,57 @@ enum TotalFloatMode {
   SMALLEST
 }
 
-// The kind of schedule activity (PROJECT_BRIEF §8). All five are modelled so the
-// deferred slices (dependencies, CPM, canvas) never need an enum migration; the
-// web UI exposes only TASK + START/FINISH milestones in this slice — HAMMOCK and
-// LEVEL_OF_EFFORT derive their duration from dependencies that don't exist yet.
+// The kind of schedule activity (PROJECT_BRIEF §8). Modelled up front so the
+// deferred slices (dependencies, CPM, canvas) never need an enum migration.
+// TASK + START/FINISH milestones are the everyday types the web UI exposes;
+// LEVEL_OF_EFFORT is built (M5, ADR-0035 §21) — its span is DERIVED from an SS
+// predecessor and an FF successor (the engine owns loeNoSpan when that span is
+// missing); HAMMOCK is the same derived-duration idea and is still deferred (its
+// engine wiring does not exist yet). WBS_SUMMARY (M5, ADR-0038) is a hierarchy
+// SUMMARY: it carries NO logic (never an endpoint of a dependency edge) and its
+// dates roll up from its branch's earliest start / latest finish (engine work is
+// F6). RESOURCE_DEPENDENT (M7.1, ADR-0039 / ADR-0035 §23) is an activity that
+// schedules on its DRIVING resource's calendar instead of its own (wired in M7.2);
+// like LEVEL_OF_EFFORT / WBS_SUMMARY it is a first-class type, so `type` stays the
+// single source of scheduling behaviour. MUST stay in lock-step with the
+// `ActivityType` union in @repo/types (a separate task).
 enum ActivityType {
   TASK
   START_MILESTONE
   FINISH_MILESTONE
   HAMMOCK
   LEVEL_OF_EFFORT
+  WBS_SUMMARY
+  RESOURCE_DEPENDENT
+}
+
+// The kind of a Resource (M7.1, ADR-0039). LABOUR = a crew / trade; EQUIPMENT =
+// plant / machinery (the conformance fixture's NONLABOUR maps here); MATERIAL = a
+// consumable quantity (concrete m³, steel te). A MATERIAL may be assigned to an
+// activity but may NEVER be the driving resource of dates (drive is a labour/
+// equipment concept) — a service invariant, not a DB constraint. MUST stay in
+// lock-step with the TypeScript `ResourceKind` union in @repo/types (a separate task).
+enum ResourceKind {
+  LABOUR
+  EQUIPMENT
+  MATERIAL
+}
+
+// The P6 duration type of an activity (M7 rung 4, ADR-0040). It names which of the
+// triad {Duration, Units, Units/Time} is RECOMPUTED (and which held) when a planner
+// edits another, keeping the identity `Units = Duration × Units/Time` true. All four
+// P6 values are modelled (the fixture uses all four): FIXED_DURATION_AND_UNITS_TIME
+// (the dominant DEFAULT — duration & rate held, units absorb), FIXED_DURATION_AND_UNITS
+// (duration & units held, rate absorbs), FIXED_UNITS (units held — duration derives on a
+// rate edit), FIXED_UNITS_TIME (rate held — duration derives on a units edit). The
+// recompute (`resolveTriad`) is a pure SERVICE-BOUNDARY concern resolved at write time,
+// NOT the CPM engine (F2/F3); this slice is the definition column only. MUST stay in
+// lock-step with the TypeScript `DurationType` union in @repo/types (F1).
+enum DurationType {
+  FIXED_DURATION_AND_UNITS_TIME
+  FIXED_DURATION_AND_UNITS
+  FIXED_UNITS
+  FIXED_UNITS_TIME
 }
 
 // Progress state of an activity. Set via the progress path (Contributor+), never
@@ -463,6 +509,23 @@ model Plan {
   // task (F4). Like scheduling_mode, a single-row column read with the plan, never
   // filtered across plans, so no index; additive with a constant DEFAULT.
   makeOpenEndsCritical   Boolean                @default(false) @map("make_open_ends_critical")
+  // Resource-levelling opt-in switch (ADR-0041 §7). When true (and the plan has
+  // assignments), the recalc runs the opt-in second levelling pass that resolves
+  // over-allocation into the engine-owned leveled_* overlay. Default FALSE is the
+  // PARITY gate: off ⇒ the pass never runs and the recalc is byte-identical to today
+  // (no server feature flag needed — the ADR-0040 opt-in precedent). Like
+  // scheduling_mode/use_expected_finish_dates, a single-row column read with the plan,
+  // never filtered across plans, so no index; additive with a constant DEFAULT (no data
+  // migration). Consumed by the L2 engine pass; dark in this L1 slice.
+  levelResources         Boolean                @default(false) @map("level_resources")
+  // Level-within-float-only option (ADR-0041 §4, matching P6's off-by-default "level
+  // only within float"). When true, levelling may delay an activity only WITHIN its
+  // total float (preserving the project finish) and never EXTENDS the schedule; any
+  // residual over-allocation is flagged rather than resolved. Default FALSE is
+  // behaviour-preserving (and only relevant when level_resources is on). Like the other
+  // plan options, a single-row column read with the plan, never filtered across plans,
+  // so no index; additive with a constant DEFAULT. Consumed by the L2 engine pass.
+  levelWithinFloatOnly   Boolean                @default(false) @map("level_within_float_only")
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
   // (ADR-0023). **Required + NOT NULL** as of ADR-0033 **M1** — the
@@ -555,6 +618,17 @@ model Activity {
   secondaryConstraintType  ConstraintType? @map("secondary_constraint_type")
   // Calendar day (date-only, no timezone), like constraint_date.
   secondaryConstraintDate  DateTime?       @map("secondary_constraint_date") @db.Date
+  // The P6 duration type (M7 rung 4, ADR-0040) — which of {Duration, Units, Units/Time}
+  // is recomputed vs held when a planner edits another, keeping `Units = Duration ×
+  // Units/Time` true. CLIENT-SETTABLE definition column (a Planner picks it, like `type`/
+  // `constraint_type`), NOT engine-owned. The recompute (`resolveTriad`) is a pure
+  // service-boundary concern (F2/F3); the CPM engine is untouched — it reads the resolved
+  // `duration_minutes`. Default FIXED_DURATION_AND_UNITS_TIME (the fixture's dominant
+  // value) backfills every existing row, so the byte-parity golden path is unchanged.
+  // No index: read only on the full-plan recalc load, never a query predicate (the
+  // secondary_constraint_type precedent). MUST stay in lock-step with the TypeScript
+  // `DurationType` union in @repo/types.
+  durationType             DurationType    @default(FIXED_DURATION_AND_UNITS_TIME) @map("duration_type")
   // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
   // persisted model per PROJECT_BRIEF §9, not a runtime concern.
   laneIndex                Int             @default(0) @map("lane_index")
@@ -566,6 +640,20 @@ model Activity {
   // every existing row, so the byte-parity golden path is unchanged. No index: read
   // only on the full-plan recalc load, never a query predicate.
   scheduleAsLateAsPossible Boolean         @default(false) @map("schedule_as_late_as_possible")
+  // The resource-levelling TIE-BREAK input (ADR-0041 §1). LOWER = HIGHER priority: when
+  // two activities contend for a capacity-constrained resource, the serial priority-list
+  // pass places the lower `leveling_priority` first (then total-float asc → early-start
+  // asc → id asc). CLIENT-SETTABLE Planner input (a write DTO sets it), NOT engine-owned.
+  // NULLABLE with NO default — NULL = UNSET (the planner has expressed no preference),
+  // distinct from an explicit 0 (which, lower=higher, would mean "top priority"). The
+  // engine defines NULL ordering (NULL sorts LAST / neutral, after every explicit value),
+  // documented in ADR-0035 §28. Nullable-no-default mirrors the other optional Planner
+  // inputs (expected_finish / visual_start): a DEFAULT is deliberately omitted so we
+  // never conflate "unset" with an arbitrary sentinel priority, and existing rows read
+  // NULL (metadata-only add, no backfill, byte-parity). No index — read only on the
+  // full-plan recalc load, never a query predicate (plan-scoped load only). MUST stay in
+  // lock-step with @repo/types. LEVELLING-READ ONLY when the plan opts in; dark until L2.
+  levelingPriority         Int?            @map("leveling_priority")
 
   // Progress (Contributor-updatable via the progress path).
   status                   ActivityStatus @default(NOT_STARTED)
@@ -596,12 +684,32 @@ model Activity {
   // golden path is unchanged. No index: read only on the full-plan recalc load.
   expectedFinish           DateTime?      @map("expected_finish") @db.Date
 
+  // WBS hierarchy — the adjacency-list parent link (M5, ADR-0038). A nullable
+  // self-FK: null = a top-level activity (no WBS parent); non-null = this activity
+  // is grouped under the referenced WBS_SUMMARY. The parent tree groups activities
+  // into a Work Breakdown Structure and is ORTHOGONAL to the dependency DAG
+  // (ADR-0021) — a WBS parent is NOT a logic tie. Three invariants live in the
+  // service (the FK alone cannot express them): (a) the parent tree is ACYCLIC — no
+  // activity is its own ancestor (a service-layer ancestor walk on reparent; the
+  // ck_activities_parent_not_self CHECK, raw SQL in the migration, backs only the
+  // trivial self-parent parent_id <> id); (b) parent and child share the SAME plan
+  // AND organization (the FK scopes only to `activities`, not to a plan); (c) only a
+  // WBS_SUMMARY may be a parent and a SUMMARY carries NO logic (never a dependency
+  // endpoint — ADR-0035 §24). Client-settable. onDelete: Restrict — a summary with
+  // children can never be hard-deleted out from under them (defence in depth; the
+  // real delete path is the service-owned cascade soft-delete, which stamps the
+  // summary and its whole active subtree with one delete_batch_id, ADR-0038). Rollup
+  // (a summary's dates = its branch's earliest start / latest finish) is engine work
+  // (F6); this slice is schema + validation only. Backed by the partial index on
+  // (parent_id) WHERE deleted_at IS NULL — raw SQL in the migration.
+  parentId String? @map("parent_id") @db.Uuid
+
   // CPM output — engine-owned (M6). Nullable/defaulted; never set from input.
-  earlyStart         DateTime? @map("early_start") @db.Date
-  earlyFinish        DateTime? @map("early_finish") @db.Date
-  lateStart          DateTime? @map("late_start") @db.Date
-  lateFinish         DateTime? @map("late_finish") @db.Date
-  totalFloat         Int?      @map("total_float")
+  earlyStart            DateTime? @map("early_start") @db.Date
+  earlyFinish           DateTime? @map("early_finish") @db.Date
+  lateStart             DateTime? @map("late_start") @db.Date
+  lateFinish            DateTime? @map("late_finish") @db.Date
+  totalFloat            Int?      @map("total_float")
   // Free float in whole working days (ADR-0035 §17–§20, M6-F1; day-denominated public
   // column per ADR-0036 §7). Engine-owned CPM output exactly like total_float:
   // written ONLY by the recalc's batched `unnest` UPDATE (schedule.repository
@@ -614,9 +722,9 @@ model Activity {
   // read only as part of the already plan-scoped activity load ((plan_id, created_at,
   // id)); no query filters or sorts by it (docs/DATABASE.md: index query patterns,
   // not columns).
-  freeFloat          Int?      @map("free_float")
-  isCritical         Boolean   @default(false) @map("is_critical")
-  isNearCritical     Boolean   @default(false) @map("is_near_critical")
+  freeFloat             Int?      @map("free_float")
+  isCritical            Boolean   @default(false) @map("is_critical")
+  isNearCritical        Boolean   @default(false) @map("is_near_critical")
   // Produce-and-flag violation output (ADR-0035 §7 amendment, M4). True when a mandatory
   // pin (MANDATORY_START/MANDATORY_FINISH) overrode a stronger logic bound — a forward pin
   // earlier than the network-earliest, or a backward pin that forced negative float. This
@@ -629,7 +737,34 @@ model Activity {
   // as part of the already plan-scoped activity load ((plan_id, created_at, id)) and
   // aggregated over that scope (constraintViolationCount) — no predicate targets it; a
   // low-cardinality boolean index would only cost writes (mirrors is_critical/is_driving).
-  constraintViolated Boolean   @default(false) @map("constraint_violated")
+  constraintViolated    Boolean   @default(false) @map("constraint_violated")
+  // LOE no-span produce-and-flag output (ADR-0035 §21 / N12, M5). True when a
+  // LEVEL_OF_EFFORT activity has no resolvable span — missing an SS predecessor or an
+  // FF successor — so the engine cannot derive its start/finish from the activities it
+  // spans. Rather than rejecting, the engine places the span-less LOE at its defined
+  // fallback and flags it, never repairs it. Engine-owned exactly like
+  // constraint_violated/is_critical: defaulted false, never accepted from a write DTO,
+  // written only by the recalc's batched `unnest` UPDATE alongside the CPM columns above
+  // (never touching version/updated_at/updated_by, ADR-0022). Reads false until the plan
+  // is first calculated AND on the no-LOE / all-inherit path, so existing rows stay
+  // byte-identical. No index: read as part of the already plan-scoped activity load
+  // ((plan_id, created_at, id)) and aggregated over that scope — no predicate targets it;
+  // a low-cardinality boolean index would only cost writes (mirrors constraint_violated).
+  loeNoSpan             Boolean   @default(false) @map("loe_no_span")
+  // RESOURCE_DEPENDENT driver-missing produce-and-flag output (M7, ADR-0035 §23 /
+  // ADR-0039 rung 2). True when a RESOURCE_DEPENDENT activity has no resolvable
+  // driving resource (0 or >1 driving assignments, or a driver with no calendar) so
+  // the engine falls back to the activity calendar. Engine-owned EXACTLY like
+  // loe_no_span / constraint_violated: defaulted false, NEVER accepted from a write
+  // DTO, written only by the recalc's batched `unnest` UPDATE (never touching version/
+  // updated_at/updated_by, ADR-0022). The column lands NOW (additive; reads false
+  // everywhere until an activity is made resource-dependent, so the byte-parity golden
+  // path is unchanged) so the M7.2 rung-2 slice needs no wide ALTER of the large
+  // activities table; its WRITER is the M7.2 engine task (F4.T2), not this slice. No
+  // index: read as part of the already plan-scoped activity load ((plan_id, created_at,
+  // id)) and aggregated over that scope (resourceDriverMissingCount) — no predicate
+  // targets it; a low-cardinality boolean index would only cost writes (mirrors loe_no_span).
+  resourceDriverMissing Boolean   @default(false) @map("resource_driver_missing")
 
   // Visual Planning placement (ADR-0033). `visual_start` is the ONLY Planner-owned
   // input here — the hand-placed calendar day a DTO may set (date-only, like
@@ -652,6 +787,43 @@ model Activity {
   visualEffectiveFinish DateTime? @map("visual_effective_finish") @db.Date
   visualConflict        Boolean   @default(false) @map("visual_conflict")
   visualDriftDays       Int?      @map("visual_drift_days")
+
+  // Resource-levelling OVERLAY — engine-owned (ADR-0041 §3, Q2). The opt-in second pass
+  // (plans.level_resources) runs AFTER the pure CPM network pass and produces these
+  // additive leveled positions; the pure early_*/late_*/total_float/is_critical are
+  // NOT recomputed on the leveled dates (network float stays authoritative — ADR-0041
+  // Q2). Written ONLY by the recalc's batched `unnest` UPDATE alongside the CPM columns
+  // above; NEVER accepted from a write DTO and NEVER touching version/updated_at/
+  // updated_by (the ADR-0022 engine-owned-column contract), exactly like early_*/
+  // is_critical/constraint_violated/resource_driver_missing.
+  //   * leveled_start/leveled_finish — the delayed positions the levelling pass placed
+  //     this activity at (calendar day, date-only like early_start/early_finish).
+  //     Nullable/no-default ⇒ NULL = "not levelled" (levelling off, or the plan has no
+  //     over-allocation), mirroring early_start/early_finish.
+  //   * leveling_delay_minutes — the applied delay in WORKING MINUTES on the activity's
+  //     own calendar (leveled_start − early_start; day-denominated at the API boundary,
+  //     ADR-0036 §7). Nullable/no-default ⇒ NULL = "not yet levelled", mirroring the
+  //     engine-owned nullable ints total_float/free_float/visual_drift_days.
+  //   * leveling_window_exceeded — produce-and-flag bool (ADR-0041 §6, Q1 =
+  //     extend-past-window-and-flag): true when serialising pushed this activity PAST a
+  //     resource's availability window (e.g. the crane-hire window's end); the engine
+  //     extends and FLAGS, never hangs, never silently succeeds. Mirrors
+  //     constraint_violated exactly (defaulted false, engine-owned).
+  //   * self_over_allocated — produce-and-flag bool (ADR-0041 §2): true when this
+  //     activity's OWN single-activity demand exceeds the resource capacity — an
+  //     over-allocation delay cannot fix (not split in this rung); reported, never
+  //     resolved. Mirrors constraint_violated/resource_driver_missing exactly.
+  // All read false/NULL until the plan opts in AND is first levelled, so existing rows
+  // stay byte-identical (parity). No index: read as part of the already plan-scoped
+  // activity load ((plan_id, created_at, id)) and the bools aggregated over that scope
+  // (plan-level counts, computed in the schedule summary — no plan column, the
+  // constraint_violated precedent); no predicate targets them, and a low-cardinality
+  // boolean index would only cost writes. Dark until L2 wires the pass.
+  leveledStart           DateTime? @map("leveled_start") @db.Date
+  leveledFinish          DateTime? @map("leveled_finish") @db.Date
+  levelingDelayMinutes   Int?      @map("leveling_delay_minutes")
+  levelingWindowExceeded Boolean   @default(false) @map("leveling_window_exceeded")
+  selfOverAllocated      Boolean   @default(false) @map("self_over_allocated")
 
   // Housekeeping (as Project/Plan): TEXT audit ids (Better Auth ids are TEXT),
   // optimistic-lock version, soft delete + restore-batch correlation.
@@ -678,6 +850,21 @@ model Activity {
   predecessorLinks ActivityDependency[] @relation("DependencyPredecessor")
   successorLinks   ActivityDependency[] @relation("DependencySuccessor")
 
+  // The WBS adjacency-list self-relation (M5, ADR-0038): `parent` is this activity's
+  // WBS_SUMMARY container (null = top-level), `children` are the activities grouped
+  // under it (empty for a leaf). onDelete: Restrict guards against an accidental hard
+  // delete orphaning children; the normal delete is the service-owned cascade
+  // soft-delete (delete_batch_id), never a DB CASCADE. Same-plan/same-org and
+  // acyclicity are service-enforced (see the parentId comment above).
+  parent   Activity?  @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Activity[] @relation("ActivityHierarchy")
+
+  // Resource assignments on this activity (M7.1, ADR-0039). RESTRICT FK; assignments
+  // soft-delete only. Soft-deleting an activity SHOULD sweep its active assignments
+  // (stamped with the same delete_batch_id, mirroring the incident-dependency cascade)
+  // — a HierarchyLifecycleService follow-on (a later task, not this schema slice).
+  assignments ResourceAssignment[]
+
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
   // deleted_at IS NULL [AND code IS NOT NULL]), raw SQL in the migration.
@@ -685,8 +872,17 @@ model Activity {
   // (plan_id, created_at, id) covers the plan FK, the list-activities-under-a-plan
   // query and its cursor sort in one. organization_id is indexed on its own for
   // its FK (RESTRICT) and org-scoped IDOR loads.
+  //
+  // (parent_id) backs the parent self-FK (RESTRICT) and the "children of this
+  // summary" load the rollup + navigator walk over. It is a PARTIAL index filtered
+  // on deleted_at IS NULL (raw SQL in the migration — Prisma cannot express the
+  // WHERE): only the minority of rows that are grouped under a summary and live
+  // carry a value, so the partial keeps it tiny (the delete_batch_id / calendar_id
+  // partial-index precedent). The @@index below declares it to Prisma; the migration
+  // replaces it with the partial form.
   @@index([planId, createdAt, id])
   @@index([organizationId])
+  @@index([parentId])
   @@map("activities")
 }
 
@@ -849,6 +1045,12 @@ model Calendar {
   // ALSO counts ACTIVE activities here (WHERE deleted_at IS NULL) — a soft-deleted
   // activity must NOT block the delete; the FK is RESTRICT as defence in depth.
   activities   Activity[]
+  // Resources whose OWN availability calendar this is (M7.1, ADR-0039). A resource
+  // may reference an org calendar as its working-time; the CALENDAR_IN_USE delete
+  // guard must therefore ALSO count ACTIVE resources here (WHERE deleted_at IS NULL),
+  // alongside active plans + activities, before allowing a calendar delete (a service
+  // follow-on when the resources module lands). FK is RESTRICT as defence in depth.
+  resources    Resource[]
 
   // Calendar name is unique per organisation among ACTIVE rows — partial unique
   // (uq_calendars_org_name ON (organization_id, name) WHERE deleted_at IS NULL),
@@ -1150,4 +1352,166 @@ model PlanLock {
   // organization_id FK and any org-scoped audit read of held locks.
   @@index([organizationId])
   @@map("plan_locks")
+}
+
+// ---------------------------------------------------------------------------
+// Resources — Resource + ResourceAssignment (M7.1, ADR-0039).
+//
+// The resource dimension the CPM engine schedules around. A Resource is an
+// org-scoped, reusable LIBRARY entity — a crew, a plant item, a material — modelled
+// exactly like Calendar (a sibling of the Client→Project→Plan tree, NOT a hierarchy
+// level). A ResourceAssignment ties a Resource to an Activity with a budgeted
+// quantity and, for at most one assignment per activity, the `is_driving` flag that
+// designates the resource whose calendar governs a RESOURCE_DEPENDENT activity
+// (ADR-0035 §23, wired in M7.2). This slice is the MODEL only — an assignment is
+// reference data until an activity is made resource-dependent, so with no resources
+// the schedule is byte-identical (the parity gate).
+//
+// Both follow every house standard (UUID v7 PK, snake_case via @map, timestamptz
+// UTC, NOT NULL by default, soft delete + delete_batch_id, TEXT audit ids,
+// optimistic-locking `version`, scoped indexes) and the domain conventions in
+// docs/DATABASE.md. Resource.organization_id is NATIVE (the org is its direct parent,
+// like Calendar / Client); ResourceAssignment.organization_id is DENORMALISED from
+// its endpoints (copied by the service inside the create transaction, NEVER client
+// input — the Activity / ActivityDependency pattern), so an org-scope/IDOR check and
+// the cascade batch filter one indexed column without a join.
+//
+// DELIBERATELY LEAN (ADR-0039): a kind, an optional own Calendar, and a budgeted
+// quantity are all rung-1 needs. Availability (max units), cost, and earned-value
+// columns are RESERVED for their later rungs (levelling / cost / EV), added only when
+// those rungs land — mirroring how activities.calendar_id was reserved (ADR-0024).
+// ---------------------------------------------------------------------------
+
+model Resource {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  name            String
+  // Optional short human handle (e.g. "CR600", "CREW-A"). Unique per org among ACTIVE
+  // rows where set — a partial unique uq_resources_org_code (WHERE deleted_at IS NULL
+  // AND code IS NOT NULL), raw SQL in the migration; NULL codes are exempt. Mirrors
+  // activities.code / uq_activities_plan_code — a natural-key handle (docs/DATABASE.md:
+  // unique constraints for natural keys).
+  code            String?
+  description     String?
+  kind            ResourceKind
+  // The resource's OWN working-time calendar (ADR-0039; the ADR-0037 port seam rung 2
+  // rides). Nullable → the resource inherits the plan calendar at schedule time (the
+  // driving-calendar fallback order: driving-resource calendar → activity calendar →
+  // plan default). Client-settable, but the FK alone does NOT enforce same-org — a
+  // cross-org calendarId satisfies it — so the org-scope check stays in the service
+  // (like the plan / activity calendar picker, ADR-0037). FK is RESTRICT (calendars
+  // soft-delete only; the CALENDAR_IN_USE guard — extended to count active resources
+  // too — is the real protection, RESTRICT is defence in depth). Backed by the partial
+  // idx_resources_calendar_id (WHERE deleted_at IS NULL AND calendar_id IS NOT NULL).
+  calendarId      String?      @map("calendar_id") @db.Uuid
+  // The per-resource CAPACITY ceiling — the max units of work this resource can supply
+  // per working hour (ADR-0041 §2, activating the column ADR-0039 RESERVED "for
+  // levelling"). An EXACT numeric (DECIMAL(18,4)) like the assignment quantities.
+  // NULLABLE with NO default — NULL = UNCAPPED, the parity-preserving default: an
+  // uncapped resource is never over-allocated, so the levelling pass has nothing to
+  // resolve and the default recalc stays byte-identical (never add a DEFAULT — a
+  // DEFAULT 0 would mean "zero capacity" and silently over-allocate every existing
+  // resource). Client-settable (a Planner sets the hire ceiling). `max_units_per_hour
+  // IS NULL OR >= 0` is enforced by ck_resources_max_units_per_hour_nonneg (raw SQL —
+  // nullable-safe), the DB backstop behind the DTO @Min(0) boundary reject (N21,
+  // ADR-0035 §25), mirroring resource_assignments.budgeted_units/units_per_hour
+  // (N14/N19). No index: read only on the full-plan recalc demand load, never a query
+  // predicate. MUST stay in lock-step with @repo/types. LEVELLING-READ ONLY when the
+  // plan opts in (plans.level_resources); dark until L2 wires the pass.
+  maxUnitsPerHour Decimal?     @map("max_units_per_hour") @db.Decimal(18, 4)
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  calendar     Calendar?            @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  assignments  ResourceAssignment[]
+
+  // Resource name is unique per org among ACTIVE rows — partial unique
+  // (uq_resources_org_name ON (organization_id, name) WHERE deleted_at IS NULL), raw
+  // SQL in the migration (Prisma cannot express partial indexes). Backs the create
+  // DUPLICATE_RESOURCE (409) check; a soft-deleted name is free to reuse.
+  //
+  // (organization_id, created_at, id) covers the organization_id FK (leftmost prefix),
+  // the org-scoped active-list query AND its deterministic cursor sort — the same
+  // full-composite pattern as Calendar / Client; it subsumes a standalone org index.
+  // The partial idx_resources_calendar_id (the CALENDAR_IN_USE / driving-calendar load)
+  // and idx_resources_delete_batch_id (batch restore) are raw SQL in the migration.
+  @@index([organizationId, createdAt, id])
+  @@map("resources")
+}
+
+model ResourceAssignment {
+  id             String @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the endpoints (copied by the service inside the create
+  // transaction, NEVER client input; invariant: organization_id ==
+  // activity.organization_id == resource.organization_id — service-enforced, the FK
+  // scopes only to `organizations`). RESTRICT.
+  organizationId String @map("organization_id") @db.Uuid
+  activityId     String @map("activity_id") @db.Uuid
+  resourceId     String @map("resource_id") @db.Uuid
+
+  // The assigned quantity of work. An EXACT numeric (docs/DATABASE.md: exact data uses
+  // exact types) — the schema's first Decimal. `>= 0` is enforced by
+  // ck_resource_assignments_budgeted_units_nonneg (raw SQL), the DB backstop behind the
+  // DTO @Min(0) boundary reject (N14, ADR-0035 §25) so a bypass can never persist a
+  // negative. Defaulted 0 for a defensive direct-DB insert; the service always sets it.
+  budgetedUnits Decimal  @default(0) @map("budgeted_units") @db.Decimal(18, 4)
+  // The planned RATE (units of work per working hour) at which the driving resource
+  // produces on THIS activity — the `Units/Time` of the P6 triad (M7 rung 4, ADR-0040).
+  // An EXACT numeric like budgeted_units (DECIMAL(18,4)). NULLABLE with NO default — a
+  // NULL rate means the triad is INERT (nothing to recompute; `duration_minutes` stays as
+  // entered), the parity gate: with no units_per_hour on any driving assignment the
+  // recalc is byte-identical (never add a DEFAULT — that would silently activate the
+  // triad on every existing row). Client-settable. `units_per_hour IS NULL OR >= 0` is
+  // enforced by ck_resource_assignments_units_per_hour_nonneg (raw SQL — nullable-safe),
+  // the DB backstop behind the DTO @Min(0) boundary reject (N19), mirroring
+  // budgeted_units/N14. Only the DRIVING assignment (is_driving) participates in the
+  // triad; a zero rate on a units-driven recompute is a service reject (N20 — a CHECK
+  // cannot read the activity's duration_type). MUST stay in lock-step with @repo/types.
+  unitsPerHour  Decimal? @map("units_per_hour") @db.Decimal(18, 4)
+  // Designates THE driving resource of a RESOURCE_DEPENDENT activity (ADR-0035 §23): its
+  // resolved calendar governs the activity's scheduling (wired in M7.2). At most ONE
+  // driving assignment per activity is guaranteed in the DB by the partial unique
+  // uq_resource_assignments_activity_driving (activity_id) WHERE is_driving AND
+  // deleted_at IS NULL (raw SQL). "EXACTLY one on a resource-dependent activity" and "a
+  // MATERIAL resource may not drive" are SERVICE invariants (a partial-unique/FK cannot
+  // read the activity's type or the resource's kind).
+  isDriving     Boolean  @default(false) @map("is_driving")
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  resource     Resource     @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+
+  // Uniqueness & FK-backing indexes are PARTIAL (raw SQL — Prisma cannot express a
+  // WHERE), following the calendar_id / parent_id precedent (assignments soft-delete
+  // only, so the FK RESTRICT check never fires; the real access is active-row lookups):
+  //   * uq_resource_assignments_activity_resource (activity_id, resource_id) WHERE
+  //     deleted_at IS NULL — one ACTIVE assignment per (activity, resource); backs
+  //     DUPLICATE_ASSIGNMENT (409). Its leftmost prefix (activity_id) ALSO subsumes a
+  //     standalone active-activity_id index (the "load an activity's assignments" load),
+  //     so none is added.
+  //   * uq_resource_assignments_activity_driving (activity_id) WHERE is_driving AND
+  //     deleted_at IS NULL — the ≤1-driver-per-activity backstop AND the recalc
+  //     "find THE driving assignment of this activity" load.
+  //   * idx_resource_assignments_resource_id (resource_id) WHERE deleted_at IS NULL —
+  //     the RESOURCE_IN_USE delete guard's active-assignment count.
+  //   * idx_resource_assignments_delete_batch_id — batch restore (WHERE ... IS NOT NULL).
+  // organization_id is a FULL index (backs its FK RESTRICT + org-scoped IDOR loads),
+  // like every denormalised-org sibling.
+  @@index([organizationId])
+  @@map("resource_assignments")
 }

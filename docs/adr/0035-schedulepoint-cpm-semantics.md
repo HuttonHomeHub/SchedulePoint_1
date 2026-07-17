@@ -20,7 +20,11 @@ stays **Proposed** overall until every clause is built. Current state:
 | §13–§14 (duplicate/cycle report)   | M4 (F8)          | **Accepted** |
 | §22 (zero-duration task)           | M4               | **Accepted** |
 | §17–§20 (float & critical)         | M6               | **Accepted** |
-| §21, §23–§24 (LOE, resource, WBS)  | M5-epic          | Proposed     |
+| §21 (level of effort)              | M5-epic          | **Accepted** |
+| §24 (WBS-summary rollup)           | M5-epic          | **Accepted** |
+| §23 (resource-dependent)           | M7               | **Accepted** |
+| §26–§27 (duration types), N19/N20  | M7 (rung 4)      | **Accepted** |
+| §28 (resource levelling), N21      | M7 (levelling)   | **Accepted** |
 | §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
@@ -138,7 +142,7 @@ We will implement the following semantics. Each cites the milestone that will bu
 20. **"Make open-ended activities critical"** is an option, **default off** (P6 default); on (S08) it
     marks open-ends critical.
 
-### Activity types (→ M1/M5)
+### Activity types (→ M1/M5/M7)
 
 21. **Level of Effort:** duration is **derived** from its SS-predecessor's start to its FF-successor's
     finish; an LOE **never drives a successor, never appears on the critical path, and never inherits
@@ -153,7 +157,98 @@ We will implement the following semantics. Each cites the milestone that will bu
 ### Input validity (boundary)
 
 25. **Reject** negative duration (N09) and negative resource units (N14) at the API boundary; **coerce
-    a milestone's non-zero duration to zero** with a warning (N17).
+    a milestone's non-zero duration to zero** with a warning (N17). **(→ M7, ADR-0040)** also **reject a
+    negative `units_per_hour` rate (N19)** at the boundary — a DTO `@Min(0)` backed by a nullable-safe
+    `ck_resource_assignments_units_per_hour_nonneg` CHECK — and **reject a zero rate on a units-driven
+    duration recompute (N20)** in the service **before any division** (`UNITS_PER_HOUR_ZERO`), so the
+    `resolveTriad` recompute is **total** (never NaN / Infinity / a negative duration). N20 is a service
+    guard because a CHECK cannot read the activity's `duration_type` to know the rate is a divisor.
+    **(→ M7, ADR-0041)** also **reject a negative `resource.max_units_per_hour` capacity (N21)** at the
+    boundary — a DTO `@Min(0)` backed by a nullable-safe `ck_resources_max_units_per_hour_nonneg` CHECK
+    (**NULL = uncapped**, the parity-preserving default). A negative capacity is meaningless as a ceiling;
+    rejecting it keeps the levelling feasibility sweep total (spare headroom `capacity − demand` is never
+    a negative ceiling).
+
+### Duration types (→ M7)
+
+26. **Duration-type recompute contract.** Every activity carries a **`duration_type`** — one of the four
+    P6 values `FIXED_DURATION_AND_UNITS_TIME` (default) | `FIXED_DURATION_AND_UNITS` | `FIXED_UNITS` |
+    `FIXED_UNITS_TIME` — that keeps the identity **`Units = Duration × Units/Time`** (`U = D × R`, with
+    `D` = working hours = `durationMinutes / 60`) true after a planner edits one of the three quantities.
+    The type names which quantity is **recomputed** for a given edited field (the pure `resolveTriad`
+    truth table, ADR-0040 §3):
+
+    | Duration type                   | edit Duration | edit Units | edit Units/Time |
+    | ------------------------------- | ------------- | ---------- | --------------- |
+    | `FIXED_UNITS`                   | `R := U/D`    | `R := U/D` | `D := U/R`      |
+    | `FIXED_UNITS_TIME`              | `U := D×R`    | `D := U/R` | `U := D×R`      |
+    | `FIXED_DURATION_AND_UNITS`      | `R := U/D`    | `R := U/D` | `U := D×R`      |
+    | `FIXED_DURATION_AND_UNITS_TIME` | `U := D×R`    | `R := U/D` | `U := D×R`      |
+
+    **Duration is auto-derived only under the two units-driven types** (`FIXED_UNITS`, `FIXED_UNITS_TIME`)
+    and only on the complementary edit; every other cell **holds the duration** (P6's "protect duration
+    first, then the pair's second member, the remaining field absorbs" priority). Changing **only** the
+    type never retroactively re-solves the triad — it governs future edits. **Rounding:** a derived
+    `durationMinutes` is rounded **half-up to a whole minute** and clamped `≥ 0` (ADR-0036 integer
+    minutes); `budgetedUnits` / `unitsPerHour` are `Decimal(18,4)`. The identity holds to that grid; a
+    sub-minute residual on a derived duration is documented, absorbed by re-deriving the shown dependent.
+    The recompute is a **service-boundary** concern resolved once at write time — the **CPM engine is
+    untouched** and reads the already-resolved `durationMinutes` (ADR-0040 §6).
+
+27. **Units/time home & the derivation boundary.** The planned **rate** (`units_per_hour`) lives on the
+    **driving `ResourceAssignment`** (ADR-0039's `is_driving` ≤1-driver), **not** the `Resource`
+    (`resource.max_units_per_hour` stays reserved for levelling). **Only the driving assignment
+    participates** in the triad; non-driving assignments' units/rate are inert bookkeeping. A **NULL rate**
+    (no driving assignment, or a driver with no rate entered) makes the triad **inert** — `resolveTriad`
+    is a **no-op**, `durationMinutes` is exactly what the planner entered, and the whole feature is dark
+    (the byte-parity gate, ADR-0034/0040 §4). The derived field is **server-computed**, never trusted
+    from the client. Negative (N19) and zero-divisor (N20) rates are rejected per §25.
+
+### Resource levelling (→ M7)
+
+28. **Resource-levelling semantics.** Levelling is an **opt-in, pure, second pass** on top of the CPM
+    network (ADR-0041): the network (early/late/float/critical) is computed **first and unchanged**, and
+    levelling then delays activities within a resource-constrained model, producing an **additive leveled
+    overlay** (`leveledStart`/`leveledFinish` + `levelingDelay` + plan counts). SchedulePoint's chosen
+    semantics — the golden contract for the fixture's `levelling_test` / S10:
+
+    - **Deterministic serial priority-list heuristic** (levelling is NP-hard; there is no single "correct"
+      answer, so we fix a reproducible one). Activities are placed **one at a time**, highest-priority
+      first, each into the **earliest capacity-feasible working window at or after its early start**. The
+      single **composite priority key** — `levelingPriority` asc (client-settable, lower = higher; NULL
+      sorts **last** as +∞) → **total float** asc → **early start** asc → **activity id** asc — makes the
+      result independent of input order (the determinism invariant; the goldens are reproducible).
+    - **Capacity = `resource.max_units_per_hour`** (ADR-0039-reserved, activated here): `Decimal(18,4)?`,
+      **NULL = uncapped** (never over-allocated — the parity default), `>= 0` (N21, §25). **Demand** at a
+      working instant is the **sum of `unitsPerHour` of every active assignment running then** — **all**
+      assignments consume capacity, not only the schedule-driving one — measured on the **resource's own
+      calendar** (ADR-0037) via a bounded event-driven interval sweep.
+    - **Level within total float first, then extend.** A delay that fits within total float preserves the
+      project finish; only when float is exhausted does levelling **extend** the schedule. The plan option
+      **`levelWithinFloatOnly`** (default `false`, P6's off-by-default) forbids extension: a residual
+      over-allocation is then left **unresolved at the within-float cap**, not extended.
+    - **Exclusions — never moved (occupy in place).** **Mandatory**-constrained (`MANDATORY_START`/
+      `MANDATORY_FINISH`), **Level-of-Effort** (§21), **WBS-summary** (§24), **milestone**, and **time-fixed
+      progressed** (started) activities are **never delayed**; they hold the resource profile at their
+      network position so others level around them. A residual over-allocation a pinned activity causes is
+      **reported**, never resolved by moving the pinned one.
+    - **Window conflict = extend-and-flag (Q1).** When serialising pushes an activity **past a resource's
+      availability window** (a window-only crane-hire calendar that runs out), the activity is still placed
+      there and **`levelingWindowExceeded`** is set (engine-owned produce-and-flag + plan count) — never a
+      hang, never silent success. (The report-and-stop alternative is defensible; extend-and-flag is chosen
+      and documented, per the fixture's explicit open question.)
+    - **Network float authoritative (Q2).** The pure early/late/float/critical are **not recomputed** on
+      the leveled dates; the leveled dates are an **overlay only**. This keeps the critical path meaningful
+      and the off-path byte-parity gate trivially true (leveling-aware float is a named later rung).
+    - **Self-over-allocation (§2).** A single activity whose own demand on a resource exceeds that
+      resource's capacity cannot be fixed by delay: **`selfOverAllocated`** is set, the activity is placed
+      at its early start (not split), and the pass continues.
+    - **Opt-in, additive, dark by default.** Levelling runs only when the plan's **`levelResources`** flag
+      is on (and it has assignments); off (the default) the recalculate output is **byte-identical** — the
+      parity gate. The leveled columns are **engine-owned** (written only by the recalc batched `UPDATE`,
+      never a write DTO, never touching `version`/`updated_at`), and the schedule summary surfaces
+      `leveledActivityCount` / `levelingWindowExceededCount` / `selfOverAllocatedCount` /
+      `leveledProjectFinish` (0 / null when off).
 
 ## Alternatives considered
 

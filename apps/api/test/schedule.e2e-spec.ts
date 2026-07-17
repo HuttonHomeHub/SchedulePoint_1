@@ -49,6 +49,8 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
 
   // Delete children before parents so the FK restrictions never bite.
   async function resetDatabase(): Promise<void> {
+    await prisma.resourceAssignment.deleteMany();
+    await prisma.resource.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
@@ -255,6 +257,80 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(depAfter.updatedBy).toBe(depBefore.updatedBy);
   });
 
+  it('levels resources on recalc (serialises a capacity-1 clash) without touching version/updated_at', async () => {
+    // Two 2-day activities both start at the data date and both demand the one capacity-1 crane. With
+    // levelResources on, the levelling pass (ADR-0041) serialises them: A holds days 1–2, B is pushed
+    // to days 3–4 with a 2-working-day (2 × 1440-minute) delay. The overlay is engine-owned (ADR-0022),
+    // so it lands in leveled_start/leveled_finish/leveling_delay_minutes while version/updated_at stay put.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Levelling'); // clears the calendar → all-days-work
+
+    const makePriorityActivity = async (name: string, priority: number): Promise<string> => {
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name, durationDays: 2, levelingPriority: priority })
+        .expect(201);
+      return res.body.data.id as string;
+    };
+    const a = await makePriorityActivity('A', 1);
+    const b = await makePriorityActivity('B', 2);
+
+    // A capacity-1 crane, assigned to both activities at 1 unit/hour of demand each.
+    const crane = await actor.agent
+      .post('/api/v1/organizations/acme/resources')
+      .send({ name: 'Crane', kind: 'EQUIPMENT', maxUnitsPerHour: 1 })
+      .expect(201);
+    const craneId = crane.body.data.id as string;
+    for (const activityId of [a, b]) {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/activities/${activityId}/assignments`)
+        .send({ resourceId: craneId, unitsPerHour: 1 })
+        .expect(201);
+    }
+
+    // Opt the plan into resource levelling (the plan is at version 2 after makePlan's calendar PATCH).
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ levelResources: true, version: 2 })
+      .expect(200);
+
+    const before = await prisma.activity.findUniqueOrThrow({
+      where: { id: b },
+      select: { version: true, updatedAt: true, updatedBy: true },
+    });
+
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    // A keeps its network position; B is serialised behind it and carries the delay in WORKING MINUTES.
+    const aAfter = await prisma.activity.findUniqueOrThrow({
+      where: { id: a },
+      select: { leveledStart: true, leveledFinish: true, levelingDelayMinutes: true },
+    });
+    const bAfter = await prisma.activity.findUniqueOrThrow({
+      where: { id: b },
+      select: {
+        leveledStart: true,
+        leveledFinish: true,
+        levelingDelayMinutes: true,
+        version: true,
+        updatedAt: true,
+        updatedBy: true,
+      },
+    });
+    const ymd = (d: Date | null) => d?.toISOString().slice(0, 10);
+    expect(ymd(aAfter.leveledStart)).toBe('2026-01-01');
+    expect(ymd(aAfter.leveledFinish)).toBe('2026-01-02');
+    expect(aAfter.levelingDelayMinutes).toBe(0);
+    expect(ymd(bAfter.leveledStart)).toBe('2026-01-03');
+    expect(ymd(bAfter.leveledFinish)).toBe('2026-01-04');
+    expect(bAfter.levelingDelayMinutes).toBe(2 * 1440); // 2 working days, in minutes
+
+    // The levelling overlay is engine-owned: the recalc did NOT bump version/updated_at/updated_by.
+    expect(bAfter.version).toBe(before.version);
+    expect(bAfter.updatedAt.getTime()).toBe(before.updatedAt.getTime());
+    expect(bAfter.updatedBy).toBe(before.updatedBy);
+  });
+
   // NOTE: `plannedStart` is now a mandatory, non-null column (ADR-0033 M1;
   // migration `20260714130000_require_plan_planned_start`) and `POST /plans`
   // rejects a missing start with 422 — so a plan with no start date can no
@@ -355,6 +431,71 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const planId = await makePlan(actor, 'Northgate');
     const outsider = await signUp('outsider@example.com');
     await outsider.agent.get(summaryUrl(planId)).expect(404);
+  });
+
+  const floatPathsUrl = (planId: string, target: string, maxPaths?: number) =>
+    `/api/v1/organizations/acme/plans/${planId}/schedule/float-paths?target=${target}` +
+    (maxPaths !== undefined ? `&maxPaths=${maxPaths}` : '');
+
+  it('returns ranked contiguous float paths into a target (ADR-0035 §19)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    // A(3)→B(4)→D(5); A(3)→C(2)→D(5). Into D: path 0 is the driving chain D←B←A (relative float 0);
+    // C is a non-driving predecessor carrying 2 days of float, so it forms a branch path at +2.
+    const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 4);
+    const c = await makeActivity(actor, planId, 'C', 2);
+    const d = await makeActivity(actor, planId, 'D', 5);
+    await link(actor, planId, a, b);
+    await link(actor, planId, a, c);
+    await link(actor, planId, b, d);
+    await link(actor, planId, c, d);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const res = await actor.agent.get(floatPathsUrl(planId, d)).expect(200);
+    const paths = res.body.data.paths as Array<{
+      index: number;
+      relativeFloat: number;
+      activityIds: string[];
+    }>;
+    expect(res.body.data.targetActivityId).toBe(d);
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    // Path 0 is the driving chain, target-first, relative float 0.
+    expect(paths[0]).toMatchObject({ index: 0, relativeFloat: 0 });
+    expect(paths[0]!.activityIds[0]).toBe(d);
+    expect(paths[0]!.activityIds).toEqual(expect.arrayContaining([d, b, a]));
+    // A branch path carries C at +2 working days of relative float.
+    const branch = paths.find((p) => p.activityIds.includes(c));
+    expect(branch).toBeDefined();
+    expect(branch!.index).toBeGreaterThanOrEqual(1);
+    expect(branch!.relativeFloat).toBe(2);
+
+    // schedule:read — a Viewer can run the analysis.
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    await viewer.agent.get(floatPathsUrl(planId, d)).expect(200);
+  });
+
+  it('404s when the target activity is not in the plan', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    await makeActivity(actor, planId, 'A', 3);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+    await actor.agent.get(floatPathsUrl(planId, randomUUID())).expect(404);
+  });
+
+  it('422s when the target query param is missing or not a uuid', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    // A missing / malformed `target` is a DTO validation failure (FloatPathsQueryDto), which the
+    // global ValidationPipe surfaces as 422 — matching every other validation error in the API
+    // (docs/API.md; cf. the "validates the id (422)" case above), not a 400 malformed-request.
+    await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/schedule/float-paths`)
+      .expect(422);
+    await actor.agent.get(floatPathsUrl(planId, 'not-a-uuid')).expect(422);
   });
 
   it('a mandatory pin that breaks logic is produced, flagged, and counted (ADR-0035 §7)', async () => {

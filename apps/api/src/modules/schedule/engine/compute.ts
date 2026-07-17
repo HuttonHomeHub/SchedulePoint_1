@@ -3,8 +3,10 @@ import {
   clampBackwardFinish,
   clampForwardStart,
   clampSecondaryBackwardFinish,
+  isLoe,
   isMandatory,
   isMilestone,
+  isSummary,
 } from './constraints';
 import { buildGraph } from './graph';
 import {
@@ -183,6 +185,9 @@ export function computeSchedule(
     const inProgress = progress.status === 'IN_PROGRESS';
     let lower = dataDateAbs; // the data date floors any (remaining) work — never before it (§2)
     for (const edge of graph.incoming.get(id)!) {
+      // A Level-of-Effort predecessor never drives or bounds its successor (ADR-0035 §21): the LOE is
+      // a hammock that spans its neighbours, so its own (derived) dates carry no logic downstream.
+      if (isLoe(graph.activities.get(edge.predecessorId)!.type)) continue;
       // For an IN-PROGRESS activity's remaining work, the recalc mode decides whether this
       // predecessor's tie still holds (ADR-0035 §1): Retained Logic keeps all; Progress Override
       // drops incomplete predecessors; Actual Dates drops all. A not-started activity always
@@ -275,6 +280,8 @@ export function computeSchedule(
     const duration = activity.durationMinutes;
     let logicEarliest = dataDateAbs;
     for (const edge of graph.incoming.get(id)!) {
+      // An LOE predecessor never pushes its successor in the effective-Visual pass either (§21).
+      if (isLoe(graph.activities.get(edge.predecessorId)!.type)) continue;
       const predPs = visualPropStart.get(edge.predecessorId)!;
       const predPf = visualPropFinish.get(edge.predecessorId)!;
       const bound = forwardLowerBound(edge, predPs, predPf, cal, duration, planCalendar);
@@ -310,7 +317,15 @@ export function computeSchedule(
     const cal = calendarOf(successor);
     const successorStart = earlyStart.get(id)!;
     const successorDuration = successor.durationMinutes;
+    const successorIsLoe = isLoe(successor.type);
     for (const edge of graph.incoming.get(id)!) {
+      // An edge that touches a Level-of-Effort activity is never a driver (§21): an LOE never drives a
+      // successor, and its own dates are derived from the span (below) rather than from these bounds, so
+      // a bound check against them would be meaningless. Force non-driving on either side.
+      if (successorIsLoe || isLoe(graph.activities.get(edge.predecessorId)!.type)) {
+        edgeResults.push({ edgeId: edge.id, isDriving: false });
+        continue;
+      }
       const predStart = earlyStart.get(edge.predecessorId)!;
       const predFinish = earlyFinish.get(edge.predecessorId)!;
       const bound = forwardLowerBound(
@@ -329,9 +344,15 @@ export function computeSchedule(
     }
   }
 
-  // Project finish is the latest early-finish INSTANT across the whole plan.
+  // Project finish is the latest early-finish INSTANT across the whole plan. A Level-of-Effort activity
+  // is excluded (§21): its finish is derived from its FF-successor (a real activity already in this max),
+  // so it can never extend the project end — and it must never drive it. A WBS-summary is excluded the
+  // same way (§24): its finish is rolled up from its branch (real activities already in this max), so it
+  // can never define the project end either.
   let projectFinishInstant: number | null = null;
   for (const id of graph.order) {
+    const type = graph.activities.get(id)!.type;
+    if (isLoe(type) || isSummary(type)) continue;
     const ef = earlyFinish.get(id)!;
     if (projectFinishInstant === null || ef > projectFinishInstant) projectFinishInstant = ef;
   }
@@ -347,6 +368,11 @@ export function computeSchedule(
     const drivingById = new Map<string, boolean>(edgeResults.map((e) => [e.edgeId, e.isDriving]));
     const stack: string[] = [];
     for (const id of graph.order) {
+      // An LOE is never on the longest path (§21): skip it as a seed. Its incoming/outgoing edges are
+      // all non-driving (above), so the backward walk never traverses one either. A WBS-summary is
+      // never on the longest path (§24) and carries no edges at all, so it is skipped the same way.
+      const type = graph.activities.get(id)!.type;
+      if (isLoe(type) || isSummary(type)) continue;
       if (earlyFinish.get(id) === projectFinishInstant && !onLongestPath.has(id)) {
         onLongestPath.add(id);
         stack.push(id);
@@ -385,6 +411,9 @@ export function computeSchedule(
     const duration = effectiveDurationById.get(id) ?? activity.durationMinutes;
     let upper = projectFinish;
     for (const edge of graph.outgoing.get(id)!) {
+      // A Level-of-Effort successor never constrains its predecessor's late finish (§21): the LOE hangs
+      // off this activity, it does not pull it back. (The LOE's own late dates are derived below.)
+      if (isLoe(graph.activities.get(edge.successorId)!.type)) continue;
       const succLs = lateStart.get(edge.successorId)!;
       const succLf = lateFinish.get(edge.successorId)!;
       const bound = backwardUpperBound(edge, succLs, succLf, cal, duration, planCalendar);
@@ -409,6 +438,117 @@ export function computeSchedule(
     }
   }
 
+  // LOE derivation pass (ADR-0035 §21). A Level-of-Effort activity's dates are DERIVED from its span —
+  // the earliest of its SS-predecessors' starts to the latest of its FF-successors' finishes — rather
+  // than from an input duration. Because an LOE never drove or bounded any of those neighbours (the
+  // exclusions above), their early dates are already final; we read them here and OVERWRITE the LOE's
+  // own early/late maps. Late is pinned to early, so the LOE carries a non-negative 0 float and never
+  // inherits a downstream FNLT's negative float. Runs in topological order so a chained LOE resolves
+  // after its drivers. `loeNoSpan` records the N12 case (surfaced in a later slice). No LOE ⇒ this loop
+  // is empty and every prior map is untouched (the golden-suite parity gate).
+  const loeNoSpan = new Map<string, boolean>();
+  for (const id of graph.order) {
+    const activity = graph.activities.get(id)!;
+    if (!isLoe(activity.type)) continue;
+    const cal = calendarOf(activity);
+    const duration = activity.durationMinutes;
+    // Start = the earliest SS-predecessor start (the widest hammock cover); no SS predecessor ⇒ no span.
+    let startBound: number | null = null;
+    for (const edge of graph.incoming.get(id)!) {
+      if (edge.type !== 'SS') continue;
+      const predStart = earlyStart.get(edge.predecessorId)!;
+      const predFinish = earlyFinish.get(edge.predecessorId)!;
+      const bound = forwardLowerBound(edge, predStart, predFinish, cal, duration, planCalendar);
+      if (startBound === null || bound < startBound) startBound = bound;
+    }
+    // Finish = the latest FF-successor finish; no FF successor ⇒ no span.
+    let finishBound: number | null = null;
+    for (const edge of graph.outgoing.get(id)!) {
+      if (edge.type !== 'FF') continue;
+      const succStart = earlyStart.get(edge.successorId)!;
+      const succFinish = earlyFinish.get(edge.successorId)!;
+      const bound = backwardUpperBound(edge, succStart, succFinish, cal, duration, planCalendar);
+      if (finishBound === null || bound > finishBound) finishBound = bound;
+    }
+    // N12 (ADR-0035 §21): an LOE missing either span end has no resolvable duration. Produce a defined
+    // fallback — start at its SS end if present else the data date; zero length when the finish is
+    // unknown — and flag it, never rejecting or crashing. The flag is surfaced in a later slice (F2).
+    loeNoSpan.set(id, startBound === null || finishBound === null);
+    const start = rollForwardToWorking(cal, startBound ?? dataDateAbs);
+    const finish =
+      finishBound === null
+        ? start
+        : Math.max(start, rollBackwardToWorking(cal, dataDateAbs, finishBound));
+    earlyStart.set(id, start);
+    earlyFinish.set(id, finish);
+    lateStart.set(id, start);
+    lateFinish.set(id, finish);
+  }
+
+  // WBS-summary rollup pass (ADR-0035 §24). A `WBS_SUMMARY` activity carries no logic (it has no
+  // incoming/outgoing edges) and its dates are DERIVED from its branch: the earliest early-start to the
+  // latest early-finish over its DIRECT children in the `parentId` containment tree. It is never
+  // critical, never driving, never on the longest path and never defines the project finish (the
+  // exclusions above), so nothing here can feed back into another activity's schedule. Runs AFTER the
+  // LOE derivation pass so an LOE child already carries its final derived dates. Summaries are processed
+  // **deepest-first** (by `parentId`-chain depth, descending) so a nested summary's children — including
+  // child summaries — resolve before it; late is pinned to the rolled-up early instants, giving a
+  // by-convention 0 float. An EMPTY summary (no children) collapses to the data date (the defined empty
+  // convention). No summary ⇒ this loop is empty and every prior map is untouched (the parity gate).
+  const summaryIds = graph.order.filter((id) => isSummary(graph.activities.get(id)!.type));
+  if (summaryIds.length > 0) {
+    const childrenByParent = new Map<string, string[]>();
+    for (const id of graph.order) {
+      const parentId = graph.activities.get(id)!.parentId;
+      if (parentId === undefined || parentId === null) continue;
+      const siblings = childrenByParent.get(parentId);
+      if (siblings) siblings.push(id);
+      else childrenByParent.set(parentId, [id]);
+    }
+    // Depth = the length of the `parentId` chain up to a top-level node; deepest-first ordering makes a
+    // nested summary resolve after (below) its child summaries, so a parent reads finalised child dates.
+    const depthOf = (id: string): number => {
+      let depth = 0;
+      let cursor: string | null | undefined = graph.activities.get(id)!.parentId;
+      // A guard cap (≤ node count) keeps a malformed `parentId` cycle from spinning forever.
+      while (cursor !== undefined && cursor !== null && depth <= graph.order.length) {
+        depth += 1;
+        cursor = graph.activities.get(cursor)?.parentId;
+      }
+      return depth;
+    };
+    const ordered = [...summaryIds].sort((a, b) => depthOf(b) - depthOf(a));
+    for (const id of ordered) {
+      const cal = calendarOf(graph.activities.get(id)!);
+      const children = childrenByParent.get(id) ?? [];
+      let esInst: number;
+      let efInst: number;
+      if (children.length === 0) {
+        // Empty summary (§24): collapse to the data date — a defined zero-length point, never NaN.
+        esInst = dataDateAbs;
+        efInst = dataDateAbs;
+      } else {
+        esInst = Infinity;
+        efInst = -Infinity;
+        for (const childId of children) {
+          const childEs = earlyStart.get(childId)!;
+          const childEf = earlyFinish.get(childId)!;
+          if (childEs < esInst) esInst = childEs;
+          if (childEf > efInst) efInst = childEf;
+        }
+      }
+      // Roll the branch onto the summary's own calendar working boundaries (like the LOE pass), then pin
+      // late = early so the summary carries a by-convention 0 float and inherits no downstream negative.
+      const start = rollForwardToWorking(cal, esInst);
+      const finish =
+        efInst <= start ? start : Math.max(start, rollBackwardToWorking(cal, dataDateAbs, efInst));
+      earlyStart.set(id, start);
+      earlyFinish.set(id, finish);
+      lateStart.set(id, start);
+      lateFinish.set(id, finish);
+    }
+  }
+
   // Map instants to inclusive dates, compute float (on the activity's own calendar) and
   // criticality, roll up. The exposed *Offset fields project onto the common **plan** calendar
   // frame (byte-identical to the old offsets on the all-inherit path); float uses the activity's
@@ -418,14 +558,23 @@ export function computeSchedule(
   let nearCriticalCount = 0;
   let constraintViolationCount = 0;
   let constraintWarningCount = 0;
+  let loeNoSpanCount = 0;
+  let resourceDriverMissingCount = 0;
   let maxInclusiveFinishInstant: number | null = null;
   let projectFinishDate: string | null = null;
   for (const id of graph.order) {
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
+    const activityIsLoe = isLoe(activity.type);
+    const activityIsSummary = isSummary(activity.type);
     const progress = progressOf.get(id)!;
     if (constraintViolated.get(id)) constraintViolationCount += 1;
+    if (loeNoSpan.get(id)) loeNoSpanCount += 1;
+    // Resource-dependent driver-missing (ADR-0035 §23 / ADR-0039): the service sets this on a
+    // RESOURCE_DEPENDENT activity with no driving assignment; the engine carries it and counts it
+    // (produce-and-flag). Always false otherwise, so the byte-identical path is unchanged.
+    if (activity.resourceDriverMissing) resourceDriverMissingCount += 1;
     // N15 (ADR-0035 §12): a Start-No-Earlier-Than whose date is before the data date is honoured but
     // cannot pull work before it — a WARNING (not a violation), derived purely from the inputs.
     if (
@@ -470,7 +619,13 @@ export function computeSchedule(
     // Make-open-ends-critical (M6-F4): OR an open end (no predecessors or no successors) into the
     // definition when the option is on — never dropping an already-critical member. Off ⇒ unchanged.
     const isOpenEnd = graph.incoming.get(id)!.length === 0 || graph.outgoing.get(id)!.length === 0;
-    const isCritical = byDefinition || (makeOpenEndsCritical && isOpenEnd);
+    // A Level-of-Effort activity is NEVER critical (ADR-0035 §21), even though its pinned late = early
+    // gives it total float 0 (which would otherwise satisfy `TOTAL_FLOAT ≤ 0`) and it is often an open
+    // end. The guard overrides both the definition and the make-open-ends option. A WBS-summary is never
+    // critical either (§24) — its pinned late = early gives it total float 0, and having no edges it is
+    // always an open end, so the guard overrides both here as well.
+    const isCritical =
+      !activityIsLoe && !activityIsSummary && (byDefinition || (makeOpenEndsCritical && isOpenEnd));
     // Near-critical stays total-float-based and never overlaps critical: a positive-but-small float that
     // is not already flagged critical. On the default path (threshold 0) this equals the old predicate.
     const isNearCritical =
@@ -488,7 +643,14 @@ export function computeSchedule(
     const effDurationForFF = effectiveDurationById.get(id) ?? duration;
     const outgoing = graph.outgoing.get(id)!;
     let freeFloat: number;
-    if (outgoing.length === 0) {
+    if (activityIsLoe || activityIsSummary) {
+      // A Level-of-Effort activity carries no float of its own (ADR-0035 §21): its span is pinned to its
+      // neighbours, so it can slip by nothing — free float is 0, never the negative value the raw
+      // FF-successor gap math would give for a hammock that ends at its latest (not tightest) successor.
+      // A WBS-summary is the same (§24): its span is rolled up from its branch and it has no successors,
+      // so its free float is 0 by convention rather than the tail identity FF = TF an open end would give.
+      freeFloat = 0;
+    } else if (outgoing.length === 0) {
       freeFloat = totalFloat;
     } else {
       let minGap = Infinity;
@@ -514,8 +676,14 @@ export function computeSchedule(
     const efOwn = offsetFromDataDate(cal, dataDateAbs, efInst);
     const lsOwn = offsetFromDataDate(cal, dataDateAbs, lsInst);
     const lfOwn = offsetFromDataDate(cal, dataDateAbs, lfInst);
-    const inclusiveFinishOwn = duration === 0 ? esOwn : efOwn - 1;
-    const inclusiveLateFinishOwn = duration === 0 ? lsOwn : lfOwn - 1;
+    // Point-like ⇒ finish maps to the start day (a milestone or a zero-length span). For a normal
+    // activity this is exactly `duration === 0` (byte-identical); a Level-of-Effort activity has a
+    // DERIVED span, so its point-ness is read from the computed instants (a no-span LOE collapses to
+    // its start), not its always-zero input duration. A WBS-summary likewise has a DERIVED (rolled-up)
+    // span — read from the instants — so an empty summary collapsed to the data date reads as point-like.
+    const pointLike = activityIsLoe || activityIsSummary ? efInst === esInst : duration === 0;
+    const inclusiveFinishOwn = pointLike ? esOwn : efOwn - 1;
+    const inclusiveLateFinishOwn = pointLike ? lsOwn : lfOwn - 1;
     const vDisplayInst = visualDisplayStart.get(id)!;
     const vDisplayOwn = offsetFromDataDate(cal, dataDateAbs, vDisplayInst);
     const vInclusiveFinishOwn = duration === 0 ? vDisplayOwn : vDisplayOwn + duration - 1;
@@ -543,7 +711,15 @@ export function computeSchedule(
     // to a finish milestone at the same instant (and `esInst === efInst` for it, so `efInst − 1` is
     // its own last minute).
     const inclusiveFinishInstant = isMilestone(activity.type) ? esInst : efInst - 1;
-    if (maxInclusiveFinishInstant === null || inclusiveFinishInstant > maxInclusiveFinishInstant) {
+    // A Level-of-Effort activity never defines the project finish DATE either (§21) — consistent with
+    // its exclusion from `projectFinishInstant` above; its span mirrors a real successor that is already
+    // in this max. A WBS-summary is excluded the same way (§24): its rolled-up finish mirrors a real
+    // branch member already in this max, so it can never define the project finish date.
+    if (
+      !activityIsLoe &&
+      !activityIsSummary &&
+      (maxInclusiveFinishInstant === null || inclusiveFinishInstant > maxInclusiveFinishInstant)
+    ) {
       maxInclusiveFinishInstant = inclusiveFinishInstant;
       projectFinishDate = earlyFinishDate;
     }
@@ -559,6 +735,8 @@ export function computeSchedule(
       isCritical,
       isNearCritical,
       constraintViolated: constraintViolated.get(id) ?? false,
+      loeNoSpan: loeNoSpan.get(id) ?? false,
+      resourceDriverMissing: activity.resourceDriverMissing ?? false,
       earlyStart: earlyStartDate,
       earlyFinish: earlyFinishDate,
       lateStart: lateStartDate,
@@ -576,6 +754,8 @@ export function computeSchedule(
     nearCriticalCount,
     constraintViolationCount,
     constraintWarningCount,
+    loeNoSpanCount,
+    resourceDriverMissingCount,
     expectedFinishAppliedCount,
     projectFinishOffset:
       projectFinishInstant === null

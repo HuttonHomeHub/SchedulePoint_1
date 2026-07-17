@@ -1,9 +1,11 @@
 import {
+  DURATION_TYPES,
   PARKED_CONSTRAINT_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
+  type DurationType,
 } from '@repo/types';
 import { z } from 'zod';
 
@@ -21,6 +23,8 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   FINISH_MILESTONE: 'Finish milestone',
   HAMMOCK: 'Hammock',
   LEVEL_OF_EFFORT: 'Level of effort',
+  WBS_SUMMARY: 'WBS summary',
+  RESOURCE_DEPENDENT: 'Resource-dependent',
 };
 
 export const ACTIVITY_TYPES = Object.keys(ACTIVITY_TYPE_LABELS) as [
@@ -41,6 +45,61 @@ export const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FIN
 
 export function isMilestoneType(type: ActivityType): boolean {
   return MILESTONE_TYPES.includes(type);
+}
+
+/**
+ * Types whose duration is NOT a user-entered number: milestones (a point in time, always 0),
+ * **Level of Effort** (the engine derives its span from its SS/FF ties, ADR-0035 §21) and
+ * **WBS summary** (dates roll up from the branch it heads, ADR-0035 §24). The form hides the
+ * Duration and Expected-finish fields for these, and the request builder stores duration 0.
+ */
+export function isDurationDerivedType(type: ActivityType): boolean {
+  return isMilestoneType(type) || type === 'LEVEL_OF_EFFORT' || type === 'WBS_SUMMARY';
+}
+
+/**
+ * Human labels for the P6 duration type (M7 rung 4, ADR-0040). Exhaustive
+ * `Record<DurationType, …>` so a new type fails to compile until a label is added. The default
+ * (`FIXED_DURATION_AND_UNITS_TIME`) is named in the picker's help text, keeping the labels the bare
+ * P6 terms (the `&` mirrors P6/ADR-0040 naming, unlike the other label maps).
+ */
+export const DURATION_TYPE_LABELS: Record<DurationType, string> = {
+  FIXED_DURATION_AND_UNITS_TIME: 'Fixed duration & units/time',
+  FIXED_DURATION_AND_UNITS: 'Fixed duration & units',
+  FIXED_UNITS: 'Fixed units',
+  FIXED_UNITS_TIME: 'Fixed units/time',
+};
+
+/** The activity types the form's Type picker always offers — the three with full engine support. */
+export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
+  'TASK',
+  'START_MILESTONE',
+  'FINISH_MILESTONE',
+];
+
+/**
+ * Advanced activity types offered only when `VITE_ADVANCED_ACTIVITY_TYPES` is on (M5-epic, ADR-0035).
+ * **Level of Effort** (span-derived, §21) and **WBS summary** (branch roll-up, §24) — both with live
+ * engine/API/conformance support. `HAMMOCK` is intentionally NOT offered (no engine behaviour yet),
+ * though {@link ACTIVITY_TYPE_LABELS} still names every value so a legacy/imported one displays
+ * honestly.
+ */
+export const ADVANCED_ACTIVITY_TYPES: readonly ActivityType[] = ['LEVEL_OF_EFFORT', 'WBS_SUMMARY'];
+
+/**
+ * The activity types the Type picker should offer: the always-supported {@link BASE_ACTIVITY_TYPES},
+ * plus {@link ADVANCED_ACTIVITY_TYPES} when the flag is on, plus the activity's `current` value if it
+ * isn't already in that set — so editing an activity of a not-offered type (a legacy `HAMMOCK`, or an
+ * LOE while the flag is off) keeps its own value visible and selected rather than silently coercing it
+ * (the honest-selector pattern, cf. the constraint editor). Order-stable and de-duplicated.
+ */
+export function selectableActivityTypes(
+  advancedEnabled: boolean,
+  current?: ActivityType,
+): ActivityType[] {
+  const types = [...BASE_ACTIVITY_TYPES, ...(advancedEnabled ? ADVANCED_ACTIVITY_TYPES : [])];
+  if (current && !types.includes(current)) types.push(current);
+  return types;
 }
 
 /**
@@ -74,6 +133,11 @@ export const activityFormSchema = z
     name: z.string().trim().min(1, 'Name is required.').max(200, 'Name is too long.'),
     code: z.string().trim().max(32, 'Code is too long.').optional(),
     type: z.enum(ACTIVITY_TYPES),
+    // The P6 duration type (ADR-0040): how a future edit to one of {duration, units, units/time}
+    // recomputes the others so `Units = Duration × Units/Time` stays true. A `<select>` over the four
+    // values; only editable behind `VITE_DURATION_TYPES`, but always seeded from the row so a stored
+    // value round-trips even with the picker hidden. Defaults to the API default.
+    durationType: z.enum(DURATION_TYPES),
     // Registered with `valueAsNumber`, so this is a number (NaN for an empty
     // field, which `.int()` rejects with the message below).
     durationDays: z
@@ -98,6 +162,10 @@ export const activityFormSchema = z
     // A raw `<select>` value; the choices are the org's calendar ids (+ inherit), so the id is
     // never free-typed — validation of the UUID/in-org is the API's job (mirrors `constraintDate`).
     calendarId: z.string().optional(),
+    // The WBS-summary this activity is grouped under (ADR-0038, M5-epic F8): `''` = top-level (no
+    // parent). A raw `<select>` value picked from the plan's existing summaries; the API validates it
+    // is an active `WBS_SUMMARY` in the same plan and that re-parenting introduces no cycle.
+    parentId: z.string().optional(),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
   })
   // Only the type→date direction needs a rule: the dialog hides the date field

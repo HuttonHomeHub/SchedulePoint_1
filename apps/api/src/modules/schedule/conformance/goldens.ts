@@ -1,5 +1,14 @@
+import type { DurationType, EditedField } from '@repo/types';
+
+import { resolveTriad } from '../duration-type/resolve-triad';
 import { allMinutesWorkCalendar, buildWorkingTimeCalendar, fullDayWeek } from '../engine';
-import type { ComputeOptions, EngineActivity, EngineEdge } from '../engine';
+import type {
+  ComputeOptions,
+  EngineActivity,
+  EngineAssignment,
+  EngineEdge,
+  EngineResource,
+} from '../engine';
 
 /**
  * **First-principles golden networks** (ADR-0034 §3). Small, hand-authored CPM
@@ -54,6 +63,49 @@ const task = (id: string, durationMinutes: number): EngineActivity => ({
   durationMinutes: durationMinutes * 1440,
   type: 'TASK',
 });
+
+/** A Level-of-Effort hammock (ADR-0035 §21): duration 0 (the engine derives its span from SS/FF ties). */
+const loe = (id: string, calendar?: EngineActivity['calendar']): EngineActivity => ({
+  id,
+  durationMinutes: 0,
+  type: 'LEVEL_OF_EFFORT',
+  ...(calendar ? { calendar } : {}),
+});
+
+/**
+ * A resource-dependent activity (ADR-0035 §23 / ADR-0039): identical to a TASK for logic, scheduled on
+ * the port the adapter/service resolves from its DRIVING resource's calendar. Here the port stands in
+ * for that resolved driving-resource calendar.
+ */
+const resourceDependent = (
+  id: string,
+  durationDays: number,
+  calendar: NonNullable<EngineActivity['calendar']>,
+): EngineActivity => ({
+  id,
+  durationMinutes: durationDays * 1440,
+  type: 'RESOURCE_DEPENDENT',
+  calendar,
+});
+
+/**
+ * Resolve a driving assignment's `{budgetedUnits, unitsPerHour}` into a whole-minute duration through
+ * the SAME pure `resolveTriad` the write paths + the conformance adapter use (ADR-0040 / ADR-0035 §26).
+ * These goldens build their activities from its output so the derived duration reaches the engine
+ * exactly as production would — the engine reads `durationMinutes`, never a `durationType` (§6).
+ * Throws on the N20 zero-rate reject (a golden must never wire an infeasible triad).
+ */
+function resolveTriadDurationMinutes(
+  type: DurationType,
+  edited: EditedField,
+  durationMinutes: number,
+  budgetedUnits: number,
+  unitsPerHour: number,
+): number {
+  const r = resolveTriad(type, edited, { durationMinutes, budgetedUnits, unitsPerHour });
+  if (!r.ok) throw new Error(`golden setup: unexpected ${r.reason}`);
+  return r.durationMinutes;
+}
 
 export const GOLDEN_CASES: GoldenCase[] = [
   {
@@ -322,5 +374,277 @@ export const GOLDEN_CASES: GoldenCase[] = [
       },
     },
     projectFinish: '2026-06-08',
+  },
+  {
+    name: 'loe-spans-project',
+    description:
+      'A1010-style: an LOE hammock H hangs off the A→B chain by SS-from-A + FF-to-B. Its span is derived from A’s start to B’s finish; it never drives, is never critical, and carries a non-negative 0 float (ADR-0035 §21).',
+    activities: [task('A', 5), task('B', 3), loe('H')],
+    edges: [
+      { id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 0 },
+      { id: 'e2', predecessorId: 'A', successorId: 'H', type: 'SS', lagMinutes: 0 },
+      { id: 'e3', predecessorId: 'H', successorId: 'B', type: 'FF', lagMinutes: 0 },
+    ],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // The A→B critical chain is byte-identical to fs-chain — the LOE hangs off it, never bounds it.
+      A: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      B: {
+        earlyStart: '2026-06-06',
+        earlyFinish: '2026-06-08',
+        lateStart: '2026-06-06',
+        lateFinish: '2026-06-08',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // H spans A’s start (06-01) to B’s finish (06-08); late is pinned to early ⇒ float 0, free float 0,
+      // never critical.
+      H: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-08',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-08',
+        totalFloat: 0,
+        isCritical: false,
+        freeFloat: 0,
+      },
+    },
+    // The LOE never carries the project finish; B does (06-08).
+    projectFinish: '2026-06-08',
+  },
+  {
+    name: 'loe-cross-calendar',
+    description:
+      'A1030-style: the span ends A→B run on a Mon–Fri calendar (B starts after the weekend), while the LOE H runs on a 7-day calendar. H’s dates are pinned to the span-end INSTANTS regardless of its own calendar — it spans A’s Monday start to B’s finish across the weekend (ADR-0035 §21 on the activity’s own calendar, ADR-0037).',
+    activities: [task('A', 5), task('B', 3), loe('H', allMinutesWorkCalendar)],
+    edges: [
+      { id: 'e1', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 0 },
+      { id: 'e2', predecessorId: 'A', successorId: 'H', type: 'SS', lagMinutes: 0 },
+      { id: 'e3', predecessorId: 'H', successorId: 'B', type: 'FF', lagMinutes: 0 },
+    ],
+    options: { dataDate: MONDAY_DATA_DATE, calendar: monFri },
+    expected: {
+      // A: Mon 01-05 → Fri 01-09 (5 working days). B: FS-after A skips the weekend, Mon 01-12 → Wed 01-14.
+      A: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-09',
+        lateStart: '2026-01-05',
+        lateFinish: '2026-01-09',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      B: {
+        earlyStart: '2026-01-12',
+        earlyFinish: '2026-01-14',
+        lateStart: '2026-01-12',
+        lateFinish: '2026-01-14',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // H (7-day calendar) starts at A’s Monday-start instant (01-05) and finishes at B’s finish instant
+      // (Wed 01-14) — its span crosses the weekend the span ends skip. Late pinned to early ⇒ float 0.
+      H: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-14',
+        lateStart: '2026-01-05',
+        lateFinish: '2026-01-14',
+        totalFloat: 0,
+        isCritical: false,
+        freeFloat: 0,
+      },
+    },
+    projectFinish: '2026-01-14',
+  },
+  {
+    name: 'resource-calendar-drives',
+    description:
+      'A8300-style: a RESOURCE_DEPENDENT activity R is driven by a 24/7 crew calendar while a plain TASK T runs on the Mon–Fri plan — same 7-day duration, both from Monday 2026-01-05. R works through the weekend and finishes on its resource calendar (01-11); T waits the weekend out (01-13). The driving resource’s calendar demonstrably drives R’s dates (ADR-0035 §23 / ADR-0039); R is not on the critical path (T is the longer pole).',
+    activities: [task('T', 7), resourceDependent('R', 7, allMinutesWorkCalendar)],
+    edges: [],
+    options: { dataDate: MONDAY_DATA_DATE, calendar: monFri },
+    expected: {
+      // T (Mon–Fri): 7 working days from Mon 01-05 → skips one weekend → inclusive finish Tue 01-13.
+      T: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-13',
+        lateStart: '2026-01-05',
+        lateFinish: '2026-01-13',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // R (24/7 driving crew): 7 ELAPSED days from Mon 01-05 → inclusive finish Sun 01-11 (worked the
+      // weekend). It floats to the project finish; its slack is measured on ITS OWN 24/7 calendar =
+      // 2 elapsed days (2880 min), so it is not critical.
+      R: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-11',
+        lateStart: '2026-01-07',
+        lateFinish: '2026-01-13',
+        totalFloat: 2880,
+        isCritical: false,
+        freeFloat: 2880,
+      },
+    },
+    // T — scheduled on the plan calendar — is the longer pole and carries the project finish (01-13).
+    projectFinish: '2026-01-13',
+  },
+  {
+    name: 'fixed-units-derives-duration',
+    description:
+      'A7100-style: a FIXED_UNITS activity U DERIVES its duration from its driving assignment (U=240 units ÷ R=5 units/working-hour = 48 h = 2 days), fed to the engine via resolveTriad — not the placeholder duration it was entered with. It drives a 3-day successor W; the derivation reaching the engine is what puts W’s finish on 06-05 (ADR-0040 / ADR-0035 §26).',
+    activities: [
+      {
+        id: 'U',
+        // The 10-day placeholder is DELIBERATELY WRONG: resolveTriad overwrites it with U/R = 48 h.
+        // A naive reading (leaving the entered 10 days, or treating 240 units as anything but ÷ rate)
+        // would finish U on a different day — the golden pins the derivation, not a coincidence.
+        durationMinutes: resolveTriadDurationMinutes(
+          'FIXED_UNITS',
+          'UNITS_PER_HOUR',
+          10 * 1440,
+          240,
+          5,
+        ),
+        type: 'TASK',
+      },
+      task('W', 3),
+    ],
+    edges: [{ id: 'e1', predecessorId: 'U', successorId: 'W', type: 'FS', lagMinutes: 0 }],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // U: derived 2 days (48 working hours on the 24/7 calendar). ES 06-01, EF inclusive offset 1 = 06-02.
+      U: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-02',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-02',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // W (3 days) FS after U: ES offset 2 = 06-03, EF inclusive offset 4 = 06-05.
+      W: {
+        earlyStart: '2026-06-03',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-03',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-05',
+  },
+  {
+    name: 'fixed-duration-units-holds-duration',
+    description:
+      'A7400-style: a FIXED_DURATION_AND_UNITS activity H holds its ENTERED duration (3 days) when its units are edited — the rate absorbs, the duration is untouched. resolveTriad returns the entered 4 320 minutes unchanged, so the engine schedules 3 days; a type that wrongly derived would land a different finish (ADR-0040 / ADR-0035 §26).',
+    activities: [
+      {
+        id: 'H',
+        // Editing Units on a FIXED_DURATION_AND_UNITS activity recomputes the RATE and HOLDS the
+        // duration: resolveTriad returns exactly the entered 3 days (4 320 min). Had it derived
+        // (D := U/R = 900/2 = 450 h ≈ 18.75 d) the finish would move — the held value is the point.
+        durationMinutes: resolveTriadDurationMinutes(
+          'FIXED_DURATION_AND_UNITS',
+          'UNITS',
+          3 * 1440,
+          900,
+          2,
+        ),
+        type: 'TASK',
+      },
+    ],
+    edges: [],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // Held 3 days: ES 06-01, EF inclusive offset 2 = 06-03.
+      H: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-03',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-03',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-03',
+  },
+];
+
+/**
+ * **First-principles resource-levelling golden** (ADR-0034 §3 / ADR-0041). Unlike {@link GOLDEN_CASES}
+ * (pure CPM), a levelling case carries a resource-demand model and asserts the LEVELED overlay the
+ * opt-in second pass produces — computed by hand, independent of the fixture (the reproducible oracle,
+ * ADR-0034's no-external-oracle strategy). The plan calendar is 24/7 so one working day = 1440 minutes
+ * and a plan-frame offset equals the absolute minute delta — the serialisation arithmetic is transparent.
+ */
+export interface LevellingGoldenExpectation {
+  leveledStartOffset: number;
+  leveledFinishOffset: number;
+  leveledStart: string;
+  leveledFinish: string;
+  levelingDelay: number;
+}
+
+export interface LevellingGoldenCase {
+  name: string;
+  description: string;
+  activities: EngineActivity[];
+  edges: EngineEdge[];
+  assignments: EngineAssignment[];
+  resources: EngineResource[];
+  options: ComputeOptions;
+  levelWithinFloatOnly: boolean;
+  /** Per-activity expected leveled overlay, keyed by activity id. */
+  expected: Record<string, LevellingGoldenExpectation>;
+  /** Expected inclusive leveled project-finish display date. */
+  leveledProjectFinish: string;
+}
+
+export const LEVELLING_GOLDEN_CASES: LevellingGoldenCase[] = [
+  {
+    name: 'single-unit-resource-serialises-second',
+    description:
+      'A6100/A6200 crane shape: two equal 2-day activities (A priority 1, B priority 2) both start at the data date and both demand a capacity-1 resource — 200% allocation. Levelling serialises them: A keeps its early start, B is delayed by EXACTLY A’s 2-day duration (ADR-0041 §1–§4).',
+    activities: [
+      { id: 'A', durationMinutes: 2 * 1440, type: 'TASK', levelingPriority: 1 },
+      { id: 'B', durationMinutes: 2 * 1440, type: 'TASK', levelingPriority: 2 },
+    ],
+    edges: [],
+    assignments: [
+      { activityId: 'A', resourceId: 'R', unitsPerHour: 1 },
+      { activityId: 'B', resourceId: 'R', unitsPerHour: 1 },
+    ],
+    resources: [{ id: 'R', capacity: 1 }],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    levelWithinFloatOnly: false,
+    expected: {
+      // A keeps its network position (delay 0), occupying the resource on days 1–2 (06-01 … 06-02).
+      A: {
+        leveledStartOffset: 0,
+        leveledFinishOffset: 2 * 1440,
+        leveledStart: '2026-06-01',
+        leveledFinish: '2026-06-02',
+        levelingDelay: 0,
+      },
+      // B serialises to the day after A frees the resource: delayed by exactly A’s duration (2 days =
+      // 2 880 min), so it runs 06-03 … 06-04.
+      B: {
+        leveledStartOffset: 2 * 1440,
+        leveledFinishOffset: 4 * 1440,
+        leveledStart: '2026-06-03',
+        leveledFinish: '2026-06-04',
+        levelingDelay: 2 * 1440,
+      },
+    },
+    // Serialising with no float extends the schedule: the leveled project finish is B’s (06-04), two
+    // days past the unleveled network finish (06-02).
+    leveledProjectFinish: '2026-06-04',
   },
 ];

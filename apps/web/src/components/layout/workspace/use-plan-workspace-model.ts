@@ -271,6 +271,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           name: activity.name,
           code: activity.code ?? undefined,
           type: activity.type,
+          // Round-trip the duration type unchanged (ADR-0040) — a canvas move must not reset it.
+          durationType: activity.durationType,
           durationDays: activity.durationDays,
           description: activity.description ?? undefined,
           constraintType: 'SNET',

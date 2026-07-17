@@ -43,6 +43,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     criticalFloatThreshold: 0,
     totalFloatMode: 'FINISH',
     makeOpenEndsCritical: false,
+    levelResources: false,
+    levelWithinFloatOnly: false,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -84,11 +86,21 @@ function activity(id: string, overrides: Partial<Activity> = {}): Activity {
     isCritical: false,
     isNearCritical: false,
     constraintViolated: false,
+    loeNoSpan: false,
+    resourceDriverMissing: false,
+    durationType: 'FIXED_DURATION_AND_UNITS_TIME',
+    parentId: null,
     visualStart: null,
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
     visualDriftDays: null,
+    levelingPriority: null,
+    leveledStart: null,
+    leveledFinish: null,
+    levelingDelayMinutes: null,
+    levelingWindowExceeded: false,
+    selfOverAllocated: false,
     remainingDurationMinutes: null,
     suspendDate: null,
     resumeDate: null,
@@ -231,6 +243,19 @@ describe('DependenciesService', () => {
         service.create(principalWith(ALL), 'acme', PLAN_ID, {
           predecessorId: PRED_ID,
           successorId: PRED_ID,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(deps.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a link whose endpoint is a WBS summary (422 — a summary carries no logic)', async () => {
+      activities.findActiveByIdInOrg
+        .mockResolvedValueOnce(activity(PRED_ID, { type: 'WBS_SUMMARY' }))
+        .mockResolvedValueOnce(activity(SUCC_ID));
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, {
+          predecessorId: PRED_ID,
+          successorId: SUCC_ID,
         }),
       ).rejects.toBeInstanceOf(ValidationError);
       expect(deps.create).not.toHaveBeenCalled();

@@ -28,6 +28,7 @@ import { PlanLockModule } from './modules/plan-lock/plan-lock.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
+import { ResourcesModule } from './modules/resources/resources.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -106,6 +107,7 @@ function isPrettyLoggingAvailable(): boolean {
     DependenciesModule,
     ScheduleModule,
     CalendarsModule,
+    ResourcesModule,
     BaselinesModule,
     PlanLockModule,
     RecycleBinModule,

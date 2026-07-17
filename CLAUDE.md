@@ -351,6 +351,39 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   port (activates the reserved `activities.calendar_id`, supersedes ADR-0024 §4's deferral); total float
   measured in the **activity's own** calendar (P6/ADR-0035); PRED/SUCC lag resolves to the endpoint
   calendar (completing M3); all-inherit path stays byte-identical (golden-suite parity gate).
+- **ADR-0038** _(Accepted)_ — WBS activity hierarchy: an **adjacency-list `parentId` self-FK** on
+  `activities` + a `WBS_SUMMARY` activity type, the foundation for WBS-summary rollup (ADR-0035 §24,
+  M5-epic). Invariants (service-enforced): the parent tree is **acyclic** and **same-plan**, only a
+  `WBS_SUMMARY` may be a parent, and a **summary carries no logic** (never a dependency endpoint). The
+  parent tree is orthogonal to the dependency DAG (ADR-0021); soft-deleting a summary cascades to its
+  subtree. Rejected: a materialized `wbs_code` path and an engine-only proof.
+- **ADR-0039** _(Accepted)_ — Resource model & resource-calendar scheduling: an org-scoped
+  `Resource` **library** (a `Calendar` sibling: `kind`, optional own `calendar_id`) + a
+  `ResourceAssignment` join (`budgeted_units`, per-assignment `is_driving`) + a new
+  `RESOURCE_DEPENDENT` `ActivityType` that schedules on its **driving resource's** calendar via
+  the ADR-0037 port seam (M7 rungs 1–2). Lean/additive (cost/EV/max-units reserved); same-org,
+  exactly-one-driver, `RESOURCE_IN_USE`, and assignment-cascade are service invariants; the
+  no-resource path is byte-identical.
+- **ADR-0040** _(Accepted)_ — Duration types & the resource-units model: the per-activity
+  four-value `DurationType` enum (default `FIXED_DURATION_AND_UNITS_TIME`) + the per-driving-
+  assignment `units_per_hour` rate, making the ADR-0039 model **dynamic** by keeping
+  `Units = Duration × Units/Time` true via a **pure service-boundary** recompute (`resolveTriad`,
+  F2/F3) — the **CPM engine is untouched** (M7 rung 4). Units/time lives on the driving assignment
+  (resource `max_units_per_hour` stays reserved for levelling); `units_per_hour` NULL = triad inert
+  = byte-parity; N19 (negative rate) / N20 (zero-rate divisor) boundary rejects. Additive; %-complete
+  / earned-value columns deferred to a later rung.
+- **ADR-0041** _(Accepted)_ — Resource levelling: an **opt-in, pure, second engine pass** (a
+  deterministic **serial priority-list heuristic**) that runs after the unchanged CPM network pass to
+  resolve resource over-allocation — delaying activities within total float first, then extending
+  (`levelWithinFloatOnly` forbids extension). **Activates** the ADR-0039-reserved
+  `resource.max_units_per_hour` as the capacity ceiling (NULL = uncapped; N21 negative reject) and
+  consumes the ADR-0040 `units_per_hour` as demand, measured on each resource's own calendar (ADR-0037)
+  via a bounded interval sweep. Composite tie-break (`levelingPriority` → total-float → early-start →
+  id); mandatory/LOE/WBS/milestone/progressed activities never moved; **window conflict = extend-and-flag**
+  (`levelingWindowExceeded`, Q1); the **network float/critical stays authoritative** with leveled
+  start/finish + `levelingDelay` as an additive overlay (Q2). `levelResources` off (default) ⇒
+  recalculate **byte-identical** (the parity gate). Levelling semantics accepted as ADR-0035 **§28** with
+  the conformance slice (S10 / `levelling_test`). Supersedes nothing; amends ADR-0022 (execution).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
