@@ -1,0 +1,37 @@
+-- M5 LOE no-span produce-and-flag: the per-activity no-resolvable-span output
+-- (Engine Conformance Framework, ADR-0035 §21 / N12, M5-epic Feature F2).
+--
+-- `loe_no_span` is engine-owned CPM output, the machine-readable half of the
+-- LOE no-span produce-and-flag: true when a LEVEL_OF_EFFORT activity has no
+-- resolvable span — it is missing an SS predecessor or an FF successor, so its
+-- start/finish cannot be derived from the activities it spans (ADR-0035 §21).
+-- Rather than rejecting such a plan, the engine PRODUCES the schedule (placing
+-- the span-less LOE at its defined fallback) and FLAGS it, never repairs it. It
+-- is the direct analogue of the existing constraint_violated column (M4 §7
+-- amendment) and of the other activity engine columns (early_start/is_critical/
+-- is_near_critical) and dependencies.is_driving: defaulted, NOT NULL, never set
+-- from a user-facing write DTO, and written only by the CPM engine's batched raw
+-- UPDATE (schedule.repository writeResults), which touches engine columns alone
+-- (never version/updated_at/updated_by) so a recalc stays invisible to
+-- optimistic locking (ADR-0022).
+--
+-- Fully additive and reversible. The constant DEFAULT false backfills every
+-- existing row in the same statement (rows read "spans fine" until the plan is
+-- first calculated, and on the no-LOE / all-inherit path), so existing data and
+-- the byte-parity golden path are unchanged. On Postgres 11+ an ADD COLUMN with
+-- a constant DEFAULT is a metadata-only change — no table rewrite, no full-table
+-- scan, no lock held beyond a brief ACCESS EXCLUSIVE for the catalog update — so
+-- this is fast and safe at any data volume (same posture as
+-- add_constraint_violated / add_dependency_is_driving; docs/DATABASE.md).
+--
+-- No new index: the flag is read as part of the already plan-scoped activity
+-- load (WHERE organization_id / plan_id / deleted_at, served by the existing
+-- (plan_id, created_at, id) index) and aggregated over that same scope for any
+-- plan-level LOE-no-span count; no predicate ever targets it in isolation. An
+-- index on a low-cardinality boolean that no query filters or sorts by would only
+-- cost writes for no read benefit (docs/DATABASE.md: index real query patterns,
+-- not columns).
+ALTER TABLE "activities" ADD COLUMN "loe_no_span" BOOLEAN NOT NULL DEFAULT false;
+
+-- Down (forward-only in prod; documented for completeness): fully reversible —
+--   ALTER TABLE "activities" DROP COLUMN "loe_no_span";

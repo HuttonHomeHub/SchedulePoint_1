@@ -173,6 +173,14 @@ export interface EngineResult {
    * is produced as-pinned; this flags that it broke logic — engine-owned, never repaired.
    */
   constraintViolated: boolean;
+  /**
+   * LOE no-span produce-and-flag (N12, ADR-0035 §21): true when a `LEVEL_OF_EFFORT` activity has no
+   * resolvable span — it is missing an SS predecessor or an FF successor (or both). The engine places it
+   * at a defined fallback (its SS end if present, else the data date; zero length) and flags it rather
+   * than rejecting, mirroring the mandatory §7 produce-and-flag. Always false for a non-LOE activity and
+   * for an LOE with a complete span.
+   */
+  loeNoSpan: boolean;
   earlyStart: string;
   earlyFinish: string;
   lateStart: string;
@@ -208,6 +216,11 @@ export interface EngineSummary {
    * dated before the data date (honoured, but can't pull work before it). ADR-0035 §12.
    */
   constraintWarningCount: number;
+  /**
+   * How many Level-of-Effort activities had no resolvable span this run (N12, ADR-0035 §21) — the
+   * produce-and-flag count. Zero unless the plan has an LOE missing an SS predecessor or FF successor.
+   */
+  loeNoSpanCount: number;
   /**
    * How many incomplete activities had their remaining work resized to an **expected finish** this run
    * (ADR-0035 §9) — zero unless the plan's `useExpectedFinishDates` option is on. Observability only.

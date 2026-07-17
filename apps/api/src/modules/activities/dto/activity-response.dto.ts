@@ -148,6 +148,12 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({
     description:
+      'LOE no-span produce-and-flag (engine-owned, ADR-0035 §21): true when a Level-of-Effort activity has no resolvable span (missing an SS predecessor or FF successor).',
+  })
+  loeNoSpan!: boolean;
+
+  @ApiProperty({
+    description:
       'Schedule As-Late-As-Possible (ADR-0035 §11): display-only placement preference; does not change early/late/float.',
   })
   scheduleAsLateAsPossible!: boolean;
@@ -238,6 +244,7 @@ export class ActivityResponseDto implements ActivitySummary {
       isCritical: entity.isCritical,
       isNearCritical: entity.isNearCritical,
       constraintViolated: entity.constraintViolated,
+      loeNoSpan: entity.loeNoSpan,
       visualStart: day(entity.visualStart),
       visualEffectiveStart: day(entity.visualEffectiveStart),
       visualEffectiveFinish: day(entity.visualEffectiveFinish),

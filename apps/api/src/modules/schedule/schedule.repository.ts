@@ -79,6 +79,8 @@ export interface ScheduleAggregate {
   constraintViolationCount: number;
   /** Soft constraint warnings (today N15: a SNET dated before the data date). ADR-0035 §12. */
   constraintWarningCount: number;
+  /** Level-of-Effort activities with no resolvable span (N12, ADR-0035 §21). */
+  loeNoSpanCount: number;
   /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
   projectFinish: string | null;
 }
@@ -88,7 +90,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the thirteen engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the fourteen engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -143,6 +145,7 @@ export class ScheduleRepository {
         near_critical_count: bigint;
         constraint_violation_count: bigint;
         constraint_warning_count: bigint;
+        loe_no_span_count: bigint;
         project_finish: string | null;
       }>
     >`
@@ -158,6 +161,9 @@ export class ScheduleRepository {
           WHERE constraint_type = 'SNET'
             AND constraint_date < (SELECT planned_start FROM plans WHERE id = ${planId}::uuid)
         ) AS constraint_warning_count,
+        -- LOE no-span produce-and-flag (N12, ADR-0035 §21): the engine-written flag, read back like
+        -- constraint_violated, aggregated over the same plan-scoped active set.
+        COUNT(*) FILTER (WHERE loe_no_span) AS loe_no_span_count,
         to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
       FROM activities
       WHERE plan_id = ${planId}::uuid
@@ -171,6 +177,7 @@ export class ScheduleRepository {
       nearCriticalCount: Number(row.near_critical_count),
       constraintViolationCount: Number(row.constraint_violation_count),
       constraintWarningCount: Number(row.constraint_warning_count),
+      loeNoSpanCount: Number(row.loe_no_span_count),
       projectFinish: row.project_finish,
     };
   }
@@ -234,7 +241,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the thirteen engine
+   * id can never write across a plan or tenant). Sets only the fourteen engine
    * columns; a no-op for an empty result set.
    */
   async writeResults(
@@ -259,6 +266,8 @@ export class ScheduleRepository {
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
     const constraintViolated = results.map((r) => r.constraintViolated);
+    // LOE no-span produce-and-flag (N12, ADR-0035 §21) — engine-owned like constraint_violated.
+    const loeNoSpan = results.map((r) => r.loeNoSpan);
     // Effective-Visual outputs (ADR-0033) — written by the same batch as the CPM columns, so they
     // stay engine-owned and out of the version/updated_at optimistic-lock path.
     const visualEffectiveStart = results.map((r) => r.visualEffectiveStart);
@@ -280,6 +289,7 @@ export class ScheduleRepository {
         is_critical = v.is_critical,
         is_near_critical = v.is_near_critical,
         constraint_violated = v.constraint_violated,
+        loe_no_span = v.loe_no_span,
         visual_effective_start = v.visual_effective_start,
         visual_effective_finish = v.visual_effective_finish,
         visual_conflict = v.visual_conflict,
@@ -295,6 +305,7 @@ export class ScheduleRepository {
         ${isCritical}::boolean[],
         ${isNearCritical}::boolean[],
         ${constraintViolated}::boolean[],
+        ${loeNoSpan}::boolean[],
         ${visualEffectiveStart}::date[],
         ${visualEffectiveFinish}::date[],
         ${visualConflict}::boolean[],
@@ -302,7 +313,7 @@ export class ScheduleRepository {
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
-        visual_effective_start, visual_effective_finish, visual_conflict, visual_drift_days
+        loe_no_span, visual_effective_start, visual_effective_finish, visual_conflict, visual_drift_days
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid

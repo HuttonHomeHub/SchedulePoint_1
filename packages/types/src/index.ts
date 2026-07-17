@@ -353,6 +353,13 @@ export interface ActivitySummary {
    */
   constraintViolated: boolean;
   /**
+   * Engine-owned (ADR-0035 §21, M5-epic): true when this Level-of-Effort activity has no resolvable
+   * span — it is missing an SS predecessor or an FF successor — so the engine placed it at a defined
+   * fallback and flagged it (N12 produce-and-flag), never rejecting. False for every non-LOE activity
+   * and for an LOE with a complete span.
+   */
+  loeNoSpan: boolean;
+  /**
    * Visual-Planning placement input (ADR-0033): the calendar day (`YYYY-MM-DD`) the planner
    * hand-placed this activity's start at, or null if unplaced. Feeds only the engine's
    * effective-Visual pass; ignored by the pure-network (early/late/float) pass.
@@ -497,7 +504,9 @@ export interface DeletedHierarchyItem {
  * `earlyFinish`); it is null until the plan has been calculated (or when empty).
  * `constraintViolationCount` is how many activities a mandatory pin drove into a broken relationship
  * (produce-and-flag, ADR-0035 §7); `constraintWarningCount` counts soft constraint warnings (today
- * the N15 case: a SNET dated before the data date). All dates are calendar days (`YYYY-MM-DD`).
+ * the N15 case: a SNET dated before the data date); `loeNoSpanCount` counts Level-of-Effort activities
+ * with no resolvable span (N12 produce-and-flag, ADR-0035 §21). All dates are calendar days
+ * (`YYYY-MM-DD`).
  */
 export interface PlanScheduleSummary {
   dataDate: string | null;
@@ -507,6 +516,7 @@ export interface PlanScheduleSummary {
   nearCriticalCount: number;
   constraintViolationCount: number;
   constraintWarningCount: number;
+  loeNoSpanCount: number;
 }
 
 /**

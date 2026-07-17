@@ -154,3 +154,45 @@ describe('Level of Effort — never inherits negative float (ADR-0035 §21)', ()
     expect(h.isCritical).toBe(false);
   });
 });
+
+describe('Level of Effort — no-span produce-and-flag (N12, ADR-0035 §21)', () => {
+  it('flags an LOE missing its FF successor and places it at the SS end (zero length)', () => {
+    // H has an SS predecessor (A, starts 01-05) but no FF successor ⇒ no span end.
+    const out = run([act('A', 2 * DAY), loe('H')], [edge('A', 'H', 'SS')]);
+    const h = out.results.find((r) => r.activityId === 'H')!;
+    expect(h.loeNoSpan).toBe(true);
+    expect(h.earlyStart).toBe('2026-01-05'); // its SS end
+    expect(h.earlyFinish).toBe('2026-01-05'); // zero length (finish unknown)
+    expect(h.isCritical).toBe(false);
+    expect(h.totalFloat).toBe(0);
+    expect(out.summary.loeNoSpanCount).toBe(1);
+  });
+
+  it('flags an LOE missing its SS predecessor and falls back to the data date', () => {
+    // H has an FF successor (B) but no SS predecessor ⇒ no span start.
+    const out = run(
+      [act('A', 2 * DAY), act('B', 3 * DAY), loe('H')],
+      [edge('A', 'B', 'FS'), edge('H', 'B', 'FF')],
+    );
+    const h = out.results.find((r) => r.activityId === 'H')!;
+    expect(h.loeNoSpan).toBe(true);
+    expect(h.earlyStart).toBe('2026-01-05'); // data-date fallback
+    expect(out.summary.loeNoSpanCount).toBe(1);
+  });
+
+  it('flags a fully-dangling LOE (no SS and no FF) and never counts a well-formed LOE', () => {
+    const dangling = run([loe('H')], []);
+    expect(dangling.results.find((r) => r.activityId === 'H')!.loeNoSpan).toBe(true);
+    expect(dangling.summary.loeNoSpanCount).toBe(1);
+
+    // A well-formed LOE is not flagged and does not count.
+    const wellFormed = run(
+      [act('A', 2 * DAY), act('B', 3 * DAY), loe('H')],
+      [edge('A', 'B', 'FS'), edge('A', 'H', 'SS'), edge('H', 'B', 'FF')],
+    );
+    expect(wellFormed.results.find((r) => r.activityId === 'H')!.loeNoSpan).toBe(false);
+    expect(wellFormed.summary.loeNoSpanCount).toBe(0);
+    // A non-LOE activity is never flagged.
+    expect(wellFormed.results.find((r) => r.activityId === 'A')!.loeNoSpan).toBe(false);
+  });
+});

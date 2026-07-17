@@ -488,6 +488,7 @@ export function computeSchedule(
   let nearCriticalCount = 0;
   let constraintViolationCount = 0;
   let constraintWarningCount = 0;
+  let loeNoSpanCount = 0;
   let maxInclusiveFinishInstant: number | null = null;
   let projectFinishDate: string | null = null;
   for (const id of graph.order) {
@@ -497,6 +498,7 @@ export function computeSchedule(
     const activityIsLoe = isLoe(activity.type);
     const progress = progressOf.get(id)!;
     if (constraintViolated.get(id)) constraintViolationCount += 1;
+    if (loeNoSpan.get(id)) loeNoSpanCount += 1;
     // N15 (ADR-0035 §12): a Start-No-Earlier-Than whose date is before the data date is honoured but
     // cannot pull work before it — a WARNING (not a violation), derived purely from the inputs.
     if (
@@ -649,6 +651,7 @@ export function computeSchedule(
       isCritical,
       isNearCritical,
       constraintViolated: constraintViolated.get(id) ?? false,
+      loeNoSpan: loeNoSpan.get(id) ?? false,
       earlyStart: earlyStartDate,
       earlyFinish: earlyFinishDate,
       lateStart: lateStartDate,
@@ -666,6 +669,7 @@ export function computeSchedule(
     nearCriticalCount,
     constraintViolationCount,
     constraintWarningCount,
+    loeNoSpanCount,
     expectedFinishAppliedCount,
     projectFinishOffset:
       projectFinishInstant === null

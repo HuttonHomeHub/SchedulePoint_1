@@ -84,6 +84,7 @@ function activity(id: string, overrides: Partial<Activity> = {}): Activity {
     isCritical: false,
     isNearCritical: false,
     constraintViolated: false,
+    loeNoSpan: false,
     visualStart: null,
     visualEffectiveStart: null,
     visualEffectiveFinish: null,

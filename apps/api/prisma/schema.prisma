@@ -630,6 +630,19 @@ model Activity {
   // aggregated over that scope (constraintViolationCount) — no predicate targets it; a
   // low-cardinality boolean index would only cost writes (mirrors is_critical/is_driving).
   constraintViolated Boolean   @default(false) @map("constraint_violated")
+  // LOE no-span produce-and-flag output (ADR-0035 §21 / N12, M5). True when a
+  // LEVEL_OF_EFFORT activity has no resolvable span — missing an SS predecessor or an
+  // FF successor — so the engine cannot derive its start/finish from the activities it
+  // spans. Rather than rejecting, the engine places the span-less LOE at its defined
+  // fallback and flags it, never repairs it. Engine-owned exactly like
+  // constraint_violated/is_critical: defaulted false, never accepted from a write DTO,
+  // written only by the recalc's batched `unnest` UPDATE alongside the CPM columns above
+  // (never touching version/updated_at/updated_by, ADR-0022). Reads false until the plan
+  // is first calculated AND on the no-LOE / all-inherit path, so existing rows stay
+  // byte-identical. No index: read as part of the already plan-scoped activity load
+  // ((plan_id, created_at, id)) and aggregated over that scope — no predicate targets it;
+  // a low-cardinality boolean index would only cost writes (mirrors constraint_violated).
+  loeNoSpan          Boolean   @default(false) @map("loe_no_span")
 
   // Visual Planning placement (ADR-0033). `visual_start` is the ONLY Planner-owned
   // input here — the hand-placed calendar day a DTO may set (date-only, like

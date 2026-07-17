@@ -198,6 +198,7 @@ export class ScheduleService {
       nearCriticalCount: summary.nearCriticalCount,
       constraintViolationCount: summary.constraintViolationCount,
       constraintWarningCount: summary.constraintWarningCount,
+      loeNoSpanCount: summary.loeNoSpanCount,
     };
   }
 
@@ -227,6 +228,7 @@ export class ScheduleService {
       nearCriticalCount: aggregate.nearCriticalCount,
       constraintViolationCount: aggregate.constraintViolationCount,
       constraintWarningCount: aggregate.constraintWarningCount,
+      loeNoSpanCount: aggregate.loeNoSpanCount,
     };
   }
 

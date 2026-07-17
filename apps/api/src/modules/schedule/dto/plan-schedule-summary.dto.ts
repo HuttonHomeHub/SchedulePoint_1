@@ -45,6 +45,12 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
   })
   constraintWarningCount!: number;
 
+  @ApiProperty({
+    description:
+      'Level-of-Effort activities with no resolvable span (missing an SS predecessor or FF successor) — produced at a fallback placement and flagged (N12, ADR-0035 §21).',
+  })
+  loeNoSpanCount!: number;
+
   static from(summary: PlanScheduleSummary): PlanScheduleSummaryDto {
     return {
       dataDate: summary.dataDate,
@@ -54,6 +60,7 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
       nearCriticalCount: summary.nearCriticalCount,
       constraintViolationCount: summary.constraintViolationCount,
       constraintWarningCount: summary.constraintWarningCount,
+      loeNoSpanCount: summary.loeNoSpanCount,
     };
   }
 }
