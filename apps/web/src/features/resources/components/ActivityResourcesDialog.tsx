@@ -43,22 +43,31 @@ const MATERIAL_DRIVING_HINT = 'A material resource can’t drive an activity’s
 const DRIVING_HINT =
   'For a resource-dependent activity, the driving resource’s calendar sets its schedule. Only one resource can drive — choosing this un-drives the current one.';
 
-/** A one-line preview of the duration a units/rate edit will derive (ADR-0040), or its N20 block. */
+/**
+ * A one-line preview of the duration a units/rate edit will derive (ADR-0040), or its N20 block.
+ * Carries an `id` so the editing field can reference it via `aria-describedby`. The **blocked** (N20)
+ * message follows the same per-field convention as the units/rate validation errors — no `role="alert"`;
+ * the input's `aria-invalid` + `aria-describedby` convey it (matching `TextField`). The **derived**
+ * preview appears/updates on typing with no focus change, so it is a polite `role="status"` so a
+ * screen-reader user hears it without moving focus.
+ */
 function DerivedDurationNote({
+  id,
   preview,
 }: {
+  id: string;
   preview: DurationDerivationPreview | null;
 }): React.ReactElement | null {
   if (!preview) return null;
   if (preview.kind === 'blocked') {
     return (
-      <p role="alert" className="text-destructive-text text-sm">
+      <p id={id} className="text-destructive-text text-sm">
         The rate must be greater than zero to drive this activity’s duration.
       </p>
     );
   }
   return (
-    <p className="text-muted-foreground text-sm">
+    <p id={id} role="status" className="text-muted-foreground text-sm">
       Duration becomes {formatDurationDays(preview.durationMinutes)} (Recalculate to apply).
     </p>
   );
@@ -95,8 +104,10 @@ function AssignmentRow({
   const announce = useAnnounce();
   const unitsId = useId();
   const unitsErrorId = useId();
+  const unitsNoteId = useId();
   const rateId = useId();
   const rateErrorId = useId();
+  const rateNoteId = useId();
   // Seeded from the row's persisted value. The parent keys this component by the
   // assignment id (not its version), so a save/driving-toggle refetch keeps the row
   // mounted — focus is preserved — while the persisted-value diff below drives Save.
@@ -139,6 +150,21 @@ function AssignmentRow({
           unitsPerHour: (rateValidation as { value: number }).value,
         })
       : null;
+
+  // The note (derived preview or N20 block) shows under a field only once that field has changed.
+  const showUnitsNote = unitsChanged && unitsPreview !== null;
+  const showRateNote = rateChanged && !rateError && ratePreview !== null;
+  // Both the validation error and the N20 "blocked" note are invalid states for the field, and both
+  // must be linked via aria-describedby so AT reaches the reason (WCAG 4.1.3 / label-in-name).
+  const unitsInvalid = Boolean(unitsError) || unitsPreview?.kind === 'blocked';
+  const rateInvalid = Boolean(rateError) || ratePreview?.kind === 'blocked';
+  const unitsDescribedBy =
+    [unitsError ? unitsErrorId : null, showUnitsNote ? unitsNoteId : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
+  const rateDescribedBy =
+    [rateError ? rateErrorId : null, showRateNote ? rateNoteId : null].filter(Boolean).join(' ') ||
+    undefined;
 
   const saveUnits = (): void => {
     if ('error' in unitsValidation) {
@@ -243,15 +269,17 @@ function AssignmentRow({
                   step="any"
                   value={units}
                   onChange={(event) => setUnits(event.target.value)}
-                  aria-invalid={unitsError ? true : undefined}
-                  aria-describedby={unitsError ? unitsErrorId : undefined}
+                  aria-invalid={unitsInvalid ? true : undefined}
+                  aria-describedby={unitsDescribedBy}
                   className="w-28"
                 />
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  disabled={!unitsChanged || Boolean(unitsError) || update.isPending}
+                  // Distinct accessible name — a row can show two "Save" buttons (units + rate).
+                  aria-label={`Save budgeted units for ${name}`}
+                  disabled={!unitsChanged || unitsInvalid || update.isPending}
                   aria-busy={update.isPending}
                   onClick={saveUnits}
                 >
@@ -263,7 +291,9 @@ function AssignmentRow({
                   {unitsError}
                 </p>
               ) : null}
-              {unitsChanged ? <DerivedDurationNote preview={unitsPreview} /> : null}
+              {unitsChanged ? (
+                <DerivedDurationNote id={unitsNoteId} preview={unitsPreview} />
+              ) : null}
             </div>
             {/* Units/time (rate) lives on the DRIVING assignment (ADR-0040 §7) — shown only there, and
                 only behind the flag. */}
@@ -278,20 +308,16 @@ function AssignmentRow({
                     step="any"
                     value={rate}
                     onChange={(event) => setRate(event.target.value)}
-                    aria-invalid={rateError || ratePreview?.kind === 'blocked' ? true : undefined}
-                    aria-describedby={rateError ? rateErrorId : undefined}
+                    aria-invalid={rateInvalid ? true : undefined}
+                    aria-describedby={rateDescribedBy}
                     className="w-28"
                   />
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={
-                      !rateChanged ||
-                      Boolean(rateError) ||
-                      ratePreview?.kind === 'blocked' ||
-                      update.isPending
-                    }
+                    aria-label={`Save rate for ${name}`}
+                    disabled={!rateChanged || rateInvalid || update.isPending}
                     aria-busy={update.isPending}
                     onClick={saveRate}
                   >
@@ -303,7 +329,9 @@ function AssignmentRow({
                     {rateError}
                   </p>
                 ) : null}
-                {rateChanged && !rateError ? <DerivedDurationNote preview={ratePreview} /> : null}
+                {rateChanged && !rateError ? (
+                  <DerivedDurationNote id={rateNoteId} preview={ratePreview} />
+                ) : null}
               </div>
             ) : null}
             <CheckboxField
@@ -532,11 +560,11 @@ export function ActivityResourcesDialog({
                     duration derivation happens on a later units/rate edit in the row above. */}
                 {DURATION_TYPES_ENABLED && wantsDriving && !selectedIsMaterial ? (
                   <TextField
-                    label="Units / time (rate, optional)"
+                    label="Units / time (rate)"
                     type="number"
                     min={0}
                     step="any"
-                    hint="Units of work per working hour. Kept with the duration type so units = duration × rate; editing it later can derive the activity’s duration."
+                    hint="Optional. Units of work per working hour, kept with the duration type so units = duration × rate; editing it later can derive the activity’s duration."
                     error={errors.unitsPerHour?.message}
                     {...register('unitsPerHour', {
                       setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),

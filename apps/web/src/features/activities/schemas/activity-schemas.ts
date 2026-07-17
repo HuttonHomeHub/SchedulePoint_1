@@ -60,7 +60,8 @@ export function isDurationDerivedType(type: ActivityType): boolean {
 /**
  * Human labels for the P6 duration type (M7 rung 4, ADR-0040). Exhaustive
  * `Record<DurationType, …>` so a new type fails to compile until a label is added. The default
- * (`FIXED_DURATION_AND_UNITS_TIME`) is called out in the picker's help, not the label.
+ * (`FIXED_DURATION_AND_UNITS_TIME`) is named in the picker's help text, keeping the labels the bare
+ * P6 terms (the `&` mirrors P6/ADR-0040 naming, unlike the other label maps).
  */
 export const DURATION_TYPE_LABELS: Record<DurationType, string> = {
   FIXED_DURATION_AND_UNITS_TIME: 'Fixed duration & units/time',

@@ -1,4 +1,4 @@
-import type { ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
+import type { DurationType, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,10 +50,7 @@ function assignment(overrides: Partial<ResourceAssignmentSummary> = {}): Resourc
   };
 }
 
-function renderDialog(
-  assignments: ResourceAssignmentSummary[],
-  durationType: React.ComponentProps<typeof ActivityResourcesDialog>['activityDurationType'],
-) {
+function renderDialog(assignments: ResourceAssignmentSummary[], durationType: DurationType) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -87,8 +84,8 @@ describe('ActivityResourcesDialog — units/time rate (flag on)', () => {
     // 240 units ÷ 5 units/hour = 48 h = 2 days.
     expect(screen.getByText(/Duration becomes 2 days/)).toBeInTheDocument();
 
-    // The rate block's Save is the second "Save" (the units block's is first).
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[1]!);
+    // Each Save has a distinct accessible name (a row can show two).
+    fireEvent.click(screen.getByRole('button', { name: 'Save rate for Crew A' }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
     expect(path).toBe('/organizations/acme/assignments/asg-1');
@@ -107,7 +104,7 @@ describe('ActivityResourcesDialog — units/time rate (flag on)', () => {
     fireEvent.change(screen.getByLabelText('Units / time (rate)'), { target: { value: '0' } });
 
     expect(screen.getByText(/rate must be greater than zero/i)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Save' })[1]!).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save rate for Crew A' })).toBeDisabled();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -115,7 +112,7 @@ describe('ActivityResourcesDialog — units/time rate (flag on)', () => {
     renderDialog([assignment({ unitsPerHour: 2 })], 'FIXED_DURATION_AND_UNITS_TIME');
     const units = screen.getAllByLabelText('Budgeted units')[0]!;
     fireEvent.change(units, { target: { value: '10' } });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Save budgeted units for Crew A' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
@@ -130,5 +127,47 @@ describe('ActivityResourcesDialog — units/time rate (flag on)', () => {
   it('does not show the rate field on a non-driving assignment (rate is a driver property)', () => {
     renderDialog([assignment({ isDriving: false })], 'FIXED_UNITS');
     expect(screen.queryByLabelText('Units / time (rate)')).not.toBeInTheDocument();
+  });
+
+  it('assign form: the rate field appears once "Driving resource" is ticked, and posts an initial rate (no editedField)', async () => {
+    renderDialog([], 'FIXED_UNITS');
+    // Hidden until the resource is set to drive.
+    expect(screen.queryByLabelText('Units / time (rate)')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    fireEvent.change(screen.getByLabelText('Budgeted units'), { target: { value: '100' } });
+    fireEvent.click(screen.getByLabelText('Driving resource'));
+
+    const rate = screen.getByLabelText('Units / time (rate)');
+    fireEvent.change(rate, { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(path).toBe('/organizations/acme/activities/a1/assignments');
+    expect(init?.method).toBe('POST');
+    const body = JSON.parse(init?.body as string);
+    expect(body).toMatchObject({
+      resourceId: 'res-1',
+      budgetedUnits: 100,
+      unitsPerHour: 4,
+      isDriving: true,
+    });
+    // A create never recomputes the triad — no editedField (a plain store; ADR-0040).
+    expect(body.editedField).toBeUndefined();
+  });
+
+  it('assign form: a non-driving assignment omits the rate entirely', async () => {
+    renderDialog([], 'FIXED_UNITS');
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    fireEvent.change(screen.getByLabelText('Budgeted units'), { target: { value: '100' } });
+    // Leave "Driving resource" unchecked — the rate field never shows.
+    fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    const body = JSON.parse(init?.body as string);
+    expect(body).toMatchObject({ resourceId: 'res-1', budgetedUnits: 100, isDriving: false });
+    expect(body.unitsPerHour).toBeUndefined();
   });
 });

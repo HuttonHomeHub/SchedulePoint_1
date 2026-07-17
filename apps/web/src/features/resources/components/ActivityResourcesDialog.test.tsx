@@ -102,18 +102,18 @@ describe('ActivityResourcesDialog', () => {
 
     expect(screen.getByText(/cannot be negative/i)).toBeInTheDocument();
     expect(unitsInput).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save budgeted units for Crew A' })).toBeDisabled();
 
     // Too many decimal places is likewise rejected, and never PATCHes.
     fireEvent.change(unitsInput, { target: { value: '1.234567' } });
     expect(screen.getByText(/at most 4 decimal places/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save budgeted units for Crew A' })).toBeDisabled();
     expect(apiFetch).not.toHaveBeenCalled();
 
     // A valid value clears the error and enables Save.
     fireEvent.change(unitsInput, { target: { value: '7.5' } });
     expect(screen.queryByText(/decimal places|cannot be negative/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save budgeted units for Crew A' })).toBeEnabled();
   });
 
   it('disables the driving toggle when a MATERIAL resource is selected in the assign form', () => {

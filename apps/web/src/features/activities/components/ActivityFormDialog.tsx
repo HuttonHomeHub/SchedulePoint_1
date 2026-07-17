@@ -286,9 +286,12 @@ export function ActivityFormDialog({
               ))}
             </Select>
             <p id="activity-duration-type-help" className="text-muted-foreground text-sm">
-              How editing one of duration, units or units/time recomputes the others (keeping units
-              = duration × units/time). With “Fixed units” or “Fixed units/time”, the driving
-              resource’s units ÷ rate derive this activity’s duration.
+              Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or
+              units/time recomputes the others so units = duration × units/time stays true — e.g. a
+              crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or
+              “Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s
+              duration; with the two fixed-duration types, editing the duration here also updates
+              the driving resource’s units or rate.
             </p>
           </div>
         ) : null}
