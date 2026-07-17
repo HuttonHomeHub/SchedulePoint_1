@@ -24,8 +24,9 @@ import { mapActivityType, mapConstraintType, toCalendarDay } from './type-map';
  * fixture onto the inputs today's engine can actually consume, and — the whole
  * point — **reports every place it had to skip or approximate rather than faking a
  * value** (ADR-0034 §2–§3). What the engine still cannot represent
- * (resource-dependent activities, external relationships) is recorded, not invented
- * — LOE (§21) and WBS-summary (§24) activities are now scheduled, not skipped. M4
+ * (external/multi-project relationships) is recorded, not invented — LOE (§21),
+ * WBS-summary (§24) and resource-dependent (§23, M7) activities are now scheduled,
+ * not skipped (a resource activity on its driving resource's calendar). M4
  * added the advanced constraints — mandatory produce-and-flag,
  * secondary constraints, expected finish and as-late-as-possible — which the
  * adapter now feeds through instead of dropping.
@@ -54,7 +55,9 @@ export interface AdaptationNote {
     | 'endpoint-excluded'
     | 'lag-rounded'
     | 'lag-calendar-dropped'
-    | 'activity-calendar-substituted';
+    | 'activity-calendar-substituted'
+    | 'resource-calendar-substituted'
+    | 'resource-driver-missing';
   reason: string;
 }
 
@@ -105,6 +108,16 @@ export interface AdaptOptions {
    */
   honorActivityCalendars?: boolean;
   /**
+   * Substitute each `RESOURCE_DEPENDENT` activity's **driving resource's calendar** as its scheduling
+   * calendar (ADR-0035 §23 / ADR-0039, M7). Default **false** — the baseline schedules a resource
+   * activity on its own/plan calendar like any other, so a scenario that flips this on differs for the
+   * resource activities whose driving resource works a distinct calendar. The driving resource is the
+   * assignment tagged `res_driving`; with no driving assignment the activity is flagged
+   * `resourceDriverMissing` and falls back to its activity calendar → plan default. Type-gated: a
+   * non-resource activity never picks up its assigned resource's calendar (the A5500 contrast).
+   */
+  honorResourceCalendars?: boolean;
+  /**
    * The global "calendar for scheduling relationship lag" setting (fixture S05). `SUCCESSOR`/
    * `PREDECESSOR` resolve a relationship's lag on that endpoint activity's calendar (requires
    * per-activity calendars); `PLAN` (default) measures it on the plan calendar. An explicit
@@ -149,10 +162,24 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const dataDate = opts.dataDate ?? toCalendarDay(fixture.project.planned_start);
   const honorLagCalendars = opts.honorLagCalendars ?? true;
   const honorActivityCalendars = opts.honorActivityCalendars ?? false;
+  const honorResourceCalendars = opts.honorResourceCalendars ?? false;
   const honorProgress = opts.honorProgress ?? false;
   const useExpectedFinishDates = opts.useExpectedFinishDates ?? false;
   const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
+
+  // Driving-resource calendar per activity (ADR-0035 §23 / ADR-0039, M7). The fixture marks the
+  // driving assignment with the `res_driving` test tag (the product carries an explicit `isDriving`
+  // flag); resolve it to the resource's own calendar id. At most one driver per activity, mirroring
+  // the DB partial-unique. Only consulted when `honorResourceCalendars` is on.
+  const resourceCalById = new Map(fixture.resources.map((r) => [r.id, r.calendar]));
+  const drivingResourceCalByActivity = new Map<string, string>();
+  for (const asg of fixture.assignments) {
+    if (!asg.test_tags.includes('res_driving')) continue;
+    const resourceCalendarId = resourceCalById.get(asg.resource);
+    if (resourceCalendarId !== undefined)
+      drivingResourceCalByActivity.set(asg.activity, resourceCalendarId);
+  }
 
   const defaultCalendarId = fixture.project.default_calendar;
   // Build every fixture calendar once (ADR-0037 M5: O(distinct calendars)); the plan default is
@@ -169,11 +196,12 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       .filter((c) => !WEEKDAY_KEYS.some((k) => c.workweek[k].length > 0))
       .map((c) => c.id),
   );
-  /** The activity's own calendar port, or undefined when it inherits the plan default / is window-only. */
+  /** A representable non-default port for a calendar id, or undefined if it inherits the default / is window-only. */
+  const portForCal = (calId: string): WorkingTimeCalendar | undefined =>
+    calId !== defaultCalendarId && !windowOnly.has(calId) ? portById.get(calId) : undefined;
+  /** The activity's own calendar port, gated on `honorActivityCalendars` (the M5 baseline is off). */
   const activityPort = (calId: string): WorkingTimeCalendar | undefined =>
-    honorActivityCalendars && calId !== defaultCalendarId && !windowOnly.has(calId)
-      ? portById.get(calId)
-      : undefined;
+    honorActivityCalendars ? portForCal(calId) : undefined;
 
   // Build the WBS containment tree (ADR-0035 §24, M5-epic F7) from the fixture's `wbs` code strings.
   // The product carries `parentId` directly; the fixture instead expresses hierarchy through dotted
@@ -203,14 +231,15 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const calIdByActivity = new Map<string, string>();
   const activities: EngineActivity[] = [];
   for (const activity of fixture.activities) {
-    const adapted = adaptActivity(
-      activity,
+    const adapted = adaptActivity(activity, {
       defaultCalendarId,
       honorActivityCalendars,
+      honorResourceCalendars,
       honorProgress,
-      activityPort,
+      portForCal,
+      drivingResourceCalId: drivingResourceCalByActivity.get(activity.id),
       notes,
-    );
+    });
     if (adapted) {
       const parentId = resolveParentId(activity.wbs);
       if (parentId !== undefined) adapted.parentId = parentId;
@@ -242,6 +271,9 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       honorActivityCalendars
         ? `each activity schedules on its own resolved calendar (ADR-0037, M5); relationship lag resolves on the ${relationshipLagCalendar.toLowerCase()} calendar`
         : `every activity is scheduled on the project default calendar ${defaultCalendarId}; per-activity shift/24h/window calendars are not applied (ADR-0037, M5 baseline)`,
+      honorResourceCalendars
+        ? 'each RESOURCE_DEPENDENT activity schedules on its driving resource’s calendar (ADR-0035 §23 / ADR-0039, M7); a driver-less one is flagged and falls back to the plan default'
+        : 'RESOURCE_DEPENDENT activities schedule like any other activity; driving-resource calendars are not applied (ADR-0039, M7 baseline)',
       'progress, actuals, suspend/resume and the data-date floor are ignored (ADR-0035 §1–§6, M2)',
       honorLagCalendars
         ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag)'
@@ -326,15 +358,31 @@ function applyConstraint(
   set(mapped.value, toCalendarDay(constraint.date));
 }
 
+interface AdaptActivityContext {
+  defaultCalendarId: string;
+  honorActivityCalendars: boolean;
+  honorResourceCalendars: boolean;
+  honorProgress: boolean;
+  portForCal: (calId: string) => WorkingTimeCalendar | undefined;
+  /** The driving resource's calendar id for this activity (undefined = no driving assignment). */
+  drivingResourceCalId: string | undefined;
+  notes: AdaptationNote[];
+}
+
 /** Adapt one activity, or return null (with a note) if its type is unsupported. */
 function adaptActivity(
   activity: FixtureActivity,
-  defaultCalendarId: string,
-  honorActivityCalendars: boolean,
-  honorProgress: boolean,
-  activityPort: (calId: string) => WorkingTimeCalendar | undefined,
-  notes: AdaptationNote[],
+  ctx: AdaptActivityContext,
 ): EngineActivity | null {
+  const {
+    defaultCalendarId,
+    honorActivityCalendars,
+    honorResourceCalendars,
+    honorProgress,
+    portForCal,
+    drivingResourceCalId,
+    notes,
+  } = ctx;
   const typeResult = mapActivityType(activity.activity_type);
   if (!typeResult.supported) {
     notes.push({
@@ -365,19 +413,53 @@ function adaptActivity(
     }
   }
 
-  // Per-activity calendars (ADR-0037, M5): when honoured, attach the activity's own resolved
-  // port so its duration/float/dates land on its calendar; otherwise (the baseline) it schedules
-  // on the plan default and the non-default assignment is noted, never silently applied.
-  const ownPort =
-    activity.calendar !== defaultCalendarId ? activityPort(activity.calendar) : undefined;
-  if (activity.calendar !== defaultCalendarId && !ownPort) {
+  // Scheduling calendar (ADR-0035 §23 / ADR-0039 fallback: driving resource → activity → plan default).
+  // A RESOURCE_DEPENDENT activity schedules on its DRIVING resource's calendar when resource calendars
+  // are honoured; with no driving assignment it is produced-and-flagged and falls back to its activity
+  // calendar. Any other type schedules on its own calendar (type-gated — a TASK with a resource
+  // assignment never picks up the resource's calendar; the A5500 contrast). When resource calendars are
+  // honoured the resource port applies regardless of the per-activity-calendar gate (they are distinct
+  // knobs); the activity's own calendar still only applies under `honorActivityCalendars`.
+  const isResourceDependent = type === 'RESOURCE_DEPENDENT';
+  let resourceDriverMissing = false;
+  let schedulingCalId = activity.calendar;
+  let resourceDriven = false;
+  if (isResourceDependent && honorResourceCalendars) {
+    if (drivingResourceCalId !== undefined) {
+      schedulingCalId = drivingResourceCalId;
+      resourceDriven = true;
+    } else {
+      resourceDriverMissing = true;
+      notes.push({
+        entity: 'activity',
+        id: activity.id,
+        kind: 'resource-driver-missing',
+        reason: `no driving resource assignment; scheduled on the fallback calendar and flagged (ADR-0035 §23)`,
+      });
+    }
+  }
+
+  // Apply the port under the right gate: a resource-driven calendar under `honorResourceCalendars`,
+  // an own calendar under `honorActivityCalendars`. `portForCal` returns undefined for the plan
+  // default or a window-only calendar (which is then substituted onto the plan default + noted).
+  const gateOn = resourceDriven ? honorResourceCalendars : honorActivityCalendars;
+  const ownPort = gateOn ? portForCal(schedulingCalId) : undefined;
+  if (gateOn && schedulingCalId !== defaultCalendarId && !ownPort) {
+    notes.push({
+      entity: 'activity',
+      id: activity.id,
+      kind: resourceDriven ? 'resource-calendar-substituted' : 'activity-calendar-substituted',
+      reason: resourceDriven
+        ? `driving resource calendar ${schedulingCalId} is window-only; scheduled on the plan default ${defaultCalendarId} (in-window placement is an M5-epic edge case)`
+        : `assigned window-only calendar ${schedulingCalId} scheduled on the plan default ${defaultCalendarId} (in-window placement is an M5-epic edge case)`,
+    });
+  } else if (!gateOn && schedulingCalId !== defaultCalendarId) {
+    // The baseline (per-activity calendars off): a non-default assignment is noted, never applied.
     notes.push({
       entity: 'activity',
       id: activity.id,
       kind: 'activity-calendar-substituted',
-      reason: honorActivityCalendars
-        ? `assigned window-only calendar ${activity.calendar} scheduled on the plan default ${defaultCalendarId} (in-window placement is an M5-epic edge case)`
-        : `assigned calendar ${activity.calendar} scheduled on the plan default ${defaultCalendarId} (per-activity calendars off — baseline)`,
+      reason: `assigned calendar ${schedulingCalId} scheduled on the plan default ${defaultCalendarId} (per-activity calendars off — baseline)`,
     });
   }
 
@@ -419,6 +501,7 @@ function adaptActivity(
     type,
     ...progress,
     ...(ownPort ? { calendar: ownPort } : {}),
+    ...(resourceDriverMissing ? { resourceDriverMissing: true } : {}),
   };
 
   // Expected finish (ADR-0035 §9, M4): fed unconditionally; the engine only acts on it when the plan

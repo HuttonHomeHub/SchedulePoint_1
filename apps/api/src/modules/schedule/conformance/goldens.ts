@@ -63,6 +63,22 @@ const loe = (id: string, calendar?: EngineActivity['calendar']): EngineActivity 
   ...(calendar ? { calendar } : {}),
 });
 
+/**
+ * A resource-dependent activity (ADR-0035 §23 / ADR-0039): identical to a TASK for logic, scheduled on
+ * the port the adapter/service resolves from its DRIVING resource's calendar. Here the port stands in
+ * for that resolved driving-resource calendar.
+ */
+const resourceDependent = (
+  id: string,
+  durationDays: number,
+  calendar: NonNullable<EngineActivity['calendar']>,
+): EngineActivity => ({
+  id,
+  durationMinutes: durationDays * 1440,
+  type: 'RESOURCE_DEPENDENT',
+  calendar,
+});
+
 export const GOLDEN_CASES: GoldenCase[] = [
   {
     name: 'fs-chain',
@@ -417,5 +433,38 @@ export const GOLDEN_CASES: GoldenCase[] = [
       },
     },
     projectFinish: '2026-01-14',
+  },
+  {
+    name: 'resource-calendar-drives',
+    description:
+      'A8300-style: a RESOURCE_DEPENDENT activity R is driven by a 24/7 crew calendar while a plain TASK T runs on the Mon–Fri plan — same 7-day duration, both from Monday 2026-01-05. R works through the weekend and finishes on its resource calendar (01-11); T waits the weekend out (01-13). The driving resource’s calendar demonstrably drives R’s dates (ADR-0035 §23 / ADR-0039); R is not on the critical path (T is the longer pole).',
+    activities: [task('T', 7), resourceDependent('R', 7, allMinutesWorkCalendar)],
+    edges: [],
+    options: { dataDate: MONDAY_DATA_DATE, calendar: monFri },
+    expected: {
+      // T (Mon–Fri): 7 working days from Mon 01-05 → skips one weekend → inclusive finish Tue 01-13.
+      T: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-13',
+        lateStart: '2026-01-05',
+        lateFinish: '2026-01-13',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // R (24/7 driving crew): 7 ELAPSED days from Mon 01-05 → inclusive finish Sun 01-11 (worked the
+      // weekend). It floats to the project finish; its slack is measured on ITS OWN 24/7 calendar =
+      // 2 elapsed days (2880 min), so it is not critical.
+      R: {
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-11',
+        lateStart: '2026-01-07',
+        lateFinish: '2026-01-13',
+        totalFloat: 2880,
+        isCritical: false,
+        freeFloat: 2880,
+      },
+    },
+    // T — scheduled on the plan calendar — is the longer pole and carries the project finish (01-13).
+    projectFinish: '2026-01-13',
   },
 ];

@@ -22,9 +22,10 @@ export type MapResult<T> = { supported: true; value: T } | { supported: false; r
 
 /**
  * The fixture's P6 activity types that today's engine can schedule. `LEVEL_OF_EFFORT` (span-derived,
- * ADR-0035 §21) and `WBS_SUMMARY` (branch roll-up, §24) are now supported (M5-epic F1–F3 / F6–F7).
- * `RESOURCE_DEPENDENT` (resource-calendar driven, §23) is **not** yet — it is excluded with a reason
- * until its owning milestone builds it.
+ * ADR-0035 §21) and `WBS_SUMMARY` (branch roll-up, §24) are supported (M5-epic F1–F3 / F6–F7).
+ * `RESOURCE_DEPENDENT` (resource-calendar driven, §23) is now supported (M7): the engine treats it
+ * exactly like a `TASK` for logic, and the adapter resolves its driving resource's calendar as its
+ * scheduling calendar (see `adapter.ts`).
  */
 export function mapActivityType(type: FixtureActivityType): MapResult<ActivityType> {
   switch (type) {
@@ -44,10 +45,10 @@ export function mapActivityType(type: FixtureActivityType): MapResult<ActivityTy
       // from driving/criticality/project-finish. The adapter builds the `parentId` tree from `wbs` codes.
       return { supported: true, value: 'WBS_SUMMARY' };
     case 'RESOURCE_DEPENDENT':
-      return {
-        supported: false,
-        reason: 'resource-dependent scheduling is not implemented (ADR-0035 §23, M5)',
-      };
+      // Resource-calendar driven (ADR-0035 §23 / ADR-0039, M7): identical to a TASK for logic; the
+      // adapter substitutes the driving resource's calendar as its scheduling calendar (or flags it
+      // driver-missing and falls back), so the type itself maps straight through.
+      return { supported: true, value: 'RESOURCE_DEPENDENT' };
   }
 }
 

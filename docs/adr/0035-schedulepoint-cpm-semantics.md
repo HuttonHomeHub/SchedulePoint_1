@@ -22,7 +22,7 @@ stays **Proposed** overall until every clause is built. Current state:
 | §17–§20 (float & critical)         | M6               | **Accepted** |
 | §21 (level of effort)              | M5-epic          | **Accepted** |
 | §24 (WBS-summary rollup)           | M5-epic          | **Accepted** |
-| §23 (resource-dependent)           | M5-epic          | Proposed     |
+| §23 (resource-dependent)           | M7               | **Accepted** |
 | §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
@@ -140,7 +140,7 @@ We will implement the following semantics. Each cites the milestone that will bu
 20. **"Make open-ended activities critical"** is an option, **default off** (P6 default); on (S08) it
     marks open-ends critical.
 
-### Activity types (→ M1/M5)
+### Activity types (→ M1/M5/M7)
 
 21. **Level of Effort:** duration is **derived** from its SS-predecessor's start to its FF-successor's
     finish; an LOE **never drives a successor, never appears on the critical path, and never inherits
