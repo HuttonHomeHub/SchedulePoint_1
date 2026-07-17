@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-query';
 
 import {
-  isMilestoneType,
+  isDurationDerivedType,
   type ActivityFormValues,
   type ProgressFormValues,
 } from '../schemas/activity-schemas';
@@ -65,7 +65,7 @@ function createBody(input: ActivityFormValues) {
     code: optional(input.code),
     type: input.type,
     // A milestone has no duration — the API rejects a non-zero one.
-    durationDays: isMilestoneType(input.type) ? 0 : input.durationDays,
+    durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
     description: optional(input.description),
     ...(hasConstraint
       ? { constraintType: input.constraintType, constraintDate: input.constraintDate }
@@ -92,7 +92,7 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     name: input.name,
     code: optional(input.code) ?? null,
     type: input.type,
-    durationDays: isMilestoneType(input.type) ? 0 : input.durationDays,
+    durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
     description: optional(input.description) ?? null,
     // Clear both sides together when the constraint is removed (API pairs them).
     constraintType: hasConstraint ? input.constraintType : null,

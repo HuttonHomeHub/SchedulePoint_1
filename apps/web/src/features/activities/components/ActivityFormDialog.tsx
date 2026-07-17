@@ -10,12 +10,12 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import {
-  ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
   INHERIT_CALENDAR_LABEL,
   activityFormSchema,
-  isMilestoneType,
+  isDurationDerivedType,
+  selectableActivityTypes,
   type ActivityFormValues,
 } from '../schemas/activity-schemas';
 
@@ -25,7 +25,11 @@ import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField, FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { ACTIVITY_CALENDAR_ENABLED, ADVANCED_CONSTRAINTS_ENABLED } from '@/config/env';
+import {
+  ACTIVITY_CALENDAR_ENABLED,
+  ADVANCED_ACTIVITY_TYPES_ENABLED,
+  ADVANCED_CONSTRAINTS_ENABLED,
+} from '@/config/env';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
 /**
@@ -191,7 +195,7 @@ export function ActivityFormDialog({
             aria-describedby={errors.type ? 'activity-type-error' : undefined}
             {...register('type')}
           >
-            {ACTIVITY_TYPES.map((value) => (
+            {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
               <option key={value} value={value}>
                 {ACTIVITY_TYPE_LABELS[value]}
               </option>
@@ -203,7 +207,15 @@ export function ActivityFormDialog({
             </p>
           ) : null}
         </div>
-        {isMilestoneType(type) ? null : (
+        {isDurationDerivedType(type) ? (
+          type === 'LEVEL_OF_EFFORT' ? (
+            <p className="text-muted-foreground text-sm">
+              A level-of-effort activity’s duration is derived from its span — the start of its
+              earliest start-to-start predecessor to the finish of its latest finish-to-finish
+              successor. Add those links, then Recalculate.
+            </p>
+          ) : null
+        ) : (
           <TextField
             label="Duration (working days)"
             type="number"
@@ -361,9 +373,10 @@ export function ActivityFormDialog({
               hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
               {...register('scheduleAsLateAsPossible')}
             />
-            {/* Expected finish sizes work to a target finish, so it's meaningless for a milestone
-                (a point in time, 0 duration) — hidden for those types, mirroring the Duration field. */}
-            {isMilestoneType(type) ? null : (
+            {/* Expected finish sizes work to a target finish, so it's meaningless for a type whose
+                duration isn't entered — a milestone (a point in time) or a level-of-effort (span-
+                derived) — hidden for those, mirroring the Duration field. */}
+            {isDurationDerivedType(type) ? null : (
               <TextField
                 label="Expected finish (optional)"
                 type="date"

@@ -44,6 +44,46 @@ export function isMilestoneType(type: ActivityType): boolean {
 }
 
 /**
+ * Types whose duration is NOT a user-entered number: milestones (a point in time, always 0) and
+ * **Level of Effort** (the engine derives its span from its SS/FF ties, ADR-0035 §21). The form hides
+ * the Duration and Expected-finish fields for these, and the request builder stores duration 0.
+ */
+export function isDurationDerivedType(type: ActivityType): boolean {
+  return isMilestoneType(type) || type === 'LEVEL_OF_EFFORT';
+}
+
+/** The activity types the form's Type picker always offers — the three with full engine support. */
+export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
+  'TASK',
+  'START_MILESTONE',
+  'FINISH_MILESTONE',
+];
+
+/**
+ * Advanced activity types offered only when `VITE_ADVANCED_ACTIVITY_TYPES` is on (M5-epic, ADR-0035 §21).
+ * Today just **Level of Effort** (span-derived; its engine/API/conformance are live). `HAMMOCK` and
+ * `WBS_SUMMARY` are intentionally NOT offered — no (or not-yet) engine behaviour — though
+ * {@link ACTIVITY_TYPE_LABELS} still names every value so a legacy/imported one displays honestly.
+ */
+export const ADVANCED_ACTIVITY_TYPES: readonly ActivityType[] = ['LEVEL_OF_EFFORT'];
+
+/**
+ * The activity types the Type picker should offer: the always-supported {@link BASE_ACTIVITY_TYPES},
+ * plus {@link ADVANCED_ACTIVITY_TYPES} when the flag is on, plus the activity's `current` value if it
+ * isn't already in that set — so editing an activity of a not-offered type (a legacy `HAMMOCK`, or an
+ * LOE while the flag is off) keeps its own value visible and selected rather than silently coercing it
+ * (the honest-selector pattern, cf. the constraint editor). Order-stable and de-duplicated.
+ */
+export function selectableActivityTypes(
+  advancedEnabled: boolean,
+  current?: ActivityType,
+): ActivityType[] {
+  const types = [...BASE_ACTIVITY_TYPES, ...(advancedEnabled ? ADVANCED_ACTIVITY_TYPES : [])];
+  if (current && !types.includes(current)) types.push(current);
+  return types;
+}
+
+/**
  * Every constraint kind the form's Zod schema accepts — the six honoured
  * ({@link SELECTABLE_CONSTRAINT_TYPES}) plus the two parked `MANDATORY_*`, so a
  * legacy/imported parked value round-trips unchanged through an edit. The **selector**

@@ -36,6 +36,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     isCritical: true,
     isNearCritical: false,
     constraintViolated: false,
+    loeNoSpan: false,
     visualStart: null,
     visualEffectiveStart: null,
     visualEffectiveFinish: null,

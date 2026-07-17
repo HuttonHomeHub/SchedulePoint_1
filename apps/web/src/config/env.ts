@@ -220,3 +220,14 @@ export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
 export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOff(
   import.meta.env.VITE_FLOAT_CRITICAL_SETTINGS,
 );
+
+/**
+ * Advanced activity types (ADR-0035 §21/§24, M5-epic). **OFF by default** — gates whether the activity
+ * form's Type picker offers **Level of Effort** (a span-derived hammock: duration from its SS-predecessor
+ * start to its FF-successor finish, never driving or critical). The engine, API and conformance proof for
+ * LOE are already live (F1–F3); the flag only governs whether a planner can *pick* it. When WBS-summary
+ * lands (F5–F8) it joins this same gate. Set `VITE_ADVANCED_ACTIVITY_TYPES=true` to enable.
+ */
+export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_ADVANCED_ACTIVITY_TYPES,
+);
