@@ -287,6 +287,160 @@ describe('levelSchedule — parity (§8)', () => {
   });
 });
 
+describe('levelSchedule — partial concurrency on a higher-capacity resource (§2)', () => {
+  it('runs two 1-unit activities at their early start on a capacity-2 resource (no false serialise)', () => {
+    // Both demand 1 on a capacity-2 crane, no dependency: `need = capacity − demand = 1` PERMITS the
+    // other's concurrent unit, so they legitimately overlap and BOTH keep their early start (delay 0).
+    // A `>`/`>=` off-by-one in the sweep would wrongly serialise them — this pins that it does not.
+    const A = task('A', 2, { levelingPriority: 1 });
+    const B = task('B', 2, { levelingPriority: 2 });
+    const resources: EngineResource[] = [{ id: 'R', capacity: 2 }];
+    const assignments = [assign('A', 'R', 1), assign('B', 'R', 1)];
+    const { byId, leveled } = run([A, B], [], assignments, resources);
+    expect(byId.get('A')!.leveledStartOffset).toBe(0);
+    expect(byId.get('A')!.leveledFinishOffset).toBe(2 * DAY);
+    expect(byId.get('A')!.levelingDelay).toBe(0);
+    expect(byId.get('B')!.leveledStartOffset).toBe(0);
+    expect(byId.get('B')!.leveledFinishOffset).toBe(2 * DAY);
+    expect(byId.get('B')!.levelingDelay).toBe(0);
+    expect(leveled.summary.leveledActivityCount).toBe(0); // neither was delayed
+  });
+});
+
+describe('levelSchedule — exclusion types are pinned; levellable work levels around them (§5)', () => {
+  it('never moves a Level-of-Effort activity that holds a resource', () => {
+    // L is an LOE hammock spanning P (SS pred) → Q (FF succ): its derived span is [P.start, Q.finish) =
+    // days 1–2. It holds the crane there and is NEVER moved (§5); B is serialised around it to days 3–4.
+    const P = task('P', 2);
+    const Q = task('Q', 2);
+    const L = task('L', 2, { type: 'LEVEL_OF_EFFORT', levelingPriority: 9 });
+    const B = task('B', 2, { levelingPriority: 1 });
+    const edges = [edge('P', 'L', 'SS'), edge('L', 'Q', 'FF')];
+    const resources: EngineResource[] = [{ id: 'R', capacity: 1 }];
+    const assignments = [assign('L', 'R', 1), assign('B', 'R', 1)];
+    const { byId } = run([P, Q, L, B], edges, assignments, resources);
+    // The LOE occupies days 1–2 at its network position (delay 0); B levels behind it.
+    expect(byId.get('L')!.leveledStart).toBe(byId.get('L')!.earlyStart);
+    expect(byId.get('L')!.leveledStartOffset).toBe(0);
+    expect(byId.get('L')!.levelingDelay).toBe(0);
+    expect(byId.get('B')!.leveledStartOffset).toBe(2 * DAY);
+  });
+
+  it('never moves a WBS-summary activity that holds a resource', () => {
+    // S is a WBS summary rolling up its child C (days 1–2). It holds the crane at that rolled-up span
+    // and is never moved (§5); B levels around it to days 3–4.
+    const S = task('S', 0, { type: 'WBS_SUMMARY', levelingPriority: 9 });
+    const C = task('C', 2, { parentId: 'S' });
+    const B = task('B', 2, { levelingPriority: 1 });
+    const resources: EngineResource[] = [{ id: 'R', capacity: 1 }];
+    const assignments = [assign('S', 'R', 1), assign('B', 'R', 1)];
+    const { byId } = run([S, C, B], [], assignments, resources);
+    expect(byId.get('S')!.leveledStart).toBe(byId.get('S')!.earlyStart);
+    expect(byId.get('S')!.leveledStartOffset).toBe(0);
+    expect(byId.get('S')!.leveledFinishOffset).toBe(2 * DAY); // rolled up from C
+    expect(byId.get('S')!.levelingDelay).toBe(0);
+    expect(byId.get('B')!.leveledStartOffset).toBe(2 * DAY);
+  });
+
+  it('pins a milestone at its network position (a zero-span point occupies no capacity)', () => {
+    // A START_MILESTONE is an exclusion type (§5): pinned at its network position with delay 0. Being a
+    // zero-length point it occupies no span, so a contending task is NOT blocked and keeps its early
+    // start — the milestone exclusion branch is exercised without any false serialisation.
+    const M = task('M', 0, { type: 'START_MILESTONE', levelingPriority: 9 });
+    const B = task('B', 2, { levelingPriority: 1 });
+    const resources: EngineResource[] = [{ id: 'R', capacity: 1 }];
+    const assignments = [assign('M', 'R', 1), assign('B', 'R', 1)];
+    const { byId } = run([M, B], [], assignments, resources);
+    expect(byId.get('M')!.leveledStart).toBe(byId.get('M')!.earlyStart);
+    expect(byId.get('M')!.leveledStartOffset).toBe(0);
+    expect(byId.get('M')!.levelingDelay).toBe(0);
+    expect(byId.get('B')!.leveledStartOffset).toBe(0); // not blocked by the zero-span milestone
+    expect(byId.get('B')!.levelingDelay).toBe(0);
+  });
+});
+
+describe('levelSchedule — never hangs even when a resource window can never fit the run (§6, §F)', () => {
+  it('terminates and flags every activity pushed past a one-day hire window', () => {
+    // A capacity-1 crane on hire for a SINGLE day (2026-01-01). Five 1-day activities serialise onto it;
+    // only the first lands in the window, the other four are pushed past it. The single-sweep placement
+    // cannot loop, so this returns (a wall-clock guard makes a regression to a hang a hard failure) and
+    // each over-run activity is flagged `levelingWindowExceeded`.
+    const craneCal = buildWorkingTimeCalendar(fullDayWeek([]), [
+      {
+        startDate: '2026-01-01',
+        endDate: '2026-01-01',
+        windows: [{ startMinute: 0, endMinute: DAY }],
+      },
+    ]);
+    const activities = Array.from({ length: 5 }, (_, i) =>
+      task(`N${i}`, 1, { levelingPriority: i }),
+    );
+    const resources: EngineResource[] = [{ id: 'R', capacity: 1, calendar: craneCal }];
+    const assignments = activities.map((a) => assign(a.id, 'R', 1));
+    const started = performance.now();
+    const { byId, leveled } = run(activities, [], assignments, resources);
+    const elapsedMs = performance.now() - started;
+    expect(elapsedMs).toBeLessThan(1000); // proves termination — a hang would blow the vitest timeout
+    expect(byId.get('N0')!.levelingWindowExceeded).toBe(false); // in the window
+    for (const i of [1, 2, 3, 4]) {
+      expect(byId.get(`N${i}`)!.levelingWindowExceeded).toBe(true); // pushed past the window
+    }
+    expect(leveled.summary.levelingWindowExceededCount).toBe(4);
+  });
+});
+
+describe('levelSchedule — negative-float within-float cap does not underflow past early start (§4)', () => {
+  it('clamps an over-constrained activity to its early start rather than before it', () => {
+    // B has an FNLT of 2026-01-01 but needs 2 days from the data date → late finish (day 1) is before
+    // its early finish (day 2): NEGATIVE total float, an over-constrained network. Under
+    // `levelWithinFloatOnly`, the within-float cap arithmetic (late finish − duration) would walk B's
+    // start BEFORE the data date; the guard clamps it to the early start instead. Assert it never lands
+    // before `earlyStart`.
+    const A = task('A', 2, { levelingPriority: 1 });
+    const B = task('B', 2, {
+      levelingPriority: 2,
+      constraintType: 'FNLT',
+      constraintDate: '2026-01-01',
+    });
+    const resources: EngineResource[] = [{ id: 'R', capacity: 1 }];
+    const assignments = [assign('A', 'R', 1), assign('B', 'R', 1)];
+    const { byId } = run([A, B], [], assignments, resources, true);
+    const b = byId.get('B')!;
+    expect(b.totalFloat).toBeLessThan(0); // genuinely over-constrained
+    // The cap never underflows: the leveled start is not before the early start.
+    expect(b.leveledStartOffset).toBeGreaterThanOrEqual(b.earlyStartOffset);
+    expect(b.leveledStartOffset).toBe(0);
+    expect(b.leveledStart).toBe(b.earlyStart);
+    expect(b.levelingDelay).toBe(0);
+  });
+});
+
+describe('levelSchedule — single-resource many-way contention performance (ADR-0041 §2)', () => {
+  it('serialises 2,000 activities all contending for one capacity-1 resource, sub-second', () => {
+    // The pathological case the retry-loop placement took ~21 s on: EVERY activity assigns the one
+    // capacity-1 crane, so each is serialised behind all prior placements. The single blackout-gap sweep
+    // is O(k log k) per placement, so the whole run stays well under budget. Assert the exact
+    // serialisation (activity i → offset i × duration) AND a generous wall-clock bound.
+    const N = 2000;
+    const activities: EngineActivity[] = [];
+    const assignments: EngineAssignment[] = [];
+    for (let i = 0; i < N; i += 1) {
+      activities.push(task(`N${i}`, 1, { levelingPriority: i }));
+      assignments.push(assign(`N${i}`, 'R', 1));
+    }
+    const resources: EngineResource[] = [{ id: 'R', capacity: 1 }];
+    const started = performance.now();
+    const { byId, leveled } = run(activities, [], assignments, resources);
+    const elapsedMs = performance.now() - started;
+    expect(leveled.results).toHaveLength(N);
+    // Serialised in priority order: the last activity starts after the other N−1 one-day runs.
+    expect(byId.get(`N${N - 1}`)!.leveledStartOffset).toBe((N - 1) * DAY);
+    expect(byId.get(`N${N - 1}`)!.leveledFinishOffset).toBe(N * DAY);
+    expect(leveled.summary.leveledActivityCount).toBe(N - 1); // all but the first were delayed
+    expect(elapsedMs).toBeLessThan(3000);
+  });
+});
+
 describe('levelSchedule — performance (2,000 activities, ADR-0041 §2)', () => {
   it('levels 2,000 activities across 200 capacity-1 resources well under budget', () => {
     // 10 activities per resource all start at the data date → each resource serialises its 10. The

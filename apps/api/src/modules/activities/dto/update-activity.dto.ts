@@ -189,6 +189,8 @@ export class UpdateActivityDto {
   @ValidateIf((_, value) => value !== null)
   @Type(() => Number)
   @IsInt()
+  @Min(0)
+  @Max(1_000_000)
   levelingPriority?: number | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })

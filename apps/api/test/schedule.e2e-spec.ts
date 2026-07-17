@@ -49,6 +49,8 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
 
   // Delete children before parents so the FK restrictions never bite.
   async function resetDatabase(): Promise<void> {
+    await prisma.resourceAssignment.deleteMany();
+    await prisma.resource.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
@@ -253,6 +255,80 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(depAfter.version).toBe(depBefore.version);
     expect(depAfter.updatedAt.getTime()).toBe(depBefore.updatedAt.getTime());
     expect(depAfter.updatedBy).toBe(depBefore.updatedBy);
+  });
+
+  it('levels resources on recalc (serialises a capacity-1 clash) without touching version/updated_at', async () => {
+    // Two 2-day activities both start at the data date and both demand the one capacity-1 crane. With
+    // levelResources on, the levelling pass (ADR-0041) serialises them: A holds days 1–2, B is pushed
+    // to days 3–4 with a 2-working-day (2 × 1440-minute) delay. The overlay is engine-owned (ADR-0022),
+    // so it lands in leveled_start/leveled_finish/leveling_delay_minutes while version/updated_at stay put.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Levelling'); // clears the calendar → all-days-work
+
+    const makePriorityActivity = async (name: string, priority: number): Promise<string> => {
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name, durationDays: 2, levelingPriority: priority })
+        .expect(201);
+      return res.body.data.id as string;
+    };
+    const a = await makePriorityActivity('A', 1);
+    const b = await makePriorityActivity('B', 2);
+
+    // A capacity-1 crane, assigned to both activities at 1 unit/hour of demand each.
+    const crane = await actor.agent
+      .post('/api/v1/organizations/acme/resources')
+      .send({ name: 'Crane', kind: 'EQUIPMENT', maxUnitsPerHour: 1 })
+      .expect(201);
+    const craneId = crane.body.data.id as string;
+    for (const activityId of [a, b]) {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/activities/${activityId}/assignments`)
+        .send({ resourceId: craneId, unitsPerHour: 1 })
+        .expect(201);
+    }
+
+    // Opt the plan into resource levelling (the plan is at version 2 after makePlan's calendar PATCH).
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ levelResources: true, version: 2 })
+      .expect(200);
+
+    const before = await prisma.activity.findUniqueOrThrow({
+      where: { id: b },
+      select: { version: true, updatedAt: true, updatedBy: true },
+    });
+
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    // A keeps its network position; B is serialised behind it and carries the delay in WORKING MINUTES.
+    const aAfter = await prisma.activity.findUniqueOrThrow({
+      where: { id: a },
+      select: { leveledStart: true, leveledFinish: true, levelingDelayMinutes: true },
+    });
+    const bAfter = await prisma.activity.findUniqueOrThrow({
+      where: { id: b },
+      select: {
+        leveledStart: true,
+        leveledFinish: true,
+        levelingDelayMinutes: true,
+        version: true,
+        updatedAt: true,
+        updatedBy: true,
+      },
+    });
+    const ymd = (d: Date | null) => d?.toISOString().slice(0, 10);
+    expect(ymd(aAfter.leveledStart)).toBe('2026-01-01');
+    expect(ymd(aAfter.leveledFinish)).toBe('2026-01-02');
+    expect(aAfter.levelingDelayMinutes).toBe(0);
+    expect(ymd(bAfter.leveledStart)).toBe('2026-01-03');
+    expect(ymd(bAfter.leveledFinish)).toBe('2026-01-04');
+    expect(bAfter.levelingDelayMinutes).toBe(2 * 1440); // 2 working days, in minutes
+
+    // The levelling overlay is engine-owned: the recalc did NOT bump version/updated_at/updated_by.
+    expect(bAfter.version).toBe(before.version);
+    expect(bAfter.updatedAt.getTime()).toBe(before.updatedAt.getTime());
+    expect(bAfter.updatedBy).toBe(before.updatedBy);
   });
 
   // NOTE: `plannedStart` is now a mandatory, non-null column (ADR-0033 M1;

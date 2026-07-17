@@ -35,8 +35,10 @@ import {
  *    causes is reported on the mover that can't fit (or left), never resolved by moving the pinned one.
  * 3. **Placement.** Each levellable activity is placed at the earliest working start ≥ its early start
  *    at which every finite-capacity resource it assigns has spare capacity for the whole run — found by
- *    an **event-driven interval sweep** over already-placed assignment intervals (never a per-minute
- *    scan), bounded by an iteration cap (a resource that can never free terminates and flags, §6/§F).
+ *    a **single blackout-gap sweep** ({@link earliestFeasibleStart}) that merges the already-placed
+ *    intervals into feasible / blackout regions and returns the first region the run fits (O(k log k)
+ *    over k placed intervals, never a per-minute scan and never a retry loop — termination is inherent,
+ *    so it cannot hang; the final open region always fits, §6/§F).
  * 4. **`levelingDelay`** = working time between early start and leveled start on the activity's own
  *    calendar (0 when not delayed).
  * 5. **Float-first then extend (§4).** A within-total-float delay preserves the project finish; when
@@ -82,14 +84,20 @@ export function levelSchedule(
   const activityById = new Map(activities.map((a) => [a.id, a]));
   const resourceById = new Map(resources.map((r) => [r.id, r]));
 
-  // Assignments grouped by activity. Only finite-capacity resources with positive demand participate in
-  // levelling (occupancy + feasibility) — an uncapped resource never constrains (§8, the parity path).
+  // Assignments grouped by activity in a SINGLE pass. Only finite-capacity resources with positive
+  // demand participate in levelling (occupancy + feasibility) — an uncapped resource never constrains
+  // (§8, the parity path). Pre-grouping makes `finiteAssignmentsOf` an O(1) lookup, so the pass never
+  // re-scans every assignment per activity (which was quadratic even with zero contention).
+  const assignmentsByActivity = new Map<string, EngineAssignment[]>();
+  for (const asg of assignments) {
+    const res = resourceById.get(asg.resourceId);
+    if (res == null || res.capacity == null || asg.unitsPerHour <= 0) continue;
+    const list = assignmentsByActivity.get(asg.activityId);
+    if (list) list.push(asg);
+    else assignmentsByActivity.set(asg.activityId, [asg]);
+  }
   const finiteAssignmentsOf = (id: string): EngineAssignment[] =>
-    assignments.filter((asg) => {
-      if (asg.activityId !== id) return false;
-      const res = resourceById.get(asg.resourceId);
-      return res != null && res.capacity != null && asg.unitsPerHour > 0;
-    });
+    assignmentsByActivity.get(id) ?? [];
 
   const calendarOf = (a: EngineActivity): WorkingTimeCalendar => a.calendar ?? planCalendar;
 
@@ -187,40 +195,21 @@ export function levelSchedule(
     const finiteAsgs = finiteAssignmentsOf(a.id);
     const esInst = instOfOffset(r.earlyStartOffset);
 
-    // Iteration cap (§F, N11/N16 posture): bounded by the number of already-placed intervals across
-    // the resources this activity touches, plus a guard. A resource that can never free terminates here
-    // and is flagged, never hangs.
-    const placedCount = finiteAsgs.reduce(
-      (sum, asg) => sum + (profile.get(asg.resourceId)?.length ?? 0),
-      0,
+    // Earliest capacity-feasible start via a single blackout-gap sweep over the already-placed
+    // intervals on the resources this activity touches (§2). `need` is the spare headroom on each
+    // resource once this activity's own demand is reserved (capacity − demand; ≥ 0 here, since a
+    // self-over-allocated activity was pinned in Pass A). Non-iterative — it cannot hang.
+    const perResource = finiteAsgs.map((asg) => ({
+      intervals: profile.get(asg.resourceId) ?? [],
+      need: resourceById.get(asg.resourceId)!.capacity! - asg.unitsPerHour,
+    }));
+    const { start: candidate, finish: finishInst } = earliestFeasibleStart(
+      calA,
+      esInst,
+      d,
+      perResource,
     );
-    const maxIter = placedCount + finiteAsgs.length + 8;
-
-    let candidate = rollForwardToWorking(calA, esInst);
-    let finishInst = d === 0 ? candidate : advanceWorking(calA, candidate, d);
     let windowExceeded = false;
-    let iterations = 0;
-    for (;;) {
-      let jumpTo: number | null = null;
-      for (const asg of finiteAsgs) {
-        const res = resourceById.get(asg.resourceId)!;
-        const need = res.capacity! - asg.unitsPerHour; // max existing concurrent demand allowed
-        const jt = earliestConflictJump(
-          profile.get(asg.resourceId) ?? [],
-          candidate,
-          finishInst,
-          need,
-        );
-        if (jt !== null) jumpTo = jumpTo === null ? jt : Math.min(jumpTo, jt);
-      }
-      if (jumpTo === null) break; // capacity-feasible for the whole run
-      candidate = rollForwardToWorking(calA, jumpTo);
-      finishInst = d === 0 ? candidate : advanceWorking(calA, candidate, d);
-      if ((iterations += 1) > maxIter) {
-        windowExceeded = true;
-        break;
-      }
-    }
 
     // §6 window conflict: a finite resource whose own (window-only) calendar supplies NO working time
     // across the activity's leveled run means the serialisation pushed it past that resource's window —
@@ -251,6 +240,14 @@ export function levelSchedule(
     ) {
       leveledFinishInst = instOfOffset(r.lateFinishOffset);
       leveledStartInst = d === 0 ? leveledFinishInst : advanceWorking(calA, leveledFinishInst, -d);
+      // Negative-float guard: an over-constrained activity (late finish < early finish) has an
+      // unsatisfiable within-float cap, so the cap arithmetic can walk the start BEFORE the early
+      // start. Never place an activity before its early start — clamp to the early start (the
+      // earliest it can go) and let its finish follow, rather than underflow behind it.
+      if (leveledStartInst < esInst) {
+        leveledStartInst = esInst;
+        leveledFinishInst = d === 0 ? esInst : advanceWorking(calA, esInst, d);
+      }
     }
     for (const asg of finiteAsgs) {
       occupy(asg.resourceId, leveledStartInst, leveledFinishInst, asg.unitsPerHour);
@@ -312,39 +309,101 @@ export function levelSchedule(
   };
 }
 
+/** One touched resource's already-placed intervals plus this activity's spare headroom on it. */
+interface ResourceContention {
+  intervals: ReadonlyArray<{ start: number; finish: number; demand: number }>;
+  /** capacity − this activity's demand: the max concurrent PLACED demand the resource may already carry. */
+  need: number;
+}
+
 /**
- * Event-driven interval sweep (ADR-0041 §2): is there any instant in `[winStart, winFinish)` where the
- * placed demand on a resource exceeds `need` (= capacity − this activity's demand)? If so, return the
- * earliest placed-interval finish overlapping the window — the earliest point the profile can drop, and
- * the next candidate start to retry (strictly greater than `winStart`, so the caller always progresses).
- * Returns `null` when the window is capacity-feasible. Never a per-minute scan.
+ * The earliest working start ≥ `esAbs` at which every touched resource has spare capacity for the whole
+ * run (ADR-0041 §2), found by a **single blackout-gap sweep** — no retry loop, so it cannot hang.
+ *
+ * A merged event stream (`+demand` at each placed interval's start, `−demand` at its finish, clamped to
+ * `esAbs` and tagged by resource) is swept in time order (a finish before a start at an equal instant —
+ * touching intervals do not overlap). Maintaining a per-resource concurrent load and a count of
+ * resources currently **over** their `need`, the timeline splits into **feasible** regions (over-count
+ * 0) and **blackout** regions (over-count > 0). The run is placed in the first feasible region it fits:
+ * `advanceWorking(cal, cand, d) ≤ regionEnd`. Because every interval finishes, the over-count returns to
+ * 0 after the last event, so the final region `[lastBlackoutEnd, +∞)` always fits — termination is
+ * inherent. A run placed past a resource's own availability window is caught by the caller's
+ * window-coverage check (`levelingWindowExceeded`), not here.
+ *
+ * Cost is O(k log k) over the k placed intervals across the touched resources (the sort), never a
+ * per-minute scan.
  */
-function earliestConflictJump(
-  placed: ReadonlyArray<{ start: number; finish: number; demand: number }>,
-  winStart: number,
-  winFinish: number,
-  need: number,
-): number | null {
-  const relevant = placed.filter((p) => p.start < winFinish && p.finish > winStart);
-  if (relevant.length === 0) return null;
-  // Sweep the clamped +demand (at start) / −demand (at finish) events. At an equal instant a finish is
-  // processed before a start (touching intervals do not overlap), so sort by time then delta ascending.
-  const events: Array<{ t: number; delta: number }> = [];
-  for (const p of relevant) {
-    events.push({ t: Math.max(p.start, winStart), delta: p.demand });
-    events.push({ t: Math.min(p.finish, winFinish), delta: -p.demand });
+function earliestFeasibleStart(
+  cal: WorkingTimeCalendar,
+  esAbs: number,
+  d: number,
+  perResource: readonly ResourceContention[],
+): { start: number; finish: number } {
+  const start0 = rollForwardToWorking(cal, esAbs);
+  // A milestone (zero duration) occupies no span, so no resource can ever block it.
+  if (d === 0) return { start: start0, finish: start0 };
+
+  // Merge the touched resources' placed intervals into demand events; only intervals reaching past the
+  // early start can affect a placement at or after it. Tag each event with its resource index `j`.
+  const events: Array<{ t: number; delta: number; j: number }> = [];
+  for (let j = 0; j < perResource.length; j += 1) {
+    for (const p of perResource[j]!.intervals) {
+      if (p.finish <= esAbs) continue;
+      events.push({ t: Math.max(p.start, esAbs), delta: p.demand, j });
+      events.push({ t: p.finish, delta: -p.demand, j });
+    }
   }
+  // No contention → the earliest working start fits immediately.
+  if (events.length === 0) return { start: start0, finish: advanceWorking(cal, start0, d) };
+  // Time ascending; at an equal instant a finish (negative delta) precedes a start (positive delta).
   events.sort((a, b) => a.t - b.t || a.delta - b.delta);
-  let concurrent = 0;
-  let over = false;
-  for (const e of events) {
-    concurrent += e.delta;
-    if (concurrent > need) over = true;
+
+  const load = new Array<number>(perResource.length).fill(0);
+  const need = perResource.map((rc) => rc.need);
+
+  /** Place the run at the earliest working start ≥ max(regionStart, start0) that finishes ≤ regionEnd. */
+  const tryFit = (
+    regionStart: number,
+    regionEnd: number,
+  ): { start: number; finish: number } | null => {
+    if (regionEnd <= start0) return null; // the region ends before the run could even start
+    const cand = rollForwardToWorking(cal, Math.max(regionStart, start0));
+    if (cand >= regionEnd) return null; // rolling to a working minute pushed past the region
+    const finish = advanceWorking(cal, cand, d);
+    return finish <= regionEnd ? { start: cand, finish } : null;
+  };
+
+  let overCount = 0; // resources whose placed load currently exceeds `need` (a blackout when > 0)
+  let regionStart = esAbs; // the start of the CURRENT feasible region (we begin feasible)
+  let i = 0;
+  let guard = 0;
+  const maxRegions = events.length + 2; // belt-and-suspenders; the loop is already finite
+  while (i < events.length) {
+    const t = events[i]!.t;
+    const wasFeasible = overCount === 0;
+    // Apply every event at this instant (finishes before starts) before re-reading the region state.
+    while (i < events.length && events[i]!.t === t) {
+      const e = events[i]!;
+      const before = load[e.j]! > need[e.j]!;
+      load[e.j]! += e.delta;
+      const after = load[e.j]! > need[e.j]!;
+      if (after && !before) overCount += 1;
+      else if (!after && before) overCount -= 1;
+      i += 1;
+    }
+    const nowFeasible = overCount === 0;
+    if (wasFeasible && !nowFeasible) {
+      // A feasible region [regionStart, t) just closed against a blackout at t — try to fit it.
+      const fit = tryFit(regionStart, t);
+      if (fit) return fit;
+    } else if (!wasFeasible && nowFeasible) {
+      regionStart = t; // a feasible region opens at t
+    }
+    if ((guard += 1) > maxRegions) break; // defensive only; termination is inherent
   }
-  if (!over) return null;
-  let jump = Number.POSITIVE_INFINITY;
-  for (const p of relevant) if (p.finish > winStart && p.finish < jump) jump = p.finish;
-  return jump === Number.POSITIVE_INFINITY ? null : jump;
+  // Every interval has finished, so over-count is 0: the final region [regionStart, +∞) always fits.
+  const cand = rollForwardToWorking(cal, Math.max(regionStart, start0));
+  return { start: cand, finish: advanceWorking(cal, cand, d) };
 }
 
 /**
