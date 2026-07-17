@@ -98,6 +98,25 @@ export class ActivityResponseDto implements ActivitySummary {
   physicalPercentComplete!: number | null;
 
   @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Activity budgeted expense in minor currency units (EV1/EV4a, ADR-0042). Conditionally included: ' +
+      'returned ONLY to a caller holding `cost:read` (Planner/Org Admin) in this org; every other ' +
+      'caller (Viewer/Contributor) sees null (fail-closed). Null thus means unset OR not-permitted.',
+  })
+  budgetedExpense!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Activity actual expense in minor currency units (EV1/EV4a, ADR-0042). Conditionally included: ' +
+      'returned ONLY to a caller holding `cost:read` (Planner/Org Admin) in this org; others see null.',
+  })
+  actualExpense!: number | null;
+
+  @ApiProperty({
     format: 'uuid',
     nullable: true,
     type: String,
@@ -299,7 +318,13 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: Activity): ActivityResponseDto {
+  /**
+   * Map an activity to its public shape. `canReadCost` is the caller's org-scoped `cost:read`
+   * decision (EV4a, ADR-0042), computed in the service from the resolved organisation — the money
+   * expense amounts are included ONLY when it is true, otherwise null (fail-closed, no cross-tenant
+   * leak). The %-complete measures stay in every read (they are not commercially sensitive money).
+   */
+  static from(entity: Activity, canReadCost: boolean): ActivityResponseDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
     return {
       id: entity.id,
@@ -332,10 +357,15 @@ export class ActivityResponseDto implements ActivitySummary {
       suspendDate: day(entity.suspendDate),
       resumeDate: day(entity.resumeDate),
       expectedFinish: day(entity.expectedFinish),
-      // Earned-Value progress measures (EV1, ADR-0042): passthrough echo. The money amount fields
-      // are cost data, read only by the cost:read-gated EV read (EV2b) — never these general GETs.
+      // Earned-Value progress measures (EV1, ADR-0042): passthrough echo — not money, always readable.
       percentCompleteType: entity.percentCompleteType,
       physicalPercentComplete: entity.physicalPercentComplete,
+      // Money expense amounts (BigInt minor units → number) are gated on `cost:read` (EV4a, ADR-0042):
+      // null unless the caller may read cost AND the amount is set. A Viewer/Contributor always sees null.
+      budgetedExpense:
+        canReadCost && entity.budgetedExpense !== null ? Number(entity.budgetedExpense) : null,
+      actualExpense:
+        canReadCost && entity.actualExpense !== null ? Number(entity.actualExpense) : null,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),
       lateStart: day(entity.lateStart),

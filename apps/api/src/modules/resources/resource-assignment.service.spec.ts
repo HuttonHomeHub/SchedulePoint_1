@@ -12,6 +12,7 @@ import {
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
+import { ResourceAssignmentResponseDto } from './dto/assignment-response.dto';
 import type { ResourceAssignmentRepository } from './resource-assignment.repository';
 import { ResourceAssignmentService } from './resource-assignment.service';
 import type { ResourceRepository } from './resource.repository';
@@ -256,7 +257,39 @@ describe('ResourceAssignmentService', () => {
     it('returns the active assignments for a valid activity', async () => {
       assignments.findManyActiveByActivity.mockResolvedValue([assignment()]);
       const result = await service.list(principalWith(ALL), 'acme', ACTIVITY_ID);
-      expect(result).toHaveLength(1);
+      expect(result.items).toHaveLength(1);
+    });
+
+    // EV4a (ADR-0042): the money budgeted/actual cost is conditionally included only for a `cost:read`
+    // caller (Planner/Org Admin), org-scoped and fail-closed.
+    it('a cost:read caller reads the real budgetedCost/actualCost off the assignment', async () => {
+      assignments.findManyActiveByActivity.mockResolvedValue([
+        assignment({ budgetedCost: 120000n, actualCost: 45000n }),
+      ]);
+      const { items, canReadCost } = await service.list(
+        principalWith([...ALL, 'cost:read']),
+        'acme',
+        ACTIVITY_ID,
+      );
+      expect(canReadCost).toBe(true);
+      const dto = ResourceAssignmentResponseDto.from(items[0]!, canReadCost);
+      expect(dto.budgetedCost).toBe(120000);
+      expect(dto.actualCost).toBe(45000);
+    });
+
+    it('a non-cost-read caller gets null for BOTH cost fields (fail-closed)', async () => {
+      assignments.findManyActiveByActivity.mockResolvedValue([
+        assignment({ budgetedCost: 120000n, actualCost: 45000n }),
+      ]);
+      const { items, canReadCost } = await service.list(
+        principalWith(['resource:read']),
+        'acme',
+        ACTIVITY_ID,
+      );
+      expect(canReadCost).toBe(false);
+      const dto = ResourceAssignmentResponseDto.from(items[0]!, canReadCost);
+      expect(dto.budgetedCost).toBeNull();
+      expect(dto.actualCost).toBeNull();
     });
   });
 

@@ -38,6 +38,25 @@ export class ResourceAssignmentResponseDto implements ResourceAssignmentSummary 
   })
   actualUnits!: number;
 
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Budgeted cost in minor currency units (EV1/EV4a, ADR-0042). Conditionally included: returned ' +
+      'ONLY to a caller holding `cost:read` (Planner/Org Admin) in this org; others see null ' +
+      '(fail-closed). Null thus means unset (derive at EV read) OR not-permitted.',
+  })
+  budgetedCost!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Actual cost in minor currency units (EV1/EV4a, ADR-0042). Conditionally included: returned ONLY ' +
+      'to a caller holding `cost:read` (Planner/Org Admin) in this org; others see null (fail-closed).',
+  })
+  actualCost!: number | null;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -47,7 +66,12 @@ export class ResourceAssignmentResponseDto implements ResourceAssignmentSummary 
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: ResourceAssignment): ResourceAssignmentResponseDto {
+  /**
+   * Map an assignment to its public shape. `canReadCost` is the caller's org-scoped `cost:read`
+   * decision (EV4a, ADR-0042), computed in the service — the money `budgetedCost`/`actualCost` are
+   * included ONLY when it is true, otherwise null (fail-closed, no cross-tenant leak).
+   */
+  static from(entity: ResourceAssignment, canReadCost: boolean): ResourceAssignmentResponseDto {
     return {
       id: entity.id,
       activityId: entity.activityId,
@@ -57,6 +81,11 @@ export class ResourceAssignmentResponseDto implements ResourceAssignmentSummary 
       unitsPerHour: entity.unitsPerHour === null ? null : entity.unitsPerHour.toNumber(),
       isDriving: entity.isDriving,
       actualUnits: entity.actualUnits.toNumber(),
+      // Money (BigInt minor units → number) is gated on `cost:read` (EV4a): null unless the caller may
+      // read cost. `budgetedCost` is additionally null when unset; `actualCost` is NOT NULL (default 0).
+      budgetedCost:
+        canReadCost && entity.budgetedCost !== null ? Number(entity.budgetedCost) : null,
+      actualCost: canReadCost ? Number(entity.actualCost) : null,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

@@ -65,6 +65,8 @@ const ACTIVITY: ActivitySummary = {
   selfOverAllocated: false,
   percentCompleteType: 'DURATION',
   physicalPercentComplete: null,
+  budgetedExpense: null,
+  actualExpense: null,
   version: 1,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
@@ -192,6 +194,8 @@ describe('ActivitiesTable', () => {
         selfOverAllocated: false,
         percentCompleteType: 'DURATION',
         physicalPercentComplete: null,
+        budgetedExpense: null,
+        actualExpense: null,
       },
     ]);
     expect(screen.getAllByText('01 Jan 2026').length).toBeGreaterThan(0); // early/late start

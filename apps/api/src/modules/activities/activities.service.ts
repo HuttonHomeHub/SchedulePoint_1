@@ -146,9 +146,12 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: Activity[]; meta: PageMeta }> {
+  ): Promise<{ items: Activity[]; meta: PageMeta; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
+    // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere` (cross-tenant
+    // IDOR). Threaded to the response DTO so the money expense amounts are gated per role (fail-closed).
+    const canReadCost = principal.can('cost:read', organization.id);
     await this.loadActivePlan(planId, organization.id);
 
     const rows = await this.activities.findManyActiveByPlan({
@@ -161,16 +164,21 @@ export class ActivitiesService {
     const hasMore = rows.length > query.limit;
     const items = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
-    return { items, meta: { nextCursor, hasMore } };
+    return { items, meta: { nextCursor, hasMore }, canReadCost };
   }
 
-  async get(principal: Principal, orgSlug: string, activityId: string): Promise<Activity> {
+  async get(
+    principal: Principal,
+    orgSlug: string,
+    activityId: string,
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const activity = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!activity) throw new NotFoundError('Activity not found.');
-    return activity;
+    return { activity, canReadCost };
   }
 
   async create(
@@ -178,9 +186,10 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: CreateActivityDto,
-  ): Promise<Activity> {
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:create', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
     const plan = await this.loadActivePlan(planId, organization.id);
     // Structural write — the caller must hold the plan edit-lock (ADR-0028), 423 otherwise.
     await this.editLock.assertHoldsPen(principal, plan.id, organization.id);
@@ -268,7 +277,7 @@ export class ActivitiesService {
         },
         'activity created',
       );
-      return activity;
+      return { activity, canReadCost };
     } catch (error) {
       throw this.mapWriteError(error);
     }
@@ -279,9 +288,10 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityDto,
-  ): Promise<Activity> {
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
@@ -412,7 +422,7 @@ export class ActivitiesService {
 
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
-    return updated;
+    return { activity: updated, canReadCost };
   }
 
   /**
@@ -487,9 +497,10 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: UpdatePositionsDto,
-  ): Promise<Activity[]> {
+  ): Promise<{ items: Activity[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
     await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
     await this.editLock.assertHoldsPen(principal, planId, organization.id);
 
@@ -537,9 +548,10 @@ export class ActivitiesService {
     );
 
     // Return the moved rows with their fresh versions so the client can reconcile optimistic state.
-    return this.prisma.activity.findMany({
+    const items = await this.prisma.activity.findMany({
       where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
     });
+    return { items, canReadCost };
   }
 
   /**
@@ -553,9 +565,12 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityProgressDto,
-  ): Promise<{ activity: Activity; warnings: ProgressWarning[] }> {
+  ): Promise<{ activity: Activity; warnings: ProgressWarning[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update_progress', organization.id);
+    // A Contributor can report progress but does NOT hold cost:read — so this fails closed and the
+    // response echoes null for every money field (EV4a, ADR-0042): a progress reporter never sees cost.
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
@@ -662,7 +677,7 @@ export class ActivitiesService {
 
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
-    return { activity: updated, warnings };
+    return { activity: updated, warnings, canReadCost };
   }
 
   /** A provided date field (parsed, or null to clear) overrides the stored one;
@@ -689,14 +704,19 @@ export class ActivitiesService {
     );
   }
 
-  async restore(principal: Principal, orgSlug: string, activityId: string): Promise<Activity> {
+  async restore(
+    principal: Principal,
+    orgSlug: string,
+    activityId: string,
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:restore', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.activities.findByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
     await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
-    if (!existing.deletedAt) return existing; // already active — restore is a no-op
+    if (!existing.deletedAt) return { activity: existing, canReadCost }; // already active — no-op
 
     // The lifecycle enforces the top-down invariant: restoring an activity whose
     // parent plan is still soft-deleted raises PARENT_DELETED (→ 409).
@@ -710,7 +730,7 @@ export class ActivitiesService {
 
     const restored = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!restored) throw new NotFoundError('Activity not found.');
-    return restored;
+    return { activity: restored, canReadCost };
   }
 
   /** Load the parent plan active and in the caller's org, or 404. */

@@ -394,6 +394,30 @@ describe.skipIf(!hasDatabase)('Resources API (e2e)', () => {
     }
   });
 
+  it('includes the cost rate only for a cost:read caller, null for a Viewer (EV4a, ADR-0042)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    // A Planner/Org-Admin sets AND reads the cost rate.
+    const { id } = await createResource(actor, {
+      name: 'Priced',
+      kind: 'LABOUR',
+      costPerUnit: 5237.5,
+    });
+    const adminGot = await actor.agent.get(`${base}/${id}`).expect(200);
+    expect(adminGot.body.data.costPerUnit).toBe(5237.5);
+    const adminList = await actor.agent.get(base).expect(200);
+    expect(adminList.body.data[0].costPerUnit).toBe(5237.5);
+
+    // A Viewer may read the resource but NEVER the money — the field is null (fail-closed).
+    const viewer = await signUp('cost-viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    const viewerGot = await viewer.agent.get(`${base}/${id}`).expect(200);
+    expect(viewerGot.body.data.costPerUnit).toBeNull();
+    const viewerList = await viewer.agent.get(base).expect(200);
+    expect(viewerList.body.data[0].costPerUnit).toBeNull();
+  });
+
   it('401s without a session', async () => {
     await request(server()).get(base).expect(401);
   });

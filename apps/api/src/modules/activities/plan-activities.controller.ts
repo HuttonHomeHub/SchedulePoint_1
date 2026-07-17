@@ -59,9 +59,9 @@ export class PlanActivitiesController {
     @Param('planId', ParseUuidPipe) planId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<ActivityResponseDto>> {
-    const { items, meta } = await this.service.list(principal, orgSlug, planId, query);
+    const { items, meta, canReadCost } = await this.service.list(principal, orgSlug, planId, query);
     return new Paginated(
-      items.map((activity) => ActivityResponseDto.from(activity)),
+      items.map((activity) => ActivityResponseDto.from(activity, canReadCost)),
       meta,
     );
   }
@@ -79,7 +79,8 @@ export class PlanActivitiesController {
     @Param('planId', ParseUuidPipe) planId: string,
     @Body() dto: CreateActivityDto,
   ): Promise<ActivityResponseDto> {
-    return ActivityResponseDto.from(await this.service.create(principal, orgSlug, planId, dto));
+    const { activity, canReadCost } = await this.service.create(principal, orgSlug, planId, dto);
+    return ActivityResponseDto.from(activity, canReadCost);
   }
 
   @Patch('positions')
@@ -105,7 +106,12 @@ export class PlanActivitiesController {
     @Param('planId', ParseUuidPipe) planId: string,
     @Body() dto: UpdatePositionsDto,
   ): Promise<ActivityResponseDto[]> {
-    const moved = await this.service.updatePositions(principal, orgSlug, planId, dto);
-    return moved.map((activity) => ActivityResponseDto.from(activity));
+    const { items, canReadCost } = await this.service.updatePositions(
+      principal,
+      orgSlug,
+      planId,
+      dto,
+    );
+    return items.map((activity) => ActivityResponseDto.from(activity, canReadCost));
   }
 }

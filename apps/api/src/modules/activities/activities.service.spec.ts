@@ -18,6 +18,7 @@ import type { PlanRepository } from '../plans/plan.repository';
 
 import { ActivitiesService } from './activities.service';
 import type { ActivityRepository } from './activity.repository';
+import { ActivityResponseDto } from './dto/activity-response.dto';
 
 const ORG_ID = 'org-1';
 const USER_ID = 'user-1';
@@ -213,7 +214,7 @@ describe('ActivitiesService', () => {
       const result = await service.create(principalWith(ALL), 'acme', PLAN_ID, {
         name: 'Excavate',
       });
-      expect(result.id).toBe(ACTIVITY_ID);
+      expect(result.activity.id).toBe(ACTIVITY_ID);
       expect(activities.create).toHaveBeenCalledWith(
         expect.objectContaining({ organizationId: ORG_ID, planId: PLAN_ID, name: 'Excavate' }),
         expect.anything(), // the transaction client (calendar validation is serialised inside it)
@@ -372,6 +373,54 @@ describe('ActivitiesService', () => {
       const { items, meta } = await service.list(principalWith(ALL), 'acme', PLAN_ID, { limit: 2 });
       expect(items).toHaveLength(2);
       expect(meta).toEqual({ nextCursor: 'b', hasMore: true });
+    });
+  });
+
+  // EV4a (ADR-0042): the money expense amounts are conditionally included only for a `cost:read`
+  // caller (Planner/Org Admin), org-scoped and fail-closed. `ALL` above has no cost:read.
+  describe('cost:read gating (EV4a)', () => {
+    const withCost = activity({ budgetedExpense: 150000n, actualExpense: 60000n });
+
+    it('a Planner/Org-Admin (cost:read) read exposes the real expense amounts (get + list)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(withCost);
+      const got = await service.get(principalWith([...ALL, 'cost:read']), 'acme', ACTIVITY_ID);
+      expect(got.canReadCost).toBe(true);
+      const dto = ActivityResponseDto.from(got.activity, got.canReadCost);
+      expect(dto.budgetedExpense).toBe(150000);
+      expect(dto.actualExpense).toBe(60000);
+
+      activities.findManyActiveByPlan.mockResolvedValue([withCost]);
+      const listed = await service.list(principalWith([...ALL, 'cost:read']), 'acme', PLAN_ID, {
+        limit: 20,
+      });
+      expect(listed.canReadCost).toBe(true);
+      expect(ActivityResponseDto.from(listed.items[0]!, listed.canReadCost).budgetedExpense).toBe(
+        150000,
+      );
+    });
+
+    it('a Viewer/Contributor (no cost:read) read returns null for BOTH expense fields (fail-closed)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(withCost);
+      const got = await service.get(principalWith(['activity:read']), 'acme', ACTIVITY_ID);
+      expect(got.canReadCost).toBe(false);
+      const dto = ActivityResponseDto.from(got.activity, got.canReadCost);
+      expect(dto.budgetedExpense).toBeNull();
+      expect(dto.actualExpense).toBeNull();
+    });
+
+    it('a Contributor reporting progress never sees cost (updateProgress fails closed)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(withCost);
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      activities.updateIfVersionMatches.mockResolvedValue(1);
+      // A Contributor holds activity:update_progress but NOT cost:read.
+      const res = await service.updateProgress(
+        principalWith(['activity:update_progress']),
+        'acme',
+        ACTIVITY_ID,
+        { percentComplete: 50, version: 1 },
+      );
+      expect(res.canReadCost).toBe(false);
+      expect(ActivityResponseDto.from(res.activity, res.canReadCost).budgetedExpense).toBeNull();
     });
   });
 
@@ -795,7 +844,7 @@ describe('ActivitiesService', () => {
         ACTIVITY_ID,
         USER_ID,
       );
-      expect(result.id).toBe(ACTIVITY_ID);
+      expect(result.activity.id).toBe(ACTIVITY_ID);
     });
 
     it('is a no-op when the activity is already active', async () => {

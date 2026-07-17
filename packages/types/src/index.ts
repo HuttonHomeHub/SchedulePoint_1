@@ -396,6 +396,16 @@ export interface ActivitySummary {
    * `PHYSICAL`. Contributor progress input, integer 0–100, or `null` = unset (distinct from 0).
    */
   physicalPercentComplete: number | null;
+  /**
+   * Activity-level expense amounts in minor currency units (EV1/EV4a, ADR-0042): the lump-sum
+   * budgeted / actual cost carried directly on the activity (independent of resource-derived cost).
+   * **Conditionally included (EV4a):** a real value is returned only when the caller holds `cost:read`
+   * (Planner + Org Admin) in the activity's organisation; for every other caller (Viewer/Contributor)
+   * these are `null` (fail-closed). A `null` therefore means EITHER unset OR caller-not-permitted — a
+   * cost-reader distinguishes the two by role, an un-permitted caller never sees the amount at all.
+   */
+  budgetedExpense: number | null;
+  actualExpense: number | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.
   earlyStart: string | null;
   earlyFinish: string | null;
@@ -1110,6 +1120,14 @@ export interface ResourceSummary {
    * the plan opts in; dark until L2.
    */
   maxUnitsPerHour: number | null;
+  /**
+   * The resource's cost rate — money per unit of work, in minor currency units (EV1/EV4a, ADR-0042).
+   * **Conditionally included (EV4a):** a real value is returned only when the caller holds `cost:read`
+   * (Planner + Org Admin) in the resource's organisation; for every other caller (Viewer/Contributor)
+   * this is `null` (fail-closed). A `null` therefore means EITHER unset (no cost rate) OR
+   * caller-not-permitted.
+   */
+  costPerUnit: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1138,6 +1156,17 @@ export interface ResourceAssignmentSummary {
    * carried as a `number` (`DECIMAL(18,4)`; `>= 0`, N14). Defaults to 0. Dark until the EV2 read reads it.
    */
   actualUnits: number;
+  /**
+   * The assignment's budgeted / actual cost in minor currency units (EV1/EV4a, ADR-0042):
+   * `budgetedCost` may be `null` when unset (cost is then derived from `budgetedUnits × costPerUnit`
+   * at EV read time), `actualCost` defaults to 0.
+   * **Conditionally included (EV4a):** a real value is returned only when the caller holds `cost:read`
+   * (Planner + Org Admin) in the assignment's organisation; for every other caller
+   * (Viewer/Contributor) BOTH are `null` (fail-closed). A `null` therefore means EITHER unset OR
+   * caller-not-permitted.
+   */
+  budgetedCost: number | null;
+  actualCost: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;

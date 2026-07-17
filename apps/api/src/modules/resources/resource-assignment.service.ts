@@ -70,12 +70,16 @@ export class ResourceAssignmentService {
     principal: Principal,
     orgSlug: string,
     activityId: string,
-  ): Promise<ResourceAssignment[]> {
+  ): Promise<{ items: ResourceAssignment[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:read', organization.id);
+    // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere`. Threaded to
+    // the response DTO so the money budgeted/actual cost is gated per role (fail-closed for a non-reader).
+    const canReadCost = principal.can('cost:read', organization.id);
     // 404 if the activity is foreign/deleted (anti-IDOR) before listing its assignments.
     await this.loadActiveActivity(activityId, organization.id);
-    return this.assignments.findManyActiveByActivity(activityId, organization.id);
+    const items = await this.assignments.findManyActiveByActivity(activityId, organization.id);
+    return { items, canReadCost };
   }
 
   async create(
@@ -83,9 +87,10 @@ export class ResourceAssignmentService {
     orgSlug: string,
     activityId: string,
     dto: CreateAssignmentDto,
-  ): Promise<ResourceAssignment> {
+  ): Promise<{ assignment: ResourceAssignment; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:assign', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     // Same-org (invariant (a)): both endpoints must be active in the resolved org; a
     // foreign/deleted id reads as 404, leaking nothing.
@@ -172,7 +177,7 @@ export class ResourceAssignmentService {
         },
         'resource assigned',
       );
-      return assignment;
+      return { assignment, canReadCost };
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateAssignmentError();
       throw error;
@@ -184,9 +189,10 @@ export class ResourceAssignmentService {
     orgSlug: string,
     assignmentId: string,
     dto: UpdateAssignmentDto,
-  ): Promise<ResourceAssignment> {
+  ): Promise<{ assignment: ResourceAssignment; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:assign', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
     if (!existing) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
@@ -279,7 +285,7 @@ export class ResourceAssignmentService {
 
     const updated = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
     if (!updated) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
-    return updated;
+    return { assignment: updated, canReadCost };
   }
 
   async remove(principal: Principal, orgSlug: string, assignmentId: string): Promise<void> {

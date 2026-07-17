@@ -8,6 +8,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
+import { ResourceResponseDto } from './dto/resource-response.dto';
 import type { ResourceRepository } from './resource.repository';
 import { ResourcesService } from './resources.service';
 
@@ -117,7 +118,7 @@ describe('ResourcesService', () => {
         name: 'Crew A',
         kind: 'LABOUR',
       });
-      expect(result.id).toBe('res-1');
+      expect(result.resource.id).toBe('res-1');
       expect(resources.create).toHaveBeenCalledWith(
         expect.objectContaining({ organizationId: ORG_ID, name: 'Crew A', kind: 'LABOUR' }),
         expect.anything(),
@@ -181,6 +182,43 @@ describe('ResourcesService', () => {
       await expect(service.get(principalWith(ALL), 'acme', 'res-1')).rejects.toBeInstanceOf(
         NotFoundError,
       );
+    });
+  });
+
+  // EV4a (ADR-0042): the money cost rate is conditionally included only for a `cost:read` caller
+  // (Planner/Org Admin), org-scoped. `canReadCost` is computed in the service and threaded to the DTO.
+  describe('cost:read gating (EV4a)', () => {
+    const withCost = resource({ costPerUnit: new Prisma.Decimal(5237.5) });
+
+    it('a Planner/Org-Admin (cost:read) read exposes the real costPerUnit', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(withCost);
+      const { resource: r, canReadCost } = await service.get(
+        principalWith([...ALL, 'cost:read']),
+        'acme',
+        'res-1',
+      );
+      expect(canReadCost).toBe(true);
+      expect(ResourceResponseDto.from(r, canReadCost).costPerUnit).toBe(5237.5);
+    });
+
+    it('a Viewer/Contributor (no cost:read) read returns null for costPerUnit (fail-closed)', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(withCost);
+      const { resource: r, canReadCost } = await service.get(
+        principalWith(['resource:read']),
+        'acme',
+        'res-1',
+      );
+      expect(canReadCost).toBe(false);
+      expect(ResourceResponseDto.from(r, canReadCost).costPerUnit).toBeNull();
+    });
+
+    it('list threads the same fail-closed decision (null costPerUnit for a non-cost-read caller)', async () => {
+      resources.findManyActiveByOrg.mockResolvedValue([withCost]);
+      const { items, canReadCost } = await service.list(principalWith(['resource:read']), 'acme', {
+        limit: 20,
+      });
+      expect(canReadCost).toBe(false);
+      expect(ResourceResponseDto.from(items[0]!, canReadCost).costPerUnit).toBeNull();
     });
   });
 

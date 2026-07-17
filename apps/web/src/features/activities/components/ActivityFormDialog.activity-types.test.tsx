@@ -71,6 +71,8 @@ const BASE_LOE: ActivitySummary = {
   selfOverAllocated: false,
   percentCompleteType: 'DURATION',
   physicalPercentComplete: null,
+  budgetedExpense: null,
+  actualExpense: null,
   version: 3,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
