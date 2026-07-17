@@ -1,5 +1,62 @@
 # @repo/api
 
+## 0.14.0
+
+### Minor Changes
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - CPM engine now computes **free float** (M6-F1, ADR-0035 §17–§20): how far each activity can slip without
+  delaying the early start of any successor. It is measured on the activity's own working calendar
+  (ADR-0037 §4), computed alongside total float, persisted to the new engine-owned `activities.free_float`
+  column by the recalc's batched write, and exposed as `freeFloat` (whole working days) on the activity
+  schedule response and the `ActivitySummary` shared type. An open end (no successors) carries its total
+  float; free float is always ≤ total float. Existing rows read `null` until the plan is recalculated, and
+  the golden/parity path is byte-identical.
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Selectable critical-path definition (M6-F2, ADR-0035 §17–§20). Plans gain two options:
+  `criticalPathDefinition` (`TOTAL_FLOAT`, the P6 default, or `LONGEST_PATH`) and `criticalFloatThreshold`
+  (whole working days, default 0). Under `LONGEST_PATH` the engine flags the contiguous chain of driving
+  ties running back from the latest-finishing activities, so an open-ended, hugely-negative-float activity
+  is no longer critical though it is under `TOTAL_FLOAT ≤ 0`. The threshold widens the total-float critical
+  band. Both are echoed on the plan response and accepted on plan update; defaults are behaviour-preserving
+  (the golden path and existing critical sets are unchanged). Conformance scenario **S07** now runs as a
+  criticality-only differential.
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make-open-ends-critical option (M6-F4, ADR-0035 §20). A new plan flag `makeOpenEndsCritical` (default
+  off) flags every open-ended activity — one with no predecessors or no successors — as critical, OR-ed
+  with the active critical definition so it only ever adds open ends, never a mid-chain member. It is
+  threaded through recalculation, echoed on the plan response, and accepted on plan update. Default off
+  is behaviour-preserving (existing critical sets unchanged). Conformance scenario **S08** now runs as a
+  criticality-only differential.
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Selectable total-float measure (M6-F3, ADR-0035 §18). A new plan option `totalFloatMode`
+  (`FINISH` — the P6 default — `START`, or `SMALLEST`) chooses how `totalFloat` is measured: late−early
+  finish, late−early start, or the lesser. It is computed on the activity's own working calendar,
+  threaded through recalculation, echoed on the plan response, and accepted on plan update; the default
+  `FINISH` is behaviour-preserving (existing float is byte-identical).
+
+  Documented semantic: because float is measured on the activity's own calendar for both sides
+  (ADR-0037 §4), the three modes coincide for unprogressed activities and diverge only for progressed
+  ones — so the conformance fixture's mixed-calendar S13 divergence is deliberately not reproduced (a
+  P6 multi-calendar-measurement artefact; see the capability matrix and ADR-0035 §18).
+
+### Patch Changes
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - ALAP zero-free-float refinement (M6-F5, ADR-0035 §11). An activity flagged As-Late-As-Possible is now
+  placed as late as its successors allow, so its **`freeFloat` is 0** — the machine-readable signal of that
+  placement — while its pure `earlyStart`/`lateStart`/`totalFloat` stay untouched (display-only, per §11).
+  An open end with no successors falls back to its late dates. Completes the M4 ALAP flag with the
+  free-float pass, flipping the `con_alap` and `float_zero_free` capability rows to supported.
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Multiple float-path analysis (M6-F6, ADR-0035 §19). A new pure, read-only engine function
+  `computeFloatPaths(activities, edges, options, target, maxPaths)` returns the ranked **contiguous
+  driving chains** into a target activity — path 0 the driving chain (relative float 0), later paths
+  entered at increasing total float — bounded by `maxPaths` and a per-chain depth guard. Every activity
+  belongs to exactly one path (a partition, not a total-float sort). Conformance scenario **S11** now
+  runs as a path-shape assertion into the fixture target A12500. Engine-only; the read endpoint is
+  deferred (see the plan and `docs/DECISIONS.md`).
+- Updated dependencies [[`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a), [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a), [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a), [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a)]:
+  - @repo/types@0.12.0
+
 ## 0.13.0
 
 ### Minor Changes
