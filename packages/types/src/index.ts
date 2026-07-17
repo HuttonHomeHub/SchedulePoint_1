@@ -528,6 +528,31 @@ export interface PlanScheduleSummary {
 }
 
 /**
+ * One **float path** into a target activity (M6-F6, ADR-0035 §19): a maximal contiguous chain of
+ * activities linked by logic, ranked by how much float it carries above the driving path. `index` 0
+ * is the driving path (`relativeFloat` 0); higher indices are increasingly floaty. `activityIds` are
+ * **target-first** (the target … the chain's driving root). `relativeFloat` is in **working days**
+ * (the API's day convention) — the entry activity's total float minus the target's; it can be
+ * **negative** when a branch is more critical than a floating target (a real signal, not an error).
+ */
+export interface PlanFloatPath {
+  index: number;
+  relativeFloat: number;
+  activityIds: string[];
+}
+
+/**
+ * The ranked contiguous float paths into a target activity — a read-only CPM analysis over the
+ * live-computed schedule (P6 "multiple float paths"). `targetActivityId` echoes the requested target;
+ * `paths` is ordered by non-decreasing `relativeFloat`, path 0 being the target's own driving chain,
+ * bounded by the requested `maxPaths`.
+ */
+export interface PlanFloatPaths {
+  targetActivityId: string;
+  paths: PlanFloatPath[];
+}
+
+/**
  * Working-day calendar weekly pattern as a 7-bit mask (M5, ADR-0024): bit 0 =
  * Monday … bit 6 = Sunday, a set bit meaning that weekday is worked. This is the
  * single cross-boundary source of truth for the mask semantics — the web weekday

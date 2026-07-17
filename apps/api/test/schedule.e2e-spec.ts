@@ -357,6 +357,68 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await outsider.agent.get(summaryUrl(planId)).expect(404);
   });
 
+  const floatPathsUrl = (planId: string, target: string, maxPaths?: number) =>
+    `/api/v1/organizations/acme/plans/${planId}/schedule/float-paths?target=${target}` +
+    (maxPaths !== undefined ? `&maxPaths=${maxPaths}` : '');
+
+  it('returns ranked contiguous float paths into a target (ADR-0035 §19)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    // A(3)→B(4)→D(5); A(3)→C(2)→D(5). Into D: path 0 is the driving chain D←B←A (relative float 0);
+    // C is a non-driving predecessor carrying 2 days of float, so it forms a branch path at +2.
+    const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 4);
+    const c = await makeActivity(actor, planId, 'C', 2);
+    const d = await makeActivity(actor, planId, 'D', 5);
+    await link(actor, planId, a, b);
+    await link(actor, planId, a, c);
+    await link(actor, planId, b, d);
+    await link(actor, planId, c, d);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const res = await actor.agent.get(floatPathsUrl(planId, d)).expect(200);
+    const paths = res.body.data.paths as Array<{
+      index: number;
+      relativeFloat: number;
+      activityIds: string[];
+    }>;
+    expect(res.body.data.targetActivityId).toBe(d);
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    // Path 0 is the driving chain, target-first, relative float 0.
+    expect(paths[0]).toMatchObject({ index: 0, relativeFloat: 0 });
+    expect(paths[0]!.activityIds[0]).toBe(d);
+    expect(paths[0]!.activityIds).toEqual(expect.arrayContaining([d, b, a]));
+    // A branch path carries C at +2 working days of relative float.
+    const branch = paths.find((p) => p.activityIds.includes(c));
+    expect(branch).toBeDefined();
+    expect(branch!.index).toBeGreaterThanOrEqual(1);
+    expect(branch!.relativeFloat).toBe(2);
+
+    // schedule:read — a Viewer can run the analysis.
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    await viewer.agent.get(floatPathsUrl(planId, d)).expect(200);
+  });
+
+  it('404s when the target activity is not in the plan', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    await makeActivity(actor, planId, 'A', 3);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+    await actor.agent.get(floatPathsUrl(planId, randomUUID())).expect(404);
+  });
+
+  it('400s when the target query param is missing or not a uuid', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/schedule/float-paths`)
+      .expect(400);
+    await actor.agent.get(floatPathsUrl(planId, 'not-a-uuid')).expect(400);
+  });
+
   it('a mandatory pin that breaks logic is produced, flagged, and counted (ADR-0035 §7)', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');

@@ -784,5 +784,8 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   come out by non-decreasing relative float. `relativeFloat` = the entry activity's total float minus the
   target's; it may be **negative** when a branch is more critical than a floating target (a
   constraint-broken predecessor). Bounded by `maxPaths` + a per-chain depth guard (no blow-up on dense
-  graphs). Engine-only for now — the read endpoint (`GET .../schedule/float-paths`) is deferred
-  (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing schedule + driving edges).
+  graphs). The read endpoint `GET .../schedule/float-paths?target=&maxPaths=` (schedule:read; relative
+  float in working days; 422 if the plan has no start date; 404 for a target not in the plan) now exposes
+  it — the analysis recomputes the schedule live via the shared engine-input builder, so it can never
+  drift from a recalculate (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing
+  schedule + driving edges).

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { PlanScheduleSummary } from '@repo/types';
+import type { PlanFloatPaths, PlanScheduleSummary } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -14,8 +14,10 @@ import { PlanRepository } from '../plans/plan.repository';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import {
   allMinutesWorkCalendar,
+  computeFloatPaths,
   computeSchedule,
   ScheduleGraphNotADagError,
+  type ComputeOptions,
   type EngineActivity,
   type EngineEdge,
   type EngineSummary,
@@ -33,6 +35,9 @@ export const SCHEDULE_ERROR = {
   /** The plan has no `plannedStart`, so there is no data date to schedule from. */
   PLAN_START_REQUIRED: 'PLAN_START_REQUIRED',
 } as const;
+
+/** An active plan row as loaded for scheduling — carries the engine-relevant option fields. */
+type ActivePlan = NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdInOrg']>>>;
 
 /**
  * The CPM recalculation service (ADR-0022). Resolves the org from the caller's
@@ -84,66 +89,11 @@ export class ScheduleService {
         // Recalculate is a pen-gated plan mutation (ADR-0028, Q-B). Assert INSIDE the
         // advisory lock so a steal can't slip between the check and the engine write.
         await this.editLock.assertHoldsPen(principal, planId, organization.id, tx);
-        const activityRows = await this.schedule.loadActivities(organization.id, planId, tx);
-        const edgeRows = await this.schedule.loadEdges(organization.id, planId, tx);
-        // Observability (ADR-0036 §6): how many edges carry a lag calendar that changes the
-        // arithmetic today. Only TWENTY_FOUR_HOUR is distinct from the plan calendar in M3, so
-        // a non-zero count here is the signal that an elapsed lag actually moved dates.
-        lagCalendarOverrideCount = edgeRows.filter(
-          (e) => e.lagCalendar === 'TWENTY_FOUR_HOUR',
-        ).length;
-        // Build the plan's working-time calendar once — the inherit default (ADR-0024).
-        const calendar = await this.resolveCalendar(organization.id, plan.calendarId, tx);
-
-        // Per-activity calendars (ADR-0037, M5): resolve each DISTINCT non-inherit activity
-        // calendar ONCE (O(distinct calendars), not O(activities)). An activity with no calendar,
-        // or whose calendar IS the plan's, keeps the byte-identical fast path (undefined port).
-        const distinctActivityCalIds = [
-          ...new Set(
-            activityRows
-              .map((r) => r.calendarId)
-              .filter((id): id is string => id != null && id !== plan.calendarId),
-          ),
-        ];
-        const portByCalId = new Map<string, WorkingTimeCalendar>();
-        for (const calId of distinctActivityCalIds) {
-          portByCalId.set(calId, await this.resolveCalendar(organization.id, calId, tx));
-        }
-        activityCalendarCount = distinctActivityCalIds.length;
-        const portFor = (calId: string | null): WorkingTimeCalendar | undefined =>
-          calId == null || calId === plan.calendarId ? undefined : portByCalId.get(calId);
-        const calIdByActivity = new Map(activityRows.map((r) => [r.id, r.calendarId] as const));
-
-        // Progressed activities this recalc consumes (M2, ADR-0035): the signal that progress
-        // actually shaped the dates (0 = an unprogressed plan, the byte-identical path).
-        progressedActivityCount = activityRows.filter(
-          (r) => r.actualStart != null || r.actualFinish != null,
-        ).length;
-
-        const output = computeSchedule(
-          activityRows.map((r) => toEngineActivity(r, portFor(r.calendarId))),
-          edgeRows.map((r) =>
-            toEngineEdge(
-              r,
-              portFor(calIdByActivity.get(r.predecessorId) ?? null),
-              portFor(calIdByActivity.get(r.successorId) ?? null),
-            ),
-          ),
-          // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC. The
-          // expected-finish option (M4, ADR-0035 §9) resizes in-progress remaining work when on.
-          // The critical-path definition + float threshold (M6, ADR-0035 §17) select how criticality
-          // is decided; the day-denominated threshold is converted to working minutes for the engine.
-          {
-            dataDate,
-            calendar,
-            progressMode: plan.progressRecalcMode,
-            useExpectedFinishDates: plan.useExpectedFinishDates,
-            criticalDefinition: plan.criticalPathDefinition,
-            criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
-            totalFloatMode: plan.totalFloatMode,
-            makeOpenEndsCritical: plan.makeOpenEndsCritical,
-          },
-        );
+        const graph = await this.buildEngineGraph(organization.id, plan, dataDate, tx);
+        lagCalendarOverrideCount = graph.meta.lagCalendarOverrideCount;
+        activityCalendarCount = graph.meta.activityCalendarCount;
+        progressedActivityCount = graph.meta.progressedActivityCount;
+        const output = computeSchedule(graph.activities, graph.edges, graph.options);
         await this.schedule.writeResults(organization.id, planId, output.results, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
         return output.summary;
@@ -229,6 +179,142 @@ export class ScheduleService {
       constraintViolationCount: aggregate.constraintViolationCount,
       constraintWarningCount: aggregate.constraintWarningCount,
       loeNoSpanCount: aggregate.loeNoSpanCount,
+    };
+  }
+
+  /**
+   * The ranked contiguous **float paths** into a target activity (P6 "multiple float paths",
+   * ADR-0035 §19) — a read-only CPM analysis (`schedule:read`, every member). Recomputes the schedule
+   * live from the plan's active graph (never mutates or persists), then walks the driving chains into
+   * the target: path 0 is its own driving chain (relative float 0), branch paths follow in
+   * non-decreasing relative-float order, bounded by `maxPaths`. Requires a plan start (422) for a data
+   * date; 404s if the target activity is not active in this plan. Relative float is returned in
+   * working days (÷1440), matching the day-denominated float on the activity rows (ADR-0036 §7).
+   */
+  async floatPaths(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    targetActivityId: string,
+    maxPaths: number,
+  ): Promise<PlanFloatPaths> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'schedule:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+    if (!plan.plannedStart) {
+      throw new ValidationError('Set the plan’s start date before analysing float paths.', {
+        reason: SCHEDULE_ERROR.PLAN_START_REQUIRED,
+      });
+    }
+    const dataDate = formatCalendarDate(plan.plannedStart);
+
+    // Read a consistent snapshot of the graph (no write lock — this never persists). Reuses the exact
+    // same engine-input builder as `recalculate`, so the analysis can never drift from the schedule.
+    const { activities, edges, options } = await this.prisma.$transaction((tx) =>
+      this.buildEngineGraph(organization.id, plan, dataDate, tx),
+    );
+    // The engine returns [] for an unknown target; surface that as a 404 rather than an empty result
+    // so a mistyped id is not silently "no paths". A present target always yields path 0 (target-first).
+    if (!activities.some((a) => a.id === targetActivityId)) {
+      throw new NotFoundError('Activity not found in this plan.');
+    }
+
+    const paths = computeFloatPaths(activities, edges, options, targetActivityId, maxPaths).map(
+      (p) => ({
+        index: p.index,
+        // Engine float is working minutes (ADR-0036); expose days like the activity rows.
+        relativeFloat: Math.round(p.relativeFloat / MINUTES_PER_DAY),
+        activityIds: p.activityIds,
+      }),
+    );
+    return { targetActivityId, paths };
+  }
+
+  /**
+   * Build the pure engine's input (activities, edges, options) for a plan from its active graph, plus
+   * observability counts. Shared by {@link recalculate} (inside its write lock) and {@link floatPaths}
+   * (a read snapshot) so the two can never diverge in how they map the DB graph onto the engine.
+   * Per-activity calendars (ADR-0037) are resolved once per DISTINCT non-inherit calendar; an activity
+   * that inherits the plan calendar keeps the byte-identical fast path (undefined port).
+   */
+  private async buildEngineGraph(
+    organizationId: string,
+    plan: ActivePlan,
+    dataDate: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    activities: EngineActivity[];
+    edges: EngineEdge[];
+    options: ComputeOptions;
+    meta: {
+      lagCalendarOverrideCount: number;
+      activityCalendarCount: number;
+      progressedActivityCount: number;
+    };
+  }> {
+    const activityRows = await this.schedule.loadActivities(organizationId, plan.id, tx);
+    const edgeRows = await this.schedule.loadEdges(organizationId, plan.id, tx);
+    // Observability (ADR-0036 §6): how many edges carry a lag calendar that changes the arithmetic
+    // today. Only TWENTY_FOUR_HOUR is distinct from the plan calendar in M3.
+    const lagCalendarOverrideCount = edgeRows.filter(
+      (e) => e.lagCalendar === 'TWENTY_FOUR_HOUR',
+    ).length;
+    // Build the plan's working-time calendar once — the inherit default (ADR-0024).
+    const calendar = await this.resolveCalendar(organizationId, plan.calendarId, tx);
+
+    // Per-activity calendars (ADR-0037, M5): resolve each DISTINCT non-inherit activity calendar ONCE.
+    const distinctActivityCalIds = [
+      ...new Set(
+        activityRows
+          .map((r) => r.calendarId)
+          .filter((id): id is string => id != null && id !== plan.calendarId),
+      ),
+    ];
+    const portByCalId = new Map<string, WorkingTimeCalendar>();
+    for (const calId of distinctActivityCalIds) {
+      portByCalId.set(calId, await this.resolveCalendar(organizationId, calId, tx));
+    }
+    const portFor = (calId: string | null): WorkingTimeCalendar | undefined =>
+      calId == null || calId === plan.calendarId ? undefined : portByCalId.get(calId);
+    const calIdByActivity = new Map(activityRows.map((r) => [r.id, r.calendarId] as const));
+
+    // Progressed activities this recalc consumes (M2, ADR-0035): 0 = an unprogressed plan.
+    const progressedActivityCount = activityRows.filter(
+      (r) => r.actualStart != null || r.actualFinish != null,
+    ).length;
+
+    const activities = activityRows.map((r) => toEngineActivity(r, portFor(r.calendarId)));
+    const edges = edgeRows.map((r) =>
+      toEngineEdge(
+        r,
+        portFor(calIdByActivity.get(r.predecessorId) ?? null),
+        portFor(calIdByActivity.get(r.successorId) ?? null),
+      ),
+    );
+    // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC. Expected-finish
+    // (M4, §9) resizes in-progress remaining; the critical definition + float threshold (M6, §17) decide
+    // criticality; the day-denominated threshold is converted to working minutes for the engine.
+    const options: ComputeOptions = {
+      dataDate,
+      calendar,
+      progressMode: plan.progressRecalcMode,
+      useExpectedFinishDates: plan.useExpectedFinishDates,
+      criticalDefinition: plan.criticalPathDefinition,
+      criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
+      totalFloatMode: plan.totalFloatMode,
+      makeOpenEndsCritical: plan.makeOpenEndsCritical,
+    };
+    return {
+      activities,
+      edges,
+      options,
+      meta: {
+        lagCalendarOverrideCount,
+        activityCalendarCount: distinctActivityCalIds.length,
+        progressedActivityCount,
+      },
     };
   }
 
