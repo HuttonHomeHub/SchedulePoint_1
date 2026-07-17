@@ -850,4 +850,76 @@ export interface PlanEditLockErrorDetails {
   holder?: PlanEditLockActor | null;
 }
 
+/**
+ * The kind of a resource (M7.1, ADR-0039). LABOUR = a crew / trade; EQUIPMENT =
+ * plant / machinery (the conformance fixture's NONLABOUR maps here); MATERIAL = a
+ * consumable quantity (concrete m³, steel te). Kept in lock-step with the API's
+ * Prisma `ResourceKind` enum. A MATERIAL resource may be assigned to an activity but
+ * may NEVER be the driving resource of its dates (see {@link RESOURCE_ERROR}).
+ */
+export const RESOURCE_KINDS = ['LABOUR', 'EQUIPMENT', 'MATERIAL'] as const;
+
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+
+/**
+ * A resource in the org-scoped resource library (M7.1, ADR-0039) — a reusable
+ * sibling of the calendar library. The list/detail shape mirrors the other
+ * `*Summary` types. `code` is an optional natural-key handle (unique per org among
+ * active rows). `calendarId` is the resource's own working-time calendar — null
+ * inherits the plan calendar at schedule time.
+ */
+export interface ResourceSummary {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  kind: ResourceKind;
+  calendarId: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A resource assignment tying an activity to a resource with a budgeted quantity
+ * (M7.1, ADR-0039). `budgetedUnits` is an exact quantity carried as a `number` in the
+ * API (the DB stores `DECIMAL(18,4)`; `>= 0`, N14). `isDriving` designates THE driving
+ * resource of a RESOURCE_DEPENDENT activity — at most one per activity, and a MATERIAL
+ * resource may never drive.
+ */
+export interface ResourceAssignmentSummary {
+  id: string;
+  activityId: string;
+  resourceId: string;
+  budgetedUnits: number;
+  isDriving: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Canonical resource-module conflict / validation reasons + messages (M7.1, ADR-0039),
+ * shared like {@link DEPENDENCY_CONFLICT_MESSAGES} so the same rejection reads
+ * identically wherever it surfaces. The key is the machine-readable reason carried in a
+ * domain error's `details.reason`; the value is the human message.
+ */
+export const RESOURCE_ERROR = {
+  /** A resource name or code collides with an active resource in the same org (→ 409). */
+  DUPLICATE_RESOURCE: 'A resource with this name or code already exists.',
+  /** Deleting a resource still assigned to an active activity (→ 409). */
+  RESOURCE_IN_USE: 'This resource is assigned to one or more active activities.',
+  /** The (activity, resource) pair already has an active assignment (→ 409). */
+  DUPLICATE_ASSIGNMENT: 'This resource is already assigned to this activity.',
+  /** A MATERIAL resource cannot be the driving resource of an activity (→ 422). */
+  MATERIAL_CANNOT_DRIVE: 'A material resource cannot drive an activity’s dates.',
+  /** The referenced resource does not exist in this organisation (→ 404). */
+  RESOURCE_NOT_FOUND: 'Resource not found.',
+  /** The resource's `calendarId` is not an active calendar in the same org (→ 404). */
+  RESOURCE_CALENDAR_NOT_FOUND: 'Calendar not found.',
+} as const;
+
+/** A machine-readable resource-module error reason (a key of {@link RESOURCE_ERROR}). */
+export type ResourceErrorReason = keyof typeof RESOURCE_ERROR;
+
 export {};
