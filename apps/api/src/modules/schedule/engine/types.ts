@@ -125,6 +125,56 @@ export interface EngineActivity {
    * driving *calendar*; the engine treats `RESOURCE_DEPENDENT` exactly like `TASK` for logic.
    */
   resourceDriverMissing?: boolean;
+  /**
+   * Levelling priority (ADR-0041 §1), client-settable — **lower = higher priority** (placed first by
+   * the serial priority-list pass). Consumed only by {@link levelSchedule} (the opt-in second pass),
+   * never by the pure CPM network pass, so it never affects `early*`/`late*`/float. **NULL/undefined
+   * sorts LAST** (treated as +∞) in the composite ordering key. Ignored when levelling is off.
+   */
+  levelingPriority?: number | null;
+}
+
+/**
+ * A single unit of resource **demand** for the levelling pass (ADR-0041 §2): one active assignment of
+ * a resource to an activity, contributing `unitsPerHour` of concurrent demand while the activity runs.
+ * **Every** assignment consumes capacity (not only the schedule-driving one). Built by the service from
+ * the plan's active `ResourceAssignment` rows; the pure engine never touches Prisma.
+ */
+export interface EngineAssignment {
+  activityId: string;
+  resourceId: string;
+  /** The per-working-hour demand rate (ADR-0040). The service resolves a NULL DB rate to 0 (no demand). */
+  unitsPerHour: number;
+}
+
+/**
+ * A resource's **capacity** input for the levelling pass (ADR-0041 §2): the per-working-hour ceiling
+ * (`resource.max_units_per_hour`) and the resource's own resolved working calendar (ADR-0037/0039). A
+ * `null` capacity is **UNCAPPED** — the parity-preserving default: an uncapped resource never
+ * constrains, so a plan whose resources are all uncapped levels to byte-identical network dates.
+ */
+export interface EngineResource {
+  id: string;
+  /** Max units per working hour; **null = uncapped** (never over-allocated). */
+  capacity: number | null;
+  /** The resource's own working calendar (ADR-0037); undefined = the plan calendar. Used to detect a
+   * window-only resource running out of availability (`levelingWindowExceeded`, ADR-0041 §6). */
+  calendar?: WorkingTimeCalendar;
+}
+
+/** Options governing the levelling pass ({@link levelSchedule}). */
+export interface LevelingOptions {
+  /**
+   * Level **within total float only** (ADR-0041 §4). When `true`, an activity is never delayed past its
+   * total float: if the earliest capacity-feasible slot would push its finish beyond `lateFinishOffset`,
+   * it is left at its within-float cap and the residual over-allocation is left **unresolved** (see
+   * {@link levelSchedule} for the exact contract). Default `false` (P6 "level only within float" off).
+   */
+  levelWithinFloatOnly: boolean;
+  /** The data date (`YYYY-MM-DD`) — the schedule's earliest instant, matching {@link EngineOutput}. */
+  dataDate: string;
+  /** The **plan** working-time calendar — the frame the exposed `*Offset` fields project onto. */
+  planCalendar: WorkingTimeCalendar;
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
@@ -227,6 +277,27 @@ export interface EngineResult {
   visualEffectiveFinish: string;
   visualConflict: boolean;
   visualDriftMinutes: number | null;
+  /**
+   * Resource-levelling overlay (ADR-0041 §3, Q2) — **additive**: produced by the opt-in
+   * {@link levelSchedule} second pass and merged onto the network result; the pure
+   * `early*`/`late*`/`totalFloat`/`isCritical` above are **never recomputed** on the leveled dates
+   * (the network float stays authoritative). These fields are **OPTIONAL and absent** on a plain
+   * `computeSchedule` result (the byte-identical parity path — the network pass never emits them);
+   * they are present only after levelling runs, and even then are non-null only for an activity that
+   * assigns a **finite-capacity** resource (a levelling participant). `leveledStartOffset` /
+   * `leveledFinishOffset` are plan-frame working-minute offsets from the data date (like `early*`);
+   * `levelingDelay` is the applied delay in working minutes on the activity's own calendar (0 when not
+   * delayed); `leveledStart`/`leveledFinish` are the inclusive display dates (same mapping as `early*`).
+   */
+  leveledStartOffset?: number | null;
+  leveledFinishOffset?: number | null;
+  levelingDelay?: number;
+  leveledStart?: string | null;
+  leveledFinish?: string | null;
+  /** Produce-and-flag (ADR-0041 §6, Q1): serialising pushed this activity past a resource's window. */
+  levelingWindowExceeded?: boolean;
+  /** Produce-and-flag (ADR-0041 §2): this activity's own single-activity demand exceeds a capacity. */
+  selfOverAllocated?: boolean;
 }
 
 /** Plan-level roll-up of an engine run. */
@@ -264,4 +335,19 @@ export interface EngineSummary {
   projectFinishOffset: number | null;
   /** The inclusive project finish display date; null for an empty plan. */
   projectFinish: string | null;
+  /**
+   * Resource-levelling roll-up (ADR-0041) — **optional/absent** on a plain `computeSchedule` result
+   * (the parity path), populated by {@link levelSchedule} and merged in by the service. `null` when
+   * levelling did not run.
+   */
+  /** How many activities the levelling pass delayed (`levelingDelay > 0`). */
+  leveledActivityCount?: number | null;
+  /** How many activities were pushed past a resource's availability window (ADR-0041 §6). */
+  levelingWindowExceededCount?: number | null;
+  /** How many activities carry an unfixable single-activity over-allocation (ADR-0041 §2). */
+  selfOverAllocatedCount?: number | null;
+  /** The leveled project finish offset (max leveled/early finish under levelling); null when off. */
+  leveledProjectFinishOffset?: number | null;
+  /** The inclusive leveled project finish display date; null when off. */
+  leveledProjectFinish?: string | null;
 }

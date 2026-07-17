@@ -16,10 +16,13 @@ import {
   allMinutesWorkCalendar,
   computeFloatPaths,
   computeSchedule,
+  levelSchedule,
   ScheduleGraphNotADagError,
   type ComputeOptions,
   type EngineActivity,
+  type EngineAssignment,
   type EngineEdge,
+  type EngineResource,
   type EngineSummary,
   type WorkingTimeCalendar,
 } from './engine';
@@ -94,9 +97,29 @@ export class ScheduleService {
         activityCalendarCount = graph.meta.activityCalendarCount;
         progressedActivityCount = graph.meta.progressedActivityCount;
         const output = computeSchedule(graph.activities, graph.edges, graph.options);
-        await this.schedule.writeResults(organization.id, planId, output.results, tx);
+        // Resource levelling (ADR-0041): iff the plan opted in AND has assignments, run the pure
+        // second pass and persist its additive overlay. Off ⇒ the network `output.results` are written
+        // as-is and the leveled columns are cleared to null/false (byte-identical, the parity gate).
+        let results = output.results;
+        let summary: EngineSummary = output.summary;
+        if (graph.leveling) {
+          const leveled = levelSchedule(
+            graph.activities,
+            output,
+            graph.leveling.assignments,
+            graph.leveling.resources,
+            {
+              levelWithinFloatOnly: plan.levelWithinFloatOnly,
+              dataDate,
+              planCalendar: graph.options.calendar,
+            },
+          );
+          results = leveled.results;
+          summary = { ...output.summary, ...leveled.summary };
+        }
+        await this.schedule.writeResults(organization.id, planId, results, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
-        return output.summary;
+        return summary;
       });
     } catch (error) {
       // A residual cycle is a breach of the DAG invariant the write path
@@ -136,6 +159,12 @@ export class ScheduleService {
         progressedActivityCount,
         // Expected-finish resizes applied this run (M4, ADR-0035 §9); 0 unless the option is on.
         expectedFinishAppliedCount: summary.expectedFinishAppliedCount,
+        // Resource levelling (M7, ADR-0041): whether the opt-in pass ran, and its produce-and-flag
+        // roll-up. Null when levelling is off (the byte-identical fast path).
+        levelResources: plan.levelResources,
+        leveledActivityCount: summary.leveledActivityCount ?? null,
+        levelingWindowExceededCount: summary.levelingWindowExceededCount ?? null,
+        selfOverAllocatedCount: summary.selfOverAllocatedCount ?? null,
         durationMs: Date.now() - startedAt,
       },
       'schedule recalculated',
@@ -251,6 +280,9 @@ export class ScheduleService {
     activities: EngineActivity[];
     edges: EngineEdge[];
     options: ComputeOptions;
+    /** The resource-levelling demand model — loaded ONLY when the plan opts in (`levelResources`) and
+     * has active assignments; null keeps the byte-identical fast path (ADR-0041 §7). */
+    leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null;
     meta: {
       lagCalendarOverrideCount: number;
       activityCalendarCount: number;
@@ -350,10 +382,54 @@ export class ScheduleService {
       totalFloatMode: plan.totalFloatMode,
       makeOpenEndsCritical: plan.makeOpenEndsCritical,
     };
+
+    // Resource levelling (M7, ADR-0041): the opt-in second pass. Load its demand model ONLY when the
+    // plan opts in AND has active assignments — otherwise `leveling` is null and the recalc is the
+    // byte-identical fast path (§7). Resource calendars reuse the per-recalc port cache built above.
+    let leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null = null;
+    if (plan.levelResources) {
+      const assignmentRows = await this.schedule.loadResourceAssignments(
+        organizationId,
+        plan.id,
+        tx,
+      );
+      if (assignmentRows.length > 0) {
+        const resourceRows = await this.schedule.loadLevellingResources(
+          organizationId,
+          plan.id,
+          tx,
+        );
+        // Resolve each distinct resource calendar (≠ the plan calendar) to a port ONCE — reusing any
+        // already built for the activity/driving-resource calendars above.
+        for (const calId of new Set(
+          resourceRows
+            .map((r) => r.calendarId)
+            .filter((id): id is string => id != null && id !== plan.calendarId),
+        )) {
+          if (!portByCalId.has(calId)) {
+            portByCalId.set(calId, await this.resolveCalendar(organizationId, calId, tx));
+          }
+        }
+        const resources: EngineResource[] = resourceRows.map((r) => ({
+          id: r.id,
+          capacity: r.maxUnitsPerHour === null ? null : r.maxUnitsPerHour.toNumber(),
+          ...(portFor(r.calendarId) ? { calendar: portFor(r.calendarId)! } : {}),
+        }));
+        const assignments: EngineAssignment[] = assignmentRows.map((a) => ({
+          activityId: a.activityId,
+          resourceId: a.resourceId,
+          // A NULL demand rate (ADR-0040 inert triad) contributes zero demand (parity-safe).
+          unitsPerHour: a.unitsPerHour === null ? 0 : a.unitsPerHour.toNumber(),
+        }));
+        leveling = { assignments, resources };
+      }
+    }
+
     return {
       activities,
       edges,
       options,
+      leveling,
       meta: {
         lagCalendarOverrideCount,
         activityCalendarCount: distinctActivityCalIds.length,
@@ -428,6 +504,7 @@ function toEngineActivity(
       : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
     scheduleAsLateAsPossible: row.scheduleAsLateAsPossible,
+    levelingPriority: row.levelingPriority,
     actualStart: row.actualStart ? formatCalendarDate(row.actualStart) : null,
     actualFinish: row.actualFinish ? formatCalendarDate(row.actualFinish) : null,
     resumeDate: row.resumeDate ? formatCalendarDate(row.resumeDate) : null,
