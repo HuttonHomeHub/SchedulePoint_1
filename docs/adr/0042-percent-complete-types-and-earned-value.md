@@ -1,10 +1,14 @@
 # ADR-0042: Percent-complete types & Earned Value — the cost/EV read-model
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-17
 - **Deciders:** James Ewbank (with Claude Code)
 
-> **Proposed — governs milestone M7 (the resource dimension), the cost/**Earned-Value** rung** (the
+> **Accepted — EV1/EV2/EV3 have landed** (schema, the pure module + read endpoint, and the conformance
+> slice this rung's own §"Sliced delivery" names); **EV4 (the flagged `VITE_EARNED_VALUE` web surface) is
+> a separate, deferred slice**, the same accepted-with-a-deferred-web-rung shape as ADR-0039/0040/0041.
+>
+> **Governs milestone M7 (the resource dimension), the cost/**Earned-Value** rung** (the
 > `pct_physical` / `pct_units` / `cost_*` capability rows). It **activates** the cost columns that
 > [ADR-0039](0039-resource-model-and-resource-calendar-scheduling.md) reserved **"for the cost rung"**,
 > consumes the [ADR-0040](0040-duration-types-and-resource-units.md) units backbone (`budgeted_units` +

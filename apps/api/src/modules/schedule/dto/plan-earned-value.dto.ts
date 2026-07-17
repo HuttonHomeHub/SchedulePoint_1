@@ -116,6 +116,13 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
   costBaselineMissing!: boolean;
 
   @ApiProperty({
+    description:
+      'The count of leaf activities showing booked actual cost/units while apparently not started ' +
+      '(ADR-0035 §29, N24) — a read-time data-quality warning, never a reject.',
+  })
+  costWarningCount!: number;
+
+  @ApiProperty({
     type: [EarnedValueActivityDto],
     description: 'Per-activity rows (incl. WBS summaries), in plan order.',
   })
@@ -133,6 +140,7 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
       eacMethod: result.eacMethod,
       currencyCode: result.currencyCode,
       costBaselineMissing: result.costBaselineMissing,
+      costWarningCount: result.costWarningCount,
       activities: result.activities.map((a) => ({ ...a })),
       total: { ...result.total },
     };

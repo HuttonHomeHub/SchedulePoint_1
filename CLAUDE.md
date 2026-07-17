@@ -384,7 +384,7 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   start/finish + `levelingDelay` as an additive overlay (Q2). `levelResources` off (default) ⇒
   recalculate **byte-identical** (the parity gate). Levelling semantics accepted as ADR-0035 **§28** with
   the conformance slice (S10 / `levelling_test`). Supersedes nothing; amends ADR-0022 (execution).
-- **ADR-0042** _(Proposed)_ — Percent-complete types & Earned Value: the per-activity `percentCompleteType`
+- **ADR-0042** _(Accepted; EV4 flagged web deferred)_ — Percent-complete types & Earned Value: the per-activity `percentCompleteType`
   (Duration / Units / Physical) splitting **schedule** %-complete (drives the CPM remaining) from
   **performance/physical** %-complete (earns value, changes no date), and **Earned Value as a pure
   read-model** (a `GET …/schedule/earned-value` rollup — NOT a CPM write pass, NOT engine-owned columns, so
@@ -393,8 +393,9 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   (the committed PV curve), and reads the data date as the EV status date. Cost = assignment-derived **and**
   activity expense; PV = active baseline (live-budget fallback); default `EAC = BAC/CPI`; physical % = one
   manual field; money = `BIGINT` minor units + a per-plan `currencyCode`, rate coefficients `Decimal(18,4)`.
-  Sliced EV1 (schema, dark) → EV2 (module + read endpoint + WBS rollup) → EV3 (conformance, ADR-0035 §29)
-  → EV4 (flagged web `VITE_EARNED_VALUE`). Amends ADR-0025; builds on ADR-0037/0038/0039/0040.
+  Sliced EV1 (schema, dark) → EV2 (module + read endpoint + WBS rollup) → **EV3 (conformance, ADR-0035
+  §29 Accepted + N22–N24)** → EV4 (flagged web `VITE_EARNED_VALUE`, deferred). Amends ADR-0025; builds
+  on ADR-0037/0038/0039/0040.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

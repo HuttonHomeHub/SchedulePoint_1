@@ -1079,6 +1079,11 @@ export interface PlanEarnedValue {
   currencyCode: string | null;
   /** True when any leaf activity lacked a cost-baseline budget (PV used the live-budget fallback). */
   costBaselineMissing: boolean;
+  /**
+   * The count of leaf activities showing booked actual cost/units while apparently not started
+   * (ADR-0035 §29, N24) — a read-time data-quality WARNING, never a reject.
+   */
+  costWarningCount: number;
   /** Per-activity rows (incl. WBS summaries), in plan order. */
   activities: EarnedValueActivity[];
   /** The plan-total metric set (the sum over top-level rows). */

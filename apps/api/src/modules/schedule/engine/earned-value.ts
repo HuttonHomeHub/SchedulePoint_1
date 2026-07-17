@@ -120,6 +120,14 @@ export interface EvActivityResult extends EvMetrics {
 export interface PlanEarnedValueResult {
   /** True when any leaf activity has no cost-baseline budget, so PV used the live-budget fallback. */
   costBaselineMissing: boolean;
+  /**
+   * The count of leaf activities that show booked actual cost/units while apparently **not started**
+   * (ADR-0035 §29, N24) — a read-time **data-quality warning**, never a reject: EV still values the
+   * activity normally (spend without recorded progress is exactly the CV signal, surfaced, not hidden).
+   * "Not started" is read from the schedule/physical %-complete already on the row (both 0), since this
+   * module carries no independent activity status.
+   */
+  costWarningCount: number;
   activities: EvActivityResult[];
   total: EvMetrics;
 }
@@ -188,6 +196,20 @@ export function deriveMetrics(
   const vac = bac - eac;
 
   return { bac, pv, ev, ac, sv, cv, spi, cpi, eac, etc, tcpi, vac };
+}
+
+/**
+ * Whether a leaf activity shows booked actual cost/units while apparently **not started** (N24,
+ * ADR-0035 §29) — a read-time data-quality signal, never a reject. "Not started" is read from the
+ * schedule/physical %-complete already on the row (both 0); "booked" is any actual expense or any
+ * assignment actual cost/units greater than zero.
+ */
+function hasCostWarning(activity: EvActivityInput): boolean {
+  const notStarted =
+    activity.percentComplete === 0 && (activity.physicalPercentComplete ?? 0) === 0;
+  if (!notStarted) return false;
+  if (activity.actualExpense > 0) return true;
+  return activity.assignments.some((a) => a.actualCost > 0 || a.actualUnits > 0);
 }
 
 /** BAC + AC for one leaf activity, from its assignments and activity-level expenses (ADR-0042 §3). */
@@ -296,6 +318,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
   const rolled = new Map<string, EvBase>();
   const resultById = new Map<string, EvActivityResult>();
   let costBaselineMissing = false;
+  let costWarningCount = 0;
 
   // Leaves first — they do not depend on the rollup.
   for (const activity of activities) {
@@ -304,6 +327,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
     const { bac, ac } = leafBudgetAndActual(activity);
     const performancePercent = leafPerformancePercent(activity);
     const ev = Math.round((bac * performancePercent) / 100);
+    if (hasCostWarning(activity)) costWarningCount += 1;
 
     const useBaseline = activity.baselineStart !== null && activity.baselineFinish !== null;
     const start = useBaseline ? activity.baselineStart : activity.earlyStart;
@@ -359,6 +383,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
 
   return {
     costBaselineMissing,
+    costWarningCount,
     activities: activities.map((a) => resultById.get(a.activityId)!),
     total,
   };

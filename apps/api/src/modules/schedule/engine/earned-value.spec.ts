@@ -390,4 +390,65 @@ describe('computeEarnedValue', () => {
     ).activities[0]!;
     expect(row.bac).toBe(200000);
   });
+
+  it('(N24) actual cost/units on a NOT-STARTED activity is a read-time warning, never a reject — EV still values it normally', () => {
+    // percentComplete 0 + physicalPercentComplete unset ⇒ "not started"; an assignment already shows
+    // actual cost booked against it. The row must still compute (no throw) and count exactly one warning.
+    const result = run(
+      [
+        activity({
+          activityId: 'NS',
+          percentComplete: 0,
+          assignments: [assignment({ budgetedCost: 100000, actualCost: 20000 })],
+        }),
+        // A genuinely untouched sibling contributes no warning.
+        activity({ activityId: 'CLEAN', percentComplete: 0, budgetedExpense: 5000 }),
+      ],
+      null,
+    );
+
+    expect(result.costWarningCount).toBe(1);
+    const row = result.activities.find((r) => r.activityId === 'NS')!;
+    expect(row).toMatchObject({ bac: 100000, ac: 20000, ev: 0 }); // 0% duration ⇒ EV = 0, AC still reported
+  });
+
+  it('(N24) an actual booked via units, or a physical/duration %-complete > 0, does not count as a warning', () => {
+    const unitsActual = run(
+      [
+        activity({
+          activityId: 'U',
+          percentComplete: 0,
+          assignments: [assignment({ budgetedUnits: 10, actualUnits: 4, costPerUnit: 1000 })],
+        }),
+      ],
+      null,
+    );
+    expect(unitsActual.costWarningCount).toBe(1); // actualUnits > 0 on a not-started activity also warns
+
+    const started = run(
+      [
+        activity({
+          activityId: 'STARTED',
+          percentComplete: 10, // already underway ⇒ not "not started"
+          assignments: [assignment({ budgetedCost: 100000, actualCost: 20000 })],
+        }),
+      ],
+      null,
+    );
+    expect(started.costWarningCount).toBe(0);
+
+    const physicalStarted = run(
+      [
+        activity({
+          activityId: 'PHYS',
+          percentComplete: 0,
+          physicalPercentComplete: 5, // physically underway ⇒ not "not started"
+          budgetedExpense: 100000,
+          actualExpense: 20000,
+        }),
+      ],
+      null,
+    );
+    expect(physicalStarted.costWarningCount).toBe(0);
+  });
 });

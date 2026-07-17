@@ -13,19 +13,20 @@
 Clauses accept per owning milestone as that milestone lands (they are not all-or-nothing); the ADR
 stays **Proposed** overall until every clause is built. Current state:
 
-| Clauses                            | Owning milestone | Status       |
-| ---------------------------------- | ---------------- | ------------ |
-| §1–§6 (progress & the data date)   | M2               | **Accepted** |
-| §7–§11 (constraints), §12 (N15)    | M4               | **Accepted** |
-| §13–§14 (duplicate/cycle report)   | M4 (F8)          | **Accepted** |
-| §22 (zero-duration task)           | M4               | **Accepted** |
-| §17–§20 (float & critical)         | M6               | **Accepted** |
-| §21 (level of effort)              | M5-epic          | **Accepted** |
-| §24 (WBS-summary rollup)           | M5-epic          | **Accepted** |
-| §23 (resource-dependent)           | M7               | **Accepted** |
-| §26–§27 (duration types), N19/N20  | M7 (rung 4)      | **Accepted** |
-| §28 (resource levelling), N21      | M7 (levelling)   | **Accepted** |
-| §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
+| Clauses                             | Owning milestone | Status       |
+| ----------------------------------- | ---------------- | ------------ |
+| §1–§6 (progress & the data date)    | M2               | **Accepted** |
+| §7–§11 (constraints), §12 (N15)     | M4               | **Accepted** |
+| §13–§14 (duplicate/cycle report)    | M4 (F8)          | **Accepted** |
+| §22 (zero-duration task)            | M4               | **Accepted** |
+| §17–§20 (float & critical)          | M6               | **Accepted** |
+| §21 (level of effort)               | M5-epic          | **Accepted** |
+| §24 (WBS-summary rollup)            | M5-epic          | **Accepted** |
+| §23 (resource-dependent)            | M7               | **Accepted** |
+| §26–§27 (duration types), N19/N20   | M7 (rung 4)      | **Accepted** |
+| §28 (resource levelling), N21       | M7 (levelling)   | **Accepted** |
+| §29 (%-complete-type & EV), N22–N24 | M7 (EV3)         | **Accepted** |
+| §15–§16, §25 (arithmetic/boundary)  | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
 is folded into the next conformance pass that asserts them as goldens (out of M4 scope).
@@ -250,6 +251,76 @@ We will implement the following semantics. Each cites the milestone that will bu
       `leveledActivityCount` / `levelingWindowExceededCount` / `selfOverAllocatedCount` /
       `leveledProjectFinish` (0 / null when off).
 
+### Percent-complete-type & Earned Value (→ M7 EV3)
+
+29. **Percent-complete-type & Earned-Value semantics.** Earned Value is a **pure read-model** (ADR-0042
+    §2) — it never enters `computeSchedule`, adds no write pass, and owns no persisted column, so the
+    recalc parity gate stays structurally trivial (the CPM engine is byte-identical whether or not any
+    cost/EV data exists). SchedulePoint's chosen semantics — the golden contract for the fixture's
+    `pct_physical` / `pct_units` / `cost_*` tags:
+
+    - **Three %-complete types, one performance measure.** Every activity carries a
+      `percentCompleteType` (`DURATION` default | `UNITS` | `PHYSICAL`) that selects **which** measure
+      feeds EV's performance % — it never changes a CPM date (the key decoupling, ADR-0042 §1).
+      **Duration** derives performance % from the schedule's own %-complete (elapsed vs total working
+      time, already computed by M2 progress — the behaviour-preserving default). **Units** derives it
+      from `Σ actualUnits / Σ budgetedUnits` across the activity's assignments (capped 0–100; 0 when
+      budgeted units is 0). **Physical** reads the hand-entered `physicalPercentComplete` verbatim
+      (capped 0–100) — a performance measure that **earns value but moves no date**, decoupled from the
+      schedule by design (a concrete pour can be "60% built" while its remaining duration is
+      independently forecast).
+    - **Milestones are 0/100 regardless of type.** A milestone's performance % is binary on its own
+      schedule %-complete (0 until complete, then 100) — its `percentCompleteType` is irrelevant, since a
+      milestone has no partial physical/units state. **Level of Effort has no independent performance
+      measure**: it earns on **Duration** (its ADR-0035 §21 span-derived %-complete) regardless of its
+      nominal type, since an LOE's progress is definitionally its span's elapsed proportion. **A
+      WBS-summary carries no cost of its own** — every EV figure (BAC/PV/EV/AC and its derived indices)
+      is the roll-up of its branch, summed **deepest-first** over the `parentId` tree (the M5-epic §24
+      rollup pattern), never entered or computed independently.
+    - **BAC / AC — the cost source is both an activity's assignments and its own expense (ADR-0042 §1
+      Q1).** `BAC = Σ (assignment budgetedCost ?? budgetedUnits × resource rate) + activity
+budgetedExpense`; `AC = Σ (assignment actualCost) + activity actualExpense`. This makes EV useful
+      for resourced work (crew/plant cost) **and** lump-sum/non-resourced construction activities (a
+      direct budgeted expense) in the same model.
+    - **EV = BAC × performance %** (rounded once, to the minor unit).
+    - **PV — time-phased against the committed plan, with a flagged live-budget fallback (ADR-0042 §1
+      Q2).** Planned Value is the **active ADR-0025 cost baseline's** budgeted cost, spread linearly
+      across the baselined activity's baseline start→finish (a milestone is binary on its baseline
+      start) and measured to the **data date** on the plan/activity calendar (ADR-0037), summed and
+      rolled up like BAC/EV/AC. When no cost baseline exists for an activity (no active baseline, or one
+      captured before this rung), PV falls back to the **live** budget (BAC) time-phased over the
+      persisted `earlyStart`/`earlyFinish`, and the plan-level **`costBaselineMissing`** flag is set —
+      produced, never hidden, exactly the produce-and-flag posture §7 established for constraints.
+    - **The default EAC forecast is `BAC / CPI`** (ADR-0042 §1 Q3, P6's "typical/performance-factor"
+      method) — a plan's `eacMethod` selects the alternates: `REMAINING_AT_BUDGET` (`AC + (BAC − EV)`,
+      the "atypical" remaining-work-at-budget forecast) and `CPI_TIMES_SPI` (`AC + (BAC − EV) / (CPI ×
+SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by the same guarded
+      `deriveMetrics` helper at every roll-up level (leaf, WBS summary, plan total), so the guards below
+      are identical everywhere.
+    - **Divide-by-zero guards — every index a defined sentinel, never `NaN`/`Infinity`.** `SPI = EV / PV`
+      is **`null` when `PV = 0`** (nothing planned by the data date yet); `CPI = EV / AC` is **`null`
+      when `AC = 0`** (nothing spent yet); `TCPI = (BAC − EV) / (BAC − AC)` is **`null` when `BAC = AC`**.
+      `EAC` is **always defined**: the `CPI` method falls back to the atypical `AC + (BAC − EV)` forecast
+      whenever CPI is undefined or not strictly positive (AC = 0, or a pathological EV/AC ratio), and the
+      `CPI_TIMES_SPI` method falls back the same way whenever `CPI × SPI` is not strictly positive. `ETC
+= EAC − AC` and `VAC = BAC − EAC` inherit EAC's guard, so they too are always defined.
+    - **N22 — negative cost/rate/expense: reject.** A resource's cost rate, an assignment's
+      `budgetedCost`/`actualCost`, and an activity's `budgetedExpense`/`actualExpense` are rejected at
+      the API boundary when negative (a DTO `@Min(0)` backed by a nullable-safe CHECK) — money is never
+      allowed to go negative; a null/unset rate contributes zero cost, which is not an error (the
+      parity-preserving default, mirroring N19/N21's shape).
+    - **N23 — physical %-complete outside 0–100: reject.** `physicalPercentComplete` is validated to an
+      integer `0–100` (or null = unset) at the API boundary (`@Min(0)` + `@Max(100)`); an out-of-range
+      value is a 422, never silently clamped on write (EV itself still clamps defensively on read, the
+      same belt-and-braces posture as every other %-complete input).
+    - **N24 — actual cost/units on a not-started activity: a read-time warning, never a reject.** Booking
+      an actual cost/units against an activity that shows no recorded progress (schedule %-complete and
+      physical %-complete both 0) is **not an error** — spend-without-progress is exactly the Cost
+      Variance signal EV exists to surface, so hiding it behind a rejection would defeat the point. The
+      EV read instead **counts** every such leaf in a plan-level `costWarningCount` (produce-and-flag,
+      the same posture as `constraintWarningCount`/§7 and `costBaselineMissing` above) while still
+      valuing the activity normally (BAC/AC/EV computed exactly as any other row).
+
 ## Alternatives considered
 
 - **Progress Override as default.** Simpler (remaining always from the data date) but hides broken
@@ -281,3 +352,12 @@ We will implement the following semantics. Each cites the milestone that will bu
 - [Capability matrix](../specs/engine-conformance-framework/CAPABILITY_MATRIX.md) · rows citing M2/M4/M6.
 - ADR-0036 — hour-granular rework (exact instants for constraint roll-forward, elapsed durations).
 - The fixture `TEST_MATRIX.md` (§2 constraints, §5 progress, §6 float) and `negative_cases.json`.
+- [ADR-0042 — percent-complete types & Earned Value](0042-percent-complete-and-earned-value.md) · the
+  read-model design §29 documents the golden contract for (`percentCompleteType`, BAC/PV/EV/AC, the
+  EAC methods, N22–N24).
+- [ADR-0025 — baselines: snapshot-copy model](0025-baselines-snapshot-and-variance.md) · the cost-
+  baseline amendment §29's PV time-phasing reads from.
+- `apps/api/src/modules/schedule/engine/earned-value.ts` / `earned-value.spec.ts` (the pure module +
+  first-principles unit goldens) and `apps/api/src/modules/schedule/conformance/earned-value-adapter.ts`
+  / `earned-value-conformance.spec.ts` (the EV3 fixture-grounded golden + differentials this §29
+  Accepts against).

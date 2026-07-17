@@ -358,6 +358,7 @@ export class ScheduleService {
       eacMethod: plan.eacMethod,
       currencyCode: plan.currencyCode,
       costBaselineMissing: result.costBaselineMissing,
+      costWarningCount: result.costWarningCount,
       activities: result.activities,
       total: result.total,
     };
