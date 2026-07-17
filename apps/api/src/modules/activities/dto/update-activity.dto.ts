@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType } from '@prisma/client';
+import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -66,6 +66,17 @@ export class UpdateActivityDto {
   @Min(0)
   @IsZeroWhenMilestone()
   durationDays?: number;
+
+  @ApiPropertyOptional({
+    enum: DurationType,
+    description:
+      'P6 duration type (M7 rung 4, ADR-0040). Setting it alone does NOT recompute a quantity; ' +
+      'when sent together with durationDays, the edit holds the (new) duration and recomputes the ' +
+      'dependent per this type on the driving assignment.',
+  })
+  @IsOptional()
+  @IsEnum(DurationType)
+  durationType?: DurationType;
 
   @ApiPropertyOptional({ enum: ConstraintType, nullable: true })
   @IsOptional()

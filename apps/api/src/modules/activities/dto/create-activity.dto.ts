@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType } from '@prisma/client';
+import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -71,6 +71,19 @@ export class CreateActivityDto {
   @Min(0)
   @IsZeroWhenMilestone()
   durationDays?: number;
+
+  @ApiPropertyOptional({
+    enum: DurationType,
+    default: DurationType.FIXED_DURATION_AND_UNITS_TIME,
+    description:
+      'P6 duration type (M7 rung 4, ADR-0040) — names which of {Duration, Units, Units/Time} is ' +
+      'recomputed when a planner edits another (keeping Units = Duration × Units/Time true). Default ' +
+      'FIXED_DURATION_AND_UNITS_TIME. Setting it alone does NOT retroactively re-solve the triad; it ' +
+      'governs future edits.',
+  })
+  @IsOptional()
+  @IsEnum(DurationType)
+  durationType?: DurationType;
 
   @ApiPropertyOptional({ enum: ConstraintType, description: 'Schedule constraint (with a date).' })
   @IsOptional()

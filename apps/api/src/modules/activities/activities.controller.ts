@@ -64,10 +64,20 @@ export class ActivitiesController {
   @Patch(':activityId')
   @ApiOperation({
     summary: "Update an activity's definition (Planner or Org Admin; optimistic locking).",
+    description:
+      'Duration-type side effect (ADR-0040): editing `durationDays` on an activity that has a ' +
+      'driving resource assignment carrying a `unitsPerHour` recomputes and persists that ' +
+      'assignment’s units/rate in the SAME transaction (the `Units = Duration × Units/Time` triad) ' +
+      '— bumping the assignment’s `version`. The response body is the activity only; a client that ' +
+      'also holds the driving assignment should refetch it (its version has moved).',
   })
   @ApiOkResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiConflictResponse({ description: 'Stale version, or a name/code collision within the plan.' })
+  @ApiConflictResponse({
+    description:
+      'Stale version (of the activity OR its driving assignment when a duration edit recomputes it), ' +
+      'or a name/code collision within the plan.',
+  })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async update(
     @CurrentUser() principal: Principal,

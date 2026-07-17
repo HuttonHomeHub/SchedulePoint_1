@@ -22,7 +22,16 @@ const ACTIVITY_ID = '00000000-0000-0000-0000-0000000000ac';
 const RESOURCE_ID = '00000000-0000-0000-0000-0000000000re';
 
 function activity(overrides: Partial<Activity> = {}): Partial<Activity> {
-  return { id: ACTIVITY_ID, organizationId: ORG_ID, deletedAt: null, ...overrides };
+  return {
+    id: ACTIVITY_ID,
+    organizationId: ORG_ID,
+    deletedAt: null,
+    // Duration-type triad inputs (ADR-0040): default type, 10 working days (14 400 min), version 1.
+    durationType: 'FIXED_DURATION_AND_UNITS_TIME',
+    durationMinutes: 10 * 1440,
+    version: 1,
+    ...overrides,
+  };
 }
 
 function resource(overrides: Partial<Resource> = {}): Resource {
@@ -90,6 +99,8 @@ describe('ResourceAssignmentService', () => {
     $transaction: ReturnType<typeof vi.fn>;
     activity: { findFirst: ReturnType<typeof vi.fn> };
   };
+  // The activity.updateMany the tx uses to persist a units-driven derived duration (ADR-0040 §3).
+  let txActivityUpdateMany: ReturnType<typeof vi.fn>;
   let service: ResourceAssignmentService;
 
   beforeEach(() => {
@@ -105,9 +116,13 @@ describe('ResourceAssignmentService', () => {
       updateIfVersionMatches: vi.fn().mockResolvedValue(1),
       softDelete: vi.fn().mockResolvedValue(1),
     };
+    txActivityUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     prisma = {
-      // The tx handle exposes $executeRaw (the resource advisory lock create takes).
-      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+      // The tx handle exposes $executeRaw (the resource advisory lock create takes) and the
+      // `activity` model (the ADR-0040 units-driven derived-duration write).
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
+        cb({ $executeRaw: vi.fn(), activity: { updateMany: txActivityUpdateMany } }),
+      ),
       activity: { findFirst: vi.fn().mockResolvedValue(activity()) },
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
@@ -261,6 +276,177 @@ describe('ResourceAssignmentService', () => {
         expect.anything(),
         'asg-1',
       );
+    });
+  });
+
+  // Duration-type triad recompute on the ASSIGNMENT write path (M7 rung 4, ADR-0040 §3). Only the
+  // DRIVING assignment participates (invariant (c)); the edited field is held, the dependent is
+  // server-computed (invariant (d)). `D` = activity.durationMinutes / 60 working hours.
+  describe('duration-type recompute (ADR-0040)', () => {
+    /** The patch passed to the assignment optimistic update (its recomputed same-row fields). */
+    function lastAssignmentPatch() {
+      return assignments.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        budgetedUnits?: number;
+        unitsPerHour?: number | null;
+      };
+    }
+
+    it('derives and persists the ACTIVITY duration when the rate is edited on a FIXED_UNITS driver (units-driven)', async () => {
+      // FIXED_UNITS: edit R ⇒ D := U / R (Units held). U = 300, R := 60 ⇒ D = 5 h ⇒ 300 min.
+      prisma.activity.findFirst.mockResolvedValue(activity({ durationType: 'FIXED_UNITS' }));
+      assignments.findActiveByIdInOrg.mockResolvedValue(
+        assignment({ isDriving: true, budgetedUnits: new Prisma.Decimal(300), unitsPerHour: null }),
+      );
+
+      await service.update(principalWith(ALL), 'acme', 'asg-1', {
+        unitsPerHour: 60,
+        editedField: 'UNITS_PER_HOUR',
+        version: 1,
+      });
+
+      // The activity's durationMinutes is server-derived and persisted (optimistic-locked).
+      expect(txActivityUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: ACTIVITY_ID, version: 1, deletedAt: null },
+          data: expect.objectContaining({ durationMinutes: 300 }),
+        }),
+      );
+      // The assignment keeps the held Units and the edited rate.
+      expect(lastAssignmentPatch()).toMatchObject({ budgetedUnits: 300, unitsPerHour: 60 });
+    });
+
+    it('derives the ACTIVITY duration when Units are edited on a FIXED_UNITS_TIME driver', async () => {
+      // FIXED_UNITS_TIME: edit U ⇒ D := U / R (rate held). R = 4, U := 480 ⇒ D = 120 h ⇒ 7 200 min
+      // (differs from the activity's stored 14 400, so a duration write is persisted).
+      prisma.activity.findFirst.mockResolvedValue(activity({ durationType: 'FIXED_UNITS_TIME' }));
+      assignments.findActiveByIdInOrg.mockResolvedValue(
+        assignment({ isDriving: true, unitsPerHour: new Prisma.Decimal(4) }),
+      );
+
+      await service.update(principalWith(ALL), 'acme', 'asg-1', {
+        budgetedUnits: 480,
+        editedField: 'UNITS',
+        version: 1,
+      });
+
+      expect(txActivityUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ durationMinutes: 7200 }) }),
+      );
+    });
+
+    it('rejects a zero rate on a units-driven recompute with 422 UNITS_PER_HOUR_ZERO and writes nothing (N20)', async () => {
+      prisma.activity.findFirst.mockResolvedValue(activity({ durationType: 'FIXED_UNITS' }));
+      assignments.findActiveByIdInOrg.mockResolvedValue(
+        assignment({ isDriving: true, budgetedUnits: new Prisma.Decimal(300), unitsPerHour: null }),
+      );
+
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'asg-1', {
+          unitsPerHour: 0,
+          editedField: 'UNITS_PER_HOUR',
+          version: 1,
+        }),
+      ).rejects.toMatchObject({ details: { reason: 'UNITS_PER_HOUR_ZERO' } });
+      expect(assignments.updateIfVersionMatches).not.toHaveBeenCalled();
+      expect(txActivityUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('server-computes the derived field, ignoring a client-supplied bogus value (invariant (d))', async () => {
+      // Default type, edit rate ⇒ Units := D × R. D = 240 h, R = 4 ⇒ 960, regardless of the bogus 999999.
+      prisma.activity.findFirst.mockResolvedValue(
+        activity({ durationType: 'FIXED_DURATION_AND_UNITS_TIME' }),
+      );
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment({ isDriving: true }));
+
+      await service.update(principalWith(ALL), 'acme', 'asg-1', {
+        unitsPerHour: 4,
+        budgetedUnits: 999999, // bogus — the derived Units must overwrite it
+        editedField: 'UNITS_PER_HOUR',
+        version: 1,
+      });
+
+      expect(lastAssignmentPatch().budgetedUnits).toBe(960);
+      // A same-row (Units) dependent never touches the activity duration.
+      expect(txActivityUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('stores the rate on a NON-driving assignment but never touches the activity (invariant (c))', async () => {
+      prisma.activity.findFirst.mockResolvedValue(activity({ durationType: 'FIXED_UNITS' }));
+      assignments.findActiveByIdInOrg.mockResolvedValue(
+        assignment({ isDriving: false, unitsPerHour: null }),
+      );
+
+      await service.update(principalWith(ALL), 'acme', 'asg-1', {
+        unitsPerHour: 5,
+        editedField: 'UNITS_PER_HOUR',
+        version: 1,
+      });
+
+      expect(lastAssignmentPatch().unitsPerHour).toBe(5); // stored verbatim
+      expect(txActivityUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not recompute when no editedField is declared (plain store, parity)', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(
+        assignment({ isDriving: true, unitsPerHour: new Prisma.Decimal(4) }),
+      );
+
+      await service.update(principalWith(ALL), 'acme', 'asg-1', { budgetedUnits: 7, version: 1 });
+
+      expect(lastAssignmentPatch()).toMatchObject({ budgetedUnits: 7 });
+      expect(prisma.activity.findFirst).not.toHaveBeenCalled();
+      expect(txActivityUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('409s (rolling the whole write back) on a stale ACTIVITY version during a units-driven derive', async () => {
+      prisma.activity.findFirst.mockResolvedValue(activity({ durationType: 'FIXED_UNITS' }));
+      assignments.findActiveByIdInOrg.mockResolvedValue(
+        assignment({ isDriving: true, budgetedUnits: new Prisma.Decimal(300), unitsPerHour: null }),
+      );
+      txActivityUpdateMany.mockResolvedValue({ count: 0 }); // stale activity version
+
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'asg-1', {
+          unitsPerHour: 60,
+          editedField: 'UNITS_PER_HOUR',
+          version: 1,
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it('threads unitsPerHour into a create and derives the activity duration for a units-driven driver', async () => {
+      prisma.activity.findFirst.mockResolvedValue(activity({ durationType: 'FIXED_UNITS' }));
+
+      await service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
+        resourceId: RESOURCE_ID,
+        budgetedUnits: 300,
+        unitsPerHour: 60,
+        editedField: 'UNITS_PER_HOUR',
+        isDriving: true,
+      });
+
+      // FIXED_UNITS edit rate ⇒ D := 300 / 60 = 5 h = 300 min persisted on the activity.
+      expect(txActivityUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ durationMinutes: 300 }) }),
+      );
+      // The created assignment carries the held Units + the rate.
+      expect(assignments.create).toHaveBeenCalledWith(
+        expect.objectContaining({ budgetedUnits: 300, unitsPerHour: 60, isDriving: true }),
+        expect.anything(),
+      );
+    });
+
+    it('stores unitsPerHour verbatim on a create with no editedField (no recompute)', async () => {
+      await service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
+        resourceId: RESOURCE_ID,
+        budgetedUnits: 10,
+        unitsPerHour: 3,
+      });
+      expect(assignments.create).toHaveBeenCalledWith(
+        expect.objectContaining({ budgetedUnits: 10, unitsPerHour: 3, isDriving: false }),
+        expect.anything(),
+      );
+      expect(txActivityUpdateMany).not.toHaveBeenCalled();
     });
   });
 

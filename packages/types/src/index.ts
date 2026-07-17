@@ -969,6 +969,13 @@ export const RESOURCE_ERROR = {
   DUPLICATE_ASSIGNMENT: 'This resource is already assigned to this activity.',
   /** A MATERIAL resource cannot be the driving resource of an activity (→ 422). */
   MATERIAL_CANNOT_DRIVE: 'A material resource cannot drive an activity’s dates.',
+  /**
+   * A `unitsPerHour` of 0 on a units-driven recompute (`Duration := Units ÷ Units/Time`) would
+   * divide by zero (N20, M7 rung 4 / ADR-0040 §5). Rejected before any division so the pure
+   * `resolveTriad` never yields Infinity/NaN (→ 422).
+   */
+  UNITS_PER_HOUR_ZERO:
+    'The rate (units/time) must be greater than zero to drive an activity’s duration.',
   /** The referenced resource does not exist in this organisation (→ 404). */
   RESOURCE_NOT_FOUND: 'Resource not found.',
   /** The referenced assignment does not exist in this organisation (→ 404). */

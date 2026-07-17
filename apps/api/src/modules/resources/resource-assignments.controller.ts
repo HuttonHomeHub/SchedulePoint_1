@@ -70,13 +70,28 @@ export class ResourceAssignmentsController {
 
   @Post('activities/:activityId/assignments')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Assign a resource to an activity (Planner or Org Admin).' })
+  @ApiOperation({
+    summary: 'Assign a resource to an activity (Planner or Org Admin).',
+    description:
+      'Duration-type side effect (ADR-0040): when this is the DRIVING assignment, carries a ' +
+      '`unitsPerHour`, and names an `editedField` (UNITS | UNITS_PER_HOUR), the triad ' +
+      '`Units = Duration × Units/Time` is resolved — and for a FIXED_UNITS / FIXED_UNITS_TIME ' +
+      'activity the derived `durationMinutes` is persisted on the OWNING ACTIVITY in the same ' +
+      'transaction (bumping its version). Refetch the activity if you hold it. Inert (a plain store) ' +
+      'for a non-driving assignment, no rate, or no `editedField`.',
+  })
   @ApiCreatedResponse({ type: ResourceAssignmentResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
-    description: 'Negative budgetedUnits, or a MATERIAL resource set as the driver.',
+    description:
+      'Negative budgetedUnits / unitsPerHour (N14/N19), a zero unitsPerHour on a units-driven ' +
+      'duration recompute (N20, UNITS_PER_HOUR_ZERO), or a MATERIAL resource set as the driver.',
   })
-  @ApiConflictResponse({ description: 'This resource is already assigned to this activity.' })
+  @ApiConflictResponse({
+    description:
+      'This resource is already assigned to this activity, or a stale version of the owning activity ' +
+      'when a units/rate edit recomputes its duration.',
+  })
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -90,14 +105,27 @@ export class ResourceAssignmentsController {
 
   @Patch('assignments/:id')
   @ApiOperation({
-    summary: 'Update an assignment (units / driver; Planner or Org Admin; optimistic locking).',
+    summary:
+      'Update an assignment (units / rate / driver; Planner or Org Admin; optimistic locking).',
+    description:
+      'Duration-type side effect (ADR-0040): editing a DRIVING assignment’s units/rate with an ' +
+      '`editedField` recomputes the triad; for a FIXED_UNITS / FIXED_UNITS_TIME activity the derived ' +
+      '`durationMinutes` is persisted on the OWNING ACTIVITY in the same transaction (bumping its ' +
+      'version) — refetch it if you hold it. Inert for a non-driving assignment, no rate, or no ' +
+      '`editedField`.',
   })
   @ApiOkResponse({ type: ResourceAssignmentResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
-    description: 'Negative budgetedUnits, or a MATERIAL resource set as the driver.',
+    description:
+      'Negative budgetedUnits / unitsPerHour (N14/N19), or a zero unitsPerHour on a units-driven ' +
+      'duration recompute (N20, UNITS_PER_HOUR_ZERO).',
   })
-  @ApiConflictResponse({ description: 'Stale version.' })
+  @ApiConflictResponse({
+    description:
+      'Stale version of the assignment, or of the owning activity when a units/rate edit recomputes ' +
+      'its duration.',
+  })
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

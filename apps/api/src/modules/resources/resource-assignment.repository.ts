@@ -11,6 +11,8 @@ export interface CreateAssignmentInput {
   activityId: string;
   resourceId: string;
   budgetedUnits: number;
+  /** Planned rate (units/time), the triad's Units/Time term (M7 rung 4, ADR-0040); null = no rate. */
+  unitsPerHour: number | null;
   isDriving: boolean;
   createdBy: string;
   updatedBy: string;
@@ -19,6 +21,8 @@ export interface CreateAssignmentInput {
 /** Fields an assignment update may change. */
 export interface AssignmentPatch {
   budgetedUnits?: number;
+  /** Planned rate (units/time), the triad's Units/Time term (M7 rung 4, ADR-0040); null = no rate. */
+  unitsPerHour?: number | null;
   isDriving?: boolean;
 }
 
@@ -50,6 +54,7 @@ export class ResourceAssignmentRepository {
         activityId: input.activityId,
         resourceId: input.resourceId,
         budgetedUnits: input.budgetedUnits,
+        unitsPerHour: input.unitsPerHour,
         isDriving: input.isDriving,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,

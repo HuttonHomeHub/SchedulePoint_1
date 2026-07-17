@@ -5,6 +5,7 @@ import {
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
+  type DurationType,
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -23,6 +24,8 @@ export interface ActivityPatch {
   description?: string | null;
   type?: ActivityType;
   durationMinutes?: number;
+  /** P6 duration type (M7 rung 4, ADR-0040): governs which triad field recomputes on a quantity edit. */
+  durationType?: DurationType;
   constraintType?: ConstraintType | null;
   constraintDate?: Date | null;
   /** Secondary constraint (ADR-0035 §10): drives the backward pass; paired like the primary. */

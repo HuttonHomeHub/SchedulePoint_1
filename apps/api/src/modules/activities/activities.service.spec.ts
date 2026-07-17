@@ -140,6 +140,10 @@ describe('ActivitiesService', () => {
   };
   let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  // Driving-assignment access on the tx client (ADR-0040 activity-path recompute). Default: no
+  // driving assignment, so the triad is inert and every prior activity test stays byte-identical.
+  let txDrivingFindFirst: ReturnType<typeof vi.fn>;
+  let txDrivingUpdateMany: ReturnType<typeof vi.fn>;
   let service: ActivitiesService;
 
   beforeEach(() => {
@@ -158,9 +162,20 @@ describe('ActivitiesService', () => {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
       restoreBatch: vi.fn().mockResolvedValue({}),
     };
-    // The tx carries `$executeRaw` for the calendar advisory lock (ADR-0037 validation path).
+    // The tx carries `$executeRaw` for the calendar advisory lock (ADR-0037 validation path) and the
+    // `resourceAssignment` model for the ADR-0040 driving-assignment recompute. Default: no driver.
+    txDrivingFindFirst = vi.fn().mockResolvedValue(null);
+    txDrivingUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     prisma = {
-      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
+        cb({
+          $executeRaw: vi.fn(),
+          resourceAssignment: {
+            findFirst: txDrivingFindFirst,
+            updateMany: txDrivingUpdateMany,
+          },
+        }),
+      ),
     };
     const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     // Activity calendars are validated in-org via this repo (ADR-0037); default: id resolves.
@@ -386,6 +401,144 @@ describe('ActivitiesService', () => {
       await expect(
         service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { name: 'New', version: 1 }),
       ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    // Duration-type triad recompute on the ACTIVITY write path (M7 rung 4, ADR-0040 §3).
+    // editedField = DURATION: the duration is held; the dependent (Units or Units/Time, per the
+    // truth table) recomputes on the DRIVING assignment. `D` = durationMinutes / 60 working hours.
+    describe('duration-type recompute (ADR-0040)', () => {
+      /** A driving assignment row as the tx sees it (Decimal columns), with a rate by default. */
+      function driving(overrides: Record<string, unknown> = {}) {
+        return {
+          id: 'asg-1',
+          budgetedUnits: new Prisma.Decimal(40),
+          unitsPerHour: new Prisma.Decimal(4),
+          version: 1,
+          ...overrides,
+        };
+      }
+
+      it('recomputes the driving assignment’s UNITS on a duration edit (default FIXED_DURATION_AND_UNITS_TIME)', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(
+          activity({ durationType: 'FIXED_DURATION_AND_UNITS_TIME' }),
+        );
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        txDrivingFindFirst.mockResolvedValue(driving({ unitsPerHour: new Prisma.Decimal(4) }));
+
+        // 10 working days → 14 400 min → D = 240 h; U := D × R = 240 × 4 = 960 (duration held).
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          durationDays: 10,
+          version: 1,
+        });
+
+        // The activity's own duration is the (held) edited value; the engine reads it unchanged.
+        const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+          durationMinutes: number;
+        };
+        expect(patch.durationMinutes).toBe(10 * 1440);
+        // The dependent (Units) is recomputed and persisted on the assignment row, optimistic-locked.
+        expect(txDrivingUpdateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'asg-1', version: 1, deletedAt: null },
+            data: expect.objectContaining({ budgetedUnits: 960, unitsPerHour: 4 }),
+          }),
+        );
+      });
+
+      it('recomputes the driving assignment’s RATE on a duration edit for a FIXED_UNITS activity', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity({ durationType: 'FIXED_UNITS' }));
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        // U = 300 held; edit duration to 10 d → D = 240 h; R := U / D = 300 / 240 = 1.25.
+        txDrivingFindFirst.mockResolvedValue(
+          driving({ budgetedUnits: new Prisma.Decimal(300), unitsPerHour: new Prisma.Decimal(30) }),
+        );
+
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          durationDays: 10,
+          version: 1,
+        });
+
+        expect(txDrivingUpdateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ budgetedUnits: 300, unitsPerHour: 1.25 }),
+          }),
+        );
+      });
+
+      it('leaves the assignment untouched when there is no driving assignment (parity)', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        txDrivingFindFirst.mockResolvedValue(null); // no driver
+
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          durationDays: 3,
+          version: 1,
+        });
+
+        const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+          durationMinutes: number;
+        };
+        expect(patch.durationMinutes).toBe(3 * 1440);
+        expect(txDrivingUpdateMany).not.toHaveBeenCalled();
+      });
+
+      it('leaves the assignment untouched when the driving assignment has no rate (parity)', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        txDrivingFindFirst.mockResolvedValue(driving({ unitsPerHour: null }));
+
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          durationDays: 3,
+          version: 1,
+        });
+
+        expect(txDrivingUpdateMany).not.toHaveBeenCalled();
+      });
+
+      it('does NOT recompute when only the durationType is set (US-1 — no duration edit)', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          durationType: 'FIXED_UNITS',
+          version: 1,
+        });
+
+        // The type is persisted, but with no durationDays the driving assignment is never even read.
+        const patch = activities.updateIfVersionMatches.mock.calls[0]?.[2] as {
+          durationType: string;
+        };
+        expect(patch.durationType).toBe('FIXED_UNITS');
+        expect(txDrivingFindFirst).not.toHaveBeenCalled();
+        expect(txDrivingUpdateMany).not.toHaveBeenCalled();
+      });
+
+      it('does NOT recompute when the edit makes the activity a (zero-duration) milestone', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        txDrivingFindFirst.mockResolvedValue(driving());
+
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          type: 'FINISH_MILESTONE',
+          durationDays: 0,
+          version: 1,
+        });
+
+        expect(txDrivingUpdateMany).not.toHaveBeenCalled();
+      });
+
+      it('409s (rolling the whole write back) on a stale driving-assignment version', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(
+          activity({ durationType: 'FIXED_DURATION_AND_UNITS_TIME' }),
+        );
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        txDrivingFindFirst.mockResolvedValue(driving());
+        txDrivingUpdateMany.mockResolvedValue({ count: 0 }); // stale assignment version
+
+        await expect(
+          service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { durationDays: 10, version: 1 }),
+        ).rejects.toBeInstanceOf(ConflictError);
+      });
     });
   });
 

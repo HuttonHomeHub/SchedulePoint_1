@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Activity, type ActivityStatus, type ActivityType } from '@prisma/client';
+import {
+  Prisma,
+  type Activity,
+  type ActivityStatus,
+  type ActivityType,
+  type DurationType,
+} from '@prisma/client';
 import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -21,6 +27,7 @@ import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
+import { resolveTriad } from '../schedule/duration-type/resolve-triad';
 
 import { ActivityRepository, type ActivityPatch } from './activity.repository';
 import type { CreateActivityDto } from './dto/create-activity.dto';
@@ -205,6 +212,9 @@ export class ActivitiesService {
             description: dto.description ?? null,
             type,
             durationMinutes: durationDays * MINUTES_PER_DAY,
+            // P6 duration type (ADR-0040); omit to take the Prisma default (FIXED_DURATION_AND_UNITS_TIME).
+            // A brand-new activity has no assignments yet, so nothing to recompute at create.
+            ...(dto.durationType ? { durationType: dto.durationType } : {}),
             calendarId,
             ...(parentId !== null ? { parentId } : {}),
             ...(dto.constraintType ? { constraintType: dto.constraintType } : {}),
@@ -291,6 +301,7 @@ export class ActivitiesService {
       patch.description = dto.description === '' ? null : dto.description;
     }
     if (dto.type !== undefined) patch.type = dto.type;
+    if (dto.durationType !== undefined) patch.durationType = dto.durationType;
     if (dto.durationDays !== undefined) patch.durationMinutes = dto.durationDays * MINUTES_PER_DAY;
     if (dto.constraintType !== undefined) patch.constraintType = dto.constraintType;
     if (dto.constraintDate !== undefined) {
@@ -357,6 +368,18 @@ export class ActivitiesService {
         if (changed === 0) {
           throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
         }
+        // Duration-type recompute (ADR-0040 §3, editedField = DURATION): a duration edit holds the
+        // (new) duration and recomputes the DEPENDENT — never DURATION itself — on the activity's
+        // DRIVING assignment. Runs in THIS transaction, optimistic-locking the assignment row too, so
+        // a stale version on either row rolls the whole write back (409).
+        await this.recomputeDrivingAssignmentOnDurationEdit(
+          tx,
+          activityId,
+          dto.durationDays,
+          patch.durationMinutes,
+          patch.durationType ?? existing.durationType,
+          principal.userId,
+        );
       });
     } catch (error) {
       throw this.mapWriteError(error);
@@ -365,6 +388,65 @@ export class ActivitiesService {
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
     return updated;
+  }
+
+  /**
+   * The duration-type triad recompute for the ACTIVITY write path (M7 rung 4, ADR-0040 §3;
+   * `editedField = DURATION`). A duration edit **holds** the new duration and recomputes the
+   * dependent — which, under every duration type, is Units or Units/Time on the **driving**
+   * assignment, never the duration itself (the truth table). So this reads the single driving
+   * assignment and, when it carries a rate, persists the recomputed `budgetedUnits`/`unitsPerHour`
+   * on it, inside the caller's transaction and optimistic-locked, so a stale assignment version
+   * aborts the whole activity write (409).
+   *
+   * Inert (a plain duration write, byte-parity — ADR-0040 (e)) when: this is not a duration edit
+   * (`durationDays` absent); the effective duration is 0 (a milestone / zero-duration activity —
+   * its triad is inert); there is no driving assignment; or that assignment has no `unitsPerHour`.
+   * The driving assignment is fetched in ONE indexed query via the ADR-0039 `(activity_id) WHERE
+   * is_driving` partial-unique — no N+1.
+   */
+  private async recomputeDrivingAssignmentOnDurationEdit(
+    tx: Prisma.TransactionClient,
+    activityId: string,
+    durationDays: number | undefined,
+    effectiveDurationMinutes: number | undefined,
+    durationType: DurationType,
+    userId: string,
+  ): Promise<void> {
+    // Only a duration edit drives this; a milestone / zero-duration activity's triad is inert.
+    if (durationDays === undefined) return;
+    if (effectiveDurationMinutes === undefined || effectiveDurationMinutes <= 0) return;
+
+    const driving = await tx.resourceAssignment.findFirst({
+      where: { activityId, isDriving: true, deletedAt: null },
+    });
+    // No driving assignment, or a driving assignment with no rate ⇒ triad inert ⇒ byte-parity.
+    if (!driving || driving.unitsPerHour === null) return;
+
+    const resolved = resolveTriad(durationType, 'DURATION', {
+      durationMinutes: effectiveDurationMinutes,
+      budgetedUnits: driving.budgetedUnits.toNumber(),
+      unitsPerHour: driving.unitsPerHour.toNumber(),
+    });
+    // A DURATION edit never recomputes DURATION (the dependent is Units or Units/Time), so
+    // resolveTriad is always `ok` here (the zero-rate divisor N20 is a units-driven-recompute
+    // concern, unreachable on this path); guard defensively and never write on the impossible branch.
+    if (!resolved.ok) return;
+
+    // Persist the resolved dependent on the driving assignment (the held field is unchanged).
+    // Optimistic-locked on the assignment's own version: a stale row rolls the activity write back.
+    const result = await tx.resourceAssignment.updateMany({
+      where: { id: driving.id, version: driving.version, deletedAt: null },
+      data: {
+        budgetedUnits: resolved.budgetedUnits,
+        unitsPerHour: resolved.unitsPerHour,
+        updatedBy: userId,
+        version: { increment: 1 },
+      },
+    });
+    if (result.count === 0) {
+      throw new ConflictError('The driving assignment changed elsewhere. Refresh and try again.');
+    }
   }
 
   /**

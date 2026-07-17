@@ -13,6 +13,7 @@ import {
 } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { resolveTriad } from '../schedule/duration-type/resolve-triad';
 
 import type { CreateAssignmentDto } from './dto/create-assignment.dto';
 import type { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -28,7 +29,16 @@ export const ASSIGNMENT_ERROR = {
   DUPLICATE_ASSIGNMENT: 'DUPLICATE_ASSIGNMENT',
   /** A MATERIAL resource cannot be the driving resource of an activity. */
   MATERIAL_CANNOT_DRIVE: 'MATERIAL_CANNOT_DRIVE',
+  /** A zero rate on a units-driven duration recompute (N20, ADR-0040 §5) — rejected pre-division. */
+  UNITS_PER_HOUR_ZERO: 'UNITS_PER_HOUR_ZERO',
 } as const;
+
+/** A pending optimistic-locked write of an activity's server-derived duration (ADR-0040 §3). */
+interface ActivityDurationUpdate {
+  id: string;
+  version: number;
+  durationMinutes: number;
+}
 
 /**
  * Business logic for resource assignments (ADR-0039) — the activity↔resource join. Every
@@ -87,6 +97,33 @@ export class ResourceAssignmentService {
     // A MATERIAL resource may never drive (invariant (b)) — the DB cannot read the kind.
     if (isDriving && resource.kind === 'MATERIAL') throw this.materialCannotDriveError();
 
+    // Duration-type triad recompute (ADR-0040 §3): only a DRIVING assignment with a rate and a
+    // declared edited field participates. Resolved BEFORE the tx (pure); the resolved units/rate are
+    // stored and a derived duration (a units-driven type) is persisted on the activity in the same tx.
+    const budgetedUnits = dto.budgetedUnits ?? 0;
+    const unitsPerHour = dto.unitsPerHour ?? null;
+    let storedUnits = budgetedUnits;
+    let storedRate = unitsPerHour;
+    let activityDurationUpdate: ActivityDurationUpdate | null = null;
+    if (dto.editedField && isDriving && unitsPerHour !== null) {
+      const resolved = resolveTriad(activity.durationType, dto.editedField, {
+        durationMinutes: activity.durationMinutes,
+        budgetedUnits,
+        unitsPerHour,
+      });
+      if (!resolved.ok) throw this.unitsPerHourZeroError();
+      // The derived field is server-computed (invariant (d)); the client's value for it is ignored.
+      storedUnits = resolved.budgetedUnits;
+      storedRate = resolved.unitsPerHour;
+      if (resolved.durationMinutes !== activity.durationMinutes) {
+        activityDurationUpdate = {
+          id: activity.id,
+          version: activity.version,
+          durationMinutes: resolved.durationMinutes,
+        };
+      }
+    }
+
     try {
       const assignment = await this.prisma.$transaction(async (tx) => {
         // Serialise against a concurrent resource delete (RESOURCE_IN_USE guard, ADR-0039
@@ -102,19 +139,23 @@ export class ResourceAssignmentService {
         if (isDriving) {
           await this.assignments.clearDrivingForActivity(activityId, principal.userId, tx);
         }
-        return this.assignments.create(
+        const created = await this.assignments.create(
           {
             // Copy the org id from the endpoints (both verified in-org), never from input.
             organizationId: activity.organizationId,
             activityId,
             resourceId: resource.id,
-            budgetedUnits: dto.budgetedUnits ?? 0,
+            budgetedUnits: storedUnits,
+            unitsPerHour: storedRate,
             isDriving,
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
           tx,
         );
+        // Persist a units-driven derived duration on the activity (optimistic-locked in the same tx).
+        await this.persistActivityDuration(tx, activityDurationUpdate, principal.userId);
+        return created;
       });
       this.logger.info(
         {
@@ -147,6 +188,7 @@ export class ResourceAssignmentService {
 
     const patch: AssignmentPatch = {};
     if (dto.budgetedUnits !== undefined) patch.budgetedUnits = dto.budgetedUnits;
+    if (dto.unitsPerHour !== undefined) patch.unitsPerHour = dto.unitsPerHour;
     if (dto.isDriving !== undefined) patch.isDriving = dto.isDriving;
 
     // A MATERIAL resource may never drive (invariant (b)): re-check the resource's kind
@@ -158,6 +200,41 @@ export class ResourceAssignmentService {
       );
       if (!resource) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
       if (resource.kind === 'MATERIAL') throw this.materialCannotDriveError();
+    }
+
+    // Duration-type triad recompute (ADR-0040 §3): only the DRIVING assignment participates
+    // (invariant (c)), and only when a rate is present and an edited field is declared. The edited
+    // field is HELD and its post-edit value is taken from the client; the dependent is recomputed
+    // (invariant (d)) — either the same-row Units/Rate, or the activity's duration (a units-driven
+    // type). Resolved BEFORE the tx (pure); N20 zero-rate rejects (422) before any write.
+    const effectiveDriving = dto.isDriving ?? existing.isDriving;
+    const effectiveUnits = dto.budgetedUnits ?? existing.budgetedUnits.toNumber();
+    const effectiveRate =
+      dto.unitsPerHour !== undefined
+        ? dto.unitsPerHour
+        : existing.unitsPerHour === null
+          ? null
+          : existing.unitsPerHour.toNumber();
+
+    let activityDurationUpdate: ActivityDurationUpdate | null = null;
+    if (dto.editedField && effectiveDriving && effectiveRate !== null) {
+      const activity = await this.loadActiveActivity(existing.activityId, organization.id);
+      const resolved = resolveTriad(activity.durationType, dto.editedField, {
+        durationMinutes: activity.durationMinutes,
+        budgetedUnits: effectiveUnits,
+        unitsPerHour: effectiveRate,
+      });
+      if (!resolved.ok) throw this.unitsPerHourZeroError();
+      // The derived field is server-computed and overwrites any client value (invariant (d)).
+      patch.budgetedUnits = resolved.budgetedUnits;
+      patch.unitsPerHour = resolved.unitsPerHour;
+      if (resolved.durationMinutes !== activity.durationMinutes) {
+        activityDurationUpdate = {
+          id: activity.id,
+          version: activity.version,
+          durationMinutes: resolved.durationMinutes,
+        };
+      }
     }
 
     try {
@@ -181,6 +258,9 @@ export class ResourceAssignmentService {
         if (changed === 0) {
           throw new ConflictError('This assignment was changed elsewhere. Refresh and try again.');
         }
+        // Persist a units-driven derived duration on the activity — same tx, optimistic-locked, so a
+        // stale version on EITHER row rolls the whole write back (409).
+        await this.persistActivityDuration(tx, activityDurationUpdate, principal.userId);
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateAssignmentError();
@@ -233,6 +313,38 @@ export class ResourceAssignmentService {
     return new ValidationError(RESOURCE_ERROR.MATERIAL_CANNOT_DRIVE, {
       reason: ASSIGNMENT_ERROR.MATERIAL_CANNOT_DRIVE,
     });
+  }
+
+  /** N20 (ADR-0040 §5): a zero rate on a units-driven duration recompute → 422 (nothing written). */
+  private unitsPerHourZeroError(): ValidationError {
+    return new ValidationError(RESOURCE_ERROR.UNITS_PER_HOUR_ZERO, {
+      reason: ASSIGNMENT_ERROR.UNITS_PER_HOUR_ZERO,
+    });
+  }
+
+  /**
+   * Persist a units-driven derived `durationMinutes` on the owning activity (ADR-0040 §3), inside
+   * the assignment write transaction and optimistic-locked on the activity's pre-read version — a
+   * stale row (count 0) rolls the whole write back (409). A no-op when the recompute produced no
+   * duration change (a same-row Units/Rate dependent, or the parity no-op).
+   */
+  private async persistActivityDuration(
+    tx: Prisma.TransactionClient,
+    update: ActivityDurationUpdate | null,
+    userId: string,
+  ): Promise<void> {
+    if (!update) return;
+    const result = await tx.activity.updateMany({
+      where: { id: update.id, version: update.version, deletedAt: null },
+      data: {
+        durationMinutes: update.durationMinutes,
+        updatedBy: userId,
+        version: { increment: 1 },
+      },
+    });
+    if (result.count === 0) {
+      throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
+    }
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {
