@@ -409,6 +409,12 @@ export class ScheduleRepository {
     // stays out of the version/updated_at optimistic-lock path. Null/false on every activity when
     // levelling is off (the pass never ran), which also CLEARS a stale overlay from a prior run.
     // `leveling_delay_minutes` is stored in WORKING MINUTES (day-denominated only at the API boundary).
+    // On the parity path (levelling off) every activity's leveled date is null, so these are ALL-NULL
+    // arrays. Prisma serializes an all-null array with no element-type hint, which Postgres infers as
+    // `integer[]` — and `integer[] → date[]` is an illegal cast. Casting through `text[]` first
+    // (`::text[]::date[]` at the unnest) makes the empty/all-null case resolve to `date[]`; a populated
+    // array is already text[] there, so the extra cast is a no-op. (The CPM date columns above never hit
+    // this because the engine always writes real dates for them.)
     const leveledStart = results.map((r) => r.leveledStart ?? null);
     const leveledFinish = results.map((r) => r.leveledFinish ?? null);
     const levelingDelayMinutes = results.map((r) =>
@@ -457,8 +463,8 @@ export class ScheduleRepository {
         ${visualEffectiveFinish}::date[],
         ${visualConflict}::boolean[],
         ${visualDriftDays}::int[],
-        ${leveledStart}::date[],
-        ${leveledFinish}::date[],
+        ${leveledStart}::text[]::date[],
+        ${leveledFinish}::text[]::date[],
         ${levelingDelayMinutes}::int[],
         ${levelingWindowExceeded}::boolean[],
         ${selfOverAllocated}::boolean[]
