@@ -184,9 +184,11 @@ DAG** (invariant c). No code should treat a parent link as logic or vice versa.
   excluded from logic, dates = branch earliest-start/latest-finish); F7
   (conformance: fixture `wbs` code → `parentId` adapter, flip `type_wbs_summary`);
   F8 (API round-trip of `parentId` + navigator nesting). The
-  `HierarchyLifecycleService` must learn the `parent_id` subtree axis for the
-  cascade above (F5.T3 / lifecycle task). `@repo/types`' `ActivityType` union must
-  gain `WBS_SUMMARY` in lock-step with the Prisma enum. **CLAUDE.md §16's ADR list
+  `HierarchyLifecycleService` learned the `parent_id` subtree axis for the cascade
+  above in **F7.5** (the activity branch resolves the active subtree breadth-first
+  and the restore guard checks the WBS-summary parent too — TECH_DEBT #36 resolved).
+  `@repo/types`' `ActivityType` union must gain `WBS_SUMMARY` in lock-step with the
+  Prisma enum. **CLAUDE.md §16's ADR list
   should gain a one-line ADR-0038 entry** (flagged here; updated separately).
 
 ## References

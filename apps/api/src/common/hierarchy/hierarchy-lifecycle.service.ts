@@ -119,18 +119,43 @@ export class HierarchyLifecycleService {
       ).count;
     };
 
-    // Soft-delete the active dependencies incident to a single activity (either
-    // direction) — used when an activity leaf is deleted on its own.
-    const deleteLinksForActivity = async (activityId: string): Promise<number> =>
-      (
+    // Soft-delete the active dependencies incident to any of a set of activities
+    // (either direction) — used when an activity subtree is deleted. A single leaf
+    // passes a one-element set; a WBS_SUMMARY passes its whole `parent_id` subtree
+    // (the summary itself carries no logic, but its descendant tasks do).
+    const deleteLinksForActivities = async (activityIds: string[]): Promise<number> => {
+      if (activityIds.length === 0) return 0;
+      return (
         await tx.activityDependency.updateMany({
           where: {
             deletedAt: null,
-            OR: [{ predecessorId: activityId }, { successorId: activityId }],
+            OR: [{ predecessorId: { in: activityIds } }, { successorId: { in: activityIds } }],
           },
           data: stamp,
         })
       ).count;
+    };
+
+    // Resolve an activity's active `parent_id` subtree (the row itself + every
+    // active descendant), breadth-first. Only a WBS_SUMMARY can be a parent
+    // (service-enforced), so a leaf activity resolves to just itself in one hop.
+    // The visited guard + the acyclic parent-tree invariant (ADR-0038) bound this;
+    // a level that returns no new ids terminates the walk.
+    const resolveActivitySubtree = async (rootId: string): Promise<string[]> => {
+      const all = new Set<string>([rootId]);
+      let frontier = [rootId];
+      while (frontier.length > 0) {
+        const children = (
+          await tx.activity.findMany({
+            where: { parentId: { in: frontier }, deletedAt: null },
+            select: { id: true },
+          })
+        ).map((c) => c.id);
+        frontier = children.filter((id) => !all.has(id));
+        for (const id of frontier) all.add(id);
+      }
+      return [...all];
+    };
 
     // Root updates use updateMany with a `deletedAt: null` guard (not `update`)
     // so the whole cascade is idempotent: a concurrent delete of the same row
@@ -192,10 +217,17 @@ export class HierarchyLifecycleService {
         await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
     } else if (entity === 'activity') {
-      // Activity leaf — soft-delete this row and its incident links (either direction).
-      counts.dependencies = await deleteLinksForActivity(id);
+      // Activity — soft-delete this row, its active `parent_id` subtree (a leaf is
+      // just itself; a WBS_SUMMARY sweeps its descendants — ADR-0038), and every
+      // link incident to any of them, all under the one batch id so a restore of
+      // the root reactivates the subtree together.
+      const subtreeIds = await resolveActivitySubtree(id);
+      counts.dependencies = await deleteLinksForActivities(subtreeIds);
       counts.activities = (
-        await tx.activity.updateMany({ where: { id, deletedAt: null }, data: stamp })
+        await tx.activity.updateMany({
+          where: { id: { in: subtreeIds }, deletedAt: null },
+          data: stamp,
+        })
       ).count;
     } else {
       // Dependency leaf — a directly-deleted link, its own fresh batch.
@@ -337,7 +369,11 @@ export class HierarchyLifecycleService {
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
     id: string,
-  ): Promise<{ deleteBatchId: string | null; parentId: string | null }> {
+  ): Promise<{
+    deleteBatchId: string | null;
+    parentId: string | null;
+    wbsParentId?: string | null;
+  }> {
     if (entity === 'client') {
       const row = await tx.client.findFirst({
         where: { id, deletedAt: { not: null } },
@@ -365,10 +401,12 @@ export class HierarchyLifecycleService {
     if (entity === 'activity') {
       const row = await tx.activity.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, planId: true },
+        select: { deleteBatchId: true, planId: true, parentId: true },
       });
       if (!row) throw new NotFoundError('Activity not found.');
-      return { deleteBatchId: row.deleteBatchId, parentId: row.planId };
+      // An activity restores under its plan AND (if grouped) its WBS-summary parent
+      // (ADR-0038): both must be active so no active row lands under a deleted ancestor.
+      return { deleteBatchId: row.deleteBatchId, parentId: row.planId, wbsParentId: row.parentId };
     }
     // Dependency — its parent for the restore guard is its plan (this slice has no
     // standalone dependency-restore endpoint; links come back with their batch).
@@ -386,22 +424,41 @@ export class HierarchyLifecycleService {
   private async assertParentActive(
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
-    root: { parentId: string | null },
+    root: { parentId: string | null; wbsParentId?: string | null },
   ): Promise<void> {
-    if (entity === 'client' || root.parentId === null) return;
-    let parentActive: unknown;
-    if (entity === 'project') {
-      parentActive = await tx.client.findFirst({ where: { id: root.parentId, deletedAt: null } });
-    } else if (entity === 'plan') {
-      parentActive = await tx.project.findFirst({ where: { id: root.parentId, deletedAt: null } });
-    } else {
-      // activity or dependency — the parent is the plan.
-      parentActive = await tx.plan.findFirst({ where: { id: root.parentId, deletedAt: null } });
+    if (entity !== 'client' && root.parentId !== null) {
+      let parentActive: unknown;
+      if (entity === 'project') {
+        parentActive = await tx.client.findFirst({ where: { id: root.parentId, deletedAt: null } });
+      } else if (entity === 'plan') {
+        parentActive = await tx.project.findFirst({
+          where: { id: root.parentId, deletedAt: null },
+        });
+      } else {
+        // activity or dependency — the parent is the plan.
+        parentActive = await tx.plan.findFirst({ where: { id: root.parentId, deletedAt: null } });
+      }
+      if (!parentActive) {
+        throw new ConflictError('Restore the parent first.', {
+          reason: HIERARCHY_CONFLICT.PARENT_DELETED,
+        });
+      }
     }
-    if (!parentActive) {
-      throw new ConflictError('Restore the parent first.', {
-        reason: HIERARCHY_CONFLICT.PARENT_DELETED,
+
+    // An activity grouped under a WBS summary (ADR-0038) also restores only while
+    // that summary is active — otherwise an individually-deleted child would come
+    // back under a still-deleted parent, breaking the no-orphan invariant. (A child
+    // deleted *with* its summary shares the batch and is restored together, so this
+    // only bites a separately-deleted child.)
+    if (entity === 'activity' && root.wbsParentId) {
+      const summaryActive = await tx.activity.findFirst({
+        where: { id: root.wbsParentId, deletedAt: null },
       });
+      if (!summaryActive) {
+        throw new ConflictError('Restore the parent first.', {
+          reason: HIERARCHY_CONFLICT.PARENT_DELETED,
+        });
+      }
     }
   }
 }
