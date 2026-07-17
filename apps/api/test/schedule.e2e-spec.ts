@@ -498,6 +498,69 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await actor.agent.get(floatPathsUrl(planId, 'not-a-uuid')).expect(422);
   });
 
+  const earnedValueUrl = (planId: string) =>
+    `/api/v1/organizations/acme/plans/${planId}/schedule/earned-value`;
+
+  it('returns the Earned-Value analysis to a Planner (cost:read), with the metric shape', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await makeActivity(actor, planId, 'A', 4);
+    // Give the activity a £1,000.00 lump-sum budget (EV1 passthrough); version 1 post-create.
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${a}`)
+      .send({ budgetedExpense: 100000, version: 1 })
+      .expect(200);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
+    expect(res.body.data).toMatchObject({
+      dataDate: '2026-01-01',
+      eacMethod: 'CPI',
+      currencyCode: null,
+      // No active baseline → PV used the live-budget fallback and the read flags it.
+      costBaselineMissing: true,
+    });
+    // BAC picks up the lump-sum budget; the total carries the full P6 metric set.
+    expect(res.body.data.total).toMatchObject({ bac: 100000, ac: 0 });
+    for (const key of ['bac', 'pv', 'ev', 'ac', 'sv', 'cv', 'eac', 'etc', 'vac'] as const) {
+      expect(typeof res.body.data.total[key]).toBe('number');
+    }
+    const rows = res.body.data.activities as Array<{ activityId: string; bac: number }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ activityId: a, bac: 100000 });
+  });
+
+  it('forbids a Viewer and a Contributor from reading Earned Value (403 — cost:read)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    await viewer.agent.get(earnedValueUrl(planId)).expect(403);
+
+    const contributor = await signUp('contributor@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+    });
+    await contributor.agent.get(earnedValueUrl(planId)).expect(403);
+  });
+
+  it('404s an unknown plan (and hides another org’s plan) from the Earned-Value read', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    // A well-formed but unknown plan id → 404.
+    await actor.agent.get(earnedValueUrl('00000000-0000-7000-8000-000000000000')).expect(404);
+
+    // A member of another org cannot reach acme's plan (anti-IDOR).
+    const outsider = await signUp('outsider@example.com');
+    await outsider.agent.post('/api/v1/organizations').send({ name: 'Other' }).expect(201);
+    await outsider.agent
+      .get(`/api/v1/organizations/other/plans/${planId}/schedule/earned-value`)
+      .expect(404);
+  });
+
   it('a mandatory pin that breaks logic is produced, flagged, and counted (ADR-0035 §7)', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');

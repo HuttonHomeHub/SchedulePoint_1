@@ -21,6 +21,14 @@ export interface CaptureActivityRow {
   lateFinish: Date | null;
   totalFloat: number | null;
   isCritical: boolean;
+  /**
+   * The activity's budgeted cost frozen at capture (EV1, ADR-0042 — the ADR-0025 amendment), in
+   * integer minor units: Σ over its active assignments `(budgetedCost ?? round(budgetedUnits ×
+   * costPerUnit))` + the activity's `budgetedExpense`. A plan with no cost data captures `0` (a real
+   * "no budget", distinct from the SQL NULL a pre-EV baseline carries — which the EV read flags as
+   * `costBaselineMissing`), so a baseline captured now ALWAYS stores an integer, never NULL.
+   */
+  budgetedCost: number;
 }
 
 /** The baseline row to insert, plus the already-projected snapshot rows. */
@@ -90,6 +98,9 @@ export class BaselineRepository {
           lateFinish: a.lateFinish,
           totalFloat: a.totalFloat,
           isCritical: a.isCritical,
+          // The cost baseline frozen at capture (EV1, ADR-0042 / the ADR-0025 amendment) — an
+          // integer minor-unit budget, computed by the service-side load below.
+          budgetedCost: a.budgetedCost,
           createdBy: input.actorId,
           updatedBy: input.actorId,
         })),
@@ -103,12 +114,12 @@ export class BaselineRepository {
    * source. Scoped by org (anti-IDOR) and plan; read inside the locked capture tx so
    * it is a consistent snapshot (never taken mid-recalculation).
    */
-  loadActiveActivitiesForCapture(
+  async loadActiveActivitiesForCapture(
     organizationId: string,
     planId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<CaptureActivityRow[]> {
-    return db.activity.findMany({
+    const rows = await db.activity.findMany({
       where: { organizationId, planId, deletedAt: null },
       select: {
         id: true,
@@ -122,8 +133,24 @@ export class BaselineRepository {
         lateFinish: true,
         totalFloat: true,
         isCritical: true,
+        // Cost baseline inputs (EV1, ADR-0042): the activity-level lump-sum plus each active
+        // assignment's budget (explicit override or `budgetedUnits × costPerUnit`). Loaded inside
+        // the locked capture tx so the frozen budget is consistent with the frozen dates.
+        budgetedExpense: true,
+        assignments: {
+          where: { deletedAt: null, resource: { deletedAt: null } },
+          select: {
+            budgetedCost: true,
+            budgetedUnits: true,
+            resource: { select: { costPerUnit: true } },
+          },
+        },
       },
     });
+    return rows.map(({ budgetedExpense, assignments, ...rest }) => ({
+      ...rest,
+      budgetedCost: computeBudgetedCost(budgetedExpense, assignments),
+    }));
   }
 
   /** The plan's active comparison baseline, or null when it has none — the variance source. */
@@ -355,4 +382,29 @@ export class BaselineRepository {
       activityCount: _count.activities,
     }));
   }
+}
+
+/**
+ * The activity's budgeted cost at capture in integer minor units (EV1, ADR-0042 / the ADR-0025
+ * amendment) — mirrors the EV read-model's leaf BAC (`earned-value.ts`): the activity-level
+ * `budgetedExpense` (0 when null) plus, per active assignment, its explicit `budgetedCost` override
+ * or the derived `round(budgetedUnits × (costPerUnit ?? 0))`. Money is `BIGINT` (→ `Number`); units
+ * and the cost rate are `Decimal(18,4)` (→ `toNumber`). Always returns an integer (0 for no cost).
+ */
+function computeBudgetedCost(
+  budgetedExpense: bigint | null,
+  assignments: {
+    budgetedCost: bigint | null;
+    budgetedUnits: Prisma.Decimal;
+    resource: { costPerUnit: Prisma.Decimal | null };
+  }[],
+): number {
+  let cost = Number(budgetedExpense ?? 0n);
+  for (const a of assignments) {
+    cost +=
+      a.budgetedCost !== null
+        ? Number(a.budgetedCost)
+        : Math.round(a.budgetedUnits.toNumber() * (a.resource.costPerUnit?.toNumber() ?? 0));
+  }
+  return cost;
 }

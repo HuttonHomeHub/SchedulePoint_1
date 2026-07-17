@@ -5,6 +5,7 @@ import {
   type ConstraintType,
   type DependencyType,
   type LagCalendarSource,
+  type PercentCompleteType,
 } from '@prisma/client';
 
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
@@ -87,6 +88,40 @@ export interface ScheduleCalendarRow {
     endDate: Date;
     windows: { startMinute: number; endMinute: number }[];
   }[];
+}
+
+/**
+ * One activity's Earned-Value inputs as the EV read loads them (EV2b, ADR-0042) — the persisted CPM
+ * dates plus the cost / %-complete inputs, with each active assignment joined to its resource's cost
+ * rate. Money is `BIGINT` (`bigint | null`); units and the rate are `Decimal(18,4)`. The service maps
+ * this onto the pure engine's `EvActivityInput` (converting minor-unit `bigint` → `number`).
+ */
+export interface EarnedValueActivityRow {
+  id: string;
+  type: ActivityType;
+  parentId: string | null;
+  percentCompleteType: PercentCompleteType;
+  percentComplete: number;
+  physicalPercentComplete: number | null;
+  budgetedExpense: bigint | null;
+  actualExpense: bigint | null;
+  earlyStart: Date | null;
+  earlyFinish: Date | null;
+  assignments: {
+    budgetedCost: bigint | null;
+    actualCost: bigint;
+    budgetedUnits: Prisma.Decimal;
+    actualUnits: Prisma.Decimal;
+    resource: { costPerUnit: Prisma.Decimal | null };
+  }[];
+}
+
+/** The active baseline's cost-snapshot row the EV read time-phases PV against (EV2b, ADR-0042). */
+export interface EarnedValueBaselineRow {
+  sourceActivityId: string;
+  budgetedCost: bigint | null;
+  baselineStart: Date | null;
+  baselineFinish: Date | null;
 }
 
 /** The read-side aggregate over a plan's persisted engine columns (C1). */
@@ -361,6 +396,72 @@ export class ScheduleRepository {
         type: true,
         lagMinutes: true,
         lagCalendar: true,
+      },
+    });
+  }
+
+  /**
+   * A plan's active activities projected to the Earned-Value read inputs (EV2b, ADR-0042) — the
+   * persisted CPM dates plus cost / %-complete inputs, with each active assignment (of an active
+   * resource) joined to its resource's cost rate. Org + plan scoped (anti-IDOR), soft-deletes
+   * excluded. A pure read — never taken under a write lock or a recompute.
+   */
+  loadEarnedValueActivities(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<EarnedValueActivityRow[]> {
+    return db.activity.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        type: true,
+        parentId: true,
+        percentCompleteType: true,
+        percentComplete: true,
+        physicalPercentComplete: true,
+        budgetedExpense: true,
+        actualExpense: true,
+        earlyStart: true,
+        earlyFinish: true,
+        assignments: {
+          where: { deletedAt: null, resource: { deletedAt: null } },
+          select: {
+            budgetedCost: true,
+            actualCost: true,
+            budgetedUnits: true,
+            actualUnits: true,
+            resource: { select: { costPerUnit: true } },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * The plan's ACTIVE baseline cost-snapshot rows (EV2b, ADR-0042 — the ADR-0025 amendment): the
+   * `sourceActivityId → budgetedCost / baselineStart / baselineFinish` the EV read time-phases PV
+   * against. Returns `[]` when the plan has no active baseline (the module then falls back to the live
+   * budget and flags `costBaselineMissing`). Org + plan scoped (anti-IDOR), soft-deletes excluded.
+   */
+  async loadActiveBaselineCostSnapshot(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<EarnedValueBaselineRow[]> {
+    const active = await db.baseline.findFirst({
+      where: { organizationId, planId, isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (!active) return [];
+    return db.baselineActivity.findMany({
+      where: { baselineId: active.id, deletedAt: null },
+      select: {
+        sourceActivityId: true,
+        budgetedCost: true,
+        baselineStart: true,
+        baselineFinish: true,
       },
     });
   }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { PlanFloatPaths, PlanScheduleSummary } from '@repo/types';
+import type { PlanEarnedValue, PlanFloatPaths, PlanScheduleSummary } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -14,6 +14,7 @@ import { PlanRepository } from '../plans/plan.repository';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import {
   allMinutesWorkCalendar,
+  computeEarnedValue,
   computeFloatPaths,
   computeSchedule,
   levelSchedule,
@@ -24,6 +25,7 @@ import {
   type EngineEdge,
   type EngineResource,
   type EngineSummary,
+  type EvActivityInput,
   type WorkingTimeCalendar,
 } from './engine';
 import { buildPlanCalendar } from './plan-calendar';
@@ -32,6 +34,11 @@ import {
   type ScheduleActivityRow,
   type ScheduleEdgeRow,
 } from './schedule.repository';
+
+/** A calendar-day (or null) as a `YYYY-MM-DD` string, for the pure EV read (the baselines `day` helper). */
+function day(value: Date | null): string | null {
+  return value ? formatCalendarDate(value) : null;
+}
 
 /** Machine-readable reasons carried in a schedule {@link ValidationError}. */
 export const SCHEDULE_ERROR = {
@@ -277,6 +284,86 @@ export class ScheduleService {
   }
 
   /**
+   * The plan's **Earned-Value analysis** (EV2b, ADR-0042 §2) — a pure READ over the persisted CPM
+   * dates plus the cost / %-complete inputs, gated on `cost:read` (Planner + Org Admin only, so a
+   * Viewer/Contributor never reads commercially sensitive money). Resolves the org from the caller's
+   * memberships (anti-IDOR) and asserts `cost:read` BEFORE any load; 404s if the plan is not in the
+   * caller's org. It NEVER recomputes or mutates: no write lock, no `computeSchedule` — it reads the
+   * persisted `earlyStart`/`earlyFinish` and cost inputs, joins the active baseline's cost snapshot
+   * (live-budget fallback when absent → `costBaselineMissing`), and runs the pure `computeEarnedValue`.
+   */
+  async getEarnedValue(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<PlanEarnedValue> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'cost:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    const [activityRows, snapshotRows, calendar] = await Promise.all([
+      this.schedule.loadEarnedValueActivities(organization.id, planId),
+      this.schedule.loadActiveBaselineCostSnapshot(organization.id, planId),
+      this.resolveCalendar(organization.id, plan.calendarId),
+    ]);
+
+    // Join the active baseline's cost snapshot by source activity id; a missing row (or no active
+    // baseline at all) leaves the baseline fields null → the module's live-budget PV fallback.
+    const baselineById = new Map(snapshotRows.map((s) => [s.sourceActivityId, s]));
+    const activities: EvActivityInput[] = activityRows.map((r) => {
+      const base = baselineById.get(r.id) ?? null;
+      return {
+        activityId: r.id,
+        type: r.type,
+        parentId: r.parentId,
+        percentCompleteType: r.percentCompleteType,
+        percentComplete: r.percentComplete,
+        physicalPercentComplete: r.physicalPercentComplete,
+        // Money is BIGINT minor units (→ number); an unset lump-sum contributes 0.
+        budgetedExpense: Number(r.budgetedExpense ?? 0n),
+        actualExpense: Number(r.actualExpense ?? 0n),
+        assignments: r.assignments.map((a) => ({
+          budgetedCost: a.budgetedCost === null ? null : Number(a.budgetedCost),
+          actualCost: Number(a.actualCost),
+          budgetedUnits: a.budgetedUnits.toNumber(),
+          actualUnits: a.actualUnits.toNumber(),
+          costPerUnit: a.resource.costPerUnit === null ? null : a.resource.costPerUnit.toNumber(),
+        })),
+        baselineStart: base ? day(base.baselineStart) : null,
+        baselineFinish: base ? day(base.baselineFinish) : null,
+        // A SQL-NULL snapshot cost (a pre-EV baseline) stays null → PV falls back to the live BAC and
+        // the module flags `costBaselineMissing`; a snapshot captured post-EV carries an integer (0+).
+        baselineBudgetedCost: base
+          ? base.budgetedCost === null
+            ? null
+            : Number(base.budgetedCost)
+          : null,
+        earlyStart: day(r.earlyStart),
+        earlyFinish: day(r.earlyFinish),
+      };
+    });
+
+    const dataDate = plan.plannedStart ? formatCalendarDate(plan.plannedStart) : null;
+    const result = computeEarnedValue({
+      activities,
+      dataDate,
+      eacMethod: plan.eacMethod,
+      calendar,
+    });
+
+    return {
+      dataDate,
+      eacMethod: plan.eacMethod,
+      currencyCode: plan.currencyCode,
+      costBaselineMissing: result.costBaselineMissing,
+      activities: result.activities,
+      total: result.total,
+    };
+  }
+
+  /**
    * Build the pure engine's input (activities, edges, options) for a plan from its active graph, plus
    * observability counts. Shared by {@link recalculate} (inside its write lock) and {@link floatPaths}
    * (a read snapshot) so the two can never diverge in how they map the DB graph onto the engine.
@@ -460,7 +547,7 @@ export class ScheduleService {
   private async resolveCalendar(
     organizationId: string,
     calendarId: string | null,
-    tx: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient = this.prisma,
   ): Promise<WorkingTimeCalendar> {
     if (!calendarId) return buildPlanCalendar(null);
     const calendar = await this.schedule.loadPlanCalendar(organizationId, calendarId, tx);

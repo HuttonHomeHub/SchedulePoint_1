@@ -1017,6 +1017,75 @@ export const EAC_METHODS = ['CPI', 'REMAINING_AT_BUDGET', 'CPI_TIMES_SPI'] as co
 export type EacMethod = (typeof EAC_METHODS)[number];
 
 /**
+ * The P6 Earned-Value metric set for one level of the read-model (EV2, ADR-0042 / ADR-0035 §29) —
+ * an activity, a WBS summary, or the plan total. Money fields are **integer minor units** in the
+ * plan's {@link PlanEarnedValue.currencyCode}; the index ratios (`spi`/`cpi`/`tcpi`) are 4-dp floats,
+ * `null` when their divisor is zero (the divide-by-zero sentinel — never `Infinity`). `eac` is always
+ * defined (its guards fall back to the atypical `AC + (BAC − EV)` forecast). Kept in lock-step with the
+ * API's pure `earned-value.ts` compute module (`EvMetrics`).
+ */
+export interface EarnedValueMetrics {
+  /** Budget at Completion (minor units). */
+  bac: number;
+  /** Planned Value / BCWS (minor units), time-phased to the data date. */
+  pv: number;
+  /** Earned Value / BCWP (minor units) = `BAC × performance %`. */
+  ev: number;
+  /** Actual Cost / ACWP (minor units). */
+  ac: number;
+  /** Schedule Variance `EV − PV` (minor units). */
+  sv: number;
+  /** Cost Variance `EV − AC` (minor units). */
+  cv: number;
+  /** Schedule Performance Index `EV / PV`; `null` when PV = 0. */
+  spi: number | null;
+  /** Cost Performance Index `EV / AC`; `null` when AC = 0. */
+  cpi: number | null;
+  /** Estimate at Completion (minor units), per the plan's {@link PlanEarnedValue.eacMethod}. */
+  eac: number;
+  /** Estimate to Complete `EAC − AC` (minor units). */
+  etc: number;
+  /** To-Complete Performance Index `(BAC − EV) / (BAC − AC)`; `null` when `BAC = AC`. */
+  tcpi: number | null;
+  /** Variance at Completion `BAC − EAC` (minor units). */
+  vac: number;
+}
+
+/**
+ * One activity's Earned-Value row (EV2, ADR-0042): the {@link EarnedValueMetrics} set plus its id and
+ * the performance % that earned its EV (a leaf's schedule/units/physical measure; a WBS summary's
+ * rolled `EV / BAC × 100`). Every non-deleted activity — including WBS summaries — appears in
+ * {@link PlanEarnedValue.activities}.
+ */
+export interface EarnedValueActivity extends EarnedValueMetrics {
+  activityId: string;
+  /** The performance % (0–100) that earned this row's EV. */
+  performancePercent: number;
+}
+
+/**
+ * The plan's Earned-Value analysis read-model (EV2, ADR-0042 §2) — the wire shape the
+ * `GET …/schedule/earned-value` endpoint returns (a later rung wires it). A pure read over the live
+ * schedule + cost/%-complete inputs as of `dataDate`; it schedules nothing and persists nothing.
+ * `costBaselineMissing` flags that PV fell back to the live budget (no active cost baseline). Money is
+ * integer minor units in `currencyCode` (null = inherit the org default).
+ */
+export interface PlanEarnedValue {
+  /** The EV status date (`YYYY-MM-DD`); null when the plan has no data date. */
+  dataDate: string | null;
+  /** The EAC forecast method used for every level. */
+  eacMethod: EacMethod;
+  /** The plan's ISO-4217 currency code; null = inherit the org default. */
+  currencyCode: string | null;
+  /** True when any leaf activity lacked a cost-baseline budget (PV used the live-budget fallback). */
+  costBaselineMissing: boolean;
+  /** Per-activity rows (incl. WBS summaries), in plan order. */
+  activities: EarnedValueActivity[];
+  /** The plan-total metric set (the sum over top-level rows). */
+  total: EarnedValueMetrics;
+}
+
+/**
  * A resource in the org-scoped resource library (M7.1, ADR-0039) — a reusable
  * sibling of the calendar library. The list/detail shape mirrors the other
  * `*Summary` types. `code` is an optional natural-key handle (unique per org among

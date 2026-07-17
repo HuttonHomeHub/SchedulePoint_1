@@ -538,3 +538,98 @@ describe('ScheduleService.summary', () => {
     expect(schedule.summarise).not.toHaveBeenCalled();
   });
 });
+
+const COST: Permission[] = ['cost:read'];
+
+describe('ScheduleService.getEarnedValue', () => {
+  let organizations: { resolveScope: ReturnType<typeof vi.fn> };
+  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let schedule: {
+    loadEarnedValueActivities: ReturnType<typeof vi.fn>;
+    loadActiveBaselineCostSnapshot: ReturnType<typeof vi.fn>;
+    loadPlanCalendar: ReturnType<typeof vi.fn>;
+  };
+  let service: ScheduleService;
+
+  beforeEach(() => {
+    organizations = {
+      resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
+    };
+    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    schedule = {
+      // One TASK, DURATION %-complete 50, a £1,000.00 lump-sum budget, no assignments, no baseline.
+      loadEarnedValueActivities: vi.fn().mockResolvedValue([
+        {
+          id: 'act-1',
+          type: 'TASK',
+          parentId: null,
+          percentCompleteType: 'DURATION',
+          percentComplete: 50,
+          physicalPercentComplete: null,
+          budgetedExpense: 100000n,
+          actualExpense: null,
+          earlyStart: null,
+          earlyFinish: null,
+          assignments: [],
+        },
+      ]),
+      loadActiveBaselineCostSnapshot: vi.fn().mockResolvedValue([]),
+      loadPlanCalendar: vi.fn().mockResolvedValue(null),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    service = new ScheduleService(
+      organizations as unknown as OrganizationsService,
+      plans as unknown as PlanRepository,
+      schedule as unknown as ScheduleRepository,
+      { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
+      { $transaction: vi.fn() } as unknown as PrismaService,
+      logger,
+    );
+  });
+
+  it('denies a caller without cost:read (403) before any load', async () => {
+    // A Viewer/Contributor with only schedule:read must NOT reach cost.
+    await expect(
+      service.getEarnedValue(principalWith(READ), 'acme', PLAN_ID),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(schedule.loadEarnedValueActivities).not.toHaveBeenCalled();
+  });
+
+  it('404s when the plan is not in the caller’s org', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(null);
+    await expect(
+      service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('assembles the inputs and returns the module’s Earned-Value numbers', async () => {
+    const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+    // BAC = the £1,000.00 lump-sum; EV = BAC × 50% = £500.00; no baseline → PV falls back and is
+    // flagged; currency/eacMethod come from the plan; data date = the plan start.
+    expect(result).toMatchObject({
+      dataDate: '2026-01-01',
+      eacMethod: 'CPI',
+      currencyCode: null,
+      costBaselineMissing: true,
+    });
+    expect(result.total.bac).toBe(100000);
+    expect(result.total.ev).toBe(50000);
+    expect(result.total.ac).toBe(0);
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0]).toMatchObject({ activityId: 'act-1', performancePercent: 50 });
+  });
+
+  it('joins the active baseline cost snapshot for PV (not flagged as missing)', async () => {
+    schedule.loadActiveBaselineCostSnapshot.mockResolvedValue([
+      {
+        sourceActivityId: 'act-1',
+        budgetedCost: 100000n,
+        baselineStart: new Date('2026-01-01T00:00:00Z'),
+        baselineFinish: new Date('2026-01-05T00:00:00Z'),
+      },
+    ]);
+    const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+    // A snapshot cost is present for every leaf → the live-budget fallback flag is off.
+    expect(result.costBaselineMissing).toBe(false);
+  });
+});

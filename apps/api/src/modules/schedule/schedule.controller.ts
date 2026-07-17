@@ -16,6 +16,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { FloatPathsQueryDto } from './dto/float-paths-query.dto';
+import { PlanEarnedValueDto } from './dto/plan-earned-value.dto';
 import { PlanFloatPathsDto } from './dto/plan-float-paths.dto';
 import { PlanScheduleSummaryDto } from './dto/plan-schedule-summary.dto';
 import { ScheduleService } from './schedule.service';
@@ -81,5 +82,21 @@ export class ScheduleController {
     return PlanFloatPathsDto.from(
       await this.service.floatPaths(principal, orgSlug, planId, query.target, query.maxPaths),
     );
+  }
+
+  @Get('earned-value')
+  @ApiOperation({
+    summary: 'Read a plan’s Earned-Value analysis (cost:read — Planner or Org Admin, ADR-0042).',
+  })
+  @ApiOkResponse({ type: PlanEarnedValueDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role — cost:read (Planner/Org Admin) is required to read cost.',
+  })
+  async earnedValue(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<PlanEarnedValueDto> {
+    return PlanEarnedValueDto.from(await this.service.getEarnedValue(principal, orgSlug, planId));
   }
 }

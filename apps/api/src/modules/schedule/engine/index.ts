@@ -17,6 +17,16 @@ export {
 export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
 export { levelSchedule } from './level';
 export { computeFloatPaths, type FloatPath } from './float-paths';
+export {
+  computeEarnedValue,
+  deriveMetrics,
+  type EvInput,
+  type EvActivityInput,
+  type EvAssignmentInput,
+  type EvMetrics,
+  type EvActivityResult,
+  type PlanEarnedValueResult,
+} from './earned-value';
 export type { ProgressMode, ProgressStatus } from './progress';
 export { buildGraph, type ScheduleGraph } from './graph';
 export { ScheduleGraphNotADagError, UnknownActivityError } from './errors';
