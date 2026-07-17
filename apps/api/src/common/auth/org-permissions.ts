@@ -101,7 +101,15 @@ export type OrgPermission =
   // needs no new code — it rides on `plan:read`, held by every member.
   | 'plan:acquire_lock'
   | 'plan:request_control'
-  | 'plan:override_lock';
+  | 'plan:override_lock'
+  // Earned Value / cost (EV2b, ADR-0042). Reading the plan's cost + Earned-Value analysis
+  // (`cost:read`) is **Planner + Org Admin only** — commercially sensitive money (rates, budgets,
+  // actual cost, BAC/EV/AC and the derived SPI/CPI/EAC) is deliberately NOT part of the
+  // every-member `HIERARCHY_READ` schedule reads (a Viewer/Contributor sees dates, never cost).
+  // Setting the cost inputs is already gated by the existing hierarchy writes (a cost rate rides
+  // on `resource:update`, an activity budget on `activity:update`, an assignment cost on
+  // `resource:assign`), so this is a **read** code only.
+  | 'cost:read';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -168,6 +176,13 @@ const LOCK_COORDINATE: readonly OrgPermission[] = ['plan:acquire_lock', 'plan:re
 /** Immediately override a live edit-lock, skipping the grace handshake — Org Admin only. */
 const LOCK_OVERRIDE: readonly OrgPermission[] = ['plan:override_lock'];
 
+/**
+ * Read the plan's cost + Earned-Value analysis (EV2b, ADR-0042) — Planner + Org Admin ONLY.
+ * Commercially sensitive money is kept out of the every-member hierarchy reads; only these two
+ * roles see rates/budgets/actual cost and the derived BAC/EV/AC/SPI/CPI/EAC.
+ */
+const COST_READ: readonly OrgPermission[] = ['cost:read'];
+
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
 
@@ -194,6 +209,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...HIERARCHY_WRITE,
     ...PROGRESS_WRITE,
     ...LOCK_COORDINATE,
+    ...COST_READ,
   ],
   [OrganizationRole.ORG_ADMIN]: [
     ...ADMIN,
@@ -202,6 +218,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...PROGRESS_WRITE,
     ...LOCK_COORDINATE,
     ...LOCK_OVERRIDE,
+    ...COST_READ,
   ],
 };
 
