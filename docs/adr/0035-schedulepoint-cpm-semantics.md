@@ -23,6 +23,7 @@ stays **Proposed** overall until every clause is built. Current state:
 | §21 (level of effort)              | M5-epic          | **Accepted** |
 | §24 (WBS-summary rollup)           | M5-epic          | **Accepted** |
 | §23 (resource-dependent)           | M7               | **Accepted** |
+| §26–§27 (duration types), N19/N20  | M7 (rung 4)      | **Accepted** |
 | §15–§16, §25 (arithmetic/boundary) | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
@@ -155,7 +156,47 @@ We will implement the following semantics. Each cites the milestone that will bu
 ### Input validity (boundary)
 
 25. **Reject** negative duration (N09) and negative resource units (N14) at the API boundary; **coerce
-    a milestone's non-zero duration to zero** with a warning (N17).
+    a milestone's non-zero duration to zero** with a warning (N17). **(→ M7, ADR-0040)** also **reject a
+    negative `units_per_hour` rate (N19)** at the boundary — a DTO `@Min(0)` backed by a nullable-safe
+    `ck_resource_assignments_units_per_hour_nonneg` CHECK — and **reject a zero rate on a units-driven
+    duration recompute (N20)** in the service **before any division** (`UNITS_PER_HOUR_ZERO`), so the
+    `resolveTriad` recompute is **total** (never NaN / Infinity / a negative duration). N20 is a service
+    guard because a CHECK cannot read the activity's `duration_type` to know the rate is a divisor.
+
+### Duration types (→ M7)
+
+26. **Duration-type recompute contract.** Every activity carries a **`duration_type`** — one of the four
+    P6 values `FIXED_DURATION_AND_UNITS_TIME` (default) | `FIXED_DURATION_AND_UNITS` | `FIXED_UNITS` |
+    `FIXED_UNITS_TIME` — that keeps the identity **`Units = Duration × Units/Time`** (`U = D × R`, with
+    `D` = working hours = `durationMinutes / 60`) true after a planner edits one of the three quantities.
+    The type names which quantity is **recomputed** for a given edited field (the pure `resolveTriad`
+    truth table, ADR-0040 §3):
+
+    | Duration type                   | edit Duration | edit Units | edit Units/Time |
+    | ------------------------------- | ------------- | ---------- | --------------- |
+    | `FIXED_UNITS`                   | `R := U/D`    | `R := U/D` | `D := U/R`      |
+    | `FIXED_UNITS_TIME`              | `U := D×R`    | `D := U/R` | `U := D×R`      |
+    | `FIXED_DURATION_AND_UNITS`      | `R := U/D`    | `R := U/D` | `U := D×R`      |
+    | `FIXED_DURATION_AND_UNITS_TIME` | `U := D×R`    | `R := U/D` | `U := D×R`      |
+
+    **Duration is auto-derived only under the two units-driven types** (`FIXED_UNITS`, `FIXED_UNITS_TIME`)
+    and only on the complementary edit; every other cell **holds the duration** (P6's "protect duration
+    first, then the pair's second member, the remaining field absorbs" priority). Changing **only** the
+    type never retroactively re-solves the triad — it governs future edits. **Rounding:** a derived
+    `durationMinutes` is rounded **half-up to a whole minute** and clamped `≥ 0` (ADR-0036 integer
+    minutes); `budgetedUnits` / `unitsPerHour` are `Decimal(18,4)`. The identity holds to that grid; a
+    sub-minute residual on a derived duration is documented, absorbed by re-deriving the shown dependent.
+    The recompute is a **service-boundary** concern resolved once at write time — the **CPM engine is
+    untouched** and reads the already-resolved `durationMinutes` (ADR-0040 §6).
+
+27. **Units/time home & the derivation boundary.** The planned **rate** (`units_per_hour`) lives on the
+    **driving `ResourceAssignment`** (ADR-0039's `is_driving` ≤1-driver), **not** the `Resource`
+    (`resource.max_units_per_hour` stays reserved for levelling). **Only the driving assignment
+    participates** in the triad; non-driving assignments' units/rate are inert bookkeeping. A **NULL rate**
+    (no driving assignment, or a driver with no rate entered) makes the triad **inert** — `resolveTriad`
+    is a **no-op**, `durationMinutes` is exactly what the planner entered, and the whole feature is dark
+    (the byte-parity gate, ADR-0034/0040 §4). The derived field is **server-computed**, never trusted
+    from the client. Negative (N19) and zero-divisor (N20) rates are rejected per §25.
 
 ## Alternatives considered
 

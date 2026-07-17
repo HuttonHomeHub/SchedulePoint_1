@@ -1,5 +1,8 @@
-import type { ActivityType as FixtureActivityType } from '@repo/engine-conformance';
-import type { ActivityType, ConstraintType } from '@repo/types';
+import type {
+  ActivityType as FixtureActivityType,
+  FixtureActivity,
+} from '@repo/engine-conformance';
+import type { ActivityType, ConstraintType, DurationType } from '@repo/types';
 
 /**
  * Pure fixture→engine vocabulary mapping for the conformance harness (ADR-0034).
@@ -50,6 +53,22 @@ export function mapActivityType(type: FixtureActivityType): MapResult<ActivityTy
       // driver-missing and falls back), so the type itself maps straight through.
       return { supported: true, value: 'RESOURCE_DEPENDENT' };
   }
+}
+
+/**
+ * The fixture's P6 duration-type vocabulary → SchedulePoint's `DurationType` (M7 rung 4, ADR-0040).
+ * The two enums carry the **same four labels** (`FIXED_DURATION_AND_UNITS_TIME` |
+ * `FIXED_DURATION_AND_UNITS` | `FIXED_UNITS` | `FIXED_UNITS_TIME`), so this is a **1:1 total** map — it
+ * never fails (unlike `mapActivityType`/`mapConstraintType`, every fixture value is representable). The
+ * seam still exists so a future fixture-vs-domain divergence is a typed, single-point change, and so the
+ * adapter reads the fixture's `duration_type` through one named vocabulary boundary.
+ *
+ * Duration types are a **write-boundary** concern (ADR-0040 §3/§6): the engine has no `durationType`
+ * field. This mapper feeds the adapter's optional `resolveTriad` derivation (see `adapter.ts`
+ * `honorDurationTypes`), which resolves a `durationMinutes` — the engine still reads only that.
+ */
+export function mapDurationType(type: FixtureActivity['duration_type']): DurationType {
+  return type;
 }
 
 /**

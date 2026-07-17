@@ -144,6 +144,49 @@ describe('conformance adapter', () => {
     expect(resourced.activities.every((a) => a.resourceDriverMissing !== true)).toBe(true);
   });
 
+  it('reads the fixture duration types and reproduces their durations under honorDurationTypes (ADR-0040, self-consistent/driver-less parity)', () => {
+    // The fixture carries a `duration_type` on every activity; all four P6 values appear. The
+    // non-default ones (the units-driven FIXED_UNITS/FIXED_UNITS_TIME and the held FIXED_DURATION_AND_UNITS):
+    const durationTypeIds = fixture.activities
+      .filter((a) => a.duration_type !== 'FIXED_DURATION_AND_UNITS_TIME')
+      .map((a) => a.id);
+    expect(durationTypeIds).toEqual(
+      expect.arrayContaining(['A3010', 'A4330', 'A4430', 'A7100', 'A7200', 'A7400']),
+    );
+
+    // NONE of the fixture's duration-type activities carries a DRIVING assignment (`res_driving`), so
+    // the triad has no driver to consult — only the driving assignment participates (ADR-0040 §3), so
+    // the derivation is INERT. (The fixture's two drivers, A6100/A8300, are the default held type.)
+    const drivingActivityIds = new Set(
+      fixture.assignments
+        .filter((asg) => asg.test_tags.includes('res_driving'))
+        .map((asg) => asg.activity),
+    );
+    for (const id of durationTypeIds) expect(drivingActivityIds.has(id)).toBe(false);
+
+    // Their units/duration/rate are internally self-consistent (e.g. A7100 FIXED_UNITS 300 h; its
+    // LAB-PIPE assignment 2 400 u ÷ 8 u/h = 300 h), so honouring duration types resolves each
+    // durationMinutes to exactly the fixture duration — byte-parity, the same S13/A8300 self-consistency
+    // the harness is honest about (proven for real by the resolveTriad goldens, not a fixture date shift).
+    const withTypes = adaptFixture(fixture, { honorDurationTypes: true });
+    const baseById = new Map(network.activities.map((a) => [a.id, a.durationMinutes]));
+    const typedById = new Map(withTypes.activities.map((a) => [a.id, a.durationMinutes]));
+    for (const id of durationTypeIds) expect(typedById.get(id)).toBe(baseById.get(id));
+
+    // The WHOLE network is byte-identical (the flag is a no-op on this fixture — the ADR-0040 parity gate);
+    // no activity is flagged `duration-derived` because the branch never fires.
+    expect(withTypes.activities.map((a) => a.durationMinutes)).toEqual(
+      network.activities.map((a) => a.durationMinutes),
+    );
+    expect(withTypes.report.notes.filter((n) => n.kind === 'duration-derived')).toHaveLength(0);
+
+    // N19 (negative rate) and N20 (zero-rate divisor) are BOUNDARY-owned (ADR-0035 §25/§27): rejected at
+    // the DTO `@Min(0)` + service pre-division guard, not the adapter. The fixture carries only valid
+    // non-negative rates and the adapter never divides here (inert), so there is nothing to reject —
+    // the service-level proof lives in `resolve-triad.spec.ts` + the write-path specs, referenced not re-run.
+    expect(fixture.assignments.every((asg) => asg.units_per_hour >= 0)).toBe(true);
+  });
+
   it('builds the WBS parent tree from the fixture wbs codes and rolls a summary up its branch (ADR-0035 §24)', () => {
     // The adapter maps the fixture's dotted `wbs` codes to `parentId`: the TT.4-branch summary W4000
     // (wbs TT.4) parents every DEEPER-level activity under it (TT.4.1 / TT.4.2 / TT.4.3) — but not the

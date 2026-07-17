@@ -4,8 +4,9 @@ import type {
   FixtureCalendar,
   FixtureRelationship,
 } from '@repo/engine-conformance';
-import type { ConstraintType } from '@repo/types';
+import type { ConstraintType, DurationType, EditedField } from '@repo/types';
 
+import { resolveTriad } from '../duration-type/resolve-triad';
 import { allMinutesWorkCalendar, buildWorkingTimeCalendar } from '../engine';
 import type {
   ComputeOptions,
@@ -17,7 +18,7 @@ import type {
   WorkingTimeCalendar,
 } from '../engine';
 
-import { mapActivityType, mapConstraintType, toCalendarDay } from './type-map';
+import { mapActivityType, mapConstraintType, mapDurationType, toCalendarDay } from './type-map';
 
 /**
  * The **differential adapter** (ADR-0034 §7): maps the P6-class conformance
@@ -30,6 +31,13 @@ import { mapActivityType, mapConstraintType, toCalendarDay } from './type-map';
  * added the advanced constraints — mandatory produce-and-flag,
  * secondary constraints, expected finish and as-late-as-possible — which the
  * adapter now feeds through instead of dropping.
+ *
+ * M7 rung 4 (ADR-0040) adds an optional `honorDurationTypes` pass: for a UNITS-DRIVEN
+ * activity with a driving assignment it resolves `durationMinutes` through the pure
+ * `resolveTriad` (`Units ÷ Units/Time`), the same function the write paths use. On this
+ * fixture the pass is inert (no duration-type activity has a driving assignment; the
+ * durations are self-consistent), so it is proven by first-principles goldens, not a
+ * fixture differential — recorded honestly in `approximations`, never faked.
  *
  * Since M1 (ADR-0036) the engine computes in working-**minutes** over intraday
  * shift calendars, so the adapter now feeds the fixture's **hour** durations/lags
@@ -57,7 +65,8 @@ export interface AdaptationNote {
     | 'lag-calendar-dropped'
     | 'activity-calendar-substituted'
     | 'resource-calendar-substituted'
-    | 'resource-driver-missing';
+    | 'resource-driver-missing'
+    | 'duration-derived';
   reason: string;
 }
 
@@ -137,9 +146,37 @@ export interface AdaptOptions {
    * (the S12 differential flips it on; the baseline leaves it off). See `ComputeOptions`.
    */
   useExpectedFinishDates?: boolean;
+  /**
+   * Resolve each activity's `durationMinutes` through the pure `resolveTriad` (ADR-0040 / ADR-0035
+   * §26/§27, M7 rung 4) instead of taking the fixture's `original_duration_h × 60` verbatim. Default
+   * **false** (parity). When **true**, a `FIXED_UNITS` / `FIXED_UNITS_TIME` activity that has a
+   * **driving** assignment (`res_driving`) carrying a rate derives its duration from
+   * `Units ÷ Units/Time` (the two units-driven types; the other two hold the duration by construction,
+   * so the flag is a no-op for them). Only the **driving** assignment participates (ADR-0040 §3), and
+   * duration types are a **write-boundary** concern — the engine has no `durationType` field and reads
+   * only the resolved `durationMinutes`.
+   *
+   * **Inert on this fixture (documented, not faked).** None of the fixture's duration-type activities
+   * (A4330/A4430/A7100/A7200 units-driven, A3010/A7400 held) carries a `res_driving` assignment, and
+   * their units/duration/rate are internally self-consistent (e.g. A7100 `FIXED_UNITS` 300 h; its
+   * LAB-PIPE assignment 2 400 u ÷ 8 u/h = 300 h). So deriving reproduces the fixture durations
+   * **byte-for-byte** — the same S13/A8300-style capacity/self-consistency the harness is honest about.
+   * The capability is proven by the first-principles `resolveTriad` goldens (`goldens.ts`) and the
+   * write-path service tests, **not** by a fixture date-differential. Recorded in `approximations`.
+   */
+  honorDurationTypes?: boolean;
 }
 
 const MINUTES_PER_HOUR = 60;
+/**
+ * The `editedField` whose recompute **derives the duration** for each units-driven type (ADR-0035 §26
+ * truth table): `FIXED_UNITS` derives on a rate edit (`D := U/R`), `FIXED_UNITS_TIME` on a units edit
+ * (`D := U/R`). The two held types are absent — they never auto-derive the duration.
+ */
+const DURATION_DERIVING_EDIT: Partial<Record<DurationType, EditedField>> = {
+  FIXED_UNITS: 'UNITS_PER_HOUR',
+  FIXED_UNITS_TIME: 'UNITS',
+};
 const WEEKDAY_KEYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
 
 /** Normalise a fixture `lag_calendar` string to a `LagCalendarSource`, or null if unmappable. */
@@ -165,20 +202,28 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const honorResourceCalendars = opts.honorResourceCalendars ?? false;
   const honorProgress = opts.honorProgress ?? false;
   const useExpectedFinishDates = opts.useExpectedFinishDates ?? false;
+  const honorDurationTypes = opts.honorDurationTypes ?? false;
   const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
 
-  // Driving-resource calendar per activity (ADR-0035 §23 / ADR-0039, M7). The fixture marks the
-  // driving assignment with the `res_driving` test tag (the product carries an explicit `isDriving`
-  // flag); resolve it to the resource's own calendar id. At most one driver per activity, mirroring
-  // the DB partial-unique. Only consulted when `honorResourceCalendars` is on.
+  // Driving-resource calendar + units/rate per activity (ADR-0035 §23 / ADR-0039 / ADR-0040, M7). The
+  // fixture marks the driving assignment with the `res_driving` test tag (the product carries an
+  // explicit `isDriving` flag); resolve it to the resource's own calendar id and capture its units +
+  // rate for the duration-type triad. At most one driver per activity, mirroring the DB partial-unique.
+  // The calendar is only consulted when `honorResourceCalendars` is on; the units/rate only when
+  // `honorDurationTypes` is on.
   const resourceCalById = new Map(fixture.resources.map((r) => [r.id, r.calendar]));
   const drivingResourceCalByActivity = new Map<string, string>();
+  const drivingUnitsByActivity = new Map<string, { budgetedUnits: number; unitsPerHour: number }>();
   for (const asg of fixture.assignments) {
     if (!asg.test_tags.includes('res_driving')) continue;
     const resourceCalendarId = resourceCalById.get(asg.resource);
     if (resourceCalendarId !== undefined)
       drivingResourceCalByActivity.set(asg.activity, resourceCalendarId);
+    drivingUnitsByActivity.set(asg.activity, {
+      budgetedUnits: asg.budgeted_units,
+      unitsPerHour: asg.units_per_hour,
+    });
   }
 
   const defaultCalendarId = fixture.project.default_calendar;
@@ -235,9 +280,11 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       defaultCalendarId,
       honorActivityCalendars,
       honorResourceCalendars,
-      honorProgress,
+      honorDurationTypes,
       portForCal,
+      honorProgress,
       drivingResourceCalId: drivingResourceCalByActivity.get(activity.id),
+      drivingUnits: drivingUnitsByActivity.get(activity.id),
       notes,
     });
     if (adapted) {
@@ -274,6 +321,9 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       honorResourceCalendars
         ? 'each RESOURCE_DEPENDENT activity schedules on its driving resource’s calendar (ADR-0035 §23 / ADR-0039, M7); a driver-less one is flagged and falls back to the plan default'
         : 'RESOURCE_DEPENDENT activities schedule like any other activity; driving-resource calendars are not applied (ADR-0039, M7 baseline)',
+      honorDurationTypes
+        ? 'FIXED_UNITS / FIXED_UNITS_TIME activities with a driving assignment carrying a rate derive their duration via resolveTriad (Units ÷ Units/Time → working minutes; ADR-0040 / ADR-0035 §26/§27); on this fixture no duration-type activity has a driving assignment and their units/duration/rate are self-consistent, so the derivation is inert and durations stay byte-identical (documented, not faked — the S13/A8300 self-consistency)'
+        : 'duration types are not resolved; each activity keeps its fixture duration (ADR-0040, M7 rung 4 baseline)',
       'progress, actuals, suspend/resume and the data-date floor are ignored (ADR-0035 §1–§6, M2)',
       honorLagCalendars
         ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag)'
@@ -362,10 +412,13 @@ interface AdaptActivityContext {
   defaultCalendarId: string;
   honorActivityCalendars: boolean;
   honorResourceCalendars: boolean;
+  honorDurationTypes: boolean;
   honorProgress: boolean;
   portForCal: (calId: string) => WorkingTimeCalendar | undefined;
   /** The driving resource's calendar id for this activity (undefined = no driving assignment). */
   drivingResourceCalId: string | undefined;
+  /** The driving assignment's units + rate for the duration-type triad (undefined = no driving assignment). */
+  drivingUnits: { budgetedUnits: number; unitsPerHour: number } | undefined;
   notes: AdaptationNote[];
 }
 
@@ -378,9 +431,11 @@ function adaptActivity(
     defaultCalendarId,
     honorActivityCalendars,
     honorResourceCalendars,
+    honorDurationTypes,
     honorProgress,
     portForCal,
     drivingResourceCalId,
+    drivingUnits,
     notes,
   } = ctx;
   const typeResult = mapActivityType(activity.activity_type);
@@ -410,6 +465,43 @@ function adaptActivity(
         kind: 'duration-rounded',
         reason: `${activity.original_duration_h}h rounded to ${durationMinutes} working minutes`,
       });
+    }
+
+    // Duration-type derivation (ADR-0040 / ADR-0035 §26/§27, M7 rung 4). For the two UNITS-DRIVEN types
+    // (FIXED_UNITS / FIXED_UNITS_TIME) with a DRIVING assignment carrying a rate, the duration is derived
+    // from `Units ÷ Units/Time` via the SAME pure `resolveTriad` the write paths use — so the fixture and
+    // the API agree by construction. The held types (FIXED_DURATION_AND_UNITS[_TIME]) are absent from
+    // DURATION_DERIVING_EDIT and keep their entered duration. Only consulted when `honorDurationTypes` is
+    // on; only the driving assignment participates (ADR-0040 §3).
+    //
+    // On THIS fixture the derivation is INERT: no duration-type activity carries a `res_driving`
+    // assignment, so `drivingUnits` is undefined for all of them (A4330/A4430/A7100/A7200 are
+    // units-driven but driver-less; A6100/A8300 have a driver but are the default held type). Their
+    // units/duration/rate are self-consistent, so were a driver present the derivation would reproduce
+    // the fixture duration anyway (the S13/A8300 self-consistency). This branch is therefore dead on the
+    // fixture — proven by the first-principles `resolveTriad` goldens, not a fixture date-differential.
+    if (honorDurationTypes && drivingUnits) {
+      const edit = DURATION_DERIVING_EDIT[mapDurationType(activity.duration_type)];
+      if (edit) {
+        const resolved = resolveTriad(mapDurationType(activity.duration_type), edit, {
+          durationMinutes,
+          budgetedUnits: drivingUnits.budgetedUnits,
+          unitsPerHour: drivingUnits.unitsPerHour,
+        });
+        // A units-driven derive can only fail on N20 (zero rate); that is a BOUNDARY reject (§25), so we
+        // never fake a value — leave the fixture duration and let the write-path/DTO own the reject.
+        if (resolved.ok) {
+          if (resolved.durationMinutes !== durationMinutes) {
+            notes.push({
+              entity: 'activity',
+              id: activity.id,
+              kind: 'duration-derived',
+              reason: `${activity.duration_type}: duration derived from the driving assignment's units ÷ rate to ${resolved.durationMinutes} working minutes (ADR-0040 / ADR-0035 §26)`,
+            });
+          }
+          durationMinutes = resolved.durationMinutes;
+        }
+      }
     }
   }
 

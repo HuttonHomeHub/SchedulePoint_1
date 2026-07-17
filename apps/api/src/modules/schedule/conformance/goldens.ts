@@ -1,3 +1,6 @@
+import type { DurationType, EditedField } from '@repo/types';
+
+import { resolveTriad } from '../duration-type/resolve-triad';
 import { allMinutesWorkCalendar, buildWorkingTimeCalendar, fullDayWeek } from '../engine';
 import type { ComputeOptions, EngineActivity, EngineEdge } from '../engine';
 
@@ -78,6 +81,25 @@ const resourceDependent = (
   type: 'RESOURCE_DEPENDENT',
   calendar,
 });
+
+/**
+ * Resolve a driving assignment's `{budgetedUnits, unitsPerHour}` into a whole-minute duration through
+ * the SAME pure `resolveTriad` the write paths + the conformance adapter use (ADR-0040 / ADR-0035 §26).
+ * These goldens build their activities from its output so the derived duration reaches the engine
+ * exactly as production would — the engine reads `durationMinutes`, never a `durationType` (§6).
+ * Throws on the N20 zero-rate reject (a golden must never wire an infeasible triad).
+ */
+function resolveTriadDurationMinutes(
+  type: DurationType,
+  edited: EditedField,
+  durationMinutes: number,
+  budgetedUnits: number,
+  unitsPerHour: number,
+): number {
+  const r = resolveTriad(type, edited, { durationMinutes, budgetedUnits, unitsPerHour });
+  if (!r.ok) throw new Error(`golden setup: unexpected ${r.reason}`);
+  return r.durationMinutes;
+}
 
 export const GOLDEN_CASES: GoldenCase[] = [
   {
@@ -466,5 +488,85 @@ export const GOLDEN_CASES: GoldenCase[] = [
     },
     // T — scheduled on the plan calendar — is the longer pole and carries the project finish (01-13).
     projectFinish: '2026-01-13',
+  },
+  {
+    name: 'fixed-units-derives-duration',
+    description:
+      'A7100-style: a FIXED_UNITS activity U DERIVES its duration from its driving assignment (U=240 units ÷ R=5 units/working-hour = 48 h = 2 days), fed to the engine via resolveTriad — not the placeholder duration it was entered with. It drives a 3-day successor W; the derivation reaching the engine is what puts W’s finish on 06-05 (ADR-0040 / ADR-0035 §26).',
+    activities: [
+      {
+        id: 'U',
+        // The 10-day placeholder is DELIBERATELY WRONG: resolveTriad overwrites it with U/R = 48 h.
+        // A naive reading (leaving the entered 10 days, or treating 240 units as anything but ÷ rate)
+        // would finish U on a different day — the golden pins the derivation, not a coincidence.
+        durationMinutes: resolveTriadDurationMinutes(
+          'FIXED_UNITS',
+          'UNITS_PER_HOUR',
+          10 * 1440,
+          240,
+          5,
+        ),
+        type: 'TASK',
+      },
+      task('W', 3),
+    ],
+    edges: [{ id: 'e1', predecessorId: 'U', successorId: 'W', type: 'FS', lagMinutes: 0 }],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // U: derived 2 days (48 working hours on the 24/7 calendar). ES 06-01, EF inclusive offset 1 = 06-02.
+      U: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-02',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-02',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      // W (3 days) FS after U: ES offset 2 = 06-03, EF inclusive offset 4 = 06-05.
+      W: {
+        earlyStart: '2026-06-03',
+        earlyFinish: '2026-06-05',
+        lateStart: '2026-06-03',
+        lateFinish: '2026-06-05',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-05',
+  },
+  {
+    name: 'fixed-duration-units-holds-duration',
+    description:
+      'A7400-style: a FIXED_DURATION_AND_UNITS activity H holds its ENTERED duration (3 days) when its units are edited — the rate absorbs, the duration is untouched. resolveTriad returns the entered 4 320 minutes unchanged, so the engine schedules 3 days; a type that wrongly derived would land a different finish (ADR-0040 / ADR-0035 §26).',
+    activities: [
+      {
+        id: 'H',
+        // Editing Units on a FIXED_DURATION_AND_UNITS activity recomputes the RATE and HOLDS the
+        // duration: resolveTriad returns exactly the entered 3 days (4 320 min). Had it derived
+        // (D := U/R = 900/2 = 450 h ≈ 18.75 d) the finish would move — the held value is the point.
+        durationMinutes: resolveTriadDurationMinutes(
+          'FIXED_DURATION_AND_UNITS',
+          'UNITS',
+          3 * 1440,
+          900,
+          2,
+        ),
+        type: 'TASK',
+      },
+    ],
+    edges: [],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    expected: {
+      // Held 3 days: ES 06-01, EF inclusive offset 2 = 06-03.
+      H: {
+        earlyStart: '2026-06-01',
+        earlyFinish: '2026-06-03',
+        lateStart: '2026-06-01',
+        lateFinish: '2026-06-03',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2026-06-03',
   },
 ];
