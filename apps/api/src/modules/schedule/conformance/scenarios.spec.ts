@@ -170,7 +170,7 @@ describe('conformance scenarios (differential scaffold)', () => {
     const run = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
     expect(run.ran).toBe(true);
     if (run.ran) {
-      expect(run.output.summary.activityCount).toBe(124);
+      expect(run.output.summary.activityCount).toBe(127);
       expect(run.output.summary.projectFinish).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });

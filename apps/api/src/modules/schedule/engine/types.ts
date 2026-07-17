@@ -42,6 +42,15 @@ export interface EngineActivity {
   durationMinutes: number;
   type: ActivityType;
   /**
+   * The activity's **WBS parent** (ADR-0038), for the summary-rollup pass (ADR-0035 §24). The engine
+   * rolls a `WBS_SUMMARY` activity's dates up from the activities whose `parentId` points at it — its
+   * DIRECT children — deepest-first, so nested summaries resolve child-before-parent. Absent/null = a
+   * top-level node. This is **orthogonal to the dependency graph**: it is a containment tree, never a
+   * logic edge (a summary carries no dependencies), so on a plan with no summary it is inert and the
+   * schedule is byte-identical.
+   */
+  parentId?: string | null;
+  /**
    * The activity's own working-time calendar (ADR-0037, M5). **Undefined = inherit the plan
    * calendar** (`ComputeOptions.calendar`) — the default, byte-identical path. When set, the
    * activity's duration is advanced, its float measured, and its dates derived on **this**

@@ -6,6 +6,7 @@ import {
   isLoe,
   isMandatory,
   isMilestone,
+  isSummary,
 } from './constraints';
 import { buildGraph } from './graph';
 import {
@@ -345,10 +346,13 @@ export function computeSchedule(
 
   // Project finish is the latest early-finish INSTANT across the whole plan. A Level-of-Effort activity
   // is excluded (§21): its finish is derived from its FF-successor (a real activity already in this max),
-  // so it can never extend the project end — and it must never drive it.
+  // so it can never extend the project end — and it must never drive it. A WBS-summary is excluded the
+  // same way (§24): its finish is rolled up from its branch (real activities already in this max), so it
+  // can never define the project end either.
   let projectFinishInstant: number | null = null;
   for (const id of graph.order) {
-    if (isLoe(graph.activities.get(id)!.type)) continue;
+    const type = graph.activities.get(id)!.type;
+    if (isLoe(type) || isSummary(type)) continue;
     const ef = earlyFinish.get(id)!;
     if (projectFinishInstant === null || ef > projectFinishInstant) projectFinishInstant = ef;
   }
@@ -365,8 +369,10 @@ export function computeSchedule(
     const stack: string[] = [];
     for (const id of graph.order) {
       // An LOE is never on the longest path (§21): skip it as a seed. Its incoming/outgoing edges are
-      // all non-driving (above), so the backward walk never traverses one either.
-      if (isLoe(graph.activities.get(id)!.type)) continue;
+      // all non-driving (above), so the backward walk never traverses one either. A WBS-summary is
+      // never on the longest path (§24) and carries no edges at all, so it is skipped the same way.
+      const type = graph.activities.get(id)!.type;
+      if (isLoe(type) || isSummary(type)) continue;
       if (earlyFinish.get(id) === projectFinishInstant && !onLongestPath.has(id)) {
         onLongestPath.add(id);
         stack.push(id);
@@ -479,6 +485,70 @@ export function computeSchedule(
     lateFinish.set(id, finish);
   }
 
+  // WBS-summary rollup pass (ADR-0035 §24). A `WBS_SUMMARY` activity carries no logic (it has no
+  // incoming/outgoing edges) and its dates are DERIVED from its branch: the earliest early-start to the
+  // latest early-finish over its DIRECT children in the `parentId` containment tree. It is never
+  // critical, never driving, never on the longest path and never defines the project finish (the
+  // exclusions above), so nothing here can feed back into another activity's schedule. Runs AFTER the
+  // LOE derivation pass so an LOE child already carries its final derived dates. Summaries are processed
+  // **deepest-first** (by `parentId`-chain depth, descending) so a nested summary's children — including
+  // child summaries — resolve before it; late is pinned to the rolled-up early instants, giving a
+  // by-convention 0 float. An EMPTY summary (no children) collapses to the data date (the defined empty
+  // convention). No summary ⇒ this loop is empty and every prior map is untouched (the parity gate).
+  const summaryIds = graph.order.filter((id) => isSummary(graph.activities.get(id)!.type));
+  if (summaryIds.length > 0) {
+    const childrenByParent = new Map<string, string[]>();
+    for (const id of graph.order) {
+      const parentId = graph.activities.get(id)!.parentId;
+      if (parentId === undefined || parentId === null) continue;
+      const siblings = childrenByParent.get(parentId);
+      if (siblings) siblings.push(id);
+      else childrenByParent.set(parentId, [id]);
+    }
+    // Depth = the length of the `parentId` chain up to a top-level node; deepest-first ordering makes a
+    // nested summary resolve after (below) its child summaries, so a parent reads finalised child dates.
+    const depthOf = (id: string): number => {
+      let depth = 0;
+      let cursor: string | null | undefined = graph.activities.get(id)!.parentId;
+      // A guard cap (≤ node count) keeps a malformed `parentId` cycle from spinning forever.
+      while (cursor !== undefined && cursor !== null && depth <= graph.order.length) {
+        depth += 1;
+        cursor = graph.activities.get(cursor)?.parentId;
+      }
+      return depth;
+    };
+    const ordered = [...summaryIds].sort((a, b) => depthOf(b) - depthOf(a));
+    for (const id of ordered) {
+      const cal = calendarOf(graph.activities.get(id)!);
+      const children = childrenByParent.get(id) ?? [];
+      let esInst: number;
+      let efInst: number;
+      if (children.length === 0) {
+        // Empty summary (§24): collapse to the data date — a defined zero-length point, never NaN.
+        esInst = dataDateAbs;
+        efInst = dataDateAbs;
+      } else {
+        esInst = Infinity;
+        efInst = -Infinity;
+        for (const childId of children) {
+          const childEs = earlyStart.get(childId)!;
+          const childEf = earlyFinish.get(childId)!;
+          if (childEs < esInst) esInst = childEs;
+          if (childEf > efInst) efInst = childEf;
+        }
+      }
+      // Roll the branch onto the summary's own calendar working boundaries (like the LOE pass), then pin
+      // late = early so the summary carries a by-convention 0 float and inherits no downstream negative.
+      const start = rollForwardToWorking(cal, esInst);
+      const finish =
+        efInst <= start ? start : Math.max(start, rollBackwardToWorking(cal, dataDateAbs, efInst));
+      earlyStart.set(id, start);
+      earlyFinish.set(id, finish);
+      lateStart.set(id, start);
+      lateFinish.set(id, finish);
+    }
+  }
+
   // Map instants to inclusive dates, compute float (on the activity's own calendar) and
   // criticality, roll up. The exposed *Offset fields project onto the common **plan** calendar
   // frame (byte-identical to the old offsets on the all-inherit path); float uses the activity's
@@ -496,6 +566,7 @@ export function computeSchedule(
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
     const activityIsLoe = isLoe(activity.type);
+    const activityIsSummary = isSummary(activity.type);
     const progress = progressOf.get(id)!;
     if (constraintViolated.get(id)) constraintViolationCount += 1;
     if (loeNoSpan.get(id)) loeNoSpanCount += 1;
@@ -545,8 +616,11 @@ export function computeSchedule(
     const isOpenEnd = graph.incoming.get(id)!.length === 0 || graph.outgoing.get(id)!.length === 0;
     // A Level-of-Effort activity is NEVER critical (ADR-0035 §21), even though its pinned late = early
     // gives it total float 0 (which would otherwise satisfy `TOTAL_FLOAT ≤ 0`) and it is often an open
-    // end. The guard overrides both the definition and the make-open-ends option.
-    const isCritical = !activityIsLoe && (byDefinition || (makeOpenEndsCritical && isOpenEnd));
+    // end. The guard overrides both the definition and the make-open-ends option. A WBS-summary is never
+    // critical either (§24) — its pinned late = early gives it total float 0, and having no edges it is
+    // always an open end, so the guard overrides both here as well.
+    const isCritical =
+      !activityIsLoe && !activityIsSummary && (byDefinition || (makeOpenEndsCritical && isOpenEnd));
     // Near-critical stays total-float-based and never overlaps critical: a positive-but-small float that
     // is not already flagged critical. On the default path (threshold 0) this equals the old predicate.
     const isNearCritical =
@@ -564,10 +638,12 @@ export function computeSchedule(
     const effDurationForFF = effectiveDurationById.get(id) ?? duration;
     const outgoing = graph.outgoing.get(id)!;
     let freeFloat: number;
-    if (activityIsLoe) {
+    if (activityIsLoe || activityIsSummary) {
       // A Level-of-Effort activity carries no float of its own (ADR-0035 §21): its span is pinned to its
       // neighbours, so it can slip by nothing — free float is 0, never the negative value the raw
       // FF-successor gap math would give for a hammock that ends at its latest (not tightest) successor.
+      // A WBS-summary is the same (§24): its span is rolled up from its branch and it has no successors,
+      // so its free float is 0 by convention rather than the tail identity FF = TF an open end would give.
       freeFloat = 0;
     } else if (outgoing.length === 0) {
       freeFloat = totalFloat;
@@ -598,8 +674,9 @@ export function computeSchedule(
     // Point-like ⇒ finish maps to the start day (a milestone or a zero-length span). For a normal
     // activity this is exactly `duration === 0` (byte-identical); a Level-of-Effort activity has a
     // DERIVED span, so its point-ness is read from the computed instants (a no-span LOE collapses to
-    // its start), not its always-zero input duration.
-    const pointLike = activityIsLoe ? efInst === esInst : duration === 0;
+    // its start), not its always-zero input duration. A WBS-summary likewise has a DERIVED (rolled-up)
+    // span — read from the instants — so an empty summary collapsed to the data date reads as point-like.
+    const pointLike = activityIsLoe || activityIsSummary ? efInst === esInst : duration === 0;
     const inclusiveFinishOwn = pointLike ? esOwn : efOwn - 1;
     const inclusiveLateFinishOwn = pointLike ? lsOwn : lfOwn - 1;
     const vDisplayInst = visualDisplayStart.get(id)!;
@@ -631,9 +708,11 @@ export function computeSchedule(
     const inclusiveFinishInstant = isMilestone(activity.type) ? esInst : efInst - 1;
     // A Level-of-Effort activity never defines the project finish DATE either (§21) — consistent with
     // its exclusion from `projectFinishInstant` above; its span mirrors a real successor that is already
-    // in this max.
+    // in this max. A WBS-summary is excluded the same way (§24): its rolled-up finish mirrors a real
+    // branch member already in this max, so it can never define the project finish date.
     if (
       !activityIsLoe &&
+      !activityIsSummary &&
       (maxInclusiveFinishInstant === null || inclusiveFinishInstant > maxInclusiveFinishInstant)
     ) {
       maxInclusiveFinishInstant = inclusiveFinishInstant;

@@ -8,7 +8,7 @@ import { adaptFixture } from './adapter';
 /**
  * Adapter tests (ADR-0034 §2, §7). Two jobs: prove the adapter's **classification
  * is honest** (the right rows are excluded/approximated, for the right reasons),
- * and prove the supported subset **schedules structurally** — a 124-activity real
+ * and prove the supported subset **schedules structurally** — a 127-activity real
  * network exercising all four relationship kinds runs clean, which is the
  * structural-regression half of the M1 safety net (dates here are a degradation,
  * not a golden — see `goldens.ts` for date assertions).
@@ -18,28 +18,29 @@ describe('conformance adapter', () => {
   const network = adaptFixture(fixture);
 
   it('classifies the fixture into the supported subset with honest counts', () => {
-    // 103 TASK + 4 START_MS + 12 FINISH_MS + 5 LOE supported (M5-epic); 3 WBS + 2 RESOURCE_DEPENDENT excluded.
-    expect(network.report.supportedActivities).toBe(124);
-    expect(network.report.excludedActivities).toBe(5);
+    // 103 TASK + 4 START_MS + 12 FINISH_MS + 5 LOE + 3 WBS supported (M5-epic); 2 RESOURCE_DEPENDENT
+    // excluded. Summaries carry no logic (no edges), so the relationship counts are unchanged.
+    expect(network.report.supportedActivities).toBe(127);
+    expect(network.report.excludedActivities).toBe(2);
     expect(network.report.supportedRelationships).toBe(179);
     expect(network.report.excludedRelationships).toBe(9);
-    expect(network.activities).toHaveLength(124);
+    expect(network.activities).toHaveLength(127);
     expect(network.edges).toHaveLength(179);
   });
 
   it('records why each unsupported feature was dropped, never faking it', () => {
     const kinds = new Set(network.report.notes.map((n) => n.kind));
-    // Unsupported activity types are excluded with a reason (3 WBS + 2 RESOURCE_DEPENDENT; LOE now supported).
-    expect(network.report.notes.filter((n) => n.kind === 'type-unsupported')).toHaveLength(5);
+    // Unsupported activity types are excluded with a reason (2 RESOURCE_DEPENDENT; LOE + WBS now supported).
+    expect(network.report.notes.filter((n) => n.kind === 'type-unsupported')).toHaveLength(2);
     // Durations/lags are now minute-EXACT (hours × 60, M1/ADR-0036) — nothing rounds away.
     expect(network.report.notes.filter((n) => n.kind === 'duration-rounded')).toHaveLength(0);
     expect(network.report.notes.filter((n) => n.kind === 'lag-rounded')).toHaveLength(0);
-    // The honest M5 gap surfaced per-row: 90 supported activities are assigned a calendar
+    // The honest M5 gap surfaced per-row: 93 supported activities are assigned a calendar
     // other than the plan default (CAL-01) and are scheduled on the default instead (now incl. the
-    // two LOE hammocks A1030/A3100 on CAL-02).
+    // two LOE hammocks A1030/A3100 and the three WBS summaries W4000/W5000/W7000, all on CAL-02).
     expect(
       network.report.notes.filter((n) => n.kind === 'activity-calendar-substituted'),
-    ).toHaveLength(90);
+    ).toHaveLength(93);
     // Twenty progressed activities have their progress ignored here (now incl. the four in-progress LOEs).
     expect(network.report.notes.filter((n) => n.kind === 'progress-ignored')).toHaveLength(20);
     // The one 24H lag-calendar override is now HONOURED (M3) — no longer dropped.
@@ -48,7 +49,8 @@ describe('conformance adapter', () => {
     // secondary constraint, expected finish and as-late-as-possible are no longer degradation notes,
     // and every fixture constraint kind is representable, so nothing drops as an unmodelled constraint.
     expect(network.report.notes.filter((n) => n.kind === 'constraint-dropped')).toHaveLength(0);
-    // Every edge dropped for an excluded endpoint is recorded (9 now that LOE ties are retained).
+    // Every edge dropped for an excluded endpoint is recorded (9 — only the 2 RESOURCE_DEPENDENT
+    // activities' ties now; WBS summaries carry no logic, so retaining them drops no relationship).
     expect(network.report.notes.filter((n) => n.kind === 'endpoint-excluded')).toHaveLength(9);
     // The plan-wide degradations are spelled out.
     expect(network.report.approximations.length).toBeGreaterThanOrEqual(4);
@@ -98,6 +100,43 @@ describe('conformance adapter', () => {
     expect(baseline.report.notes.filter((n) => n.kind === 'lag-calendar-dropped')).toHaveLength(1);
   });
 
+  it('builds the WBS parent tree from the fixture wbs codes and rolls a summary up its branch (ADR-0035 §24)', () => {
+    // The adapter maps the fixture's dotted `wbs` codes to `parentId`: the TT.4-branch summary W4000
+    // (wbs TT.4) parents every DEEPER-level activity under it (TT.4.1 / TT.4.2 / TT.4.3) — but not the
+    // TT.4-level tasks themselves (an equal code is not a strict prefix). None of those children is a
+    // WBS summary, so the tree here is flat.
+    const w4000Children = network.activities.filter((a) => a.parentId === 'W4000').map((a) => a.id);
+    expect(w4000Children.length).toBeGreaterThan(0);
+    // Sanity on the mapping: the TT.4.1 task A4200 rolls up to W4000; the TT.4-level task A4100 does not.
+    expect(w4000Children).toContain('A4200');
+    expect(w4000Children).not.toContain('A4100');
+
+    const output = computeSchedule(network.activities, network.edges, network.options);
+    const byId = new Map(output.results.map((r) => [r.activityId, r]));
+    const summary = byId.get('W4000')!;
+    const children = w4000Children.map((id) => byId.get(id)!);
+    // The summary's rolled-up span IS its branch: earliest child start → latest child finish (dates sort
+    // lexicographically = chronologically). All TT.4.x children are tasks, so the finish mapping lines up.
+    const minStart = children.map((c) => c.earlyStart).sort()[0];
+    const maxFinish = children
+      .map((c) => c.earlyFinish)
+      .sort()
+      .at(-1);
+    expect(summary.earlyStart).toBe(minStart);
+    expect(summary.earlyFinish).toBe(maxFinish);
+    // Late pinned to the rolled-up early ⇒ a by-convention 0 float; a summary is never critical.
+    expect(summary.lateStart).toBe(summary.earlyStart);
+    expect(summary.lateFinish).toBe(summary.earlyFinish);
+    expect(summary.totalFloat).toBe(0);
+    expect(summary.freeFloat).toBe(0);
+    expect(summary.isCritical).toBe(false);
+    // W5000 (wbs TT.5) has no deeper-level members in the fixture ⇒ an empty summary at the data date.
+    const emptySummary = byId.get('W5000')!;
+    expect(network.activities.filter((a) => a.parentId === 'W5000')).toHaveLength(0);
+    expect(emptySummary.earlyStart).toBe(emptySummary.earlyFinish);
+    expect(emptySummary.isCritical).toBe(false);
+  });
+
   it('never emits an edge to an excluded activity (the graph stays a valid DAG)', () => {
     const ids = new Set(network.activities.map((a) => a.id));
     for (const edge of network.edges) {
@@ -108,8 +147,8 @@ describe('conformance adapter', () => {
 
   it('schedules the supported subset without error and produces complete dates', () => {
     const output = computeSchedule(network.activities, network.edges, network.options);
-    expect(output.summary.activityCount).toBe(124);
-    expect(output.results).toHaveLength(124);
+    expect(output.summary.activityCount).toBe(127);
+    expect(output.results).toHaveLength(127);
     expect(output.summary.projectFinish).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     for (const result of output.results) {
       expect(result.earlyStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);

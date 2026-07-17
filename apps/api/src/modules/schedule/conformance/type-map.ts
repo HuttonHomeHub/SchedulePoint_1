@@ -22,9 +22,9 @@ export type MapResult<T> = { supported: true; value: T } | { supported: false; r
 
 /**
  * The fixture's P6 activity types that today's engine can schedule. `LEVEL_OF_EFFORT` (span-derived,
- * ADR-0035 §21) is now supported (M5-epic F1–F3). `RESOURCE_DEPENDENT` (resource-calendar driven, §23)
- * and `WBS_SUMMARY` (roll-up, §24) are **not** yet — they are excluded with a reason until their owning
- * milestone builds them.
+ * ADR-0035 §21) and `WBS_SUMMARY` (branch roll-up, §24) are now supported (M5-epic F1–F3 / F6–F7).
+ * `RESOURCE_DEPENDENT` (resource-calendar driven, §23) is **not** yet — it is excluded with a reason
+ * until its owning milestone builds it.
  */
 export function mapActivityType(type: FixtureActivityType): MapResult<ActivityType> {
   switch (type) {
@@ -38,15 +38,15 @@ export function mapActivityType(type: FixtureActivityType): MapResult<ActivityTy
       // Span-derived hammock (ADR-0035 §21, M5-epic): the engine derives its dates from its SS/FF ties
       // and excludes it from driving/criticality; a no-span LOE is produced-and-flagged (N12).
       return { supported: true, value: 'LEVEL_OF_EFFORT' };
+    case 'WBS_SUMMARY':
+      // Branch roll-up (ADR-0035 §24, M5-epic F6–F7): a summary carries no logic and the engine derives
+      // its dates from the earliest start / latest finish over its `parentId` children, excluding it
+      // from driving/criticality/project-finish. The adapter builds the `parentId` tree from `wbs` codes.
+      return { supported: true, value: 'WBS_SUMMARY' };
     case 'RESOURCE_DEPENDENT':
       return {
         supported: false,
         reason: 'resource-dependent scheduling is not implemented (ADR-0035 §23, M5)',
-      };
-    case 'WBS_SUMMARY':
-      return {
-        supported: false,
-        reason: 'WBS-summary roll-up is not implemented (ADR-0035 §24)',
       };
   }
 }

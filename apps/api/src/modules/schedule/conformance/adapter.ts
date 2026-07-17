@@ -24,8 +24,9 @@ import { mapActivityType, mapConstraintType, toCalendarDay } from './type-map';
  * fixture onto the inputs today's engine can actually consume, and — the whole
  * point — **reports every place it had to skip or approximate rather than faking a
  * value** (ADR-0034 §2–§3). What the engine still cannot represent
- * (resource-dependent/LOE/summary activities, external relationships) is recorded,
- * not invented. M4 added the advanced constraints — mandatory produce-and-flag,
+ * (resource-dependent activities, external relationships) is recorded, not invented
+ * — LOE (§21) and WBS-summary (§24) activities are now scheduled, not skipped. M4
+ * added the advanced constraints — mandatory produce-and-flag,
  * secondary constraints, expected finish and as-late-as-possible — which the
  * adapter now feeds through instead of dropping.
  *
@@ -174,6 +175,30 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       ? portById.get(calId)
       : undefined;
 
+  // Build the WBS containment tree (ADR-0035 §24, M5-epic F7) from the fixture's `wbs` code strings.
+  // The product carries `parentId` directly; the fixture instead expresses hierarchy through dotted
+  // `wbs` codes (`TT.4`, `TT.4.1`), so here each activity's `parentId` is the nearest ANCESTOR summary —
+  // the `WBS_SUMMARY` whose `wbs` code is a strict (proper, segment-aligned) prefix of this activity's
+  // code, taking the longest such match when summaries nest. Conformance-only; the engine consumes the
+  // resulting `parentId` exactly as the product would.
+  const summaryWbsCodes = fixture.activities
+    .filter((a) => a.activity_type === 'WBS_SUMMARY')
+    .map((a) => ({ code: a.wbs, id: a.id }));
+  const resolveParentId = (wbsCode: string): string | undefined => {
+    let best: { code: string; id: string } | undefined;
+    for (const candidate of summaryWbsCodes) {
+      // Strict, segment-aligned prefix: `TT.4` is an ancestor of `TT.4.1` but not of `TT.40` (nor of
+      // its own equal code). The longest matching ancestor is the NEAREST parent.
+      if (
+        wbsCode.startsWith(`${candidate.code}.`) &&
+        (best === undefined || candidate.code.length > best.code.length)
+      ) {
+        best = candidate;
+      }
+    }
+    return best?.id;
+  };
+
   const supportedIds = new Set<string>();
   const calIdByActivity = new Map<string, string>();
   const activities: EngineActivity[] = [];
@@ -187,6 +212,8 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       notes,
     );
     if (adapted) {
+      const parentId = resolveParentId(activity.wbs);
+      if (parentId !== undefined) adapted.parentId = parentId;
       supportedIds.add(activity.id);
       calIdByActivity.set(activity.id, activity.calendar);
       activities.push(adapted);
