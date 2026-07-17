@@ -372,6 +372,18 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   (resource `max_units_per_hour` stays reserved for levelling); `units_per_hour` NULL = triad inert
   = byte-parity; N19 (negative rate) / N20 (zero-rate divisor) boundary rejects. Additive; %-complete
   / earned-value columns deferred to a later rung.
+- **ADR-0041** _(Proposed)_ — Resource levelling: an **opt-in, pure, second engine pass** (a
+  deterministic **serial priority-list heuristic**) that runs after the unchanged CPM network pass to
+  resolve resource over-allocation — delaying activities within total float first, then extending
+  (`levelWithinFloatOnly` forbids extension). **Activates** the ADR-0039-reserved
+  `resource.max_units_per_hour` as the capacity ceiling (NULL = uncapped; N21 negative reject) and
+  consumes the ADR-0040 `units_per_hour` as demand, measured on each resource's own calendar (ADR-0037)
+  via a bounded interval sweep. Composite tie-break (`levelingPriority` → total-float → early-start →
+  id); mandatory/LOE/WBS/milestone/progressed activities never moved; **window conflict = extend-and-flag**
+  (`levelingWindowExceeded`, Q1); the **network float/critical stays authoritative** with leveled
+  start/finish + `levelingDelay` as an additive overlay (Q2). `levelResources` off (default) ⇒
+  recalculate **byte-identical** (the parity gate). Levelling semantics accepted as ADR-0035 **§28** with
+  the conformance slice (S10 / `levelling_test`). Supersedes nothing; amends ADR-0022 (execution).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
