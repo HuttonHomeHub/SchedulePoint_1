@@ -300,6 +300,13 @@ export interface ActivitySummary {
   secondaryConstraintType: ConstraintType | null;
   secondaryConstraintDate: string | null;
   /**
+   * The P6 duration type (ADR-0040, M7 rung 4): which of {Duration, Units, Units/Time} recomputes vs
+   * holds when the planner edits another, keeping `Units = Duration × Units/Time` true. Client-settable
+   * definition field (default `FIXED_DURATION_AND_UNITS_TIME`); the recompute is resolved server-side at
+   * write time — the CPM engine reads the resulting duration.
+   */
+  durationType: DurationType;
+  /**
    * The activity's own working-time calendar (ADR-0037, M5), or `null` to **inherit** the plan
    * default (resolution: activity → plan → all-days-work). When set, the activity's duration is
    * measured, its float counted, and its dates derived on this calendar — so e.g. a 24/7 crew
@@ -875,6 +882,37 @@ export const RESOURCE_KINDS = ['LABOUR', 'EQUIPMENT', 'MATERIAL'] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
 /**
+ * The P6 duration type of an activity (M7 rung 4, ADR-0040). It names which of the triad
+ * {Duration, Units, Units/Time} is **recomputed** (and which held) when a planner edits
+ * another, keeping the identity `Units = Duration × Units/Time` true: with
+ * `FIXED_DURATION_AND_UNITS_TIME` (the **default**) duration & rate are held and units
+ * absorb; `FIXED_DURATION_AND_UNITS` holds duration & units and rate absorbs; `FIXED_UNITS`
+ * holds units so **duration derives** on a rate edit; `FIXED_UNITS_TIME` holds rate so
+ * **duration derives** on a units edit. Const-array source-of-truth (like
+ * {@link RESOURCE_KINDS}) kept in lock-step with the API's Prisma `DurationType` enum; the
+ * recompute is a service-boundary concern, the CPM engine reads the resolved duration.
+ */
+export const DURATION_TYPES = [
+  'FIXED_DURATION_AND_UNITS_TIME',
+  'FIXED_DURATION_AND_UNITS',
+  'FIXED_UNITS',
+  'FIXED_UNITS_TIME',
+] as const;
+
+export type DurationType = (typeof DURATION_TYPES)[number];
+
+/**
+ * Which quantity of the `Units = Duration × Units/Time` triad a planner edited (M7 rung 4,
+ * ADR-0040). The write path names the edited field so the service holds it and recomputes the
+ * dependent per the activity's {@link DurationType}: `DURATION` (activity duration edit), `UNITS`
+ * (a driving assignment's `budgetedUnits`), or `UNITS_PER_HOUR` (its rate). Shared so the API DTOs
+ * and the client-side recompute preview agree on one vocabulary.
+ */
+export const EDITED_FIELDS = ['DURATION', 'UNITS', 'UNITS_PER_HOUR'] as const;
+
+export type EditedField = (typeof EDITED_FIELDS)[number];
+
+/**
  * A resource in the org-scoped resource library (M7.1, ADR-0039) — a reusable
  * sibling of the calendar library. The list/detail shape mirrors the other
  * `*Summary` types. `code` is an optional natural-key handle (unique per org among
@@ -898,13 +936,18 @@ export interface ResourceSummary {
  * (M7.1, ADR-0039). `budgetedUnits` is an exact quantity carried as a `number` in the
  * API (the DB stores `DECIMAL(18,4)`; `>= 0`, N14). `isDriving` designates THE driving
  * resource of a RESOURCE_DEPENDENT activity — at most one per activity, and a MATERIAL
- * resource may never drive.
+ * resource may never drive. `unitsPerHour` (M7 rung 4, ADR-0040) is the planned **rate**
+ * (units of work per working hour) — the `Units/Time` term of the triad
+ * `Units = Duration × Units/Time`; a `number` in the API (`DECIMAL(18,4)`; `>= 0`, N19),
+ * or `null` when no rate is set (the triad is inert — parity). Only the driving assignment
+ * participates in the triad.
  */
 export interface ResourceAssignmentSummary {
   id: string;
   activityId: string;
   resourceId: string;
   budgetedUnits: number;
+  unitsPerHour: number | null;
   isDriving: boolean;
   version: number;
   createdAt: string;

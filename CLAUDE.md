@@ -357,6 +357,21 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   `WBS_SUMMARY` may be a parent, and a **summary carries no logic** (never a dependency endpoint). The
   parent tree is orthogonal to the dependency DAG (ADR-0021); soft-deleting a summary cascades to its
   subtree. Rejected: a materialized `wbs_code` path and an engine-only proof.
+- **ADR-0039** _(Accepted)_ — Resource model & resource-calendar scheduling: an org-scoped
+  `Resource` **library** (a `Calendar` sibling: `kind`, optional own `calendar_id`) + a
+  `ResourceAssignment` join (`budgeted_units`, per-assignment `is_driving`) + a new
+  `RESOURCE_DEPENDENT` `ActivityType` that schedules on its **driving resource's** calendar via
+  the ADR-0037 port seam (M7 rungs 1–2). Lean/additive (cost/EV/max-units reserved); same-org,
+  exactly-one-driver, `RESOURCE_IN_USE`, and assignment-cascade are service invariants; the
+  no-resource path is byte-identical.
+- **ADR-0040** _(Accepted)_ — Duration types & the resource-units model: the per-activity
+  four-value `DurationType` enum (default `FIXED_DURATION_AND_UNITS_TIME`) + the per-driving-
+  assignment `units_per_hour` rate, making the ADR-0039 model **dynamic** by keeping
+  `Units = Duration × Units/Time` true via a **pure service-boundary** recompute (`resolveTriad`,
+  F2/F3) — the **CPM engine is untouched** (M7 rung 4). Units/time lives on the driving assignment
+  (resource `max_units_per_hour` stays reserved for levelling); `units_per_hour` NULL = triad inert
+  = byte-parity; N19 (negative rate) / N20 (zero-rate divisor) boundary rejects. Additive; %-complete
+  / earned-value columns deferred to a later rung.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

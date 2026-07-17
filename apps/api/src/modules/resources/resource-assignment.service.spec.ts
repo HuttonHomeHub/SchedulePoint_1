@@ -52,6 +52,7 @@ function assignment(overrides: Partial<ResourceAssignment> = {}): ResourceAssign
     activityId: ACTIVITY_ID,
     resourceId: RESOURCE_ID,
     budgetedUnits: new Prisma.Decimal(0),
+    unitsPerHour: null,
     isDriving: false,
     version: 1,
     createdAt: new Date(),

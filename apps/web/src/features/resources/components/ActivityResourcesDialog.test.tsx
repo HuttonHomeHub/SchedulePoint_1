@@ -37,6 +37,7 @@ function assignment(overrides: Partial<ResourceAssignmentSummary> = {}): Resourc
     activityId: 'a1',
     resourceId: 'res-1',
     budgetedUnits: 5,
+    unitsPerHour: null,
     isDriving: false,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',

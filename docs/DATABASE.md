@@ -271,10 +271,20 @@ migration) — default `false` is behaviour-preserving.
 scheduling slices depend on, persisted **now** so those slices are additive (no
 wide `ALTER TABLE` + backfill later):
 
-- **Definition** (`type`, `duration_minutes`, `constraint_type`/`constraint_date`,
+- **Definition** (`type`, `duration_minutes`, `duration_type`,
+  `constraint_type`/`constraint_date`,
   `secondary_constraint_type`/`secondary_constraint_date`, `lane_index`,
   `schedule_as_late_as_possible`, optional
-  `code`) — Planner-owned. The **secondary** constraint pair (ADR-0035 §10, M4 F3)
+  `code`) — Planner-owned. `duration_type` (M7 rung 4, ADR-0040) is a **client-settable**
+  (NOT engine-owned) `DurationType` enum — `FIXED_DURATION_AND_UNITS_TIME` (the **default**),
+  `FIXED_DURATION_AND_UNITS`, `FIXED_UNITS`, `FIXED_UNITS_TIME` — naming which of the triad
+  {`duration_minutes`, an assignment's `budgeted_units`, its `units_per_hour`} is
+  **recomputed** vs held when a planner edits another, keeping `Units = Duration ×
+Units/Time` true. The recompute is a **pure service-boundary** concern resolved at write
+  time (F2/F3), **not** the CPM engine — which reads the resulting `duration_minutes`
+  unchanged. Additive with a constant `DEFAULT` (no data migration); unindexed (read only
+  on the full-plan recalc load, never a query predicate — the `secondary_constraint_type`
+  precedent). The **secondary** constraint pair (ADR-0035 §10, M4 F3)
   mirrors the primary pair exactly and is equally **client-settable** (NOT
   engine-owned): the primary drives the CPM forward pass, the secondary drives the
   backward pass. `schedule_as_late_as_possible` (ADR-0035 §11, M4 F4) is a defaulted
@@ -611,6 +621,19 @@ with no resources the schedule is byte-identical (the parity gate).
   numeric per _Data types_ above), `DEFAULT 0`. `ck_resource_assignments_budgeted_units_nonneg`
   (`>= 0`, raw SQL) is the DB backstop behind the DTO `@Min(0)` boundary reject (N14,
   ADR-0035 §25) — a bypass can never persist a negative.
+- **`units_per_hour`** (M7 rung 4, ADR-0040) is the driving assignment's planned **rate**
+  (units of work per working hour) — the `Units/Time` term of the triad `Units = Duration ×
+Units/Time`. An **exact numeric** (`DECIMAL(18,4)`) like `budgeted_units`, but **nullable
+  with no default**: `NULL` means the triad is **inert** (`duration_minutes` stays as
+  entered) — the **parity gate** (with no rate on any driving assignment the recalc is
+  byte-identical; a `DEFAULT 0` is deliberately omitted so it never silently activates on
+  existing rows). `ck_resource_assignments_units_per_hour_nonneg` (`units_per_hour IS NULL
+OR >= 0`, raw SQL — nullable-safe) is the DB backstop behind the DTO `@Min(0)` reject
+  (**N19**), mirroring the `budgeted_units`/N14 precedent. Only the **driving** assignment
+  participates in the triad; a **zero** rate on a units-driven recompute is a **service**
+  reject (**N20** — a CHECK cannot read the activity's `duration_type` to know the rate is a
+  divisor). `resource.max_units_per_hour` (a levelling availability cap) and the assignment
+  cost/earned-value columns stay **reserved** for their later rungs (ADR-0040).
 - **Driver designation.** `is_driving` marks THE driving resource of a
   `RESOURCE_DEPENDENT` activity (its calendar governs scheduling, M7.2). The partial
   unique `uq_resource_assignments_activity_driving (activity_id) WHERE is_driving AND

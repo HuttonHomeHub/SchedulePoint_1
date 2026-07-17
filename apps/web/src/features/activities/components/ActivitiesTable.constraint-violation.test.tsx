@@ -53,6 +53,7 @@ const BASE: ActivitySummary = {
   constraintViolated: false,
   loeNoSpan: false,
   resourceDriverMissing: false,
+  durationType: 'FIXED_DURATION_AND_UNITS_TIME',
   parentId: null,
   visualStart: null,
   visualEffectiveStart: null,

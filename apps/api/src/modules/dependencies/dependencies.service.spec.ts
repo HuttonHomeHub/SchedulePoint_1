@@ -86,6 +86,7 @@ function activity(id: string, overrides: Partial<Activity> = {}): Activity {
     constraintViolated: false,
     loeNoSpan: false,
     resourceDriverMissing: false,
+    durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
     visualEffectiveStart: null,

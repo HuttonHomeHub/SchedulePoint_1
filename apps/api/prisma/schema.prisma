@@ -357,6 +357,23 @@ enum ResourceKind {
   MATERIAL
 }
 
+// The P6 duration type of an activity (M7 rung 4, ADR-0040). It names which of the
+// triad {Duration, Units, Units/Time} is RECOMPUTED (and which held) when a planner
+// edits another, keeping the identity `Units = Duration × Units/Time` true. All four
+// P6 values are modelled (the fixture uses all four): FIXED_DURATION_AND_UNITS_TIME
+// (the dominant DEFAULT — duration & rate held, units absorb), FIXED_DURATION_AND_UNITS
+// (duration & units held, rate absorbs), FIXED_UNITS (units held — duration derives on a
+// rate edit), FIXED_UNITS_TIME (rate held — duration derives on a units edit). The
+// recompute (`resolveTriad`) is a pure SERVICE-BOUNDARY concern resolved at write time,
+// NOT the CPM engine (F2/F3); this slice is the definition column only. MUST stay in
+// lock-step with the TypeScript `DurationType` union in @repo/types (F1).
+enum DurationType {
+  FIXED_DURATION_AND_UNITS_TIME
+  FIXED_DURATION_AND_UNITS
+  FIXED_UNITS
+  FIXED_UNITS_TIME
+}
+
 // Progress state of an activity. Set via the progress path (Contributor+), never
 // via the definition update.
 enum ActivityStatus {
@@ -584,6 +601,17 @@ model Activity {
   secondaryConstraintType  ConstraintType? @map("secondary_constraint_type")
   // Calendar day (date-only, no timezone), like constraint_date.
   secondaryConstraintDate  DateTime?       @map("secondary_constraint_date") @db.Date
+  // The P6 duration type (M7 rung 4, ADR-0040) — which of {Duration, Units, Units/Time}
+  // is recomputed vs held when a planner edits another, keeping `Units = Duration ×
+  // Units/Time` true. CLIENT-SETTABLE definition column (a Planner picks it, like `type`/
+  // `constraint_type`), NOT engine-owned. The recompute (`resolveTriad`) is a pure
+  // service-boundary concern (F2/F3); the CPM engine is untouched — it reads the resolved
+  // `duration_minutes`. Default FIXED_DURATION_AND_UNITS_TIME (the fixture's dominant
+  // value) backfills every existing row, so the byte-parity golden path is unchanged.
+  // No index: read only on the full-plan recalc load, never a query predicate (the
+  // secondary_constraint_type precedent). MUST stay in lock-step with the TypeScript
+  // `DurationType` union in @repo/types.
+  durationType             DurationType    @default(FIXED_DURATION_AND_UNITS_TIME) @map("duration_type")
   // Graphical y-lane / vertical offset for the TSLD canvas (M7); part of the
   // persisted model per PROJECT_BRIEF §9, not a runtime concern.
   laneIndex                Int             @default(0) @map("lane_index")
@@ -1350,7 +1378,20 @@ model ResourceAssignment {
   // ck_resource_assignments_budgeted_units_nonneg (raw SQL), the DB backstop behind the
   // DTO @Min(0) boundary reject (N14, ADR-0035 §25) so a bypass can never persist a
   // negative. Defaulted 0 for a defensive direct-DB insert; the service always sets it.
-  budgetedUnits Decimal @default(0) @map("budgeted_units") @db.Decimal(18, 4)
+  budgetedUnits Decimal  @default(0) @map("budgeted_units") @db.Decimal(18, 4)
+  // The planned RATE (units of work per working hour) at which the driving resource
+  // produces on THIS activity — the `Units/Time` of the P6 triad (M7 rung 4, ADR-0040).
+  // An EXACT numeric like budgeted_units (DECIMAL(18,4)). NULLABLE with NO default — a
+  // NULL rate means the triad is INERT (nothing to recompute; `duration_minutes` stays as
+  // entered), the parity gate: with no units_per_hour on any driving assignment the
+  // recalc is byte-identical (never add a DEFAULT — that would silently activate the
+  // triad on every existing row). Client-settable. `units_per_hour IS NULL OR >= 0` is
+  // enforced by ck_resource_assignments_units_per_hour_nonneg (raw SQL — nullable-safe),
+  // the DB backstop behind the DTO @Min(0) boundary reject (N19), mirroring
+  // budgeted_units/N14. Only the DRIVING assignment (is_driving) participates in the
+  // triad; a zero rate on a units-driven recompute is a service reject (N20 — a CHECK
+  // cannot read the activity's duration_type). MUST stay in lock-step with @repo/types.
+  unitsPerHour  Decimal? @map("units_per_hour") @db.Decimal(18, 4)
   // Designates THE driving resource of a RESOURCE_DEPENDENT activity (ADR-0035 §23): its
   // resolved calendar governs the activity's scheduling (wired in M7.2). At most ONE
   // driving assignment per activity is guaranteed in the DB by the partial unique
@@ -1358,7 +1399,7 @@ model ResourceAssignment {
   // deleted_at IS NULL (raw SQL). "EXACTLY one on a resource-dependent activity" and "a
   // MATERIAL resource may not drive" are SERVICE invariants (a partial-unique/FK cannot
   // read the activity's type or the resource's kind).
-  isDriving     Boolean @default(false) @map("is_driving")
+  isDriving     Boolean  @default(false) @map("is_driving")
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)

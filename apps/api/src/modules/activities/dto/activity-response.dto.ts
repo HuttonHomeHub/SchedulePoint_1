@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ActivityStatus, ActivityType, ConstraintType, type Activity } from '@prisma/client';
+import {
+  ActivityStatus,
+  ActivityType,
+  ConstraintType,
+  DurationType,
+  type Activity,
+} from '@prisma/client';
 import type { ActivitySummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
@@ -38,6 +44,15 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({ description: 'Working days (milestones are 0).' })
   durationDays!: number;
+
+  @ApiProperty({
+    enum: DurationType,
+    description:
+      'Duration type (ADR-0040): which of {duration, units, units/time} recomputes when a planner ' +
+      'edits another. Default FIXED_DURATION_AND_UNITS_TIME; FIXED_UNITS/FIXED_UNITS_TIME let a ' +
+      'driving resource’s units drive the duration.',
+  })
+  durationType!: DurationType;
 
   @ApiProperty({ enum: ConstraintType, nullable: true })
   constraintType!: ConstraintType | null;
@@ -230,6 +245,7 @@ export class ActivityResponseDto implements ActivitySummary {
       type: entity.type,
       // Stored in working-minutes (ADR-0036); the public field stays whole working days.
       durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
+      durationType: entity.durationType,
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),
       secondaryConstraintType: entity.secondaryConstraintType,

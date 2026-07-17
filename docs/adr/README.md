@@ -55,3 +55,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0029](0029-persistent-hierarchy-navigator.md)                  | Persistent app-shell & hierarchy navigator    | Proposed |
 | [0038](0038-wbs-activity-hierarchy.md)                          | WBS activity hierarchy (parent tree)          | Accepted |
 | [0039](0039-resource-model-and-resource-calendar-scheduling.md) | Resource model & resource-calendar scheduling | Accepted |
+| [0040](0040-duration-types-and-resource-units.md)               | Duration types & the resource-units model     | Accepted |
