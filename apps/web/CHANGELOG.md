@@ -1,5 +1,27 @@
 # @repo/web
 
+## 0.27.0
+
+### Minor Changes
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Plan float & critical scheduling settings (M6-F7), behind `VITE_FLOAT_CRITICAL_SETTINGS` (default off).
+  A new `PlanScheduleSettings` block on the plan detail screen adds three controls — **Critical-path
+  definition** (Total float / Longest path), **Total-float measure** (Finish / Start / Smallest), and a
+  **Make open ends critical** toggle — mirroring the existing recalc-mode / expected-finish pickers
+  (optimistic select, live-region announce, read-only summary for non-editors). Each persists as a
+  targeted plan PATCH; a later Recalculate applies it to the computed critical path. The engine/API
+  behind these options is already live (M6-F2/F3/F4); this exposes them in the UI.
+
+### Patch Changes
+
+- [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/89) [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - TSLD canvas: flag a **same-lane time overlap** (TECH_DEBT #24c). Auto-arrange never packs two
+  time-overlapping bars into one lane, but a manual lane drop (drag or `Alt+↑/↓`) could — with no cue.
+  A pure `laneOverlapIds` pass now marks both overlapping bars at the mapping seam; the painter draws a
+  stacked-squares badge above each (a shape cue, never colour-only — WCAG 1.4.1 — named in the legend),
+  and the accessible listbox line speaks "overlaps another activity in its lane". No API/engine change.
+- Updated dependencies [[`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a), [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a), [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a), [`a283c0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a283c0c2064e48b531e35cc911be018696275d3a)]:
+  - @repo/types@0.12.0
+
 ## 0.26.0
 
 ### Minor Changes
