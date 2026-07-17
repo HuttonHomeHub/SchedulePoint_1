@@ -389,8 +389,9 @@ export function ActivitiesTable({
             calendars={calendars}
             calendarsLoading={calendarsLoading}
             calendarsError={calendarsError}
-            parentSummaries={activities.data ?? []}
-            parentSummariesLoading={activities.isPending}
+            planActivities={activities.data ?? []}
+            planActivitiesLoading={activities.isPending}
+            planActivitiesError={activities.isError}
             {...(editing ? { activity: editing } : {})}
           />
           <ConfirmDialog

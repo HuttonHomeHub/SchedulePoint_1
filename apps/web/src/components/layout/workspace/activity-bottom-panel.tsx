@@ -59,8 +59,9 @@ export function ActivityBottomPanel({
               calendars={model.calendars.data ?? []}
               calendarsLoading={model.calendars.isPending}
               calendarsError={model.calendars.isError}
-              parentSummaries={model.activities.data ?? []}
-              parentSummariesLoading={model.activities.isPending}
+              planActivities={model.activities.data ?? []}
+              planActivitiesLoading={model.activities.isPending}
+              planActivitiesError={model.activities.isError}
             />
           ) : null}
           {onCollapse ? (

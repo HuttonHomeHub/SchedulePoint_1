@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 
 /**
  * Header affordance that opens the create-activity dialog for a plan. Writers only. The org
- * calendars (for the calendar picker, ADR-0037) and the plan's existing activities (for the WBS
- * parent picker, ADR-0038) are route-composed and passed straight through to the dialog — this
- * feature never fetches another feature's query itself, and reuses the route's warm activities query.
+ * calendars (for the calendar picker, ADR-0037) and the plan's activities (the pool the WBS parent
+ * picker draws summaries from, ADR-0038) are route-composed and passed straight through to the dialog
+ * — this feature never fetches another feature's query itself, and reuses the route's warm activities
+ * query (including its loading/error state, so the parent picker distinguishes the two honestly).
  */
 export function CreateActivityButton({
   orgSlug,
@@ -17,17 +18,19 @@ export function CreateActivityButton({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
-  parentSummaries = [],
-  parentSummariesLoading = false,
+  planActivities = [],
+  planActivitiesLoading = false,
+  planActivitiesError = false,
 }: {
   orgSlug: string;
   planId: string;
   calendars?: CalendarSummary[];
   calendarsLoading?: boolean;
   calendarsError?: boolean;
-  /** The plan's activities (filtered to WBS summaries inside the dialog), for the parent picker. */
-  parentSummaries?: ActivitySummary[];
-  parentSummariesLoading?: boolean;
+  /** The plan's activities (the dialog derives WBS summaries from these), for the parent picker. */
+  planActivities?: ActivitySummary[];
+  planActivitiesLoading?: boolean;
+  planActivitiesError?: boolean;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
@@ -41,8 +44,9 @@ export function CreateActivityButton({
         calendars={calendars}
         calendarsLoading={calendarsLoading}
         calendarsError={calendarsError}
-        parentSummaries={parentSummaries}
-        parentSummariesLoading={parentSummariesLoading}
+        planActivities={planActivities}
+        planActivitiesLoading={planActivitiesLoading}
+        planActivitiesError={planActivitiesError}
       />
     </>
   );

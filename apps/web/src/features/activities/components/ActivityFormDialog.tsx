@@ -53,8 +53,9 @@ export function ActivityFormDialog({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
-  parentSummaries = [],
-  parentSummariesLoading = false,
+  planActivities = [],
+  planActivitiesLoading = false,
+  planActivitiesError = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -68,14 +69,17 @@ export function ActivityFormDialog({
   /** The calendars list failed to load — surface it rather than silently offering only "inherit". */
   calendarsError?: boolean;
   /**
-   * The plan's existing WBS summaries — the valid parents for the WBS-nesting picker (ADR-0038, F8).
-   * Route-composed like {@link calendars} (from the same plan activities query), so the dialog stays a
-   * pure presentation component. Only consulted when the WBS surface (`VITE_ADVANCED_ACTIVITY_TYPES`)
-   * is on. The activity being edited is filtered out here (it can't parent itself; the API rejects it too).
+   * The plan's activities — the pool the WBS-nesting picker draws valid parents from (the summaries
+   * within it, ADR-0038, F8). The **unfiltered** list: the dialog derives the summaries (and excludes
+   * the activity being edited — it can't parent itself, and the API rejects it too). Route-composed
+   * like {@link calendars} (reusing the plan's warm activities query), so the dialog stays a pure
+   * presentation component. Only consulted when the WBS surface (`VITE_ADVANCED_ACTIVITY_TYPES`) is on.
    */
-  parentSummaries?: ActivitySummary[];
+  planActivities?: ActivitySummary[];
   /** The plan activities are still loading (the parent options aren't complete yet). */
-  parentSummariesLoading?: boolean;
+  planActivitiesLoading?: boolean;
+  /** The plan activities failed to load — surface it rather than reading as a confirmed "no summaries". */
+  planActivitiesError?: boolean;
 }): React.ReactElement {
   const isEdit = activity !== undefined;
   const create = useCreateActivity(orgSlug, planId);
@@ -84,8 +88,8 @@ export function ActivityFormDialog({
   const announce = useAnnounce();
 
   // The valid WBS parents: the plan's summaries minus the activity being edited (no self-parent; the
-  // API rejects it too). Defensive re-filter on type in case the caller passes the raw activities list.
-  const parentOptions = parentSummaries.filter(
+  // API rejects it too), derived from the unfiltered plan-activities pool.
+  const parentOptions = planActivities.filter(
     (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
   );
 
@@ -244,7 +248,8 @@ export function ActivityFormDialog({
             <p className="text-muted-foreground text-sm">
               A WBS summary’s dates roll up from the activities grouped under it — the earliest
               start to the latest finish of its branch. It carries no logic of its own (no
-              dependencies). Assign activities to it below, then Recalculate.
+              dependencies). To fill it, open each activity in the branch and set its WBS summary to
+              this one, then Recalculate.
             </p>
           ) : null
         ) : (
@@ -261,9 +266,14 @@ export function ActivityFormDialog({
             <Label htmlFor="activity-parent">WBS summary (optional)</Label>
             <Select
               id="activity-parent"
-              disabled={parentSummariesLoading}
-              aria-busy={parentSummariesLoading}
-              aria-describedby="activity-parent-help"
+              disabled={planActivitiesLoading}
+              aria-busy={planActivitiesLoading}
+              aria-invalid={planActivitiesError ? true : undefined}
+              aria-describedby={
+                planActivitiesError
+                  ? 'activity-parent-help activity-parent-error'
+                  : 'activity-parent-help'
+              }
               {...register('parentId')}
             >
               <option value="">None (top-level)</option>
@@ -271,7 +281,7 @@ export function ActivityFormDialog({
                   never silently un-nests the activity (never blank, which reads as "top-level"). */}
               {missingParent ? (
                 <option value={parentId}>
-                  {parentSummariesLoading ? 'Loading…' : 'Unavailable'}
+                  {planActivitiesLoading ? 'Loading…' : 'Unavailable'}
                 </option>
               ) : null}
               {parentOptions.map((summary) => (
@@ -280,11 +290,24 @@ export function ActivityFormDialog({
                 </option>
               ))}
             </Select>
+            {/* Primary help is invariant to loading (mirrors the calendar picker), so it never
+                asserts a false state while the plan activities are still resolving. The
+                "no summaries yet" guidance is a distinct, appended clause shown only once the list
+                has resolved empty — not conflated with loading or a load failure. */}
             <p id="activity-parent-help" className="text-muted-foreground text-sm">
-              {parentOptions.length === 0 && !missingParent
-                ? 'Groups this activity under a WBS summary. Create a “WBS summary” activity first to nest others under it.'
-                : 'Groups this activity under a WBS summary, whose dates roll up from its members.'}
+              Groups this activity under a WBS summary, whose dates roll up from its members.
+              {!planActivitiesLoading &&
+              !planActivitiesError &&
+              parentOptions.length === 0 &&
+              !missingParent
+                ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
+                : ''}
             </p>
+            {planActivitiesError ? (
+              <p id="activity-parent-error" role="alert" className="text-destructive-text text-sm">
+                Couldn’t load the plan’s activities, so no WBS summaries are available to choose.
+              </p>
+            ) : null}
           </div>
         ) : null}
         {ACTIVITY_CALENDAR_ENABLED ? (

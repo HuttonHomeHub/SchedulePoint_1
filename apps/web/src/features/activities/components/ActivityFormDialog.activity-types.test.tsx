@@ -133,7 +133,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
   });
 
   it('offers the plan’s summaries in the WBS parent picker (excluding the edited activity)', () => {
-    renderDialog({ parentSummaries: [SUMMARY] });
+    renderDialog({ planActivities: [SUMMARY] });
     const parent = screen.getByLabelText('WBS summary (optional)');
     expect(parent).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'TT.4 · Superstructure' })).toBeInTheDocument();
@@ -141,13 +141,32 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     expect(screen.getByRole('option', { name: 'None (top-level)' })).toBeInTheDocument();
   });
 
-  it('guides the planner to create a summary first when the plan has none', () => {
-    renderDialog({ parentSummaries: [] });
-    expect(screen.getByText(/Create a “WBS summary” activity first/i)).toBeInTheDocument();
+  it('guides the planner to create a summary when the plan has resolved with none', () => {
+    renderDialog({ planActivities: [] });
+    expect(screen.getByText(/There are no WBS summaries in this plan yet/i)).toBeInTheDocument();
+  });
+
+  it('does NOT assert an empty state while the plan activities are still loading', () => {
+    // Loading and empty are distinct (UX_STANDARDS): the "no summaries yet" guidance must not show
+    // while the list is pending, when the app doesn't yet know whether the plan has any.
+    renderDialog({ planActivities: [], planActivitiesLoading: true });
+    expect(
+      screen.queryByText(/There are no WBS summaries in this plan yet/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('WBS summary (optional)')).toBeDisabled();
+  });
+
+  it('surfaces an honest error (not a false empty) when the plan activities fail to load', () => {
+    renderDialog({ planActivities: [], planActivitiesError: true });
+    expect(screen.getByRole('alert')).toHaveTextContent(/Couldn’t load the plan’s activities/i);
+    // The misleading "no summaries yet — create one" guidance must NOT show on a load failure.
+    expect(
+      screen.queryByText(/There are no WBS summaries in this plan yet/i),
+    ).not.toBeInTheDocument();
   });
 
   it('creates an activity nested under the chosen WBS summary', async () => {
-    renderDialog({ parentSummaries: [SUMMARY] });
+    renderDialog({ planActivities: [SUMMARY] });
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour columns' } });
     fireEvent.change(screen.getByLabelText('WBS summary (optional)'), {
       target: { value: 'wbs1' },
@@ -161,7 +180,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
 
   it('does not parent an activity to itself in edit mode', () => {
     // Editing the summary itself: it must not appear as its own parent option.
-    renderDialog({ activity: SUMMARY, parentSummaries: [SUMMARY] });
+    renderDialog({ activity: SUMMARY, planActivities: [SUMMARY] });
     expect(screen.queryByRole('option', { name: 'TT.4 · Superstructure' })).not.toBeInTheDocument();
   });
 });
