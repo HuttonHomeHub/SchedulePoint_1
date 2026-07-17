@@ -372,7 +372,7 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   (resource `max_units_per_hour` stays reserved for levelling); `units_per_hour` NULL = triad inert
   = byte-parity; N19 (negative rate) / N20 (zero-rate divisor) boundary rejects. Additive; %-complete
   / earned-value columns deferred to a later rung.
-- **ADR-0041** _(Proposed)_ — Resource levelling: an **opt-in, pure, second engine pass** (a
+- **ADR-0041** _(Accepted)_ — Resource levelling: an **opt-in, pure, second engine pass** (a
   deterministic **serial priority-list heuristic**) that runs after the unchanged CPM network pass to
   resolve resource over-allocation — delaying activities within total float first, then extending
   (`levelWithinFloatOnly` forbids extension). **Activates** the ADR-0039-reserved

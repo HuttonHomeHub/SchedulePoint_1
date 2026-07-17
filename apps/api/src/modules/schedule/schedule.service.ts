@@ -180,6 +180,12 @@ export class ScheduleService {
       constraintWarningCount: summary.constraintWarningCount,
       loeNoSpanCount: summary.loeNoSpanCount,
       resourceDriverMissingCount: summary.resourceDriverMissingCount,
+      // Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): the engine emits these only when the
+      // levelling pass ran, so they default to 0 / null on the byte-identical parity path.
+      leveledActivityCount: summary.leveledActivityCount ?? 0,
+      levelingWindowExceededCount: summary.levelingWindowExceededCount ?? 0,
+      selfOverAllocatedCount: summary.selfOverAllocatedCount ?? 0,
+      leveledProjectFinish: summary.leveledProjectFinish ?? null,
     };
   }
 
@@ -211,6 +217,12 @@ export class ScheduleService {
       constraintWarningCount: aggregate.constraintWarningCount,
       loeNoSpanCount: aggregate.loeNoSpanCount,
       resourceDriverMissingCount: aggregate.resourceDriverMissingCount,
+      // Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): a read-time aggregate over the plan's
+      // engine-owned leveled columns; 0 / null when the plan does not level.
+      leveledActivityCount: aggregate.leveledActivityCount,
+      levelingWindowExceededCount: aggregate.levelingWindowExceededCount,
+      selfOverAllocatedCount: aggregate.selfOverAllocatedCount,
+      leveledProjectFinish: aggregate.leveledProjectFinish,
     };
   }
 

@@ -3,7 +3,7 @@ import type { ConformanceFixture } from '@repo/engine-conformance';
 import { computeSchedule } from '../engine';
 import type { EngineOutput, ProgressMode } from '../engine';
 
-import { adaptFixture } from './adapter';
+import { adaptFixture, computeLeveledSchedule } from './adapter';
 import { toCalendarDay } from './type-map';
 
 /**
@@ -81,8 +81,13 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: 'needs an external/multi-project relationship model (not on the current ladder)',
   },
   S10_LEVELLED: {
-    runnable: false,
-    reason: 'needs resource levelling (ADR-0035 §21–§23, M7 — deferred)',
+    // M7 (ADR-0041 / ADR-0035 §28) landed the opt-in resource-levelling second pass. S10 runs the
+    // same unprogressed network as S01 with levelling ON, so the pure early/late/float layer is
+    // byte-identical while over-allocations (NL-CRANE600 A6100/A6200, NL-HYDROPUMP A7700/A7730) are
+    // serialised into a leveled overlay — a leveled-date differential (assert on the overlay, not
+    // `resultsDiffer`, which compares only the untouched pure layer).
+    runnable: true,
+    reason: '',
   },
   S11_MULTIPLE_FLOAT_PATHS: {
     // M6-F6 (ADR-0035 §19) landed `computeFloatPaths`. S11 runs the plain unprogressed network like
@@ -152,19 +157,29 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
   // S08 flips make-open-ends-critical on (ADR-0035 §20, M6-F4). Like S07 it changes only the critical
   // set (the open ends), never the dates — asserted with `criticalSetDiffers`.
   const makeOpenEndsCritical = scenarioId === 'S08_OPEN_ENDS_CRITICAL' ? true : undefined;
-  const { activities, edges, options } = adaptFixture(fixture, {
+  // S10 flips resource levelling on (ADR-0041, M7): the adapter builds the demand model and
+  // `computeLeveledSchedule` runs the opt-in second pass after the network pass. Off for every other
+  // scenario (the byte-identical parity path).
+  const honorLevelling = scenarioId === 'S10_LEVELLED';
+  const network = adaptFixture(fixture, {
     dataDate,
     honorLagCalendars,
     honorActivityCalendars,
     honorProgress,
     relationshipLagCalendar,
     useExpectedFinishDates,
+    honorLevelling,
   });
+  if (honorLevelling) {
+    // The levelling pass consumes the network output and merges its additive overlay; S10 needs none of
+    // the other one-option flips, so the adapted options carry through unchanged.
+    return { ran: true, scenarioId, output: computeLeveledSchedule(network) };
+  }
   return {
     ran: true,
     scenarioId,
-    output: computeSchedule(activities, edges, {
-      ...options,
+    output: computeSchedule(network.activities, network.edges, {
+      ...network.options,
       ...(progressMode ? { progressMode } : {}),
       ...(criticalDefinition ? { criticalDefinition } : {}),
       ...(makeOpenEndsCritical ? { makeOpenEndsCritical } : {}),
@@ -210,4 +225,20 @@ export function criticalSetDiffers(a: EngineOutput, b: EngineOutput): boolean {
     if (left.isCritical !== right.isCritical) return true;
   }
   return false;
+}
+
+/**
+ * Whether the resource-levelling overlay moved any activity off its pure-network position — the
+ * **levelling differential** ("flip levelling on, the leveled dates must move"). `resultsDiffer`
+ * compares only the pure `early*`/`late*` layer, which levelling **never recomputes** (ADR-0041 §3 / Q2),
+ * so on a leveled output it correctly reports NO difference; this predicate instead compares each
+ * participant's `leveledStart`/`leveledFinish` against its `earlyStart`/`earlyFinish`. Kept separate for
+ * the same reason `criticalSetDiffers` is (ADR-0034 §2) — a date regression can never mask it.
+ */
+export function leveledResultsDiffer(output: EngineOutput): boolean {
+  return output.results.some(
+    (r) =>
+      r.leveledStart != null &&
+      (r.leveledStart !== r.earlyStart || r.leveledFinish !== r.earlyFinish),
+  );
 }

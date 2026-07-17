@@ -593,6 +593,22 @@ export interface PlanScheduleSummary {
    * unless the plan has a resource-dependent activity with no driver.
    */
   resourceDriverMissingCount: number;
+  /**
+   * Resource-levelling roll-up (ADR-0041 / ADR-0035 §28). `leveledActivityCount` is how many activities
+   * the opt-in levelling pass delayed (`levelingDelay > 0`); `levelingWindowExceededCount` how many were
+   * pushed past a resource's availability window (produce-and-flag, §6); `selfOverAllocatedCount` how many
+   * carry an unfixable single-activity over-allocation (§2). All **0** when the plan does not level
+   * (`levelResources` off) — the parity path never populates a leveled overlay.
+   */
+  leveledActivityCount: number;
+  levelingWindowExceededCount: number;
+  selfOverAllocatedCount: number;
+  /**
+   * The inclusive leveled project finish (`YYYY-MM-DD`) — the latest finish under levelling — or **null**
+   * when the plan does not level (ADR-0041). Independent of `projectFinish`, which stays the pure-network
+   * finish (the network layer is never recomputed, Q2).
+   */
+  leveledProjectFinish: string | null;
 }
 
 /**

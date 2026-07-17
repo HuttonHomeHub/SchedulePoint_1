@@ -4,7 +4,13 @@ import { describe, expect, it } from 'vitest';
 import { computeFloatPaths } from '../engine';
 
 import { adaptFixture } from './adapter';
-import { runScenario, resultsDiffer, criticalSetDiffers, SCENARIO_SUPPORT } from './scenarios';
+import {
+  runScenario,
+  resultsDiffer,
+  criticalSetDiffers,
+  leveledResultsDiffer,
+  SCENARIO_SUPPORT,
+} from './scenarios';
 import { toCalendarDay } from './type-map';
 
 /**
@@ -42,6 +48,8 @@ describe('conformance scenarios (differential scaffold)', () => {
       'S06_LAG_CALENDAR_24H',
       'S07_LONGEST_PATH',
       'S08_OPEN_ENDS_CRITICAL',
+      // S10 became runnable at M7 (ADR-0041 resource levelling).
+      'S10_LEVELLED',
       'S11_MULTIPLE_FLOAT_PATHS',
       'S12_EXPECTED_FINISH_OFF',
     ]);
@@ -166,6 +174,62 @@ describe('conformance scenarios (differential scaffold)', () => {
     }
   });
 
+  it('runs S10 (resource levelling) as a leveled-date differential — over-allocations serialise (M7)', () => {
+    const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
+    const levelled = runScenario(fixture, 'S10_LEVELLED');
+    expect(baseline.ran && levelled.ran).toBe(true);
+    if (!(baseline.ran && levelled.ran)) return;
+
+    // The pure network layer is NEVER recomputed by levelling (ADR-0041 §3 / Q2), so the early/late
+    // dates are byte-identical to S01 — a real date regression would still trip `resultsDiffer`.
+    expect(resultsDiffer(levelled.output, baseline.output)).toBe(false);
+    // The LEVELLING differential: turning levelling on moves at least one activity's leveled date off
+    // its network position ("flip the option, the leveled dates must move", ADR-0034 §2).
+    expect(leveledResultsDiffer(levelled.output)).toBe(true);
+    expect(levelled.output.summary.leveledActivityCount ?? 0).toBeGreaterThan(0);
+
+    const byId = new Map(levelled.output.results.map((r) => [r.activityId, r]));
+
+    /**
+     * Assert two activities are serialised on their shared single-unit resource: their leveled
+     * [start, finish) intervals do not overlap, the later one is placed exactly when the earlier frees
+     * the resource (abuts — delayed by the earlier's leveled duration), and it was actually delayed.
+     */
+    const assertSerialised = (id1: string, id2: string): void => {
+      const a = byId.get(id1)!;
+      const b = byId.get(id2)!;
+      expect(a.leveledStartOffset).not.toBeNull();
+      expect(b.leveledStartOffset).not.toBeNull();
+      const [first, second] = a.leveledStartOffset! <= b.leveledStartOffset! ? [a, b] : [b, a];
+      // Non-overlapping on the resource: the later starts no earlier than the earlier finishes.
+      expect(second.leveledStartOffset!).toBeGreaterThanOrEqual(first.leveledFinishOffset!);
+      // Serialised back-to-back: placed at the earliest feasible slot = when the earlier frees it.
+      expect(second.leveledStartOffset!).toBe(first.leveledFinishOffset!);
+      // The serialised (later) activity was delayed off its network position, and its finish moved out.
+      expect(second.levelingDelay ?? 0).toBeGreaterThan(0);
+      expect(second.leveledFinishOffset!).toBeGreaterThan(second.earlyFinishOffset);
+    };
+
+    // NL-CRANE600 (capacity 1): A6100 + A6200 both demand it (SS+0) → serialise (fixture S10 assertion).
+    assertSerialised('A6100', 'A6200');
+    // NL-HYDROPUMP (capacity 1): A7700 + A7730 both FS+0 from A7600 → serialise (fixture S10 assertion).
+    // With no fixture leveling_priority, the composite tie-break (equal float/early start → id asc)
+    // places A7700 first and delays A7730 by A7700's duration.
+    assertSerialised('A7700', 'A7730');
+    expect(
+      (byId.get('A7730')!.leveledStartOffset ?? 0) > (byId.get('A7700')!.leveledStartOffset ?? 0),
+    ).toBe(true);
+
+    // Levelling must NEVER move a MANDATORY-constrained activity (fixture S10 assertion): A10100 /
+    // A10500 keep their network position — no delay and no leveled shift away from their early start.
+    for (const id of ['A10100', 'A10500']) {
+      const r = byId.get(id)!;
+      expect(r.levelingDelay ?? 0).toBe(0);
+      // Either not a levelling participant (no overlay) or pinned at the network position.
+      if (r.leveledStart != null) expect(r.leveledStart).toBe(r.earlyStart);
+    }
+  });
+
   it('runs the S01 baseline against the real engine', () => {
     const run = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
     expect(run.ran).toBe(true);
@@ -176,10 +240,11 @@ describe('conformance scenarios (differential scaffold)', () => {
   });
 
   it('returns a todo (not a fabricated run) for a not-yet-supported scenario', () => {
-    // S10 (resource levelling) is deferred to the M7 resource epic — still honestly a todo.
-    const run = runScenario(fixture, 'S10_LEVELLED');
+    // S09 (ignore external relationships) needs an inter-project relationship model — still honestly a
+    // todo (S10 resource levelling became runnable at M7, ADR-0041).
+    const run = runScenario(fixture, 'S09_IGNORE_EXTERNAL');
     expect(run.ran).toBe(false);
-    if (!run.ran) expect(run.todo).toContain('M7');
+    if (!run.ran) expect(run.todo).toContain('external');
   });
 
   it('resultsDiffer detects identity — the S01 run does not differ from itself', () => {

@@ -2,7 +2,13 @@ import type { DurationType, EditedField } from '@repo/types';
 
 import { resolveTriad } from '../duration-type/resolve-triad';
 import { allMinutesWorkCalendar, buildWorkingTimeCalendar, fullDayWeek } from '../engine';
-import type { ComputeOptions, EngineActivity, EngineEdge } from '../engine';
+import type {
+  ComputeOptions,
+  EngineActivity,
+  EngineAssignment,
+  EngineEdge,
+  EngineResource,
+} from '../engine';
 
 /**
  * **First-principles golden networks** (ADR-0034 §3). Small, hand-authored CPM
@@ -568,5 +574,77 @@ export const GOLDEN_CASES: GoldenCase[] = [
       },
     },
     projectFinish: '2026-06-03',
+  },
+];
+
+/**
+ * **First-principles resource-levelling golden** (ADR-0034 §3 / ADR-0041). Unlike {@link GOLDEN_CASES}
+ * (pure CPM), a levelling case carries a resource-demand model and asserts the LEVELED overlay the
+ * opt-in second pass produces — computed by hand, independent of the fixture (the reproducible oracle,
+ * ADR-0034's no-external-oracle strategy). The plan calendar is 24/7 so one working day = 1440 minutes
+ * and a plan-frame offset equals the absolute minute delta — the serialisation arithmetic is transparent.
+ */
+export interface LevellingGoldenExpectation {
+  leveledStartOffset: number;
+  leveledFinishOffset: number;
+  leveledStart: string;
+  leveledFinish: string;
+  levelingDelay: number;
+}
+
+export interface LevellingGoldenCase {
+  name: string;
+  description: string;
+  activities: EngineActivity[];
+  edges: EngineEdge[];
+  assignments: EngineAssignment[];
+  resources: EngineResource[];
+  options: ComputeOptions;
+  levelWithinFloatOnly: boolean;
+  /** Per-activity expected leveled overlay, keyed by activity id. */
+  expected: Record<string, LevellingGoldenExpectation>;
+  /** Expected inclusive leveled project-finish display date. */
+  leveledProjectFinish: string;
+}
+
+export const LEVELLING_GOLDEN_CASES: LevellingGoldenCase[] = [
+  {
+    name: 'single-unit-resource-serialises-second',
+    description:
+      'A6100/A6200 crane shape: two equal 2-day activities (A priority 1, B priority 2) both start at the data date and both demand a capacity-1 resource — 200% allocation. Levelling serialises them: A keeps its early start, B is delayed by EXACTLY A’s 2-day duration (ADR-0041 §1–§4).',
+    activities: [
+      { id: 'A', durationMinutes: 2 * 1440, type: 'TASK', levelingPriority: 1 },
+      { id: 'B', durationMinutes: 2 * 1440, type: 'TASK', levelingPriority: 2 },
+    ],
+    edges: [],
+    assignments: [
+      { activityId: 'A', resourceId: 'R', unitsPerHour: 1 },
+      { activityId: 'B', resourceId: 'R', unitsPerHour: 1 },
+    ],
+    resources: [{ id: 'R', capacity: 1 }],
+    options: { dataDate: ALL_DAYS_DATA_DATE, calendar: allMinutesWorkCalendar },
+    levelWithinFloatOnly: false,
+    expected: {
+      // A keeps its network position (delay 0), occupying the resource on days 1–2 (06-01 … 06-02).
+      A: {
+        leveledStartOffset: 0,
+        leveledFinishOffset: 2 * 1440,
+        leveledStart: '2026-06-01',
+        leveledFinish: '2026-06-02',
+        levelingDelay: 0,
+      },
+      // B serialises to the day after A frees the resource: delayed by exactly A’s duration (2 days =
+      // 2 880 min), so it runs 06-03 … 06-04.
+      B: {
+        leveledStartOffset: 2 * 1440,
+        leveledFinishOffset: 4 * 1440,
+        leveledStart: '2026-06-03',
+        leveledFinish: '2026-06-04',
+        levelingDelay: 2 * 1440,
+      },
+    },
+    // Serialising with no float extends the schedule: the leveled project finish is B’s (06-04), two
+    // days past the unleveled network finish (06-02).
+    leveledProjectFinish: '2026-06-04',
   },
 ];

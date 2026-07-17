@@ -102,6 +102,13 @@ export interface ScheduleAggregate {
   loeNoSpanCount: number;
   /** Resource-dependent activities with no driving resource (ADR-0035 §23 / ADR-0039). */
   resourceDriverMissingCount: number;
+  /** Resource-levelling roll-up (ADR-0041 / ADR-0035 §28), read back from the engine-owned leveled
+   * columns; all 0 / null when the plan does not level. */
+  leveledActivityCount: number;
+  levelingWindowExceededCount: number;
+  selfOverAllocatedCount: number;
+  /** Max inclusive leveled finish as `YYYY-MM-DD`; null when the plan does not level. */
+  leveledProjectFinish: string | null;
   /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
   projectFinish: string | null;
 }
@@ -240,6 +247,10 @@ export class ScheduleRepository {
         constraint_warning_count: bigint;
         loe_no_span_count: bigint;
         resource_driver_missing_count: bigint;
+        leveled_activity_count: bigint;
+        leveling_window_exceeded_count: bigint;
+        self_over_allocated_count: bigint;
+        leveled_project_finish: string | null;
         project_finish: string | null;
       }>
     >`
@@ -261,6 +272,20 @@ export class ScheduleRepository {
         -- Resource-dependent driver-missing produce-and-flag (ADR-0035 §23 / ADR-0039): the
         -- engine-written flag, read back like loe_no_span over the same plan-scoped active set.
         COUNT(*) FILTER (WHERE resource_driver_missing) AS resource_driver_missing_count,
+        -- Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): read back from the engine-owned leveled
+        -- columns, aggregated like the produce-and-flag counts above. A plan that does not level has
+        -- every leveled column null/false ⇒ these are 0 and the leveled finish is null (the parity path).
+        COUNT(*) FILTER (WHERE leveling_delay_minutes > 0) AS leveled_activity_count,
+        COUNT(*) FILTER (WHERE leveling_window_exceeded) AS leveling_window_exceeded_count,
+        COUNT(*) FILTER (WHERE self_over_allocated) AS self_over_allocated_count,
+        -- The leveled project finish is the latest finish under levelling (a participant's leveled
+        -- finish, else its network early finish). Null unless at least one activity carries a leveled
+        -- overlay, so a non-levelled plan reports null (distinct from the pure-network project_finish).
+        CASE
+          WHEN COUNT(*) FILTER (WHERE leveled_finish IS NOT NULL) > 0
+          THEN to_char(MAX(COALESCE(leveled_finish, early_finish)), 'YYYY-MM-DD')
+          ELSE NULL
+        END AS leveled_project_finish,
         to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
       FROM activities
       WHERE plan_id = ${planId}::uuid
@@ -276,6 +301,10 @@ export class ScheduleRepository {
       constraintWarningCount: Number(row.constraint_warning_count),
       loeNoSpanCount: Number(row.loe_no_span_count),
       resourceDriverMissingCount: Number(row.resource_driver_missing_count),
+      leveledActivityCount: Number(row.leveled_activity_count),
+      levelingWindowExceededCount: Number(row.leveling_window_exceeded_count),
+      selfOverAllocatedCount: Number(row.self_over_allocated_count),
+      leveledProjectFinish: row.leveled_project_finish,
       projectFinish: row.project_finish,
     };
   }

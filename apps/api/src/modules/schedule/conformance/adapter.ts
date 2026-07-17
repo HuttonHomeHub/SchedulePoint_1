@@ -7,11 +7,19 @@ import type {
 import type { ConstraintType, DurationType, EditedField } from '@repo/types';
 
 import { resolveTriad } from '../duration-type/resolve-triad';
-import { allMinutesWorkCalendar, buildWorkingTimeCalendar } from '../engine';
+import {
+  allMinutesWorkCalendar,
+  buildWorkingTimeCalendar,
+  computeSchedule,
+  levelSchedule,
+} from '../engine';
 import type {
   ComputeOptions,
   EngineActivity,
+  EngineAssignment,
   EngineEdge,
+  EngineOutput,
+  EngineResource,
   ShiftWindow,
   TimeException,
   WeeklyPattern,
@@ -86,12 +94,32 @@ export interface AdaptationReport {
   notes: AdaptationNote[];
 }
 
+/**
+ * The resource-**levelling** demand model (ADR-0041 §2), built from the fixture only when
+ * `honorLevelling` is on. `resources` carries each resource's capacity ceiling (`max_units_per_hour`,
+ * NULL = uncapped) + its own resolved calendar port; `assignments` carries every active assignment's
+ * per-hour demand (all assignments consume capacity, not only the driving one). `levelWithinFloatOnly`
+ * threads the plan-level intent for the scenario. Fed to {@link levelSchedule} after
+ * {@link computeSchedule}; absent on the default (parity) adaptation.
+ */
+export interface LevelingModel {
+  resources: EngineResource[];
+  assignments: EngineAssignment[];
+  levelWithinFloatOnly: boolean;
+}
+
 /** The adapted, engine-ready network plus the honesty report. */
 export interface AdaptedNetwork {
   activities: EngineActivity[];
   edges: EngineEdge[];
   options: ComputeOptions;
   report: AdaptationReport;
+  /**
+   * The resource-levelling demand model (ADR-0041), present only when `honorLevelling` is on. When
+   * absent the network levels to byte-identical CPM dates (the parity path); {@link computeLeveledSchedule}
+   * runs the opt-in second pass when it is present.
+   */
+  leveling?: LevelingModel;
 }
 
 export interface AdaptOptions {
@@ -165,6 +193,27 @@ export interface AdaptOptions {
    * write-path service tests, **not** by a fixture date-differential. Recorded in `approximations`.
    */
   honorDurationTypes?: boolean;
+  /**
+   * Build the resource-**levelling** demand model from the fixture and expose it as
+   * {@link AdaptedNetwork.leveling} (ADR-0041, M7). Default **false** = parity: the model is absent and
+   * the network levels to byte-identical CPM dates (the whole existing golden/adapter suite is
+   * unchanged — the parity gate). When **true** the adapter reads each resource's `max_units_per_hour`
+   * as the capacity ceiling (NULL = uncapped) + its own calendar port, and every active assignment's
+   * `units_per_hour` as demand (all assignments consume capacity, ADR-0041 §2). {@link computeLeveledSchedule}
+   * then runs {@link levelSchedule} after {@link computeSchedule} and merges the additive overlay. Only
+   * the S10 differential turns this on; the pure early/late/float layer is never recomputed (Q2).
+   *
+   * **Levelling priority.** The fixture's `leveling_priority` is not carried through the loader schema
+   * (every fixture value is `null`), so the deterministic composite tie-break — total-float asc →
+   * early-start asc → id asc (ADR-0041 §1) — decides serialisation order here. Recorded in `approximations`.
+   */
+  honorLevelling?: boolean;
+  /**
+   * Level within total float only (ADR-0041 §4) — the plan-level intent threaded into
+   * {@link LevelingModel.levelWithinFloatOnly}. Default **false** (P6's off-by-default). Consulted only
+   * when `honorLevelling` is on.
+   */
+  levelWithinFloatOnly?: boolean;
 }
 
 const MINUTES_PER_HOUR = 60;
@@ -203,6 +252,8 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const honorProgress = opts.honorProgress ?? false;
   const useExpectedFinishDates = opts.useExpectedFinishDates ?? false;
   const honorDurationTypes = opts.honorDurationTypes ?? false;
+  const honorLevelling = opts.honorLevelling ?? false;
+  const levelWithinFloatOnly = opts.levelWithinFloatOnly ?? false;
   const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
 
@@ -307,6 +358,33 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     else excludedRelationships += 1;
   }
 
+  // Resource-levelling demand model (ADR-0041, M7): built only when opted in (default off = parity).
+  // Capacity = each resource's `max_units_per_hour` (NULL = uncapped); the resource's own calendar port
+  // (built above in `portById`) is attached when it is not the plan default — including window-only
+  // resource calendars (RCAL-CRANE600), which is exactly how the pass detects a serialisation pushed past
+  // a resource's availability window (`levelingWindowExceeded`, §6). Every active assignment contributes
+  // its `units_per_hour` demand (all assignments consume capacity, not only the driving one, §2). This
+  // mirrors ScheduleService.buildEngineGraph's model-load (portFor(r.calendarId) + all assignments).
+  let leveling: LevelingModel | undefined;
+  if (honorLevelling) {
+    const resources: EngineResource[] = fixture.resources.map((r) => {
+      const port = r.calendar !== defaultCalendarId ? portById.get(r.calendar) : undefined;
+      return {
+        id: r.id,
+        capacity: r.max_units_per_hour,
+        ...(port ? { calendar: port } : {}),
+      };
+    });
+    const assignments: EngineAssignment[] = fixture.assignments
+      .filter((asg) => supportedIds.has(asg.activity))
+      .map((asg) => ({
+        activityId: asg.activity,
+        resourceId: asg.resource,
+        unitsPerHour: asg.units_per_hour,
+      }));
+    leveling = { resources, assignments, levelWithinFloatOnly };
+  }
+
   const report: AdaptationReport = {
     dataDate,
     planCalendarId: defaultCalendarId,
@@ -324,6 +402,9 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       honorDurationTypes
         ? 'FIXED_UNITS / FIXED_UNITS_TIME activities with a driving assignment carrying a rate derive their duration via resolveTriad (Units ÷ Units/Time → working minutes; ADR-0040 / ADR-0035 §26/§27); on this fixture no duration-type activity has a driving assignment and their units/duration/rate are self-consistent, so the derivation is inert and durations stay byte-identical (documented, not faked — the S13/A8300 self-consistency)'
         : 'duration types are not resolved; each activity keeps its fixture duration (ADR-0040, M7 rung 4 baseline)',
+      honorLevelling
+        ? 'resource levelling is honoured (ADR-0041, §28): the opt-in serial priority-list second pass runs after the CPM network pass and serialises over-allocations (NL-CRANE600 A6100/A6200, NL-HYDROPUMP A7700/A7730) into a leveled overlay; the fixture carries no leveling_priority (the schema strips it), so the composite tie-break (total-float → early-start → id) orders placement; the pure early/late/float layer is never recomputed (Q2)'
+        : 'resource levelling is not applied; the schedule is the pure CPM network with no leveled overlay (ADR-0041, M7 baseline / the byte-identical parity path)',
       'progress, actuals, suspend/resume and the data-date floor are ignored (ADR-0035 §1–§6, M2)',
       honorLagCalendars
         ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag)'
@@ -338,6 +419,36 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
     edges,
     options: { dataDate, calendar, ...(useExpectedFinishDates ? { useExpectedFinishDates } : {}) },
     report,
+    ...(leveling ? { leveling } : {}),
+  };
+}
+
+/**
+ * Compute the pure CPM network schedule, then — when the network carries a levelling demand model
+ * ({@link AdaptOptions.honorLevelling}) — run the opt-in {@link levelSchedule} second pass and merge its
+ * **additive overlay** (leveled start/finish + `levelingDelay` + the produce-and-flag flags + plan
+ * counts) onto the result. This mirrors `ScheduleService.recalculate`'s compute→level→merge under the
+ * ADR-0041 contract: the pure `early*`/`late*`/`totalFloat`/`isCritical` are **never recomputed** (Q2),
+ * so with no `leveling` model present this is exactly `computeSchedule` (the byte-identical parity path).
+ */
+export function computeLeveledSchedule(network: AdaptedNetwork): EngineOutput {
+  const output = computeSchedule(network.activities, network.edges, network.options);
+  if (!network.leveling) return output;
+  const leveled = levelSchedule(
+    network.activities,
+    output,
+    network.leveling.assignments,
+    network.leveling.resources,
+    {
+      levelWithinFloatOnly: network.leveling.levelWithinFloatOnly,
+      dataDate: network.options.dataDate,
+      planCalendar: network.options.calendar,
+    },
+  );
+  return {
+    ...output,
+    results: leveled.results,
+    summary: { ...output.summary, ...leveled.summary },
   };
 }
 

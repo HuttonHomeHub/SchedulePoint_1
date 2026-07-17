@@ -1,10 +1,10 @@
 # ADR-0041: Resource levelling — the opt-in resource-constrained pass
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-17
-- **Deciders:** James Ewbank (with Claude Code) — **awaiting approval**
+- **Deciders:** James Ewbank (with Claude Code)
 
-> **Proposed — governs milestone M7 (the resource dimension), the resource-**levelling** rung
+> **Accepted — governs milestone M7 (the resource dimension), the resource-**levelling** rung
 > (`levelling_test`, scenario S10).** It **activates** the `resource.max_units_per_hour` column that
 > [ADR-0039](0039-resource-model-and-resource-calendar-scheduling.md) reserved **"for levelling"** as the
 > per-resource capacity ceiling, and consumes the driving assignment's `units_per_hour`
