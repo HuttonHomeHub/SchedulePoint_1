@@ -120,6 +120,26 @@
   `varchar(n)` unless a real limit applies). Money (if the app has any):
   `integer`/`bigint` minor units + currency code. Identifiers: `uuid`. Enums:
   Postgres enums via Prisma.
+- **Money is `BIGINT` minor units + a currency code (EV1, ADR-0042).** The first
+  money columns land with the cost/earned-value rung: `resources.cost_per_unit`
+  (a P6 "Price/Unit" rate), `resource_assignments.budgeted_cost`/`actual_cost`,
+  `activities.budgeted_expense`/`actual_expense`, and
+  `baseline_activities.budgeted_cost` are all **`BIGINT` minor units** (e.g.
+  pence/cents) in the plan's currency; `plans.currency_code` is `CHAR(3)`
+  ISO-4217 (a genuine fixed-width code — the "text unless a real limit applies"
+  exception — format-guarded, nullable = inherit the org default). `BIGINT` (not
+  `INTEGER`) because construction BACs exceed the ~£21M `INT` minor-unit ceiling;
+  `BIGINT` (not `DECIMAL`) because money uses exact integer minor units with a
+  single documented rounding point per derived index (ADR-0035 §29) — the
+  schema's `DECIMAL(18,4)` columns (`budgeted_units`, `units_per_hour`,
+  `max_units_per_hour`, `actual_units`) are physical **quantities**, not money.
+  The house rule: **rate coefficients are `DECIMAL(18,4)`; stored money amounts are
+  `BIGINT` minor units.** `resources.cost_per_unit` is a **cost-per-unit rate**
+  (multiplies `budgeted_units` directly, aligned with the ADR-0040 units backbone),
+  so it is `DECIMAL(18,4)` like its sibling rates — in minor units per unit of work
+  (e.g. `5237.5000` pence/unit) so a derived amount is `round(budgeted_units ×
+cost_per_unit)` minor units. Decimal keeps a composite rate exact rather than
+  rounding it to a whole minor unit before the multiply.
 - No business logic in triggers/stored procedures unless justified and
   documented (keep logic in the app for testability).
 
@@ -656,6 +676,50 @@ deleted_at IS NULL` guarantees **≤ 1** driver per activity in the DB; **"exact
   defaulted false, never accepted from a write DTO, written only by the M7.2 recalc
   `UPDATE` (never touching `version`/`updated_at`, ADR-0022). It lands now so M7.2
   needs no wide `ALTER` of the large `activities` table.
+
+### Earned Value: cost, %-complete-type & the cost baseline (EV1)
+
+The `percent-complete-earned-value` rung (EV1, ADR-0042; amends ADR-0025) activates
+the cost columns ADR-0039 **reserved** and adds the %-complete-type inputs — all
+**additive, nullable/constant-default, and DARK** (Earned Value is a pure
+**read-model** computed on a read endpoint in EV2; there is **no write pass and no
+engine-owned EV column**, so the CPM parity gate is structurally trivial — nothing on
+the recalc write path changes). An unset value leaves every existing recalc / progress
+/ baseline path **byte-identical**. Money follows the `BIGINT` minor-units rule above.
+
+- **`resources.cost_per_unit`** (`DECIMAL(18,4)?`, minor units per unit — a **rate
+  coefficient** like `units_per_hour`, not a stored money amount) — the
+  ADR-0039-reserved cost rate, now live: cost-per-unit (P6 "Price/Unit"), `NULL` = no
+  cost (contributes 0). `ck_resources_cost_per_unit_nonneg` (nullable-safe, **N22**)
+  mirrors `ck_resources_max_units_per_hour_nonneg` (N21).
+- **`resource_assignments.budgeted_cost`** (`BIGINT?`, **override** — `NULL` derives
+  `budgeted_units × cost_per_unit` at read time, Q1), **`actual_cost`** (`BIGINT NOT
+NULL DEFAULT 0`, progress), **`actual_units`** (`DECIMAL(18,4) NOT NULL DEFAULT 0`,
+  progress — the units-% numerator). `>= 0` CHECKs: `_budgeted_cost_nonneg`
+  (nullable-safe, N22), `_actual_cost_nonneg` (N22), `_actual_units_nonneg` (N14
+  precedent).
+- **`activities.percent_complete_type`** (`PercentCompleteType` enum
+  `DURATION`/`UNITS`/`PHYSICAL`, **DEFAULT `DURATION`** = behaviour-preserving; it
+  selects the EV performance measure and **changes no CPM date**),
+  **`physical_percent_complete`** (`SMALLINT?`, `NULL` = unset;
+  `ck_activities_physical_percent_complete_range` 0–100 nullable-safe, **N23**), and
+  **`budgeted_expense`/`actual_expense`** (`BIGINT?` lump-sum, `NULL` = none; `>= 0`
+  CHECKs, N22). No index (plan-scoped EV load only — the `secondary_constraint_type`
+  precedent).
+- **`plans.eac_method`** (`EacMethod` enum `CPI`/`REMAINING_AT_BUDGET`/`CPI_TIMES_SPI`,
+  **DEFAULT `CPI`** = P6's headline `EAC = BAC / CPI`, Q3) and **`currency_code`**
+  (`CHAR(3)?` ISO-4217, `ck_plans_currency_code_iso4217` nullable-safe format guard;
+  `NULL` = inherit the org default). Single-row plan options, unindexed.
+- **`baseline_activities.budgeted_cost`** (`BIGINT?`) — the **cost baseline** (ADR-0025
+  amendment): the activity's budgeted cost **frozen at capture**, immutable, giving the
+  active baseline a committed PV/BCWS reference. `NULL` for a baseline captured before
+  this rung ⇒ PV falls back to the live budget (`costBaselineMissing`), never an error.
+  `ck_baseline_activities_budgeted_cost_nonneg` (nullable-safe, defence-in-depth).
+
+**N24** (actual cost/units on a not-started activity) is a **warn, not a reject** — the
+EV read surfaces it as a count — so it is deliberately **not** a CHECK. No new index is
+added: every EV column is read within an already plan-scoped or org-scoped load and is
+never a query predicate.
 
 ## Testing & performance
 

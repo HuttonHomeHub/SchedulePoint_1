@@ -382,6 +382,32 @@ enum ActivityStatus {
   COMPLETE
 }
 
+// The %-complete measure that feeds Earned Value for an activity (EV1, ADR-0042 /
+// ADR-0035 §29). DURATION (default, behaviour-preserving — today's `percent_complete`
+// is duration-based) derives EV performance % from elapsed vs total working time; UNITS
+// from actual vs budgeted work (`actual_units / budgeted_units`); PHYSICAL from the
+// hand-entered `physical_percent_complete`. It selects the EV performance measure ONLY —
+// it NEVER changes a CPM date (physical/units %-complete earn value but move no dates;
+// the schedule keeps using the M2 remaining duration). MUST stay in lock-step with the
+// TypeScript `PercentCompleteType` union in @repo/types (EV1 Task 3).
+enum PercentCompleteType {
+  DURATION
+  UNITS
+  PHYSICAL
+}
+
+// The Estimate-at-Completion forecast method a plan's EV read uses (EV1, ADR-0042 /
+// ADR-0035 §29, Q3). CPI (default, P6's "typical/performance-factor" EAC = BAC / CPI);
+// REMAINING_AT_BUDGET (the "atypical" EAC = AC + (BAC − EV), remaining work at budget);
+// CPI_TIMES_SPI (schedule-and-cost adjusted EAC = AC + (BAC − EV) / (CPI × SPI)). Read by
+// the EV2 read module (a query param may override per-request); DARK in EV1. MUST stay in
+// lock-step with the TypeScript `EacMethod` union in @repo/types.
+enum EacMethod {
+  CPI
+  REMAINING_AT_BUDGET
+  CPI_TIMES_SPI
+}
+
 // Schedule constraint kinds (PROJECT_BRIEF §11). Reserved for the CPM engine
 // (M6) — stored now so constraints round-trip before the engine honours them.
 enum ConstraintType {
@@ -526,6 +552,23 @@ model Plan {
   // plan options, a single-row column read with the plan, never filtered across plans,
   // so no index; additive with a constant DEFAULT. Consumed by the L2 engine pass.
   levelWithinFloatOnly   Boolean                @default(false) @map("level_within_float_only")
+  // The Earned-Value EAC forecast method (EV1, ADR-0042, Q3). Default CPI is P6's headline
+  // forecast (EAC = BAC / CPI). Read by the EV2 read module (a query param may override
+  // per-request); DARK in EV1 — nothing computes EV yet. Like the other plan options a
+  // single-row column read with the plan, never filtered across plans, so no index;
+  // additive with a constant DEFAULT (no data migration, byte-parity). MUST stay in
+  // lock-step with the TypeScript `EacMethod` union in @repo/types.
+  eacMethod              EacMethod              @default(CPI) @map("eac_method")
+  // The plan's ISO-4217 currency for all money columns (EV1, ADR-0042, Q6). Single currency
+  // per plan (multi-currency/FX is out of scope — CLAUDE.md §17). CHAR(3) is a genuine
+  // fixed-width code (the docs/DATABASE.md "text unless a real limit applies" exception),
+  // guarded by ck_plans_currency_code_iso4217 (nullable-safe uppercase 3-letter format).
+  // NULLABLE with NO default — NULL = unset / inherit the org default at read time; a
+  // DEFAULT currency is deliberately omitted so we never stamp an arbitrary currency (e.g.
+  // USD) on an existing GBP plan. Money reads as minor units + this code. Single-row column
+  // read with the plan, never filtered across plans, so no index; additive, byte-parity.
+  // Client-settable.
+  currencyCode           String?                @map("currency_code") @db.Char(3)
   // Date-only (no time / no timezone): a plan's start is a calendar day, not an
   // instant, so it is @db.Date, not timestamptz. This IS the CPM data date
   // (ADR-0023). **Required + NOT NULL** as of ADR-0033 **M1** — the
@@ -683,6 +726,33 @@ model Activity {
   // with no default ⇒ every existing row reads "no expected finish" and the byte-parity
   // golden path is unchanged. No index: read only on the full-plan recalc load.
   expectedFinish           DateTime?      @map("expected_finish") @db.Date
+
+  // Earned Value inputs (EV1, ADR-0042 / ADR-0035 §29). All additive & behaviour-
+  // preserving: EV is a pure READ-MODEL (EV2) — none of these feed the CPM engine, and an
+  // unset value leaves every recalc/progress/baseline path byte-identical. DARK in EV1
+  // (nothing reads them yet). Money is BIGINT minor units in the plan's `currency_code`
+  // (docs/DATABASE.md: money = integer minor units + currency).
+  //   * percent_complete_type — CLIENT-SETTABLE definition (a Planner picks it, like `type`/
+  //     `duration_type`). Selects which measure feeds EV performance %: DURATION (default,
+  //     behaviour-preserving), UNITS, or PHYSICAL. It NEVER changes a CPM date. Constant
+  //     DEFAULT backfills every row (byte-parity).
+  //   * physical_percent_complete — CONTRIBUTOR progress input, used only when
+  //     percent_complete_type = PHYSICAL. SMALLINT 0–100, NULLABLE / NO default (NULL =
+  //     unset, distinct from an explicit 0). ck_activities_physical_percent_complete_range
+  //     (nullable-safe 0–100) is the DB backstop behind the DTO 0–100 reject (N23).
+  //   * budgeted_expense — CLIENT-SETTABLE definition: an optional activity-level lump-sum
+  //     budget for non-resourced work (BAC = Σ assignment cost + this). BIGINT minor units,
+  //     NULLABLE / NO default (NULL = no expense, contributes 0 — parity).
+  //   * actual_expense — CONTRIBUTOR progress: the lump-sum actual spent. BIGINT minor
+  //     units, NULLABLE / NO default (NULL = none). Both expenses are guarded `>= 0`
+  //     (nullable-safe) by ck_activities_budgeted_expense_nonneg / _actual_expense_nonneg (N22).
+  // No index: read only on the plan-scoped EV load ((plan_id, created_at, id)), never a
+  // query predicate (the secondary_constraint_type / expected_finish precedent). MUST stay
+  // in lock-step with @repo/types.
+  percentCompleteType     PercentCompleteType @default(DURATION) @map("percent_complete_type")
+  physicalPercentComplete Int?                @map("physical_percent_complete") @db.SmallInt
+  budgetedExpense         BigInt?             @map("budgeted_expense")
+  actualExpense           BigInt?             @map("actual_expense")
 
   // WBS hierarchy — the adjacency-list parent link (M5, ADR-0038). A nullable
   // self-FK: null = a top-level activity (no WBS parent); non-null = this activity
@@ -1258,6 +1328,16 @@ model BaselineActivity {
   totalFloat     Int?      @map("total_float")
   isCritical     Boolean   @default(false) @map("is_critical")
 
+  // The captured COST BASELINE — the activity's budgeted cost frozen at capture (EV1,
+  // ADR-0042; the ADR-0025 snapshot amendment), giving the active baseline a committed PV /
+  // BCWS reference. BIGINT minor units in the plan's currency. NULLABLE / NO default ⇒ a
+  // baseline captured BEFORE this rung reads NULL (PV falls back to the live budget and the
+  // EV read flags `costBaselineMissing`, never an error). Immutable after capture like every
+  // snapshot column. ck_baseline_activities_budgeted_cost_nonneg (nullable-safe `>= 0`) is
+  // defence-in-depth (N22 family). No index (the snapshot is loaded whole per baseline).
+  // DARK until EV2 reads it.
+  budgetedCost BigInt? @map("budgeted_cost")
+
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1419,6 +1499,23 @@ model Resource {
   // predicate. MUST stay in lock-step with @repo/types. LEVELLING-READ ONLY when the
   // plan opts in (plans.level_resources); dark until L2 wires the pass.
   maxUnitsPerHour Decimal?     @map("max_units_per_hour") @db.Decimal(18, 4)
+  // The resource's planned COST RATE (EV1, ADR-0042; activating the column ADR-0039 RESERVED
+  // "for the cost rung"). A RATE COEFFICIENT, so DECIMAL(18,4) like the sibling rates
+  // `max_units_per_hour` / `units_per_hour` (NOT a stored money amount — those stay BIGINT
+  // minor units): the house rule is "rate coefficients are Decimal(18,4); stored money amounts
+  // are integer minor units". Decimal keeps a composite rate (e.g. £52.3750/unit) exact rather
+  // than rounding it to a whole minor unit before multiplying, so the single rounding point is
+  // the derived amount. Expressed in MINOR UNITS per unit of work (e.g. 5237.5000 pence/unit),
+  // so a derived assignment budget is `round(budgeted_units × cost_per_unit)` minor units — no
+  // major/minor conversion. COST-PER-UNIT (P6 "Price/Unit"), NOT cost-per-hour: it multiplies
+  // the assignment's `budgeted_units` directly, aligned with the units backbone (ADR-0040)
+  // rather than re-deriving hours. NULLABLE with NO default — NULL = no cost (the resource
+  // contributes ZERO to BAC/AC), the parity-preserving default (a DEFAULT is omitted to keep
+  // "no rate set" explicit). Client-settable. ck_resources_cost_per_unit_nonneg (nullable-safe
+  // `>= 0`) is the DB backstop behind the DTO @Min(0) reject (N22), mirroring
+  // max_units_per_hour/N21. No index: read only on the plan-scoped EV assignment/rate load,
+  // never a query predicate. MUST stay in lock-step with @repo/types. DARK until EV2 reads it.
+  costPerUnit     Decimal?     @map("cost_per_unit") @db.Decimal(18, 4)
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1483,6 +1580,29 @@ model ResourceAssignment {
   // MATERIAL resource may not drive" are SERVICE invariants (a partial-unique/FK cannot
   // read the activity's type or the resource's kind).
   isDriving     Boolean  @default(false) @map("is_driving")
+
+  // Earned Value cost inputs (EV1, ADR-0042). Money is BIGINT minor units in the plan's
+  // `currency_code`; `actual_units` is an exact-numeric QUANTITY like `budgeted_units`.
+  //   * budgeted_cost — an OPTIONAL definition OVERRIDE of the derived budgeted cost.
+  //     NULLABLE / NO default ⇒ NULL = DERIVE at read time (`budgeted_units ×
+  //     resource.cost_per_unit`, Q1); a non-null value pins an explicit budget (e.g. a quoted
+  //     sub-contract price that is not units × rate). The derive-when-null pattern keeps the
+  //     common case input-free while allowing an override — the ADR-0040 rate-on-the-
+  //     assignment precedent.
+  //   * actual_cost — CONTRIBUTOR progress: the cost actually spent on this assignment,
+  //     entered directly (Q8 — construction actuals come from the cost system, not units).
+  //     NOT NULL DEFAULT 0 (0 = nothing spent yet, a real value with no unset/zero ambiguity),
+  //     metadata-only backfill, mirroring `budgeted_units @default(0)`.
+  //   * actual_units — CONTRIBUTOR progress: the quantity of work actually done, feeding the
+  //     UNITS performance % (`actual_units / budgeted_units`). DECIMAL(18,4) NOT NULL DEFAULT
+  //     0, mirroring `budgeted_units`.
+  // ck_resource_assignments_budgeted_cost_nonneg (nullable-safe), _actual_cost_nonneg, and
+  // _actual_units_nonneg (`>= 0`) are the DB backstops behind the DTO @Min(0) rejects (N22
+  // for the money pair; the units N14 precedent for actual_units). No index: read only on the
+  // plan-scoped EV assignment load. MUST stay in lock-step with @repo/types. DARK until EV2.
+  budgetedCost BigInt? @map("budgeted_cost")
+  actualCost   BigInt  @default(0) @map("actual_cost")
+  actualUnits  Decimal @default(0) @map("actual_units") @db.Decimal(18, 4)
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)

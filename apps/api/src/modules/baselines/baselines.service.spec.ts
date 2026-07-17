@@ -39,6 +39,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     makeOpenEndsCritical: false,
     levelResources: false,
     levelWithinFloatOnly: false,
+    eacMethod: 'CPI',
+    currencyCode: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
