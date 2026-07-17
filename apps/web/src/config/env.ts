@@ -224,9 +224,11 @@ export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOff(
 /**
  * Advanced activity types (ADR-0035 §21/§24, M5-epic). **OFF by default** — gates whether the activity
  * form's Type picker offers **Level of Effort** (a span-derived hammock: duration from its SS-predecessor
- * start to its FF-successor finish, never driving or critical). The engine, API and conformance proof for
- * LOE are already live (F1–F3); the flag only governs whether a planner can *pick* it. When WBS-summary
- * lands (F5–F8) it joins this same gate. Set `VITE_ADVANCED_ACTIVITY_TYPES=true` to enable.
+ * start to its FF-successor finish, never driving or critical) and **WBS summary** (a branch roll-up:
+ * dates from the earliest start / latest finish of the activities grouped under it, carrying no logic),
+ * plus the WBS **parent** picker that nests activities under a summary. The engine, API and conformance
+ * proof for both are live (F1–F7); the flag only governs whether a planner can *pick* them.
+ * Set `VITE_ADVANCED_ACTIVITY_TYPES=true` to enable.
  */
 export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOff(
   import.meta.env.VITE_ADVANCED_ACTIVITY_TYPES,

@@ -238,6 +238,8 @@ function LegacyPlanLayout({
             calendars={model.calendars.data ?? []}
             calendarsLoading={model.calendars.isPending}
             calendarsError={model.calendars.isError}
+            parentSummaries={model.activities.data ?? []}
+            parentSummariesLoading={model.activities.isPending}
           />
         ) : null}
       </div>

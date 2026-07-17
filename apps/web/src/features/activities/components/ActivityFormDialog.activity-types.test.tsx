@@ -8,11 +8,12 @@ import { ActivityFormDialog } from './ActivityFormDialog';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The M5-epic advanced activity types (ADR-0035 §21) with `VITE_ADVANCED_ACTIVITY_TYPES` forced ON —
- * the Type picker gains **Level of effort**. Proves the option renders, that picking it hides the
- * Duration/Expected-finish inputs (an LOE's duration is span-derived) and shows the explanatory hint,
- * and that a create submits `type: LEVEL_OF_EFFORT` with a zeroed duration. Flag-off behaviour (option
- * absent, a seeded LOE still shown) is covered in `ActivityFormDialog.test.tsx`.
+ * The M5-epic advanced activity types (ADR-0035 §21/§24) with `VITE_ADVANCED_ACTIVITY_TYPES` forced ON —
+ * the Type picker gains **Level of effort** and **WBS summary**. Proves the options render, that picking
+ * one hides the Duration/Expected-finish inputs (their duration is derived) and shows the explanatory
+ * hint, that the WBS parent picker offers the plan's summaries, and that a create submits the derived
+ * type with a zeroed duration (and the chosen `parentId`). Flag-off behaviour (options absent, a seeded
+ * value still shown) is covered in `ActivityFormDialog.test.tsx`.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -106,5 +107,61 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     const body = JSON.parse(init?.body as string);
     expect(body.type).toBe('LEVEL_OF_EFFORT');
     expect(body.durationDays).toBe(0);
+  });
+
+  // A plan WBS summary passed as a parent option (route-composed like the calendars list).
+  const SUMMARY: ActivitySummary = {
+    ...BASE_LOE,
+    id: 'wbs1',
+    code: 'TT.4',
+    name: 'Superstructure',
+    type: 'WBS_SUMMARY',
+  };
+
+  it('offers WBS summary in the Type picker', () => {
+    renderDialog();
+    expect(screen.getByRole('option', { name: 'WBS summary' })).toBeInTheDocument();
+  });
+
+  it('hides the Duration input and explains the roll-up when WBS summary is chosen', () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'WBS_SUMMARY' } });
+    expect(screen.queryByLabelText('Duration (working days)')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/dates roll up from the activities grouped under it/i),
+    ).toBeInTheDocument();
+  });
+
+  it('offers the plan’s summaries in the WBS parent picker (excluding the edited activity)', () => {
+    renderDialog({ parentSummaries: [SUMMARY] });
+    const parent = screen.getByLabelText('WBS summary (optional)');
+    expect(parent).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'TT.4 · Superstructure' })).toBeInTheDocument();
+    // The "None (top-level)" default is always present.
+    expect(screen.getByRole('option', { name: 'None (top-level)' })).toBeInTheDocument();
+  });
+
+  it('guides the planner to create a summary first when the plan has none', () => {
+    renderDialog({ parentSummaries: [] });
+    expect(screen.getByText(/Create a “WBS summary” activity first/i)).toBeInTheDocument();
+  });
+
+  it('creates an activity nested under the chosen WBS summary', async () => {
+    renderDialog({ parentSummaries: [SUMMARY] });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour columns' } });
+    fireEvent.change(screen.getByLabelText('WBS summary (optional)'), {
+      target: { value: 'wbs1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create|save/i }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
+    expect(body.parentId).toBe('wbs1');
+  });
+
+  it('does not parent an activity to itself in edit mode', () => {
+    // Editing the summary itself: it must not appear as its own parent option.
+    renderDialog({ activity: SUMMARY, parentSummaries: [SUMMARY] });
+    expect(screen.queryByRole('option', { name: 'TT.4 · Superstructure' })).not.toBeInTheDocument();
   });
 });

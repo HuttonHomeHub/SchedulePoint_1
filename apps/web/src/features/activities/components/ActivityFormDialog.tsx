@@ -53,6 +53,8 @@ export function ActivityFormDialog({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
+  parentSummaries = [],
+  parentSummariesLoading = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -65,12 +67,27 @@ export function ActivityFormDialog({
   calendarsLoading?: boolean;
   /** The calendars list failed to load — surface it rather than silently offering only "inherit". */
   calendarsError?: boolean;
+  /**
+   * The plan's existing WBS summaries — the valid parents for the WBS-nesting picker (ADR-0038, F8).
+   * Route-composed like {@link calendars} (from the same plan activities query), so the dialog stays a
+   * pure presentation component. Only consulted when the WBS surface (`VITE_ADVANCED_ACTIVITY_TYPES`)
+   * is on. The activity being edited is filtered out here (it can't parent itself; the API rejects it too).
+   */
+  parentSummaries?: ActivitySummary[];
+  /** The plan activities are still loading (the parent options aren't complete yet). */
+  parentSummariesLoading?: boolean;
 }): React.ReactElement {
   const isEdit = activity !== undefined;
   const create = useCreateActivity(orgSlug, planId);
   const update = useUpdateActivity(orgSlug, planId);
   const mutation = isEdit ? update : create;
   const announce = useAnnounce();
+
+  // The valid WBS parents: the plan's summaries minus the activity being edited (no self-parent; the
+  // API rejects it too). Defensive re-filter on type in case the caller passes the raw activities list.
+  const parentOptions = parentSummaries.filter(
+    (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
+  );
 
   const {
     register,
@@ -92,6 +109,7 @@ export function ActivityFormDialog({
       scheduleAsLateAsPossible: false,
       expectedFinish: '',
       calendarId: '',
+      parentId: '',
       description: '',
     },
   });
@@ -114,6 +132,9 @@ export function ActivityFormDialog({
         // Always seed from the row so the value round-trips even when the picker is hidden
         // (flag off) — an edit then never silently clears an assigned calendar. '' = inherit.
         calendarId: activity?.calendarId ?? '',
+        // Seeded from the row so a stored WBS parent round-trips even with the picker hidden
+        // (flag off) — an edit then never silently un-nests the activity. '' = top-level.
+        parentId: activity?.parentId ?? '',
         description: activity?.description ?? '',
       });
       mutation.reset();
@@ -125,6 +146,11 @@ export function ActivityFormDialog({
   const constraintType = useWatch({ control, name: 'constraintType' });
   const secondaryConstraintType = useWatch({ control, name: 'secondaryConstraintType' });
   const calendarId = useWatch({ control, name: 'calendarId' });
+  const parentId = useWatch({ control, name: 'parentId' });
+  // A seeded parent that isn't in the fetched summary list (still loading, or the parent was itself
+  // deleted/changed): keep it visible as an honest one-off option so opening the form never silently
+  // un-nests the activity — the same honest-selector pattern as the calendar picker.
+  const missingParent = Boolean(parentId) && !parentOptions.some((p) => p.id === parentId);
   // A seeded non-inherit value that doesn't match any option (the list is still loading, or failed
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
@@ -214,6 +240,12 @@ export function ActivityFormDialog({
               earliest start-to-start predecessor to the finish of its latest finish-to-finish
               successor. Add those links, then Recalculate.
             </p>
+          ) : type === 'WBS_SUMMARY' ? (
+            <p className="text-muted-foreground text-sm">
+              A WBS summary’s dates roll up from the activities grouped under it — the earliest
+              start to the latest finish of its branch. It carries no logic of its own (no
+              dependencies). Assign activities to it below, then Recalculate.
+            </p>
           ) : null
         ) : (
           <TextField
@@ -224,6 +256,37 @@ export function ActivityFormDialog({
             {...register('durationDays', { valueAsNumber: true })}
           />
         )}
+        {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="activity-parent">WBS summary (optional)</Label>
+            <Select
+              id="activity-parent"
+              disabled={parentSummariesLoading}
+              aria-busy={parentSummariesLoading}
+              aria-describedby="activity-parent-help"
+              {...register('parentId')}
+            >
+              <option value="">None (top-level)</option>
+              {/* A seeded parent not in the list stays selected under an honest label so the form
+                  never silently un-nests the activity (never blank, which reads as "top-level"). */}
+              {missingParent ? (
+                <option value={parentId}>
+                  {parentSummariesLoading ? 'Loading…' : 'Unavailable'}
+                </option>
+              ) : null}
+              {parentOptions.map((summary) => (
+                <option key={summary.id} value={summary.id}>
+                  {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
+                </option>
+              ))}
+            </Select>
+            <p id="activity-parent-help" className="text-muted-foreground text-sm">
+              {parentOptions.length === 0 && !missingParent
+                ? 'Groups this activity under a WBS summary. Create a “WBS summary” activity first to nest others under it.'
+                : 'Groups this activity under a WBS summary, whose dates roll up from its members.'}
+            </p>
+          </div>
+        ) : null}
         {ACTIVITY_CALENDAR_ENABLED ? (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="activity-calendar">Calendar (optional)</Label>

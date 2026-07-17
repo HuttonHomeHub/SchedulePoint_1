@@ -45,12 +45,13 @@ export function isMilestoneType(type: ActivityType): boolean {
 }
 
 /**
- * Types whose duration is NOT a user-entered number: milestones (a point in time, always 0) and
- * **Level of Effort** (the engine derives its span from its SS/FF ties, ADR-0035 §21). The form hides
- * the Duration and Expected-finish fields for these, and the request builder stores duration 0.
+ * Types whose duration is NOT a user-entered number: milestones (a point in time, always 0),
+ * **Level of Effort** (the engine derives its span from its SS/FF ties, ADR-0035 §21) and
+ * **WBS summary** (dates roll up from the branch it heads, ADR-0035 §24). The form hides the
+ * Duration and Expected-finish fields for these, and the request builder stores duration 0.
  */
 export function isDurationDerivedType(type: ActivityType): boolean {
-  return isMilestoneType(type) || type === 'LEVEL_OF_EFFORT';
+  return isMilestoneType(type) || type === 'LEVEL_OF_EFFORT' || type === 'WBS_SUMMARY';
 }
 
 /** The activity types the form's Type picker always offers — the three with full engine support. */
@@ -61,12 +62,13 @@ export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
 ];
 
 /**
- * Advanced activity types offered only when `VITE_ADVANCED_ACTIVITY_TYPES` is on (M5-epic, ADR-0035 §21).
- * Today just **Level of Effort** (span-derived; its engine/API/conformance are live). `HAMMOCK` and
- * `WBS_SUMMARY` are intentionally NOT offered — no (or not-yet) engine behaviour — though
- * {@link ACTIVITY_TYPE_LABELS} still names every value so a legacy/imported one displays honestly.
+ * Advanced activity types offered only when `VITE_ADVANCED_ACTIVITY_TYPES` is on (M5-epic, ADR-0035).
+ * **Level of Effort** (span-derived, §21) and **WBS summary** (branch roll-up, §24) — both with live
+ * engine/API/conformance support. `HAMMOCK` is intentionally NOT offered (no engine behaviour yet),
+ * though {@link ACTIVITY_TYPE_LABELS} still names every value so a legacy/imported one displays
+ * honestly.
  */
-export const ADVANCED_ACTIVITY_TYPES: readonly ActivityType[] = ['LEVEL_OF_EFFORT'];
+export const ADVANCED_ACTIVITY_TYPES: readonly ActivityType[] = ['LEVEL_OF_EFFORT', 'WBS_SUMMARY'];
 
 /**
  * The activity types the Type picker should offer: the always-supported {@link BASE_ACTIVITY_TYPES},
@@ -139,6 +141,10 @@ export const activityFormSchema = z
     // A raw `<select>` value; the choices are the org's calendar ids (+ inherit), so the id is
     // never free-typed — validation of the UUID/in-org is the API's job (mirrors `constraintDate`).
     calendarId: z.string().optional(),
+    // The WBS-summary this activity is grouped under (ADR-0038, M5-epic F8): `''` = top-level (no
+    // parent). A raw `<select>` value picked from the plan's existing summaries; the API validates it
+    // is an active `WBS_SUMMARY` in the same plan and that re-parenting introduces no cycle.
+    parentId: z.string().optional(),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
   })
   // Only the type→date direction needs a rule: the dialog hides the date field

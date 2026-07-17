@@ -317,6 +317,13 @@ scheduling` row is **unchanged**.
   `VITE_ADVANCED_ACTIVITY_TYPES`.
 - **Complexity:** L · **Dependencies:** F8.T1, F4.T2 · **Testing:** component + a11y + e2e; ux/component/
   accessibility reviewers; changeset + docs.
+- **Status (delivered):** the **form surface** shipped — the Type picker offers **WBS summary** (with a
+  roll-up explainer and hidden Duration/Expected-finish, like LOE) and a flag-gated **WBS parent picker**
+  nests any activity under a plan summary (honest-selector: a seeded parent stays visible, self excluded),
+  round-tripping `parentId` through create/update. A prerequisite **F7.5** shipped the WBS soft-delete
+  subtree cascade (TECH_DEBT #36) so summaries are safe to make planner-creatable. **Deferred to a
+  follow-on** (the plan's "deferrable" larger piece): canvas **summary/LOE span-bar rendering** and
+  **navigator-tree visual nesting** of the `parentId` hierarchy — tracked in TECH_DEBT.
 
 ---
 

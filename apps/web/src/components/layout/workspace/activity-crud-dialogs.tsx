@@ -60,6 +60,8 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         calendars={model.calendars.data ?? []}
         calendarsLoading={model.calendars.isPending}
         calendarsError={model.calendars.isError}
+        parentSummaries={model.activities.data ?? []}
+        parentSummariesLoading={model.activities.isPending}
         {...(editing ? { activity: editing } : {})}
       />
       <ConfirmDialog

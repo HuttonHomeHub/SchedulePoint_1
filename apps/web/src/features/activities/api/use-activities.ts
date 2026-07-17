@@ -82,6 +82,8 @@ function createBody(input: ActivityFormValues) {
     ...(input.expectedFinish ? { expectedFinish: input.expectedFinish } : {}),
     // `''` = inherit the plan calendar → omit the field (the API treats absent as inherit).
     ...(input.calendarId ? { calendarId: input.calendarId } : {}),
+    // `''` = top-level → omit (absent = no WBS parent). The picker offers only the plan's summaries.
+    ...(input.parentId ? { parentId: input.parentId } : {}),
   };
 }
 
@@ -106,6 +108,9 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     // `''` (inherit) clears the activity's own calendar → null. The dialog always seeds this from
     // the row (even with the picker hidden), so an edit round-trips the stored value unchanged.
     calendarId: input.calendarId ? input.calendarId : null,
+    // `''` (top-level) clears the WBS parent → null. Seeded from the row so an edit with the picker
+    // hidden (flag off) round-trips the stored parent unchanged rather than silently un-nesting it.
+    parentId: input.parentId ? input.parentId : null,
     // Carry a lane change through the same write when a free-2D drag moved both axes (M4); the
     // canvas is the only caller that sets this — the form dialog never sends it.
     ...(input.laneIndex !== undefined ? { laneIndex: input.laneIndex } : {}),
