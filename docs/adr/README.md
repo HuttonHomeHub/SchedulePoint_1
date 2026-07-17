@@ -22,35 +22,36 @@ future maintainers (human or AI) the _why_, not just the _what_.
 
 ## Index
 
-| ADR                                                        | Title                                      | Status   |
-| ---------------------------------------------------------- | ------------------------------------------ | -------- |
-| [0001](0001-record-architecture-decisions.md)              | Record architecture decisions              | Accepted |
-| [0002](0002-monorepo-with-turborepo-and-pnpm.md)           | Monorepo with Turborepo and pnpm           | Accepted |
-| [0003](0003-authentication-with-better-auth.md)            | Authentication with Better Auth            | Accepted |
-| [0004](0004-frontend-state-management.md)                  | Frontend state management                  | Accepted |
-| [0005](0005-routing-with-tanstack-router.md)               | Routing with TanStack Router               | Accepted |
-| [0006](0006-styling-and-design-tokens.md)                  | Styling and design tokens                  | Accepted |
-| [0007](0007-forms-and-validation.md)                       | Forms and validation                       | Accepted |
-| [0008](0008-backend-modular-monolith.md)                   | Backend modular monolith                   | Accepted |
-| [0009](0009-background-processing-bullmq.md)               | Background processing (BullMQ)             | Accepted |
-| [0010](0010-caching-with-redis.md)                         | Caching with Redis                         | Accepted |
-| [0011](0011-object-storage-abstraction.md)                 | Object storage abstraction                 | Accepted |
-| [0012](0012-authorization-rbac-scoped.md)                  | Authorisation: RBAC + scoping              | Accepted |
-| [0013](0013-observability-otel-pino.md)                    | Observability (OTel + Pino)                | Accepted |
-| [0014](0014-reference-feature-as-non-shipping-template.md) | Reference feature → non-shipping template  | Accepted |
-| [0015](0015-template-driven-feature-development.md)        | Template-driven feature development        | Accepted |
-| [0016](0016-core-identity-tenancy-role-model.md)           | Core identity & tenancy role model         | Accepted |
-| [0017](0017-release-tagging-and-image-publishing.md)       | Release tagging & image publishing         | Accepted |
-| [0018](0018-self-migrating-container-image.md)             | Self-migrating container image             | Accepted |
-| [0019](0019-shared-package-build-contract.md)              | Shared-package build contract              | Accepted |
-| [0020](0020-ci-image-smoke-boot.md)                        | CI image build & smoke-boot                | Accepted |
-| [0021](0021-dependency-graph-dag-invariant.md)             | Dependency graph DAG invariant             | Accepted |
-| [0022](0022-cpm-execution-and-persistence-model.md)        | CPM execution & persistence model          | Accepted |
-| [0023](0023-cpm-scheduling-date-convention.md)             | CPM scheduling date convention             | Accepted |
-| [0024](0024-working-day-calendars.md)                      | Working-day calendars                      | Accepted |
-| [0025](0025-baselines-snapshot-and-variance.md)            | Baselines — snapshot & variance            | Accepted |
-| [0026](0026-tsld-canvas-rendering-and-architecture.md)     | TSLD canvas rendering & architecture       | Accepted |
-| [0027](0027-per-package-release-tagging.md)                | Per-package release tagging & versions     | Accepted |
-| [0028](0028-plan-edit-lock.md)                             | Single-editor plan edit-lock               | Accepted |
-| [0029](0029-persistent-hierarchy-navigator.md)             | Persistent app-shell & hierarchy navigator | Proposed |
-| [0038](0038-wbs-activity-hierarchy.md)                     | WBS activity hierarchy (parent tree)       | Accepted |
+| ADR                                                             | Title                                         | Status   |
+| --------------------------------------------------------------- | --------------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)                   | Record architecture decisions                 | Accepted |
+| [0002](0002-monorepo-with-turborepo-and-pnpm.md)                | Monorepo with Turborepo and pnpm              | Accepted |
+| [0003](0003-authentication-with-better-auth.md)                 | Authentication with Better Auth               | Accepted |
+| [0004](0004-frontend-state-management.md)                       | Frontend state management                     | Accepted |
+| [0005](0005-routing-with-tanstack-router.md)                    | Routing with TanStack Router                  | Accepted |
+| [0006](0006-styling-and-design-tokens.md)                       | Styling and design tokens                     | Accepted |
+| [0007](0007-forms-and-validation.md)                            | Forms and validation                          | Accepted |
+| [0008](0008-backend-modular-monolith.md)                        | Backend modular monolith                      | Accepted |
+| [0009](0009-background-processing-bullmq.md)                    | Background processing (BullMQ)                | Accepted |
+| [0010](0010-caching-with-redis.md)                              | Caching with Redis                            | Accepted |
+| [0011](0011-object-storage-abstraction.md)                      | Object storage abstraction                    | Accepted |
+| [0012](0012-authorization-rbac-scoped.md)                       | Authorisation: RBAC + scoping                 | Accepted |
+| [0013](0013-observability-otel-pino.md)                         | Observability (OTel + Pino)                   | Accepted |
+| [0014](0014-reference-feature-as-non-shipping-template.md)      | Reference feature → non-shipping template     | Accepted |
+| [0015](0015-template-driven-feature-development.md)             | Template-driven feature development           | Accepted |
+| [0016](0016-core-identity-tenancy-role-model.md)                | Core identity & tenancy role model            | Accepted |
+| [0017](0017-release-tagging-and-image-publishing.md)            | Release tagging & image publishing            | Accepted |
+| [0018](0018-self-migrating-container-image.md)                  | Self-migrating container image                | Accepted |
+| [0019](0019-shared-package-build-contract.md)                   | Shared-package build contract                 | Accepted |
+| [0020](0020-ci-image-smoke-boot.md)                             | CI image build & smoke-boot                   | Accepted |
+| [0021](0021-dependency-graph-dag-invariant.md)                  | Dependency graph DAG invariant                | Accepted |
+| [0022](0022-cpm-execution-and-persistence-model.md)             | CPM execution & persistence model             | Accepted |
+| [0023](0023-cpm-scheduling-date-convention.md)                  | CPM scheduling date convention                | Accepted |
+| [0024](0024-working-day-calendars.md)                           | Working-day calendars                         | Accepted |
+| [0025](0025-baselines-snapshot-and-variance.md)                 | Baselines — snapshot & variance               | Accepted |
+| [0026](0026-tsld-canvas-rendering-and-architecture.md)          | TSLD canvas rendering & architecture          | Accepted |
+| [0027](0027-per-package-release-tagging.md)                     | Per-package release tagging & versions        | Accepted |
+| [0028](0028-plan-edit-lock.md)                                  | Single-editor plan edit-lock                  | Accepted |
+| [0029](0029-persistent-hierarchy-navigator.md)                  | Persistent app-shell & hierarchy navigator    | Proposed |
+| [0038](0038-wbs-activity-hierarchy.md)                          | WBS activity hierarchy (parent tree)          | Accepted |
+| [0039](0039-resource-model-and-resource-calendar-scheduling.md) | Resource model & resource-calendar scheduling | Accepted |

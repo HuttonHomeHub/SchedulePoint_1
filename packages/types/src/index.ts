@@ -242,7 +242,13 @@ export interface PlanSummary {
  * (as the web does for plan statuses) to avoid importing runtime values here.
  */
 export type ActivityType =
-  'TASK' | 'START_MILESTONE' | 'FINISH_MILESTONE' | 'HAMMOCK' | 'LEVEL_OF_EFFORT' | 'WBS_SUMMARY';
+  | 'TASK'
+  | 'START_MILESTONE'
+  | 'FINISH_MILESTONE'
+  | 'HAMMOCK'
+  | 'LEVEL_OF_EFFORT'
+  | 'WBS_SUMMARY'
+  | 'RESOURCE_DEPENDENT';
 export type ActivityStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
 export type ConstraintType =
   'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO' | 'MANDATORY_START' | 'MANDATORY_FINISH';

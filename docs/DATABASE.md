@@ -206,6 +206,16 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `uq_calendar_exceptions_cal_date`             | `(calendar_id, date)`                  | partial unique | at most one **active** exception per `(calendar, date)` (`WHERE deleted_at IS NULL`); backs `DUPLICATE_EXCEPTION` (409) **and** the engine's active-exception load                                                         |
 | `idx_calendars_delete_batch_id`               | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 | `idx_calendar_exceptions_delete_batch_id`     | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
+| `resources_organization_id_created_at_id_idx` | `(organization_id, created_at, id)`    | full composite | `organization_id` FK + org-scoped active resource list + cursor sort — subsumes a standalone org index (the `Calendar` pattern)                                                                                            |
+| `uq_resources_org_name`                       | `(organization_id, name)`              | partial unique | resource name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `DUPLICATE_RESOURCE` (409)                                                                                                                |
+| `uq_resources_org_code`                       | `(organization_id, code)`              | partial unique | optional `code` unique per org among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt (the `uq_activities_plan_code` pattern)                                                            |
+| `idx_resources_calendar_id`                   | `(calendar_id)`                        | partial        | the (extended) `CALENDAR_IN_USE` guard's active-resource count + the M7.2 driving-calendar load (`WHERE calendar_id = ? AND deleted_at IS NULL`); the `idx_activities_calendar_id` twin                                    |
+| `idx_resources_delete_batch_id`               | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
+| `resource_assignments_organization_id_idx`    | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
+| `uq_resource_assignments_activity_resource`   | `(activity_id, resource_id)`           | partial unique | one **active** assignment per (activity, resource) (`WHERE deleted_at IS NULL`); backs `DUPLICATE_ASSIGNMENT` (409); its leftmost prefix `activity_id` subsumes an active-activity assignment-list index                   |
+| `uq_resource_assignments_activity_driving`    | `(activity_id)`                        | partial unique | at most one **driving** assignment per activity (`WHERE is_driving AND deleted_at IS NULL`); the ≤1-driver backstop + the recalc "find the driving assignment" load                                                        |
+| `idx_resource_assignments_resource_id`        | `(resource_id)`                        | partial        | the `RESOURCE_IN_USE` guard's active-assignment count (`WHERE resource_id = ? AND deleted_at IS NULL`)                                                                                                                     |
+| `idx_resource_assignments_delete_batch_id`    | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -568,6 +578,61 @@ purpose (a future reader should not "fix" these into the standard shape):
   predicates filter the one PK-selected row for free). Only `@@index([organization_id])`
   is added, backing the FK and org-scoped audit reads; nothing on
   `holder_user_id`/`expires_at` (they would only add write cost on the hot path).
+
+### Resource & ResourceAssignment: the resource dimension
+
+The `resources` and `resource_assignments` tables (M7.1, ADR-0039) are the CPM
+engine's **resource dimension**. A `Resource` is an org-scoped, reusable **library**
+entity — a crew, a plant item, a material — modelled exactly like `Calendar` (a
+**sibling** of the Client→Project→Plan tree, not a hierarchy level). A
+`ResourceAssignment` ties a `Resource` to an `Activity` with a budgeted quantity and
+a **driving** flag. Both follow every house standard (UUID v7 PK, snake_case via
+`@map`, timestamptz UTC, soft delete + `delete_batch_id`, TEXT audit ids,
+optimistic-locking `version`, scoped indexes). This slice is the **model** only —
+assignment is reference data until an activity is made resource-dependent (M7.2), so
+with no resources the schedule is byte-identical (the parity gate).
+
+- **Deliberately lean (ADR-0039).** `Resource` carries `name`, an optional short
+  `code`, `description`, a `kind` (`ResourceKind`: `LABOUR`/`EQUIPMENT`/`MATERIAL`),
+  and an **optional `calendar_id`** FK to the org `Calendar`. Availability
+  (`max_units`), **cost**, and **earned-value** columns are **reserved** for their
+  later rungs (levelling / cost / EV), added only when those rungs land — the
+  `activities.calendar_id`-was-reserved precedent (ADR-0024). A resource references
+  an existing `Calendar`; there is no separate resource-calendar model.
+- **Scope.** `Resource.organization_id` is **native** (the org is its direct parent,
+  like `Calendar`/`Client`). `ResourceAssignment.organization_id` is **denormalised**
+  from its endpoints (copied by the service, never client input — the `Activity`/
+  `ActivityDependency` pattern), so an org-scope/IDOR check and the cascade batch
+  filter one indexed column. The FK on `resources.calendar_id` (and on an
+  assignment's `activity_id`/`resource_id`) does **not** enforce same-org — a
+  cross-org id satisfies it — so the **service** owns the same-org check (the
+  `activities.calendar_id`/`parent_id` limitation & remedy, ADR-0037/0038).
+- **`budgeted_units`** is the schema's **first `Decimal`** (`DECIMAL(18,4)`, an exact
+  numeric per _Data types_ above), `DEFAULT 0`. `ck_resource_assignments_budgeted_units_nonneg`
+  (`>= 0`, raw SQL) is the DB backstop behind the DTO `@Min(0)` boundary reject (N14,
+  ADR-0035 §25) — a bypass can never persist a negative.
+- **Driver designation.** `is_driving` marks THE driving resource of a
+  `RESOURCE_DEPENDENT` activity (its calendar governs scheduling, M7.2). The partial
+  unique `uq_resource_assignments_activity_driving (activity_id) WHERE is_driving AND
+deleted_at IS NULL` guarantees **≤ 1** driver per activity in the DB; **"exactly
+  one on a resource-dependent activity"** and **"a `MATERIAL` may not drive"** are
+  **service** invariants (a partial-unique/FK cannot read the activity `type` or the
+  resource `kind`). Duplicate assignments are blocked by `uq_resource_assignments_activity_resource
+(activity_id, resource_id) WHERE deleted_at IS NULL` (backs `DUPLICATE_ASSIGNMENT`
+  409), whose leftmost prefix also serves the "load an activity's assignments" query.
+- **Delete guards (service-owned).** A `RESOURCE_IN_USE` guard blocks soft-deleting a
+  resource assigned to an **active** activity (409, mirroring `CALENDAR_IN_USE`), and
+  the `CALENDAR_IN_USE` guard is **extended** to also count active resources
+  referencing a calendar (a third referencer, alongside active plans + activities) —
+  backed by `idx_resources_calendar_id`. Soft-deleting an activity **sweeps its
+  active assignments** (same `delete_batch_id`, like the incident-edge cascade) — a
+  `HierarchyLifecycleService` follow-on. FKs are `RESTRICT` throughout (defence in
+  depth; these tables soft-delete only, so the referential check never fires).
+- **Engine-owned flag.** `activities.resource_driver_missing` (added by this
+  migration) is a produce-and-flag output exactly like `loe_no_span`/`constraint_violated`:
+  defaulted false, never accepted from a write DTO, written only by the M7.2 recalc
+  `UPDATE` (never touching `version`/`updated_at`, ADR-0022). It lands now so M7.2
+  needs no wide `ALTER` of the large `activities` table.
 
 ## Testing & performance
 

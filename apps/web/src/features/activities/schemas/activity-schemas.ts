@@ -22,6 +22,7 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   HAMMOCK: 'Hammock',
   LEVEL_OF_EFFORT: 'Level of effort',
   WBS_SUMMARY: 'WBS summary',
+  RESOURCE_DEPENDENT: 'Resource-dependent',
 };
 
 export const ACTIVITY_TYPES = Object.keys(ACTIVITY_TYPE_LABELS) as [
