@@ -87,6 +87,11 @@ export class ScheduleController {
   @Get('earned-value')
   @ApiOperation({
     summary: 'Read a plan’s Earned-Value analysis (cost:read — Planner or Org Admin, ADR-0042).',
+    description:
+      'Returns per-activity + WBS-rolled Earned-Value metrics plus the plan total. The activity ' +
+      'list is a bounded, plan-scoped read (one row per non-deleted activity) and is returned ' +
+      'unpaginated by design — like GET …/baselines/variance; the plan-level roll-up rides in the ' +
+      'same response object alongside the activity rows rather than in a Paginated `meta`.',
   })
   @ApiOkResponse({ type: PlanEarnedValueDto })
   @ApiForbiddenResponse({

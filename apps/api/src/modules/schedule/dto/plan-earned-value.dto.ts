@@ -1,10 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type {
-  EacMethod,
-  EarnedValueActivity,
-  EarnedValueMetrics,
-  PlanEarnedValue,
-} from '@repo/types';
+// The runtime Prisma enum is the single source of truth for the OpenAPI `enum` (mirrors
+// PlanResponseDto), so the documented values can never drift from a hand-copied literal array.
+import { EacMethod } from '@prisma/client';
+import type { EarnedValueActivity, EarnedValueMetrics, PlanEarnedValue } from '@repo/types';
 
 /**
  * The P6 Earned-Value metric set for one level (an activity, a WBS summary, or the plan total) —
@@ -75,7 +73,11 @@ export class EarnedValueActivityDto extends EarnedValueMetricsDto implements Ear
   @ApiProperty({ format: 'uuid', description: 'The activity this row is for.' })
   activityId!: string;
 
-  @ApiProperty({ description: 'The performance % (0–100) that earned this row’s EV.' })
+  @ApiProperty({
+    minimum: 0,
+    maximum: 100,
+    description: 'The performance % (0–100) that earned this row’s EV.',
+  })
   performancePercent!: number;
 }
 
@@ -95,7 +97,7 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
   dataDate!: string | null;
 
   @ApiProperty({
-    enum: ['CPI', 'REMAINING_AT_BUDGET', 'CPI_TIMES_SPI'],
+    enum: EacMethod,
     description: 'The EAC forecast method used for every level.',
   })
   eacMethod!: EacMethod;
