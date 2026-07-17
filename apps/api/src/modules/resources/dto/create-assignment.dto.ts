@@ -24,7 +24,9 @@ export class CreateAssignmentDto {
   })
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 400)
+  // rather than let Postgres round or throw a 22003 later.
+  @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
   budgetedUnits?: number;
 

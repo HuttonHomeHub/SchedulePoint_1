@@ -50,7 +50,14 @@ export class ResourceAssignmentsController {
   constructor(private readonly service: ResourceAssignmentService) {}
 
   @Get('activities/:activityId/assignments')
-  @ApiOperation({ summary: "List an activity's active resource assignments." })
+  @ApiOperation({
+    summary: "List an activity's active resource assignments.",
+    description:
+      'Returns the full set of active assignments for one activity — deliberately unpaginated. ' +
+      'The result is bounded by the number of resources a single activity can carry (a handful in ' +
+      'practice), the same bounded-list exemption the per-plan dependency and baseline lists use, so ' +
+      'no cursor/limit is needed. Assignments across the whole org are never listed in one call.',
+  })
   @ApiOkResponse({ type: ResourceAssignmentResponseDto, isArray: true })
   async list(
     @CurrentUser() principal: Principal,

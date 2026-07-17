@@ -5,6 +5,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
+import { acquireResourceWriteLock } from '../../common/db/resource-advisory-lock';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -169,8 +170,12 @@ export class ResourcesService {
     // Delete-in-use guard (ADR-0039 invariant (c)): a resource assigned to an active
     // activity cannot be deleted (409 RESOURCE_IN_USE). Soft delete never trips the DB
     // FK, so this service check is the real guard (RESTRICT is defence in depth). The
-    // count + delete run in ONE transaction so a concurrent assign cannot slip in between.
+    // resource advisory lock — taken by both this delete and every assign — serialises
+    // the count + delete against a concurrent assign, which a single READ COMMITTED
+    // transaction alone would NOT (a commit landing after the count but before the
+    // delete stays invisible to the count), so the guard cannot be raced.
     await this.prisma.$transaction(async (tx) => {
+      await acquireResourceWriteLock(tx, resourceId);
       const inUse = await this.resources.countActiveAssignmentsUsing(resourceId, tx);
       if (inUse > 0) {
         throw new ConflictError(RESOURCE_ERROR.RESOURCE_IN_USE, {

@@ -928,6 +928,8 @@ export const RESOURCE_ERROR = {
   MATERIAL_CANNOT_DRIVE: 'A material resource cannot drive an activity’s dates.',
   /** The referenced resource does not exist in this organisation (→ 404). */
   RESOURCE_NOT_FOUND: 'Resource not found.',
+  /** The referenced assignment does not exist in this organisation (→ 404). */
+  ASSIGNMENT_NOT_FOUND: 'Assignment not found.',
   /** The resource's `calendarId` is not an active calendar in the same org (→ 404). */
   RESOURCE_CALENDAR_NOT_FOUND: 'Calendar not found.',
 } as const;

@@ -105,7 +105,8 @@ describe('ResourceAssignmentService', () => {
       softDelete: vi.fn().mockResolvedValue(1),
     };
     prisma = {
-      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})),
+      // The tx handle exposes $executeRaw (the resource advisory lock create takes).
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
       activity: { findFirst: vi.fn().mockResolvedValue(activity()) },
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
@@ -157,6 +158,17 @@ describe('ResourceAssignmentService', () => {
       await expect(
         service.create(principalWith(ALL), 'acme', ACTIVITY_ID, { resourceId: RESOURCE_ID }),
       ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('404s and does not assign if the resource is deleted after the pre-check (TOCTOU re-check under the lock)', async () => {
+      // The pre-transaction check sees the resource active; a concurrent delete lands; the
+      // in-transaction re-check (under the resource advisory lock) then sees it gone → 404,
+      // so no assignment is created against a soft-deleted resource.
+      resources.findActiveByIdInOrg.mockResolvedValueOnce(resource()).mockResolvedValueOnce(null);
+      await expect(
+        service.create(principalWith(ALL), 'acme', ACTIVITY_ID, { resourceId: RESOURCE_ID }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(assignments.create).not.toHaveBeenCalled();
     });
 
     it('rejects a MATERIAL resource set as the driver (422)', async () => {

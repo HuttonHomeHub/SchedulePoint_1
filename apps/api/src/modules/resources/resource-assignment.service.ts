@@ -4,6 +4,7 @@ import { RESOURCE_ERROR } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquireResourceWriteLock } from '../../common/db/resource-advisory-lock';
 import {
   ConflictError,
   ForbiddenError,
@@ -49,6 +50,12 @@ export class ResourceAssignmentService {
     @InjectPinoLogger(ResourceAssignmentService.name) private readonly logger: PinoLogger,
   ) {}
 
+  /**
+   * List one activity's active assignments — deliberately unpaginated (bounded-list exemption):
+   * the count is capped by how many resources a single activity carries (a handful in practice),
+   * the same rationale the per-plan dependency/baseline lists use. This is always activity-scoped;
+   * org-wide assignments are never listed in one call.
+   */
   async list(
     principal: Principal,
     orgSlug: string,
@@ -82,6 +89,14 @@ export class ResourceAssignmentService {
 
     try {
       const assignment = await this.prisma.$transaction(async (tx) => {
+        // Serialise against a concurrent resource delete (RESOURCE_IN_USE guard, ADR-0039
+        // invariant (c)): take the resource lock the delete also holds, then re-confirm the
+        // resource is still active inside it, so this assign can never land against a resource
+        // being soft-deleted (which a pre-transaction check alone would not prevent).
+        await acquireResourceWriteLock(tx, resource.id);
+        if (!(await this.resources.findActiveByIdInOrg(resource.id, organization.id, tx))) {
+          throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+        }
         // Setting a driver is a MOVE: clear any other driver on this activity first so the
         // ≤1-driver partial-unique never trips a P2002.
         if (isDriving) {
@@ -128,7 +143,7 @@ export class ResourceAssignmentService {
     this.assertCan(principal, 'resource:assign', organization.id);
 
     const existing = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
-    if (!existing) throw new NotFoundError('Assignment not found.');
+    if (!existing) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
 
     const patch: AssignmentPatch = {};
     if (dto.budgetedUnits !== undefined) patch.budgetedUnits = dto.budgetedUnits;
@@ -173,7 +188,7 @@ export class ResourceAssignmentService {
     }
 
     const updated = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
-    if (!updated) throw new NotFoundError('Assignment not found.');
+    if (!updated) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
     return updated;
   }
 
@@ -182,7 +197,7 @@ export class ResourceAssignmentService {
     this.assertCan(principal, 'resource:assign', organization.id);
 
     const existing = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
-    if (!existing) throw new NotFoundError('Assignment not found.');
+    if (!existing) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
 
     await this.assignments.softDelete(assignmentId, principal.userId);
     this.logger.info(

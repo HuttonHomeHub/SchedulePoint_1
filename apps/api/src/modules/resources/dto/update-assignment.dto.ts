@@ -12,7 +12,8 @@ export class UpdateAssignmentDto {
   @ApiPropertyOptional({ minimum: 0, description: 'Budgeted quantity of work (>= 0).' })
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 400).
+  @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
   budgetedUnits?: number;
 
