@@ -13,10 +13,17 @@ import type { Permission, Principal } from '../../common/auth/principal';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
+import {
+  deriveExternalInstants,
+  type DerivedExternalInstant,
+  type IncomingCrossPlanEdge,
+  type OutgoingCrossPlanEdge,
+} from './cross-plan-derivation';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import {
   allMinutesWorkCalendar,
@@ -78,6 +85,7 @@ export class ScheduleService {
     private readonly schedule: ScheduleRepository,
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
+    private readonly crossPlan: CrossPlanDependencyRepository,
     @InjectPinoLogger(ScheduleService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -103,6 +111,10 @@ export class ScheduleService {
     let lagCalendarOverrideCount = 0;
     let activityCalendarCount = 0;
     let progressedActivityCount = 0;
+    // Live cross-plan derivation (F4, ADR-0045 §2): how many cross-plan edges pointed at a
+    // never-calculated upstream this recalc (N32). Undefined on the byte-parity path (no cross-plan
+    // edge), so the log field reads null and existing summaries/goldens do not move.
+    let crossPlanUpstreamMissingCount: number | undefined;
     try {
       summary = await this.prisma.$transaction(async (tx) => {
         // Serialise with dependency creates and other recalcs on this plan, then
@@ -115,6 +127,7 @@ export class ScheduleService {
         lagCalendarOverrideCount = graph.meta.lagCalendarOverrideCount;
         activityCalendarCount = graph.meta.activityCalendarCount;
         progressedActivityCount = graph.meta.progressedActivityCount;
+        crossPlanUpstreamMissingCount = graph.meta.crossPlanUpstreamMissingCount;
         const output = computeSchedule(graph.activities, graph.edges, graph.options);
         // Resource levelling (ADR-0041): iff the plan opted in AND has assignments, run the pure
         // second pass and persist its additive overlay. Off ⇒ the network `output.results` are written
@@ -179,6 +192,9 @@ export class ScheduleService {
         // Progress (M2, ADR-0035): the recalc mode and how many activities carried actuals.
         progressRecalcMode: plan.progressRecalcMode,
         progressedActivityCount,
+        // Live cross-plan derivation (F4, ADR-0045 §2 / ADR-0035 §30.5 / N32): edges whose upstream
+        // was never calculated this run. Null on the byte-parity path (no cross-plan edge feeds the plan).
+        crossPlanUpstreamMissingCount: crossPlanUpstreamMissingCount ?? null,
         // Expected-finish resizes applied this run (M4, ADR-0035 §9); 0 unless the option is on.
         expectedFinishAppliedCount: summary.expectedFinishAppliedCount,
         // Resource levelling (M7, ADR-0041): whether the opt-in pass ran, and its produce-and-flag
@@ -514,6 +530,9 @@ export class ScheduleService {
       lagCalendarOverrideCount: number;
       activityCalendarCount: number;
       progressedActivityCount: number;
+      /** Live cross-plan derivation (F4, ADR-0045 §2): edges pointing at a never-calculated upstream
+       * this recalc (N32). ABSENT on the byte-parity path (no cross-plan edge feeds the plan). */
+      crossPlanUpstreamMissingCount?: number;
     };
   }> {
     const activityRows = await this.schedule.loadActivities(organizationId, plan.id, tx);
@@ -585,9 +604,71 @@ export class ScheduleService {
       (r) => r.actualStart != null || r.actualFinish != null,
     ).length;
 
+    // Live cross-plan derivation (F4, ADR-0045 §2 / ADR-0035 §30.5). GUARDED on "this plan has ≥1 active
+    // cross-plan edge": a plan with none takes the branch below unchanged — an empty derived map means
+    // `toEngineActivity` reads the raw M1 columns (byte-identical engine input ⇒ byte-identical output,
+    // the parity gate). Only when an edge exists do we load the upstreams' persisted dates and OVERRIDE
+    // each linked activity's external instants with the composed (later-of / tighter-of) value.
+    const derivedExternalByActivity = new Map<string, DerivedExternalInstant>();
+    let crossPlanUpstreamMissingCount: number | undefined;
+    const crossPlanEdgeCount = await this.crossPlan.countActiveForPlan(organizationId, plan.id, tx);
+    if (crossPlanEdgeCount > 0) {
+      const [incomingRows, outgoingRows] = await Promise.all([
+        this.crossPlan.loadIncomingWithPredecessorDates(organizationId, plan.id, tx),
+        this.crossPlan.loadOutgoingWithSuccessorDates(organizationId, plan.id, tx),
+      ]);
+      // The M1 hand-entered columns (crossed to `YYYY-MM-DD`), composed with the derived bounds below.
+      const m1 = new Map(
+        activityRows.map((r) => [
+          r.id,
+          {
+            externalEarlyStart: r.externalEarlyStart
+              ? formatCalendarDate(r.externalEarlyStart)
+              : null,
+            externalLateFinish: r.externalLateFinish
+              ? formatCalendarDate(r.externalLateFinish)
+              : null,
+          },
+        ]),
+      );
+      // Durations in whole days (÷1440) for the FF/SF start-/finish-implied arithmetic (ADR-0036 §7).
+      const durationDaysByActivity = new Map(
+        activityRows.map((r) => [r.id, Math.round(r.durationMinutes / MINUTES_PER_DAY)]),
+      );
+      // Lag is stored in signed working-MINUTES; the day-denominated derivation uses whole days (÷1440).
+      const incoming: IncomingCrossPlanEdge[] = incomingRows.map((e) => ({
+        successorActivityId: e.successorId,
+        type: e.type,
+        lagDays: Math.round(e.lagMinutes / MINUTES_PER_DAY),
+        predecessorEarlyStart: e.predecessorEarlyStart
+          ? formatCalendarDate(e.predecessorEarlyStart)
+          : null,
+        predecessorEarlyFinish: e.predecessorEarlyFinish
+          ? formatCalendarDate(e.predecessorEarlyFinish)
+          : null,
+      }));
+      const outgoing: OutgoingCrossPlanEdge[] = outgoingRows.map((e) => ({
+        predecessorActivityId: e.predecessorId,
+        type: e.type,
+        lagDays: Math.round(e.lagMinutes / MINUTES_PER_DAY),
+        successorLateStart: e.successorLateStart ? formatCalendarDate(e.successorLateStart) : null,
+        successorLateFinish: e.successorLateFinish
+          ? formatCalendarDate(e.successorLateFinish)
+          : null,
+      }));
+      const result = deriveExternalInstants({ incoming, outgoing, m1, durationDaysByActivity });
+      for (const [id, instant] of result.derived) derivedExternalByActivity.set(id, instant);
+      crossPlanUpstreamMissingCount = result.upstreamMissingCount;
+    }
+
     const activities = activityRows.map((r) => {
       const { calId, driverMissing } = effectiveByActivity.get(r.id)!;
-      return toEngineActivity(r, portFor(calId), driverMissing);
+      return toEngineActivity(
+        r,
+        portFor(calId),
+        driverMissing,
+        derivedExternalByActivity.get(r.id),
+      );
     });
     const edges = edgeRows.map((r) =>
       toEngineEdge(
@@ -664,6 +745,8 @@ export class ScheduleService {
         lagCalendarOverrideCount,
         activityCalendarCount: distinctActivityCalIds.length,
         progressedActivityCount,
+        // Present only when the plan has cross-plan edges; absent (⇒ null in the log) on the parity path.
+        ...(crossPlanUpstreamMissingCount !== undefined ? { crossPlanUpstreamMissingCount } : {}),
       },
     };
   }
@@ -715,11 +798,15 @@ function resolveRemainingMinutes(row: ScheduleActivityRow): number | undefined {
  * `calendar` is the activity's resolved own-calendar port (ADR-0037, M5) — undefined when it
  * inherits the plan calendar, keeping the byte-identical fast path. Progress actuals (M2) cross as
  * `YYYY-MM-DD`; `remainingMinutes` is the service-resolved remaining for an in-progress activity.
+ * `derivedExternal` is the live cross-plan-derived override (F4, ADR-0045 §2) — present ONLY for an
+ * activity with a cross-plan edge, and already composed with the M1 columns; absent ⇒ the raw M1
+ * columns stand (the byte-identical fast path for a plan with no cross-plan edges).
  */
 function toEngineActivity(
   row: ScheduleActivityRow,
   calendar?: WorkingTimeCalendar,
   resourceDriverMissing = false,
+  derivedExternal?: DerivedExternalInstant,
 ): EngineActivity {
   const remainingMinutes = resolveRemainingMinutes(row);
   return {
@@ -735,8 +822,18 @@ function toEngineActivity(
     // External / inter-project bounds (ADR-0043 / ADR-0035 §30): stored as absolute Timestamptz (UTC
     // midnight), crossed to the engine as calendar days — the same date→YYYY-MM-DD conversion as
     // constraintDate/expectedFinish/actualStart. Dropped inside the engine when ignore-external is on.
-    externalEarlyStart: row.externalEarlyStart ? formatCalendarDate(row.externalEarlyStart) : null,
-    externalLateFinish: row.externalLateFinish ? formatCalendarDate(row.externalLateFinish) : null,
+    // A live cross-plan edge OVERRIDES these with the F4-derived value (ADR-0045 §2), which already folds
+    // in the M1 column (later-of / tighter-of); absent an edge, the raw M1 column stands (parity gate).
+    externalEarlyStart: derivedExternal
+      ? derivedExternal.externalEarlyStart
+      : row.externalEarlyStart
+        ? formatCalendarDate(row.externalEarlyStart)
+        : null,
+    externalLateFinish: derivedExternal
+      ? derivedExternal.externalLateFinish
+      : row.externalLateFinish
+        ? formatCalendarDate(row.externalLateFinish)
+        : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
     scheduleAsLateAsPossible: row.scheduleAsLateAsPossible,
     levelingPriority: row.levelingPriority,

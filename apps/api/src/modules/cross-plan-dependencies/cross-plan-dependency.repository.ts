@@ -30,6 +30,32 @@ export interface PlanCrossEdge {
 }
 
 /**
+ * An active cross-plan edge INTO a plan (its successor is in that plan), with the upstream
+ * PREDECESSOR's persisted early dates — the forward (external early start) derivation input
+ * (F4, ADR-0045 §2). Dates are `@db.Date` (`Date | null`); the service crosses them to `YYYY-MM-DD`.
+ */
+export interface IncomingCrossPlanEdgeRow {
+  successorId: string;
+  type: DependencyType;
+  lagMinutes: number;
+  predecessorEarlyStart: Date | null;
+  predecessorEarlyFinish: Date | null;
+}
+
+/**
+ * An active cross-plan edge OUT OF a plan (its predecessor is in that plan), with the downstream
+ * SUCCESSOR's persisted late dates — the backward (external late finish) derivation input
+ * (F4, ADR-0045 §2). Dates are `@db.Date` (`Date | null`); the service crosses them to `YYYY-MM-DD`.
+ */
+export interface OutgoingCrossPlanEdgeRow {
+  predecessorId: string;
+  type: DependencyType;
+  lagMinutes: number;
+  successorLateStart: Date | null;
+  successorLateFinish: Date | null;
+}
+
+/**
  * Data-access for cross-plan dependencies (ADR-0008, ADR-0045) — the LIVE inter-project edges of
  * the programme graph. Deliberately SEPARATE from {@link ../dependencies/dependency.repository}
  * (which asserts a single `plan_id` for both endpoints); this table carries BOTH plan ids,
@@ -122,6 +148,83 @@ export class CrossPlanDependencyRepository {
       where: this.active({ organizationId }),
       select: { predecessorPlanId: true, successorPlanId: true },
     });
+  }
+
+  /**
+   * How many active cross-plan edges touch this plan in EITHER direction (predecessor or successor
+   * plan). The cheap guard the schedule service reads BEFORE the derivation loads (F4, ADR-0045 §2):
+   * 0 ⇒ the plan takes the byte-identical M1-column fast path and neither load below is issued.
+   * Org-scoped (defence in depth) and taken inside the recalc transaction snapshot.
+   */
+  countActiveForPlan(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.crossPlanDependency.count({
+      where: this.active({
+        organizationId,
+        OR: [{ predecessorPlanId: planId }, { successorPlanId: planId }],
+      }),
+    });
+  }
+
+  /**
+   * The plan's active INCOMING cross-plan edges (successor in this plan) with each upstream
+   * PREDECESSOR's persisted early dates — the forward-derivation load (F4, ADR-0045 §2). Only called
+   * when {@link countActiveForPlan} is non-zero. Org-scoped (anti-IDOR); no N+1 (dates come via the
+   * predecessor include). Served by the (successor_plan_id, …) index.
+   */
+  async loadIncomingWithPredecessorDates(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<IncomingCrossPlanEdgeRow[]> {
+    const rows = await db.crossPlanDependency.findMany({
+      where: this.active({ organizationId, successorPlanId: planId }),
+      select: {
+        successorId: true,
+        type: true,
+        lagMinutes: true,
+        predecessor: { select: { earlyStart: true, earlyFinish: true } },
+      },
+    });
+    return rows.map((r) => ({
+      successorId: r.successorId,
+      type: r.type,
+      lagMinutes: r.lagMinutes,
+      predecessorEarlyStart: r.predecessor.earlyStart,
+      predecessorEarlyFinish: r.predecessor.earlyFinish,
+    }));
+  }
+
+  /**
+   * The plan's active OUTGOING cross-plan edges (predecessor in this plan) with each downstream
+   * SUCCESSOR's persisted late dates — the backward-derivation load (F4, ADR-0045 §2). Only called
+   * when {@link countActiveForPlan} is non-zero. Org-scoped (anti-IDOR); no N+1 (dates come via the
+   * successor include).
+   */
+  async loadOutgoingWithSuccessorDates(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<OutgoingCrossPlanEdgeRow[]> {
+    const rows = await db.crossPlanDependency.findMany({
+      where: this.active({ organizationId, predecessorPlanId: planId }),
+      select: {
+        predecessorId: true,
+        type: true,
+        lagMinutes: true,
+        successor: { select: { lateStart: true, lateFinish: true } },
+      },
+    });
+    return rows.map((r) => ({
+      predecessorId: r.predecessorId,
+      type: r.type,
+      lagMinutes: r.lagMinutes,
+      successorLateStart: r.successor.lateStart,
+      successorLateFinish: r.successor.lateFinish,
+    }));
   }
 
   /**

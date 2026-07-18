@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
@@ -95,6 +96,15 @@ function principalWith(permissions: Permission[]): Principal {
   return new Principal(USER_ID, [{ organizationId: ORG_ID, role: 'PLANNER', permissions }]);
 }
 
+/** A cross-plan repo mock defaulting to the byte-parity path (no cross-plan edge feeds the plan). */
+function crossPlanRepoMock() {
+  return {
+    countActiveForPlan: vi.fn().mockResolvedValue(0),
+    loadIncomingWithPredecessorDates: vi.fn().mockResolvedValue([]),
+    loadOutgoingWithSuccessorDates: vi.fn().mockResolvedValue([]),
+  };
+}
+
 const CAN: Permission[] = ['schedule:calculate'];
 
 describe('ScheduleService.recalculate', () => {
@@ -112,6 +122,8 @@ describe('ScheduleService.recalculate', () => {
     summarise: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let crossPlan: ReturnType<typeof crossPlanRepoMock>;
+  let logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
   let service: ScheduleService;
 
   beforeEach(() => {
@@ -119,6 +131,7 @@ describe('ScheduleService.recalculate', () => {
       resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
     };
     plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    crossPlan = crossPlanRepoMock();
     schedule = {
       lockPlanForWrite: vi.fn().mockResolvedValue(undefined),
       loadActivities: vi.fn().mockResolvedValue([]),
@@ -138,14 +151,15 @@ describe('ScheduleService.recalculate', () => {
       }),
     };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
-    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    logger = { info: vi.fn(), warn: vi.fn() };
     service = new ScheduleService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       schedule as unknown as ScheduleRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
-      logger,
+      crossPlan as unknown as CrossPlanDependencyRepository,
+      logger as unknown as PinoLogger,
     );
   });
 
@@ -287,6 +301,135 @@ describe('ScheduleService.recalculate', () => {
     const aIgnored = ignoredResults.find((r) => r.activityId === 'A')!;
     expect(aIgnored.earlyStart).toBe('2026-01-01'); // dropped → data date
     expect(ignored.externalDrivenCount).toBe(0);
+  });
+
+  // ── F4: live cross-plan derivation seam + PARITY gate (ADR-0045 §2 / ADR-0035 §30.5) ──────────────
+
+  it('PARITY: no cross-plan edge ⇒ the derivation is a strict no-op (M1 columns stand, loads skipped)', async () => {
+    // The default plan has no cross-plan edge (countActiveForPlan → 0). An activity carrying ONLY a
+    // hand-entered M1 external early start must schedule EXACTLY as it did pre-F4: the derivation loads
+    // are never issued and the engine sees the raw M1 column verbatim (the byte-identical fast path).
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 3, { externalEarlyStart: new Date('2026-01-05T00:00:00.000Z') }),
+    ]);
+
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+
+    // Guard read once; neither derivation load issued (the fast path).
+    expect(crossPlan.countActiveForPlan).toHaveBeenCalledWith(ORG_ID, PLAN_ID, expect.anything());
+    expect(crossPlan.loadIncomingWithPredecessorDates).not.toHaveBeenCalled();
+    expect(crossPlan.loadOutgoingWithSuccessorDates).not.toHaveBeenCalled();
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const a = results.find((r) => r.activityId === 'A')!;
+    // Identical to the pre-F4 M1-column behaviour: clamped up to the hand-entered 2026-01-05.
+    expect(a.earlyStart).toBe('2026-01-05');
+    expect(a.externalDriven).toBe(true);
+    expect(summary.externalDrivenCount).toBe(1);
+    // No cross-plan edge ⇒ the missing-upstream count is absent (logged null, not 0).
+    const logged = logger.info.mock.calls.at(-1)?.[0] as { crossPlanUpstreamMissingCount: unknown };
+    expect(logged.crossPlanUpstreamMissingCount).toBeNull();
+  });
+
+  it('derives an external early start from an incoming cross-plan edge’s upstream computed dates', async () => {
+    // A(3) has NO M1 column but an incoming FS cross-plan edge from an upstream activity whose persisted
+    // early finish is 2026-01-10 (lag 0). Derived external early start = predEarlyFinish + lag = 01-10,
+    // so A clamps UP to 01-10 and is flagged external-driven — the live cross-plan bound reached the engine.
+    schedule.loadActivities.mockResolvedValue([activityRow('A', 3)]);
+    crossPlan.countActiveForPlan.mockResolvedValue(1);
+    crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue([
+      {
+        successorId: 'A',
+        type: 'FS',
+        lagMinutes: 0,
+        predecessorEarlyStart: new Date('2026-01-08T00:00:00.000Z'),
+        predecessorEarlyFinish: new Date('2026-01-10T00:00:00.000Z'),
+      },
+    ]);
+
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const a = results.find((r) => r.activityId === 'A')!;
+    expect(a.earlyStart).toBe('2026-01-10');
+    expect(a.externalDriven).toBe(true);
+    expect(summary.externalDrivenCount).toBe(1);
+    const logged = logger.info.mock.calls.at(-1)?.[0] as { crossPlanUpstreamMissingCount: unknown };
+    expect(logged.crossPlanUpstreamMissingCount).toBe(0);
+  });
+
+  it('composes the derived bound with the M1 column by later-of, and later drives (§30.1/§30.5)', async () => {
+    // A carries an M1 external early start of 2026-01-15 AND an incoming FS edge deriving 2026-01-10.
+    // later-of ⇒ the M1 column (01-15) wins; A clamps to 01-15.
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 3, { externalEarlyStart: new Date('2026-01-15T00:00:00.000Z') }),
+    ]);
+    crossPlan.countActiveForPlan.mockResolvedValue(1);
+    crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue([
+      {
+        successorId: 'A',
+        type: 'FS',
+        lagMinutes: 0,
+        predecessorEarlyStart: new Date('2026-01-08T00:00:00.000Z'),
+        predecessorEarlyFinish: new Date('2026-01-10T00:00:00.000Z'),
+      },
+    ]);
+
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    expect(results.find((r) => r.activityId === 'A')!.earlyStart).toBe('2026-01-15');
+  });
+
+  it('N32: an incoming edge from a never-calculated upstream contributes no bound and is counted', async () => {
+    // A(3) has an incoming FS edge whose upstream has NEVER been calculated (null persisted dates). That
+    // edge derives NO bound → A falls back to the data date, and the missing upstream is counted (N32).
+    schedule.loadActivities.mockResolvedValue([activityRow('A', 3)]);
+    crossPlan.countActiveForPlan.mockResolvedValue(1);
+    crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue([
+      {
+        successorId: 'A',
+        type: 'FS',
+        lagMinutes: 0,
+        predecessorEarlyStart: null,
+        predecessorEarlyFinish: null,
+      },
+    ]);
+
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const a = results.find((r) => r.activityId === 'A')!;
+    expect(a.earlyStart).toBe('2026-01-01'); // no bound → data date
+    expect(a.externalDriven).toBeUndefined();
+    expect(summary.externalDrivenCount).toBe(0);
+    const logged = logger.info.mock.calls.at(-1)?.[0] as { crossPlanUpstreamMissingCount: unknown };
+    expect(logged.crossPlanUpstreamMissingCount).toBe(1);
+  });
+
+  it('derives an external late finish from an outgoing cross-plan edge (tighter-of, §30.2/§30.5)', async () => {
+    // A(3) occupies 01-01..01-03. An outgoing FS edge to a downstream activity whose persisted late start
+    // is 2026-01-02 derives an external late finish = succLateStart − lag = 01-02 — an FNLT-shaped bound
+    // TIGHTER than A's own finish, so A's late finish is pulled back to 01-02 (negative float) and it is
+    // flagged external-driven: the live downstream commitment reached the backward pass.
+    schedule.loadActivities.mockResolvedValue([activityRow('A', 3)]);
+    crossPlan.countActiveForPlan.mockResolvedValue(1);
+    crossPlan.loadOutgoingWithSuccessorDates.mockResolvedValue([
+      {
+        predecessorId: 'A',
+        type: 'FS',
+        lagMinutes: 0,
+        successorLateStart: new Date('2026-01-02T00:00:00.000Z'),
+        successorLateFinish: new Date('2026-01-04T00:00:00.000Z'),
+      },
+    ]);
+
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const a = results.find((r) => r.activityId === 'A')!;
+    expect(a.lateFinish).toBe('2026-01-02'); // pulled back below its own early finish → tight, driven
+    expect(a.externalDriven).toBe(true);
+    expect(summary.externalDrivenCount).toBe(1);
   });
 
   it('threads the plan’s critical-path definition into the engine (M6, ADR-0035 §17)', async () => {
@@ -526,6 +669,7 @@ describe('ScheduleService.summary', () => {
       schedule as unknown as ScheduleRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
+      crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
       logger,
     );
   });
@@ -621,6 +765,7 @@ describe('ScheduleService.getEarnedValue', () => {
       schedule as unknown as ScheduleRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
+      crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
       logger,
     );
   });
@@ -709,6 +854,7 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
       schedule as unknown as ScheduleRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
+      crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
       logger,
     );
   });
