@@ -5,12 +5,19 @@ import type {
   PlanEarnedValue,
   PlanFloatPaths,
   PlanScheduleSummary,
+  ProgrammeScheduleLockedDetails,
+  ProgrammeScheduleResult,
   ResourceHistogramSeries,
 } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
+import {
+  ForbiddenError,
+  LockedError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
@@ -46,6 +53,7 @@ import {
   type WorkingTimeCalendar,
 } from './engine';
 import { buildPlanCalendar } from './plan-calendar';
+import { ProgrammeCycleError, resolveProgrammeOrder } from './programme-order';
 import {
   ScheduleRepository,
   type ScheduleActivityRow,
@@ -94,6 +102,24 @@ export class ScheduleService {
     orgSlug: string,
     planId: string,
   ): Promise<PlanScheduleSummary> {
+    return (await this.recalculatePlan(principal, orgSlug, planId)).summary;
+  }
+
+  /**
+   * The ADR-0022 single-plan recalc body — the shared unit reused verbatim by both the public
+   * {@link recalculate} and the programme orchestrator {@link recalculateProgramme}. Resolves the org
+   * (anti-IDOR) + asserts `schedule:calculate`, loads the plan (404) and its `plannedStart` (422), then —
+   * under the plan advisory lock, in ONE transaction, with the pen asserted — runs the pure engine and
+   * persists the engine-owned columns. Returns the public {@link PlanScheduleSummary} plus the run's N32
+   * `crossPlanUpstreamMissingCount` (0 on the byte-parity path), which the programme roll-up sums; the
+   * public {@link recalculate} drops the count. Not a new transaction shape — the exact per-plan unit the
+   * programme solve invokes once per plan, in the deterministic topological order.
+   */
+  private async recalculatePlan(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<{ summary: PlanScheduleSummary; crossPlanUpstreamMissingCount: number }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'schedule:calculate', organization.id);
 
@@ -208,7 +234,7 @@ export class ScheduleService {
       'schedule recalculated',
     );
 
-    return {
+    const planSummary: PlanScheduleSummary = {
       dataDate,
       projectFinish: summary.projectFinish,
       activityCount: summary.activityCount,
@@ -227,6 +253,134 @@ export class ScheduleService {
       levelingWindowExceededCount: summary.levelingWindowExceededCount ?? 0,
       selfOverAllocatedCount: summary.selfOverAllocatedCount ?? 0,
       leveledProjectFinish: summary.leveledProjectFinish ?? null,
+    };
+    // Surface the run's N32 count (0 on the byte-parity path) so the programme roll-up can sum it; the
+    // public `recalculate` drops it (it never reached the single-plan summary).
+    return {
+      summary: planSummary,
+      crossPlanUpstreamMissingCount: crossPlanUpstreamMissingCount ?? 0,
+    };
+  }
+
+  /**
+   * **Programme recalculation** (inter-project M2, ADR-0045 §4 / ADR-0035 §30.8) — recalculate the target
+   * plan's UPSTREAM cross-plan **closure** in topological order (upstream-first) so the target's derived
+   * inter-project bounds (ADR-0045 §2, the F4 seam) are fresh. The pure engine is untouched; each plan is
+   * recalculated with the **existing** single-plan {@link recalculatePlan} unit — its own ADR-0022
+   * transaction + plan advisory lock + pen — acquired in the deterministic topological order (a stable lock
+   * order ⇒ two overlapping programme recalcs cannot deadlock, §4). A programme with no cross-plan edges
+   * has a closure of just the target, so this is exactly a single-plan recalc.
+   *
+   * Authorisation mirrors the single-plan recalc (`schedule:calculate`, Planner + Org Admin); the target
+   * plan must be active in the caller's org (404). Because the recalc **writes** every plan in the closure,
+   * the default policy (Critical Question 3) is **fail-fast**: a pre-flight pass asserts the pen on EVERY
+   * closure plan BEFORE any write, collecting ALL blocked plans and — if any is held by another editor —
+   * throwing a single 423 `LockedError` carrying the blocked-plan list, so nothing is written. (The pen is
+   * asserted a second time inside each plan's transaction by {@link recalculatePlan}, unchanged.)
+   */
+  async recalculateProgramme(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<ProgrammeScheduleResult> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'schedule:calculate', organization.id);
+
+    // The target must be an active plan in the caller's org (404, anti-IDOR) before we touch the graph.
+    const target = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!target) throw new NotFoundError('Plan not found.');
+
+    // Resolve the upstream closure + its deterministic topological (upstream-first) order. The adjacency
+    // is the org's active cross-plan edge set (plan-grain, small); with no edge the closure is [target].
+    const edges = await this.crossPlan.loadOrgAdjacency(organization.id);
+    let order: string[];
+    try {
+      order = resolveProgrammeOrder(planId, edges);
+    } catch (error) {
+      // A residual plan-level cycle breaches the DAG invariant (ADR-0045 §3) — it should be unreachable.
+      // Log distinctly and rethrow so the global filter returns an opaque alarm-worthy 500 (nothing written).
+      if (error instanceof ProgrammeCycleError) {
+        this.logger.error(
+          { organizationId: organization.id, planId, unresolvedPlanIds: error.unresolvedPlanIds },
+          'programme graph DAG invariant breached',
+        );
+      }
+      throw error;
+    }
+
+    // Pre-flight pen check (fail-fast, CQ-3 default): assert the pen on EVERY closure plan BEFORE any
+    // write, COLLECTING every blocked plan (not failing on the first). `assertHoldsPen` is inert unless
+    // enforcement is on, so this is a no-op in the default config; when enforced it fails fast with the
+    // full blocked-plan list. A non-lock error (never expected here) propagates unchanged.
+    const blockedPlanIds: string[] = [];
+    for (const closurePlanId of order) {
+      try {
+        await this.editLock.assertHoldsPen(principal, closurePlanId, organization.id);
+      } catch (error) {
+        if (error instanceof LockedError) blockedPlanIds.push(closurePlanId);
+        else throw error;
+      }
+    }
+    if (blockedPlanIds.length > 0) {
+      this.logger.warn(
+        { organizationId: organization.id, planId, blockedPlanIds },
+        'programme recalculation blocked by peer-held plan locks',
+      );
+      throw new LockedError(
+        'One or more plans in this programme are being edited by someone else. Programme recalculation ' +
+          'wrote nothing.',
+        {
+          reason: 'PROGRAMME_PLANS_LOCKED',
+          blockedPlanIds,
+        } satisfies ProgrammeScheduleLockedDetails,
+      );
+    }
+
+    // Recalculate each plan in topological order, reusing the single-plan transaction verbatim. Upstreams
+    // come first, so each downstream plan reads its upstreams' freshly-written dates when it derives (§2).
+    const startedAt = Date.now();
+    const plans: ProgrammeScheduleResult['plans'] = [];
+    let crossPlanUpstreamMissingCount = 0;
+    for (const closurePlanId of order) {
+      const planStartedAt = Date.now();
+      const { summary, crossPlanUpstreamMissingCount: missing } = await this.recalculatePlan(
+        principal,
+        orgSlug,
+        closurePlanId,
+      );
+      crossPlanUpstreamMissingCount += missing;
+      plans.push({ planId: closurePlanId, summary });
+      this.logger.debug(
+        {
+          organizationId: organization.id,
+          targetPlanId: planId,
+          planId: closurePlanId,
+          crossPlanUpstreamMissingCount: missing,
+          durationMs: Date.now() - planStartedAt,
+        },
+        'programme recalculation — plan recalculated',
+      );
+    }
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        targetPlanId: planId,
+        userId: principal.userId,
+        // The closure in recalculation order (upstream-first, target last) — the audit of what ran.
+        closure: order,
+        planCount: order.length,
+        // N32 summed across the closure (ADR-0035 §30.5): cross-plan edges whose upstream was never
+        // calculated, contributing no derived bound. 0 on the byte-parity path.
+        crossPlanUpstreamMissingCount,
+        durationMs: Date.now() - startedAt,
+      },
+      'programme recalculated',
+    );
+
+    return {
+      plans,
+      programme: { planCount: order.length, crossPlanUpstreamMissingCount },
     };
   }
 

@@ -171,6 +171,33 @@ that would close a cycle between two plans is rejected **409
 is **409 `DUPLICATE_CROSS_PLAN_DEPENDENCY`** (N33). Concurrent mirror creates are
 serialised by an **org-scoped advisory lock** so exactly one wins.
 
+### Programme recalculation (ADR-0045 §4)
+
+`POST …/plans/:planId/schedule/recalculate-programme` (`schedule:calculate` —
+Planner + Org Admin) recalculates the target plan's **upstream cross-plan
+closure** — the plan plus every plan it transitively depends on over cross-plan
+edges — in **topological order, upstream-first** (the target last), so the
+target's derived inter-project bounds (the live cross-plan derivation, ADR-0045
+§2) read fresh upstream dates. Each plan is recalculated with the **existing
+single-plan recalc transaction** (its own advisory lock + pen), acquired in the
+deterministic topological order (a stable lock order ⇒ deadlock-free). The **pure
+engine is untouched**; a plan with **no** cross-plan edges recalculates just
+itself (equivalent to `…/schedule/recalculate`).
+
+Because the solve **writes** every plan in the closure, the default policy
+(ADR-0045 Critical Question 3) is **fail-fast**: a pre-flight pass asserts the pen
+on **every** closure plan _before any write_, collecting **all** blocked plans and
+throwing a single **423 `PROGRAMME_PLANS_LOCKED`** (with the `blockedPlanIds`
+list) if any is held by another editor — **nothing is written**. The `200`
+response carries the per-plan summaries (in recalculation order) plus a programme
+roll-up (`planCount`, and `crossPlanUpstreamMissingCount` — the summed **N32**
+warnings for cross-plan edges whose upstream had never been calculated, which
+contribute no derived bound and are never an error).
+
+| Method | Path                                             | Notes                                                                                                  |
+| ------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| POST   | `…/plans/:planId/schedule/recalculate-programme` | Recalculate the plan's upstream cross-plan closure in dependency order · 423 `PROGRAMME_PLANS_LOCKED`. |
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

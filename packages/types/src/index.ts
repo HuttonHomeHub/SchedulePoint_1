@@ -727,6 +727,47 @@ export interface PlanScheduleSummary {
 }
 
 /**
+ * One plan's slot in a **programme recalculation** result (inter-project M2, ADR-0045 §4) — the plan id
+ * paired with the single-plan {@link PlanScheduleSummary} the existing ADR-0022 recalc produced for it.
+ * The `plans` array is ordered **upstream-first** (the target plan last), the same order the plans were
+ * recalculated in.
+ */
+export interface ProgrammeSchedulePlanResult {
+  planId: string;
+  summary: PlanScheduleSummary;
+}
+
+/**
+ * The result of a **programme recalculation** (`POST …/schedule/recalculate-programme`, ADR-0045 §4) — a
+ * synchronous solve that recalculated the target plan's upstream cross-plan **closure** in topological
+ * order (upstream-first) so the target's derived inter-project bounds (ADR-0045 §2) are fresh.
+ *
+ * `plans` carries one {@link ProgrammeSchedulePlanResult} per plan in the closure, in recalculation order
+ * (the target is last). `programme` rolls the run up: `planCount` is the closure size (1 for a plan with no
+ * cross-plan edges — a plain single-plan recalc); `crossPlanUpstreamMissingCount` sums the N32 warnings
+ * across the closure (edges whose upstream had never been calculated, so they contributed no derived
+ * bound — never an error, ADR-0035 §30.5 / N32).
+ */
+export interface ProgrammeScheduleResult {
+  plans: ProgrammeSchedulePlanResult[];
+  programme: {
+    planCount: number;
+    crossPlanUpstreamMissingCount: number;
+  };
+}
+
+/**
+ * The `details` payload on the **423 Locked** a programme recalculation raises when one or more plans in
+ * the target's closure are held by another editor (ADR-0045 §4, Critical Question 3 — fail-fast, write
+ * nothing). `reason` is stable; `blockedPlanIds` lists every closure plan whose pen is held (collected in
+ * a single pre-flight pass, not one at a time), so the UI can offer to request/override the pen on each.
+ */
+export interface ProgrammeScheduleLockedDetails {
+  reason: 'PROGRAMME_PLANS_LOCKED';
+  blockedPlanIds: string[];
+}
+
+/**
  * One **float path** into a target activity (M6-F6, ADR-0035 §19): a maximal contiguous chain of
  * activities linked by logic, ranked by how much float it carries above the driving path. `index` 0
  * is the driving path (`relativeFloat` 0); higher indices are increasingly floaty. `activityIds` are
