@@ -144,12 +144,15 @@ export class ScheduleController {
       query.limit,
       query.offset,
     );
-    return new Paginated(result.series.map(ResourceHistogramSeriesDto.from), {
-      granularity: result.granularity,
-      buckets: result.buckets,
-      total: result.total,
-      hasMore: result.hasMore,
-      curveNormalisedCount: result.curveNormalisedCount,
-    });
+    return new Paginated(
+      result.series.map((series) => ResourceHistogramSeriesDto.from(series)),
+      {
+        granularity: result.granularity,
+        buckets: result.buckets,
+        total: result.total,
+        hasMore: result.hasMore,
+        curveNormalisedCount: result.curveNormalisedCount,
+      },
+    );
   }
 }

@@ -1,5 +1,5 @@
-import type { AccrualType } from '@repo/types';
 import { loadFixture } from '@repo/engine-conformance';
+import type { AccrualType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { allMinutesWorkCalendar, computeEarnedValue, type EvActivityInput } from '../engine';

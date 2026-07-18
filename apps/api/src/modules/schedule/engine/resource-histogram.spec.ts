@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { allMinutesWorkCalendar, fullDayWeek } from './working-time-calendar';
-import { buildWorkingTimeCalendar } from './working-time-calendar';
 import {
   computeResourceHistogram,
   RESOURCE_CURVE_PROFILES,
   resolveCurveProfile,
   type HistogramAssignmentInput,
 } from './resource-histogram';
+import { allMinutesWorkCalendar, fullDayWeek } from './working-time-calendar';
+import { buildWorkingTimeCalendar } from './working-time-calendar';
 
 /**
  * Unit tests for the pure resource-histogram read-model (M7 rung 5, ADR-0044 §3 / ADR-0035 §31).

@@ -1,6 +1,5 @@
-import { ACCRUAL_TYPES, type AccrualType } from '@repo/types';
-
 import type { ConformanceFixture, FixtureActivity } from '@repo/engine-conformance';
+import { ACCRUAL_TYPES, type AccrualType } from '@repo/types';
 
 import type { ActivityStepInput, EvActivityInput, EvAssignmentInput } from '../engine';
 

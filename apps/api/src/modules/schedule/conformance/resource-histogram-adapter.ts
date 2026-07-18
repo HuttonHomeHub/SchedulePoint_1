@@ -1,6 +1,5 @@
-import type { ResourceCurveType } from '@repo/types';
-
 import type { ConformanceFixture, FixtureAssignment } from '@repo/engine-conformance';
+import type { ResourceCurveType } from '@repo/types';
 
 import { allMinutesWorkCalendar } from '../engine';
 import type { HistogramAssignmentInput } from '../engine';
