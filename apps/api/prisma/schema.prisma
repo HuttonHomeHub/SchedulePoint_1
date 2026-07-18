@@ -142,6 +142,11 @@ model Organization {
   // Denormalised scope back-relation: dependencies carry organization_id directly
   // (copied from their endpoints), like Activity — see the ActivityDependency model.
   dependencies        ActivityDependency[]
+  // Live cross-plan (inter-project) dependency edges owned by this org (M2, ADR-0045).
+  // Like ActivityDependency, organization_id is denormalised from the (validated)
+  // endpoints (both in this org), so the org-scoped adjacency load for the plan-level
+  // cycle walk and org/IDOR checks filter one indexed column.
+  crossPlanDeps       CrossPlanDependency[]
   // Org-scoped calendar library + its dated exceptions (M5, ADR-0024). Calendar's
   // organization_id is native (the org is its direct parent, like Client);
   // CalendarException's is denormalised from its parent calendar (like Activity).
@@ -626,6 +631,18 @@ model Plan {
   // CALENDAR_IN_USE before any delete). Backed by a partial index on (calendar_id)
   // WHERE deleted_at IS NULL — raw SQL in the migration.
   calendarId                  String?                @map("calendar_id") @db.Uuid
+  // Schedule freshness cursor (M2, ADR-0045 §5). ENGINE-OWNED: stamped `now()` by the
+  // recalc write path (single-plan AND programme, F6) whenever this plan's schedule is
+  // (re)computed — NEVER accepted from a client DTO. Read-time staleness is a bounded
+  // walk of the plan-level cross-plan graph: a plan is STALE iff any plan in its
+  // upstream closure has a LATER schedule_computed_at (pull, not push — no background
+  // propagation in M2). NULLABLE with NO default: NULL = "never calculated" (distinct
+  // from an explicit instant), which the derivation treats as an absent upstream bound
+  // (N32 warn-and-proceed). Additive, no backfill (every existing plan reads NULL), so
+  // the byte-parity path is untouched. Not a query predicate — read with the plan row
+  // (and across a plan's small upstream closure), never filtered/sorted across plans —
+  // so no index (the scheduling_mode / ignore_external_relationships precedent).
+  scheduleComputedAt          DateTime?              @map("schedule_computed_at") @db.Timestamptz(3)
   version                     Int                    @default(1)
   createdAt                   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -640,6 +657,14 @@ model Plan {
   activities   Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
   dependencies ActivityDependency[]
+  // Live cross-plan (inter-project) edges incident on this plan (M2, ADR-0045). Two
+  // named relations disambiguate the two plan FKs on CrossPlanDependency:
+  // `crossPlanOutgoing` are the edges where this plan is the PREDECESSOR (feeds a
+  // downstream plan), `crossPlanIncoming` where it is the SUCCESSOR (gated BY an
+  // upstream plan — the edge's home per ADR-0045 CQ-2). Both FKs are RESTRICT: a
+  // schedule edge is never cascade-deleted; soft-delete + restore is service-owned.
+  crossPlanOutgoing CrossPlanDependency[] @relation("CrossPlanDependencyPredecessorPlan")
+  crossPlanIncoming CrossPlanDependency[] @relation("CrossPlanDependencySuccessorPlan")
   // Plan-of-record snapshots captured from this plan (M7, ADR-0025). At most one is
   // active at a time (partial unique in the migration). FK is RESTRICT; baseline
   // soft-delete + cascade is service-owned (HierarchyLifecycleService).
@@ -1002,6 +1027,16 @@ model Activity {
   predecessorLinks ActivityDependency[] @relation("DependencyPredecessor")
   successorLinks   ActivityDependency[] @relation("DependencySuccessor")
 
+  // The live cross-plan (inter-project) edges incident on this activity (M2, ADR-0045).
+  // Mirrors predecessorLinks/successorLinks: `crossPlanPredecessorLinks` are the edges
+  // where this activity is the PREDECESSOR (its cross-plan successors, in OTHER plans),
+  // `crossPlanSuccessorLinks` where it is the SUCCESSOR (its cross-plan predecessors).
+  // Two named self-relations disambiguate CrossPlanDependency's two FKs to `activities`.
+  // Both FKs are RESTRICT; edge soft-delete/sweep is service-owned (the dependency
+  // precedent).
+  crossPlanPredecessorLinks CrossPlanDependency[] @relation("CrossPlanDependencyPredecessor")
+  crossPlanSuccessorLinks   CrossPlanDependency[] @relation("CrossPlanDependencySuccessor")
+
   // The WBS adjacency-list self-relation (M5, ADR-0038): `parent` is this activity's
   // WBS_SUMMARY container (null = top-level), `children` are the activities grouped
   // under it (empty for a leaf). onDelete: Restrict guards against an accidental hard
@@ -1149,6 +1184,104 @@ model ActivityDependency {
   @@index([successorId])
   @@index([organizationId])
   @@map("dependencies")
+}
+
+// A CrossPlanDependency — a LIVE inter-project (cross-plan) logic edge whose
+// predecessor and successor activities live in DIFFERENT plans of the SAME
+// organisation (M2, ADR-0045 §1). It makes a downstream date track an upstream
+// re-plan: at recalc time the service DERIVES the successor's external early start
+// (and the predecessor's external late finish) from the linked activity's persisted
+// computed dates and folds them into the M1 external instants (ADR-0043) — the pure
+// `computeSchedule` never sees this table (parity by construction, §2).
+//
+// It is DELIBERATELY SEPARATE from `dependencies` (ActivityDependency), which asserts
+// a single `plan_id` for BOTH endpoints (ADR-0021, `loadEndpointInPlan`). Reusing that
+// table would break its whole-plan-adjacency invariant and the engine's per-plan
+// `loadEdges`. This table therefore mirrors ActivityDependency's shape (type FS/SS/FF/SF,
+// signed working-MINUTE `lag_minutes`, the `lag_calendar` resolution seam, soft-delete +
+// `delete_batch_id`, audit, optimistic `version`, scoped indexes; all house standards in
+// docs/DATABASE.md) but carries BOTH plan ids, denormalised (`predecessor_plan_id`,
+// `successor_plan_id`), for org-scoping, the plan-level cycle walk (ADR-0045 §3), and the
+// topological programme order (§4). Scope (`organization_id` + both plan ids) is copied
+// from the validated endpoints by the service inside the create transaction — NEVER from
+// client input; invariant: `organization_id == predecessor.organization_id ==
+// successor.organization_id` and each plan id equals its endpoint's `plan_id`.
+//
+// It deliberately OMITS ActivityDependency's engine-owned `is_driving` column: the CPM
+// engine never consumes cross-plan edges (they are DERIVED above it, §2), so there is no
+// per-edge driving flag to write. It also omits a self-loop CHECK: the different-plans
+// CHECK below (predecessor_plan_id <> successor_plan_id) already guarantees the two
+// endpoints are in different plans and therefore distinct activities.
+//
+// Four FKs, all ON DELETE RESTRICT (a live schedule edge is NEVER cascade-deleted; soft-
+// delete + endpoint-guarded restore is service-owned): two to `plans`
+// (predecessor_plan/successor_plan) and two to `activities` (predecessor/successor), each
+// via an explicitly-named relation so Prisma can disambiguate the back-relations.
+model CrossPlanDependency {
+  id                String @id @default(uuid(7)) @db.Uuid
+  organizationId    String @map("organization_id") @db.Uuid
+  // Denormalised plan ids (copied from the endpoints, never client input): the edge
+  // spans two DIFFERENT plans of this org. `predecessor_plan_id == predecessor.plan_id`,
+  // `successor_plan_id == successor.plan_id`; enforced <> by a DB CHECK (N31 backstop).
+  predecessorPlanId String @map("predecessor_plan_id") @db.Uuid
+  successorPlanId   String @map("successor_plan_id") @db.Uuid
+  predecessorId     String @map("predecessor_id") @db.Uuid
+  successorId       String @map("successor_id") @db.Uuid
+
+  // Logic (Planner-owned), IDENTICAL to ActivityDependency. `lag_minutes` is a SIGNED
+  // working-MINUTE lag (negative = lead), bounded to −5_256_000…5_256_000 (≈ ±10 y) by
+  // ck_cross_plan_dependencies_lag_minutes_range (raw SQL); `lag_calendar` is the
+  // ADR-0036 §6 resolution seam (default PROJECT_DEFAULT is behaviour-preserving). The
+  // public API stays day-denominated; the service scales days↔minutes.
+  type        DependencyType    @default(FS)
+  lagMinutes  Int               @default(0) @map("lag_minutes")
+  lagCalendar LagCalendarSource @default(PROJECT_DEFAULT) @map("lag_calendar")
+
+  // Housekeeping (as ActivityDependency): TEXT audit ids (Better Auth ids are TEXT —
+  // nullable), optimistic-lock version, soft delete + restore-batch correlation.
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  predecessorPlan Plan         @relation("CrossPlanDependencyPredecessorPlan", fields: [predecessorPlanId], references: [id], onDelete: Restrict)
+  successorPlan   Plan         @relation("CrossPlanDependencySuccessorPlan", fields: [successorPlanId], references: [id], onDelete: Restrict)
+  predecessor     Activity     @relation("CrossPlanDependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Restrict)
+  successor       Activity     @relation("CrossPlanDependencySuccessor", fields: [successorId], references: [id], onDelete: Restrict)
+
+  // A given ordered (predecessor, successor) pair may carry at most one link of each
+  // type among ACTIVE rows — enforced by a PARTIAL unique index
+  // (uq_cross_plan_dependencies_pred_succ_type ON (predecessor_id, successor_id, type)
+  // WHERE deleted_at IS NULL), raw SQL in the migration (Prisma cannot express partial
+  // indexes). Mirrors uq_dependencies_pred_succ_type and backs the N33
+  // DUPLICATE_CROSS_PLAN_DEPENDENCY (409) check; a soft-deleted link frees its triple.
+  //
+  // Indexes serve the derivation/closure + walk loads:
+  //   * (successor_plan_id, created_at, id) — the successor plan is the edge's HOME
+  //     (ADR-0045 CQ-2): this covers loading a plan's INCOMING cross-plan edges (the
+  //     forward-derivation load), the plan-scoped list AND its cursor sort, and the
+  //     successor_plan FK (leftmost prefix) in one; it subsumes a standalone
+  //     successor_plan_id index (the (plan_id, created_at, id) precedent).
+  //   * (predecessor_plan_id) — load a plan's OUTGOING edges (the backward-derivation
+  //     load) and back the predecessor_plan FK (RESTRICT).
+  //   * (predecessor_id) / (successor_id) — back the two activity FKs (RESTRICT) and the
+  //     per-activity incident-edge lists / sweep (the dependency direction-index
+  //     precedent).
+  //   * (organization_id) — back the org FK (RESTRICT) and the org-scoped adjacency load
+  //     the plan-level cycle walk (ADR-0045 §3) reads (bounded by plan count).
+  // The partial delete_batch_id index (raw SQL, WHERE ... IS NOT NULL) backs batch
+  // restore. The different-plans CHECK (predecessor_plan_id <> successor_plan_id, the
+  // N31 backstop) and the lag-range CHECK are raw SQL in the migration.
+  @@index([successorPlanId, createdAt, id])
+  @@index([predecessorPlanId])
+  @@index([predecessorId])
+  @@index([successorId])
+  @@index([organizationId])
+  @@map("cross_plan_dependencies")
 }
 
 // ---------------------------------------------------------------------------

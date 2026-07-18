@@ -41,6 +41,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     levelResources: false,
     levelWithinFloatOnly: false,
     ignoreExternalRelationships: false,
+    scheduleComputedAt: null,
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
