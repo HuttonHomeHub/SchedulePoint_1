@@ -10,6 +10,8 @@
  * `@/features/clients` as before.
  */
 
+import type { HistogramGranularity } from '@repo/types';
+
 export const clientKeys = {
   all: (orgSlug: string) => ['clients', orgSlug] as const,
   list: (orgSlug: string) => [...clientKeys.all(orgSlug), 'list'] as const,
@@ -91,6 +93,19 @@ export const scheduleKeys = {
   // sweep it too (dates move EV's PV/EV).
   earnedValue: (orgSlug: string, planId: string) =>
     [...scheduleKeys.all(orgSlug), 'plan', planId, 'earned-value'] as const,
+  // The resource-loading histogram read-model (M7 rung 5, ADR-0044 §3): a pure GET over the live
+  // schedule + resource assignments, keyed under the same schedule namespace as the summary so a
+  // recalc's schedule invalidation sweeps it too (dates move each assignment's units-over-time).
+  // Omit `granularity` to get the plan-scoped prefix — invalidating it sweeps every bucket size at
+  // once (Day/Week/Month), so an assignment or recalc change refreshes whichever the user is viewing.
+  resourceHistogram: (orgSlug: string, planId: string, granularity?: HistogramGranularity) =>
+    [
+      ...scheduleKeys.all(orgSlug),
+      'plan',
+      planId,
+      'resource-histogram',
+      ...(granularity ? [granularity] : []),
+    ] as const,
 };
 
 export const planLockKeys = {

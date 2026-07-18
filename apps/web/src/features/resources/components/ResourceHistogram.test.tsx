@@ -1,6 +1,6 @@
 import type { ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resourceKeys } from '../api/use-resources';
@@ -98,5 +98,39 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
     });
     renderHistogram();
     expect(await screen.findByText(/No resource loading to show yet/)).toBeInTheDocument();
+  });
+
+  it('shows a loading state while the histogram is pending', () => {
+    // A never-resolving fetch keeps the query pending.
+    vi.mocked(apiFetchEnvelope)
+      .mockReset()
+      .mockReturnValue(new Promise(() => {}));
+    renderHistogram();
+    expect(screen.getByText('Loading histogram…')).toBeInTheDocument();
+  });
+
+  it('shows a retryable error state and recovers on Try again', async () => {
+    vi.mocked(apiFetchEnvelope).mockReset().mockRejectedValueOnce(new Error('boom'));
+    renderHistogram();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /Couldn’t load the resource histogram/,
+    );
+    // The next attempt succeeds → clicking Try again refetches and resolves to the empty state.
+    vi.mocked(apiFetchEnvelope).mockResolvedValue({
+      data: [],
+      meta: { granularity: 'WEEK', buckets: [], curveNormalisedCount: 0 },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText(/No resource loading to show yet/)).toBeInTheDocument();
+  });
+
+  it('refetches the endpoint when the bucket size changes', async () => {
+    renderHistogram();
+    await screen.findByRole('table');
+    fireEvent.change(screen.getByLabelText('Bucket size'), { target: { value: 'DAY' } });
+    await waitFor(() => {
+      const paths = vi.mocked(apiFetchEnvelope).mock.calls.map(([path]) => String(path));
+      expect(paths.some((path) => path.includes('granularity=DAY'))).toBe(true);
+    });
   });
 });

@@ -80,6 +80,12 @@ export function useRecalculate(orgSlug: string, planId: string) {
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: dependencyKeys.byPlan(orgSlug, planId) }),
+        // The resource histogram (M7 rung 5, ADR-0044 §3) reads the recomputed activity spans, so a
+        // recalc moves each assignment's units-over-time — refresh every bucket size (prefix, no
+        // granularity) so whichever the user is viewing reflects the new dates.
+        queryClient.invalidateQueries({
+          queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+        }),
       ]),
   });
 }

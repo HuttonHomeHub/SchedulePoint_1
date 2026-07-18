@@ -107,16 +107,19 @@ function seedMoney(minorUnits: number | null): string {
  */
 function AssignmentCostFields({
   orgSlug,
+  planId,
   activityId,
   assignment,
   name,
 }: {
   orgSlug: string;
+  /** The owning plan, so a cost save refreshes the resource histogram (ADR-0044 §3). */
+  planId: string | undefined;
   activityId: string;
   assignment: ResourceAssignmentSummary;
   name: string;
 }): React.ReactElement {
-  const update = useUpdateAssignment(orgSlug);
+  const update = useUpdateAssignment(orgSlug, planId);
   const announce = useAnnounce();
   const budgetedId = useId();
   const budgetedErrorId = useId();
@@ -251,6 +254,7 @@ function AssignmentCostFields({
  */
 function AssignmentRow({
   orgSlug,
+  planId,
   activityId,
   assignment,
   resource,
@@ -259,6 +263,8 @@ function AssignmentRow({
   onRemoved,
 }: {
   orgSlug: string;
+  /** The owning plan, so units/driving/curve/unassign edits refresh the resource histogram (ADR-0044 §3). */
+  planId: string | undefined;
   activityId: string;
   assignment: ResourceAssignmentSummary;
   resource: ResourceSummary | undefined;
@@ -268,8 +274,8 @@ function AssignmentRow({
   /** Called after a successful unassign so the parent can restore focus (the row unmounts). */
   onRemoved: () => void;
 }): React.ReactElement {
-  const update = useUpdateAssignment(orgSlug);
-  const remove = useDeleteAssignment(orgSlug);
+  const update = useUpdateAssignment(orgSlug, planId);
+  const remove = useDeleteAssignment(orgSlug, planId);
   const announce = useAnnounce();
   const unitsId = useId();
   const unitsErrorId = useId();
@@ -565,6 +571,7 @@ function AssignmentRow({
           {EARNED_VALUE_ENABLED ? (
             <AssignmentCostFields
               orgSlug={orgSlug}
+              planId={planId}
               activityId={activityId}
               assignment={assignment}
               name={name}
@@ -601,6 +608,7 @@ function AssignmentRow({
  */
 export function ActivityResourcesDialog({
   orgSlug,
+  planId,
   activityId,
   activityName,
   activityDurationType,
@@ -609,6 +617,10 @@ export function ActivityResourcesDialog({
   canWrite,
 }: {
   orgSlug: string;
+  /** The owning plan (ADR-0044 §3) — threaded to the assignment mutations so an assign / edit /
+   * unassign refreshes the plan's resource histogram. Optional so the flag-off / test callers can
+   * omit it (the histogram surface is dark by default). */
+  planId?: string;
   /** Optional so the dialog can stay mounted (toggled by `open`), preserving focus restore. */
   activityId?: string;
   activityName?: string;
@@ -620,11 +632,12 @@ export function ActivityResourcesDialog({
 }): React.ReactElement {
   const resources = useResources(orgSlug);
   const assignments = useAssignments(orgSlug, activityId ?? '');
-  const create = useCreateAssignment(orgSlug, activityId ?? '');
+  const create = useCreateAssignment(orgSlug, activityId ?? '', planId);
   const announce = useAnnounce();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const resourceSelectId = useId();
   const curveSelectId = useId();
+  const curveHelpId = useId();
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
   const assignedIds = new Set((assignments.data ?? []).map((a) => a.resourceId));
@@ -706,6 +719,7 @@ export function ActivityResourcesDialog({
                 <AssignmentRow
                   key={assignment.id}
                   orgSlug={orgSlug}
+                  planId={planId}
                   activityId={activityId ?? ''}
                   assignment={assignment}
                   resource={resourceById.get(assignment.resourceId)}
@@ -783,14 +797,18 @@ export function ActivityResourcesDialog({
                 {RESOURCE_CURVES_ENABLED ? (
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor={curveSelectId}>Loading curve</Label>
-                    <Select id={curveSelectId} {...register('curveType')}>
+                    <Select
+                      id={curveSelectId}
+                      aria-describedby={curveHelpId}
+                      {...register('curveType')}
+                    >
                       {RESOURCE_CURVE_TYPES.map((curve) => (
                         <option key={curve} value={curve}>
                           {RESOURCE_CURVE_LABELS[curve]}
                         </option>
                       ))}
                     </Select>
-                    <p className="text-muted-foreground text-sm">
+                    <p id={curveHelpId} className="text-muted-foreground text-sm">
                       Shapes how this resource’s units spread over the activity — the resource
                       histogram only. It doesn’t move any dates.
                     </p>

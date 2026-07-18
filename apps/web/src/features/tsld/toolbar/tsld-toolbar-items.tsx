@@ -53,6 +53,7 @@ import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import {
   CANVAS_AUTHORING_ENABLED,
   EARNED_VALUE_ENABLED,
+  RESOURCE_CURVES_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
@@ -935,6 +936,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <DollarSign className="size-4" />,
       isVisible: () => EARNED_VALUE_ENABLED,
       onActivate: (ctx) => ctx.openEarnedValue(),
+    },
+    // Resource histogram (M7 rung 5, ADR-0044 §3) — opens the resource-loading read dialog; a read
+    // action (no pen). Gated behind `VITE_RESOURCE_CURVES`, so it's absent until the surface ships.
+    {
+      id: 'resource-histogram',
+      group: 'object',
+      row: 'do',
+      tier: 2,
+      order: 5,
+      label: 'Resource histogram…',
+      icon: <BarChart3 className="size-4" />,
+      isVisible: () => RESOURCE_CURVES_ENABLED,
+      onActivate: (ctx) => ctx.openResourceHistogram(),
     },
     // Plan details + Edit plan are no longer toolbar buttons (ADR-0031 amendment): the key facts
     // (status, data date, mode) now live in the Summary popover, which also carries an "Edit plan…"

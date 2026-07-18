@@ -6,6 +6,7 @@ import { useActivities, useDeleteActivity } from '../api/use-activities';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
+  isDurationDerivedType,
   isMilestoneType,
 } from '../schemas/activity-schemas';
 
@@ -334,8 +335,10 @@ export function ActivitiesTable({
             </Button>
           ) : null}
           {/* Dark surface (ADR-0044 §2): the weighted-steps editor is an authoring surface — writers
-              only, gated on the flag. */}
-          {ACTIVITY_STEPS_ENABLED && canWrite ? (
+              only, gated on the flag. Hidden for a duration-derived type (milestone / LOE / WBS
+              summary): weighted steps are inert there — the EV engine hardcodes their physical %,
+              matching how the form hides %-complete / expense for those (ux review). */}
+          {ACTIVITY_STEPS_ENABLED && canWrite && !isDurationDerivedType(activity.type) ? (
             <Button
               variant="ghost"
               size="sm"
@@ -419,6 +422,7 @@ export function ActivitiesTable({
       {RESOURCES_ENABLED ? (
         <ActivityResourcesDialog
           orgSlug={orgSlug}
+          planId={planId}
           open={managingResources !== undefined}
           onClose={() => setResourcesId(null)}
           canWrite={canWrite}

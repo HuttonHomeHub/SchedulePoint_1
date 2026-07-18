@@ -191,6 +191,29 @@ describe('ActivityStepsDialog (flag on)', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  it('focuses the new step’s name input after Add step (a11y)', async () => {
+    renderDialog([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    await waitFor(() => expect(screen.getByLabelText('Step 1 name')).toHaveFocus());
+  });
+
+  it('restores focus to the previous row’s Remove after removing a step (a11y)', async () => {
+    renderDialog([
+      step({ id: 'st-1', seq: 1, name: 'Rebar' }),
+      step({ id: 'st-2', seq: 2, name: 'Formwork' }),
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 2' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove step 1' })).toHaveFocus(),
+    );
+  });
+
+  it('moves focus to Add step when the first (only) row is removed (a11y)', async () => {
+    renderDialog([step({ id: 'st-1', seq: 1, name: 'Rebar' })]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 1' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add step' })).toHaveFocus());
+  });
+
   it('reorders a row with Move up', () => {
     renderDialog([
       step({ id: 'st-1', seq: 1, name: 'Rebar' }),

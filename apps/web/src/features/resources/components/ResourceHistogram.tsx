@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 
 import { useResourceHistogram, useResources } from '../api/use-resources';
 
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
@@ -76,9 +77,14 @@ export function ResourceHistogram({
       {histogram.isPending ? (
         <p className="text-muted-foreground text-sm">Loading histogram…</p>
       ) : histogram.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          Couldn’t load the resource histogram. Please try again.
-        </p>
+        <div className="flex flex-col items-start gap-3">
+          <p role="alert" className="text-destructive-text text-sm">
+            Couldn’t load the resource histogram.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void histogram.refetch()}>
+            Try again
+          </Button>
+        </div>
       ) : series.length === 0 ? (
         <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
           No resource loading to show yet — assign resources with budgeted units and recalculate the

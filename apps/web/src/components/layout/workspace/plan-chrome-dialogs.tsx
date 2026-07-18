@@ -6,6 +6,7 @@ import {
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   PROGRESS_INGESTION_ENABLED,
+  RESOURCE_CURVES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
@@ -19,10 +20,12 @@ import {
   PlanLevellingSettings,
   PlanRecalcModePicker,
 } from '@/features/plans';
+import { ResourceHistogram } from '@/features/resources';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The lower-frequency plan-chrome surfaces reachable from either layout's overflow. */
-export type PlanChromeDialog = 'details' | 'baselines' | 'calendar' | 'earned-value';
+export type PlanChromeDialog =
+  'details' | 'baselines' | 'calendar' | 'earned-value' | 'resource-histogram';
 
 /**
  * The three **plan-chrome dialogs** — Plan details, Baselines, and the working-day Calendar — shared
@@ -122,6 +125,18 @@ export function PlanChromeDialogs({
             planId={model.planId}
             activities={model.activities.data ?? []}
           />
+        </Dialog>
+      ) : null}
+
+      {RESOURCE_CURVES_ENABLED ? (
+        <Dialog
+          open={dialog === 'resource-histogram'}
+          onClose={onClose}
+          title="Resource histogram"
+          description="Each resource's curve-shaped units over time across this plan — a bar chart with a keyboard-navigable data table carrying the same numbers."
+          size="lg"
+        >
+          <ResourceHistogram orgSlug={model.orgSlug} planId={model.planId} />
         </Dialog>
       ) : null}
     </>

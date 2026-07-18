@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ActivitySummary } from '@repo/types';
-import { useEffect, useId } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 
 import { useActivitySteps, useReplaceActivitySteps } from '../api/use-activity-steps';
@@ -50,7 +50,20 @@ export function ActivityStepsDialog({
   const steps = useActivitySteps(orgSlug, activityId);
   const replace = useReplaceActivitySteps(orgSlug, planId, activityId);
   const announce = useAnnounce();
-  const rollupId = useId();
+
+  // Focus management for the field array (a11y review): the "Add step" button sits below the list, so
+  // after an add/remove the natural focus point isn't reachable without tabbing back up. We move focus
+  // explicitly after the commit — a `useFieldArray` mutation re-renders, so the new/prev DOM only
+  // exists on the next paint. A no-dep effect runs after every commit and drains a one-shot callback.
+  const listRef = useRef<HTMLUListElement>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const pendingFocus = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (pendingFocus.current) {
+      pendingFocus.current();
+      pendingFocus.current = null;
+    }
+  });
 
   const {
     register,
@@ -102,6 +115,37 @@ export function ActivityStepsDialog({
     );
   });
 
+  // Append a row, then focus its name input and announce it (a11y review) — otherwise focus stays on
+  // the "Add step" button below the list and a keyboard user never lands in the field they just added.
+  const addStep = (): void => {
+    append({ ...NEW_STEP });
+    pendingFocus.current = () => {
+      const rows = listRef.current?.querySelectorAll(':scope > li');
+      const last = rows?.[rows.length - 1];
+      last?.querySelector<HTMLInputElement>('input')?.focus();
+    };
+    announce('Step added.');
+  };
+
+  // Remove a row, then restore focus to the previous row's Remove button (or the "Add step" button when
+  // the first/last row was removed), and announce it — the removed control would otherwise drop focus
+  // to <body> (a11y review). Earlier rows keep their index after a later removal, so `index - 1` is
+  // still the previous row post-commit.
+  const removeStep = (index: number): void => {
+    remove(index);
+    pendingFocus.current = () => {
+      if (index > 0) {
+        const rows = listRef.current?.querySelectorAll(':scope > li');
+        const prev = rows?.[index - 1];
+        const button = prev?.querySelector<HTMLButtonElement>('[data-step-remove]');
+        (button ?? addButtonRef.current)?.focus();
+      } else {
+        addButtonRef.current?.focus();
+      }
+    };
+    announce('Step removed.');
+  };
+
   return (
     <Dialog
       open={open}
@@ -111,14 +155,14 @@ export function ActivityStepsDialog({
       {...(activity ? { description: `Weighted progress steps for “${activity.name}”.` } : {})}
     >
       <div className="flex flex-col gap-6">
+        {/* aria-live on the whole container (not just the value) so AT hears the label with the value —
+            "Physical % complete (rolled up) 75%", not a bare "75%" (a11y review). */}
         <div
-          id={rollupId}
+          aria-live="polite"
           className="border-border bg-muted/30 flex items-baseline justify-between gap-4 rounded-md border p-3"
         >
           <span className="text-sm font-medium">Physical % complete (rolled up)</span>
-          <span className="text-lg font-semibold tabular-nums" aria-live="polite">
-            {formatRollup(rollup)}
-          </span>
+          <span className="text-lg font-semibold tabular-nums">{formatRollup(rollup)}</span>
         </div>
         {hasSteps ? (
           <p className="text-muted-foreground text-sm">
@@ -127,9 +171,14 @@ export function ActivityStepsDialog({
         ) : null}
 
         {steps.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            Couldn’t load steps. Please try again.
-          </p>
+          <div className="flex flex-col items-start gap-3">
+            <p role="alert" className="text-destructive-text text-sm">
+              Couldn’t load steps.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void steps.refetch()}>
+              Try again
+            </Button>
+          </div>
         ) : steps.isPending && activityId ? (
           <p className="text-muted-foreground text-sm">Loading steps…</p>
         ) : (
@@ -150,7 +199,7 @@ export function ActivityStepsDialog({
                 No steps yet. Add the first step to build a weighted progress checklist.
               </div>
             ) : (
-              <ul className="flex flex-col gap-3">
+              <ul ref={listRef} className="flex flex-col gap-3">
                 {fields.map((field, index) => {
                   const rowErrors = errors.steps?.[index];
                   return (
@@ -213,8 +262,9 @@ export function ActivityStepsDialog({
                           type="button"
                           size="sm"
                           variant="ghost"
+                          data-step-remove=""
                           aria-label={`Remove step ${index + 1}`}
-                          onClick={() => remove(index)}
+                          onClick={() => removeStep(index)}
                         >
                           Remove
                         </Button>
@@ -226,12 +276,7 @@ export function ActivityStepsDialog({
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => append({ ...NEW_STEP })}
-                aria-describedby={rollupId}
-              >
+              <Button ref={addButtonRef} type="button" variant="outline" onClick={addStep}>
                 Add step
               </Button>
               <div className="flex gap-2">

@@ -470,7 +470,7 @@ export function ActivityFormDialog({
                     className="text-muted-foreground text-sm"
                   >
                     {PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no
-                    dates — only how Earned Value measures progress.
+                    dates — only how Earned value measures progress.
                   </p>
                 </div>
                 {percentCompleteType === 'PHYSICAL' ? (
@@ -533,7 +533,7 @@ export function ActivityFormDialog({
                 <p id="activity-accrual-type-help" className="text-muted-foreground text-sm">
                   Sets when this activity’s cost is recognised: Start (all at the start), Uniform
                   (spread evenly), or End (all at the finish). It changes only when cost is
-                  recognised in Earned Value — never a date.
+                  recognised in Earned value — never a date.
                 </p>
               </div>
             ) : null}

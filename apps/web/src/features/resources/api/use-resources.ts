@@ -8,6 +8,7 @@ import type {
   ResourceSummary,
 } from '@repo/types';
 import {
+  keepPreviousData,
   queryOptions,
   useMutation,
   useQuery,
@@ -19,7 +20,12 @@ import type { AssignmentFormValues, ResourceFormValues } from '../schemas/resour
 
 import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
 import { majorInputToMinor } from '@/lib/format-money';
-import { activityKeys, assignmentKeys, planKeys, resourceKeys } from '@/lib/query/hierarchy-keys';
+import {
+  activityKeys,
+  assignmentKeys,
+  resourceKeys,
+  scheduleKeys,
+} from '@/lib/query/hierarchy-keys';
 
 export { assignmentKeys, resourceKeys };
 
@@ -146,7 +152,7 @@ export function useAssignments(
   return useQuery(assignmentsQueryOptions(orgSlug, activityId));
 }
 
-export function useCreateAssignment(orgSlug: string, activityId: string) {
+export function useCreateAssignment(orgSlug: string, activityId: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AssignmentFormValues) =>
@@ -179,13 +185,24 @@ export function useCreateAssignment(orgSlug: string, activityId: string) {
         },
       ),
     onSettled: () =>
-      queryClient.invalidateQueries({
-        queryKey: assignmentKeys.listByActivity(orgSlug, activityId),
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, activityId),
+        }),
+        // A new assignment adds demand to the resource histogram (M7 rung 5, ADR-0044 §3) — refresh
+        // every bucket size for the plan (prefix). Only when the plan is known (the dialog passes it).
+        ...(planId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+            ]
+          : []),
+      ]),
   });
 }
 
-export function useUpdateAssignment(orgSlug: string) {
+export function useUpdateAssignment(orgSlug: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
@@ -244,11 +261,20 @@ export function useUpdateAssignment(orgSlug: string) {
         ...(input.editedField
           ? [queryClient.invalidateQueries({ queryKey: activityKeys.all(orgSlug) })]
           : []),
+        // Editing units / driving flag / loading curve all reshape the resource histogram (M7 rung 5,
+        // ADR-0044 §3) — refresh every bucket size for the plan (prefix). Only when the plan is known.
+        ...(planId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+            ]
+          : []),
       ]),
   });
 }
 
-export function useDeleteAssignment(orgSlug: string) {
+export function useDeleteAssignment(orgSlug: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { assignmentId: string; activityId: string }) =>
@@ -256,9 +282,20 @@ export function useDeleteAssignment(orgSlug: string) {
         method: 'DELETE',
       }),
     onSettled: (_data, _error, input) =>
-      queryClient.invalidateQueries({
-        queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
+        }),
+        // Unassigning removes the resource's demand from the histogram (M7 rung 5, ADR-0044 §3) —
+        // refresh every bucket size for the plan (prefix). Only when the plan is known.
+        ...(planId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+            ]
+          : []),
+      ]),
   });
 }
 
@@ -281,7 +318,12 @@ export function resourceHistogramQueryOptions(
   granularity: HistogramGranularity,
 ) {
   return queryOptions({
-    queryKey: [...planKeys.detail(orgSlug, planId), 'resource-histogram', granularity] as const,
+    // Keyed under the shared schedule namespace (ADR-0044 §3) so a recalc's and an assignment write's
+    // schedule invalidation both sweep it (`scheduleKeys.resourceHistogram` prefix, all granularities).
+    queryKey: scheduleKeys.resourceHistogram(orgSlug, planId, granularity),
+    // Keep the previous bucket size's histogram on screen while switching Day/Week/Month, so the view
+    // doesn't collapse to "Loading…" on every granularity change (ux review).
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<ResourceHistogramResult> => {
       const { data, meta } = await apiFetchEnvelope<
         ResourceHistogramSeries[],

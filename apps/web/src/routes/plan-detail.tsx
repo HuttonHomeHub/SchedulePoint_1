@@ -17,6 +17,7 @@ import {
   FLOAT_CRITICAL_SETTINGS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   PROGRESS_INGESTION_ENABLED,
+  RESOURCE_CURVES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
@@ -33,6 +34,7 @@ import {
   PlanRecalcModePicker,
   PlanScheduleSettings,
 } from '@/features/plans';
+import { ResourceHistogram } from '@/features/resources';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -242,6 +244,19 @@ function LegacyPlanLayout({
               planId={planId}
               activities={model.activities.data ?? []}
             />
+          </div>
+        </div>
+      ) : null}
+
+      {RESOURCE_CURVES_ENABLED ? (
+        <div className="mt-6">
+          <h3 className="text-base font-medium">Resource histogram</h3>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Each resource’s curve-shaped units over time across this plan — a bar chart with a
+            keyboard-navigable data table carrying the same numbers.
+          </p>
+          <div className="mt-3">
+            <ResourceHistogram orgSlug={orgSlug} planId={planId} />
           </div>
         </div>
       ) : null}
