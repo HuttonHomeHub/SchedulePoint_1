@@ -573,6 +573,19 @@ export const DEPENDENCY_CONFLICT_MESSAGES = {
 } as const;
 
 /**
+ * Canonical cross-plan-dependency conflict messages (inter-project M2, ADR-0045 §6, N31/N30/N33),
+ * shared so the same rejection reads identically wherever it surfaces — the API throws them, and the
+ * web cross-plan link editor shows them locally before the write. One voice (the sibling of
+ * {@link DEPENDENCY_CONFLICT_MESSAGES} for the cross-plan edge).
+ */
+export const CROSS_PLAN_DEPENDENCY_CONFLICT_MESSAGES = {
+  SAME_PLAN:
+    'A cross-plan link must join activities in two different plans — use a dependency for same-plan logic.',
+  CYCLE: 'This cross-plan link would create a cycle between plans.',
+  DUPLICATE: 'A cross-plan link of this type already exists between these activities.',
+} as const;
+
+/**
  * One entry in a batch lane-position write (TSLD M4): move activity `id` to `laneIndex`,
  * carrying the `version` it was read at for optimistic locking. The batch is all-or-nothing.
  */
@@ -616,6 +629,31 @@ export interface DependencySummary {
    * on every recalculate; false until the plan is first calculated (or if the edge has slack).
    */
   isDriving: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A cross-plan dependency — a LIVE inter-project logic edge whose predecessor and successor
+ * activities live in DIFFERENT plans of the SAME organisation (inter-project M2, ADR-0045 §1).
+ * It mirrors {@link DependencySummary} but carries BOTH plan ids (denormalised) instead of a
+ * single `planId`, and deliberately OMITS `isDriving`: the CPM engine never consumes cross-plan
+ * edges (they are DERIVED above it — parity by construction), so there is no per-edge driving flag.
+ * `lagDays` is a signed count of working days (a lead is negative).
+ */
+export interface CrossPlanDependencySummary {
+  id: string;
+  /** The plan the predecessor activity belongs to (the upstream plan). */
+  predecessorPlanId: string;
+  /** The plan the successor activity belongs to (the downstream plan — the edge's home, ADR-0045 CQ-2). */
+  successorPlanId: string;
+  type: DependencyType;
+  lagDays: number;
+  /** The calendar the lag is measured on (ADR-0036 §6) — identical semantics to a dependency's. */
+  lagCalendar: LagCalendarSource;
+  predecessor: DependencyEndpoint;
+  successor: DependencyEndpoint;
   version: number;
   createdAt: string;
   updatedAt: string;

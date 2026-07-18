@@ -131,16 +131,45 @@ override needs `plan:override_lock` (Org Admin).
 
 **Gated writes.** The structural write endpoints — activity
 create/update/delete/restore, `…/activities/positions`, dependency
-create/update/delete, and `…/schedule/recalculate` — additionally require holding
-the pen and return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from the
-409 version clash). The Contributor progress path (`…/activities/:id/progress`),
-all reads, and plan-metadata `PATCH …/plans/:id` are **not** pen-gated.
+create/update/delete, cross-plan dependency create/delete (on the **successor**
+plan), and `…/schedule/recalculate` — additionally require holding the pen and
+return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from the 409 version
+clash). The Contributor progress path (`…/activities/:id/progress`), all reads,
+and plan-metadata `PATCH …/plans/:id` are **not** pen-gated.
 
 The write-gate is **behind a staged-rollout flag** `PLAN_EDIT_LOCK_ENFORCED`
 (default off): the lock mechanism ships inert so it never breaks the existing
 (flag-on) activities-table / dependency-editor / recalculate flows, which don't
 acquire a lock yet. Ops enable it only once the front end acquires the pen across
 every editing entry point (edit-lock M2/M3).
+
+### Cross-plan dependencies (ADR-0045)
+
+A **live cross-plan dependency** is an inter-project logic edge whose predecessor
+and successor activities live in **different plans of the same organisation**
+(inter-project M2). It is a sibling of the intra-plan dependency, kept on its own
+resource because it carries **two** plan ids and is derived above the pure engine
+(never fed to it). Create is **org-scoped** (not nested under a plan): both plan
+ids are derived server-side from the two endpoint activities, so a caller only
+supplies the endpoint ids. Listing reuses `dependency:read`; create/delete need
+the dedicated **`dependency:link_cross_plan`** (Planner + Org Admin) and hold the
+pen on the **successor** plan (the edge's home).
+
+| Method | Path                                               | Notes                                                                                      |
+| ------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| POST   | `…/cross-plan-dependencies`                        | Link two activities across plans · 422 `CROSS_PLAN_SAME_PLAN` · 409 cycle/duplicate · 423. |
+| GET    | `…/cross-plan-dependencies/:id`                    | Fetch one (org-scoped, anti-IDOR 404).                                                     |
+| DELETE | `…/cross-plan-dependencies/:id`                    | Soft-delete · 204, pen on the successor plan.                                              |
+| GET    | `…/plans/:planId/cross-plan-dependencies`          | The plan's **incoming** cross-plan links (cursor-paginated).                               |
+| GET    | `…/activities/:activityId/cross-plan-dependencies` | An activity's links, **both directions** (cursor-paginated).                               |
+
+Anti-IDOR is uniform: a foreign, other-org, or deleted endpoint id is an
+indistinguishable **404**. The programme graph is a **plan-level DAG** — a create
+that would close a cycle between two plans is rejected **409
+`CROSS_PLAN_CYCLE_DETECTED`** (N30), a same-plan edge is **422
+`CROSS_PLAN_SAME_PLAN`** (N31), and a duplicate `(predecessor, successor, type)`
+is **409 `DUPLICATE_CROSS_PLAN_DEPENDENCY`** (N33). Concurrent mirror creates are
+serialised by an **org-scoped advisory lock** so exactly one wins.
 
 ## Pagination, filtering, sorting
 
