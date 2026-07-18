@@ -15,6 +15,8 @@ import {
   CONSTRAINT_TYPE_LABELS,
   DURATION_TYPE_LABELS,
   INHERIT_CALENDAR_LABEL,
+  PERCENT_COMPLETE_TYPE_LABELS,
+  PERCENT_COMPLETE_TYPE_OPTIONS,
   activityFormSchema,
   isDurationDerivedType,
   selectableActivityTypes,
@@ -32,9 +34,11 @@ import {
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
   DURATION_TYPES_ENABLED,
+  EARNED_VALUE_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
+import { minorToMajorInput } from '@/lib/format-money';
 
 /**
  * Create-or-edit dialog for an activity DEFINITION (Planner/Org Admin). Progress
@@ -120,6 +124,10 @@ export function ActivityFormDialog({
       calendarId: '',
       parentId: '',
       levelingPriority: undefined,
+      percentCompleteType: 'DURATION',
+      physicalPercentComplete: undefined,
+      budgetedExpense: undefined,
+      actualExpense: undefined,
       description: '',
     },
   });
@@ -151,6 +159,13 @@ export function ActivityFormDialog({
         // Always seed from the row so a stored levelling priority round-trips even with the field
         // hidden (flag off) — an edit then never silently clears it. `null` → undefined (blank).
         levelingPriority: activity?.levelingPriority ?? undefined,
+        // Earned-Value inputs (EV4b): always seed from the row so a stored value round-trips even with
+        // the fields hidden (flag off) — an edit then never clears them. `percentCompleteType` defaults
+        // to the API default; `null` physical %/expense → undefined (blank), money minor → major units.
+        percentCompleteType: activity?.percentCompleteType ?? 'DURATION',
+        physicalPercentComplete: activity?.physicalPercentComplete ?? undefined,
+        budgetedExpense: minorToMajorInput(activity?.budgetedExpense),
+        actualExpense: minorToMajorInput(activity?.actualExpense),
         description: activity?.description ?? '',
       });
       mutation.reset();
@@ -163,6 +178,7 @@ export function ActivityFormDialog({
   const secondaryConstraintType = useWatch({ control, name: 'secondaryConstraintType' });
   const calendarId = useWatch({ control, name: 'calendarId' });
   const parentId = useWatch({ control, name: 'parentId' });
+  const percentCompleteType = useWatch({ control, name: 'percentCompleteType' });
   // A seeded parent that isn't in the fetched summary list (still loading, or the parent was itself
   // deleted/changed): keep it visible as an honest one-off option so opening the form never silently
   // un-nests the activity — the same honest-selector pattern as the calendar picker.
@@ -408,6 +424,76 @@ export function ActivityFormDialog({
               setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
             })}
           />
+        ) : null}
+        {/* Earned-Value inputs (EV4b, ADR-0042): the %-complete measure that earns value, an optional
+            hand-entered physical % (only relevant to the PHYSICAL measure), and the lump-sum budgeted /
+            actual expense carried on the activity. Meaningless for a type with no entered
+            duration/units/cost (a milestone, LOE or WBS summary) — hidden for those, mirroring the
+            Duration / Duration-type fields. Money is entered in major units (e.g. dollars). */}
+        {EARNED_VALUE_ENABLED && !isDurationDerivedType(type) ? (
+          <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
+            <legend className="sr-only">Cost &amp; Earned Value</legend>
+            <p className="text-sm font-medium" aria-hidden="true">
+              Cost &amp; Earned Value
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="activity-percent-complete-type">% complete type</Label>
+              <Select
+                id="activity-percent-complete-type"
+                aria-describedby="activity-percent-complete-type-help"
+                {...register('percentCompleteType')}
+              >
+                {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {PERCENT_COMPLETE_TYPE_LABELS[value].label}
+                  </option>
+                ))}
+              </Select>
+              <p id="activity-percent-complete-type-help" className="text-muted-foreground text-sm">
+                {PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates
+                — only how Earned Value measures progress.
+              </p>
+            </div>
+            {percentCompleteType === 'PHYSICAL' ? (
+              <TextField
+                label="Physical % complete (optional)"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                inputMode="numeric"
+                hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
+                error={errors.physicalPercentComplete?.message}
+                {...register('physicalPercentComplete', {
+                  setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                })}
+              />
+            ) : null}
+            <TextField
+              label="Budgeted expense (optional)"
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
+              error={errors.budgetedExpense?.message}
+              {...register('budgetedExpense', {
+                setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+              })}
+            />
+            <TextField
+              label="Actual expense (optional)"
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
+              error={errors.actualExpense?.message}
+              {...register('actualExpense', {
+                setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+              })}
+            />
+          </fieldset>
         ) : null}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="activity-constraint-type">Constraint (optional)</Label>

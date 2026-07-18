@@ -1,4 +1,4 @@
-import { CalendarDays, Info, Layers, MoreHorizontal, SquarePen } from 'lucide-react';
+import { CalendarDays, DollarSign, Info, Layers, MoreHorizontal, SquarePen } from 'lucide-react';
 import { useState } from 'react';
 
 import { PlanChromeDialogs, type PlanChromeDialog } from './plan-chrome-dialogs';
@@ -6,6 +6,7 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
+import { EARNED_VALUE_ENABLED } from '@/config/env';
 
 /**
  * The plan workspace's header **overflow menu** (ADR-0030, spec re-homing table): the
@@ -61,6 +62,11 @@ export function PlanActionsMenu({
         <MenuItem onSelect={() => setDialog('calendar')}>
           <CalendarDays aria-hidden="true" className="size-4" /> Calendar…
         </MenuItem>
+        {EARNED_VALUE_ENABLED ? (
+          <MenuItem onSelect={() => setDialog('earned-value')}>
+            <DollarSign aria-hidden="true" className="size-4" /> Earned Value…
+          </MenuItem>
+        ) : null}
       </Menu>
 
       <PlanChromeDialogs

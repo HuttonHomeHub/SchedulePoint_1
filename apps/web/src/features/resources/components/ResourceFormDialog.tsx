@@ -16,7 +16,8 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { RESOURCE_LEVELLING_ENABLED } from '@/config/env';
+import { EARNED_VALUE_ENABLED, RESOURCE_LEVELLING_ENABLED } from '@/config/env';
+import { minorToMajorInput } from '@/lib/format-money';
 
 const INHERIT_CALENDAR_LABEL = 'Plan default (inherit)';
 
@@ -80,6 +81,7 @@ export function ResourceFormDialog({
       kind: 'LABOUR',
       calendarId: '',
       maxUnitsPerHour: undefined,
+      costPerUnit: undefined,
     },
   });
 
@@ -95,6 +97,9 @@ export function ResourceFormDialog({
         // (flag off) — an edit then never silently clears the levelling ceiling. `null` → undefined
         // (blank = uncapped).
         maxUnitsPerHour: resource?.maxUnitsPerHour ?? undefined,
+        // Cost rate (EV4b): seed the MAJOR-unit value from the stored minor units so it round-trips
+        // even when the field is hidden (flag off) — an edit then never clears the rate. `null` → blank.
+        costPerUnit: minorToMajorInput(resource?.costPerUnit),
       });
       mutation.reset();
     }
@@ -211,6 +216,21 @@ export function ResourceFormDialog({
             hint="The most this resource can supply at once. Resource levelling delays activities so demand never exceeds it. Leave blank for uncapped."
             error={errors.maxUnitsPerHour?.message}
             {...register('maxUnitsPerHour', {
+              setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+            })}
+          />
+        ) : null}
+        {EARNED_VALUE_ENABLED ? (
+          <TextField
+            label="Cost per unit (optional)"
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            readOnly={readOnly}
+            hint="The cost per unit of work this resource does, in the plan’s currency. Earned Value derives an assignment’s budgeted cost from units × this rate. Leave blank for no rate."
+            error={errors.costPerUnit?.message}
+            {...register('costPerUnit', {
               setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
             })}
           />

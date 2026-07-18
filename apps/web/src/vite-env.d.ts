@@ -33,4 +33,6 @@ interface ImportMetaEnv {
   readonly VITE_DURATION_TYPES?: string;
   /** Resource levelling — plan level-resources/within-float toggles, resource max units/hour, activity levelling priority, levelled summary overlay (ADR-0041). "true"/"1" enables it; off by default. */
   readonly VITE_RESOURCE_LEVELLING?: string;
+  /** Earned-Value web surface — plan EAC/currency settings, resource cost rate, activity cost & %-complete, assignment cost, and the EV analysis panel (EV4b, ADR-0042). "true"/"1" enables it; off by default. */
+  readonly VITE_EARNED_VALUE?: string;
 }

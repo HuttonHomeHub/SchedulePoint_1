@@ -46,6 +46,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     recalculate: vi.fn(),
     openBaselines: vi.fn(),
     openCalendar: vi.fn(),
+    openEarnedValue: vi.fn(),
     editPlan: vi.fn(),
     openShortcuts: vi.fn(),
     legendOpen: false,

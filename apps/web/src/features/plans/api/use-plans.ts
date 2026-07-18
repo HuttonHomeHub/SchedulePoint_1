@@ -208,8 +208,9 @@ export function useSetPlanExpectedFinish(orgSlug: string) {
 
 /**
  * The plan scheduling options this targeted PATCH can set: the **float & critical** trio (ADR-0035
- * §17/§18/§20, M6) and the **resource-levelling** switches (ADR-0041) — each a simple scalar edited by
- * its own optimistic `<select>`, sent as just the changed field(s) + `version`.
+ * §17/§18/§20, M6), the **resource-levelling** switches (ADR-0041), and the **Earned-Value** settings
+ * (EV4b, ADR-0042 — the `eacMethod` picker and the `currencyCode` field) — each a simple scalar edited
+ * by its own optimistic control, sent as just the changed field(s) + `version`.
  */
 export type PlanScheduleOptionPatch = Partial<
   Pick<
@@ -219,6 +220,8 @@ export type PlanScheduleOptionPatch = Partial<
     | 'makeOpenEndsCritical'
     | 'levelResources'
     | 'levelWithinFloatOnly'
+    | 'eacMethod'
+    | 'currencyCode'
   >
 >;
 

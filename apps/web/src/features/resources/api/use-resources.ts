@@ -10,6 +10,7 @@ import {
 import type { AssignmentFormValues, ResourceFormValues } from '../schemas/resource-schemas';
 
 import { apiFetch } from '@/lib/api/client';
+import { majorInputToMinor } from '@/lib/format-money';
 import { activityKeys, assignmentKeys, resourceKeys } from '@/lib/query/hierarchy-keys';
 
 export { assignmentKeys, resourceKeys };
@@ -21,6 +22,7 @@ function optional(value?: string): string | undefined {
 }
 
 function createResourceBody(input: ResourceFormValues) {
+  const costPerUnit = majorInputToMinor(input.costPerUnit);
   return {
     name: input.name,
     kind: input.kind,
@@ -29,10 +31,13 @@ function createResourceBody(input: ResourceFormValues) {
     calendarId: optional(input.calendarId),
     // Levelling capacity (ADR-0041): omit when blank so an uncapped resource stays uncapped.
     ...(input.maxUnitsPerHour === undefined ? {} : { maxUnitsPerHour: input.maxUnitsPerHour }),
+    // Cost rate (EV4b, ADR-0042), major → minor units. Omit when blank so a rate-less resource stays so.
+    ...(costPerUnit === undefined ? {} : { costPerUnit }),
   };
 }
 
 function updateResourceBody(input: ResourceFormValues & { version: number }) {
+  const costPerUnit = majorInputToMinor(input.costPerUnit);
   return {
     name: input.name,
     kind: input.kind,
@@ -43,6 +48,9 @@ function updateResourceBody(input: ResourceFormValues & { version: number }) {
     // always seeds this from the row (even with the field hidden), so an edit round-trips the stored
     // value rather than silently clearing it.
     maxUnitsPerHour: input.maxUnitsPerHour === undefined ? null : input.maxUnitsPerHour,
+    // Cost rate (EV4b, ADR-0042): a blank field clears the rate → null. The form always seeds this from
+    // the row (even with the field hidden), so an edit round-trips the stored value in minor units.
+    costPerUnit: costPerUnit === undefined ? null : costPerUnit,
     version: input.version,
   };
 }
@@ -146,6 +154,16 @@ export function useCreateAssignment(orgSlug: string, activityId: string) {
             // edit in the row editor, where the "edited field" is unambiguous.
             ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             isDriving: input.isDriving,
+            // Assignment cost & actuals (EV4b, ADR-0042): the money fields carry major → minor units.
+            // Omit when blank so an absent value stays absent (the API derives budgeted cost from
+            // units × rate, and defaults actuals to 0).
+            ...(majorInputToMinor(input.budgetedCost) === undefined
+              ? {}
+              : { budgetedCost: majorInputToMinor(input.budgetedCost) }),
+            ...(majorInputToMinor(input.actualCost) === undefined
+              ? {}
+              : { actualCost: majorInputToMinor(input.actualCost) }),
+            ...(input.actualUnits === undefined ? {} : { actualUnits: input.actualUnits }),
           }),
         },
       ),
@@ -173,6 +191,14 @@ export function useUpdateAssignment(orgSlug: string) {
        * or the owning activity's duration for a units-driven type). Omitted = a plain store.
        */
       editedField?: EditedField;
+      /**
+       * Assignment cost & actuals (EV4b, ADR-0042), already in **minor units** for the money fields.
+       * Sent only when the caller edits the cost group, so a units/rate/driving save never touches them
+       * (the PATCH treats absent fields as unchanged). `budgetedCost: null` clears the override.
+       */
+      budgetedCost?: number | null;
+      actualCost?: number;
+      actualUnits?: number;
     }) =>
       apiFetch<ResourceAssignmentSummary>(
         `/organizations/${orgSlug}/assignments/${input.assignmentId}`,
@@ -183,6 +209,9 @@ export function useUpdateAssignment(orgSlug: string) {
             ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             ...(input.editedField ? { editedField: input.editedField } : {}),
             isDriving: input.isDriving,
+            ...(input.budgetedCost !== undefined ? { budgetedCost: input.budgetedCost } : {}),
+            ...(input.actualCost !== undefined ? { actualCost: input.actualCost } : {}),
+            ...(input.actualUnits !== undefined ? { actualUnits: input.actualUnits } : {}),
             version: input.version,
           }),
         },

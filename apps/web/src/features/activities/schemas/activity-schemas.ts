@@ -1,11 +1,13 @@
 import {
   DURATION_TYPES,
   PARKED_CONSTRAINT_TYPES,
+  PERCENT_COMPLETE_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
   type DurationType,
+  type PercentCompleteType,
 } from '@repo/types';
 import { z } from 'zod';
 
@@ -69,6 +71,37 @@ export const DURATION_TYPE_LABELS: Record<DurationType, string> = {
   FIXED_UNITS: 'Fixed units',
   FIXED_UNITS_TIME: 'Fixed units/time',
 };
+
+/**
+ * Human labels + one-line descriptions for the **%-complete type** (EV4b, ADR-0042) — the measure
+ * that earns an activity's value in the Earned-Value read. Exhaustive `Record<PercentCompleteType, …>`
+ * so a new measure fails to compile until it is described. The default (`DURATION`) is
+ * behaviour-preserving — today's schedule %-complete already drives it. This selects the EV
+ * performance measure ONLY; it never changes a CPM date.
+ */
+export const PERCENT_COMPLETE_TYPE_LABELS: Record<
+  PercentCompleteType,
+  { label: string; description: string }
+> = {
+  DURATION: {
+    label: 'Duration',
+    description: 'Earns value from elapsed vs total working time (the schedule %-complete).',
+  },
+  UNITS: {
+    label: 'Units',
+    description: 'Earns value from actual vs budgeted work (actual units ÷ budgeted units).',
+  },
+  PHYSICAL: {
+    label: 'Physical',
+    description: 'Earns value from a hand-entered physical %-complete, independent of dates.',
+  },
+};
+
+/** %-complete types, in order — derived from the labels so it stays exhaustive. */
+export const PERCENT_COMPLETE_TYPE_OPTIONS = Object.keys(PERCENT_COMPLETE_TYPE_LABELS) as [
+  PercentCompleteType,
+  ...PercentCompleteType[],
+];
 
 /** The activity types the form's Type picker always offers — the three with full engine support. */
 export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
@@ -177,6 +210,37 @@ export const activityFormSchema = z
       .int('Enter a whole number.')
       .min(0, 'Priority cannot be negative.')
       .max(1000000, 'Priority is too large.')
+      .optional(),
+    // Earned-Value inputs (EV4b, ADR-0042). `percentCompleteType` selects the EV performance measure
+    // (default `DURATION`, behaviour-preserving — it NEVER changes a CPM date); a plain enum attribute
+    // like `durationType`, always seeded from the row. `physicalPercentComplete` feeds the `PHYSICAL`
+    // measure only — an integer 0–100, blank → `undefined` (unset). `budgetedExpense` / `actualExpense`
+    // are lump-sum activity costs entered in MAJOR units (×100 → minor on submit, ÷100 to seed); optional,
+    // `>= 0`, at most 2 major decimals (the 2-decimal money assumption, `lib/format-money`). All only
+    // editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a stored value round-trips
+    // even when the fields are hidden.
+    percentCompleteType: z.enum(PERCENT_COMPLETE_TYPES),
+    physicalPercentComplete: z
+      .number({ message: 'Enter a percentage from 0 to 100.' })
+      .int('Enter a whole percentage.')
+      .min(0, 'Percentage cannot be negative.')
+      .max(100, 'Percentage cannot exceed 100.')
+      .optional(),
+    budgetedExpense: z
+      .number({ message: 'Enter an amount.' })
+      .min(0, 'Cost cannot be negative.')
+      .refine(
+        (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
+        'Use at most 2 decimal places.',
+      )
+      .optional(),
+    actualExpense: z
+      .number({ message: 'Enter an amount.' })
+      .min(0, 'Cost cannot be negative.')
+      .refine(
+        (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
+        'Use at most 2 decimal places.',
+      )
       .optional(),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
   })

@@ -77,6 +77,11 @@ export const scheduleKeys = {
   all: (orgSlug: string) => ['schedule', orgSlug] as const,
   summary: (orgSlug: string, planId: string) =>
     [...scheduleKeys.all(orgSlug), 'plan', planId, 'summary'] as const,
+  // The Earned-Value read-model (EV4b, ADR-0042): a pure GET over the live schedule + cost inputs,
+  // keyed under the same schedule namespace as the summary so a recalc's schedule invalidation can
+  // sweep it too (dates move EV's PV/EV).
+  earnedValue: (orgSlug: string, planId: string) =>
+    [...scheduleKeys.all(orgSlug), 'plan', planId, 'earned-value'] as const,
 };
 
 export const planLockKeys = {

@@ -43,6 +43,20 @@ export const resourceFormSchema = z.object({
       'Use at most 4 decimal places.',
     )
     .optional(),
+  // Cost rate — money per unit of work (EV4b, ADR-0042). Entered here in MAJOR units (e.g. 12.50);
+  // the form ×100 → minor units on submit and ÷100 to seed on edit. Optional (blank = no rate); `>= 0`
+  // with at most 2 major decimal places (the 2-decimal money assumption, `lib/format-money`).
+  // Registered with a `setValueAs` that maps a blank field to `undefined`, so an empty rate is
+  // "absent", not `NaN`. Only editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a
+  // stored value round-trips even with the field hidden.
+  costPerUnit: z
+    .number({ message: 'Enter an amount.' })
+    .min(0, 'Cost cannot be negative.')
+    .refine(
+      (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
+      'Use at most 2 decimal places.',
+    )
+    .optional(),
 });
 
 export type ResourceFormValues = z.infer<typeof resourceFormSchema>;
@@ -76,6 +90,35 @@ export const assignmentFormSchema = z.object({
     )
     .optional(),
   isDriving: z.boolean(),
+  // Assignment cost & actuals (EV4b, ADR-0042). `budgetedCost` is an optional override (blank = derive
+  // from budgetedUnits × the resource's costPerUnit at EV read time); `actualCost` is the booked cost.
+  // Both entered in MAJOR units (×100 → minor on submit, ÷100 to seed). `actualUnits` is the quantity of
+  // work done (a plain quantity like budgetedUnits, `>= 0`, at most 4 dp). All optional, `>= 0`. Only
+  // editable behind `VITE_EARNED_VALUE`.
+  budgetedCost: z
+    .number({ message: 'Enter an amount.' })
+    .min(0, 'Cost cannot be negative.')
+    .refine(
+      (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
+      'Use at most 2 decimal places.',
+    )
+    .optional(),
+  actualCost: z
+    .number({ message: 'Enter an amount.' })
+    .min(0, 'Cost cannot be negative.')
+    .refine(
+      (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
+      'Use at most 2 decimal places.',
+    )
+    .optional(),
+  actualUnits: z
+    .number({ message: 'Enter a number.' })
+    .min(0, 'Actual units cannot be negative.')
+    .refine(
+      (value) => Number.isFinite(value) && Math.round(value * 10000) === value * 10000,
+      'Use at most 4 decimal places.',
+    )
+    .optional(),
 });
 
 export type AssignmentFormValues = z.infer<typeof assignmentFormSchema>;
@@ -109,6 +152,38 @@ export function validateUnitsPerHour(raw: string): { value: number } | { error: 
   const value = Number(trimmed);
   if (!Number.isFinite(value)) return { error: 'Enter a number.' };
   if (value < 0) return { error: 'Rate cannot be negative.' };
+  if (Math.round(value * 10000) !== value * 10000)
+    return { error: 'Use at most 4 decimal places.' };
+  return { value };
+}
+
+/**
+ * Validate a raw MAJOR-unit money string from the inline assignment cost editor (EV4b, ADR-0042),
+ * returning the amount in **minor units** (×100, float-noise rounded like `majorInputToMinor`) or a
+ * human message. `>= 0`, at most 2 major decimal places (the 2-decimal money assumption). A blank
+ * field is `{ value: null }` — the caller decides what null means (clear an override vs. zero).
+ */
+export function validateMoneyMajor(raw: string): { value: number | null } | { error: string } {
+  const trimmed = raw.trim();
+  if (trimmed === '') return { value: null };
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return { error: 'Enter an amount.' };
+  if (value < 0) return { error: 'Cost cannot be negative.' };
+  if (Math.round(value * 100) !== value * 100) return { error: 'Use at most 2 decimal places.' };
+  return { value: Math.round(value * 100) };
+}
+
+/**
+ * Validate a raw actual-units string from the inline assignment cost editor (EV4b, ADR-0042) against
+ * the same rule as `budgetedUnits` (`>= 0`, `<= 4` decimal places). A blank field is `{ value: 0 }`
+ * (actual work defaults to none). Returns the parsed number or a human message.
+ */
+export function validateActualUnits(raw: string): { value: number } | { error: string } {
+  const trimmed = raw.trim();
+  if (trimmed === '') return { value: 0 };
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return { error: 'Enter a number.' };
+  if (value < 0) return { error: 'Actual units cannot be negative.' };
   if (Math.round(value * 10000) !== value * 10000)
     return { error: 'Use at most 4 decimal places.' };
   return { value };

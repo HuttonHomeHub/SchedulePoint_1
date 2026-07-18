@@ -15,6 +15,7 @@ import {
 } from '../schemas/activity-schemas';
 
 import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
+import { majorInputToMinor } from '@/lib/format-money';
 import { activityKeys, assignmentKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
 export { activityKeys };
@@ -90,6 +91,20 @@ function createBody(input: ActivityFormValues) {
     ...(input.parentId ? { parentId: input.parentId } : {}),
     // Levelling priority (ADR-0041): omit when blank so an unprioritised activity stays unprioritised.
     ...(input.levelingPriority === undefined ? {} : { levelingPriority: input.levelingPriority }),
+    // Earned-Value inputs (EV4b, ADR-0042). `percentCompleteType` is a plain attribute like
+    // `durationType` — always sent (the API default equals the form default, so it stays inert until an
+    // EV read reads it). The physical %/expense fields are omitted when blank so a create without them
+    // stays byte-identical; the money fields carry MAJOR → minor units.
+    percentCompleteType: input.percentCompleteType,
+    ...(input.physicalPercentComplete === undefined
+      ? {}
+      : { physicalPercentComplete: input.physicalPercentComplete }),
+    ...(majorInputToMinor(input.budgetedExpense) === undefined
+      ? {}
+      : { budgetedExpense: majorInputToMinor(input.budgetedExpense) }),
+    ...(majorInputToMinor(input.actualExpense) === undefined
+      ? {}
+      : { actualExpense: majorInputToMinor(input.actualExpense) }),
   };
 }
 
@@ -124,6 +139,15 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     // Levelling priority (ADR-0041): a blank field clears the tie-break → null. Seeded from the row
     // so an edit with the field hidden (flag off) round-trips the stored value unchanged.
     levelingPriority: input.levelingPriority === undefined ? null : input.levelingPriority,
+    // Earned-Value inputs (EV4b, ADR-0042). `percentCompleteType` is always sent (seeded from the row).
+    // The physical %/expense fields are always seeded from the row (even with the inputs hidden), so an
+    // edit round-trips a stored value; a cleared field sends null. The money fields carry MAJOR → minor
+    // units (`majorInputToMinor` maps a blank field to `undefined` → null here).
+    percentCompleteType: input.percentCompleteType,
+    physicalPercentComplete:
+      input.physicalPercentComplete === undefined ? null : input.physicalPercentComplete,
+    budgetedExpense: majorInputToMinor(input.budgetedExpense) ?? null,
+    actualExpense: majorInputToMinor(input.actualExpense) ?? null,
     // Carry a lane change through the same write when a free-2D drag moved both axes (M4); the
     // canvas is the only caller that sets this — the form dialog never sends it.
     ...(input.laneIndex !== undefined ? { laneIndex: input.laneIndex } : {}),

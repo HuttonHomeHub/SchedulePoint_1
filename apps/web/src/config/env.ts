@@ -290,3 +290,27 @@ export const DURATION_TYPES_ENABLED = flagDefaultOff(import.meta.env.VITE_DURATI
  * it. Set `VITE_RESOURCE_LEVELLING=true` to enable it in an environment.
  */
 export const RESOURCE_LEVELLING_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCE_LEVELLING);
+
+/**
+ * Earned-Value web surface (EV4b, ADR-0042). **OFF by default** — a brand-new dark surface whose
+ * quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and
+ * is turned on per-environment during rollout, then flipped default-on once cleared (the
+ * `VITE_RESOURCE_LEVELLING` / `VITE_DURATION_TYPES` pattern). When on, the web UI exposes the cost &
+ * Earned-Value surface:
+ *
+ * - **Plan Earned-Value settings** — an `EAC method` picker (CPI (default) / Remaining-at-budget /
+ *   CPI × SPI) and a plan `currency` (ISO-4217) field.
+ * - **Resource cost rate** — a `Cost per unit` field on the resource form.
+ * - **Activity cost & %-complete** — a `%-complete type` picker (Duration / Units / Physical), a
+ *   `Physical % complete` field (shown when the type is Physical), and `Budgeted` / `Actual` expense
+ *   money fields on the activity form.
+ * - **Assignment cost** — `Budgeted cost` / `Actual cost` / `Actual units` on a resource assignment.
+ * - **Earned-Value analysis** — a KPI + per-activity/WBS table panel reading
+ *   `GET …/schedule/earned-value` (cost:read-gated → a friendly "restricted" state for non-Planners).
+ *
+ * Everything behind it — the settable cost inputs on the create/update DTOs (EV4a) and the
+ * `earned-value` read endpoint — is already live; the flag only governs whether the web UI exposes it.
+ * Money on the wire is **integer minor units** in the plan's `currencyCode` (see `lib/format-money`).
+ * Set `VITE_EARNED_VALUE=true` to enable it in an environment.
+ */
+export const EARNED_VALUE_ENABLED = flagDefaultOff(import.meta.env.VITE_EARNED_VALUE);

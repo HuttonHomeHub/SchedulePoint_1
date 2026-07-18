@@ -13,16 +13,19 @@ import { Spinner } from '@/components/ui/spinner';
 import {
   ADVANCED_CONSTRAINTS_ENABLED,
   CANVAS_WORKSPACE_ENABLED,
+  EARNED_VALUE_ENABLED,
   FLOAT_CRITICAL_SETTINGS_ENABLED,
   PROGRESS_INGESTION_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary } from '@/features/baselines';
+import { EarnedValuePanel } from '@/features/earned-value';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import {
   PLAN_STATUS_LABELS,
   PlanCalendarPicker,
+  PlanEarnedValueSettings,
   PlanExpectedFinishToggle,
   PlanLevellingSettings,
   PlanRecalcModePicker,
@@ -195,6 +198,11 @@ function LegacyPlanLayout({
           <PlanLevellingSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
         </div>
       ) : null}
+      {EARNED_VALUE_ENABLED ? (
+        <div className="mt-3">
+          <PlanEarnedValueSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+        </div>
+      ) : null}
       <div className="mt-3">
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       </div>
@@ -209,6 +217,23 @@ function LegacyPlanLayout({
           <BaselinesPanel orgSlug={orgSlug} planId={planId} canManage={model.canWrite} />
         </div>
       </div>
+
+      {EARNED_VALUE_ENABLED ? (
+        <div className="mt-6">
+          <h3 className="text-base font-medium">Earned Value</h3>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Cost and schedule performance measured against the active baseline — SPI, CPI and the
+            forecast at completion, per activity and for the plan as a whole.
+          </p>
+          <div className="mt-3">
+            <EarnedValuePanel
+              orgSlug={orgSlug}
+              planId={planId}
+              activities={model.activities.data ?? []}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         <h2 className="text-lg font-medium">Logic diagram</h2>

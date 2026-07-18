@@ -19,7 +19,9 @@ import {
   RESOURCE_KIND_LABELS,
   assignmentFormSchema,
   isMaterialResource,
+  validateActualUnits,
   validateBudgetedUnits,
+  validateMoneyMajor,
   validateUnitsPerHour,
   type AssignmentFormValues,
 } from '../schemas/resource-schemas';
@@ -31,7 +33,7 @@ import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { DURATION_TYPES_ENABLED } from '@/config/env';
+import { DURATION_TYPES_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
 
 /** A MATERIAL resource may never drive an activity's dates (ADR-0039). */
 const MATERIAL_DRIVING_HINT = 'A material resource can’t drive an activity’s dates.';
@@ -70,6 +72,156 @@ function DerivedDurationNote({
     <p id={id} role="status" className="text-muted-foreground text-sm">
       Duration becomes {formatDurationDays(preview.durationMinutes)} (Recalculate to apply).
     </p>
+  );
+}
+
+/** Seed a MAJOR-unit money field from a stored minor-units value: blank when unset, else ÷100. */
+function seedMoney(minorUnits: number | null): string {
+  return minorUnits === null ? '' : String(minorUnits / 100);
+}
+
+/**
+ * The assignment's **cost & actuals** editor (EV4b, ADR-0042), shown behind `VITE_EARNED_VALUE` on a
+ * writable row: a budgeted-cost override (blank = derive from budgeted units × the resource rate at EV
+ * read time), an actual cost, and actual units of work done — the inputs the Earned-Value read consumes.
+ * Money is entered in MAJOR units (e.g. dollars) and stored in minor units. One grouped Save persists
+ * all three at once (the fields are a logical set); values seed from the row so an untouched Save
+ * round-trips them exactly. It carries no `editedField`, so it never triggers a triad recompute.
+ */
+function AssignmentCostFields({
+  orgSlug,
+  activityId,
+  assignment,
+  name,
+}: {
+  orgSlug: string;
+  activityId: string;
+  assignment: ResourceAssignmentSummary;
+  name: string;
+}): React.ReactElement {
+  const update = useUpdateAssignment(orgSlug);
+  const announce = useAnnounce();
+  const budgetedId = useId();
+  const budgetedErrorId = useId();
+  const actualCostId = useId();
+  const actualCostErrorId = useId();
+  const actualUnitsId = useId();
+  const actualUnitsErrorId = useId();
+
+  const seededBudgeted = seedMoney(assignment.budgetedCost);
+  const seededActualCost = seedMoney(assignment.actualCost);
+  const seededActualUnits = String(assignment.actualUnits);
+  const [budgetedCost, setBudgetedCost] = useState(seededBudgeted);
+  const [actualCost, setActualCost] = useState(seededActualCost);
+  const [actualUnits, setActualUnits] = useState(seededActualUnits);
+
+  const budgetedValidation = validateMoneyMajor(budgetedCost);
+  const actualCostValidation = validateMoneyMajor(actualCost);
+  const actualUnitsValidation = validateActualUnits(actualUnits);
+  const budgetedError = 'error' in budgetedValidation ? budgetedValidation.error : undefined;
+  const actualCostError = 'error' in actualCostValidation ? actualCostValidation.error : undefined;
+  const actualUnitsError =
+    'error' in actualUnitsValidation ? actualUnitsValidation.error : undefined;
+  const hasError = Boolean(budgetedError || actualCostError || actualUnitsError);
+  const changed =
+    budgetedCost !== seededBudgeted ||
+    actualCost !== seededActualCost ||
+    actualUnits !== seededActualUnits;
+
+  const save = (): void => {
+    if (hasError || !changed) return;
+    update.mutate(
+      {
+        assignmentId: assignment.id,
+        activityId,
+        version: assignment.version,
+        budgetedUnits: assignment.budgetedUnits,
+        isDriving: assignment.isDriving,
+        // A blank budgeted-cost clears the override (→ null, derive from units × rate); a blank actual
+        // cost/units means none (0). All three round-trip a seeded value untouched.
+        budgetedCost: (budgetedValidation as { value: number | null }).value,
+        actualCost: (actualCostValidation as { value: number | null }).value ?? 0,
+        actualUnits: (actualUnitsValidation as { value: number }).value,
+      },
+      { onSuccess: () => announce(`Cost for “${name}” saved.`) },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={budgetedId}>Budgeted cost</Label>
+          <Input
+            id={budgetedId}
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            value={budgetedCost}
+            onChange={(event) => setBudgetedCost(event.target.value)}
+            aria-invalid={budgetedError ? true : undefined}
+            aria-describedby={budgetedError ? budgetedErrorId : undefined}
+            className="w-32"
+          />
+          {budgetedError ? (
+            <p id={budgetedErrorId} className="text-destructive-text text-sm">
+              {budgetedError}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={actualCostId}>Actual cost</Label>
+          <Input
+            id={actualCostId}
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            value={actualCost}
+            onChange={(event) => setActualCost(event.target.value)}
+            aria-invalid={actualCostError ? true : undefined}
+            aria-describedby={actualCostError ? actualCostErrorId : undefined}
+            className="w-32"
+          />
+          {actualCostError ? (
+            <p id={actualCostErrorId} className="text-destructive-text text-sm">
+              {actualCostError}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={actualUnitsId}>Actual units</Label>
+          <Input
+            id={actualUnitsId}
+            type="number"
+            min={0}
+            step="any"
+            value={actualUnits}
+            onChange={(event) => setActualUnits(event.target.value)}
+            aria-invalid={actualUnitsError ? true : undefined}
+            aria-describedby={actualUnitsError ? actualUnitsErrorId : undefined}
+            className="w-28"
+          />
+          {actualUnitsError ? (
+            <p id={actualUnitsErrorId} className="text-destructive-text text-sm">
+              {actualUnitsError}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          aria-label={`Save cost for ${name}`}
+          disabled={!changed || hasError || update.isPending}
+          aria-busy={update.isPending}
+          onClick={save}
+        >
+          Save
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -352,6 +504,15 @@ function AssignmentRow({
               Unassign
             </Button>
           </div>
+          {/* Cost & actuals (EV4b, ADR-0042) — the EV read's per-assignment inputs, behind the flag. */}
+          {EARNED_VALUE_ENABLED ? (
+            <AssignmentCostFields
+              orgSlug={orgSlug}
+              activityId={activityId}
+              assignment={assignment}
+              name={name}
+            />
+          ) : null}
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">
@@ -570,6 +731,48 @@ export function ActivityResourcesDialog({
                       setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                     })}
                   />
+                ) : null}
+                {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag. Money in
+                    MAJOR units (×100 → minor on submit); budgeted cost is an optional override of the
+                    units × rate derivation. */}
+                {EARNED_VALUE_ENABLED ? (
+                  <>
+                    <TextField
+                      label="Budgeted cost (optional)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      hint="Overrides the cost derived from budgeted units × the resource’s rate. Leave blank to derive it."
+                      error={errors.budgetedCost?.message}
+                      {...register('budgetedCost', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                    <TextField
+                      label="Actual cost (optional)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      hint="The cost booked against this assignment so far, in the plan’s currency."
+                      error={errors.actualCost?.message}
+                      {...register('actualCost', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                    <TextField
+                      label="Actual units (optional)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      hint="The quantity of work done so far, feeding the Units earned-value measure."
+                      error={errors.actualUnits?.message}
+                      {...register('actualUnits', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                  </>
                 ) : null}
                 <div className="flex justify-end">
                   <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
