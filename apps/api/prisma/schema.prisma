@@ -152,6 +152,10 @@ model Organization {
   // ResourceAssignment's is denormalised from its endpoints (like Activity/Dependency).
   resources           Resource[]
   resourceAssignments ResourceAssignment[]
+  // Weighted activity-step checklists (M7 rung 5, ADR-0044). ActivityStep's
+  // organization_id is denormalised from its parent activity (copied by the service,
+  // never client input — the Activity/ResourceAssignment pattern).
+  activitySteps       ActivityStep[]
   // Plan-of-record snapshots (M7, ADR-0025). Baseline's organization_id is
   // denormalised from its plan; BaselineActivity's from its parent baseline — both
   // copied by the service, never client input (the Activity pattern), so an org-scope
@@ -406,6 +410,36 @@ enum EacMethod {
   CPI
   REMAINING_AT_BUDGET
   CPI_TIMES_SPI
+}
+
+// How an activity's expense lump-sum is recognised over time in the Earned-Value /
+// cost read-model's PV & AC time-phasing (M7 rung 5, ADR-0044 §1 / ADR-0035 §32).
+// It changes WHEN cost is recognised (the cost / cash-flow S-curve), NOT any CPM date
+// and no engine column — EV is a pure read-model (ADR-0042). START recognises the full
+// amount at the activity start (e.g. a crane mobilisation), END at the finish (e.g.
+// retention), UNIFORM linearly (the DEFAULT — exactly today's linear phasing, so an
+// unset value is byte-identical EV). MUST stay in lock-step with the `AccrualType`
+// union in @repo/types.
+enum AccrualType {
+  START
+  UNIFORM
+  END
+}
+
+// The named P6 resource loading profile a resource assignment's budgeted_units is
+// distributed by across the activity's duration (M7 rung 5, ADR-0044 §3 / ADR-0035
+// §31). It shapes the resource histogram (a pure read-model, resource-histogram.ts) —
+// it moves NO date and does NOT feed the levelling pass this rung (Q2). UNIFORM (the
+// DEFAULT) is a flat load = today's byte-identical histogram; BELL peaks mid-span;
+// FRONT_LOADED / BACK_LOADED weight the early / late span; DOUBLE_PEAK has two humps.
+// The 21-point profile constants live in the read-model, not the DB. MUST stay in
+// lock-step with the `ResourceCurveType` union in @repo/types.
+enum ResourceCurveType {
+  UNIFORM
+  BELL
+  FRONT_LOADED
+  BACK_LOADED
+  DOUBLE_PEAK
 }
 
 // Schedule constraint kinds (PROJECT_BRIEF §11). Reserved for the CPM engine
@@ -783,6 +817,15 @@ model Activity {
   physicalPercentComplete Int?                @map("physical_percent_complete") @db.SmallInt
   budgetedExpense         BigInt?             @map("budgeted_expense")
   actualExpense           BigInt?             @map("actual_expense")
+  // Cost accrual (M7 rung 5, ADR-0044 §1 / ADR-0035 §32). CLIENT-SETTABLE definition: how
+  // this activity's expense lump-sum is time-phased in the EV/cost read-model's PV & AC —
+  // START (all at the activity start), UNIFORM (linear), END (all at the finish). It
+  // changes WHEN cost is recognised (the cost S-curve), never a CPM date and no engine
+  // column (EV is a pure read-model, ADR-0042). Constant DEFAULT UNIFORM = today's linear
+  // phasing, so every existing row backfills to byte-identical EV (the parity gate). No
+  // index: read only on the plan-scoped EV load ((plan_id, created_at, id)), never a query
+  // predicate (the percent_complete_type precedent). MUST stay in lock-step with @repo/types.
+  accrualType             AccrualType         @default(UNIFORM) @map("accrual_type")
 
   // WBS hierarchy — the adjacency-list parent link (M5, ADR-0038). A nullable
   // self-FK: null = a top-level activity (no WBS parent); non-null = this activity
@@ -964,6 +1007,12 @@ model Activity {
   // (stamped with the same delete_batch_id, mirroring the incident-dependency cascade)
   // — a HierarchyLifecycleService follow-on (a later task, not this schema slice).
   assignments ResourceAssignment[]
+
+  // Weighted checklist steps on this activity (M7 rung 5, ADR-0044 §2). RESTRICT FK;
+  // steps soft-delete only. Soft-deleting an activity SHOULD sweep its active steps
+  // (stamped with the same delete_batch_id, mirroring the assignment sweep above) — a
+  // HierarchyLifecycleService follow-on for the F2 build, NOT this schema slice.
+  steps ActivityStep[]
 
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
@@ -1588,7 +1637,7 @@ model ResourceAssignment {
   // ck_resource_assignments_budgeted_units_nonneg (raw SQL), the DB backstop behind the
   // DTO @Min(0) boundary reject (N14, ADR-0035 §25) so a bypass can never persist a
   // negative. Defaulted 0 for a defensive direct-DB insert; the service always sets it.
-  budgetedUnits Decimal  @default(0) @map("budgeted_units") @db.Decimal(18, 4)
+  budgetedUnits Decimal           @default(0) @map("budgeted_units") @db.Decimal(18, 4)
   // The planned RATE (units of work per working hour) at which the driving resource
   // produces on THIS activity — the `Units/Time` of the P6 triad (M7 rung 4, ADR-0040).
   // An EXACT numeric like budgeted_units (DECIMAL(18,4)). NULLABLE with NO default — a
@@ -1601,7 +1650,7 @@ model ResourceAssignment {
   // budgeted_units/N14. Only the DRIVING assignment (is_driving) participates in the
   // triad; a zero rate on a units-driven recompute is a service reject (N20 — a CHECK
   // cannot read the activity's duration_type). MUST stay in lock-step with @repo/types.
-  unitsPerHour  Decimal? @map("units_per_hour") @db.Decimal(18, 4)
+  unitsPerHour  Decimal?          @map("units_per_hour") @db.Decimal(18, 4)
   // Designates THE driving resource of a RESOURCE_DEPENDENT activity (ADR-0035 §23): its
   // resolved calendar governs the activity's scheduling (wired in M7.2). At most ONE
   // driving assignment per activity is guaranteed in the DB by the partial unique
@@ -1609,7 +1658,20 @@ model ResourceAssignment {
   // deleted_at IS NULL (raw SQL). "EXACTLY one on a resource-dependent activity" and "a
   // MATERIAL resource may not drive" are SERVICE invariants (a partial-unique/FK cannot
   // read the activity's type or the resource's kind).
-  isDriving     Boolean  @default(false) @map("is_driving")
+  isDriving     Boolean           @default(false) @map("is_driving")
+  // Resource loading curve (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). CLIENT-SETTABLE: the
+  // named P6 profile the resource-histogram read-model distributes this assignment's
+  // `budgeted_units` by across the activity duration (span = duration − assignment lag),
+  // conserving units. It shapes the histogram (and can feed cost time-phasing), moves NO
+  // date, and does NOT feed the levelling pass this rung (Q2) — a pure read-model, so the
+  // parity gate is trivial. Constant DEFAULT UNIFORM = flat load = today's byte-identical
+  // histogram (never add a non-constant default — it would re-shape every existing
+  // assignment). The 21-point profile constants live in the read-model, not the DB. No
+  // index: read only on the plan-scoped histogram/EV assignment load, never a query
+  // predicate (the is_driving / percent_complete_type precedent — a low-cardinality enum
+  // read with the whole plan's assignments, never filtered across plans). MUST stay in
+  // lock-step with the `ResourceCurveType` union in @repo/types.
+  curveType     ResourceCurveType @default(UNIFORM) @map("curve_type")
 
   // Earned Value cost inputs (EV1, ADR-0042). Money is BIGINT minor units in the plan's
   // `currency_code`; `actual_units` is an exact-numeric QUANTITY like `budgeted_units`.
@@ -1664,4 +1726,82 @@ model ResourceAssignment {
   // like every denormalised-org sibling.
   @@index([organizationId])
   @@map("resource_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// ActivityStep — the weighted-checklist step (M7 rung 5, ADR-0044 §2 / ADR-0035 §33).
+//
+// A per-activity checklist row (`seq`, `name`, `weight`, `percent_complete`). When an
+// activity has steps, its PHYSICAL %-complete rolls up as the weighted mean
+// Σ(wᵢ·pᵢ)/Σ(wᵢ) and WINS over the manual `physical_percent_complete`; with no steps the
+// manual field behaves exactly as today (ADR-0042 parity). Steps feed the PHYSICAL
+// Earned-Value measure ONLY — no engine change, no CPM date moves. All-zero weights ⇒ the
+// N27 fallback to the manual physical % (never a divide-by-zero, never a reject).
+//
+// A full reference-template child, modelled exactly like CalendarException /
+// ResourceAssignment: UUID v7 PK, snake_case via @map, timestamptz UTC, NOT NULL by
+// default, soft delete + delete_batch_id, TEXT audit ids, optimistic-locking `version`,
+// scoped indexes. organization_id is DENORMALISED from the parent activity (copied by the
+// service inside the create transaction, NEVER client input — the Activity /
+// ResourceAssignment pattern), so an org-scope/IDOR check and the cascade batch filter one
+// indexed column without a join.
+//
+// Soft-delete cascade is SERVICE-owned (no DB cascade): soft-deleting an activity SHOULD
+// sweep its active steps under the SAME delete_batch_id (the assignment / incident-edge
+// precedent in HierarchyLifecycleService) — a lifecycle follow-on for the F2 build, not
+// this schema slice. The FK is RESTRICT (steps soft-delete only; the referential check
+// never fires — defence in depth).
+// ---------------------------------------------------------------------------
+
+model ActivityStep {
+  id             String @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent activity (never client input). RESTRICT.
+  organizationId String @map("organization_id") @db.Uuid
+  activityId     String @map("activity_id") @db.Uuid
+
+  // Ordering within the activity's checklist. The service assigns/validates a contiguous
+  // `seq` on bulk-replace; at most one ACTIVE step per (activity, seq) is guaranteed by
+  // the partial unique uq_activity_steps_activity_seq (raw SQL, WHERE deleted_at IS NULL).
+  seq             Int
+  name            String
+  // The step's relative weight in the weighted-mean physical %. An EXACT numeric
+  // (DECIMAL(18,4)) mirroring resource_assignments.budgeted_units exactly — physical
+  // quantities use exact types, and (18,4) is the schema's established quantity precision.
+  // ck_activity_steps_weight_nonneg (`>= 0`, raw SQL) is the DB backstop (weights are
+  // non-negative; all-zero ⇒ N27 fallback, still not a negative). Defaulted 0 for a
+  // defensive direct-DB insert; the service always sets it (the budgeted_units precedent).
+  weight          Decimal @default(0) @db.Decimal(18, 4)
+  // The step's own completion, SMALLINT 0–100 (mirrors physical_percent_complete's type).
+  // NOT NULL DEFAULT 0 (a step always has a percent; a new step is 0% done — unlike the
+  // NULLABLE activity-level physical_percent_complete, an "unset" step-percent is
+  // meaningless). ck_activity_steps_percent_complete_range (0–100, raw SQL) is the N28 DB
+  // backstop behind the DTO 422 STEP_PERCENT_OUT_OF_RANGE reject, mirroring
+  // ck_activities_physical_percent_complete_range (but NOT nullable-safe — always set).
+  percentComplete Int     @default(0) @map("percent_complete") @db.SmallInt
+
+  // Housekeeping (as ResourceAssignment): TEXT audit ids, optimistic-lock version, soft
+  // delete + restore-batch correlation.
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Restrict)
+
+  // organization_id is a FULL index (backs its FK RESTRICT + org-scoped IDOR loads), like
+  // every denormalised-org sibling. There is deliberately NO standalone activity_id index:
+  // the partial unique uq_activity_steps_activity_seq (activity_id, seq) WHERE deleted_at IS
+  // NULL (raw SQL) has activity_id as its leftmost prefix, so it already serves the "load an
+  // activity's ACTIVE steps ordered by seq" query — and the index is pre-sorted by seq — the
+  // exact uq_resource_assignments_activity_resource precedent (activity_id prefix subsumes the
+  // assignment-list index). The FK RESTRICT referential check would need an all-rows index,
+  // but steps soft-delete only so it never fires (the service sweep is the real path). The
+  // partial idx_activity_steps_delete_batch_id (raw SQL, WHERE ... IS NOT NULL) backs batch
+  // restore.
+  @@index([organizationId])
+  @@map("activity_steps")
 }

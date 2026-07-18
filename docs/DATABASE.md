@@ -237,6 +237,9 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `uq_resource_assignments_activity_driving`    | `(activity_id)`                        | partial unique | at most one **driving** assignment per activity (`WHERE is_driving AND deleted_at IS NULL`); the ≤1-driver backstop + the recalc "find the driving assignment" load                                                        |
 | `idx_resource_assignments_resource_id`        | `(resource_id)`                        | partial        | the `RESOURCE_IN_USE` guard's active-assignment count (`WHERE resource_id = ? AND deleted_at IS NULL`)                                                                                                                     |
 | `idx_resource_assignments_delete_batch_id`    | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
+| `activity_steps_organization_id_idx`          | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
+| `uq_activity_steps_activity_seq`              | `(activity_id, seq)`                   | partial unique | one **active** step per `(activity, seq)` (`WHERE deleted_at IS NULL`); backs the bulk-replace dup-seq (409); its leftmost prefix `activity_id` (pre-sorted by `seq`) subsumes an active-step list index                   |
+| `idx_activity_steps_delete_batch_id`          | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -757,6 +760,64 @@ NULL DEFAULT 0`, progress), **`actual_units`** (`DECIMAL(18,4) NOT NULL DEFAULT 
 EV read surfaces it as a count — so it is deliberately **not** a CHECK. No new index is
 added: every EV column is read within an already plan-scoped or org-scoped load and is
 never a query predicate.
+
+### Resource curves, cost accrual & weighted steps (M7 rung 5)
+
+The `resource-curves-accrual-steps` rung (ADR-0044; ADR-0035 §31/§32/§33) closes the last
+capability-matrix row with **two enum columns** and **one child table**, all **additive,
+constant-default / new-table, and read-model only** — the pure CPM engine (`compute.ts`)
+and the levelling pass (`level.ts`) are untouched, so each is byte-identical when its data
+is absent. Landed as three independently shippable slices (cost accrual → weighted steps →
+resource curves).
+
+- **`activities.accrual_type`** (`AccrualType` enum `START`/`UNIFORM`/`END`, **DEFAULT
+  `UNIFORM`** = today's linear phasing = byte-parity; F1-1, ADR-0044 §1). Client-settable;
+  governs **when** the activity's expense lump-sum is recognised in the Earned-Value /
+  cost read-model's PV & AC time-phasing (the cost / cash-flow S-curve) — it changes no CPM
+  date and no engine column. **No index** — read only on the plan-scoped EV load, never a
+  query predicate (the `percent_complete_type` precedent).
+- **`resource_assignments.curve_type`** (`ResourceCurveType` enum
+  `UNIFORM`/`BELL`/`FRONT_LOADED`/`BACK_LOADED`/`DOUBLE_PEAK`, **DEFAULT `UNIFORM`** = flat
+  load = byte-identical histogram; F3-1, ADR-0044 §3). Client-settable; names the P6 profile
+  the resource-histogram read-model distributes the assignment's `budgeted_units` by across
+  the activity duration (span = duration − assignment lag), conserving units. It shapes the
+  histogram only — moves no date and does **not** feed the levelling pass this rung (Q2). The
+  21-point profile constants live in the read-model, not the DB. **No index** — read only on
+  the plan-scoped histogram/EV assignment load, never a query predicate (the `is_driving`
+  precedent — a low-cardinality enum read with the whole plan's assignments).
+- **`activity_steps`** — a new **reference-template child table** (F2-1, ADR-0044 §2): a
+  weighted checklist per activity feeding the `PHYSICAL` Earned-Value measure. When an
+  activity has steps its physical %-complete rolls up as the weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)`
+  and **wins** over the manual `physical_percent_complete`; with no steps the manual field
+  behaves exactly as today (parity). It follows every house standard (UUID v7 PK, snake_case
+  via `@map`, timestamptz UTC, soft delete + `delete_batch_id`, TEXT audit ids,
+  optimistic-locking `version`, scoped indexes); `organization_id` is **denormalised** from
+  the parent activity (service-copied, never client input — the `ResourceAssignment`
+  pattern). Columns: `seq` (int ordering, service-assigned contiguous), `name` (TEXT, bounded
+  at the DTO like every sibling name), `weight` (`DECIMAL(18,4)` — the exact-quantity
+  precision mirroring `budgeted_units`; a relative quantity, not money, so Decimal not
+  `BIGINT`), and `percent_complete` (`SMALLINT NOT NULL DEFAULT 0`).
+  - **CHECKs** (raw SQL): `ck_activity_steps_weight_nonneg` (`weight >= 0`; all-zero weights
+    are legal — they trigger the **N27** rollup fallback to the manual physical %, never a
+    divide-by-zero, never a reject) and `ck_activity_steps_percent_complete_range` (`0–100`;
+    the **N28** DB backstop behind the DTO 422 `STEP_PERCENT_OUT_OF_RANGE`, mirroring
+    `ck_activities_physical_percent_complete_range` but **not** nullable-safe since the column
+    is `NOT NULL`).
+  - **Partial unique** `uq_activity_steps_activity_seq (activity_id, seq) WHERE deleted_at IS
+NULL` (raw SQL) — one active step per `(activity, seq)`; a soft-deleted step frees its
+    `seq` for reuse. Its leftmost prefix `activity_id` (pre-sorted by `seq`) **subsumes** a
+    standalone active-step list index (the `uq_resource_assignments_activity_resource`
+    precedent), so no separate `activity_id` index is added; the FK RESTRICT check never
+    fires because steps soft-delete only.
+  - **Soft-delete cascade is service-owned** (no DB cascade; FK `ON DELETE RESTRICT`):
+    soft-deleting an activity **should** sweep its active steps under the **same**
+    `delete_batch_id` — the identical mechanism `HierarchyLifecycleService` already applies
+    to a soft-deleted activity's incident dependency edges and resource assignments
+    (ADR-0039 (d)). This is a lifecycle-service follow-on for the **F2 build**, not a schema
+    change.
+
+The two enums `AccrualType` and `ResourceCurveType` are Postgres enums (Prisma-managed), each
+kept in lock-step with its `@repo/types` union by the build features.
 
 ## Testing & performance
 
