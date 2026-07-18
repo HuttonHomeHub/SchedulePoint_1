@@ -409,6 +409,21 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   ADR-0035 **§30** (+ N25 warn-and-clamp / N26 boundary reject). The **live cross-plan solve** (cross-plan
   edges, cross-plan DAG/authz/propagation, programme recalc) is deferred to a separately-ADR'd **Milestone
   2**. Amends ADR-0022/0023/0037; builds on the constraint machinery (ADR-0035 §7–§12).
+- **ADR-0044** _(Accepted)_ — Resource loading curves, cost accrual & weighted activity steps (M7's final
+  resource-side rung): the five named P6 loading profiles (UNIFORM/BELL/FRONT/BACK/DOUBLE_PEAK) shaping the
+  histogram/curve read-model, a per-activity cost-accrual type, and weighted activity steps rolling up to a
+  physical %-complete. Read-model/additive; the CPM engine and the parity gate are untouched. Semantics
+  accepted as ADR-0035 **§31** (curves, N29) / **§32** (accrual) / **§33** (weighted steps, N27/N28).
+- **ADR-0045** _(Accepted; inter-project **Milestone 2**)_ — Live cross-plan / programme scheduling: a
+  first-class **cross-plan dependency** edge whose downstream bound is **derived above the pure engine** from
+  the upstream plan's persisted computed dates and folded into ADR-0043's M1 external instants
+  (later-of/tighter-of) — so `computeSchedule` stays byte-identical (no cross-plan edge ⇒ identical input).
+  A **plan-level DAG** (nodes = plans) extends ADR-0021's acyclicity across plans, making a **programme
+  recalc** a single topological pass that reuses ADR-0022's single-plan transaction per plan (deterministic
+  lock order, pen asserted per plan, fail-fast 423). **Pull staleness** (`schedule_computed_at` compared
+  across the upstream closure). New `cross_plan_dependencies` table (separate from `dependencies`), a
+  `dependency:link_cross_plan` permission, and a flagged web surface (`VITE_PROGRAMME_SCHEDULING`).
+  Semantics accepted as ADR-0035 **§30.5–§30.8** (+ N30–N33). Amends ADR-0021/0022/0043.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

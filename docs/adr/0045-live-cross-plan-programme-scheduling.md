@@ -1,11 +1,23 @@
 # ADR-0045: Live cross-plan / programme scheduling (inter-project Milestone 2)
 
-- **Status:** Proposed (inter-project **Milestone 2** — the live cross-plan solve deferred by ADR-0043;
-  each §30 sub-clause Accepts with its owning implementation milestone/feature)
+- **Status:** Accepted (inter-project **Milestone 2** — the live cross-plan solve deferred by ADR-0043;
+  each §30 sub-clause Accepts with its owning implementation feature F1–F8)
 - **Date:** 2026-07-18
-- **Deciders:** Product Owner (to answer the critical questions at their recommended defaults),
-  Solution Architect, Technical Lead; schema to be reviewed with **database-architect** before any
-  migration; authorisation to be reviewed with **security-reviewer**.
+- **Deciders:** Product Owner (approved the five critical questions at their recommended defaults,
+  2026-07-18), Solution Architect, Technical Lead; schema reviewed with **database-architect** before the
+  migration (F2); authorisation reviewed with **security-reviewer** (F3/F5).
+
+### Critical questions — resolved (PO-approved defaults, 2026-07-18)
+
+1. **Acyclicity grain → plan-level DAG** (§3/§30.6). A cross-plan link may only run one direction between
+   any two plans; bidirectional plan interfaces are out of scope for M2 (the activity-level + fixpoint
+   upgrade is the documented deferred path).
+2. **Cross-plan link home → the successor activity** (mirrors the intra-plan dependency editor).
+3. **Programme recalc vs a peer-locked plan → fail-fast 423, write nothing** (§4). The caller must hold the
+   pen on every plan the solve writes; a locked neighbour blocks the whole solve with the blocked-plan list.
+4. **Staleness → pull + `scheduleStale`** (§5/§30.7). No background push job in M2.
+5. **Pen guarding link create/delete → the successor plan's pen** (§6).
+
 - **Amends:** ADR-0021 (extends the DAG invariant across plans), ADR-0022 (extends CPM execution to a
   programme-level orchestration), ADR-0043 (delivers its explicitly-deferred Milestone 2). Builds on
   ADR-0012/0016 (RBAC + org scoping / tenancy), ADR-0028 (plan edit-lock), ADR-0037 (absolute
