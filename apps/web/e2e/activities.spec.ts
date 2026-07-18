@@ -62,7 +62,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   ).toEqual([]);
   await dialog.getByLabel('Name').fill('Excavate');
   await dialog.getByLabel('Code (optional)').fill('A100');
-  await dialog.getByLabel(/Duration/).fill('10');
+  await dialog.getByLabel('Duration (working days)', { exact: true }).fill('10');
   // Choosing a constraint reveals its date field — check that revealed state is accessible.
   await dialog.getByLabel('Constraint (optional)').selectOption('SNET');
   await dialog.getByLabel('Constraint date').fill('2026-05-01');
@@ -80,7 +80,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await page.getByRole('button', { name: 'New activity' }).click();
   await dialog.getByLabel('Name').fill('Kickoff');
   await dialog.getByLabel('Type').selectOption('START_MILESTONE');
-  await expect(dialog.getByLabel(/Duration/)).toBeHidden();
+  await expect(dialog.getByLabel('Duration (working days)', { exact: true })).toBeHidden();
   await dialog.getByRole('button', { name: 'Create activity' }).click();
 
   await expect(page.getByRole('cell', { name: 'Kickoff', exact: true })).toBeVisible();
