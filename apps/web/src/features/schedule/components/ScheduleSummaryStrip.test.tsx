@@ -64,7 +64,7 @@ describe('ScheduleSummaryStrip', () => {
     vi.mocked(apiFetch).mockResolvedValue(summary({ constraintWarningCount: 3 }));
     renderStrip();
     await waitFor(() => expect(screen.getByText('Constraint warnings')).toBeInTheDocument());
-    const note = screen.getByText(/Start-no-earlier-than constraints dated before the data date/i);
+    const note = screen.getByText(/Start-no-earlier-than constraints — or external early starts/i);
     expect(note).toHaveAttribute('id', 'constraint-warnings-hint');
     expect(screen.getByText('3')).toHaveAttribute('aria-describedby', 'constraint-warnings-hint');
   });

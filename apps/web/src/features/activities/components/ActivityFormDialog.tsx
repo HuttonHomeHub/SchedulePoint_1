@@ -632,22 +632,22 @@ export function ActivityFormDialog({
               External dates
             </p>
             <p className="text-muted-foreground text-sm">
-              Imported commitments from another project — a date that lives outside this plan (a
-              vendor delivery, a downstream commissioning window). The later of the activity’s logic
-              and the external early start drives its start; an external late finish earlier than
-              the logic can achieve shows as negative float. They never override a hard constraint.
+              Imported commitments from outside this plan (a vendor delivery, a downstream
+              commissioning window). The later of the activity’s logic and the external early start
+              drives its start; an external late finish earlier than the logic can achieve shows as
+              negative float. They never override a hard constraint.
             </p>
             <TextField
-              label="External early start"
+              label="External early start (optional)"
               type="date"
-              hint="The earliest an upstream project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins."
+              hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins. A date before the data date is honoured but can’t pull work earlier."
               error={errors.externalEarlyStart?.message}
               {...register('externalEarlyStart')}
             />
             <TextField
-              label="External late finish"
+              label="External late finish (optional)"
               type="date"
-              hint="The latest a downstream project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
+              hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
               error={errors.externalLateFinish?.message}
               {...register('externalLateFinish')}
             />

@@ -150,14 +150,14 @@ export function ScheduleSummaryStrip({
       ) : null}
       {constraintWarningCount > 0 ? (
         <p id="constraint-warnings-hint" className="text-muted-foreground text-xs">
-          Constraint warnings are Start-no-earlier-than constraints dated before the data date. They
-          are honoured but cannot pull work before the data date.
+          Constraint warnings are Start-no-earlier-than constraints — or external early starts —
+          dated before the data date. They are honoured but cannot pull work before the data date.
         </p>
       ) : null}
       {externalDrivenCount > 0 ? (
         <p id="external-driven-hint" className="text-muted-foreground text-xs">
           Externally driven counts activities whose start or finish was set by an imported external
-          date from another project rather than by this plan’s own logic.
+          date from outside this plan rather than by this plan’s own logic.
         </p>
       ) : null}
       {hasLevelled ? (
