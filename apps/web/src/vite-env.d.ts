@@ -43,4 +43,6 @@ interface ImportMetaEnv {
   readonly VITE_RESOURCE_CURVES?: string;
   /** Inter-project / external dates web surface — activity external early-start/late-finish, plan ignore-external toggle, externally-driven summary count (F5, ADR-0043). "true"/"1" enables it; off by default. */
   readonly VITE_INTER_PROJECT_DATES?: string;
+  /** Live cross-plan / programme scheduling web surface — the activity-panel cross-plan links section, the programme recalc control + result/423/422 handling, and the staleness banner (inter-project M2, F8, ADR-0045). "true"/"1" enables it; off by default. */
+  readonly VITE_PROGRAMME_SCHEDULING?: string;
 }

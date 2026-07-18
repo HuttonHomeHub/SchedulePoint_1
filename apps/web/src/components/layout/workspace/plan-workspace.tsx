@@ -17,10 +17,18 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { useMediaQuery } from '@/components/ui/use-media-query';
-import { CANVAS_TOOLBAR_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import {
+  CANVAS_TOOLBAR_ENABLED,
+  PROGRAMME_SCHEDULING_ENABLED,
+  SCHEDULING_MODES_ENABLED,
+} from '@/config/env';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
-import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
+import {
+  ProgrammeScheduleSection,
+  RecalculateButton,
+  ScheduleSummaryStrip,
+} from '@/features/schedule';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { cn } from '@/lib/utils';
 
@@ -257,6 +265,9 @@ function PlanHeaderBar({
         {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
       />
       <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
+      {PROGRAMME_SCHEDULING_ENABLED ? (
+        <ProgrammeScheduleSection orgSlug={orgSlug} planId={planId} canRecalc={model.canRecalc} />
+      ) : null}
     </header>
   );
 }

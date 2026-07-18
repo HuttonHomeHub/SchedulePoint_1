@@ -16,6 +16,7 @@ import {
   EARNED_VALUE_ENABLED,
   FLOAT_CRITICAL_SETTINGS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
+  PROGRAMME_SCHEDULING_ENABLED,
   PROGRESS_INGESTION_ENABLED,
   RESOURCE_CURVES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
@@ -35,7 +36,11 @@ import {
   PlanScheduleSettings,
 } from '@/features/plans';
 import { ResourceHistogram } from '@/features/resources';
-import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
+import {
+  ProgrammeScheduleSection,
+  RecalculateButton,
+  ScheduleSummaryStrip,
+} from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -219,6 +224,11 @@ function LegacyPlanLayout({
       <div className="mt-3">
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       </div>
+      {PROGRAMME_SCHEDULING_ENABLED ? (
+        <div className="mt-3">
+          <ProgrammeScheduleSection orgSlug={orgSlug} planId={planId} canRecalc={model.canRecalc} />
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <h3 className="text-base font-medium">Baselines</h3>
