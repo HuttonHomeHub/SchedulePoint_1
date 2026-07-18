@@ -126,7 +126,15 @@ describe.skipIf(!hasDatabase)('Programme recalculation API (e2e, pen enforced)',
     return res.body.data.id as string;
   }
 
-  /** Upstream Procurement (activity U) linked into downstream Construction (activity D). */
+  /**
+   * Upstream Procurement (activity U) linked into downstream Construction (activity D).
+   *
+   * The pen is ENFORCED for this suite, so every structural write below (activity creates, cross-plan
+   * link) must be made while holding the target plan's pen. We acquire each plan's pen only for its
+   * setup writes and release it immediately, so the test bodies below start from a clean lock state and
+   * can assert the pen pre-flight themselves. The cross-plan link is gated on the successor plan's pen
+   * (link-home = successor, ADR-0045), so it is created while the downstream pen is held.
+   */
   async function programme(): Promise<{
     actor: Actor;
     upPlan: string;
@@ -135,20 +143,27 @@ describe.skipIf(!hasDatabase)('Programme recalculation API (e2e, pen enforced)',
     const actor = await adminWithOrg();
     const upPlan = await makePlan(actor, 'Procurement');
     const downPlan = await makePlan(actor, 'Construction');
+
+    await actor.agent.post(lockUrl(upPlan)).send({}).expect(200);
     const u = await makeActivity(actor, upPlan, 'Deliver steel');
+    await actor.agent.delete(lockUrl(upPlan)).expect(204);
+
+    await actor.agent.post(lockUrl(downPlan)).send({}).expect(200);
     const d = await makeActivity(actor, downPlan, 'Erect frame');
     await actor.agent
       .post('/api/v1/organizations/acme/cross-plan-dependencies')
       .send({ predecessorActivityId: u, successorActivityId: d, lagDays: 5 })
       .expect(201);
+    await actor.agent.delete(lockUrl(downPlan)).expect(204);
+
     return { actor, upPlan, downPlan };
   }
 
   it('recalculates the whole upstream closure in dependency order when the caller holds every pen', async () => {
     const { actor, upPlan, downPlan } = await programme();
     // Hold the pen on BOTH plans the solve writes (pre-flight + per-plan assert both pass).
-    await actor.agent.post(lockUrl(upPlan)).send({}).expect(201);
-    await actor.agent.post(lockUrl(downPlan)).send({}).expect(201);
+    await actor.agent.post(lockUrl(upPlan)).send({}).expect(200);
+    await actor.agent.post(lockUrl(downPlan)).send({}).expect(200);
 
     const res = await actor.agent.post(programmeUrl(downPlan)).send({}).expect(200);
     // Upstream-first, target last: Procurement (upPlan) then Construction (downPlan).
@@ -165,7 +180,7 @@ describe.skipIf(!hasDatabase)('Programme recalculation API (e2e, pen enforced)',
   it('fails fast with 423 PROGRAMME_PLANS_LOCKED (blocked-plan list) and writes nothing when an upstream pen is not held', async () => {
     const { actor, upPlan, downPlan } = await programme();
     // Hold ONLY the downstream pen; the upstream plan is unheld → blocked in the pre-flight.
-    await actor.agent.post(lockUrl(downPlan)).send({}).expect(201);
+    await actor.agent.post(lockUrl(downPlan)).send({}).expect(200);
 
     const res = await actor.agent.post(programmeUrl(downPlan)).send({}).expect(423);
     expect(res.body.error).toMatchObject({
@@ -181,8 +196,8 @@ describe.skipIf(!hasDatabase)('Programme recalculation API (e2e, pen enforced)',
   it('flags the downstream plan STALE after its upstream is re-recalculated, and a programme recalc clears it (F6, ADR-0045 §5)', async () => {
     const { actor, upPlan, downPlan } = await programme();
     // Hold both pens so the single-plan recalcs below are permitted under enforcement.
-    await actor.agent.post(lockUrl(upPlan)).send({}).expect(201);
-    await actor.agent.post(lockUrl(downPlan)).send({}).expect(201);
+    await actor.agent.post(lockUrl(upPlan)).send({}).expect(200);
+    await actor.agent.post(lockUrl(downPlan)).send({}).expect(200);
 
     // Recalculate upstream-first, then downstream: the downstream is now FRESH relative to its upstream.
     await actor.agent.post(recalcUrl(upPlan)).send({}).expect(200);

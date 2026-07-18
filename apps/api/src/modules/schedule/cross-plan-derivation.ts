@@ -82,8 +82,11 @@ export interface DeriveExternalInstantsResult {
    */
   derived: Map<string, DerivedExternalInstant>;
   /**
-   * How many cross-plan edges pointed at an upstream endpoint that has never been calculated (N32,
-   * ADR-0035 §30.5) — that edge contributes no bound and is counted here; never an error.
+   * How many **incoming** cross-plan edges pointed at an *upstream predecessor* that has never been
+   * calculated (N32, ADR-0035 §30.5) — that edge contributes no forward bound and is counted here;
+   * never an error. Outgoing (backward) edges whose downstream successor is uncomputed are deliberately
+   * NOT counted: in an upstream-first programme solve the downstream is computed later in the same
+   * closure, so counting it would report a phantom "upstream never calculated" after a clean recalc.
    */
   upstreamMissingCount: number;
 }
@@ -186,10 +189,13 @@ function backwardBound(
  * Derive each cross-plan-linked activity's effective external instants (ADR-0045 §2 / ADR-0035 §30.5).
  * Forward: the derived external early start is the **latest** of all incoming-edge bounds, composed with
  * the M1 column by **later-of** (max; §30.1 "later drives"). Backward: the derived external late finish
- * is the **earliest** of all outgoing-edge bounds, composed by **tighter-of** (min; §30.2). A cross-plan
- * edge whose upstream endpoint is never-calculated contributes no bound and increments
- * `upstreamMissingCount` (N32). An activity with a cross-plan edge but neither a derived nor an M1 bound
- * gets `{ null, null }` (a no-op override, byte-identical to feeding the M1 columns).
+ * is the **earliest** of all outgoing-edge bounds, composed by **tighter-of** (min; §30.2). An
+ * **incoming** edge whose upstream predecessor is never-calculated contributes no forward bound and
+ * increments `upstreamMissingCount` (N32); an **outgoing** edge whose downstream successor is
+ * never-calculated likewise contributes no backward bound but is NOT counted (it is expected and
+ * transient in an upstream-first programme solve — see `upstreamMissingCount`). An activity with a
+ * cross-plan edge but neither a derived nor an M1 bound gets `{ null, null }` (a no-op override,
+ * byte-identical to feeding the M1 columns).
  */
 export function deriveExternalInstants(
   input: DeriveExternalInstantsInput,
@@ -219,7 +225,12 @@ export function deriveExternalInstants(
     const predDuration = input.durationDaysByActivity.get(edge.predecessorActivityId) ?? 0;
     const bound = backwardBound(edge, predDuration);
     if (bound.missing) {
-      upstreamMissingCount += 1;
+      // A never-computed DOWNSTREAM successor yields no backward bound, but it is NOT counted as N32:
+      // `upstreamMissingCount` is specifically the *upstream* (incoming-predecessor) never-calculated
+      // count (§30.5, web copy "pointed at an upstream activity"). In an upstream-first programme solve
+      // the most-upstream plan's outgoing edge always reads its downstream as uncomputed on this pass —
+      // that is expected and transient (the downstream is solved later in the same closure), so counting
+      // it here would surface a false "1 upstream never calculated" after a fully successful recalc.
       continue;
     }
     derivedBackward.set(

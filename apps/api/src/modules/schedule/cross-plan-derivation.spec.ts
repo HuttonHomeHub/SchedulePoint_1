@@ -296,6 +296,21 @@ describe('deriveExternalInstants — missing upstream (N32)', () => {
     });
     expect(upstreamMissingCount).toBe(1);
   });
+
+  it('an outgoing edge to a never-computed DOWNSTREAM successor is NOT counted (upstream-only, §30.5)', () => {
+    // `upstreamMissingCount` counts only never-calculated *upstream predecessors* (incoming). A downstream
+    // successor that is uncomputed is expected & transient during an upstream-first programme solve — it
+    // yields no backward bound but must not inflate the count (else a clean recalc reports a phantom miss).
+    const { derived, upstreamMissingCount } = deriveExternalInstants({
+      incoming: [],
+      outgoing: [outgoing({ type: 'FS', successorLateStart: null, successorLateFinish: null })],
+      m1: EMPTY_M1,
+      durationDaysByActivity: durations({ A: 3 }),
+    });
+    expect(upstreamMissingCount).toBe(0);
+    // Still produces a (no-op) entry for the linked activity — no bound derived, M1 columns stand.
+    expect(derived.get('A')).toEqual({ externalEarlyStart: null, externalLateFinish: null });
+  });
 });
 
 describe('deriveExternalInstants — shape & edge cases', () => {
