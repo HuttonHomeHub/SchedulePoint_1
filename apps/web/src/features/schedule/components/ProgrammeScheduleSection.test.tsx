@@ -141,9 +141,13 @@ describe('ProgrammeScheduleSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Recalculate programme' }));
 
     expect(await screen.findByText('Some plans are being edited')).toBeInTheDocument();
-    const links = screen.getAllByRole('link', { name: 'Open blocked plan' });
+    // Each link carries a distinguishing accessible name (WCAG 2.4.4) so AT can tell them apart.
+    const links = screen.getAllByRole('link', { name: /^Open blocked plan / });
     expect(links).toHaveLength(2);
-    expect(links[0]).toHaveAttribute('href', '/orgs/acme/plans/pl2');
+    expect(screen.getByRole('link', { name: 'Open blocked plan pl2' })).toHaveAttribute(
+      'href',
+      '/orgs/acme/plans/pl2',
+    );
   });
 
   it('shows the 422 too-large path with the actionable message', async () => {

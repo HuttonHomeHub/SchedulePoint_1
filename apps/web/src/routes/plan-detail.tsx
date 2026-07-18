@@ -226,7 +226,12 @@ function LegacyPlanLayout({
       </div>
       {PROGRAMME_SCHEDULING_ENABLED ? (
         <div className="mt-3">
-          <ProgrammeScheduleSection orgSlug={orgSlug} planId={planId} canRecalc={model.canRecalc} />
+          <ProgrammeScheduleSection
+            orgSlug={orgSlug}
+            planId={planId}
+            canRecalc={model.canRecalc}
+            headingLevel={3}
+          />
         </div>
       ) : null}
 

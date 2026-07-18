@@ -56,15 +56,23 @@ export function ProgrammeScheduleSection({
   orgSlug,
   planId,
   canRecalc,
+  headingLevel = 2,
 }: {
   orgSlug: string;
   planId: string;
   canRecalc: boolean;
+  /**
+   * The heading level for the section title, so it slots into its host's outline without a skip
+   * (WCAG 1.3.1 / 2.4.6). Defaults to `2` for the canvas workspace hosts (which mount it directly
+   * under the plan `h1`); the plan-detail route nests it under its own `h2 Schedule`, so passes `3`.
+   */
+  headingLevel?: 2 | 3;
 }): React.ReactElement | null {
   const summary = useScheduleSummary(orgSlug, planId);
   const recalc = useRecalculateProgramme(orgSlug, planId);
   const announce = useAnnounce();
   const errorId = useId();
+  const headingId = useId();
   const [genericError, setGenericError] = useState<string | null>(null);
 
   // The summary omits `scheduleStale` entirely for a plan with no cross-plan edges (ADR-0045 §5), so
@@ -99,15 +107,18 @@ export function ProgrammeScheduleSection({
   };
 
   const result = recalc.data;
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
 
   return (
     <section
-      aria-label="Programme scheduling"
+      aria-labelledby={headingId}
       className="border-border flex flex-col gap-3 rounded-lg border p-4"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <h3 className="text-sm font-medium">Programme scheduling</h3>
+          <Heading id={headingId} className="text-sm font-medium">
+            Programme scheduling
+          </Heading>
           <p className="text-muted-foreground text-sm">
             This plan has live cross-plan links. Recalculate the programme to solve its upstream
             plans in order so its dates track theirs.
@@ -182,6 +193,7 @@ export function ProgrammeScheduleSection({
               <li key={blockedId}>
                 <a
                   href={`/orgs/${orgSlug}/plans/${blockedId}`}
+                  aria-label={`Open blocked plan ${blockedId}`}
                   className="underline underline-offset-4"
                 >
                   Open blocked plan
@@ -207,7 +219,7 @@ export function ProgrammeScheduleSection({
             ))}
           </ul>
           {result.programme.crossPlanUpstreamMissingCount > 0 ? (
-            <p className="text-muted-foreground text-sm">
+            <p role="status" className="text-muted-foreground text-sm">
               {result.programme.crossPlanUpstreamMissingCount} cross-plan{' '}
               {result.programme.crossPlanUpstreamMissingCount === 1 ? 'link' : 'links'} pointed at
               an upstream activity that has never been calculated, so it contributed no date.
