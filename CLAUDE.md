@@ -396,6 +396,19 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   Sliced EV1 (schema, dark) → EV2 (module + read endpoint + WBS rollup) → **EV3 (conformance, ADR-0035
   §29 Accepted + N22–N24)** → EV4 (flagged web `VITE_EARNED_VALUE`, deferred). Amends ADR-0025; builds
   on ADR-0037/0038/0039/0040.
+- **ADR-0043** _(Accepted; Milestone 1 — live cross-plan solve deferred to M2)_ — Inter-project external
+  dates: model programme/multi-plan interfaces as two nullable per-activity **imported instants**
+  (`external_early_start` / `external_late_finish`, absolute working-instants) + a plan-level
+  `ignore_external_relationships` toggle, clamped **inside the existing forward/backward passes** — external
+  early start = **SNET-shaped** forward bound (data-date floored, later-of-two-wins), external late finish =
+  **FNLT-shaped** backward bound (negative float if infeasible). External bounds are **soft** (never a
+  mandatory pin, a hard pin still wins), the toggle drops **both** directions (P6 "ignore relationships to/
+  from other projects", scenario **S09**), and an external-driven activity is flagged/counted
+  (`externalDriven`/`externalDrivenCount`, optional-absent on the no-external path). `computeSchedule`'s
+  signature is unchanged and absent inputs ⇒ byte-identical (the parity gate). Semantics accepted as
+  ADR-0035 **§30** (+ N25 warn-and-clamp / N26 boundary reject). The **live cross-plan solve** (cross-plan
+  edges, cross-plan DAG/authz/propagation, programme recalc) is deferred to a separately-ADR'd **Milestone
+  2**. Amends ADR-0022/0023/0037; builds on the constraint machinery (ADR-0035 §7–§12).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

@@ -13,20 +13,21 @@
 Clauses accept per owning milestone as that milestone lands (they are not all-or-nothing); the ADR
 stays **Proposed** overall until every clause is built. Current state:
 
-| Clauses                             | Owning milestone | Status       |
-| ----------------------------------- | ---------------- | ------------ |
-| §1–§6 (progress & the data date)    | M2               | **Accepted** |
-| §7–§11 (constraints), §12 (N15)     | M4               | **Accepted** |
-| §13–§14 (duplicate/cycle report)    | M4 (F8)          | **Accepted** |
-| §22 (zero-duration task)            | M4               | **Accepted** |
-| §17–§20 (float & critical)          | M6               | **Accepted** |
-| §21 (level of effort)               | M5-epic          | **Accepted** |
-| §24 (WBS-summary rollup)            | M5-epic          | **Accepted** |
-| §23 (resource-dependent)            | M7               | **Accepted** |
-| §26–§27 (duration types), N19/N20   | M7 (rung 4)      | **Accepted** |
-| §28 (resource levelling), N21       | M7 (levelling)   | **Accepted** |
-| §29 (%-complete-type & EV), N22–N24 | M7 (EV3)         | **Accepted** |
-| §15–§16, §25 (arithmetic/boundary)  | M0/M1            | Proposed¹    |
+| Clauses                                 | Owning milestone | Status       |
+| --------------------------------------- | ---------------- | ------------ |
+| §1–§6 (progress & the data date)        | M2               | **Accepted** |
+| §7–§11 (constraints), §12 (N15)         | M4               | **Accepted** |
+| §13–§14 (duplicate/cycle report)        | M4 (F8)          | **Accepted** |
+| §22 (zero-duration task)                | M4               | **Accepted** |
+| §17–§20 (float & critical)              | M6               | **Accepted** |
+| §21 (level of effort)                   | M5-epic          | **Accepted** |
+| §24 (WBS-summary rollup)                | M5-epic          | **Accepted** |
+| §23 (resource-dependent)                | M7               | **Accepted** |
+| §26–§27 (duration types), N19/N20       | M7 (rung 4)      | **Accepted** |
+| §28 (resource levelling), N21           | M7 (levelling)   | **Accepted** |
+| §29 (%-complete-type & EV), N22–N24     | M7 (EV3)         | **Accepted** |
+| §30 (external / inter-project), N25–N26 | IPD (M1)         | **Accepted** |
+| §15–§16, §25 (arithmetic/boundary)      | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
 is folded into the next conformance pass that asserts them as goldens (out of M4 scope).
@@ -320,6 +321,49 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
       EV read instead **counts** every such leaf in a plan-level `costWarningCount` (produce-and-flag,
       the same posture as `constraintWarningCount`/§7 and `costBaselineMissing` above) while still
       valuing the activity normally (BAC/AC/EV computed exactly as any other row).
+
+### External / inter-project dates (→ IPD M1, ADR-0043)
+
+30. **External / inter-project date semantics.** An activity may carry imported commitments from another
+    project — an `externalEarlyStart` and/or an `externalLateFinish` (ADR-0043) — and a plan carries an
+    `ignoreExternalRelationships` toggle. These are **scheduling inputs to `computeSchedule`, not a new
+    pass and not a read-model**: absent inputs + the option off ⇒ the engine is byte-identical (the parity
+    gate). SchedulePoint's chosen semantics — the golden contract for the fixture's `net_external_*` /
+    `interproject` tags and scenario **S09**:
+
+    - **§30.1 External early start = SNET-shaped forward bound, floored at the data date.**
+      `earlyStart = max(networkEarlyStart, externalEarlyStart, dataDate)`. When an activity carries both an
+      internal predecessor and an external early start, **the later of the two drives** (the fixture's
+      A2120). Folded into the forward pass _before_ the constraint clamp, so it composes with an SNET/FNET
+      (`max`) and yields to a hard pin (§30.3).
+    - **§30.2 External late finish = FNLT-shaped backward bound.**
+      `lateFinish = min(networkLateFinish, externalLateFinish)` (the external instant's working-day end on
+      the activity's own calendar). If it is earlier than logic can achieve, **total float goes negative**
+      on the driving chain — surfaced (and made critical), never an error.
+    - **§30.3 External bounds are soft — never mandatory pins.** They never set `constraintViolated`, and a
+      hard pin (`MSO`/`MFO`/`MANDATORY_*`, and the fixture's `FINISH_ON` on A12500) still governs its side:
+      because the external bound is folded in _before_ the constraint clamp, a pin's unconditional clamp
+      discards it. An external bound therefore **coexists** with an internal constraint on the same
+      activity, tightening the schedule only where no harder pin already fixes it.
+    - **§30.4 Ignore-external drops both directions.** `ignoreExternalRelationships` drops every external
+      early start **and** every external late finish (the P6 "ignore relationships to/from other projects"
+      toggle); internal constraints/logic are untouched. This is scenario **S09**: with it on, the five
+      external early starts drop and the procurement chain pulls left.
+    - **Observability.** An activity whose binding bound is an external date is flagged `externalDriven`
+      and counted in a plan-level `externalDrivenCount` (produce-and-flag, mirroring `constraintViolated`/
+      §7) — both **optional/absent on the no-external path** so existing golden snapshots are unchanged.
+    - **N25 — external early start before the data date: honour but clamp.** Floored at the data date
+      (§30.1) and counted in `constraintWarningCount` — the same "date before the data date" warning class
+      as N15, not a reject (an imported past-dated commitment is common and must not block scheduling).
+    - **N26 — external late finish before external early start (both set): boundary reject.** Rejected at
+      the DTO/service boundary (`EXTERNAL_FINISH_BEFORE_START`, 422) with a nullable-safe DB CHECK backstop
+      (mirroring N06's actual-finish-before-start) — an inverted window is invalid input, caught before the
+      engine ever sees it.
+
+    **Deferred (ADR-0043 Milestone 2, not decided here):** a live cross-plan solve whose external dates are
+    auto-derived from the linked plan's computed schedule (cross-plan edges, a cross-plan DAG/cycle
+    invariant, cross-plan authorisation, staleness/propagation, programme recalc). M1 covers imported
+    dates + the toggle only.
 
 ## Alternatives considered
 

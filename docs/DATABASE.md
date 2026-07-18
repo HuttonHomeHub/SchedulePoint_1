@@ -286,6 +286,16 @@ remaining duration so its early finish lands on the activity's `expected_finish`
 across plans (so unindexed), and additive with a constant `DEFAULT` (no data
 migration) — default `false` is behaviour-preserving.
 
+`Plan` also carries the single-row boolean scheduling option
+`ignore_external_relationships` (default `false`; ADR-0043 / ADR-0035 §30.4, M1). When
+on, the recalc **drops** every activity's external early-start **and** late-finish
+bounds (the P6 "ignore relationships to/from other projects" toggle; see the external
+dates on _Activity_ below), leaving internal constraints/logic untouched, so a planner
+can compare the plan on its own logic vs. gated by its neighbours (scenario S09). Like
+`make_open_ends_critical` / `level_resources` it is read with the plan, never filtered
+across plans (so unindexed), and additive with a constant `DEFAULT` (no data migration)
+— default `false` is behaviour-preserving.
+
 ### Activity: the schedule leaf
 
 `Activity` follows every standard above and adds three column groups the deferred
@@ -294,9 +304,24 @@ wide `ALTER TABLE` + backfill later):
 
 - **Definition** (`type`, `duration_minutes`, `duration_type`,
   `constraint_type`/`constraint_date`,
-  `secondary_constraint_type`/`secondary_constraint_date`, `lane_index`,
+  `secondary_constraint_type`/`secondary_constraint_date`,
+  `external_early_start`/`external_late_finish`, `lane_index`,
   `schedule_as_late_as_possible`, optional
-  `code`) — Planner-owned. `duration_type` (M7 rung 4, ADR-0040) is a **client-settable**
+  `code`) — Planner-owned. The **external / inter-project dates**
+  `external_early_start`/`external_late_finish` (ADR-0043 / ADR-0035 §30, M1) are two
+  optional **imported instants** that gate an activity from another project: the early
+  start is an `SNET`-shaped forward **lower** bound (an upstream project's hand-over),
+  the late finish an `FNLT`-shaped backward **upper** bound (a downstream project's
+  window). Like the constraint pairs they are **client-settable** (a write DTO sets
+  them), **NOT** engine-owned; either, both, or neither may be set; the engine clamps
+  early start up to / late finish down to them on the **existing** forward/backward
+  passes (no new pass), **gated on** `plan.ignore_external_relationships`, and they are
+  **soft** bounds (never mandatory pins — they never set `constraint_violated`).
+  Uniquely among the schedule-day columns they are `TIMESTAMPTZ` **absolute
+  working-instants** (the ADR-0037 axis), **not** `@db.Date` — see the calendar-day
+  note below. Additive & nullable (no data migration); unindexed (read only on the
+  full-plan recalc load, never a query predicate — the `secondary_constraint`
+  precedent). `duration_type` (M7 rung 4, ADR-0040) is a **client-settable**
   (NOT engine-owned) `DurationType` enum — `FIXED_DURATION_AND_UNITS_TIME` (the **default**),
   `FIXED_DURATION_AND_UNITS`, `FIXED_UNITS`, `FIXED_UNITS_TIME` — naming which of the triad
   {`duration_minutes`, an assignment's `budgeted_units`, its `units_per_hour`} is
@@ -363,7 +388,13 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
 
 Calendar-day fields (`constraint_date`, `actual_start/finish`, `expected_finish`, the
 CPM `*_start/finish` columns) are `@db.Date` (date-only, no timezone), like
-`Plan.planned_start` — a schedule day is a calendar day, not an instant.
+`Plan.planned_start` — a schedule day is a calendar day, not an instant. The
+**exception** is the external / inter-project dates
+`external_early_start`/`external_late_finish`, which are `TIMESTAMPTZ` **absolute
+working-instants** (the ADR-0037 axis): they are **imported commitments from another
+project** (a vendor delivery, a downstream window), independent of this plan's data
+date, so they are stored absolutely — a data-date change must never move them —
+whereas the day columns above are all relative to this plan's own schedule.
 
 `activities` is the first domain table with bounded numerics, so it is also the
 first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
@@ -378,8 +409,13 @@ both suspend/resume dates are set, so it never blocks the common no-suspend path
 `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
 and `constraint_date` are both set or both null (never one without the other), so a
 half-set constraint can never corrupt CPM scheduling even if a future code path
-bypasses the service — and `ck_activities_secondary_constraint_pair`, the identical
-both-null-or-both-set invariant for the secondary pair (ADR-0035 §10, M4 F3). They
+bypasses the service — `ck_activities_secondary_constraint_pair`, the identical
+both-null-or-both-set invariant for the secondary pair (ADR-0035 §10, M4 F3), and
+`ck_activities_external_finish_after_start` (**nullable-safe**: `external_late_finish
+IS NULL OR external_early_start IS NULL OR external_late_finish >= external_early_start`
+— an external window is enforced non-inverted only when **both** ends are set, mirroring
+`ck_activities_resume_after_suspend`), the DB backstop behind the DTO's 422
+`EXTERNAL_FINISH_BEFORE_START` (ADR-0043 / ADR-0035 §30 N26). They
 are raw SQL in the migration (Prisma cannot express `CHECK`). `total_float` is
 deliberately unconstrained — negative float is valid.
 

@@ -59,6 +59,25 @@ export interface EngineActivity {
    * engine stays calendar-agnostic (it never sees an id or an enum).
    */
   calendar?: WorkingTimeCalendar;
+  /**
+   * External / inter-project **early-start** bound (ADR-0043, ADR-0035 §30.1). An imported commitment
+   * from another project (a vendor delivery, an IFC release), a calendar day (`YYYY-MM-DD`). It acts as
+   * an **SNET-shaped** forward lower bound, floored at the data date — the *later* of logic and this
+   * drives the early start. **Soft:** it is never a mandatory pin and never sets `constraintViolated`,
+   * and a hard pin (`MSO`/`MFO`/`MANDATORY_*`) still overrides it (§30.3). Dropped when
+   * {@link ComputeOptions.ignoreExternalRelationships} is on. Absent/null = none — the byte-identical
+   * parity default (a plan with no external data schedules identically with the option on or off).
+   */
+  externalEarlyStart?: string | null;
+  /**
+   * External / inter-project **late-finish** bound (ADR-0043, ADR-0035 §30.2). An imported downstream
+   * commitment (a commissioning window), a calendar day (`YYYY-MM-DD`). It acts as an **FNLT-shaped**
+   * backward upper bound (the *tighter* of logic and this). If it is earlier than logic can achieve,
+   * total float goes **negative** on the driving chain (surfaced, not an error). Soft like
+   * {@link externalEarlyStart}: it coexists with an internal finish constraint on the same activity, and
+   * a hard pin still wins (§30.3). Dropped when ignore-external is on. Absent/null = none (parity).
+   */
+  externalLateFinish?: string | null;
   /** Primary schedule constraint kind, if any. Drives the **forward** pass (early dates). */
   constraintType?: ConstraintType | null;
   /** The primary constraint's calendar day (`YYYY-MM-DD`); required when a type is set. */
@@ -243,6 +262,15 @@ export interface EngineResult {
    */
   constraintViolated: boolean;
   /**
+   * External-driven (ADR-0043, ADR-0035 §30) — **optional/absent** on the no-external path (the
+   * byte-identical parity default, like the levelling overlay below). Present (`true`) only when an
+   * external bound was the **binding** bound for this activity: its {@link EngineActivity.externalEarlyStart}
+   * raised the early start above pure logic, or its {@link EngineActivity.externalLateFinish} clamped the
+   * late finish below it (and no hard pin discarded either). Observability only, mirroring
+   * `constraintViolated` — it changes no dates the schedule didn't already produce.
+   */
+  externalDriven?: boolean;
+  /**
    * LOE no-span produce-and-flag (N12, ADR-0035 §21): true when a `LEVEL_OF_EFFORT` activity has no
    * resolvable span — it is missing an SS predecessor or an FF successor (or both). The engine places it
    * at a defined fallback (its SS end if present, else the data date; zero length) and flags it rather
@@ -311,8 +339,10 @@ export interface EngineSummary {
    */
   constraintViolationCount: number;
   /**
-   * How many soft constraint warnings the plan carries — today the N15 case: a Start-No-Earlier-Than
-   * dated before the data date (honoured, but can't pull work before it). ADR-0035 §12.
+   * How many soft constraint warnings the plan carries — the N15 case: a Start-No-Earlier-Than dated
+   * before the data date (honoured, but can't pull work before it, ADR-0035 §12); and **N25**
+   * (ADR-0043, ADR-0035 §30): an external early start dated before the data date, honoured but clamped
+   * to the data-date floor. Both are the same "date before the data date" warning class.
    */
   constraintWarningCount: number;
   /**
@@ -326,6 +356,13 @@ export interface EngineSummary {
    * no driver.
    */
   resourceDriverMissingCount: number;
+  /**
+   * How many activities were **external-driven** this run (ADR-0043, ADR-0035 §30) — an external
+   * early-start or late-finish bound was their binding bound. **Optional/absent** (⇔ 0) on the
+   * no-external path so existing summaries stay byte-identical. Observability only, mirroring
+   * `constraintViolationCount`.
+   */
+  externalDrivenCount?: number;
   /**
    * How many incomplete activities had their remaining work resized to an **expected finish** this run
    * (ADR-0035 §9) — zero unless the plan's `useExpectedFinishDates` option is on. Observability only.
