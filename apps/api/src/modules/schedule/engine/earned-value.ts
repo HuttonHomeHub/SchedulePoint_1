@@ -1,4 +1,4 @@
-import type { ActivityType, EacMethod, PercentCompleteType } from '@repo/types';
+import type { AccrualType, ActivityType, EacMethod, PercentCompleteType } from '@repo/types';
 
 import type { WorkingTimeCalendar } from './working-time-calendar';
 
@@ -37,6 +37,39 @@ export interface EvAssignmentInput {
 }
 
 /**
+ * One weighted progress step (ADR-0044 §33). `weight` is a relative importance (≥ 0); `percentComplete`
+ * is the step's own progress (0–100). The activity's physical %-complete is the weight-weighted mean of
+ * its steps' `percentComplete`.
+ */
+export interface ActivityStepInput {
+  weight: number;
+  percentComplete: number;
+}
+
+/**
+ * Resolve an activity's physical %-complete from its weighted steps, falling back to the manual value
+ * (ADR-0044 §33). Steps **win** when present with a positive total weight: the result is the weighted
+ * mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)`, clamped to `[0, 100]`. With **no steps, or all-zero weights (N27)**, the
+ * manual `physicalPercentComplete` stands (or 0 when unset) — the byte-identical no-steps path. Shared
+ * by the EV read-model and the activity API so both read physical progress one way.
+ */
+export function rollupPhysicalPercent(
+  steps: readonly ActivityStepInput[] | undefined,
+  manualPercent: number | null,
+): number {
+  const manual = clamp(manualPercent ?? 0, 0, 100);
+  if (!steps || steps.length === 0) return manual;
+  let weightSum = 0;
+  let weighted = 0;
+  for (const step of steps) {
+    weightSum += step.weight;
+    weighted += step.weight * clamp(step.percentComplete, 0, 100);
+  }
+  if (weightSum <= 0) return manual; // N27 — all weights zero: fall back to the manual field.
+  return clamp(weighted / weightSum, 0, 100);
+}
+
+/**
  * One activity's Earned-Value inputs. `percentComplete` is the M2 **schedule** %-complete (the
  * `DURATION` source); `physicalPercentComplete` is the ADR-0042 **performance** measure (the `PHYSICAL`
  * source). Baseline fields carry the ADR-0025 cost-baseline snapshot (null = missing → the live-budget
@@ -53,10 +86,24 @@ export interface EvActivityInput {
   percentComplete: number;
   /** Hand-entered physical %-complete 0–100, or null = unset — the `PHYSICAL` source. */
   physicalPercentComplete: number | null;
+  /**
+   * Weighted progress **steps** (M7 rung 5, ADR-0044 §33). When present with a positive total weight,
+   * the activity's physical %-complete is their weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)` and **wins** over
+   * {@link physicalPercentComplete}. **Optional — absent (or all-zero-weight, N27) ⇒ the manual field
+   * stands**, the byte-identical pre-ADR-0044 path. Feeds the `PHYSICAL` measure only; no CPM effect.
+   */
+  steps?: ActivityStepInput[];
   /** Activity-level lump-sum budgeted expense (minor units; 0 if none). */
   budgetedExpense: number;
   /** Activity-level actual expense (minor units; 0 if none). */
   actualExpense: number;
+  /**
+   * How the activity's cost accrues across its span (ADR-0044 §32) — governs PV time-phasing only.
+   * `START`/`END` recognise the whole cost at the start/finish; `UNIFORM` spreads it linearly, exactly
+   * today's math. **Optional — absent ⇒ `UNIFORM`**, the byte-identical pre-ADR-0044 path, so a plan
+   * with no accrual data reads identically.
+   */
+  accrualType?: AccrualType;
   assignments: EvAssignmentInput[];
   /** Cost-baseline start (`YYYY-MM-DD`); used for PV only when both baseline dates are present. */
   baselineStart: string | null;
@@ -249,14 +296,19 @@ function leafPerformancePercent(activity: EvActivityInput): number {
       return totalBudgeted > 0 ? clamp((totalActual / totalBudgeted) * 100, 0, 100) : 0;
     }
     case 'PHYSICAL':
-      return clamp(activity.physicalPercentComplete ?? 0, 0, 100);
+      // Steps win when present (positive total weight); else the manual field (N27 fallback), ADR-0044 §33.
+      return rollupPhysicalPercent(activity.steps, activity.physicalPercentComplete);
   }
 }
 
 /**
- * The planned % of a leaf's PV cost scheduled to be complete by the data date — time-phased on the
- * plan calendar (working time, ADR-0037). Milestones are binary on their start; a task spreads linearly
- * across `[start, finish)`. Returns 0 when the data date or the anchor dates are missing.
+ * The planned % of a leaf's PV cost scheduled to be recognised by the data date — time-phased on the
+ * plan calendar (working time, ADR-0037) per the activity's {@link AccrualType} (ADR-0044 §32).
+ * Milestones are binary on their start (a zero-span event's cost lands at its instant regardless of
+ * accrual). For a task: `START` recognises the whole cost once the data date reaches the start; `END`
+ * only once it reaches the finish; `UNIFORM` (default) spreads it linearly across `[start, finish)` —
+ * exactly the pre-ADR-0044 math, so a `UNIFORM` plan is byte-identical. Returns 0 when the data date or
+ * the anchor dates are missing.
  */
 function leafPlannedPercent(
   activity: EvActivityInput,
@@ -270,6 +322,10 @@ function leafPlannedPercent(
     return dataDate !== null && start !== null && dataDate >= start ? 100 : 0;
   }
   if (dataDate === null || start === null || finish === null) return 0;
+  // START/END recognise the whole cost at a single endpoint — no spread (ADR-0044 §32).
+  if (activity.accrualType === 'START') return dataDate >= start ? 100 : 0;
+  if (activity.accrualType === 'END') return dataDate >= finish ? 100 : 0;
+  // UNIFORM — the byte-identical linear path.
   if (dataDate <= start) return 0;
   if (dataDate >= finish) return 100;
   const span = calendar.workingTimeBetween(start, finish);

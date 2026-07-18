@@ -1055,6 +1055,18 @@ export const EAC_METHODS = ['CPI', 'REMAINING_AT_BUDGET', 'CPI_TIMES_SPI'] as co
 export type EacMethod = (typeof EAC_METHODS)[number];
 
 /**
+ * How an activity's cost **accrues** across its span in the Earned-Value / cost read-model (M7 rung 5,
+ * ADR-0044 / ADR-0035 §32). It changes only **when** cost/Planned Value is recognised — never a CPM
+ * date. `START` recognises the whole lump-sum at the activity start (e.g. a mobilisation charge);
+ * `END` at the finish (e.g. retention); `UNIFORM` (default) spreads it linearly across the working
+ * span — exactly today's PV time-phasing, so `UNIFORM` is byte-identical to the pre-ADR-0044 read.
+ * Const-array source-of-truth kept in lock-step with the API's Prisma `AccrualType` enum.
+ */
+export const ACCRUAL_TYPES = ['START', 'UNIFORM', 'END'] as const;
+
+export type AccrualType = (typeof ACCRUAL_TYPES)[number];
+
+/**
  * The P6 Earned-Value metric set for one level of the read-model (EV2, ADR-0042 / ADR-0035 §29) —
  * an activity, a WBS summary, or the plan total. Money fields are **integer minor units** in the
  * plan's {@link PlanEarnedValue.currencyCode}; the index ratios (`spi`/`cpi`/`tcpi`) are 4-dp floats,
