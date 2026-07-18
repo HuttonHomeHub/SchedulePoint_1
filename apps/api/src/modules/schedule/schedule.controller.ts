@@ -13,11 +13,18 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { FloatPathsQueryDto } from './dto/float-paths-query.dto';
+import { PlanEarnedValueDto } from './dto/plan-earned-value.dto';
 import { PlanFloatPathsDto } from './dto/plan-float-paths.dto';
+import {
+  ResourceHistogramMetaDto,
+  ResourceHistogramSeriesDto,
+} from './dto/plan-resource-histogram.dto';
 import { PlanScheduleSummaryDto } from './dto/plan-schedule-summary.dto';
+import { ResourceHistogramQueryDto } from './dto/resource-histogram-query.dto';
 import { ScheduleService } from './schedule.service';
 
 /**
@@ -80,6 +87,72 @@ export class ScheduleController {
   ): Promise<PlanFloatPathsDto> {
     return PlanFloatPathsDto.from(
       await this.service.floatPaths(principal, orgSlug, planId, query.target, query.maxPaths),
+    );
+  }
+
+  @Get('earned-value')
+  @ApiOperation({
+    summary: 'Read a plan’s Earned-Value analysis (cost:read — Planner or Org Admin, ADR-0042).',
+    description:
+      'Returns per-activity + WBS-rolled Earned-Value metrics plus the plan total. The activity ' +
+      'list is a bounded, plan-scoped read (one row per non-deleted activity) and is returned ' +
+      'unpaginated by design — like GET …/baselines/variance; the plan-level roll-up rides in the ' +
+      'same response object alongside the activity rows rather than in a Paginated `meta`.',
+  })
+  @ApiOkResponse({ type: PlanEarnedValueDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role — cost:read (Planner/Org Admin) is required to read cost.',
+  })
+  async earnedValue(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<PlanEarnedValueDto> {
+    return PlanEarnedValueDto.from(await this.service.getEarnedValue(principal, orgSlug, planId));
+  }
+
+  @Get('resource-histogram')
+  @ApiOperation({
+    summary:
+      'Read a plan’s resource loading histogram (schedule:read — any member, ADR-0044 §3 / ADR-0035 §31).',
+    description:
+      'Returns a units-over-time histogram per resource, curve-shaped from each assignment’s ' +
+      'loading curveType and conserving units. This is SCHEDULE data (units), not cost, so it is ' +
+      'schedule:read-gated — never cost:read (Q5). The per-resource series page in `data`; the shared ' +
+      'time-bucket axis, the total series count, and the N29 `curveNormalisedCount` ride in `meta`. It ' +
+      'reads the persisted CPM dates only — no engine recompute, no CPM date moved, and (this rung) the ' +
+      'levelling pass is untouched (Q2).',
+  })
+  @ApiOkResponse({ type: ResourceHistogramSeriesDto, isArray: true })
+  @ApiNotFoundResponse({ description: 'Plan not found (or not a member).' })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The requested granularity would produce too many buckets (HISTOGRAM_GRANULARITY_TOO_FINE); ' +
+      'request a coarser one.',
+  })
+  async resourceHistogram(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Query() query: ResourceHistogramQueryDto,
+  ): Promise<Paginated<ResourceHistogramSeriesDto, ResourceHistogramMetaDto>> {
+    const result = await this.service.getResourceHistogram(
+      principal,
+      orgSlug,
+      planId,
+      query.granularity,
+      query.limit,
+      query.offset,
+    );
+    return new Paginated(
+      result.series.map((series) => ResourceHistogramSeriesDto.from(series)),
+      {
+        granularity: result.granularity,
+        buckets: result.buckets,
+        total: result.total,
+        hasMore: result.hasMore,
+        curveNormalisedCount: result.curveNormalisedCount,
+      },
     );
   }
 }

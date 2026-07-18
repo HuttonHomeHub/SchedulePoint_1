@@ -39,6 +39,9 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     makeOpenEndsCritical: false,
     levelResources: false,
     levelWithinFloatOnly: false,
+    ignoreExternalRelationships: false,
+    eacMethod: 'CPI',
+    currencyCode: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -84,6 +87,7 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     lateFinish: new Date('2026-01-09T00:00:00Z'),
     totalFloat: 0,
     isCritical: true,
+    budgetedCost: 0,
     ...overrides,
   };
 }
@@ -175,6 +179,21 @@ describe('BaselinesService', () => {
           dataDate: plan().plannedStart,
           capturedProjectFinish: activityRow().earlyFinish,
           activities: [expect.objectContaining({ id: 'act-1', name: 'Mobilise' })],
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('freezes each activity’s computed budgeted cost into the snapshot (ADR-0042)', async () => {
+      // A row whose cost was already computed by the loader (Σ assignments + expense) crosses through
+      // capture into the snapshot unchanged — the service persists whatever the loader resolved.
+      baselines.loadActiveActivitiesForCapture.mockResolvedValue([
+        activityRow({ id: 'act-1', budgetedCost: 150000 }),
+      ]);
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Costed' });
+      expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activities: [expect.objectContaining({ id: 'act-1', budgetedCost: 150000 })],
         }),
         expect.anything(),
       );

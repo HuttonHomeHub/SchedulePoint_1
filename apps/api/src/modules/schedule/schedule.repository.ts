@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
+  type AccrualType,
   type ActivityType,
   type ConstraintType,
   type DependencyType,
   type LagCalendarSource,
+  type PercentCompleteType,
+  type ResourceCurveType,
 } from '@prisma/client';
 
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
@@ -23,6 +26,11 @@ export interface ScheduleActivityRow {
   /** Secondary constraint (ADR-0035 §10, M4): drives the backward pass only. */
   secondaryConstraintType: ConstraintType | null;
   secondaryConstraintDate: Date | null;
+  /** External / inter-project bounds (ADR-0043 / ADR-0035 §30): imported absolute instants (Timestamptz).
+   * `externalEarlyStart` is an SNET-shaped forward bound, `externalLateFinish` an FNLT-shaped backward
+   * bound; the service crosses them to the engine as calendar days, dropped when the plan ignores external. */
+  externalEarlyStart: Date | null;
+  externalLateFinish: Date | null;
   /** Visual Planning hand-placement (ADR-0033); advisory input to the effective-Visual pass. */
   visualStart: Date | null;
   /** As-Late-As-Possible placement preference (ADR-0035 §11, M4): display-only, never the pure passes. */
@@ -89,6 +97,62 @@ export interface ScheduleCalendarRow {
   }[];
 }
 
+/**
+ * One activity's Earned-Value inputs as the EV read loads them (EV2b, ADR-0042) — the persisted CPM
+ * dates plus the cost / %-complete inputs, with each active assignment joined to its resource's cost
+ * rate. Money is `BIGINT` (`bigint | null`); units and the rate are `Decimal(18,4)`. The service maps
+ * this onto the pure engine's `EvActivityInput` (converting minor-unit `bigint` → `number`).
+ */
+export interface EarnedValueActivityRow {
+  id: string;
+  type: ActivityType;
+  parentId: string | null;
+  percentCompleteType: PercentCompleteType;
+  percentComplete: number;
+  physicalPercentComplete: number | null;
+  /** How the activity's cost accrues across its span (ADR-0044 §32); governs PV time-phasing only. */
+  accrualType: AccrualType;
+  /** Active weighted progress steps, seq-ordered (M7 rung 5, ADR-0044 §33); drive the PHYSICAL measure. */
+  steps: { weight: Prisma.Decimal; percentComplete: number }[];
+  budgetedExpense: bigint | null;
+  actualExpense: bigint | null;
+  earlyStart: Date | null;
+  earlyFinish: Date | null;
+  assignments: {
+    budgetedCost: bigint | null;
+    actualCost: bigint;
+    budgetedUnits: Prisma.Decimal;
+    actualUnits: Prisma.Decimal;
+    resource: { costPerUnit: Prisma.Decimal | null };
+  }[];
+}
+
+/**
+ * One active resource assignment as the **resource-histogram read-model** loads it (M7 rung 5,
+ * ADR-0044 §3 / ADR-0035 §31): the assignment's loading `curveType` + `budgetedUnits`, joined to its
+ * owning activity's persisted CPM dates and own calendar (ADR-0037). A pure read — never taken under a
+ * write lock or a recompute; it schedules nothing.
+ */
+export interface ResourceHistogramAssignmentRow {
+  resourceId: string;
+  activityId: string;
+  budgetedUnits: Prisma.Decimal;
+  curveType: ResourceCurveType;
+  /** The owning activity's persisted early start / finish (the span); null = never-calculated ⇒ off-axis. */
+  earlyStart: Date | null;
+  earlyFinish: Date | null;
+  /** The owning activity's own calendar (ADR-0037); null = inherit the plan default. */
+  calendarId: string | null;
+}
+
+/** The active baseline's cost-snapshot row the EV read time-phases PV against (EV2b, ADR-0042). */
+export interface EarnedValueBaselineRow {
+  sourceActivityId: string;
+  budgetedCost: bigint | null;
+  baselineStart: Date | null;
+  baselineFinish: Date | null;
+}
+
 /** The read-side aggregate over a plan's persisted engine columns (C1). */
 export interface ScheduleAggregate {
   activityCount: number;
@@ -147,6 +211,8 @@ export class ScheduleRepository {
         constraintDate: true,
         secondaryConstraintType: true,
         secondaryConstraintDate: true,
+        externalEarlyStart: true,
+        externalLateFinish: true,
         visualStart: true,
         scheduleAsLateAsPossible: true,
         calendarId: true,
@@ -361,6 +427,119 @@ export class ScheduleRepository {
         type: true,
         lagMinutes: true,
         lagCalendar: true,
+      },
+    });
+  }
+
+  /**
+   * A plan's active activities projected to the Earned-Value read inputs (EV2b, ADR-0042) — the
+   * persisted CPM dates plus cost / %-complete inputs, with each active assignment (of an active
+   * resource) joined to its resource's cost rate. Org + plan scoped (anti-IDOR), soft-deletes
+   * excluded. A pure read — never taken under a write lock or a recompute.
+   */
+  loadEarnedValueActivities(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<EarnedValueActivityRow[]> {
+    return db.activity.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        type: true,
+        parentId: true,
+        percentCompleteType: true,
+        percentComplete: true,
+        physicalPercentComplete: true,
+        accrualType: true,
+        // Active weighted steps, seq-ordered (M7 rung 5, ADR-0044 §33). An activity with no steps yields
+        // an empty array → the manual physical % stands (the byte-identical parity path).
+        steps: {
+          where: { deletedAt: null },
+          orderBy: [{ seq: 'asc' }],
+          select: { weight: true, percentComplete: true },
+        },
+        budgetedExpense: true,
+        actualExpense: true,
+        earlyStart: true,
+        earlyFinish: true,
+        assignments: {
+          where: { deletedAt: null, resource: { deletedAt: null } },
+          select: {
+            budgetedCost: true,
+            actualCost: true,
+            budgetedUnits: true,
+            actualUnits: true,
+            resource: { select: { costPerUnit: true } },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * A plan's active resource assignments (of active resources) projected to the resource-histogram
+   * read-model inputs (M7 rung 5, ADR-0044 §3): each assignment's loading `curveType` + `budgetedUnits`
+   * joined to its owning activity's persisted CPM dates + own calendar (ADR-0037). Org + plan scoped
+   * (anti-IDOR), soft-deletes excluded (assignment, activity, and resource). A pure read — never taken
+   * under a write lock or a recompute. Backed by the ADR-0039 assignment indexes; one batched query.
+   */
+  async loadResourceHistogramAssignments(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ResourceHistogramAssignmentRow[]> {
+    const rows = await db.resourceAssignment.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        activity: { planId, deletedAt: null },
+        resource: { deletedAt: null },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        resourceId: true,
+        activityId: true,
+        budgetedUnits: true,
+        curveType: true,
+        activity: { select: { earlyStart: true, earlyFinish: true, calendarId: true } },
+      },
+    });
+    return rows.map((r) => ({
+      resourceId: r.resourceId,
+      activityId: r.activityId,
+      budgetedUnits: r.budgetedUnits,
+      curveType: r.curveType,
+      earlyStart: r.activity.earlyStart,
+      earlyFinish: r.activity.earlyFinish,
+      calendarId: r.activity.calendarId,
+    }));
+  }
+
+  /**
+   * The plan's ACTIVE baseline cost-snapshot rows (EV2b, ADR-0042 — the ADR-0025 amendment): the
+   * `sourceActivityId → budgetedCost / baselineStart / baselineFinish` the EV read time-phases PV
+   * against. Returns `[]` when the plan has no active baseline (the module then falls back to the live
+   * budget and flags `costBaselineMissing`). Org + plan scoped (anti-IDOR), soft-deletes excluded.
+   */
+  async loadActiveBaselineCostSnapshot(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<EarnedValueBaselineRow[]> {
+    const active = await db.baseline.findFirst({
+      where: { organizationId, planId, isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (!active) return [];
+    return db.baselineActivity.findMany({
+      where: { baselineId: active.id, deletedAt: null },
+      select: {
+        sourceActivityId: true,
+        budgetedCost: true,
+        baselineStart: true,
+        baselineFinish: true,
       },
     });
   }

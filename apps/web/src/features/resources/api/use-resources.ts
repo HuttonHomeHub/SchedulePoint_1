@@ -1,5 +1,14 @@
-import type { EditedField, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
+import type {
+  EditedField,
+  HistogramGranularity,
+  ResourceAssignmentSummary,
+  ResourceCurveType,
+  ResourceHistogramBucket,
+  ResourceHistogramSeries,
+  ResourceSummary,
+} from '@repo/types';
 import {
+  keepPreviousData,
   queryOptions,
   useMutation,
   useQuery,
@@ -9,8 +18,14 @@ import {
 
 import type { AssignmentFormValues, ResourceFormValues } from '../schemas/resource-schemas';
 
-import { apiFetch } from '@/lib/api/client';
-import { activityKeys, assignmentKeys, resourceKeys } from '@/lib/query/hierarchy-keys';
+import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
+import { majorInputToMinor } from '@/lib/format-money';
+import {
+  activityKeys,
+  assignmentKeys,
+  resourceKeys,
+  scheduleKeys,
+} from '@/lib/query/hierarchy-keys';
 
 export { assignmentKeys, resourceKeys };
 
@@ -21,22 +36,35 @@ function optional(value?: string): string | undefined {
 }
 
 function createResourceBody(input: ResourceFormValues) {
+  const costPerUnit = majorInputToMinor(input.costPerUnit);
   return {
     name: input.name,
     kind: input.kind,
     code: optional(input.code),
     description: optional(input.description),
     calendarId: optional(input.calendarId),
+    // Levelling capacity (ADR-0041): omit when blank so an uncapped resource stays uncapped.
+    ...(input.maxUnitsPerHour === undefined ? {} : { maxUnitsPerHour: input.maxUnitsPerHour }),
+    // Cost rate (EV4b, ADR-0042), major → minor units. Omit when blank so a rate-less resource stays so.
+    ...(costPerUnit === undefined ? {} : { costPerUnit }),
   };
 }
 
 function updateResourceBody(input: ResourceFormValues & { version: number }) {
+  const costPerUnit = majorInputToMinor(input.costPerUnit);
   return {
     name: input.name,
     kind: input.kind,
     code: optional(input.code) ?? null,
     description: optional(input.description) ?? null,
     calendarId: optional(input.calendarId) ?? null,
+    // Levelling capacity (ADR-0041): a blank field clears the ceiling → null (uncapped). The form
+    // always seeds this from the row (even with the field hidden), so an edit round-trips the stored
+    // value rather than silently clearing it.
+    maxUnitsPerHour: input.maxUnitsPerHour === undefined ? null : input.maxUnitsPerHour,
+    // Cost rate (EV4b, ADR-0042): a blank field clears the rate → null. The form always seeds this from
+    // the row (even with the field hidden), so an edit round-trips the stored value in minor units.
+    costPerUnit: costPerUnit === undefined ? null : costPerUnit,
     version: input.version,
   };
 }
@@ -124,7 +152,7 @@ export function useAssignments(
   return useQuery(assignmentsQueryOptions(orgSlug, activityId));
 }
 
-export function useCreateAssignment(orgSlug: string, activityId: string) {
+export function useCreateAssignment(orgSlug: string, activityId: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AssignmentFormValues) =>
@@ -140,17 +168,41 @@ export function useCreateAssignment(orgSlug: string, activityId: string) {
             // edit in the row editor, where the "edited field" is unambiguous.
             ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             isDriving: input.isDriving,
+            // Resource loading curve (M7 rung 5, ADR-0044 §3): omit when blank so an absent curve stays
+            // UNIFORM (a flat load, the API default).
+            ...(input.curveType ? { curveType: input.curveType } : {}),
+            // Assignment cost & actuals (EV4b, ADR-0042): the money fields carry major → minor units.
+            // Omit when blank so an absent value stays absent (the API derives budgeted cost from
+            // units × rate, and defaults actuals to 0).
+            ...(majorInputToMinor(input.budgetedCost) === undefined
+              ? {}
+              : { budgetedCost: majorInputToMinor(input.budgetedCost) }),
+            ...(majorInputToMinor(input.actualCost) === undefined
+              ? {}
+              : { actualCost: majorInputToMinor(input.actualCost) }),
+            ...(input.actualUnits === undefined ? {} : { actualUnits: input.actualUnits }),
           }),
         },
       ),
     onSettled: () =>
-      queryClient.invalidateQueries({
-        queryKey: assignmentKeys.listByActivity(orgSlug, activityId),
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, activityId),
+        }),
+        // A new assignment adds demand to the resource histogram (M7 rung 5, ADR-0044 §3) — refresh
+        // every bucket size for the plan (prefix). Only when the plan is known (the dialog passes it).
+        ...(planId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+            ]
+          : []),
+      ]),
   });
 }
 
-export function useUpdateAssignment(orgSlug: string) {
+export function useUpdateAssignment(orgSlug: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
@@ -161,12 +213,22 @@ export function useUpdateAssignment(orgSlug: string) {
       isDriving: boolean;
       /** Set/change the driving assignment's rate (ADR-0040); omit to leave it unchanged. */
       unitsPerHour?: number;
+      /** Set the loading curve (M7 rung 5, ADR-0044 §3); omit to leave it unchanged. */
+      curveType?: ResourceCurveType;
       /**
        * Which triad quantity the planner edited (ADR-0040) — sent only for a units/rate edit on the
        * driving assignment, so the server holds it and recomputes the dependent (a same-row Units/Rate,
        * or the owning activity's duration for a units-driven type). Omitted = a plain store.
        */
       editedField?: EditedField;
+      /**
+       * Assignment cost & actuals (EV4b, ADR-0042), already in **minor units** for the money fields.
+       * Sent only when the caller edits the cost group, so a units/rate/driving save never touches them
+       * (the PATCH treats absent fields as unchanged). `budgetedCost: null` clears the override.
+       */
+      budgetedCost?: number | null;
+      actualCost?: number;
+      actualUnits?: number;
     }) =>
       apiFetch<ResourceAssignmentSummary>(
         `/organizations/${orgSlug}/assignments/${input.assignmentId}`,
@@ -176,7 +238,11 @@ export function useUpdateAssignment(orgSlug: string) {
             budgetedUnits: input.budgetedUnits,
             ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             ...(input.editedField ? { editedField: input.editedField } : {}),
+            ...(input.curveType ? { curveType: input.curveType } : {}),
             isDriving: input.isDriving,
+            ...(input.budgetedCost !== undefined ? { budgetedCost: input.budgetedCost } : {}),
+            ...(input.actualCost !== undefined ? { actualCost: input.actualCost } : {}),
+            ...(input.actualUnits !== undefined ? { actualUnits: input.actualUnits } : {}),
             version: input.version,
           }),
         },
@@ -195,11 +261,20 @@ export function useUpdateAssignment(orgSlug: string) {
         ...(input.editedField
           ? [queryClient.invalidateQueries({ queryKey: activityKeys.all(orgSlug) })]
           : []),
+        // Editing units / driving flag / loading curve all reshape the resource histogram (M7 rung 5,
+        // ADR-0044 §3) — refresh every bucket size for the plan (prefix). Only when the plan is known.
+        ...(planId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+            ]
+          : []),
       ]),
   });
 }
 
-export function useDeleteAssignment(orgSlug: string) {
+export function useDeleteAssignment(orgSlug: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { assignmentId: string; activityId: string }) =>
@@ -207,8 +282,74 @@ export function useDeleteAssignment(orgSlug: string) {
         method: 'DELETE',
       }),
     onSettled: (_data, _error, input) =>
-      queryClient.invalidateQueries({
-        queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
+        }),
+        // Unassigning removes the resource's demand from the histogram (M7 rung 5, ADR-0044 §3) —
+        // refresh every bucket size for the plan (prefix). Only when the plan is known.
+        ...(planId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+            ]
+          : []),
+      ]),
   });
+}
+
+/**
+ * A plan's resource loading histogram (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — the `{ data, meta }`
+ * shape of `GET …/schedule/resource-histogram`: `data` is the per-resource series, `meta` the shared
+ * bucket axis + `granularity` + `curveNormalisedCount`. Read via {@link apiFetchEnvelope} because the
+ * caller needs the `meta` roll-up (the shared axis + normalise count), like the baseline-variance read.
+ */
+export interface ResourceHistogramResult {
+  series: ResourceHistogramSeries[];
+  buckets: ResourceHistogramBucket[];
+  granularity: HistogramGranularity;
+  curveNormalisedCount: number;
+}
+
+export function resourceHistogramQueryOptions(
+  orgSlug: string,
+  planId: string,
+  granularity: HistogramGranularity,
+) {
+  return queryOptions({
+    // Keyed under the shared schedule namespace (ADR-0044 §3) so a recalc's and an assignment write's
+    // schedule invalidation both sweep it (`scheduleKeys.resourceHistogram` prefix, all granularities).
+    queryKey: scheduleKeys.resourceHistogram(orgSlug, planId, granularity),
+    // Keep the previous bucket size's histogram on screen while switching Day/Week/Month, so the view
+    // doesn't collapse to "Loading…" on every granularity change (ux review).
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<ResourceHistogramResult> => {
+      const { data, meta } = await apiFetchEnvelope<
+        ResourceHistogramSeries[],
+        {
+          buckets: ResourceHistogramBucket[];
+          granularity: HistogramGranularity;
+          curveNormalisedCount: number;
+        }
+      >(
+        `/organizations/${orgSlug}/plans/${planId}/schedule/resource-histogram?granularity=${granularity}`,
+      );
+      return {
+        series: data,
+        buckets: meta?.buckets ?? [],
+        granularity: meta?.granularity ?? granularity,
+        curveNormalisedCount: meta?.curveNormalisedCount ?? 0,
+      };
+    },
+    enabled: Boolean(planId),
+  });
+}
+
+export function useResourceHistogram(
+  orgSlug: string,
+  planId: string,
+  granularity: HistogramGranularity,
+): UseQueryResult<ResourceHistogramResult> {
+  return useQuery(resourceHistogramQueryOptions(orgSlug, planId, granularity));
 }

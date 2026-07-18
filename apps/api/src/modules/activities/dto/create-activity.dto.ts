@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
+import {
+  AccrualType,
+  ActivityType,
+  ConstraintType,
+  DurationType,
+  PercentCompleteType,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -85,6 +91,70 @@ export class CreateActivityDto {
   @IsEnum(DurationType)
   durationType?: DurationType;
 
+  @ApiPropertyOptional({
+    enum: PercentCompleteType,
+    default: PercentCompleteType.DURATION,
+    description:
+      'The %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION (default, ' +
+      'behaviour-preserving), UNITS, or PHYSICAL. Selects the EV performance measure only — it NEVER ' +
+      'changes a CPM date. Dark until the EV read (EV2b).',
+  })
+  @IsOptional()
+  @IsEnum(PercentCompleteType)
+  percentCompleteType?: PercentCompleteType;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 100,
+    description:
+      'Hand-entered physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL. ' +
+      'Integer 0–100 (N23); omit for unset.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  physicalPercentComplete?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Activity-level lump-sum BUDGET for non-resourced work (EV1, ADR-0042), a component of BAC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); omit for no expense (parity).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  budgetedExpense?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Activity-level lump-sum ACTUAL spent for non-resourced work (EV1, ADR-0042), a component of AC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); omit for none.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  actualExpense?: number;
+
+  @ApiPropertyOptional({
+    enum: AccrualType,
+    default: AccrualType.UNIFORM,
+    description:
+      'How the activity’s cost accrues across its span in the Earned-Value / cost read-model (M7 ' +
+      'rung 5, ADR-0044 / ADR-0035 §32): START recognises the whole lump-sum at the start (e.g. a ' +
+      'mobilisation charge), END at the finish (e.g. retention), UNIFORM (default) spreads it linearly. ' +
+      'It changes only WHEN cost / Planned Value is recognised — it NEVER changes a CPM date. UNIFORM ' +
+      'is byte-identical to the pre-ADR-0044 PV time-phasing.',
+  })
+  @IsOptional()
+  @IsEnum(AccrualType)
+  accrualType?: AccrualType;
+
   @ApiPropertyOptional({ enum: ConstraintType, description: 'Schedule constraint (with a date).' })
   @IsOptional()
   @IsEnum(ConstraintType)
@@ -126,6 +196,34 @@ export class CreateActivityDto {
     dateField: 'secondaryConstraintDate',
   })
   secondaryConstraintDate?: string;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description:
+      'External / inter-project early start (ADR-0043 / ADR-0035 §30.1): an imported commitment from ' +
+      'another project (a vendor delivery, an IFC release) as a calendar day (YYYY-MM-DD). Acts as an ' +
+      'SNET-shaped forward lower bound (the later of logic and this drives the early start), floored at ' +
+      'the data date. Soft — never a mandatory pin. Dropped when the plan’s ignoreExternalRelationships ' +
+      'is on. Must not be after externalLateFinish when both are set (N26).',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  externalEarlyStart?: string;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description:
+      'External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): an imported downstream ' +
+      'commitment (a commissioning window) as a calendar day (YYYY-MM-DD). Acts as an FNLT-shaped ' +
+      'backward upper bound (the tighter of logic and this); if earlier than logic can achieve, total ' +
+      'float goes negative on the driving chain. Soft — coexists with an internal constraint. Dropped ' +
+      'when ignoreExternalRelationships is on. Must not be before externalEarlyStart when both are set (N26).',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  externalLateFinish?: string;
 
   @ApiPropertyOptional({
     format: 'date',

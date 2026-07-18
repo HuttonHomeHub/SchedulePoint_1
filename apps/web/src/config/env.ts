@@ -267,3 +267,133 @@ export const RESOURCES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCES);
  * this flag. Set `VITE_DURATION_TYPES=true` to enable it in an environment.
  */
 export const DURATION_TYPES_ENABLED = flagDefaultOff(import.meta.env.VITE_DURATION_TYPES);
+
+/**
+ * Resource levelling (ADR-0041, the M7 levelling rung). **OFF by default** — a new dark surface whose
+ * quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and
+ * is turned on per-environment during rollout, then flipped default-on once cleared (the
+ * `VITE_RESOURCES` / `VITE_DURATION_TYPES` pattern). When on, the web UI exposes the levelling controls:
+ *
+ * - **Plan levelling settings** — a `Level resources` toggle (the opt-in switch for the second
+ *   levelling pass) and, when it is on, a `Level within float only` toggle (delay only within total
+ *   float, never extending the schedule).
+ * - **Resource capacity** — a `Max units/hour` field on the resource form (the availability ceiling
+ *   the levelling pass respects; blank = uncapped).
+ * - **Activity levelling priority** — a `Levelling priority` field on the activity form (lower wins the
+ *   resource when two activities contend; blank = lowest priority).
+ * - **Levelled overlay** — the schedule summary gains the levelled project finish and the levelled /
+ *   window-exceeded / self-over-allocated counts once a plan has levelled.
+ *
+ * Everything behind it — the plan `levelResources`/`levelWithinFloatOnly` options, resource
+ * `maxUnitsPerHour`, activity `levelingPriority`, the opt-in second engine pass and its engine-owned
+ * levelled overlay + summary counts — is already live; the flag only governs whether the web UI exposes
+ * it. Set `VITE_RESOURCE_LEVELLING=true` to enable it in an environment.
+ */
+export const RESOURCE_LEVELLING_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCE_LEVELLING);
+
+/**
+ * Earned-Value web surface (EV4b, ADR-0042). **OFF by default** — a brand-new dark surface whose
+ * quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and
+ * is turned on per-environment during rollout, then flipped default-on once cleared (the
+ * `VITE_RESOURCE_LEVELLING` / `VITE_DURATION_TYPES` pattern). When on, the web UI exposes the cost &
+ * Earned-Value surface:
+ *
+ * - **Plan Earned-Value settings** — an `EAC method` picker (CPI (default) / Remaining-at-budget /
+ *   CPI × SPI) and a plan `currency` (ISO-4217) field.
+ * - **Resource cost rate** — a `Cost per unit` field on the resource form.
+ * - **Activity cost & %-complete** — a `%-complete type` picker (Duration / Units / Physical), a
+ *   `Physical % complete` field (shown when the type is Physical), and `Budgeted` / `Actual` expense
+ *   money fields on the activity form.
+ * - **Assignment cost** — `Budgeted cost` / `Actual cost` / `Actual units` on a resource assignment.
+ * - **Earned-Value analysis** — a KPI + per-activity/WBS table panel reading
+ *   `GET …/schedule/earned-value` (cost:read-gated → a friendly "restricted" state for non-Planners).
+ *
+ * Everything behind it — the settable cost inputs on the create/update DTOs (EV4a) and the
+ * `earned-value` read endpoint — is already live; the flag only governs whether the web UI exposes it.
+ * Money on the wire is **integer minor units** in the plan's `currencyCode` (see `lib/format-money`).
+ * Set `VITE_EARNED_VALUE=true` to enable it in an environment.
+ */
+export const EARNED_VALUE_ENABLED = flagDefaultOff(import.meta.env.VITE_EARNED_VALUE);
+
+/**
+ * Cost-accrual web surface (M7 rung 5, ADR-0044 F1 / ADR-0035 §32). **OFF by default** — a brand-new
+ * dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships
+ * hidden on `main` and is turned on per-environment during rollout, then flipped default-on once
+ * cleared (the `VITE_EARNED_VALUE` / `VITE_RESOURCE_LEVELLING` pattern). When on, the activity form's
+ * "Cost & earned value" fieldset gains a **Cost accrual** select (Start / Uniform / End):
+ *
+ * - **Cost accrual** — governs WHEN the activity's cost is recognised in the Earned-Value read's
+ *   Planned-Value time-phasing (Start = whole cost at the start, End = at the finish, Uniform = spread
+ *   linearly). It changes no date — only the cost / cash-flow S-curve.
+ *
+ * Everything behind it — the settable `accrualType` create/update activity field and the accrual-aware
+ * PV time-phasing in the `earned-value` read — is already live; the flag only governs whether the web
+ * UI exposes the picker. The cost **S-curve chart** (the period-trend series) is a later, separate
+ * slice. Set `VITE_COST_ACCRUAL=true` to enable it in an environment.
+ */
+export const COST_ACCRUAL_ENABLED = flagDefaultOff(import.meta.env.VITE_COST_ACCRUAL);
+
+/**
+ * Weighted activity-steps web surface (M7 rung 5, ADR-0044 §2 / ADR-0035 §33). **OFF by default** — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
+ * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on
+ * once cleared (the `VITE_COST_ACCRUAL` / `VITE_EARNED_VALUE` pattern). When on, the activities table
+ * gains a per-activity **Steps** row action that opens an editor for the activity's weighted progress
+ * checklist:
+ *
+ * - **Activity steps** — an editable ordered list of steps (name, relative weight, % complete) with
+ *   add / remove / reorder, saved in one bulk `PUT …/activities/:activityId/steps`. When an activity
+ *   has steps, its PHYSICAL %-complete rolls up as the weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)` and wins over the
+ *   manual `physicalPercentComplete` (all-zero weights fall back to the manual field). A live preview of
+ *   the rolled-up % is shown in the editor.
+ *
+ * Everything behind it — the settable `ActivityStep` rows, the bulk-replace endpoint, and the read-time
+ * `rollupPhysicalPercent` resolver — is already live; the flag only governs whether the web UI exposes
+ * the editor. Set `VITE_ACTIVITY_STEPS=true` to enable it in an environment.
+ */
+export const ACTIVITY_STEPS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_STEPS);
+
+/**
+ * Resource loading-curves web surface (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). **OFF by default** — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it
+ * ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on once
+ * cleared (the `VITE_COST_ACCRUAL` / `VITE_ACTIVITY_STEPS` pattern). When on, the web UI exposes resource
+ * loading curves:
+ *
+ * - **Loading-curve picker** — a per-assignment curve select (Uniform / Bell / Front-loaded /
+ *   Back-loaded / Double-peak) on the resource-assignment dialog (create form + each assigned row),
+ *   naming the named P6 profile the resource-histogram read distributes the assignment's budgeted units
+ *   by across the activity span. `UNIFORM` (the default) is a flat load.
+ * - **Resource histogram** — a read view (a bar chart with a keyboard-navigable data-table equivalent
+ *   for WCAG 2.2 AA) of the plan's `GET …/schedule/resource-histogram`, showing each resource's
+ *   curve-shaped units over time.
+ *
+ * Everything behind it — the settable `curveType`, the pure `resource-histogram.ts` read-model, and the
+ * `GET …/schedule/resource-histogram` endpoint — is already live; the flag only governs whether the web
+ * UI exposes the picker + histogram. Set `VITE_RESOURCE_CURVES=true` to enable it in an environment.
+ */
+export const RESOURCE_CURVES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCE_CURVES);
+
+/**
+ * Inter-project / external dates web surface (F5, ADR-0043 / ADR-0035 §30). **OFF by default** — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
+ * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on
+ * once cleared (the `VITE_EARNED_VALUE` / `VITE_RESOURCE_LEVELLING` pattern). When on, the web UI
+ * exposes external / inter-project dates:
+ *
+ * - **Activity External dates** — an `External early start` and `External late finish` date pair on the
+ *   activity form (imported commitments from another project: the later of logic and the external early
+ *   start drives; an external late finish earlier than logic shows as negative float).
+ * - **Plan Ignore external relationships** — an on/off plan toggle that drops all external early-start
+ *   and late-finish bounds so the plan schedules on its own logic (P6's "ignore relationships to/from
+ *   other projects").
+ * - **Externally-driven count** — the schedule summary strip surfaces `externalDrivenCount` (how many
+ *   activities an external bound drove this recalc) when it is above zero.
+ *
+ * Everything behind it — the settable `externalEarlyStart` / `externalLateFinish` activity fields (with
+ * the N26 `EXTERNAL_FINISH_BEFORE_START` reject), the plan `ignoreExternalRelationships` option, the
+ * engine's two soft clamps and the engine-owned `externalDrivenCount` summary — is already live; the
+ * flag only governs whether the web UI exposes it. Set `VITE_INTER_PROJECT_DATES=true` to enable it in
+ * an environment.
+ */
+export const INTER_PROJECT_DATES_ENABLED = flagDefaultOff(import.meta.env.VITE_INTER_PROJECT_DATES);

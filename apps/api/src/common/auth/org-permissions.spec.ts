@@ -127,6 +127,16 @@ describe('permissionsForRole — CPM schedule (read vs calculate)', () => {
       expect(perms).toContain('activity:update');
     }
   });
+
+  it('grants cost:read (Earned Value / cost) to Planner + Org Admin only', () => {
+    // Commercially sensitive money is NOT part of the every-member schedule reads (ADR-0042, EV2b).
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      expect(permissionsForRole(role)).not.toContain('cost:read');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      expect(permissionsForRole(role)).toContain('cost:read');
+    }
+  });
 });
 
 describe('permissionsForRole — calendar library (read vs write)', () => {

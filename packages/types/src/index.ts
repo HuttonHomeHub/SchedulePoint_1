@@ -233,6 +233,26 @@ export interface PlanSummary {
    */
   levelWithinFloatOnly: boolean;
   /**
+   * Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4, M1). When true, the recalc
+   * DROPS every activity's external early-start and late-finish bounds (relationships to/from other
+   * projects), scheduling the plan on its own internal logic; internal constraints and logic are
+   * untouched. Default `false` is the byte-parity path (a plan with no external data schedules identically
+   * either way). Client-settable plan option, mirroring the other scheduling-option booleans.
+   */
+  ignoreExternalRelationships: boolean;
+  /**
+   * The Earned-Value EAC forecast method (EV1, ADR-0042, Q3). Client-settable plan option; default
+   * `CPI` (P6's headline EAC = BAC / CPI). Read by the EV2 read module (a query param may override
+   * per-request); dark in EV1 — nothing computes EV yet. Kept in lock-step with the Prisma `EacMethod`.
+   */
+  eacMethod: EacMethod;
+  /**
+   * The plan's ISO-4217 currency code (`AAA`, three upper-case letters) for all money columns (EV1,
+   * ADR-0042, Q6). Client-settable; `null` = unset (inherit the org default at read time). Single
+   * currency per plan (multi-currency/FX is out of scope). Money reads as minor units + this code.
+   */
+  currencyCode: string | null;
+  /**
    * Calendar day (`YYYY-MM-DD`), date-only — no time/timezone. The mandatory CPM data date
    * (ADR-0033 M1): every saved plan has one. Modelled as `string | null` only for pre-M1
    * historical/transitional reads; live plans always carry a value.
@@ -314,6 +334,17 @@ export interface ActivitySummary {
   secondaryConstraintType: ConstraintType | null;
   secondaryConstraintDate: string | null;
   /**
+   * External / inter-project dates (ADR-0043 / ADR-0035 §30, M1): imported commitments from ANOTHER
+   * project, each a calendar day (`YYYY-MM-DD`) or null. `externalEarlyStart` is an SNET-shaped forward
+   * LOWER bound (the earliest an upstream project hands this activity over); `externalLateFinish` an
+   * FNLT-shaped backward UPPER bound (the latest a downstream project allows it to finish). Client-settable
+   * definition fields (NOT engine-owned); either, both, or neither may be set. Soft bounds, never mandatory
+   * pins — the engine clamps early start UP to / late finish DOWN to them, gated on the plan's
+   * `ignoreExternalRelationships`, never setting `constraintViolated`. Null = no external bound (parity).
+   */
+  externalEarlyStart: string | null;
+  externalLateFinish: string | null;
+  /**
    * The P6 duration type (ADR-0040, M7 rung 4): which of {Duration, Units, Units/Time} recomputes vs
    * holds when the planner edits another, keeping `Units = Duration × Units/Time` true. Client-settable
    * definition field (default `FIXED_DURATION_AND_UNITS_TIME`); the recompute is resolved server-side at
@@ -373,6 +404,35 @@ export interface ActivitySummary {
    * has no duration (a milestone).
    */
   expectedFinish: string | null;
+  /**
+   * The %-complete measure that feeds Earned Value (EV1, ADR-0042). Client-settable definition field
+   * (default `DURATION`, behaviour-preserving); selects which measure drives EV performance % —
+   * `DURATION`, `UNITS`, or `PHYSICAL`. It NEVER changes a CPM date. Dark until the EV2 read reads it.
+   */
+  percentCompleteType: PercentCompleteType;
+  /**
+   * Hand-entered physical % complete (EV1, ADR-0042), used only when `percentCompleteType` is
+   * `PHYSICAL`. Contributor progress input, integer 0–100, or `null` = unset (distinct from 0).
+   */
+  physicalPercentComplete: number | null;
+  /**
+   * How the activity's cost accrues across its span in the Earned-Value / cost read-model (M7 rung 5,
+   * ADR-0044 / ADR-0035 §32). Client-settable definition field (default `UNIFORM`, byte-identical to
+   * the pre-ADR-0044 PV time-phasing); `START` recognises the whole lump-sum at the start, `END` at the
+   * finish, `UNIFORM` spreads it linearly. It changes only WHEN cost / Planned Value is recognised — it
+   * NEVER changes a CPM date. A plain definition echo (not money) — always readable.
+   */
+  accrualType: AccrualType;
+  /**
+   * Activity-level expense amounts in minor currency units (EV1/EV4a, ADR-0042): the lump-sum
+   * budgeted / actual cost carried directly on the activity (independent of resource-derived cost).
+   * **Conditionally included (EV4a):** a real value is returned only when the caller holds `cost:read`
+   * (Planner + Org Admin) in the activity's organisation; for every other caller (Viewer/Contributor)
+   * these are `null` (fail-closed). A `null` therefore means EITHER unset OR caller-not-permitted — a
+   * cost-reader distinguishes the two by role, an un-permitted caller never sees the amount at all.
+   */
+  budgetedExpense: number | null;
+  actualExpense: number | null;
   // CPM output — engine-owned, null/false until computed by the CPM engine slice.
   earlyStart: string | null;
   earlyFinish: string | null;
@@ -593,6 +653,15 @@ export interface PlanScheduleSummary {
    * unless the plan has a resource-dependent activity with no driver.
    */
   resourceDriverMissingCount: number;
+  /**
+   * How many activities an external / inter-project bound DROVE this run (ADR-0043 / ADR-0035 §30) — its
+   * external early start raised the early start above pure logic, or its external late finish clamped the
+   * late finish below what logic could achieve. Observability only (mirrors `constraintViolationCount`);
+   * an external bound is soft and never an error. **Engine-derived: only a recalculation populates it**
+   * (M1 does not persist a per-activity external-driven flag), so the read summary reports 0. Zero when
+   * the plan carries no external data or `ignoreExternalRelationships` is on.
+   */
+  externalDrivenCount: number;
   /**
    * Resource-levelling roll-up (ADR-0041 / ADR-0035 §28). `leveledActivityCount` is how many activities
    * the opt-in levelling pass delayed (`levelingDelay > 0`); `levelingWindowExceededCount` how many were
@@ -971,6 +1040,190 @@ export const EDITED_FIELDS = ['DURATION', 'UNITS', 'UNITS_PER_HOUR'] as const;
 export type EditedField = (typeof EDITED_FIELDS)[number];
 
 /**
+ * The %-complete measure that feeds Earned Value for an activity (EV1, ADR-0042 / ADR-0035 §29).
+ * `DURATION` (default, behaviour-preserving — today's `percentComplete` is duration-based) derives EV
+ * performance % from elapsed vs total working time; `UNITS` from actual vs budgeted work
+ * (`actualUnits / budgetedUnits`); `PHYSICAL` from the hand-entered `physicalPercentComplete`. It
+ * selects the EV performance measure ONLY — it NEVER changes a CPM date. Const-array source-of-truth
+ * (like {@link DURATION_TYPES}) kept in lock-step with the API's Prisma `PercentCompleteType` enum.
+ */
+export const PERCENT_COMPLETE_TYPES = ['DURATION', 'UNITS', 'PHYSICAL'] as const;
+
+export type PercentCompleteType = (typeof PERCENT_COMPLETE_TYPES)[number];
+
+/**
+ * The Estimate-at-Completion forecast method a plan's EV read uses (EV1, ADR-0042 / ADR-0035 §29, Q3).
+ * `CPI` (default, P6's "typical/performance-factor" EAC = BAC / CPI); `REMAINING_AT_BUDGET` (the
+ * "atypical" EAC = AC + (BAC − EV)); `CPI_TIMES_SPI` (schedule-and-cost adjusted EAC = AC + (BAC − EV) /
+ * (CPI × SPI)). Read by the EV2 read module; dark in EV1. Const-array source-of-truth kept in lock-step
+ * with the API's Prisma `EacMethod` enum.
+ */
+export const EAC_METHODS = ['CPI', 'REMAINING_AT_BUDGET', 'CPI_TIMES_SPI'] as const;
+
+export type EacMethod = (typeof EAC_METHODS)[number];
+
+/**
+ * How an activity's cost **accrues** across its span in the Earned-Value / cost read-model (M7 rung 5,
+ * ADR-0044 / ADR-0035 §32). It changes only **when** cost/Planned Value is recognised — never a CPM
+ * date. `START` recognises the whole lump-sum at the activity start (e.g. a mobilisation charge);
+ * `END` at the finish (e.g. retention); `UNIFORM` (default) spreads it linearly across the working
+ * span — exactly today's PV time-phasing, so `UNIFORM` is byte-identical to the pre-ADR-0044 read.
+ * Const-array source-of-truth kept in lock-step with the API's Prisma `AccrualType` enum.
+ */
+export const ACCRUAL_TYPES = ['START', 'UNIFORM', 'END'] as const;
+
+export type AccrualType = (typeof ACCRUAL_TYPES)[number];
+
+/**
+ * The named P6 resource **loading curve** a resource assignment's `budgetedUnits` is distributed by
+ * across the activity's span in the resource-histogram read-model (M7 rung 5, ADR-0044 §3 / ADR-0035
+ * §31). It shapes only the units-over-time **histogram** — it moves no CPM date, owns no engine column,
+ * and does NOT feed the levelling pass this rung (Q2). `UNIFORM` (default) is a **flat** load — exactly
+ * a flat-rate distribution, so an assignment with no curve reads byte-identically; `BELL` peaks mid-span;
+ * `FRONT_LOADED`/`BACK_LOADED` weight the early/late span; `DOUBLE_PEAK` has two humps. The 21-point
+ * profile constants live in the API's pure `resource-histogram.ts` read-model, not here. Const-array
+ * source-of-truth kept in lock-step with the API's Prisma `ResourceCurveType` enum.
+ */
+export const RESOURCE_CURVE_TYPES = [
+  'UNIFORM',
+  'BELL',
+  'FRONT_LOADED',
+  'BACK_LOADED',
+  'DOUBLE_PEAK',
+] as const;
+
+export type ResourceCurveType = (typeof RESOURCE_CURVE_TYPES)[number];
+
+/**
+ * The P6 Earned-Value metric set for one level of the read-model (EV2, ADR-0042 / ADR-0035 §29) —
+ * an activity, a WBS summary, or the plan total. Money fields are **integer minor units** in the
+ * plan's {@link PlanEarnedValue.currencyCode}; the index ratios (`spi`/`cpi`/`tcpi`) are 4-dp floats,
+ * `null` when their divisor is zero (the divide-by-zero sentinel — never `Infinity`). `eac` is always
+ * defined (its guards fall back to the atypical `AC + (BAC − EV)` forecast). Kept in lock-step with the
+ * API's pure `earned-value.ts` compute module (`EvMetrics`).
+ */
+export interface EarnedValueMetrics {
+  /** Budget at Completion (minor units). */
+  bac: number;
+  /** Planned Value / BCWS (minor units), time-phased to the data date. */
+  pv: number;
+  /** Earned Value / BCWP (minor units) = `BAC × performance %`. */
+  ev: number;
+  /** Actual Cost / ACWP (minor units). */
+  ac: number;
+  /** Schedule Variance `EV − PV` (minor units). */
+  sv: number;
+  /** Cost Variance `EV − AC` (minor units). */
+  cv: number;
+  /** Schedule Performance Index `EV / PV`; `null` when PV = 0. */
+  spi: number | null;
+  /** Cost Performance Index `EV / AC`; `null` when AC = 0. */
+  cpi: number | null;
+  /** Estimate at Completion (minor units), per the plan's {@link PlanEarnedValue.eacMethod}. */
+  eac: number;
+  /** Estimate to Complete `EAC − AC` (minor units). */
+  etc: number;
+  /** To-Complete Performance Index `(BAC − EV) / (BAC − AC)`; `null` when `BAC = AC`. */
+  tcpi: number | null;
+  /** Variance at Completion `BAC − EAC` (minor units). */
+  vac: number;
+}
+
+/**
+ * One activity's Earned-Value row (EV2, ADR-0042): the {@link EarnedValueMetrics} set plus its id and
+ * the performance % that earned its EV (a leaf's schedule/units/physical measure; a WBS summary's
+ * rolled `EV / BAC × 100`). Every non-deleted activity — including WBS summaries — appears in
+ * {@link PlanEarnedValue.activities}.
+ */
+export interface EarnedValueActivity extends EarnedValueMetrics {
+  activityId: string;
+  /** The performance % (0–100) that earned this row's EV. */
+  performancePercent: number;
+}
+
+/**
+ * The plan's Earned-Value analysis read-model (EV2, ADR-0042 §2) — the wire shape the
+ * `GET …/schedule/earned-value` endpoint returns (a later rung wires it). A pure read over the live
+ * schedule + cost/%-complete inputs as of `dataDate`; it schedules nothing and persists nothing.
+ * `costBaselineMissing` flags that PV fell back to the live budget (no active cost baseline). Money is
+ * integer minor units in `currencyCode` (null = inherit the org default).
+ */
+export interface PlanEarnedValue {
+  /** The EV status date (`YYYY-MM-DD`); null when the plan has no data date. */
+  dataDate: string | null;
+  /** The EAC forecast method used for every level. */
+  eacMethod: EacMethod;
+  /** The plan's ISO-4217 currency code; null = inherit the org default. */
+  currencyCode: string | null;
+  /** True when any leaf activity lacked a cost-baseline budget (PV used the live-budget fallback). */
+  costBaselineMissing: boolean;
+  /**
+   * The count of leaf activities showing booked actual cost/units while apparently not started
+   * (ADR-0035 §29, N24) — a read-time data-quality WARNING, never a reject.
+   */
+  costWarningCount: number;
+  /**
+   * The count of leaf activities whose progress steps are all zero-weight (M7 rung 5, ADR-0044 §33,
+   * N27) — so the weighted-mean rollup fell back to the manual `physicalPercentComplete`. A read-time
+   * data-quality WARNING, never a reject (the resolver never divides by zero); mirrors
+   * {@link costWarningCount}.
+   */
+  stepWeightZeroCount: number;
+  /** Per-activity rows (incl. WBS summaries), in plan order. */
+  activities: EarnedValueActivity[];
+  /** The plan-total metric set (the sum over top-level rows). */
+  total: EarnedValueMetrics;
+}
+
+/**
+ * The time-bucket granularity a resource histogram is aggregated at (M7 rung 5, ADR-0044 §3 /
+ * ADR-0035 §31). Buckets are calendar-date periods spanning the plan's assignment date range; each
+ * assignment's curve-shaped units are distributed into them by working-time overlap on the activity's
+ * own calendar (ADR-0037).
+ */
+export const HISTOGRAM_GRANULARITIES = ['DAY', 'WEEK', 'MONTH'] as const;
+
+export type HistogramGranularity = (typeof HISTOGRAM_GRANULARITIES)[number];
+
+/**
+ * One time bucket on the shared histogram axis (M7 rung 5, ADR-0044 §3). `start` is inclusive, `end`
+ * exclusive (`= the next bucket's start`), both `YYYY-MM-DD`. Every {@link ResourceHistogramSeries}
+ * aligns its `values` index-for-index to this axis.
+ */
+export interface ResourceHistogramBucket {
+  start: string;
+  end: string;
+}
+
+/**
+ * One resource's units-over-time series (M7 rung 5, ADR-0044 §3 / ADR-0035 §31): `values[i]` is the
+ * curve-shaped `budgetedUnits` this resource is loaded with in bucket `i` (exact quantity, `>= 0`),
+ * aligned to {@link ResourceHistogram.buckets}. `total` is the resource's whole distributed load
+ * (`Σ values`, equal to the sum of its assignments' `budgetedUnits` — units are conserved).
+ */
+export interface ResourceHistogramSeries {
+  resourceId: string;
+  values: number[];
+  total: number;
+}
+
+/**
+ * A plan's **resource loading histogram** (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — the shape the
+ * `schedule:read`-gated `GET …/schedule/resource-histogram` endpoint returns as its `data`. A pure
+ * read-model over the persisted CPM dates + each assignment's `curveType`; it schedules nothing, moves
+ * no date, is NOT cost data (so it is `schedule:read`, not `cost:read`, Q5), and does not feed the
+ * levelling pass (Q2). `buckets` is the shared time axis; `series` carries one units-over-time row per
+ * loaded resource. `curveNormalisedCount` (also mirrored into the response `meta`) counts assignments
+ * whose curve profile did not sum to 100 and was normalised to conserve units (N29).
+ */
+export interface ResourceHistogram {
+  granularity: HistogramGranularity;
+  buckets: ResourceHistogramBucket[];
+  series: ResourceHistogramSeries[];
+  curveNormalisedCount: number;
+}
+
+/**
  * A resource in the org-scoped resource library (M7.1, ADR-0039) — a reusable
  * sibling of the calendar library. The list/detail shape mirrors the other
  * `*Summary` types. `code` is an optional natural-key handle (unique per org among
@@ -990,6 +1243,14 @@ export interface ResourceSummary {
    * the plan opts in; dark until L2.
    */
   maxUnitsPerHour: number | null;
+  /**
+   * The resource's cost rate — money per unit of work, in minor currency units (EV1/EV4a, ADR-0042).
+   * **Conditionally included (EV4a):** a real value is returned only when the caller holds `cost:read`
+   * (Planner + Org Admin) in the resource's organisation; for every other caller (Viewer/Contributor)
+   * this is `null` (fail-closed). A `null` therefore means EITHER unset (no cost rate) OR
+   * caller-not-permitted.
+   */
+  costPerUnit: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1013,9 +1274,74 @@ export interface ResourceAssignmentSummary {
   budgetedUnits: number;
   unitsPerHour: number | null;
   isDriving: boolean;
+  /**
+   * The named P6 loading **curve** (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) the resource-histogram
+   * read-model distributes this assignment's `budgetedUnits` by across the activity span. `UNIFORM`
+   * (default) is a flat load; it shapes only the histogram — no CPM date, no levelling. Always present.
+   */
+  curveType: ResourceCurveType;
+  /**
+   * Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. An exact quantity
+   * carried as a `number` (`DECIMAL(18,4)`; `>= 0`, N14). Defaults to 0. Dark until the EV2 read reads it.
+   */
+  actualUnits: number;
+  /**
+   * The assignment's budgeted / actual cost in minor currency units (EV1/EV4a, ADR-0042):
+   * `budgetedCost` may be `null` when unset (cost is then derived from `budgetedUnits × costPerUnit`
+   * at EV read time), `actualCost` defaults to 0.
+   * **Conditionally included (EV4a):** a real value is returned only when the caller holds `cost:read`
+   * (Planner + Org Admin) in the assignment's organisation; for every other caller
+   * (Viewer/Contributor) BOTH are `null` (fail-closed). A `null` therefore means EITHER unset OR
+   * caller-not-permitted.
+   */
+  budgetedCost: number | null;
+  actualCost: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * One weighted **activity step** (M7 rung 5, ADR-0044 §2 / ADR-0035 §33) — a row of the per-activity
+ * progress checklist. `weight` is the step's relative importance in the weighted-mean physical %
+ * (an exact quantity carried as a `number`; the DB stores `DECIMAL(18,4)`, `>= 0`); `percentComplete`
+ * is the step's own completion (integer 0–100, N28). `seq` is the server-assigned contiguous 1-based
+ * ordering within the activity. When an activity has steps, its PHYSICAL %-complete rolls up as the
+ * weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)` and **wins** over the manual `physicalPercentComplete`; all-zero
+ * weights fall back to the manual field (N27). Kept in lock-step with the API's Prisma `ActivityStep`.
+ */
+export interface ActivityStep {
+  id: string;
+  activityId: string;
+  seq: number;
+  name: string;
+  weight: number;
+  percentComplete: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One step in a bulk-replace request body (M7 rung 5, ADR-0044 §2, Q3). The client sends the desired
+ * ordered list of steps; the server assigns `seq` contiguously, so only the mutable fields appear here.
+ * `weight` must be `>= 0`; `percentComplete` an integer 0–100 (N28 boundary reject —
+ * `STEP_PERCENT_OUT_OF_RANGE`, 422 — mirrors the ADR-0042 physical-% N23 reject).
+ */
+export interface ActivityStepInput {
+  name: string;
+  weight: number;
+  percentComplete: number;
+}
+
+/**
+ * The bulk-replace request for an activity's steps (M7 rung 5, ADR-0044 §2, Q3) —
+ * `PUT …/activities/:activityId/steps`. `version` is the parent activity's optimistic-lock version
+ * (the whole replace bumps it); `steps` is the full desired ordered list (an empty array clears them).
+ */
+export interface ReplaceActivityStepsRequest {
+  version: number;
+  steps: ActivityStepInput[];
 }
 
 /**

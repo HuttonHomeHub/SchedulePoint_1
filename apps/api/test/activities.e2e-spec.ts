@@ -266,6 +266,71 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     expect(cleared.body.data).toMatchObject({ constraintType: null, constraintDate: null });
   });
 
+  it('round-trips external / inter-project dates and clears them (ADR-0043 / ADR-0035 §30)', async () => {
+    const { actor, planId } = await setup();
+    // Both external bounds may be set together on create (ELF after EES).
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({
+        name: 'Vendor-gated',
+        externalEarlyStart: '2026-06-01',
+        externalLateFinish: '2026-08-01',
+      })
+      .expect(201);
+    expect(created.body.data).toMatchObject({
+      externalEarlyStart: '2026-06-01',
+      externalLateFinish: '2026-08-01',
+    });
+    const item = `/api/v1/organizations/acme/activities/${created.body.data.id as string}`;
+
+    // One side can be changed while the other keeps its stored value.
+    const patched = await actor.agent
+      .patch(item)
+      .send({ externalEarlyStart: '2026-06-15', version: 1 })
+      .expect(200);
+    expect(patched.body.data).toMatchObject({
+      externalEarlyStart: '2026-06-15',
+      externalLateFinish: '2026-08-01',
+    });
+
+    // Null clears a bound (the other is untouched).
+    const cleared = await actor.agent
+      .patch(item)
+      .send({ externalLateFinish: null, version: 2 })
+      .expect(200);
+    expect(cleared.body.data).toMatchObject({
+      externalEarlyStart: '2026-06-15',
+      externalLateFinish: null,
+    });
+  });
+
+  it('rejects an external late finish before the external early start (N26 422)', async () => {
+    const { actor, planId } = await setup();
+    const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+    // Create: both set, ELF < EES → 422 EXTERNAL_FINISH_BEFORE_START.
+    const bad = await actor.agent
+      .post(base)
+      .send({
+        name: 'Backwards',
+        externalEarlyStart: '2026-08-01',
+        externalLateFinish: '2026-06-01',
+      })
+      .expect(422);
+    expect(bad.body.error?.details?.reason).toBe('EXTERNAL_FINISH_BEFORE_START');
+
+    // Update: patching a lone side is checked against the stored other side (N26 on effective pair).
+    const created = await actor.agent
+      .post(base)
+      .send({ name: 'External', externalEarlyStart: '2026-08-01' })
+      .expect(201);
+    const item = `/api/v1/organizations/acme/activities/${created.body.data.id as string}`;
+    const patchBad = await actor.agent
+      .patch(item)
+      .send({ externalLateFinish: '2026-06-01', version: 1 })
+      .expect(422);
+    expect(patchBad.body.error?.details?.reason).toBe('EXTERNAL_FINISH_BEFORE_START');
+  });
+
   it('allows the same activity name under different plans, but not within one', async () => {
     const { actor, planId } = await setup();
     // A second plan under the same project.

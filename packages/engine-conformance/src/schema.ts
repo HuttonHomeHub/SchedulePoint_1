@@ -282,6 +282,7 @@ export type FixtureRelationship = z.infer<typeof relationshipSchema>;
 export type FixtureCalendar = z.infer<typeof calendarSchema>;
 export type FixtureResource = z.infer<typeof resourceSchema>;
 export type FixtureAssignment = z.infer<typeof assignmentSchema>;
+export type FixtureStep = z.infer<typeof stepSchema>;
 export type FixtureScenario = z.infer<typeof scenarioSchema>;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 export type DependencyType = (typeof DEPENDENCY_TYPES)[number];

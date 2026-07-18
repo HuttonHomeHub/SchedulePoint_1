@@ -1,5 +1,6 @@
 import type {
   CriticalPathDefinition,
+  EacMethod,
   PlanStatus,
   ProgressRecalcMode,
   TotalFloatMode,
@@ -103,6 +104,45 @@ export const TOTAL_FLOAT_MODES = Object.keys(TOTAL_FLOAT_MODE_LABELS) as [
   TotalFloatMode,
   ...TotalFloatMode[],
 ];
+
+/**
+ * Human labels + one-line descriptions for the **EAC forecast method** (EV4b, ADR-0042 Q3) — how the
+ * Earned-Value read estimates the cost at completion. `Record<EacMethod, …>`, so a new method fails to
+ * compile until it is described. The default (`CPI`) mirrors P6's headline `EAC = BAC ÷ CPI`.
+ */
+export const EAC_METHOD_LABELS: Record<EacMethod, { label: string; description: string }> = {
+  CPI: {
+    label: 'CPI (performance factor)',
+    description:
+      'Assumes the rest of the job costs at the same rate as work so far (the P6 default).',
+  },
+  REMAINING_AT_BUDGET: {
+    label: 'Remaining at budget',
+    description: 'Assumes the remaining work runs exactly to its original budget.',
+  },
+  CPI_TIMES_SPI: {
+    label: 'CPI × SPI (schedule-adjusted)',
+    description:
+      'Assumes the rest of the job is slowed by both the current cost and schedule performance.',
+  },
+};
+
+/** EAC forecast methods, in order — derived from the labels so it stays exhaustive. */
+export const EAC_METHODS = Object.keys(EAC_METHOD_LABELS) as [EacMethod, ...EacMethod[]];
+
+/**
+ * Validate a raw currency-code entry from the plan Earned-Value settings against ISO-4217's shape
+ * (three ASCII letters). A blank field is valid — it clears the code to `null` (inherit the org
+ * default). Returns the uppercased code (or `null` for blank) or a human message; the API validates
+ * membership of the real code list. Mirrors the resource/assignment inline validators' style.
+ */
+export function validateCurrencyCode(raw: string): { value: string | null } | { error: string } {
+  const trimmed = raw.trim();
+  if (trimmed === '') return { value: null };
+  if (!/^[A-Za-z]{3}$/.test(trimmed))
+    return { error: 'Use a 3-letter ISO currency code, e.g. USD.' };
+  return { value: trimmed.toUpperCase() };
+}
 
 /**
  * Plan create/edit form schema — mirrors the API DTO. `plannedStart` is the raw

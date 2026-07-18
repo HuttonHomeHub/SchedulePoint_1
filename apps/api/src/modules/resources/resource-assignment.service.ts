@@ -70,12 +70,16 @@ export class ResourceAssignmentService {
     principal: Principal,
     orgSlug: string,
     activityId: string,
-  ): Promise<ResourceAssignment[]> {
+  ): Promise<{ items: ResourceAssignment[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:read', organization.id);
+    // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere`. Threaded to
+    // the response DTO so the money budgeted/actual cost is gated per role (fail-closed for a non-reader).
+    const canReadCost = principal.can('cost:read', organization.id);
     // 404 if the activity is foreign/deleted (anti-IDOR) before listing its assignments.
     await this.loadActiveActivity(activityId, organization.id);
-    return this.assignments.findManyActiveByActivity(activityId, organization.id);
+    const items = await this.assignments.findManyActiveByActivity(activityId, organization.id);
+    return { items, canReadCost };
   }
 
   async create(
@@ -83,9 +87,10 @@ export class ResourceAssignmentService {
     orgSlug: string,
     activityId: string,
     dto: CreateAssignmentDto,
-  ): Promise<ResourceAssignment> {
+  ): Promise<{ assignment: ResourceAssignment; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:assign', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     // Same-org (invariant (a)): both endpoints must be active in the resolved org; a
     // foreign/deleted id reads as 404, leaking nothing.
@@ -148,6 +153,14 @@ export class ResourceAssignmentService {
             budgetedUnits: storedUnits,
             unitsPerHour: storedRate,
             isDriving,
+            // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain settable enum feeding the
+            // histogram read-model; UNIFORM (the DB default) when omitted = a flat load (parity).
+            curveType: dto.curveType ?? 'UNIFORM',
+            // Earned-Value cost inputs (EV1, ADR-0042): passthrough only, no derivation (that is EV2b).
+            // budgetedCost null/omitted = derive at read time; actualCost/actualUnits default 0.
+            budgetedCost: dto.budgetedCost ?? null,
+            actualCost: dto.actualCost ?? 0,
+            actualUnits: dto.actualUnits ?? 0,
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -167,7 +180,7 @@ export class ResourceAssignmentService {
         },
         'resource assigned',
       );
-      return assignment;
+      return { assignment, canReadCost };
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateAssignmentError();
       throw error;
@@ -179,9 +192,10 @@ export class ResourceAssignmentService {
     orgSlug: string,
     assignmentId: string,
     dto: UpdateAssignmentDto,
-  ): Promise<ResourceAssignment> {
+  ): Promise<{ assignment: ResourceAssignment; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:assign', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
     if (!existing) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
@@ -190,6 +204,13 @@ export class ResourceAssignmentService {
     if (dto.budgetedUnits !== undefined) patch.budgetedUnits = dto.budgetedUnits;
     if (dto.unitsPerHour !== undefined) patch.unitsPerHour = dto.unitsPerHour;
     if (dto.isDriving !== undefined) patch.isDriving = dto.isDriving;
+    // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain settable enum, histogram read-model only.
+    if (dto.curveType !== undefined) patch.curveType = dto.curveType;
+    // Earned-Value cost inputs (EV1, ADR-0042): passthrough only. budgetedCost null clears to
+    // derive-at-read; actualCost/actualUnits are NOT NULL, so no clearing. No derivation here (EV2b).
+    if (dto.budgetedCost !== undefined) patch.budgetedCost = dto.budgetedCost;
+    if (dto.actualCost !== undefined) patch.actualCost = dto.actualCost;
+    if (dto.actualUnits !== undefined) patch.actualUnits = dto.actualUnits;
 
     // A MATERIAL resource may never drive (invariant (b)): re-check the resource's kind
     // when this update sets the driver on.
@@ -269,7 +290,7 @@ export class ResourceAssignmentService {
 
     const updated = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
     if (!updated) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
-    return updated;
+    return { assignment: updated, canReadCost };
   }
 
   async remove(principal: Principal, orgSlug: string, assignmentId: string): Promise<void> {

@@ -1,6 +1,8 @@
 import { NEAR_CRITICAL_THRESHOLD_MINUTES } from './constants';
 import {
   clampBackwardFinish,
+  clampExternalBackwardFinish,
+  clampExternalForwardStart,
   clampForwardStart,
   clampSecondaryBackwardFinish,
   isLoe,
@@ -86,6 +88,14 @@ export interface ComputeOptions {
    * an already-critical member). Off (the default) ⇒ byte-identical to the pre-M6 path (P6 default off).
    */
   makeOpenEndsCritical?: boolean;
+  /**
+   * Ignore external / inter-project relationships (ADR-0043, ADR-0035 §30.4). When true, every
+   * activity's {@link EngineActivity.externalEarlyStart} and {@link EngineActivity.externalLateFinish}
+   * bound is dropped — the plan schedules on its own internal logic/constraints alone (the P6 "ignore
+   * relationships to/from other projects" toggle). Off (the default) ⇒ external bounds apply; a plan
+   * with no external data is byte-identical either way.
+   */
+  ignoreExternalRelationships?: boolean;
 }
 
 /**
@@ -140,6 +150,7 @@ export function computeSchedule(
   const criticalThreshold = options.criticalFloatThresholdMinutes ?? 0;
   const totalFloatMode: TotalFloatMode = options.totalFloatMode ?? 'FINISH';
   const makeOpenEndsCritical = options.makeOpenEndsCritical ?? false;
+  const ignoreExternalRelationships = options.ignoreExternalRelationships ?? false;
   // How many in-progress activities had their remaining work resized to an expected finish (§9).
   let expectedFinishAppliedCount = 0;
   const graph = buildGraph(activities, edges);
@@ -169,6 +180,9 @@ export function computeSchedule(
   // Mandatory produce-and-flag (ADR-0035 §7): true when a MANDATORY_* pin forced the start earlier
   // than the network-earliest (a stronger logic bound) — the schedule is produced, the violation flagged.
   const constraintViolated = new Map<string, boolean>();
+  // External-driven (ADR-0043, ADR-0035 §30): true when an external early-start or late-finish bound was
+  // this activity's binding bound. Empty on the no-external path (parity). Set in both passes below.
+  const externalDriven = new Map<string, boolean>();
   for (const id of graph.order) {
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
@@ -218,10 +232,24 @@ export function computeSchedule(
     // A mandatory pin that drives the start EARLIER than logic wants (predecessors) breaks the
     // relationship — flag it (ADR-0035 §7). A pin later than logic just delays (no broken edge).
     const logicLower = lower;
-    lower = clampForwardStart(activity, lower, cal, dataDateAbs);
+    // External early start (ADR-0043 §30.1): fold the imported bound in BEFORE the constraint clamp so a
+    // soft SNET-shaped bound composes (max) while a hard pin (MSO/MFO/MANDATORY) still overrides it
+    // (§30.3). Absent / ignore-external ⇒ a no-op, so `withExternal === logicLower` and the mandatory
+    // check and every downstream value are byte-identical (the parity gate).
+    const withExternal = clampExternalForwardStart(
+      activity,
+      lower,
+      cal,
+      dataDateAbs,
+      ignoreExternalRelationships,
+    );
+    lower = clampForwardStart(activity, withExternal, cal, dataDateAbs);
     if (isMandatory(activity.constraintType) && lower < logicLower) {
       constraintViolated.set(id, true);
     }
+    // External-driven (§30): the external bound raised the start above pure logic AND survived the
+    // constraint clamp (no hard pin discarded it) — observability only, it moved no date logic didn't.
+    if (withExternal > logicLower && lower === withExternal) externalDriven.set(id, true);
     const workStart = rollForwardToWorking(cal, lower);
     // Expected Finish (§9): with the plan option on, RECOMPUTE the work remaining from `workStart` so
     // the early finish lands on the target date (its working-end boundary, like an actual finish),
@@ -289,7 +317,20 @@ export function computeSchedule(
     }
     logicEarliest = rollForwardToWorking(
       cal,
-      clampForwardStart(activity, logicEarliest, cal, dataDateAbs),
+      clampForwardStart(
+        activity,
+        // The effective-Visual logic-earliest respects the external early start too (§30.1), so a bar's
+        // pushed baseline reflects an imported commitment — consistent with the pure pass. No-op absent.
+        clampExternalForwardStart(
+          activity,
+          logicEarliest,
+          cal,
+          dataDateAbs,
+          ignoreExternalRelationships,
+        ),
+        cal,
+        dataDateAbs,
+      ),
     );
     const placed =
       activity.visualStart != null
@@ -419,10 +460,25 @@ export function computeSchedule(
       const bound = backwardUpperBound(edge, succLs, succLf, cal, duration, planCalendar);
       if (bound < upper) upper = bound;
     }
-    upper = clampBackwardFinish(activity, upper, cal, dataDateAbs);
+    const logicUpper = upper;
+    // External late finish (ADR-0043 §30.2): fold the imported downstream bound in BEFORE the constraint
+    // clamps so a soft FNLT-shaped bound composes (min) while a hard pin still overrides it (§30.3).
+    // Absent / ignore-external ⇒ a no-op (`withExternalUpper === logicUpper`), so the parity path is
+    // byte-identical.
+    const withExternalUpper = clampExternalBackwardFinish(
+      activity,
+      upper,
+      cal,
+      dataDateAbs,
+      ignoreExternalRelationships,
+    );
+    upper = clampBackwardFinish(activity, withExternalUpper, cal, dataDateAbs);
     // The secondary constraint (ADR-0035 §10) drives the backward pass on top of the primary — a
     // no-op unless a secondary is set (the byte-identical single-constraint path).
     upper = clampSecondaryBackwardFinish(activity, upper, cal, dataDateAbs);
+    // External-driven (§30): the external late finish tightened the bound below pure logic AND survived
+    // the constraint clamps (no hard pin discarded it). OR-ed with the forward-pass flag.
+    if (withExternalUpper < logicUpper && upper === withExternalUpper) externalDriven.set(id, true);
     let finish = rollBackwardToWorking(cal, dataDateAbs, upper);
     if (progress.status === 'IN_PROGRESS') {
       // The remaining work can't be scheduled to finish before its own early finish; the started
@@ -560,6 +616,7 @@ export function computeSchedule(
   let constraintWarningCount = 0;
   let loeNoSpanCount = 0;
   let resourceDriverMissingCount = 0;
+  let externalDrivenCount = 0;
   let maxInclusiveFinishInstant: number | null = null;
   let projectFinishDate: string | null = null;
   for (const id of graph.order) {
@@ -585,6 +642,17 @@ export function computeSchedule(
     ) {
       constraintWarningCount += 1;
     }
+    // N25 (ADR-0043, ADR-0035 §30): an external early start dated before the data date is honoured but
+    // clamped to the data-date floor — the same "date before the data date" warning class as N15. Skipped
+    // when external is ignored (the bound isn't applied) or absent (the byte-identical path).
+    if (
+      !ignoreExternalRelationships &&
+      activity.externalEarlyStart != null &&
+      activity.externalEarlyStart < dataDate
+    ) {
+      constraintWarningCount += 1;
+    }
+    if (externalDriven.get(id)) externalDrivenCount += 1;
     const esInst = earlyStart.get(id)!;
     const efInst = earlyFinish.get(id)!;
     const lsInst = lateStart.get(id)!;
@@ -735,6 +803,9 @@ export function computeSchedule(
       isCritical,
       isNearCritical,
       constraintViolated: constraintViolated.get(id) ?? false,
+      // External-driven (§30) is present only when true — absent on the no-external path (parity),
+      // mirroring the optional levelling-overlay fields below.
+      ...(externalDriven.get(id) ? { externalDriven: true } : {}),
       loeNoSpan: loeNoSpan.get(id) ?? false,
       resourceDriverMissing: activity.resourceDriverMissing ?? false,
       earlyStart: earlyStartDate,
@@ -756,6 +827,9 @@ export function computeSchedule(
     constraintWarningCount,
     loeNoSpanCount,
     resourceDriverMissingCount,
+    // External-driven count (§30) is present only when non-zero — absent (⇔ 0) on the no-external path
+    // so existing summary snapshots stay byte-identical.
+    ...(externalDrivenCount > 0 ? { externalDrivenCount } : {}),
     expectedFinishAppliedCount,
     projectFinishOffset:
       projectFinishInstant === null

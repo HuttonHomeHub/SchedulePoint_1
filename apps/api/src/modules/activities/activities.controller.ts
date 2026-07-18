@@ -58,7 +58,8 @@ export class ActivitiesController {
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
   ): Promise<ActivityResponseDto> {
-    return ActivityResponseDto.from(await this.service.get(principal, orgSlug, activityId));
+    const { activity, canReadCost } = await this.service.get(principal, orgSlug, activityId);
+    return ActivityResponseDto.from(activity, canReadCost);
   }
 
   @Patch(':activityId')
@@ -85,7 +86,13 @@ export class ActivitiesController {
     @Param('activityId', ParseUuidPipe) activityId: string,
     @Body() dto: UpdateActivityDto,
   ): Promise<ActivityResponseDto> {
-    return ActivityResponseDto.from(await this.service.update(principal, orgSlug, activityId, dto));
+    const { activity, canReadCost } = await this.service.update(
+      principal,
+      orgSlug,
+      activityId,
+      dto,
+    );
+    return ActivityResponseDto.from(activity, canReadCost);
   }
 
   @Patch(':activityId/progress')
@@ -109,13 +116,13 @@ export class ActivitiesController {
   ): Promise<
     ActivityResponseDto | ResourceEnvelope<ActivityResponseDto, { warnings: ProgressWarning[] }>
   > {
-    const { activity, warnings } = await this.service.updateProgress(
+    const { activity, warnings, canReadCost } = await this.service.updateProgress(
       principal,
       orgSlug,
       activityId,
       dto,
     );
-    const data = ActivityResponseDto.from(activity);
+    const data = ActivityResponseDto.from(activity, canReadCost);
     // Only carry `meta` when a repair actually happened, so an ordinary progress report keeps the
     // bare `{ data }` shape (M2, ADR-0035 §6).
     return warnings.length > 0 ? new ResourceEnvelope(data, { warnings }) : data;
@@ -147,6 +154,7 @@ export class ActivitiesController {
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
   ): Promise<ActivityResponseDto> {
-    return ActivityResponseDto.from(await this.service.restore(principal, orgSlug, activityId));
+    const { activity, canReadCost } = await this.service.restore(principal, orgSlug, activityId);
+    return ActivityResponseDto.from(activity, canReadCost);
   }
 }

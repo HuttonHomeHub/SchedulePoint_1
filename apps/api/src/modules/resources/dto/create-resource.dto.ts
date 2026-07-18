@@ -82,4 +82,18 @@ export class CreateResourceDto {
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
   maxUnitsPerHour?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Planned cost rate in minor units per unit of work (EV1, ADR-0042). A rate coefficient stored as ' +
+      'DECIMAL(18,4) (may carry fractional minor units); exact numeric (>= 0, N22); omit for no cost. ' +
+      'Read by the EV read (EV2b) when it derives assignment budgets.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  costPerUnit?: number;
 }

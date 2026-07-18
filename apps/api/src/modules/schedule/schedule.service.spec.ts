@@ -40,6 +40,9 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     makeOpenEndsCritical: false,
     levelResources: false,
     levelWithinFloatOnly: false,
+    ignoreExternalRelationships: false,
+    eacMethod: 'CPI',
+    currencyCode: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -64,6 +67,8 @@ const activityRow = (
   constraintDate: null,
   secondaryConstraintType: null,
   secondaryConstraintDate: null,
+  externalEarlyStart: null,
+  externalLateFinish: null,
   visualStart: null,
   scheduleAsLateAsPossible: false,
   calendarId: null,
@@ -252,6 +257,35 @@ describe('ScheduleService.recalculate', () => {
     plans.findActiveByIdInOrg.mockResolvedValue(plan({ useExpectedFinishDates: false }));
     const off = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
     expect(off.projectFinish).toBe('2026-01-02');
+  });
+
+  it('threads external / inter-project dates + the ignore flag into the engine (ADR-0043 / ADR-0035 §30)', async () => {
+    // A single activity whose logic-earliest is the data date (01-01), but carrying an external early
+    // start of 01-05 imported from another project. With external honoured (flag off) its early start is
+    // clamped UP to 01-05 and it is flagged external-driven; with ignore-external ON the bound drops and
+    // it falls back to the data date. The service must thread the instants AND the plan flag through.
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 3, { externalEarlyStart: new Date('2026-01-05T00:00:00.000Z') }),
+    ]);
+
+    const honoured = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const a = results.find((r) => r.activityId === 'A')!;
+    expect(a.earlyStart).toBe('2026-01-05'); // clamped up to the external early start
+    expect(a.externalDriven).toBe(true);
+    expect(honoured.externalDrivenCount).toBe(1);
+
+    // Ignore-external ON drops the bound → back to the data date, no external-driven activity.
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ ignoreExternalRelationships: true }));
+    const ignored = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , ignoredResults] = schedule.writeResults.mock.calls[1] as [
+      string,
+      string,
+      EngineResult[],
+    ];
+    const aIgnored = ignoredResults.find((r) => r.activityId === 'A')!;
+    expect(aIgnored.earlyStart).toBe('2026-01-01'); // dropped → data date
+    expect(ignored.externalDrivenCount).toBe(0);
   });
 
   it('threads the plan’s critical-path definition into the engine (M6, ADR-0035 §17)', async () => {
@@ -504,6 +538,8 @@ describe('ScheduleService.summary', () => {
       nearCriticalCount: 1,
       constraintViolationCount: 0,
       constraintWarningCount: 0,
+      // External-driven is engine-derived on a recalc only; the read summary always reports 0 (ADR-0043).
+      externalDrivenCount: 0,
     });
   });
 
@@ -534,5 +570,216 @@ describe('ScheduleService.summary', () => {
       ForbiddenError,
     );
     expect(schedule.summarise).not.toHaveBeenCalled();
+  });
+});
+
+const COST: Permission[] = ['cost:read'];
+
+describe('ScheduleService.getEarnedValue', () => {
+  let organizations: { resolveScope: ReturnType<typeof vi.fn> };
+  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let schedule: {
+    loadEarnedValueActivities: ReturnType<typeof vi.fn>;
+    loadActiveBaselineCostSnapshot: ReturnType<typeof vi.fn>;
+    loadPlanCalendar: ReturnType<typeof vi.fn>;
+  };
+  let service: ScheduleService;
+
+  beforeEach(() => {
+    organizations = {
+      resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
+    };
+    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    schedule = {
+      // One TASK, DURATION %-complete 50, a £1,000.00 lump-sum budget, no assignments, no baseline.
+      loadEarnedValueActivities: vi.fn().mockResolvedValue([
+        {
+          id: 'act-1',
+          type: 'TASK',
+          parentId: null,
+          percentCompleteType: 'DURATION',
+          percentComplete: 50,
+          physicalPercentComplete: null,
+          steps: [],
+          budgetedExpense: 100000n,
+          actualExpense: null,
+          earlyStart: null,
+          earlyFinish: null,
+          assignments: [],
+        },
+      ]),
+      loadActiveBaselineCostSnapshot: vi.fn().mockResolvedValue([]),
+      loadPlanCalendar: vi.fn().mockResolvedValue(null),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    service = new ScheduleService(
+      organizations as unknown as OrganizationsService,
+      plans as unknown as PlanRepository,
+      schedule as unknown as ScheduleRepository,
+      { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
+      { $transaction: vi.fn() } as unknown as PrismaService,
+      logger,
+    );
+  });
+
+  it('denies a caller without cost:read (403) before any load', async () => {
+    // A Viewer/Contributor with only schedule:read must NOT reach cost.
+    await expect(
+      service.getEarnedValue(principalWith(READ), 'acme', PLAN_ID),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(schedule.loadEarnedValueActivities).not.toHaveBeenCalled();
+  });
+
+  it('404s when the plan is not in the caller’s org', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(null);
+    await expect(
+      service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('assembles the inputs and returns the module’s Earned-Value numbers', async () => {
+    const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+    // BAC = the £1,000.00 lump-sum; EV = BAC × 50% = £500.00; no baseline → PV falls back and is
+    // flagged; currency/eacMethod come from the plan; data date = the plan start.
+    expect(result).toMatchObject({
+      dataDate: '2026-01-01',
+      eacMethod: 'CPI',
+      currencyCode: null,
+      costBaselineMissing: true,
+    });
+    expect(result.total.bac).toBe(100000);
+    expect(result.total.ev).toBe(50000);
+    expect(result.total.ac).toBe(0);
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0]).toMatchObject({ activityId: 'act-1', performancePercent: 50 });
+  });
+
+  it('joins the active baseline cost snapshot for PV (not flagged as missing)', async () => {
+    schedule.loadActiveBaselineCostSnapshot.mockResolvedValue([
+      {
+        sourceActivityId: 'act-1',
+        budgetedCost: 100000n,
+        baselineStart: new Date('2026-01-01T00:00:00Z'),
+        baselineFinish: new Date('2026-01-05T00:00:00Z'),
+      },
+    ]);
+    const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+    // A snapshot cost is present for every leaf → the live-budget fallback flag is off.
+    expect(result.costBaselineMissing).toBe(false);
+  });
+});
+
+describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-0035 §31)', () => {
+  let organizations: { resolveScope: ReturnType<typeof vi.fn> };
+  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let schedule: {
+    loadResourceHistogramAssignments: ReturnType<typeof vi.fn>;
+    loadPlanCalendar: ReturnType<typeof vi.fn>;
+  };
+  let service: ScheduleService;
+
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    resourceId: 'res-1',
+    activityId: 'act-1',
+    budgetedUnits: new Prisma.Decimal(1200),
+    curveType: 'BELL' as const,
+    // A 21-day span on the (null-calendar → all-days-work) plan calendar, DAY-aligned to the profile.
+    earlyStart: new Date('2026-01-01T00:00:00Z'),
+    earlyFinish: new Date('2026-01-22T00:00:00Z'),
+    calendarId: null,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    organizations = {
+      resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'VIEWER' }),
+    };
+    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    schedule = {
+      loadResourceHistogramAssignments: vi.fn().mockResolvedValue([row()]),
+      loadPlanCalendar: vi.fn().mockResolvedValue(null),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    service = new ScheduleService(
+      organizations as unknown as OrganizationsService,
+      plans as unknown as PlanRepository,
+      schedule as unknown as ScheduleRepository,
+      { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
+      { $transaction: vi.fn() } as unknown as PrismaService,
+      logger,
+    );
+  });
+
+  it('denies a caller without schedule:read (403) before any load', async () => {
+    await expect(
+      service.getResourceHistogram(principalWith([]), 'acme', PLAN_ID, 'DAY', 50, 0),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(schedule.loadResourceHistogramAssignments).not.toHaveBeenCalled();
+  });
+
+  it('404s when the plan is not in the caller’s org', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(null);
+    await expect(
+      service.getResourceHistogram(principalWith(READ), 'acme', PLAN_ID, 'DAY', 50, 0),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('curve-shapes the histogram (BELL) and conserves units to the buckets', async () => {
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    expect(result.granularity).toBe('DAY');
+    expect(result.buckets).toHaveLength(21);
+    expect(result.series).toHaveLength(1);
+    const series = result.series[0]!;
+    expect(series.resourceId).toBe('res-1');
+    // 1200 × BELL peak 9% ⇒ 108 at buckets 9 & 10; Σ = 1200.
+    expect(series.values[9]).toBe(108);
+    expect(series.values.reduce((a, b) => a + b, 0)).toBeCloseTo(1200, 4);
+    expect(series.total).toBe(1200);
+    expect(result.total).toBe(1);
+    expect(result.hasMore).toBe(false);
+    expect(result.curveNormalisedCount).toBe(0);
+  });
+
+  it('UNIFORM (the default) is a flat load', async () => {
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ curveType: 'UNIFORM', budgetedUnits: new Prisma.Decimal(210) }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    expect(result.series[0]!.values).toEqual(new Array(21).fill(10));
+    expect(result.curveNormalisedCount).toBe(0);
+  });
+
+  it('offset-pages the per-resource series', async () => {
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ resourceId: 'res-1' }),
+      row({ resourceId: 'res-2' }),
+      row({ resourceId: 'res-3' }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      1,
+      1,
+    );
+    expect(result.total).toBe(3);
+    expect(result.series).toHaveLength(1);
+    expect(result.series[0]!.resourceId).toBe('res-2'); // sorted, page of 1 at offset 1
+    expect(result.hasMore).toBe(true);
   });
 });

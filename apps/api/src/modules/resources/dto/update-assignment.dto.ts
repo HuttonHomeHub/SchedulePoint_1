@@ -1,6 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ResourceCurveType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 
 /**
  * The triad fields a driving-assignment write may name as the edited one (M7 rung 4, ADR-0040).
@@ -51,6 +61,46 @@ export class UpdateAssignmentDto {
   editedField?: AssignmentEditedField;
 
   @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    description:
+      'Optional OVERRIDE of the derived budgeted cost (EV1, ADR-0042). Minor units in the plan currency ' +
+      '(integer >= 0, N22); send null to clear (derive at read time). Derivation is EV2b.',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to derive); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  budgetedCost?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Cost actually spent on this assignment (EV1, ADR-0042). Minor units in the plan currency ' +
+      '(integer >= 0, N22).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  actualCost?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. Exact numeric ' +
+      '(>= 0, N14; DECIMAL(18,4)).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  actualUnits?: number;
+
+  @ApiPropertyOptional({
     description:
       'Set this as THE driving resource of the activity; setting it moves the flag off any other ' +
       'assignment (a MATERIAL resource may never drive).',
@@ -58,6 +108,16 @@ export class UpdateAssignmentDto {
   @IsOptional()
   @IsBoolean()
   isDriving?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ResourceCurveType,
+    description:
+      'The named P6 loading curve for the resource-histogram read-model (M7 rung 5, ADR-0044 §3 / ' +
+      'ADR-0035 §31). Shapes only the histogram — no CPM date, no levelling (Q2). UNIFORM is a flat load.',
+  })
+  @IsOptional()
+  @IsEnum(ResourceCurveType)
+  curveType?: ResourceCurveType;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

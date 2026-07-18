@@ -47,9 +47,12 @@ export class ResourcesService {
     principal: Principal,
     orgSlug: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: Resource[]; meta: PageMeta }> {
+  ): Promise<{ items: Resource[]; meta: PageMeta; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:read', organization.id);
+    // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere` (that would
+    // be a cross-tenant IDOR). Threaded to the response DTO so the money `costPerUnit` is gated per role.
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const rows = await this.resources.findManyActiveByOrg({
       organizationId: organization.id,
@@ -60,21 +63,31 @@ export class ResourcesService {
     const hasMore = rows.length > query.limit;
     const items = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
-    return { items, meta: { nextCursor, hasMore } };
+    return { items, meta: { nextCursor, hasMore }, canReadCost };
   }
 
-  async get(principal: Principal, orgSlug: string, resourceId: string): Promise<Resource> {
+  async get(
+    principal: Principal,
+    orgSlug: string,
+    resourceId: string,
+  ): Promise<{ resource: Resource; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:read', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const resource = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
     if (!resource) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
-    return resource;
+    return { resource, canReadCost };
   }
 
-  async create(principal: Principal, orgSlug: string, dto: CreateResourceDto): Promise<Resource> {
+  async create(
+    principal: Principal,
+    orgSlug: string,
+    dto: CreateResourceDto,
+  ): Promise<{ resource: Resource; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:create', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const calendarId = dto.calendarId ?? null;
     try {
@@ -92,6 +105,8 @@ export class ResourcesService {
             calendarId,
             // Capacity ceiling (ADR-0041 §2); null/omitted = uncapped. Client-settable; dark until L2.
             maxUnitsPerHour: dto.maxUnitsPerHour ?? null,
+            // Cost rate (EV1, ADR-0042); null/omitted = no cost. Client-settable; dark until the EV read.
+            costPerUnit: dto.costPerUnit ?? null,
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -102,7 +117,7 @@ export class ResourcesService {
         { organizationId: organization.id, resourceId: resource.id, userId: principal.userId },
         'resource created',
       );
-      return resource;
+      return { resource, canReadCost };
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateResourceError();
       throw error;
@@ -114,9 +129,10 @@ export class ResourcesService {
     orgSlug: string,
     resourceId: string,
     dto: UpdateResourceDto,
-  ): Promise<Resource> {
+  ): Promise<{ resource: Resource; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     if (!(await this.resources.findActiveByIdInOrg(resourceId, organization.id))) {
       throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
@@ -131,6 +147,8 @@ export class ResourcesService {
     if (dto.kind !== undefined) patch.kind = dto.kind;
     // Capacity ceiling (ADR-0041 §2): client-settable; null clears to uncapped. Dark until L2.
     if (dto.maxUnitsPerHour !== undefined) patch.maxUnitsPerHour = dto.maxUnitsPerHour;
+    // Cost rate (EV1, ADR-0042): client-settable; null clears to no cost. Dark until the EV read.
+    if (dto.costPerUnit !== undefined) patch.costPerUnit = dto.costPerUnit;
     // The resource's own calendar: null clears to inherit the plan default; a specific id
     // is validated in-org under the calendar lock inside the transaction below.
     const calendarId = dto.calendarId;
@@ -160,7 +178,7 @@ export class ResourcesService {
 
     const updated = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
     if (!updated) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
-    return updated;
+    return { resource: updated, canReadCost };
   }
 
   async remove(principal: Principal, orgSlug: string, resourceId: string): Promise<void> {

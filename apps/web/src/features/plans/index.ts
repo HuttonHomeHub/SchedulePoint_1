@@ -21,4 +21,7 @@ export { PlanCalendarPicker } from './components/PlanCalendarPicker';
 export { PlanRecalcModePicker } from './components/PlanRecalcModePicker';
 export { PlanExpectedFinishToggle } from './components/PlanExpectedFinishToggle';
 export { PlanScheduleSettings } from './components/PlanScheduleSettings';
-export { PLAN_STATUS_LABELS } from './schemas/plan-schemas';
+export { PlanLevellingSettings } from './components/PlanLevellingSettings';
+export { PlanEarnedValueSettings } from './components/PlanEarnedValueSettings';
+export { PlanExternalRelationshipsSettings } from './components/PlanExternalRelationshipsSettings';
+export { PLAN_STATUS_LABELS, EAC_METHOD_LABELS } from './schemas/plan-schemas';

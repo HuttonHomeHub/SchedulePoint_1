@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType, DurationType } from '@prisma/client';
+import {
+  AccrualType,
+  ActivityType,
+  ConstraintType,
+  DurationType,
+  PercentCompleteType,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -78,6 +84,72 @@ export class UpdateActivityDto {
   @IsEnum(DurationType)
   durationType?: DurationType;
 
+  @ApiPropertyOptional({
+    enum: PercentCompleteType,
+    description:
+      'The %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION, UNITS, or PHYSICAL. ' +
+      'Selects the EV performance measure only — it never changes a CPM date.',
+  })
+  @IsOptional()
+  @IsEnum(PercentCompleteType)
+  percentCompleteType?: PercentCompleteType;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 100,
+    nullable: true,
+    description:
+      'Hand-entered physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL. ' +
+      'Integer 0–100 (N23); send null to clear (unset).',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to unset); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  physicalPercentComplete?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    description:
+      'Activity-level lump-sum BUDGET for non-resourced work (EV1, ADR-0042), a component of BAC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); send null to clear.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  budgetedExpense?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    description:
+      'Activity-level lump-sum ACTUAL spent for non-resourced work (EV1, ADR-0042), a component of AC. ' +
+      'Minor units in the plan currency (integer >= 0, N22); send null to clear.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  actualExpense?: number | null;
+
+  @ApiPropertyOptional({
+    enum: AccrualType,
+    description:
+      'How the activity’s cost accrues across its span (M7 rung 5, ADR-0044 / ADR-0035 §32): START ' +
+      '(whole lump-sum at the start), END (at the finish), or UNIFORM (default, spread linearly). It ' +
+      'changes only WHEN cost / Planned Value is recognised — it never changes a CPM date.',
+  })
+  @IsOptional()
+  @IsEnum(AccrualType)
+  accrualType?: AccrualType;
+
   @ApiPropertyOptional({ enum: ConstraintType, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
@@ -111,6 +183,34 @@ export class UpdateActivityDto {
     dateField: 'secondaryConstraintDate',
   })
   secondaryConstraintDate?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-01',
+    description:
+      'External / inter-project early start (ADR-0043 / ADR-0035 §30.1): an SNET-shaped forward lower ' +
+      'bound imported from another project (YYYY-MM-DD), or null to clear it. Soft, dropped when the ' +
+      'plan’s ignoreExternalRelationships is on. Must not be after externalLateFinish when both are set (N26).',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  externalEarlyStart?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-01',
+    description:
+      'External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): an FNLT-shaped backward upper ' +
+      'bound imported from another project (YYYY-MM-DD), or null to clear it. Soft, dropped when the ' +
+      'plan’s ignoreExternalRelationships is on. Must not be before externalEarlyStart when both are set (N26).',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  externalLateFinish?: string | null;
 
   @ApiPropertyOptional({
     format: 'date',

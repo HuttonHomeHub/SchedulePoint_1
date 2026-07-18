@@ -76,6 +76,12 @@ export interface TsldToolbarContext {
   recalculate: () => void;
   openBaselines: () => void;
   openCalendar: () => void;
+  /** Open the Earned-Value analysis dialog (EV4b, ADR-0042). Wired to the shared plan-chrome dialogs;
+   * the toolbar item that calls it is gated behind `VITE_EARNED_VALUE`. */
+  openEarnedValue: () => void;
+  /** Open the resource-loading-histogram dialog (M7 rung 5, ADR-0044 §3). Wired to the shared
+   * plan-chrome dialogs; the toolbar item that calls it is gated behind `VITE_RESOURCE_CURVES`. */
+  openResourceHistogram: () => void;
   /** Edit the plan's metadata (writer only); absent for non-writers. Surfaced by the Summary popover's
    * Edit-plan shortcut and the header edit-pencil — the standalone toolbar buttons were removed
    * (ADR-0031 amendment: Plan details folded into Summary). */

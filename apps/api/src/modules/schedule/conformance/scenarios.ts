@@ -77,8 +77,14 @@ export const SCENARIO_SUPPORT: Record<string, ScenarioSupport> = {
     reason: '',
   },
   S09_IGNORE_EXTERNAL: {
-    runnable: false,
-    reason: 'needs an external/multi-project relationship model (not on the current ladder)',
+    // M1 (ADR-0043 / ADR-0035 §30) landed external / inter-project dates: the adapter feeds each
+    // activity's imported external early-start / late-finish bounds unconditionally, and the engine
+    // honours them by default. S09 runs the same unprogressed network as S01 with
+    // `ignoreExternalRelationships` ON, so the five external-early-start milestones (A2120/A2200/A2210/
+    // A2220/A2230) pull back to their internal logic while A12500's external late finish is dropped —
+    // a runnable date differential (`resultsDiffer(S09, S01)`).
+    runnable: true,
+    reason: '',
   },
   S10_LEVELLED: {
     // M7 (ADR-0041 / ADR-0035 §28) landed the opt-in resource-levelling second pass. S10 runs the
@@ -161,6 +167,10 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
   // `computeLeveledSchedule` runs the opt-in second pass after the network pass. Off for every other
   // scenario (the byte-identical parity path).
   const honorLevelling = scenarioId === 'S10_LEVELLED';
+  // S09 flips the plan-level ignore-external option on (ADR-0043 / ADR-0035 §30.4, M1). External dates
+  // are FED for every scenario (the adapter maps them unconditionally, so S01 honours them); S09 is the
+  // one that DROPS them, pulling the procurement milestones back to their internal logic.
+  const ignoreExternalRelationships = scenarioId === 'S09_IGNORE_EXTERNAL';
   const network = adaptFixture(fixture, {
     dataDate,
     honorLagCalendars,
@@ -169,6 +179,7 @@ export function runScenario(fixture: ConformanceFixture, scenarioId: string): Sc
     relationshipLagCalendar,
     useExpectedFinishDates,
     honorLevelling,
+    ignoreExternalRelationships,
   });
   if (honorLevelling) {
     // The levelling pass consumes the network output and merges its additive overlay; S10 needs none of

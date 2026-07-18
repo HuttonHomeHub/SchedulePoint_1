@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { PlanFloatPaths, PlanScheduleSummary } from '@repo/types';
+import type {
+  HistogramGranularity,
+  PlanEarnedValue,
+  PlanFloatPaths,
+  PlanScheduleSummary,
+  ResourceHistogramSeries,
+} from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -14,9 +20,13 @@ import { PlanRepository } from '../plans/plan.repository';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import {
   allMinutesWorkCalendar,
+  computeEarnedValue,
   computeFloatPaths,
+  computeResourceHistogram,
   computeSchedule,
+  HistogramTooManyBucketsError,
   levelSchedule,
+  resolveCurveProfile,
   ScheduleGraphNotADagError,
   type ComputeOptions,
   type EngineActivity,
@@ -24,6 +34,8 @@ import {
   type EngineEdge,
   type EngineResource,
   type EngineSummary,
+  type EvActivityInput,
+  type HistogramAssignmentInput,
   type WorkingTimeCalendar,
 } from './engine';
 import { buildPlanCalendar } from './plan-calendar';
@@ -33,10 +45,17 @@ import {
   type ScheduleEdgeRow,
 } from './schedule.repository';
 
+/** A calendar-day (or null) as a `YYYY-MM-DD` string, for the pure EV read (the baselines `day` helper). */
+function day(value: Date | null): string | null {
+  return value ? formatCalendarDate(value) : null;
+}
+
 /** Machine-readable reasons carried in a schedule {@link ValidationError}. */
 export const SCHEDULE_ERROR = {
   /** The plan has no `plannedStart`, so there is no data date to schedule from. */
   PLAN_START_REQUIRED: 'PLAN_START_REQUIRED',
+  /** The requested histogram granularity would produce too many buckets (ask for a coarser one). */
+  HISTOGRAM_GRANULARITY_TOO_FINE: 'HISTOGRAM_GRANULARITY_TOO_FINE',
 } as const;
 
 /** An active plan row as loaded for scheduling — carries the engine-relevant option fields. */
@@ -150,6 +169,9 @@ export class ScheduleService {
         constraintViolationCount: summary.constraintViolationCount,
         constraintWarningCount: summary.constraintWarningCount,
         resourceDriverMissingCount: summary.resourceDriverMissingCount,
+        // External / inter-project bounds that drove an activity this run (ADR-0043 / ADR-0035 §30);
+        // null on the byte-parity path (no external data / ignore-external on).
+        externalDrivenCount: summary.externalDrivenCount ?? null,
         lagCalendarOverrideCount,
         // How many DISTINCT per-activity calendars were built this recalc (ADR-0037, M5) — the
         // signal that per-activity calendars actually shaped the dates (0 on the all-inherit path).
@@ -180,6 +202,9 @@ export class ScheduleService {
       constraintWarningCount: summary.constraintWarningCount,
       loeNoSpanCount: summary.loeNoSpanCount,
       resourceDriverMissingCount: summary.resourceDriverMissingCount,
+      // External / inter-project driven count (ADR-0043 / ADR-0035 §30): engine-derived on a recalc;
+      // 0 on the byte-parity path (no external data / ignore-external on).
+      externalDrivenCount: summary.externalDrivenCount ?? 0,
       // Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): the engine emits these only when the
       // levelling pass ran, so they default to 0 / null on the byte-identical parity path.
       leveledActivityCount: summary.leveledActivityCount ?? 0,
@@ -217,6 +242,10 @@ export class ScheduleService {
       constraintWarningCount: aggregate.constraintWarningCount,
       loeNoSpanCount: aggregate.loeNoSpanCount,
       resourceDriverMissingCount: aggregate.resourceDriverMissingCount,
+      // External / inter-project driven count (ADR-0043 / ADR-0035 §30) is engine-derived on a recalc and
+      // NOT persisted per-activity in M1, so the read summary cannot recompute it: always 0 here (the
+      // authoritative value comes from the recalculate response). See PlanScheduleSummary.
+      externalDrivenCount: 0,
       // Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): a read-time aggregate over the plan's
       // engine-owned leveled columns; 0 / null when the plan does not level.
       leveledActivityCount: aggregate.leveledActivityCount,
@@ -274,6 +303,193 @@ export class ScheduleService {
       }),
     );
     return { targetActivityId, paths };
+  }
+
+  /**
+   * The plan's **Earned-Value analysis** (EV2b, ADR-0042 §2) — a pure READ over the persisted CPM
+   * dates plus the cost / %-complete inputs, gated on `cost:read` (Planner + Org Admin only, so a
+   * Viewer/Contributor never reads commercially sensitive money). Resolves the org from the caller's
+   * memberships (anti-IDOR) and asserts `cost:read` BEFORE any load; 404s if the plan is not in the
+   * caller's org. It NEVER recomputes or mutates: no write lock, no `computeSchedule` — it reads the
+   * persisted `earlyStart`/`earlyFinish` and cost inputs, joins the active baseline's cost snapshot
+   * (live-budget fallback when absent → `costBaselineMissing`), and runs the pure `computeEarnedValue`.
+   */
+  async getEarnedValue(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<PlanEarnedValue> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'cost:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    const [activityRows, snapshotRows, calendar] = await Promise.all([
+      this.schedule.loadEarnedValueActivities(organization.id, planId),
+      this.schedule.loadActiveBaselineCostSnapshot(organization.id, planId),
+      this.resolveCalendar(organization.id, plan.calendarId),
+    ]);
+
+    // Join the active baseline's cost snapshot by source activity id; a missing row (or no active
+    // baseline at all) leaves the baseline fields null → the module's live-budget PV fallback.
+    const baselineById = new Map(snapshotRows.map((s) => [s.sourceActivityId, s]));
+    const activities: EvActivityInput[] = activityRows.map((r) => {
+      const base = baselineById.get(r.id) ?? null;
+      return {
+        activityId: r.id,
+        type: r.type,
+        parentId: r.parentId,
+        percentCompleteType: r.percentCompleteType,
+        percentComplete: r.percentComplete,
+        physicalPercentComplete: r.physicalPercentComplete,
+        // How the activity's cost accrues (ADR-0044 §32) — governs PV time-phasing only. UNIFORM (the
+        // DB default) is the byte-identical linear path, so a plan with no accrual data reads identically.
+        accrualType: r.accrualType,
+        // Weighted progress steps (M7 rung 5, ADR-0044 §33) drive the PHYSICAL measure — steps win over
+        // the manual field via the shared `rollupPhysicalPercent`. An activity with NO steps yields an
+        // empty array, so the manual physicalPercentComplete stands exactly (the byte-identical parity
+        // path; existing EV goldens stay green). Decimal weight → number at this boundary.
+        steps: r.steps.map((s) => ({
+          weight: s.weight.toNumber(),
+          percentComplete: s.percentComplete,
+        })),
+        // Money is BIGINT minor units (→ number); an unset lump-sum contributes 0.
+        budgetedExpense: Number(r.budgetedExpense ?? 0n),
+        actualExpense: Number(r.actualExpense ?? 0n),
+        assignments: r.assignments.map((a) => ({
+          budgetedCost: a.budgetedCost === null ? null : Number(a.budgetedCost),
+          actualCost: Number(a.actualCost),
+          budgetedUnits: a.budgetedUnits.toNumber(),
+          actualUnits: a.actualUnits.toNumber(),
+          costPerUnit: a.resource.costPerUnit === null ? null : a.resource.costPerUnit.toNumber(),
+        })),
+        baselineStart: base ? day(base.baselineStart) : null,
+        baselineFinish: base ? day(base.baselineFinish) : null,
+        // A SQL-NULL snapshot cost (a pre-EV baseline) stays null → PV falls back to the live BAC and
+        // the module flags `costBaselineMissing`; a snapshot captured post-EV carries an integer (0+).
+        baselineBudgetedCost: base
+          ? base.budgetedCost === null
+            ? null
+            : Number(base.budgetedCost)
+          : null,
+        earlyStart: day(r.earlyStart),
+        earlyFinish: day(r.earlyFinish),
+      };
+    });
+
+    const dataDate = plan.plannedStart ? formatCalendarDate(plan.plannedStart) : null;
+    const result = computeEarnedValue({
+      activities,
+      dataDate,
+      eacMethod: plan.eacMethod,
+      calendar,
+    });
+
+    return {
+      dataDate,
+      eacMethod: plan.eacMethod,
+      currencyCode: plan.currencyCode,
+      costBaselineMissing: result.costBaselineMissing,
+      costWarningCount: result.costWarningCount,
+      // N27 (ADR-0044 §33): leaf activities whose steps are all zero-weight, so the manual physical %
+      // fallback was used — a read-time data-quality warning, mirroring costWarningCount.
+      stepWeightZeroCount: result.stepWeightZeroCount,
+      activities: result.activities,
+      total: result.total,
+    };
+  }
+
+  /**
+   * The plan's **resource loading histogram** (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — a pure READ over
+   * the persisted CPM dates plus each active assignment's loading `curveType`, gated on `schedule:read`
+   * (every member). The units histogram is **schedule data, not cost** (Q5), so it is deliberately NOT
+   * `cost:read`-gated (contrast {@link getEarnedValue}). Resolves the org from the caller's memberships
+   * (anti-IDOR), 404s if the plan is not in the caller's org, then loads the plan's active assignments +
+   * their activities' persisted dates/calendars and runs the pure `computeResourceHistogram`. It NEVER
+   * recomputes or mutates: no write lock, no `computeSchedule`, no engine column — curves feed the
+   * histogram only, not the levelling pass (Q2). The per-resource series are offset-paged; the shared
+   * bucket axis + `curveNormalisedCount` (N29) ride in the meta.
+   */
+  async getResourceHistogram(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    granularity: HistogramGranularity,
+    limit: number,
+    offset: number,
+  ): Promise<{
+    series: ResourceHistogramSeries[];
+    buckets: { start: string; end: string }[];
+    granularity: HistogramGranularity;
+    total: number;
+    hasMore: boolean;
+    curveNormalisedCount: number;
+  }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'schedule:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    const rows = await this.schedule.loadResourceHistogramAssignments(organization.id, planId);
+
+    // Resolve each DISTINCT activity calendar ONCE (ADR-0037): a null calendarId (or the plan calendar)
+    // inherits the plan default. A histogram distributes units over the activity's OWN calendar; the
+    // driving-resource-calendar substitution used for *scheduling* a RESOURCE_DEPENDENT activity is not
+    // reapplied here — the dates are already computed, and the own-calendar phasing is the ADR-0037 grain.
+    const planCalendar = await this.resolveCalendar(organization.id, plan.calendarId);
+    const portByCalId = new Map<string, WorkingTimeCalendar>();
+    for (const calId of new Set(
+      rows
+        .map((r) => r.calendarId)
+        .filter((id): id is string => id != null && id !== plan.calendarId),
+    )) {
+      portByCalId.set(calId, await this.resolveCalendar(organization.id, calId));
+    }
+    const portFor = (calId: string | null): WorkingTimeCalendar =>
+      calId == null || calId === plan.calendarId
+        ? planCalendar
+        : (portByCalId.get(calId) ?? planCalendar);
+
+    const assignments: HistogramAssignmentInput[] = rows.map((r) => ({
+      resourceId: r.resourceId,
+      activityId: r.activityId,
+      budgetedUnits: r.budgetedUnits.toNumber(),
+      // Resolve the named curve to its built-in P6 profile; UNIFORM → null → a flat load (parity).
+      profile: resolveCurveProfile(r.curveType),
+      start: r.earlyStart ? formatCalendarDate(r.earlyStart) : null,
+      finish: r.earlyFinish ? formatCalendarDate(r.earlyFinish) : null,
+      // SchedulePoint does not model a per-assignment lag column (the fixture's assignment_lag_h is a
+      // conformance-only concept, exercised via the adapter); production always distributes over the
+      // whole activity span.
+      lagMinutes: 0,
+      calendar: portFor(r.calendarId),
+    }));
+
+    let histogram;
+    try {
+      histogram = computeResourceHistogram({ assignments, granularity });
+    } catch (error) {
+      if (error instanceof HistogramTooManyBucketsError) {
+        throw new ValidationError(
+          'The requested granularity produces too many buckets for this plan’s span; use a coarser one.',
+          { reason: SCHEDULE_ERROR.HISTOGRAM_GRANULARITY_TOO_FINE },
+        );
+      }
+      throw error;
+    }
+
+    const total = histogram.series.length;
+    const page = histogram.series.slice(offset, offset + limit);
+    return {
+      series: page,
+      buckets: histogram.buckets,
+      granularity: histogram.granularity,
+      total,
+      hasMore: offset + page.length < total,
+      curveNormalisedCount: histogram.curveNormalisedCount,
+    };
   }
 
   /**
@@ -393,6 +609,9 @@ export class ScheduleService {
       criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
       totalFloatMode: plan.totalFloatMode,
       makeOpenEndsCritical: plan.makeOpenEndsCritical,
+      // Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): when on, the engine
+      // drops every activity's external early-start / late-finish bounds. Default false = byte-parity.
+      ignoreExternalRelationships: plan.ignoreExternalRelationships,
     };
 
     // Resource levelling (M7, ADR-0041): the opt-in second pass. Load its demand model ONLY when the
@@ -460,7 +679,7 @@ export class ScheduleService {
   private async resolveCalendar(
     organizationId: string,
     calendarId: string | null,
-    tx: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient = this.prisma,
   ): Promise<WorkingTimeCalendar> {
     if (!calendarId) return buildPlanCalendar(null);
     const calendar = await this.schedule.loadPlanCalendar(organizationId, calendarId, tx);
@@ -514,6 +733,11 @@ function toEngineActivity(
     secondaryConstraintDate: row.secondaryConstraintDate
       ? formatCalendarDate(row.secondaryConstraintDate)
       : null,
+    // External / inter-project bounds (ADR-0043 / ADR-0035 §30): stored as absolute Timestamptz (UTC
+    // midnight), crossed to the engine as calendar days — the same date→YYYY-MM-DD conversion as
+    // constraintDate/expectedFinish/actualStart. Dropped inside the engine when ignore-external is on.
+    externalEarlyStart: row.externalEarlyStart ? formatCalendarDate(row.externalEarlyStart) : null,
+    externalLateFinish: row.externalLateFinish ? formatCalendarDate(row.externalLateFinish) : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
     scheduleAsLateAsPossible: row.scheduleAsLateAsPossible,
     levelingPriority: row.levelingPriority,

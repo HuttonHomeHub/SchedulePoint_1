@@ -28,6 +28,7 @@ const SUMMARY: PlanScheduleSummary = {
   levelingWindowExceededCount: 0,
   selfOverAllocatedCount: 0,
   leveledProjectFinish: null,
+  externalDrivenCount: 0,
 };
 
 function renderButton(canCalculate = true) {

@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
+  type AccrualType,
   type Activity,
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
   type DurationType,
+  type PercentCompleteType,
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -31,6 +33,10 @@ export interface ActivityPatch {
   /** Secondary constraint (ADR-0035 §10): drives the backward pass; paired like the primary. */
   secondaryConstraintType?: ConstraintType | null;
   secondaryConstraintDate?: Date | null;
+  /** External / inter-project early start (ADR-0043 / ADR-0035 §30.1): SNET-shaped forward bound; null clears. */
+  externalEarlyStart?: Date | null;
+  /** External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): FNLT-shaped backward bound; null clears. */
+  externalLateFinish?: Date | null;
   /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
   calendarId?: string | null;
   /** WBS parent (ADR-0038, M5-epic); a WBS_SUMMARY in the same plan, or null for top-level. */
@@ -42,6 +48,16 @@ export interface ActivityPatch {
   visualStart?: Date | null;
   /** Resource-levelling tie-break (ADR-0041 §1): client-settable Planner input; null clears to unset. */
   levelingPriority?: number | null;
+  /** %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION default; never a CPM date. */
+  percentCompleteType?: PercentCompleteType;
+  /** Physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL; null clears. */
+  physicalPercentComplete?: number | null;
+  /** Activity-level lump-sum budget in minor units (EV1, ADR-0042); null clears. Stored as BIGINT. */
+  budgetedExpense?: number | null;
+  /** Activity-level lump-sum actual in minor units (EV1, ADR-0042); null clears. Stored as BIGINT. */
+  actualExpense?: number | null;
+  /** How the activity's cost accrues (M7 rung 5, ADR-0044 §32): START/UNIFORM/END; governs PV phasing only. */
+  accrualType?: AccrualType;
   // Progress
   status?: ActivityStatus;
   percentComplete?: number;

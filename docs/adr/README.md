@@ -57,3 +57,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0039](0039-resource-model-and-resource-calendar-scheduling.md) | Resource model & resource-calendar scheduling | Accepted |
 | [0040](0040-duration-types-and-resource-units.md)               | Duration types & the resource-units model     | Accepted |
 | [0041](0041-resource-levelling.md)                              | Resource levelling (opt-in second pass)       | Accepted |
+| [0042](0042-percent-complete-types-and-earned-value.md)         | Percent-complete types & Earned Value         | Accepted |
+| [0043](0043-inter-project-external-dates.md)                    | Inter-project external dates (M1)             | Accepted |

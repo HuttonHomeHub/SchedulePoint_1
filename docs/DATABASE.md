@@ -120,6 +120,27 @@
   `varchar(n)` unless a real limit applies). Money (if the app has any):
   `integer`/`bigint` minor units + currency code. Identifiers: `uuid`. Enums:
   Postgres enums via Prisma.
+- **Money is `BIGINT` minor units + a currency code (EV1, ADR-0042).** The first
+  money columns land with the cost/earned-value rung: the stored amounts
+  `resource_assignments.budgeted_cost`/`actual_cost`,
+  `activities.budgeted_expense`/`actual_expense`, and
+  `baseline_activities.budgeted_cost` are all **`BIGINT` minor units** (e.g.
+  pence/cents) in the plan's currency (`resources.cost_per_unit` is a **rate**, not
+  a stored amount — see the house rule below); `plans.currency_code` is `CHAR(3)`
+  ISO-4217 (a genuine fixed-width code — the "text unless a real limit applies"
+  exception — format-guarded, nullable = inherit the org default). `BIGINT` (not
+  `INTEGER`) because construction BACs exceed the ~£21M `INT` minor-unit ceiling;
+  `BIGINT` (not `DECIMAL`) because money uses exact integer minor units with a
+  single documented rounding point per derived index (ADR-0035 §29) — the
+  schema's `DECIMAL(18,4)` columns (`budgeted_units`, `units_per_hour`,
+  `max_units_per_hour`, `actual_units`) are physical **quantities**, not money.
+  The house rule: **rate coefficients are `DECIMAL(18,4)`; stored money amounts are
+  `BIGINT` minor units.** `resources.cost_per_unit` is a **cost-per-unit rate**
+  (multiplies `budgeted_units` directly, aligned with the ADR-0040 units backbone),
+  so it is `DECIMAL(18,4)` like its sibling rates — in minor units per unit of work
+  (e.g. `5237.5000` pence/unit) so a derived amount is `round(budgeted_units ×
+cost_per_unit)` minor units. Decimal keeps a composite rate exact rather than
+  rounding it to a whole minor unit before the multiply.
 - No business logic in triggers/stored procedures unless justified and
   documented (keep logic in the app for testability).
 
@@ -216,6 +237,9 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `uq_resource_assignments_activity_driving`    | `(activity_id)`                        | partial unique | at most one **driving** assignment per activity (`WHERE is_driving AND deleted_at IS NULL`); the ≤1-driver backstop + the recalc "find the driving assignment" load                                                        |
 | `idx_resource_assignments_resource_id`        | `(resource_id)`                        | partial        | the `RESOURCE_IN_USE` guard's active-assignment count (`WHERE resource_id = ? AND deleted_at IS NULL`)                                                                                                                     |
 | `idx_resource_assignments_delete_batch_id`    | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
+| `activity_steps_organization_id_idx`          | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
+| `uq_activity_steps_activity_seq`              | `(activity_id, seq)`                   | partial unique | one **active** step per `(activity, seq)` (`WHERE deleted_at IS NULL`); backs the bulk-replace dup-seq (409); its leftmost prefix `activity_id` (pre-sorted by `seq`) subsumes an active-step list index                   |
+| `idx_activity_steps_delete_batch_id`          | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -265,6 +289,16 @@ remaining duration so its early finish lands on the activity's `expected_finish`
 across plans (so unindexed), and additive with a constant `DEFAULT` (no data
 migration) — default `false` is behaviour-preserving.
 
+`Plan` also carries the single-row boolean scheduling option
+`ignore_external_relationships` (default `false`; ADR-0043 / ADR-0035 §30.4, M1). When
+on, the recalc **drops** every activity's external early-start **and** late-finish
+bounds (the P6 "ignore relationships to/from other projects" toggle; see the external
+dates on _Activity_ below), leaving internal constraints/logic untouched, so a planner
+can compare the plan on its own logic vs. gated by its neighbours (scenario S09). Like
+`make_open_ends_critical` / `level_resources` it is read with the plan, never filtered
+across plans (so unindexed), and additive with a constant `DEFAULT` (no data migration)
+— default `false` is behaviour-preserving.
+
 ### Activity: the schedule leaf
 
 `Activity` follows every standard above and adds three column groups the deferred
@@ -273,9 +307,24 @@ wide `ALTER TABLE` + backfill later):
 
 - **Definition** (`type`, `duration_minutes`, `duration_type`,
   `constraint_type`/`constraint_date`,
-  `secondary_constraint_type`/`secondary_constraint_date`, `lane_index`,
+  `secondary_constraint_type`/`secondary_constraint_date`,
+  `external_early_start`/`external_late_finish`, `lane_index`,
   `schedule_as_late_as_possible`, optional
-  `code`) — Planner-owned. `duration_type` (M7 rung 4, ADR-0040) is a **client-settable**
+  `code`) — Planner-owned. The **external / inter-project dates**
+  `external_early_start`/`external_late_finish` (ADR-0043 / ADR-0035 §30, M1) are two
+  optional **imported instants** that gate an activity from another project: the early
+  start is an `SNET`-shaped forward **lower** bound (an upstream project's hand-over),
+  the late finish an `FNLT`-shaped backward **upper** bound (a downstream project's
+  window). Like the constraint pairs they are **client-settable** (a write DTO sets
+  them), **NOT** engine-owned; either, both, or neither may be set; the engine clamps
+  early start up to / late finish down to them on the **existing** forward/backward
+  passes (no new pass), **gated on** `plan.ignore_external_relationships`, and they are
+  **soft** bounds (never mandatory pins — they never set `constraint_violated`).
+  Uniquely among the schedule-day columns they are `TIMESTAMPTZ` **absolute
+  working-instants** (the ADR-0037 axis), **not** `@db.Date` — see the calendar-day
+  note below. Additive & nullable (no data migration); unindexed (read only on the
+  full-plan recalc load, never a query predicate — the `secondary_constraint`
+  precedent). `duration_type` (M7 rung 4, ADR-0040) is a **client-settable**
   (NOT engine-owned) `DurationType` enum — `FIXED_DURATION_AND_UNITS_TIME` (the **default**),
   `FIXED_DURATION_AND_UNITS`, `FIXED_UNITS`, `FIXED_UNITS_TIME` — naming which of the triad
   {`duration_minutes`, an assignment's `budgeted_units`, its `units_per_hour`} is
@@ -342,7 +391,13 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
 
 Calendar-day fields (`constraint_date`, `actual_start/finish`, `expected_finish`, the
 CPM `*_start/finish` columns) are `@db.Date` (date-only, no timezone), like
-`Plan.planned_start` — a schedule day is a calendar day, not an instant.
+`Plan.planned_start` — a schedule day is a calendar day, not an instant. The
+**exception** is the external / inter-project dates
+`external_early_start`/`external_late_finish`, which are `TIMESTAMPTZ` **absolute
+working-instants** (the ADR-0037 axis): they are **imported commitments from another
+project** (a vendor delivery, a downstream window), independent of this plan's data
+date, so they are stored absolutely — a data-date change must never move them —
+whereas the day columns above are all relative to this plan's own schedule.
 
 `activities` is the first domain table with bounded numerics, so it is also the
 first to carry **`CHECK` constraints** (per _Constraints_ above — enforce
@@ -357,8 +412,13 @@ both suspend/resume dates are set, so it never blocks the common no-suspend path
 `ck_activities_constraint_pair` — a schedule constraint's `constraint_type`
 and `constraint_date` are both set or both null (never one without the other), so a
 half-set constraint can never corrupt CPM scheduling even if a future code path
-bypasses the service — and `ck_activities_secondary_constraint_pair`, the identical
-both-null-or-both-set invariant for the secondary pair (ADR-0035 §10, M4 F3). They
+bypasses the service — `ck_activities_secondary_constraint_pair`, the identical
+both-null-or-both-set invariant for the secondary pair (ADR-0035 §10, M4 F3), and
+`ck_activities_external_finish_after_start` (**nullable-safe**: `external_late_finish
+IS NULL OR external_early_start IS NULL OR external_late_finish >= external_early_start`
+— an external window is enforced non-inverted only when **both** ends are set, mirroring
+`ck_activities_resume_after_suspend`), the DB backstop behind the DTO's 422
+`EXTERNAL_FINISH_BEFORE_START` (ADR-0043 / ADR-0035 §30 N26). They
 are raw SQL in the migration (Prisma cannot express `CHECK`). `total_float` is
 deliberately unconstrained — negative float is valid.
 
@@ -656,6 +716,108 @@ deleted_at IS NULL` guarantees **≤ 1** driver per activity in the DB; **"exact
   defaulted false, never accepted from a write DTO, written only by the M7.2 recalc
   `UPDATE` (never touching `version`/`updated_at`, ADR-0022). It lands now so M7.2
   needs no wide `ALTER` of the large `activities` table.
+
+### Earned Value: cost, %-complete-type & the cost baseline (EV1)
+
+The `percent-complete-earned-value` rung (EV1, ADR-0042; amends ADR-0025) activates
+the cost columns ADR-0039 **reserved** and adds the %-complete-type inputs — all
+**additive, nullable/constant-default, and DARK** (Earned Value is a pure
+**read-model** computed on a read endpoint in EV2; there is **no write pass and no
+engine-owned EV column**, so the CPM parity gate is structurally trivial — nothing on
+the recalc write path changes). An unset value leaves every existing recalc / progress
+/ baseline path **byte-identical**. Money follows the `BIGINT` minor-units rule above.
+
+- **`resources.cost_per_unit`** (`DECIMAL(18,4)?`, minor units per unit — a **rate
+  coefficient** like `units_per_hour`, not a stored money amount) — the
+  ADR-0039-reserved cost rate, now live: cost-per-unit (P6 "Price/Unit"), `NULL` = no
+  cost (contributes 0). `ck_resources_cost_per_unit_nonneg` (nullable-safe, **N22**)
+  mirrors `ck_resources_max_units_per_hour_nonneg` (N21).
+- **`resource_assignments.budgeted_cost`** (`BIGINT?`, **override** — `NULL` derives
+  `budgeted_units × cost_per_unit` at read time, Q1), **`actual_cost`** (`BIGINT NOT
+NULL DEFAULT 0`, progress), **`actual_units`** (`DECIMAL(18,4) NOT NULL DEFAULT 0`,
+  progress — the units-% numerator). `>= 0` CHECKs: `_budgeted_cost_nonneg`
+  (nullable-safe, N22), `_actual_cost_nonneg` (N22), `_actual_units_nonneg` (N14
+  precedent).
+- **`activities.percent_complete_type`** (`PercentCompleteType` enum
+  `DURATION`/`UNITS`/`PHYSICAL`, **DEFAULT `DURATION`** = behaviour-preserving; it
+  selects the EV performance measure and **changes no CPM date**),
+  **`physical_percent_complete`** (`SMALLINT?`, `NULL` = unset;
+  `ck_activities_physical_percent_complete_range` 0–100 nullable-safe, **N23**), and
+  **`budgeted_expense`/`actual_expense`** (`BIGINT?` lump-sum, `NULL` = none; `>= 0`
+  CHECKs, N22). No index (plan-scoped EV load only — the `secondary_constraint_type`
+  precedent).
+- **`plans.eac_method`** (`EacMethod` enum `CPI`/`REMAINING_AT_BUDGET`/`CPI_TIMES_SPI`,
+  **DEFAULT `CPI`** = P6's headline `EAC = BAC / CPI`, Q3) and **`currency_code`**
+  (`CHAR(3)?` ISO-4217, `ck_plans_currency_code_iso4217` nullable-safe format guard;
+  `NULL` = inherit the org default). Single-row plan options, unindexed.
+- **`baseline_activities.budgeted_cost`** (`BIGINT?`) — the **cost baseline** (ADR-0025
+  amendment): the activity's budgeted cost **frozen at capture**, immutable, giving the
+  active baseline a committed PV/BCWS reference. `NULL` for a baseline captured before
+  this rung ⇒ PV falls back to the live budget (`costBaselineMissing`), never an error.
+  `ck_baseline_activities_budgeted_cost_nonneg` (nullable-safe, defence-in-depth).
+
+**N24** (actual cost/units on a not-started activity) is a **warn, not a reject** — the
+EV read surfaces it as a count — so it is deliberately **not** a CHECK. No new index is
+added: every EV column is read within an already plan-scoped or org-scoped load and is
+never a query predicate.
+
+### Resource curves, cost accrual & weighted steps (M7 rung 5)
+
+The `resource-curves-accrual-steps` rung (ADR-0044; ADR-0035 §31/§32/§33) closes the last
+capability-matrix row with **two enum columns** and **one child table**, all **additive,
+constant-default / new-table, and read-model only** — the pure CPM engine (`compute.ts`)
+and the levelling pass (`level.ts`) are untouched, so each is byte-identical when its data
+is absent. Landed as three independently shippable slices (cost accrual → weighted steps →
+resource curves).
+
+- **`activities.accrual_type`** (`AccrualType` enum `START`/`UNIFORM`/`END`, **DEFAULT
+  `UNIFORM`** = today's linear phasing = byte-parity; F1-1, ADR-0044 §1). Client-settable;
+  governs **when** the activity's expense lump-sum is recognised in the Earned-Value /
+  cost read-model's PV & AC time-phasing (the cost / cash-flow S-curve) — it changes no CPM
+  date and no engine column. **No index** — read only on the plan-scoped EV load, never a
+  query predicate (the `percent_complete_type` precedent).
+- **`resource_assignments.curve_type`** (`ResourceCurveType` enum
+  `UNIFORM`/`BELL`/`FRONT_LOADED`/`BACK_LOADED`/`DOUBLE_PEAK`, **DEFAULT `UNIFORM`** = flat
+  load = byte-identical histogram; F3-1, ADR-0044 §3). Client-settable; names the P6 profile
+  the resource-histogram read-model distributes the assignment's `budgeted_units` by across
+  the activity duration (span = duration − assignment lag), conserving units. It shapes the
+  histogram only — moves no date and does **not** feed the levelling pass this rung (Q2). The
+  21-point profile constants live in the read-model, not the DB. **No index** — read only on
+  the plan-scoped histogram/EV assignment load, never a query predicate (the `is_driving`
+  precedent — a low-cardinality enum read with the whole plan's assignments).
+- **`activity_steps`** — a new **reference-template child table** (F2-1, ADR-0044 §2): a
+  weighted checklist per activity feeding the `PHYSICAL` Earned-Value measure. When an
+  activity has steps its physical %-complete rolls up as the weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)`
+  and **wins** over the manual `physical_percent_complete`; with no steps the manual field
+  behaves exactly as today (parity). It follows every house standard (UUID v7 PK, snake_case
+  via `@map`, timestamptz UTC, soft delete + `delete_batch_id`, TEXT audit ids,
+  optimistic-locking `version`, scoped indexes); `organization_id` is **denormalised** from
+  the parent activity (service-copied, never client input — the `ResourceAssignment`
+  pattern). Columns: `seq` (int ordering, service-assigned contiguous), `name` (TEXT, bounded
+  at the DTO like every sibling name), `weight` (`DECIMAL(18,4)` — the exact-quantity
+  precision mirroring `budgeted_units`; a relative quantity, not money, so Decimal not
+  `BIGINT`), and `percent_complete` (`SMALLINT NOT NULL DEFAULT 0`).
+  - **CHECKs** (raw SQL): `ck_activity_steps_weight_nonneg` (`weight >= 0`; all-zero weights
+    are legal — they trigger the **N27** rollup fallback to the manual physical %, never a
+    divide-by-zero, never a reject) and `ck_activity_steps_percent_complete_range` (`0–100`;
+    the **N28** DB backstop behind the DTO 422 `STEP_PERCENT_OUT_OF_RANGE`, mirroring
+    `ck_activities_physical_percent_complete_range` but **not** nullable-safe since the column
+    is `NOT NULL`).
+  - **Partial unique** `uq_activity_steps_activity_seq (activity_id, seq) WHERE deleted_at IS
+NULL` (raw SQL) — one active step per `(activity, seq)`; a soft-deleted step frees its
+    `seq` for reuse. Its leftmost prefix `activity_id` (pre-sorted by `seq`) **subsumes** a
+    standalone active-step list index (the `uq_resource_assignments_activity_resource`
+    precedent), so no separate `activity_id` index is added; the FK RESTRICT check never
+    fires because steps soft-delete only.
+  - **Soft-delete cascade is service-owned** (no DB cascade; FK `ON DELETE RESTRICT`):
+    soft-deleting an activity **should** sweep its active steps under the **same**
+    `delete_batch_id` — the identical mechanism `HierarchyLifecycleService` already applies
+    to a soft-deleted activity's incident dependency edges and resource assignments
+    (ADR-0039 (d)). This is a lifecycle-service follow-on for the **F2 build**, not a schema
+    change.
+
+The two enums `AccrualType` and `ResourceCurveType` are Postgres enums (Prisma-managed), each
+kept in lock-step with its `@repo/types` union by the build features.
 
 ## Testing & performance
 

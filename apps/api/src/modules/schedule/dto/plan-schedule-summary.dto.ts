@@ -59,6 +59,12 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
 
   @ApiProperty({
     description:
+      'Activities an external / inter-project bound drove this run (ADR-0043 / ADR-0035 §30) — its external early start raised the early start above logic, or its external late finish clamped the late finish. Engine-derived on a recalculation; the read summary reports 0 (M1 does not persist the per-activity flag). 0 with no external data or when ignoreExternalRelationships is on.',
+  })
+  externalDrivenCount!: number;
+
+  @ApiProperty({
+    description:
       'Activities the opt-in resource-levelling pass delayed to resolve over-allocation (levelingDelay > 0); 0 when the plan does not level (ADR-0041 / ADR-0035 §28).',
   })
   leveledActivityCount!: number;
@@ -95,6 +101,7 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
       constraintWarningCount: summary.constraintWarningCount,
       loeNoSpanCount: summary.loeNoSpanCount,
       resourceDriverMissingCount: summary.resourceDriverMissingCount,
+      externalDrivenCount: summary.externalDrivenCount,
       leveledActivityCount: summary.leveledActivityCount,
       levelingWindowExceededCount: summary.levelingWindowExceededCount,
       selfOverAllocatedCount: summary.selfOverAllocatedCount,

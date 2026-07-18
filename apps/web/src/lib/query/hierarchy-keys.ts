@@ -10,6 +10,8 @@
  * `@/features/clients` as before.
  */
 
+import type { HistogramGranularity } from '@repo/types';
+
 export const clientKeys = {
   all: (orgSlug: string) => ['clients', orgSlug] as const,
   list: (orgSlug: string) => [...clientKeys.all(orgSlug), 'list'] as const,
@@ -39,6 +41,15 @@ export const activityKeys = {
     [...activityKeys.all(orgSlug), 'plan', planId] as const,
   detail: (orgSlug: string, activityId: string) =>
     [...activityKeys.all(orgSlug), 'detail', activityId] as const,
+};
+
+export const stepKeys = {
+  all: (orgSlug: string) => ['activity-steps', orgSlug] as const,
+  // Keyed by the activity the steps hang off — the bulk replace invalidates the one
+  // activity's step list (ADR-0044 §2), alongside the activity list/detail whose rolled-up
+  // physical % moved.
+  listByActivity: (orgSlug: string, activityId: string) =>
+    [...stepKeys.all(orgSlug), 'activity', activityId] as const,
 };
 
 export const dependencyKeys = {
@@ -77,6 +88,24 @@ export const scheduleKeys = {
   all: (orgSlug: string) => ['schedule', orgSlug] as const,
   summary: (orgSlug: string, planId: string) =>
     [...scheduleKeys.all(orgSlug), 'plan', planId, 'summary'] as const,
+  // The Earned-Value read-model (EV4b, ADR-0042): a pure GET over the live schedule + cost inputs,
+  // keyed under the same schedule namespace as the summary so a recalc's schedule invalidation can
+  // sweep it too (dates move EV's PV/EV).
+  earnedValue: (orgSlug: string, planId: string) =>
+    [...scheduleKeys.all(orgSlug), 'plan', planId, 'earned-value'] as const,
+  // The resource-loading histogram read-model (M7 rung 5, ADR-0044 §3): a pure GET over the live
+  // schedule + resource assignments, keyed under the same schedule namespace as the summary so a
+  // recalc's schedule invalidation sweeps it too (dates move each assignment's units-over-time).
+  // Omit `granularity` to get the plan-scoped prefix — invalidating it sweeps every bucket size at
+  // once (Day/Week/Month), so an assignment or recalc change refreshes whichever the user is viewing.
+  resourceHistogram: (orgSlug: string, planId: string, granularity?: HistogramGranularity) =>
+    [
+      ...scheduleKeys.all(orgSlug),
+      'plan',
+      planId,
+      'resource-histogram',
+      ...(granularity ? [granularity] : []),
+    ] as const,
 };
 
 export const planLockKeys = {

@@ -1,9 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  AccrualType,
   ActivityStatus,
   ActivityType,
   ConstraintType,
   DurationType,
+  PercentCompleteType,
   type Activity,
 } from '@prisma/client';
 import type { ActivitySummary } from '@repo/types';
@@ -74,9 +76,73 @@ export class ActivityResponseDto implements ActivitySummary {
     format: 'date',
     nullable: true,
     type: String,
+    description:
+      'External / inter-project early start (ADR-0043 / ADR-0035 §30.1): an SNET-shaped forward bound imported from another project, or null.',
+  })
+  externalEarlyStart!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): an FNLT-shaped backward bound imported from another project, or null.',
+  })
+  externalLateFinish!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
     description: 'Expected-finish target (ADR-0035 §9), or null.',
   })
   expectedFinish!: string | null;
+
+  @ApiProperty({
+    enum: PercentCompleteType,
+    description:
+      'The %-complete measure that feeds Earned Value (EV1, ADR-0042): DURATION (default), UNITS, or ' +
+      'PHYSICAL. Selects the EV performance measure only — it never changes a CPM date.',
+  })
+  percentCompleteType!: PercentCompleteType;
+
+  @ApiProperty({
+    minimum: 0,
+    maximum: 100,
+    nullable: true,
+    type: Number,
+    description:
+      'Hand-entered physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL, or null.',
+  })
+  physicalPercentComplete!: number | null;
+
+  @ApiProperty({
+    enum: AccrualType,
+    description:
+      'How the activity’s cost accrues across its span (M7 rung 5, ADR-0044 / ADR-0035 §32): START, ' +
+      'END, or UNIFORM (default). Governs WHEN cost / Planned Value is recognised in the Earned-Value ' +
+      'read — it never changes a CPM date. Always readable (not money — a plain definition echo).',
+  })
+  accrualType!: AccrualType;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Activity budgeted expense in minor currency units (EV1/EV4a, ADR-0042). Conditionally included: ' +
+      'returned ONLY to a caller holding `cost:read` (Planner/Org Admin) in this org; every other ' +
+      'caller (Viewer/Contributor) sees null (fail-closed). Null thus means unset OR not-permitted.',
+  })
+  budgetedExpense!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Activity actual expense in minor currency units (EV1/EV4a, ADR-0042). Conditionally included: ' +
+      'returned ONLY to a caller holding `cost:read` (Planner/Org Admin) in this org; others see null.',
+  })
+  actualExpense!: number | null;
 
   @ApiProperty({
     format: 'uuid',
@@ -280,7 +346,13 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: Activity): ActivityResponseDto {
+  /**
+   * Map an activity to its public shape. `canReadCost` is the caller's org-scoped `cost:read`
+   * decision (EV4a, ADR-0042), computed in the service from the resolved organisation — the money
+   * expense amounts are included ONLY when it is true, otherwise null (fail-closed, no cross-tenant
+   * leak). The %-complete measures stay in every read (they are not commercially sensitive money).
+   */
+  static from(entity: Activity, canReadCost: boolean): ActivityResponseDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
     return {
       id: entity.id,
@@ -296,6 +368,10 @@ export class ActivityResponseDto implements ActivitySummary {
       constraintDate: day(entity.constraintDate),
       secondaryConstraintType: entity.secondaryConstraintType,
       secondaryConstraintDate: day(entity.secondaryConstraintDate),
+      // External / inter-project bounds (ADR-0043): stored absolutely (Timestamptz at UTC midnight),
+      // echoed as a calendar day exactly like constraintDate/expectedFinish.
+      externalEarlyStart: day(entity.externalEarlyStart),
+      externalLateFinish: day(entity.externalLateFinish),
       calendarId: entity.calendarId,
       parentId: entity.parentId,
       laneIndex: entity.laneIndex,
@@ -313,6 +389,17 @@ export class ActivityResponseDto implements ActivitySummary {
       suspendDate: day(entity.suspendDate),
       resumeDate: day(entity.resumeDate),
       expectedFinish: day(entity.expectedFinish),
+      // Earned-Value progress measures (EV1, ADR-0042): passthrough echo — not money, always readable.
+      percentCompleteType: entity.percentCompleteType,
+      physicalPercentComplete: entity.physicalPercentComplete,
+      // Cost accrual (M7 rung 5, ADR-0044 §32): a plain definition echo — not money, always readable.
+      accrualType: entity.accrualType,
+      // Money expense amounts (BigInt minor units → number) are gated on `cost:read` (EV4a, ADR-0042):
+      // null unless the caller may read cost AND the amount is set. A Viewer/Contributor always sees null.
+      budgetedExpense:
+        canReadCost && entity.budgetedExpense !== null ? Number(entity.budgetedExpense) : null,
+      actualExpense:
+        canReadCost && entity.actualExpense !== null ? Number(entity.actualExpense) : null,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),
       lateStart: day(entity.lateStart),

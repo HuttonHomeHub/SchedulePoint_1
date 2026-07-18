@@ -25,6 +25,7 @@ function makeTx() {
     plan: model(),
     activity: model(),
     activityDependency: model(),
+    activityStep: model(),
     baseline: model(),
     baselineActivity: model(),
   };
@@ -59,6 +60,7 @@ describe('HierarchyLifecycleService', () => {
         activities: 7,
         dependencies: 0,
         baselines: 0,
+        steps: 0,
       });
       // Activities deleted are those under the client's active plans.
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -91,6 +93,7 @@ describe('HierarchyLifecycleService', () => {
         activities: 0,
         dependencies: 0,
         baselines: 0,
+        steps: 0,
       });
     });
 
@@ -109,6 +112,7 @@ describe('HierarchyLifecycleService', () => {
         activities: 4,
         dependencies: 0,
         baselines: 0,
+        steps: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1'] }, deletedAt: null },
@@ -137,6 +141,7 @@ describe('HierarchyLifecycleService', () => {
         activities: 5,
         dependencies: 0,
         baselines: 0,
+        steps: 0,
       });
     });
 
@@ -161,6 +166,7 @@ describe('HierarchyLifecycleService', () => {
         activities: 1,
         dependencies: 0,
         baselines: 0,
+        steps: 0,
       });
     });
 
@@ -247,6 +253,32 @@ describe('HierarchyLifecycleService', () => {
       expect(tx.baselineActivity.updateMany).not.toHaveBeenCalled();
     });
 
+    it("sweeps a deleted activity subtree's steps into its batch (M7 rung 5, ADR-0044 §2)", async () => {
+      tx.activity.findMany.mockResolvedValue([]); // leaf subtree = { a1 }
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      tx.activityStep.updateMany.mockResolvedValue({ count: 3 });
+      const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(result.counts.steps).toBe(3);
+      // Steps are stamped by their owning activity ids, in the same batch as the activity.
+      expect(tx.activityStep.updateMany).toHaveBeenCalledWith({
+        where: { activityId: { in: ['a1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId, updatedBy: ACTOR }),
+      });
+    });
+
+    it("sweeps a plan's activities' steps into the batch when the plan is deleted", async () => {
+      tx.activity.updateMany.mockResolvedValue({ count: 5 });
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.activityStep.updateMany.mockResolvedValue({ count: 8 });
+      const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      expect(result.counts.steps).toBe(8);
+      // Steps are reached through their `activity` relation's plan (one level deeper than activities).
+      expect(tx.activityStep.updateMany).toHaveBeenCalledWith({
+        where: { activity: { planId: { in: ['pl1'] } }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+    });
+
     it('deletes a dependency alone as a leaf (its own batch)', async () => {
       tx.activityDependency.updateMany.mockResolvedValue({ count: 1 });
       const result = await service.cascadeSoftDelete(asTx(), 'dependency', 'd1', ACTOR);
@@ -298,6 +330,7 @@ describe('HierarchyLifecycleService', () => {
         activities: 9,
         dependencies: 0,
         baselines: 0,
+        steps: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-9' },
@@ -334,6 +367,23 @@ describe('HierarchyLifecycleService', () => {
       expect(counts.activities).toBe(1);
       expect(tx.plan.findFirst).toHaveBeenCalledWith({
         where: { id: 'pl1', deletedAt: null },
+      });
+    });
+
+    it("restores the batch's activity steps with their activity (M7 rung 5, ADR-0044 §2)", async () => {
+      tx.activity.findFirst.mockResolvedValue({ deleteBatchId: 'batch-a', planId: 'pl1' });
+      tx.plan.findFirst.mockResolvedValue({ id: 'pl1' }); // parent plan active
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      tx.activityStep.updateMany.mockResolvedValue({ count: 3 });
+
+      const counts = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR);
+
+      expect(counts.steps).toBe(3);
+      // Steps come back purely by their batch id — no endpoint guard (a step belongs to exactly one
+      // activity, swept in the same batch), unlike a dependency.
+      expect(tx.activityStep.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-a' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
     });
 

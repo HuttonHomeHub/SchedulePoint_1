@@ -209,6 +209,62 @@ export function clampSecondaryBackwardFinish(
   return backwardClamp(constraint, logicLateFinish, activity.durationMinutes, calendar);
 }
 
+/**
+ * Fold an activity's **external / inter-project early start** (ADR-0043, ADR-0035 §30.1) into the
+ * logic-driven early start (forward pass), in absolute working-instants on the activity's calendar. An
+ * external early start is an **SNET-shaped lower bound floored at the data date** (N25): the later of
+ * logic and the external instant drives. Applied **before** {@link clampForwardStart} so a soft SNET
+ * composes (`max`) while a hard pin (MSO/MFO/MANDATORY) still overrides it (§30.3). Returns the input
+ * unchanged when `ignoreExternal` is on or no external early start is set — the byte-identical parity
+ * path.
+ */
+export function clampExternalForwardStart(
+  activity: EngineActivity,
+  logicEarlyStart: number,
+  calendar: WorkingTimeCalendar,
+  dataDateAbs: number,
+  ignoreExternal: boolean,
+): number {
+  if (ignoreExternal || !activity.externalEarlyStart) return logicEarlyStart;
+  const externalAbs = rollForwardToWorking(
+    calendar,
+    instantToAbsMinutes(activity.externalEarlyStart),
+  );
+  // §30.1 / N25: floor at the data date — an external date in the past can't pull work before it.
+  return Math.max(logicEarlyStart, externalAbs, dataDateAbs);
+}
+
+/**
+ * Fold an activity's **external / inter-project late finish** (ADR-0043, ADR-0035 §30.2) into the
+ * logic-driven late finish (backward pass), in absolute working-instants on the activity's calendar. An
+ * external late finish is an **FNLT-shaped upper bound** (the tighter of logic and the external instant's
+ * working-day end). Applied **before** {@link clampBackwardFinish} so a soft FNLT composes (`min`) while
+ * a hard pin still overrides it (§30.3). If it is earlier than logic can achieve, the tighter bound flows
+ * through and total float goes negative (surfaced, not an error). Returns the input unchanged when
+ * `ignoreExternal` is on or no external late finish is set — the byte-identical parity path.
+ */
+export function clampExternalBackwardFinish(
+  activity: EngineActivity,
+  logicLateFinish: number,
+  calendar: WorkingTimeCalendar,
+  dataDateAbs: number,
+  ignoreExternal: boolean,
+): number {
+  if (ignoreExternal || !activity.externalLateFinish) return logicLateFinish;
+  // The bound is the exclusive end of the external day's working time (its last working minute + 1),
+  // measured on the activity's calendar — mirroring an FNLT constraint's `finishAbs` (see resolvePair).
+  // A zero-duration milestone finishes at its start instant.
+  const externalFinishAbs =
+    activity.durationMinutes === 0
+      ? rollForwardToWorking(calendar, instantToAbsMinutes(activity.externalLateFinish))
+      : rollBackwardToWorking(
+          calendar,
+          dataDateAbs,
+          instantToAbsMinutes(nextCalendarDay(activity.externalLateFinish)),
+        );
+  return Math.min(logicLateFinish, externalFinishAbs);
+}
+
 /** The backward-pass clamp switch, shared by the primary and secondary constraints. */
 function backwardClamp(
   constraint: ResolvedConstraint | null,

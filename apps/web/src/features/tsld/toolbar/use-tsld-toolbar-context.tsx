@@ -46,7 +46,8 @@ function ProjectFinishChip({
 }
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */
-export type PlanDialogKind = 'baselines' | 'calendar' | 'details';
+export type PlanDialogKind =
+  'baselines' | 'calendar' | 'details' | 'earned-value' | 'resource-histogram';
 
 /**
  * Assemble the {@link TsldToolbarContext} the TSLD registry drives (ADR-0031), from the route model,
@@ -213,6 +214,8 @@ export function useTsldToolbarContext({
             }),
       openBaselines: () => openDialog('baselines'),
       openCalendar: () => openDialog('calendar'),
+      openEarnedValue: () => openDialog('earned-value'),
+      openResourceHistogram: () => openDialog('resource-histogram'),
       editPlan,
 
       // Help

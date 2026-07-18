@@ -79,6 +79,21 @@ export class UpdateResourceDto {
   @Min(0)
   maxUnitsPerHour?: number | null;
 
+  @ApiPropertyOptional({
+    minimum: 0,
+    nullable: true,
+    description:
+      'Planned cost rate in minor units per unit of work (EV1, ADR-0042), or null to clear (no cost). ' +
+      'A rate coefficient stored as DECIMAL(18,4); exact numeric (>= 0, N22).',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear to no cost); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  costPerUnit?: number | null;
+
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)
   @IsInt()

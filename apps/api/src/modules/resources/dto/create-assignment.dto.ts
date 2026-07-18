@@ -1,6 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ResourceCurveType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsNumber, IsOptional, Matches, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Matches,
+  Min,
+} from 'class-validator';
 
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
@@ -64,6 +74,46 @@ export class CreateAssignmentDto {
   editedField?: AssignmentEditedField;
 
   @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Optional OVERRIDE of the derived budgeted cost (EV1, ADR-0042). Minor units in the plan currency ' +
+      '(integer >= 0, N22); omit for null = derive at read time (budgetedUnits × resource.costPerUnit). ' +
+      'The derivation is EV2b — a passthrough store keeps null as null.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  budgetedCost?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    default: 0,
+    description:
+      'Cost actually spent on this assignment (EV1, ADR-0042). Minor units in the plan currency ' +
+      '(integer >= 0, N22); defaults to 0.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  actualCost?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    default: 0,
+    description:
+      'Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. Exact numeric ' +
+      '(>= 0, N14; DECIMAL(18,4)); defaults to 0.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  actualUnits?: number;
+
+  @ApiPropertyOptional({
     default: false,
     description:
       'Designate this as THE driving resource of a RESOURCE_DEPENDENT activity (ADR-0035 §23). At ' +
@@ -73,4 +123,17 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsBoolean()
   isDriving?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ResourceCurveType,
+    default: ResourceCurveType.UNIFORM,
+    description:
+      'The named P6 loading curve the resource-histogram read-model distributes this assignment’s ' +
+      'budgetedUnits by across the activity span (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). Shapes only ' +
+      'the histogram — no CPM date, no levelling (Q2). Omit for UNIFORM (a flat load; the byte-identical ' +
+      'default).',
+  })
+  @IsOptional()
+  @IsEnum(ResourceCurveType)
+  curveType?: ResourceCurveType;
 }

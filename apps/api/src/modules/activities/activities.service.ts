@@ -21,7 +21,7 @@ import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
-import { parseCalendarDate } from '../../common/validation/calendar-date';
+import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -141,14 +141,39 @@ export class ActivitiesService {
     }
   }
 
+  /**
+   * N26 (ADR-0043 / ADR-0035 §30): an external late finish may not precede an external early start when
+   * BOTH are set — a self-contradictory imported window. Boundary reject (422 `EXTERNAL_FINISH_BEFORE_START`),
+   * mirroring the actual finish-before-start (N06) and resume-before-suspend cross-field checks; the DB
+   * CHECK `ck_activities_external_finish_after_start` is the backstop. Compares the two calendar-day
+   * strings, which order lexicographically (`YYYY-MM-DD`). Either bound absent = nothing to compare.
+   */
+  private assertExternalDatesOrdered(
+    externalEarlyStart: string | null,
+    externalLateFinish: string | null,
+  ): void {
+    if (
+      externalEarlyStart !== null &&
+      externalLateFinish !== null &&
+      externalLateFinish < externalEarlyStart
+    ) {
+      throw new ValidationError('External late finish cannot precede external early start.', {
+        reason: 'EXTERNAL_FINISH_BEFORE_START',
+      });
+    }
+  }
+
   async list(
     principal: Principal,
     orgSlug: string,
     planId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: Activity[]; meta: PageMeta }> {
+  ): Promise<{ items: Activity[]; meta: PageMeta; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
+    // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere` (cross-tenant
+    // IDOR). Threaded to the response DTO so the money expense amounts are gated per role (fail-closed).
+    const canReadCost = principal.can('cost:read', organization.id);
     await this.loadActivePlan(planId, organization.id);
 
     const rows = await this.activities.findManyActiveByPlan({
@@ -161,16 +186,21 @@ export class ActivitiesService {
     const hasMore = rows.length > query.limit;
     const items = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
-    return { items, meta: { nextCursor, hasMore } };
+    return { items, meta: { nextCursor, hasMore }, canReadCost };
   }
 
-  async get(principal: Principal, orgSlug: string, activityId: string): Promise<Activity> {
+  async get(
+    principal: Principal,
+    orgSlug: string,
+    activityId: string,
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const activity = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!activity) throw new NotFoundError('Activity not found.');
-    return activity;
+    return { activity, canReadCost };
   }
 
   async create(
@@ -178,9 +208,15 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: CreateActivityDto,
-  ): Promise<Activity> {
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:create', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
+    // N26 (ADR-0043 / ADR-0035 §30): an external late finish may not precede an external early start
+    // when BOTH are set. Boundary reject before the insert (mirrors the actual finish-before-start and
+    // resume-before-suspend cross-field checks); the DB CHECK ck_activities_external_finish_after_start
+    // is the backstop.
+    this.assertExternalDatesOrdered(dto.externalEarlyStart ?? null, dto.externalLateFinish ?? null);
     const plan = await this.loadActivePlan(planId, organization.id);
     // Structural write — the caller must hold the plan edit-lock (ADR-0028), 423 otherwise.
     await this.editLock.assertHoldsPen(principal, plan.id, organization.id);
@@ -228,6 +264,14 @@ export class ActivitiesService {
             ...(dto.secondaryConstraintDate
               ? { secondaryConstraintDate: parseCalendarDate(dto.secondaryConstraintDate) }
               : {}),
+            // External / inter-project bounds (ADR-0043 / ADR-0035 §30): imported absolute commitments
+            // stored via the same calendar-day parse as constraintDate; either/both/neither may be set.
+            ...(dto.externalEarlyStart
+              ? { externalEarlyStart: parseCalendarDate(dto.externalEarlyStart) }
+              : {}),
+            ...(dto.externalLateFinish
+              ? { externalLateFinish: parseCalendarDate(dto.externalLateFinish) }
+              : {}),
             // Expected-finish target (ADR-0035 §9); honoured only when the plan option is on.
             ...(dto.expectedFinish
               ? { expectedFinish: parseCalendarDate(dto.expectedFinish) }
@@ -244,6 +288,19 @@ export class ActivitiesService {
             ...(dto.levelingPriority !== undefined
               ? { levelingPriority: dto.levelingPriority }
               : {}),
+            // Earned-Value inputs (EV1, ADR-0042): passthrough only, no derivation. Omit to take the
+            // parity defaults (percentCompleteType DURATION; the money/physical columns NULL). Dark
+            // until the EV read (EV2b); none feed the CPM engine.
+            ...(dto.percentCompleteType ? { percentCompleteType: dto.percentCompleteType } : {}),
+            ...(dto.physicalPercentComplete !== undefined
+              ? { physicalPercentComplete: dto.physicalPercentComplete }
+              : {}),
+            ...(dto.budgetedExpense !== undefined ? { budgetedExpense: dto.budgetedExpense } : {}),
+            ...(dto.actualExpense !== undefined ? { actualExpense: dto.actualExpense } : {}),
+            // Cost accrual (M7 rung 5, ADR-0044 §32): passthrough only; omit to take the DB default
+            // (UNIFORM = the byte-identical linear PV path). Governs the EV read's PV time-phasing,
+            // never a CPM date.
+            ...(dto.accrualType ? { accrualType: dto.accrualType } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -259,7 +316,7 @@ export class ActivitiesService {
         },
         'activity created',
       );
-      return activity;
+      return { activity, canReadCost };
     } catch (error) {
       throw this.mapWriteError(error);
     }
@@ -270,9 +327,10 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityDto,
-  ): Promise<Activity> {
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
@@ -326,6 +384,31 @@ export class ActivitiesService {
     if (dto.scheduleAsLateAsPossible !== undefined) {
       patch.scheduleAsLateAsPossible = dto.scheduleAsLateAsPossible;
     }
+    // External / inter-project bounds (ADR-0043 / ADR-0035 §30): planner-owned definition inputs; a
+    // date sets the bound, null clears it. Enforce N26 on the RESOLVED effective pair (a provided value
+    // overrides the stored one, null clears, omitted keeps) so a PATCH of one side is still validated
+    // against the other's persisted value — mirrors how updateProgress resolves before its N06 check.
+    const effectiveExternalEarlyStart =
+      dto.externalEarlyStart !== undefined
+        ? dto.externalEarlyStart
+        : existing.externalEarlyStart
+          ? formatCalendarDate(existing.externalEarlyStart)
+          : null;
+    const effectiveExternalLateFinish =
+      dto.externalLateFinish !== undefined
+        ? dto.externalLateFinish
+        : existing.externalLateFinish
+          ? formatCalendarDate(existing.externalLateFinish)
+          : null;
+    this.assertExternalDatesOrdered(effectiveExternalEarlyStart, effectiveExternalLateFinish);
+    if (dto.externalEarlyStart !== undefined) {
+      patch.externalEarlyStart =
+        dto.externalEarlyStart === null ? null : parseCalendarDate(dto.externalEarlyStart);
+    }
+    if (dto.externalLateFinish !== undefined) {
+      patch.externalLateFinish =
+        dto.externalLateFinish === null ? null : parseCalendarDate(dto.externalLateFinish);
+    }
     if (dto.expectedFinish !== undefined) {
       patch.expectedFinish =
         dto.expectedFinish === null ? null : parseCalendarDate(dto.expectedFinish);
@@ -339,6 +422,17 @@ export class ActivitiesService {
     // Resource-levelling tie-break (ADR-0041 §1): client-settable; null clears to unset. The
     // engine-owned leveled_* overlay is never patched here (dark until L2).
     if (dto.levelingPriority !== undefined) patch.levelingPriority = dto.levelingPriority;
+    // Earned-Value inputs (EV1, ADR-0042): passthrough only; percentCompleteType is never a CPM date,
+    // the physical/money columns clear on an explicit null. No derivation here (that is EV2b).
+    if (dto.percentCompleteType !== undefined) patch.percentCompleteType = dto.percentCompleteType;
+    if (dto.physicalPercentComplete !== undefined) {
+      patch.physicalPercentComplete = dto.physicalPercentComplete;
+    }
+    if (dto.budgetedExpense !== undefined) patch.budgetedExpense = dto.budgetedExpense;
+    if (dto.actualExpense !== undefined) patch.actualExpense = dto.actualExpense;
+    // Cost accrual (M7 rung 5, ADR-0044 §32): passthrough only; governs the EV read's PV time-phasing,
+    // never a CPM date. No derivation here (that is the read-model's job).
+    if (dto.accrualType !== undefined) patch.accrualType = dto.accrualType;
     // The activity's own calendar (ADR-0037): null clears to inherit the plan default; a specific
     // id is validated in-org under the calendar lock inside the transaction below (T4).
     const calendarId = dto.calendarId;
@@ -395,7 +489,7 @@ export class ActivitiesService {
 
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
-    return updated;
+    return { activity: updated, canReadCost };
   }
 
   /**
@@ -470,9 +564,10 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: UpdatePositionsDto,
-  ): Promise<Activity[]> {
+  ): Promise<{ items: Activity[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
     await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
     await this.editLock.assertHoldsPen(principal, planId, organization.id);
 
@@ -520,9 +615,10 @@ export class ActivitiesService {
     );
 
     // Return the moved rows with their fresh versions so the client can reconcile optimistic state.
-    return this.prisma.activity.findMany({
+    const items = await this.prisma.activity.findMany({
       where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
     });
+    return { items, canReadCost };
   }
 
   /**
@@ -536,9 +632,12 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityProgressDto,
-  ): Promise<{ activity: Activity; warnings: ProgressWarning[] }> {
+  ): Promise<{ activity: Activity; warnings: ProgressWarning[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update_progress', organization.id);
+    // A Contributor can report progress but does NOT hold cost:read — so this fails closed and the
+    // response echoes null for every money field (EV4a, ADR-0042): a progress reporter never sees cost.
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
@@ -645,7 +744,7 @@ export class ActivitiesService {
 
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
-    return { activity: updated, warnings };
+    return { activity: updated, warnings, canReadCost };
   }
 
   /** A provided date field (parsed, or null to clear) overrides the stored one;
@@ -672,14 +771,19 @@ export class ActivitiesService {
     );
   }
 
-  async restore(principal: Principal, orgSlug: string, activityId: string): Promise<Activity> {
+  async restore(
+    principal: Principal,
+    orgSlug: string,
+    activityId: string,
+  ): Promise<{ activity: Activity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:restore', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
 
     const existing = await this.activities.findByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
     await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
-    if (!existing.deletedAt) return existing; // already active — restore is a no-op
+    if (!existing.deletedAt) return { activity: existing, canReadCost }; // already active — no-op
 
     // The lifecycle enforces the top-down invariant: restoring an activity whose
     // parent plan is still soft-deleted raises PARENT_DELETED (→ 409).
@@ -693,7 +797,7 @@ export class ActivitiesService {
 
     const restored = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!restored) throw new NotFoundError('Activity not found.');
-    return restored;
+    return { activity: restored, canReadCost };
   }
 
   /** Load the parent plan active and in the caller's org, or 404. */

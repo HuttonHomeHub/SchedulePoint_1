@@ -12,6 +12,7 @@ import {
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
+import { ResourceAssignmentResponseDto } from './dto/assignment-response.dto';
 import type { ResourceAssignmentRepository } from './resource-assignment.repository';
 import { ResourceAssignmentService } from './resource-assignment.service';
 import type { ResourceRepository } from './resource.repository';
@@ -43,6 +44,7 @@ function resource(overrides: Partial<Resource> = {}): Resource {
     description: null,
     kind: 'LABOUR',
     maxUnitsPerHour: null,
+    costPerUnit: null,
     calendarId: null,
     version: 1,
     createdAt: new Date(),
@@ -64,6 +66,12 @@ function assignment(overrides: Partial<ResourceAssignment> = {}): ResourceAssign
     budgetedUnits: new Prisma.Decimal(0),
     unitsPerHour: null,
     isDriving: false,
+    // Resource loading curve (F3 schema, ADR-0044 §31) — already in the committed schema; the parity
+    // default keeps this factory valid after `prisma generate`. F3 owns the curve behaviour/tests.
+    curveType: 'UNIFORM',
+    budgetedCost: null,
+    actualCost: 0n,
+    actualUnits: new Prisma.Decimal(0),
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -154,6 +162,19 @@ describe('ResourceAssignmentService', () => {
       );
     });
 
+    it('threads Earned-Value cost inputs into the create; a null budgetedCost stays null (EV1, ADR-0042)', async () => {
+      await service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
+        resourceId: RESOURCE_ID,
+        budgetedUnits: 40,
+        actualCost: 12000,
+        actualUnits: 8,
+      });
+      expect(assignments.create).toHaveBeenCalledWith(
+        expect.objectContaining({ budgetedCost: null, actualCost: 12000, actualUnits: 8 }),
+        expect.anything(),
+      );
+    });
+
     it('forbids a caller without resource:assign', async () => {
       await expect(
         service.create(principalWith(['resource:read']), 'acme', ACTIVITY_ID, {
@@ -239,7 +260,39 @@ describe('ResourceAssignmentService', () => {
     it('returns the active assignments for a valid activity', async () => {
       assignments.findManyActiveByActivity.mockResolvedValue([assignment()]);
       const result = await service.list(principalWith(ALL), 'acme', ACTIVITY_ID);
-      expect(result).toHaveLength(1);
+      expect(result.items).toHaveLength(1);
+    });
+
+    // EV4a (ADR-0042): the money budgeted/actual cost is conditionally included only for a `cost:read`
+    // caller (Planner/Org Admin), org-scoped and fail-closed.
+    it('a cost:read caller reads the real budgetedCost/actualCost off the assignment', async () => {
+      assignments.findManyActiveByActivity.mockResolvedValue([
+        assignment({ budgetedCost: 120000n, actualCost: 45000n }),
+      ]);
+      const { items, canReadCost } = await service.list(
+        principalWith([...ALL, 'cost:read']),
+        'acme',
+        ACTIVITY_ID,
+      );
+      expect(canReadCost).toBe(true);
+      const dto = ResourceAssignmentResponseDto.from(items[0]!, canReadCost);
+      expect(dto.budgetedCost).toBe(120000);
+      expect(dto.actualCost).toBe(45000);
+    });
+
+    it('a non-cost-read caller gets null for BOTH cost fields (fail-closed)', async () => {
+      assignments.findManyActiveByActivity.mockResolvedValue([
+        assignment({ budgetedCost: 120000n, actualCost: 45000n }),
+      ]);
+      const { items, canReadCost } = await service.list(
+        principalWith(['resource:read']),
+        'acme',
+        ACTIVITY_ID,
+      );
+      expect(canReadCost).toBe(false);
+      const dto = ResourceAssignmentResponseDto.from(items[0]!, canReadCost);
+      expect(dto.budgetedCost).toBeNull();
+      expect(dto.actualCost).toBeNull();
     });
   });
 
@@ -277,6 +330,24 @@ describe('ResourceAssignmentService', () => {
         expect.anything(),
         'asg-1',
       );
+    });
+
+    it('patches Earned-Value cost inputs; a null budgetedCost clears to derive-at-read (EV1, ADR-0042)', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      await service.update(principalWith(ALL), 'acme', 'asg-1', {
+        budgetedCost: null,
+        actualCost: 9000,
+        actualUnits: 3,
+        version: 1,
+      });
+      const patch = assignments.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        budgetedCost: number | null;
+        actualCost: number;
+        actualUnits: number;
+      };
+      expect(patch.budgetedCost).toBeNull();
+      expect(patch.actualCost).toBe(9000);
+      expect(patch.actualUnits).toBe(3);
     });
   });
 

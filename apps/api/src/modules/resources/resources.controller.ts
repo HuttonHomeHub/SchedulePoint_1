@@ -58,9 +58,9 @@ export class ResourcesController {
     @Param('orgSlug') orgSlug: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<ResourceResponseDto>> {
-    const { items, meta } = await this.service.list(principal, orgSlug, query);
+    const { items, meta, canReadCost } = await this.service.list(principal, orgSlug, query);
     return new Paginated(
-      items.map((resource) => ResourceResponseDto.from(resource)),
+      items.map((resource) => ResourceResponseDto.from(resource, canReadCost)),
       meta,
     );
   }
@@ -77,7 +77,8 @@ export class ResourcesController {
     @Param('orgSlug') orgSlug: string,
     @Body() dto: CreateResourceDto,
   ): Promise<ResourceResponseDto> {
-    return ResourceResponseDto.from(await this.service.create(principal, orgSlug, dto));
+    const { resource, canReadCost } = await this.service.create(principal, orgSlug, dto);
+    return ResourceResponseDto.from(resource, canReadCost);
   }
 
   @Get(':resourceId')
@@ -88,7 +89,8 @@ export class ResourcesController {
     @Param('orgSlug') orgSlug: string,
     @Param('resourceId', ParseUuidPipe) resourceId: string,
   ): Promise<ResourceResponseDto> {
-    return ResourceResponseDto.from(await this.service.get(principal, orgSlug, resourceId));
+    const { resource, canReadCost } = await this.service.get(principal, orgSlug, resourceId);
+    return ResourceResponseDto.from(resource, canReadCost);
   }
 
   @Patch(':resourceId')
@@ -103,7 +105,13 @@ export class ResourcesController {
     @Param('resourceId', ParseUuidPipe) resourceId: string,
     @Body() dto: UpdateResourceDto,
   ): Promise<ResourceResponseDto> {
-    return ResourceResponseDto.from(await this.service.update(principal, orgSlug, resourceId, dto));
+    const { resource, canReadCost } = await this.service.update(
+      principal,
+      orgSlug,
+      resourceId,
+      dto,
+    );
+    return ResourceResponseDto.from(resource, canReadCost);
   }
 
   @Delete(':resourceId')

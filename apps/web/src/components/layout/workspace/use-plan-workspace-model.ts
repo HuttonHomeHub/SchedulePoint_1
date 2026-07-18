@@ -38,6 +38,7 @@ import {
   useOrgRole,
 } from '@/hooks/use-org-role';
 import { ApiFetchError } from '@/lib/api/client';
+import { minorToMajorInput } from '@/lib/format-money';
 
 /**
  * The single source of a plan surface's route-composed orchestration — every query, the
@@ -275,6 +276,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           durationType: activity.durationType,
           durationDays: activity.durationDays,
           description: activity.description ?? undefined,
+          // Round-trip the Earned-Value inputs unchanged (EV4b, ADR-0042) — the update body always
+          // sends them, so a canvas move must resend the stored values (money minor → major units) or
+          // it would silently clear them, exactly like the duration type above.
+          percentCompleteType: activity.percentCompleteType,
+          // Round-trip the cost accrual unchanged (M7 rung 5, ADR-0044 §32) — the update body always
+          // sends it, so a canvas move must resend the stored value or it would silently reset it.
+          accrualType: activity.accrualType,
+          physicalPercentComplete: activity.physicalPercentComplete ?? undefined,
+          budgetedExpense: minorToMajorInput(activity.budgetedExpense),
+          actualExpense: minorToMajorInput(activity.actualExpense),
           constraintType: 'SNET',
           constraintDate: droppedDate,
           ...(laneIndex !== undefined ? { laneIndex } : {}),

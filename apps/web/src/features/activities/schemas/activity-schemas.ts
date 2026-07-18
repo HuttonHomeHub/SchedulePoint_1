@@ -1,13 +1,19 @@
 import {
+  ACCRUAL_TYPES,
   DURATION_TYPES,
   PARKED_CONSTRAINT_TYPES,
+  PERCENT_COMPLETE_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
+  type AccrualType,
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
   type DurationType,
+  type PercentCompleteType,
 } from '@repo/types';
 import { z } from 'zod';
+
+import { moneyMajorAmount } from '@/lib/money-schema';
 
 // The constraint labels live in the shared lib so the form, the table, and the TSLD
 // canvas read constraints in one voice; re-exported here for existing form importers.
@@ -69,6 +75,55 @@ export const DURATION_TYPE_LABELS: Record<DurationType, string> = {
   FIXED_UNITS: 'Fixed units',
   FIXED_UNITS_TIME: 'Fixed units/time',
 };
+
+/**
+ * Human labels + one-line descriptions for the **%-complete type** (EV4b, ADR-0042) — the measure
+ * that earns an activity's value in the Earned-Value read. Exhaustive `Record<PercentCompleteType, …>`
+ * so a new measure fails to compile until it is described. The default (`DURATION`) is
+ * behaviour-preserving — today's schedule %-complete already drives it. This selects the EV
+ * performance measure ONLY; it never changes a CPM date.
+ */
+export const PERCENT_COMPLETE_TYPE_LABELS: Record<
+  PercentCompleteType,
+  { label: string; description: string }
+> = {
+  DURATION: {
+    label: 'Duration',
+    description: 'Earns value from elapsed vs total working time (the schedule %-complete).',
+  },
+  UNITS: {
+    label: 'Units',
+    description: 'Earns value from actual vs budgeted work (actual units ÷ budgeted units).',
+  },
+  PHYSICAL: {
+    label: 'Physical',
+    description: 'Earns value from a hand-entered physical %-complete, independent of dates.',
+  },
+};
+
+/** %-complete types, in order — derived from the labels so it stays exhaustive. */
+export const PERCENT_COMPLETE_TYPE_OPTIONS = Object.keys(PERCENT_COMPLETE_TYPE_LABELS) as [
+  PercentCompleteType,
+  ...PercentCompleteType[],
+];
+
+/**
+ * Human labels for the **cost accrual type** (M7 rung 5, ADR-0044 §32) — how an activity's cost is
+ * time-phased in the Earned-Value read's Planned Value. Exhaustive `Record<AccrualType, …>` so a new
+ * value fails to compile until it is labelled. The default (`UNIFORM`) is the behaviour-preserving
+ * linear spread. Accrual changes only WHEN cost is recognised — it never changes a CPM date.
+ */
+export const ACCRUAL_TYPE_LABELS: Record<AccrualType, string> = {
+  START: 'Start',
+  UNIFORM: 'Uniform',
+  END: 'End',
+};
+
+/** Cost accrual types, in order — derived from the labels so it stays exhaustive. */
+export const ACCRUAL_TYPE_OPTIONS = Object.keys(ACCRUAL_TYPE_LABELS) as [
+  AccrualType,
+  ...AccrualType[],
+];
 
 /** The activity types the form's Type picker always offers — the three with full engine support. */
 export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
@@ -158,6 +213,14 @@ export const activityFormSchema = z
     // Expected-finish target (ADR-0035 §9): a calendar day the engine resizes remaining work to when the
     // plan's `useExpectedFinishDates` is on. A raw `<input type="date">` value (`''` = none).
     expectedFinish: z.string().optional(),
+    // External / inter-project dates (ADR-0043 / ADR-0035 §30, M1): imported commitments from ANOTHER
+    // project, each a calendar day (`YYYY-MM-DD`) or `''` = none. `externalEarlyStart` is an SNET-shaped
+    // forward lower bound; `externalLateFinish` an FNLT-shaped backward upper bound. Raw `<input
+    // type="date">` values (like `constraintDate`), only editable behind `VITE_INTER_PROJECT_DATES` but
+    // always seeded from the row so a stored value round-trips even with the section hidden. Cross-field
+    // rule below mirrors the API's N26 `EXTERNAL_FINISH_BEFORE_START` reject.
+    externalEarlyStart: z.string().optional(),
+    externalLateFinish: z.string().optional(),
     // The activity's own working-time calendar (ADR-0037): `''` = inherit the plan default.
     // A raw `<select>` value; the choices are the org's calendar ids (+ inherit), so the id is
     // never free-typed — validation of the UUID/in-org is the API's job (mirrors `constraintDate`).
@@ -166,6 +229,40 @@ export const activityFormSchema = z
     // parent). A raw `<select>` value picked from the plan's existing summaries; the API validates it
     // is an active `WBS_SUMMARY` in the same plan and that re-parenting introduces no cycle.
     parentId: z.string().optional(),
+    // Resource-levelling tie-break (ADR-0041): a lower number wins the resource when two activities
+    // contend for a capacity-constrained resource. Optional (blank = lowest priority — placed after
+    // any prioritised peer); a whole number 0–1,000,000 (bounded to match the API). Only editable
+    // behind `VITE_RESOURCE_LEVELLING`, but always seeded from the row so a stored value round-trips
+    // even with the field hidden. Registered with a `setValueAs` that maps a blank field to
+    // `undefined`, so an empty priority is "absent", not `NaN`.
+    levelingPriority: z
+      .number({ message: 'Enter a whole number.' })
+      .int('Enter a whole number.')
+      .min(0, 'Priority cannot be negative.')
+      .max(1000000, 'Priority is too large.')
+      .optional(),
+    // Earned-Value inputs (EV4b, ADR-0042). `percentCompleteType` selects the EV performance measure
+    // (default `DURATION`, behaviour-preserving — it NEVER changes a CPM date); a plain enum attribute
+    // like `durationType`, always seeded from the row. `physicalPercentComplete` feeds the `PHYSICAL`
+    // measure only — an integer 0–100, blank → `undefined` (unset). `budgetedExpense` / `actualExpense`
+    // are lump-sum activity costs entered in MAJOR units (×100 → minor on submit, ÷100 to seed); optional,
+    // `>= 0`, at most 2 major decimals (the 2-decimal money assumption, `lib/format-money`). All only
+    // editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a stored value round-trips
+    // even when the fields are hidden.
+    percentCompleteType: z.enum(PERCENT_COMPLETE_TYPES),
+    // Cost accrual (M7 rung 5, ADR-0044 §32): how the activity's cost is time-phased in the EV read's
+    // Planned Value (START/UNIFORM/END). A plain enum attribute like `percentCompleteType` (default
+    // `UNIFORM`, byte-identical to the pre-ADR-0044 phasing — it NEVER changes a CPM date); only editable
+    // behind `VITE_COST_ACCRUAL`, but always seeded from the row so a stored value round-trips when hidden.
+    accrualType: z.enum(ACCRUAL_TYPES),
+    physicalPercentComplete: z
+      .number({ message: 'Enter a percentage from 0 to 100.' })
+      .int('Enter a whole percentage.')
+      .min(0, 'Percentage cannot be negative.')
+      .max(100, 'Percentage cannot exceed 100.')
+      .optional(),
+    budgetedExpense: moneyMajorAmount.optional(),
+    actualExpense: moneyMajorAmount.optional(),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
   })
   // Only the type→date direction needs a rule: the dialog hides the date field
@@ -179,7 +276,20 @@ export const activityFormSchema = z
   .refine((v) => !v.secondaryConstraintType || Boolean(v.secondaryConstraintDate), {
     message: 'Choose a date for the secondary constraint.',
     path: ['secondaryConstraintDate'],
-  });
+  })
+  // N26 (ADR-0035 §30): an external late finish can't fall before the external early start when both
+  // are set. Mirrors the API's `EXTERNAL_FINISH_BEFORE_START` (422) reject client-side, the same
+  // cross-field date shape as the progress editor's start/finish rule.
+  .refine(
+    (v) =>
+      !v.externalEarlyStart ||
+      !v.externalLateFinish ||
+      v.externalLateFinish >= v.externalEarlyStart,
+    {
+      message: 'External late finish can’t be before the external early start.',
+      path: ['externalLateFinish'],
+    },
+  );
 
 export type ActivityFormValues = z.infer<typeof activityFormSchema>;
 

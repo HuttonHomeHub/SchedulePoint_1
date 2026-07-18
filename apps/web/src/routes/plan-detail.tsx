@@ -13,19 +13,28 @@ import { Spinner } from '@/components/ui/spinner';
 import {
   ADVANCED_CONSTRAINTS_ENABLED,
   CANVAS_WORKSPACE_ENABLED,
+  EARNED_VALUE_ENABLED,
   FLOAT_CRITICAL_SETTINGS_ENABLED,
+  INTER_PROJECT_DATES_ENABLED,
   PROGRESS_INGESTION_ENABLED,
+  RESOURCE_CURVES_ENABLED,
+  RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary } from '@/features/baselines';
+import { EarnedValuePanel } from '@/features/earned-value';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import {
   PLAN_STATUS_LABELS,
   PlanCalendarPicker,
+  PlanEarnedValueSettings,
   PlanExpectedFinishToggle,
+  PlanExternalRelationshipsSettings,
+  PlanLevellingSettings,
   PlanRecalcModePicker,
   PlanScheduleSettings,
 } from '@/features/plans';
+import { ResourceHistogram } from '@/features/resources';
 import { RecalculateButton, ScheduleSummaryStrip } from '@/features/schedule';
 import { TsldPanel } from '@/features/tsld';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -188,6 +197,25 @@ function LegacyPlanLayout({
           <PlanScheduleSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
         </div>
       ) : null}
+      {RESOURCE_LEVELLING_ENABLED ? (
+        <div className="mt-3">
+          <PlanLevellingSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+        </div>
+      ) : null}
+      {INTER_PROJECT_DATES_ENABLED ? (
+        <div className="mt-3">
+          <PlanExternalRelationshipsSettings
+            orgSlug={orgSlug}
+            plan={plan}
+            canEdit={model.canWrite}
+          />
+        </div>
+      ) : null}
+      {EARNED_VALUE_ENABLED ? (
+        <div className="mt-3">
+          <PlanEarnedValueSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+        </div>
+      ) : null}
       <div className="mt-3">
         <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       </div>
@@ -202,6 +230,36 @@ function LegacyPlanLayout({
           <BaselinesPanel orgSlug={orgSlug} planId={planId} canManage={model.canWrite} />
         </div>
       </div>
+
+      {EARNED_VALUE_ENABLED ? (
+        <div className="mt-6">
+          <h3 className="text-base font-medium">Earned value</h3>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Cost and schedule performance measured against the active baseline when one exists —
+            SPI, CPI and the forecast at completion, per activity and for the plan as a whole.
+          </p>
+          <div className="mt-3">
+            <EarnedValuePanel
+              orgSlug={orgSlug}
+              planId={planId}
+              activities={model.activities.data ?? []}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {RESOURCE_CURVES_ENABLED ? (
+        <div className="mt-6">
+          <h3 className="text-base font-medium">Resource histogram</h3>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Each resource’s curve-shaped units over time across this plan — a bar chart with a
+            keyboard-navigable data table carrying the same numbers.
+          </p>
+          <div className="mt-3">
+            <ResourceHistogram orgSlug={orgSlug} planId={planId} />
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         <h2 className="text-lg font-medium">Logic diagram</h2>

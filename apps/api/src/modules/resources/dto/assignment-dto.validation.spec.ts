@@ -37,6 +37,15 @@ describe('assignment DTO validation (ADR-0040 N19 / editedField)', () => {
     expect(errors).toHaveLength(0);
   });
 
+  it('accepts a valid curveType and rejects an unknown one (ADR-0044 §3 / ADR-0035 §31)', () => {
+    const ok = errorsFor(UpdateAssignmentDto, { version: 1, curveType: 'BELL' });
+    expect(ok.some((e) => e.property === 'curveType')).toBe(false);
+    const bad = errorsFor(CreateAssignmentDto, { resourceId: RESOURCE_ID, curveType: 'S_CURVE' });
+    expect(bad.some((e) => e.property === 'curveType')).toBe(true);
+    const badUpdate = errorsFor(UpdateAssignmentDto, { version: 1, curveType: 'wobbly' });
+    expect(badUpdate.some((e) => e.property === 'curveType')).toBe(true);
+  });
+
   it('rejects editedField = DURATION (a duration edit is an activity write, not an assignment one)', () => {
     const errors = errorsFor(UpdateAssignmentDto, { version: 1, editedField: 'DURATION' });
     expect(errors.some((e) => e.property === 'editedField')).toBe(true);

@@ -1,5 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { DurationType, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
+import {
+  RESOURCE_CURVE_TYPES,
+  type DurationType,
+  type ResourceAssignmentSummary,
+  type ResourceCurveType,
+  type ResourceSummary,
+} from '@repo/types';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -16,10 +22,13 @@ import {
   type DurationDerivationPreview,
 } from '../schemas/duration-triad';
 import {
+  RESOURCE_CURVE_LABELS,
   RESOURCE_KIND_LABELS,
   assignmentFormSchema,
   isMaterialResource,
+  validateActualUnits,
   validateBudgetedUnits,
+  validateMoneyMajor,
   validateUnitsPerHour,
   type AssignmentFormValues,
 } from '../schemas/resource-schemas';
@@ -31,7 +40,12 @@ import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { DURATION_TYPES_ENABLED } from '@/config/env';
+import {
+  DURATION_TYPES_ENABLED,
+  EARNED_VALUE_ENABLED,
+  RESOURCE_CURVES_ENABLED,
+} from '@/config/env';
+import { minorToMajorInput } from '@/lib/format-money';
 
 /** A MATERIAL resource may never drive an activity's dates (ADR-0039). */
 const MATERIAL_DRIVING_HINT = 'A material resource can’t drive an activity’s dates.';
@@ -74,6 +88,164 @@ function DerivedDurationNote({
 }
 
 /**
+ * Seed a MAJOR-unit money text field from a stored minor-units value: blank when unset, else the major
+ * amount as a string. Reuses {@link minorToMajorInput} (the shared minor→major conversion) so this
+ * inline editor and the RHF dialogs divide by the same minor-units factor.
+ */
+function seedMoney(minorUnits: number | null): string {
+  const major = minorToMajorInput(minorUnits);
+  return major === undefined ? '' : String(major);
+}
+
+/**
+ * The assignment's **cost & actuals** editor (EV4b, ADR-0042), shown behind `VITE_EARNED_VALUE` on a
+ * writable row: a budgeted-cost override (blank = derive from budgeted units × the resource rate at EV
+ * read time), an actual cost, and actual units of work done — the inputs the Earned-Value read consumes.
+ * Money is entered in MAJOR units (e.g. dollars) and stored in minor units. One grouped Save persists
+ * all three at once (the fields are a logical set); values seed from the row so an untouched Save
+ * round-trips them exactly. It carries no `editedField`, so it never triggers a triad recompute.
+ */
+function AssignmentCostFields({
+  orgSlug,
+  planId,
+  activityId,
+  assignment,
+  name,
+}: {
+  orgSlug: string;
+  /** The owning plan, so a cost save refreshes the resource histogram (ADR-0044 §3). */
+  planId: string | undefined;
+  activityId: string;
+  assignment: ResourceAssignmentSummary;
+  name: string;
+}): React.ReactElement {
+  const update = useUpdateAssignment(orgSlug, planId);
+  const announce = useAnnounce();
+  const budgetedId = useId();
+  const budgetedErrorId = useId();
+  const actualCostId = useId();
+  const actualCostErrorId = useId();
+  const actualUnitsId = useId();
+  const actualUnitsErrorId = useId();
+
+  const seededBudgeted = seedMoney(assignment.budgetedCost);
+  const seededActualCost = seedMoney(assignment.actualCost);
+  const seededActualUnits = String(assignment.actualUnits);
+  const [budgetedCost, setBudgetedCost] = useState(seededBudgeted);
+  const [actualCost, setActualCost] = useState(seededActualCost);
+  const [actualUnits, setActualUnits] = useState(seededActualUnits);
+
+  const budgetedValidation = validateMoneyMajor(budgetedCost);
+  const actualCostValidation = validateMoneyMajor(actualCost);
+  const actualUnitsValidation = validateActualUnits(actualUnits);
+  const budgetedError = 'error' in budgetedValidation ? budgetedValidation.error : undefined;
+  const actualCostError = 'error' in actualCostValidation ? actualCostValidation.error : undefined;
+  const actualUnitsError =
+    'error' in actualUnitsValidation ? actualUnitsValidation.error : undefined;
+  const hasError = Boolean(budgetedError || actualCostError || actualUnitsError);
+  const changed =
+    budgetedCost !== seededBudgeted ||
+    actualCost !== seededActualCost ||
+    actualUnits !== seededActualUnits;
+
+  const save = (): void => {
+    if (hasError || !changed) return;
+    update.mutate(
+      {
+        assignmentId: assignment.id,
+        activityId,
+        version: assignment.version,
+        budgetedUnits: assignment.budgetedUnits,
+        isDriving: assignment.isDriving,
+        // A blank budgeted-cost clears the override (→ null, derive from units × rate); a blank actual
+        // cost/units means none (0). All three round-trip a seeded value untouched.
+        budgetedCost: (budgetedValidation as { value: number | null }).value,
+        actualCost: (actualCostValidation as { value: number | null }).value ?? 0,
+        actualUnits: (actualUnitsValidation as { value: number }).value,
+      },
+      { onSuccess: () => announce(`Cost for “${name}” saved.`) },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={budgetedId}>Budgeted cost</Label>
+          <Input
+            id={budgetedId}
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            value={budgetedCost}
+            onChange={(event) => setBudgetedCost(event.target.value)}
+            aria-invalid={budgetedError ? true : undefined}
+            aria-describedby={budgetedError ? budgetedErrorId : undefined}
+            className="w-32"
+          />
+          {budgetedError ? (
+            <p id={budgetedErrorId} className="text-destructive-text text-sm">
+              {budgetedError}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={actualCostId}>Actual cost</Label>
+          <Input
+            id={actualCostId}
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            value={actualCost}
+            onChange={(event) => setActualCost(event.target.value)}
+            aria-invalid={actualCostError ? true : undefined}
+            aria-describedby={actualCostError ? actualCostErrorId : undefined}
+            className="w-32"
+          />
+          {actualCostError ? (
+            <p id={actualCostErrorId} className="text-destructive-text text-sm">
+              {actualCostError}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={actualUnitsId}>Actual units</Label>
+          <Input
+            id={actualUnitsId}
+            type="number"
+            min={0}
+            step="any"
+            value={actualUnits}
+            onChange={(event) => setActualUnits(event.target.value)}
+            aria-invalid={actualUnitsError ? true : undefined}
+            aria-describedby={actualUnitsError ? actualUnitsErrorId : undefined}
+            className="w-28"
+          />
+          {actualUnitsError ? (
+            <p id={actualUnitsErrorId} className="text-destructive-text text-sm">
+              {actualUnitsError}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          aria-label={`Save cost for ${name}`}
+          disabled={!changed || hasError || update.isPending}
+          aria-busy={update.isPending}
+          onClick={save}
+        >
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * One assignment row: a budgeted-units edit, a units/time (rate) edit for the driving assignment
  * (behind `VITE_DURATION_TYPES`), a driving toggle (disabled for MATERIAL), and unassign. When the
  * duration-types surface is on, a units/rate edit on the driving assignment carries its `editedField`
@@ -82,6 +254,7 @@ function DerivedDurationNote({
  */
 function AssignmentRow({
   orgSlug,
+  planId,
   activityId,
   assignment,
   resource,
@@ -90,6 +263,8 @@ function AssignmentRow({
   onRemoved,
 }: {
   orgSlug: string;
+  /** The owning plan, so units/driving/curve/unassign edits refresh the resource histogram (ADR-0044 §3). */
+  planId: string | undefined;
   activityId: string;
   assignment: ResourceAssignmentSummary;
   resource: ResourceSummary | undefined;
@@ -99,8 +274,8 @@ function AssignmentRow({
   /** Called after a successful unassign so the parent can restore focus (the row unmounts). */
   onRemoved: () => void;
 }): React.ReactElement {
-  const update = useUpdateAssignment(orgSlug);
-  const remove = useDeleteAssignment(orgSlug);
+  const update = useUpdateAssignment(orgSlug, planId);
+  const remove = useDeleteAssignment(orgSlug, planId);
   const announce = useAnnounce();
   const unitsId = useId();
   const unitsErrorId = useId();
@@ -108,6 +283,7 @@ function AssignmentRow({
   const rateId = useId();
   const rateErrorId = useId();
   const rateNoteId = useId();
+  const curveId = useId();
   // Seeded from the row's persisted value. The parent keys this component by the
   // assignment id (not its version), so a save/driving-toggle refetch keeps the row
   // mounted — focus is preserved — while the persisted-value diff below drives Save.
@@ -227,6 +403,25 @@ function AssignmentRow({
     );
   };
 
+  // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain enum save (like the driving toggle),
+  // preserving the other fields; it never triggers a triad recompute (no editedField).
+  const changeCurve = (next: ResourceCurveType): void => {
+    update.mutate(
+      {
+        assignmentId: assignment.id,
+        activityId,
+        version: assignment.version,
+        budgetedUnits: assignment.budgetedUnits,
+        isDriving: assignment.isDriving,
+        curveType: next,
+      },
+      {
+        onSuccess: () =>
+          announce(`Loading curve for “${name}” set to ${RESOURCE_CURVE_LABELS[next]}.`),
+      },
+    );
+  };
+
   const unassign = (): void => {
     remove.mutate(
       { assignmentId: assignment.id, activityId },
@@ -341,6 +536,26 @@ function AssignmentRow({
               hint={isMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
               onChange={(event) => toggleDriving(event.target.checked)}
             />
+            {/* Loading curve (M7 rung 5, ADR-0044 §3) — shapes the resource histogram, not the dates.
+                Behind the flag; UNIFORM is the flat default. Saved immediately on change. */}
+            {RESOURCE_CURVES_ENABLED ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={curveId}>Loading curve</Label>
+                <Select
+                  id={curveId}
+                  value={assignment.curveType}
+                  disabled={update.isPending}
+                  onChange={(event) => changeCurve(event.target.value as ResourceCurveType)}
+                  className="w-40"
+                >
+                  {RESOURCE_CURVE_TYPES.map((curve) => (
+                    <option key={curve} value={curve}>
+                      {RESOURCE_CURVE_LABELS[curve]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -352,6 +567,16 @@ function AssignmentRow({
               Unassign
             </Button>
           </div>
+          {/* Cost & actuals (EV4b, ADR-0042) — the EV read's per-assignment inputs, behind the flag. */}
+          {EARNED_VALUE_ENABLED ? (
+            <AssignmentCostFields
+              orgSlug={orgSlug}
+              planId={planId}
+              activityId={activityId}
+              assignment={assignment}
+              name={name}
+            />
+          ) : null}
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">
@@ -360,6 +585,9 @@ function AssignmentRow({
             ? ` · ${assignment.unitsPerHour} units/time`
             : ''}
           {assignment.isDriving ? ' · driving' : ''}
+          {RESOURCE_CURVES_ENABLED && assignment.curveType !== 'UNIFORM'
+            ? ` · ${RESOURCE_CURVE_LABELS[assignment.curveType]} curve`
+            : ''}
         </p>
       )}
     </li>
@@ -380,6 +608,7 @@ function AssignmentRow({
  */
 export function ActivityResourcesDialog({
   orgSlug,
+  planId,
   activityId,
   activityName,
   activityDurationType,
@@ -388,6 +617,10 @@ export function ActivityResourcesDialog({
   canWrite,
 }: {
   orgSlug: string;
+  /** The owning plan (ADR-0044 §3) — threaded to the assignment mutations so an assign / edit /
+   * unassign refreshes the plan's resource histogram. Optional so the flag-off / test callers can
+   * omit it (the histogram surface is dark by default). */
+  planId?: string;
   /** Optional so the dialog can stay mounted (toggled by `open`), preserving focus restore. */
   activityId?: string;
   activityName?: string;
@@ -399,10 +632,12 @@ export function ActivityResourcesDialog({
 }): React.ReactElement {
   const resources = useResources(orgSlug);
   const assignments = useAssignments(orgSlug, activityId ?? '');
-  const create = useCreateAssignment(orgSlug, activityId ?? '');
+  const create = useCreateAssignment(orgSlug, activityId ?? '', planId);
   const announce = useAnnounce();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const resourceSelectId = useId();
+  const curveSelectId = useId();
+  const curveHelpId = useId();
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
   const assignedIds = new Set((assignments.data ?? []).map((a) => a.resourceId));
@@ -417,12 +652,12 @@ export function ActivityResourcesDialog({
     formState: { errors },
   } = useForm<AssignmentFormValues>({
     resolver: zodResolver(assignmentFormSchema),
-    defaultValues: { resourceId: '', budgetedUnits: 0, isDriving: false },
+    defaultValues: { resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' },
   });
 
   useEffect(() => {
     if (open) {
-      reset({ resourceId: '', budgetedUnits: 0, isDriving: false });
+      reset({ resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' });
       create.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
@@ -451,7 +686,7 @@ export function ActivityResourcesDialog({
         onSuccess: () => {
           const name = resourceById.get(values.resourceId)?.name ?? 'Resource';
           announce(`“${name}” assigned.`);
-          reset({ resourceId: '', budgetedUnits: 0, isDriving: false });
+          reset({ resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' });
         },
       },
     );
@@ -484,6 +719,7 @@ export function ActivityResourcesDialog({
                 <AssignmentRow
                   key={assignment.id}
                   orgSlug={orgSlug}
+                  planId={planId}
                   activityId={activityId ?? ''}
                   assignment={assignment}
                   resource={resourceById.get(assignment.resourceId)}
@@ -555,6 +791,29 @@ export function ActivityResourcesDialog({
                   hint={selectedIsMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
                   {...register('isDriving')}
                 />
+                {/* Loading curve (M7 rung 5, ADR-0044 §3) — the named P6 profile the resource histogram
+                    distributes budgeted units by across the span. Behind the flag; UNIFORM is the flat
+                    default. Shapes only the histogram, never the dates. */}
+                {RESOURCE_CURVES_ENABLED ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={curveSelectId}>Loading curve</Label>
+                    <Select
+                      id={curveSelectId}
+                      aria-describedby={curveHelpId}
+                      {...register('curveType')}
+                    >
+                      {RESOURCE_CURVE_TYPES.map((curve) => (
+                        <option key={curve} value={curve}>
+                          {RESOURCE_CURVE_LABELS[curve]}
+                        </option>
+                      ))}
+                    </Select>
+                    <p id={curveHelpId} className="text-muted-foreground text-sm">
+                      Shapes how this resource’s units spread over the activity — the resource
+                      histogram only. It doesn’t move any dates.
+                    </p>
+                  </div>
+                ) : null}
                 {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
                     driving box is ticked, and only behind the flag. An initial rate is stored inert; the
                     duration derivation happens on a later units/rate edit in the row above. */}
@@ -570,6 +829,48 @@ export function ActivityResourcesDialog({
                       setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                     })}
                   />
+                ) : null}
+                {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag. Money in
+                    MAJOR units (×100 → minor on submit); budgeted cost is an optional override of the
+                    units × rate derivation. */}
+                {EARNED_VALUE_ENABLED ? (
+                  <>
+                    <TextField
+                      label="Budgeted cost (optional)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      hint="Overrides the cost derived from budgeted units × the resource’s rate. Leave blank to derive it."
+                      error={errors.budgetedCost?.message}
+                      {...register('budgetedCost', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                    <TextField
+                      label="Actual cost (optional)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      hint="The cost booked against this assignment so far, in the plan’s currency."
+                      error={errors.actualCost?.message}
+                      {...register('actualCost', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                    <TextField
+                      label="Actual units (optional)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      hint="The quantity of work done so far, feeding the Units earned-value measure."
+                      error={errors.actualUnits?.message}
+                      {...register('actualUnits', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                  </>
                 ) : null}
                 <div className="flex justify-end">
                   <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>

@@ -17,6 +17,30 @@ export {
 export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
 export { levelSchedule } from './level';
 export { computeFloatPaths, type FloatPath } from './float-paths';
+export {
+  computeResourceHistogram,
+  resolveCurveProfile,
+  RESOURCE_CURVE_PROFILES,
+  MAX_HISTOGRAM_BUCKETS,
+  HistogramTooManyBucketsError,
+  type HistogramInput,
+  type HistogramAssignmentInput,
+  type HistogramBucket,
+  type HistogramSeries,
+  type ResourceHistogramResult,
+} from './resource-histogram';
+export {
+  computeEarnedValue,
+  deriveMetrics,
+  rollupPhysicalPercent,
+  type EvInput,
+  type EvActivityInput,
+  type EvAssignmentInput,
+  type ActivityStepInput,
+  type EvMetrics,
+  type EvActivityResult,
+  type PlanEarnedValueResult,
+} from './earned-value';
 export type { ProgressMode, ProgressStatus } from './progress';
 export { buildGraph, type ScheduleGraph } from './graph';
 export { ScheduleGraphNotADagError, UnknownActivityError } from './errors';

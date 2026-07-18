@@ -167,6 +167,65 @@ every editing entry point (edit-lock M2/M3).
 - Requests validated with `class-validator` DTOs; unknown properties rejected.
 - If the app represents money, use **minor units (integer)** with an explicit
   currency code — never floating point. Timestamps are **ISO 8601 UTC** strings.
+- **Calendar-day fields** (a date with no time/timezone) are strict `YYYY-MM-DD`
+  strings — e.g. an activity's `constraintDate`/`expectedFinish` and its
+  **external / inter-project dates** `externalEarlyStart`/`externalLateFinish`
+  (ADR-0043 / ADR-0035 §30: imported commitments from another project, gating
+  this activity; either/both/neither may be set, and dropped from the schedule
+  when the plan's `ignoreExternalRelationships` option is on). A cross-field
+  invalid pair returns **422** with a `details.reason` — e.g.
+  `EXTERNAL_FINISH_BEFORE_START` when `externalLateFinish` precedes
+  `externalEarlyStart` (N26), alongside a nullable-safe DB CHECK backstop.
+- A plan's **scheduling options** are booleans on the plan resource
+  (`makeOpenEndsCritical`, `useExpectedFinishDates`, `levelResources`,
+  `ignoreExternalRelationships`, …); each defaults to a behaviour-preserving
+  `false` and is set with a targeted PATCH. The computed `GET …/schedule/summary`
+  roll-up carries `externalDrivenCount` (how many activities an external bound
+  drove) — engine-derived on a recalculation.
+- An activity's **Earned-Value cost inputs** (ADR-0042 / ADR-0044) are settable
+  definition fields: `percentCompleteType` (`DURATION` default / `UNITS` /
+  `PHYSICAL` — the measure that earns value), `physicalPercentComplete`, the
+  minor-unit `budgetedExpense`/`actualExpense` (cost:read-gated in responses),
+  and **`accrualType`** (`START` / `UNIFORM` default / `END`, ADR-0044 §32 /
+  ADR-0035 §32). `accrualType` governs **when** the activity's cost is recognised
+  in the `GET …/schedule/earned-value` read's Planned-Value time-phasing — START
+  at its start, END at its finish, UNIFORM linearly — and **never changes a CPM
+  date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing. None of these
+  feed the scheduler.
+- An activity's **weighted progress steps** (ADR-0044 §2 / ADR-0035 §33) are a
+  bulk-replace sub-resource: `GET …/activities/:activityId/steps` lists the active
+  steps (seq-ordered), and `PUT …/activities/:activityId/steps` with
+  `{ version, steps: [{ name, weight, percentComplete }] }` replaces the whole list
+  in one transaction (retained rows updated in place, new ones appended, removed
+  ones soft-deleted; the server assigns `seq`). `version` is the parent **activity's**
+  optimistic-lock version (the replace bumps it; a stale value is a `409`). Steps
+  are activity-write data (`activity:update`, no new permission). When present,
+  their weight-weighted mean `Σ(w·p)/Σw` is the activity's **PHYSICAL** %-complete
+  and **wins** over `physicalPercentComplete` (feeding the `GET …/schedule/earned-value`
+  read only — never a CPM date); with no steps the manual field stands (parity). A
+  step `percentComplete` outside 0–100 is a **422** (`STEP_PERCENT_OUT_OF_RANGE`,
+  N28) and a negative `weight` a 422; all-zero weights fall back to the manual field
+  and raise the read's `stepWeightZeroCount` warning (N27), never a reject.
+- A **resource assignment** (`…/activities/:activityId/assignments`) carries a
+  settable **`curveType`** (`UNIFORM` default / `BELL` / `FRONT_LOADED` /
+  `BACK_LOADED` / `DOUBLE_PEAK`, ADR-0044 §3 / ADR-0035 §31) — the named P6 loading
+  curve the resource-histogram read distributes the assignment's `budgetedUnits` by
+  across the activity span. It shapes only the histogram — **no CPM date, no
+  levelling** — and `UNIFORM` (the default) is a flat load (byte-identical to a
+  flat-rate distribution). It is a plain enum (not cost-gated).
+- `GET …/schedule/resource-histogram` reads a plan's **resource loading histogram**
+  (ADR-0044 §3 / ADR-0035 §31, `schedule:read` — every member; the units histogram
+  is **schedule data, not cost**, so it is **not** `cost:read`-gated). A
+  `granularity` query param (`DAY` default / `WEEK` / `MONTH`) sets the shared
+  time-bucket axis; `limit`/`offset` page over the **per-resource series** (`data`).
+  Each assignment's `budgetedUnits` is distributed across its effective span per its
+  `curveType`, **conserving units** (`Σ buckets === Σ budgetedUnits` per resource);
+  the response `meta` carries the shared `buckets` axis, `granularity`, the total
+  series count, `hasMore`, and **`curveNormalisedCount`** (N29 — assignments whose
+  profile did not sum to 100 and were normalised to conserve units). It reads the
+  persisted CPM dates only — no recompute, no CPM date moved, no levelling. A
+  granularity too fine for the plan's span returns **422**
+  (`HISTOGRAM_GRANULARITY_TOO_FINE`); request a coarser one.
 
 ## Authentication
 

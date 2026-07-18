@@ -1,18 +1,31 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Dialog } from '@/components/ui/dialog';
-import { ADVANCED_CONSTRAINTS_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
+import {
+  ADVANCED_CONSTRAINTS_ENABLED,
+  EARNED_VALUE_ENABLED,
+  INTER_PROJECT_DATES_ENABLED,
+  PROGRESS_INGESTION_ENABLED,
+  RESOURCE_CURVES_ENABLED,
+  RESOURCE_LEVELLING_ENABLED,
+} from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
+import { EarnedValuePanel } from '@/features/earned-value';
 import {
   PLAN_STATUS_LABELS,
   PlanCalendarPicker,
+  PlanEarnedValueSettings,
   PlanExpectedFinishToggle,
+  PlanExternalRelationshipsSettings,
+  PlanLevellingSettings,
   PlanRecalcModePicker,
 } from '@/features/plans';
+import { ResourceHistogram } from '@/features/resources';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The lower-frequency plan-chrome surfaces reachable from either layout's overflow. */
-export type PlanChromeDialog = 'details' | 'baselines' | 'calendar';
+export type PlanChromeDialog =
+  'details' | 'baselines' | 'calendar' | 'earned-value' | 'resource-histogram';
 
 /**
  * The three **plan-chrome dialogs** — Plan details, Baselines, and the working-day Calendar — shared
@@ -83,8 +96,49 @@ export function PlanChromeDialogs({
               canEdit={model.canWrite}
             />
           ) : null}
+          {RESOURCE_LEVELLING_ENABLED ? (
+            <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          ) : null}
+          {INTER_PROJECT_DATES_ENABLED ? (
+            <PlanExternalRelationshipsSettings
+              orgSlug={model.orgSlug}
+              plan={plan}
+              canEdit={model.canWrite}
+            />
+          ) : null}
+          {EARNED_VALUE_ENABLED ? (
+            <PlanEarnedValueSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          ) : null}
         </div>
       </Dialog>
+
+      {EARNED_VALUE_ENABLED ? (
+        <Dialog
+          open={dialog === 'earned-value'}
+          onClose={onClose}
+          title="Earned value"
+          description="Cost and schedule performance measured against the active baseline when one exists — SPI, CPI and the forecast at completion, per activity and for the plan."
+          size="lg"
+        >
+          <EarnedValuePanel
+            orgSlug={model.orgSlug}
+            planId={model.planId}
+            activities={model.activities.data ?? []}
+          />
+        </Dialog>
+      ) : null}
+
+      {RESOURCE_CURVES_ENABLED ? (
+        <Dialog
+          open={dialog === 'resource-histogram'}
+          onClose={onClose}
+          title="Resource histogram"
+          description="Each resource's curve-shaped units over time across this plan — a bar chart with a keyboard-navigable data table carrying the same numbers."
+          size="lg"
+        >
+          <ResourceHistogram orgSlug={model.orgSlug} planId={model.planId} />
+        </Dialog>
+      ) : null}
     </>
   );
 }

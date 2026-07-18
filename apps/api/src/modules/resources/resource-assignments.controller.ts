@@ -64,8 +64,8 @@ export class ResourceAssignmentsController {
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
   ): Promise<ResourceAssignmentResponseDto[]> {
-    const rows = await this.service.list(principal, orgSlug, activityId);
-    return rows.map((row) => ResourceAssignmentResponseDto.from(row));
+    const { items, canReadCost } = await this.service.list(principal, orgSlug, activityId);
+    return items.map((row) => ResourceAssignmentResponseDto.from(row, canReadCost));
   }
 
   @Post('activities/:activityId/assignments')
@@ -98,9 +98,13 @@ export class ResourceAssignmentsController {
     @Param('activityId', ParseUuidPipe) activityId: string,
     @Body() dto: CreateAssignmentDto,
   ): Promise<ResourceAssignmentResponseDto> {
-    return ResourceAssignmentResponseDto.from(
-      await this.service.create(principal, orgSlug, activityId, dto),
+    const { assignment, canReadCost } = await this.service.create(
+      principal,
+      orgSlug,
+      activityId,
+      dto,
     );
+    return ResourceAssignmentResponseDto.from(assignment, canReadCost);
   }
 
   @Patch('assignments/:id')
@@ -132,9 +136,8 @@ export class ResourceAssignmentsController {
     @Param('id', ParseUuidPipe) id: string,
     @Body() dto: UpdateAssignmentDto,
   ): Promise<ResourceAssignmentResponseDto> {
-    return ResourceAssignmentResponseDto.from(
-      await this.service.update(principal, orgSlug, id, dto),
-    );
+    const { assignment, canReadCost } = await this.service.update(principal, orgSlug, id, dto);
+    return ResourceAssignmentResponseDto.from(assignment, canReadCost);
   }
 
   @Delete('assignments/:id')

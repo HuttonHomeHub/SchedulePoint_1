@@ -6,11 +6,13 @@ import { useActivities, useDeleteActivity } from '../api/use-activities';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
+  isDurationDerivedType,
   isMilestoneType,
 } from '../schemas/activity-schemas';
 
 import { ActivityFormDialog } from './ActivityFormDialog';
 import { ActivityProgressDialog } from './ActivityProgressDialog';
+import { ActivityStepsDialog } from './ActivityStepsDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +21,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import {
   ACTIVITY_CALENDAR_ENABLED,
+  ACTIVITY_STEPS_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
   RESOURCES_ENABLED,
 } from '@/config/env';
@@ -127,6 +130,7 @@ export function ActivitiesTable({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [progressId, setProgressId] = useState<string | null>(null);
   const [resourcesId, setResourcesId] = useState<string | null>(null);
+  const [stepsId, setStepsId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -135,6 +139,7 @@ export function ActivitiesTable({
   const managingResources = resourcesId
     ? activities.data?.find((a) => a.id === resourcesId)
     : undefined;
+  const editingSteps = stepsId ? activities.data?.find((a) => a.id === stepsId) : undefined;
 
   const columns: Column<ActivitySummary>[] = [
     {
@@ -329,6 +334,20 @@ export function ActivitiesTable({
               Resources
             </Button>
           ) : null}
+          {/* Dark surface (ADR-0044 §2): the weighted-steps editor is an authoring surface — writers
+              only, gated on the flag. Hidden for a duration-derived type (milestone / LOE / WBS
+              summary): weighted steps are inert there — the EV engine hardcodes their physical %,
+              matching how the form hides %-complete / expense for those (ux review). */}
+          {ACTIVITY_STEPS_ENABLED && canWrite && !isDurationDerivedType(activity.type) ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setStepsId(activity.id)}
+              aria-label={`Steps for ${activity.name}`}
+            >
+              Steps
+            </Button>
+          ) : null}
           {canWrite ? (
             <>
               <Button
@@ -403,6 +422,7 @@ export function ActivitiesTable({
       {RESOURCES_ENABLED ? (
         <ActivityResourcesDialog
           orgSlug={orgSlug}
+          planId={planId}
           open={managingResources !== undefined}
           onClose={() => setResourcesId(null)}
           canWrite={canWrite}
@@ -413,6 +433,16 @@ export function ActivitiesTable({
                 activityDurationType: managingResources.durationType,
               }
             : {})}
+        />
+      ) : null}
+
+      {ACTIVITY_STEPS_ENABLED && canWrite ? (
+        <ActivityStepsDialog
+          orgSlug={orgSlug}
+          planId={planId}
+          open={editingSteps !== undefined}
+          onClose={() => setStepsId(null)}
+          {...(editingSteps ? { activity: editingSteps } : {})}
         />
       ) : null}
 

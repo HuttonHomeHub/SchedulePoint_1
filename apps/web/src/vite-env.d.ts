@@ -31,4 +31,16 @@ interface ImportMetaEnv {
   readonly VITE_RESOURCES?: string;
   /** Duration types & the resource-units triad — the activity duration-type picker + the driving assignment's units/time rate (M7 rung 4, ADR-0040). "true"/"1" enables it; off by default. */
   readonly VITE_DURATION_TYPES?: string;
+  /** Resource levelling — plan level-resources/within-float toggles, resource max units/hour, activity levelling priority, levelled summary overlay (ADR-0041). "true"/"1" enables it; off by default. */
+  readonly VITE_RESOURCE_LEVELLING?: string;
+  /** Earned-Value web surface — plan EAC/currency settings, resource cost rate, activity cost & %-complete, assignment cost, and the EV analysis panel (EV4b, ADR-0042). "true"/"1" enables it; off by default. */
+  readonly VITE_EARNED_VALUE?: string;
+  /** Cost-accrual web surface — the activity "Cost accrual" select (Start / Uniform / End) governing when cost is recognised in the EV read's PV time-phasing (M7 rung 5, ADR-0044 F1). "true"/"1" enables it; off by default. */
+  readonly VITE_COST_ACCRUAL?: string;
+  /** Weighted activity-steps web surface — the per-activity "Steps" editor (name/weight/% list) whose weighted-mean rolls up the physical %-complete (M7 rung 5, ADR-0044 §2). "true"/"1" enables it; off by default. */
+  readonly VITE_ACTIVITY_STEPS?: string;
+  /** Resource loading-curves web surface — the per-assignment loading-curve picker (Uniform/Bell/Front-loaded/Back-loaded/Double-peak) + the Resource histogram read view (M7 rung 5, ADR-0044 §3). "true"/"1" enables it; off by default. */
+  readonly VITE_RESOURCE_CURVES?: string;
+  /** Inter-project / external dates web surface — activity external early-start/late-finish, plan ignore-external toggle, externally-driven summary count (F5, ADR-0043). "true"/"1" enables it; off by default. */
+  readonly VITE_INTER_PROJECT_DATES?: string;
 }
