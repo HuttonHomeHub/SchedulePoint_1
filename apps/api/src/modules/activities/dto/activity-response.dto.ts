@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  AccrualType,
   ActivityStatus,
   ActivityType,
   ConstraintType,
@@ -114,6 +115,15 @@ export class ActivityResponseDto implements ActivitySummary {
       'Hand-entered physical % complete (EV1, ADR-0042), used only when percentCompleteType = PHYSICAL, or null.',
   })
   physicalPercentComplete!: number | null;
+
+  @ApiProperty({
+    enum: AccrualType,
+    description:
+      'How the activity’s cost accrues across its span (M7 rung 5, ADR-0044 / ADR-0035 §32): START, ' +
+      'END, or UNIFORM (default). Governs WHEN cost / Planned Value is recognised in the Earned-Value ' +
+      'read — it never changes a CPM date. Always readable (not money — a plain definition echo).',
+  })
+  accrualType!: AccrualType;
 
   @ApiProperty({
     nullable: true,
@@ -382,6 +392,8 @@ export class ActivityResponseDto implements ActivitySummary {
       // Earned-Value progress measures (EV1, ADR-0042): passthrough echo — not money, always readable.
       percentCompleteType: entity.percentCompleteType,
       physicalPercentComplete: entity.physicalPercentComplete,
+      // Cost accrual (M7 rung 5, ADR-0044 §32): a plain definition echo — not money, always readable.
+      accrualType: entity.accrualType,
       // Money expense amounts (BigInt minor units → number) are gated on `cost:read` (EV4a, ADR-0042):
       // null unless the caller may read cost AND the amount is set. A Viewer/Contributor always sees null.
       budgetedExpense:

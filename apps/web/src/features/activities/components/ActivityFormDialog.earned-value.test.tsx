@@ -73,6 +73,7 @@ const ACTIVITY: ActivitySummary = {
   selfOverAllocated: false,
   // 250000 minor = 2,500.00 major; 100000 minor = 1,000.00 major.
   percentCompleteType: 'PHYSICAL',
+  accrualType: 'UNIFORM',
   physicalPercentComplete: 40,
   budgetedExpense: 250000,
   actualExpense: 100000,

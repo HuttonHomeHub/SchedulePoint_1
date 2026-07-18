@@ -8,14 +8,17 @@ import { ActivityFormDialog } from './ActivityFormDialog';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The duration-type picker (ADR-0040, M7 rung 4) with `VITE_DURATION_TYPES` forced ON — the surface
- * ships dark by default, so this suite pins the flag to prove the picker renders, persists, round-trips
- * a seeded value, and is hidden for a type with no entered duration (a milestone). (The flag-off
- * behaviour — picker hidden, seeded value still round-trips — is covered by `ActivityFormDialog.test.tsx`.)
+ * The activity **Cost accrual** select (M7 rung 5, ADR-0044 §32 / ADR-0035 §32) with `VITE_COST_ACCRUAL`
+ * forced ON (and `VITE_EARNED_VALUE` left OFF, to prove the picker renders on its own flag). The surface
+ * ships dark by default, so this suite pins the flag to prove: the select renders inside the "Cost &
+ * earned value" fieldset with Start / Uniform / End, always sends `accrualType`, seeds + round-trips a
+ * stored value, and hides for a type with no cost meaning (a milestone). Flag-off (hidden) is asserted
+ * at the end.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  DURATION_TYPES_ENABLED: true,
+  COST_ACCRUAL_ENABLED: true,
+  EARNED_VALUE_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -24,7 +27,7 @@ const ACTIVITY: ActivitySummary = {
   id: 'a1',
   planId: 'pl1',
   code: 'A100',
-  name: 'Excavate',
+  name: 'Crane mobilisation',
   description: null,
   type: 'TASK',
   durationDays: 5,
@@ -56,7 +59,7 @@ const ACTIVITY: ActivitySummary = {
   resourceDriverMissing: false,
   externalEarlyStart: null,
   externalLateFinish: null,
-  durationType: 'FIXED_UNITS',
+  durationType: 'FIXED_DURATION_AND_UNITS_TIME',
   parentId: null,
   visualStart: null,
   visualEffectiveStart: null,
@@ -70,11 +73,11 @@ const ACTIVITY: ActivitySummary = {
   levelingWindowExceeded: false,
   selfOverAllocated: false,
   percentCompleteType: 'DURATION',
-  accrualType: 'UNIFORM',
+  accrualType: 'START', // seeded from the row — a mobilisation charge, all at the start
   physicalPercentComplete: null,
-  budgetedExpense: null,
+  budgetedExpense: 4500000,
   actualExpense: null,
-  version: 4,
+  version: 3,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };
@@ -88,42 +91,48 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDia
   );
 }
 
-describe('ActivityFormDialog — duration type (flag on)', () => {
+describe('ActivityFormDialog — Cost accrual (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
 
-  it('creates an activity carrying the chosen duration type', async () => {
+  it('renders the Cost accrual select (Start / Uniform / End), defaulting to Uniform on create', () => {
     renderDialog();
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText('Duration type'), { target: { value: 'FIXED_UNITS' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(path).toBe('/organizations/acme/plans/pl1/activities');
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      name: 'Pour slab',
-      durationType: 'FIXED_UNITS',
-    });
+    const select = screen.getByLabelText('Cost accrual');
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveValue('UNIFORM');
+    expect(screen.getByRole('option', { name: 'Start' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Uniform' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'End' })).toBeInTheDocument();
   });
 
-  it('seeds the duration type from the row and round-trips it on save', async () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('Duration type')).toHaveValue('FIXED_UNITS');
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  it('sends the chosen accrualType on create', async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Retention release' } });
+    fireEvent.change(screen.getByLabelText('Cost accrual'), { target: { value: 'END' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
     expect(JSON.parse(init?.body as string)).toMatchObject({
-      version: 4,
-      durationType: 'FIXED_UNITS',
+      name: 'Retention release',
+      accrualType: 'END',
     });
   });
 
-  it('hides the picker for a milestone (no entered duration / units)', () => {
+  it('seeds accrualType from the row and round-trips it on save', async () => {
+    renderDialog({ activity: ACTIVITY });
+    expect(screen.getByLabelText('Cost accrual')).toHaveValue('START');
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(JSON.parse(init?.body as string)).toMatchObject({ accrualType: 'START', version: 3 });
+  });
+
+  it('hides the accrual select for a milestone (no cost meaning)', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
-    expect(screen.queryByLabelText('Duration type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Cost accrual')).not.toBeInTheDocument();
   });
 });

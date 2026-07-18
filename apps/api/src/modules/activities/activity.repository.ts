@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
+  type AccrualType,
   type Activity,
   type ActivityStatus,
   type ActivityType,
@@ -55,6 +56,8 @@ export interface ActivityPatch {
   budgetedExpense?: number | null;
   /** Activity-level lump-sum actual in minor units (EV1, ADR-0042); null clears. Stored as BIGINT. */
   actualExpense?: number | null;
+  /** How the activity's cost accrues (M7 rung 5, ADR-0044 §32): START/UNIFORM/END; governs PV phasing only. */
+  accrualType?: AccrualType;
   // Progress
   status?: ActivityStatus;
   percentComplete?: number;

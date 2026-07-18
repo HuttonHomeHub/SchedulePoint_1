@@ -54,6 +54,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     levelingWindowExceeded: false,
     selfOverAllocated: false,
     percentCompleteType: 'DURATION',
+    accrualType: 'UNIFORM',
     physicalPercentComplete: null,
     budgetedExpense: null,
     actualExpense: null,

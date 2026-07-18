@@ -35,6 +35,8 @@ interface ImportMetaEnv {
   readonly VITE_RESOURCE_LEVELLING?: string;
   /** Earned-Value web surface — plan EAC/currency settings, resource cost rate, activity cost & %-complete, assignment cost, and the EV analysis panel (EV4b, ADR-0042). "true"/"1" enables it; off by default. */
   readonly VITE_EARNED_VALUE?: string;
+  /** Cost-accrual web surface — the activity "Cost accrual" select (Start / Uniform / End) governing when cost is recognised in the EV read's PV time-phasing (M7 rung 5, ADR-0044 F1). "true"/"1" enables it; off by default. */
+  readonly VITE_COST_ACCRUAL?: string;
   /** Inter-project / external dates web surface — activity external early-start/late-finish, plan ignore-external toggle, externally-driven summary count (F5, ADR-0043). "true"/"1" enables it; off by default. */
   readonly VITE_INTER_PROJECT_DATES?: string;
 }

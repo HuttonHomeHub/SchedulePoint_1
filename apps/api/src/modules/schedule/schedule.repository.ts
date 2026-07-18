@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
+  type AccrualType,
   type ActivityType,
   type ConstraintType,
   type DependencyType,
@@ -108,6 +109,8 @@ export interface EarnedValueActivityRow {
   percentCompleteType: PercentCompleteType;
   percentComplete: number;
   physicalPercentComplete: number | null;
+  /** How the activity's cost accrues across its span (ADR-0044 §32); governs PV time-phasing only. */
+  accrualType: AccrualType;
   budgetedExpense: bigint | null;
   actualExpense: bigint | null;
   earlyStart: Date | null;
@@ -428,6 +431,7 @@ export class ScheduleRepository {
         percentCompleteType: true,
         percentComplete: true,
         physicalPercentComplete: true,
+        accrualType: true,
         budgetedExpense: true,
         actualExpense: true,
         earlyStart: true,

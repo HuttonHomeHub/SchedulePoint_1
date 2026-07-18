@@ -100,6 +100,9 @@ function createBody(input: ActivityFormValues) {
     // EV read reads it). The physical %/expense fields are omitted when blank so a create without them
     // stays byte-identical; the money fields carry MAJOR → minor units.
     percentCompleteType: input.percentCompleteType,
+    // Cost accrual (M7 rung 5, ADR-0044 §32): a plain attribute like `percentCompleteType` — always
+    // sent (the API default UNIFORM equals the form default, so it stays inert until an EV read reads it).
+    accrualType: input.accrualType,
     ...(input.physicalPercentComplete === undefined
       ? {}
       : { physicalPercentComplete: input.physicalPercentComplete }),
@@ -152,6 +155,8 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     // edit round-trips a stored value; a cleared field sends null. The money fields carry MAJOR → minor
     // units (`majorInputToMinor` maps a blank field to `undefined` → null here).
     percentCompleteType: input.percentCompleteType,
+    // Cost accrual (M7 rung 5, ADR-0044 §32): always sent (seeded from the row so a hidden picker round-trips).
+    accrualType: input.accrualType,
     physicalPercentComplete:
       input.physicalPercentComplete === undefined ? null : input.physicalPercentComplete,
     budgetedExpense: majorInputToMinor(input.budgetedExpense) ?? null,

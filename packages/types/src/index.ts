@@ -416,6 +416,14 @@ export interface ActivitySummary {
    */
   physicalPercentComplete: number | null;
   /**
+   * How the activity's cost accrues across its span in the Earned-Value / cost read-model (M7 rung 5,
+   * ADR-0044 / ADR-0035 §32). Client-settable definition field (default `UNIFORM`, byte-identical to
+   * the pre-ADR-0044 PV time-phasing); `START` recognises the whole lump-sum at the start, `END` at the
+   * finish, `UNIFORM` spreads it linearly. It changes only WHEN cost / Planned Value is recognised — it
+   * NEVER changes a CPM date. A plain definition echo (not money) — always readable.
+   */
+  accrualType: AccrualType;
+  /**
    * Activity-level expense amounts in minor currency units (EV1/EV4a, ADR-0042): the lump-sum
    * budgeted / actual cost carried directly on the activity (independent of resource-derived cost).
    * **Conditionally included (EV4a):** a real value is returned only when the caller holds `cost:read`

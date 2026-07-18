@@ -1,8 +1,10 @@
 import {
+  ACCRUAL_TYPES,
   DURATION_TYPES,
   PARKED_CONSTRAINT_TYPES,
   PERCENT_COMPLETE_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
+  type AccrualType,
   type ActivityStatus,
   type ActivityType,
   type ConstraintType,
@@ -103,6 +105,24 @@ export const PERCENT_COMPLETE_TYPE_LABELS: Record<
 export const PERCENT_COMPLETE_TYPE_OPTIONS = Object.keys(PERCENT_COMPLETE_TYPE_LABELS) as [
   PercentCompleteType,
   ...PercentCompleteType[],
+];
+
+/**
+ * Human labels for the **cost accrual type** (M7 rung 5, ADR-0044 §32) — how an activity's cost is
+ * time-phased in the Earned-Value read's Planned Value. Exhaustive `Record<AccrualType, …>` so a new
+ * value fails to compile until it is labelled. The default (`UNIFORM`) is the behaviour-preserving
+ * linear spread. Accrual changes only WHEN cost is recognised — it never changes a CPM date.
+ */
+export const ACCRUAL_TYPE_LABELS: Record<AccrualType, string> = {
+  START: 'Start',
+  UNIFORM: 'Uniform',
+  END: 'End',
+};
+
+/** Cost accrual types, in order — derived from the labels so it stays exhaustive. */
+export const ACCRUAL_TYPE_OPTIONS = Object.keys(ACCRUAL_TYPE_LABELS) as [
+  AccrualType,
+  ...AccrualType[],
 ];
 
 /** The activity types the form's Type picker always offers — the three with full engine support. */
@@ -230,6 +250,11 @@ export const activityFormSchema = z
     // editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a stored value round-trips
     // even when the fields are hidden.
     percentCompleteType: z.enum(PERCENT_COMPLETE_TYPES),
+    // Cost accrual (M7 rung 5, ADR-0044 §32): how the activity's cost is time-phased in the EV read's
+    // Planned Value (START/UNIFORM/END). A plain enum attribute like `percentCompleteType` (default
+    // `UNIFORM`, byte-identical to the pre-ADR-0044 phasing — it NEVER changes a CPM date); only editable
+    // behind `VITE_COST_ACCRUAL`, but always seeded from the row so a stored value round-trips when hidden.
+    accrualType: z.enum(ACCRUAL_TYPES),
     physicalPercentComplete: z
       .number({ message: 'Enter a percentage from 0 to 100.' })
       .int('Enter a whole percentage.')

@@ -11,6 +11,8 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import {
+  ACCRUAL_TYPE_LABELS,
+  ACCRUAL_TYPE_OPTIONS,
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
   DURATION_TYPE_LABELS,
@@ -33,6 +35,7 @@ import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
+  COST_ACCRUAL_ENABLED,
   DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
@@ -128,6 +131,7 @@ export function ActivityFormDialog({
       parentId: '',
       levelingPriority: undefined,
       percentCompleteType: 'DURATION',
+      accrualType: 'UNIFORM',
       physicalPercentComplete: undefined,
       budgetedExpense: undefined,
       actualExpense: undefined,
@@ -170,6 +174,9 @@ export function ActivityFormDialog({
         // the fields hidden (flag off) — an edit then never clears them. `percentCompleteType` defaults
         // to the API default; `null` physical %/expense → undefined (blank), money minor → major units.
         percentCompleteType: activity?.percentCompleteType ?? 'DURATION',
+        // Cost accrual (M7 rung 5, ADR-0044 §32): always seed from the row so a stored value round-trips
+        // even with the picker hidden (flag off) — an edit then never silently resets it. API default UNIFORM.
+        accrualType: activity?.accrualType ?? 'UNIFORM',
         physicalPercentComplete: activity?.physicalPercentComplete ?? undefined,
         budgetedExpense: minorToMajorInput(activity?.budgetedExpense),
         actualExpense: minorToMajorInput(activity?.actualExpense),
@@ -437,69 +444,99 @@ export function ActivityFormDialog({
             actual expense carried on the activity. Meaningless for a type with no entered
             duration/units/cost (a milestone, LOE or WBS summary) — hidden for those, mirroring the
             Duration / Duration-type fields. Money is entered in major units (e.g. dollars). */}
-        {EARNED_VALUE_ENABLED && !isDurationDerivedType(type) ? (
+        {(EARNED_VALUE_ENABLED || COST_ACCRUAL_ENABLED) && !isDurationDerivedType(type) ? (
           <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
             <legend className="sr-only">Cost &amp; earned value</legend>
             <p className="text-sm font-medium" aria-hidden="true">
               Cost &amp; earned value
             </p>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="activity-percent-complete-type">% complete type</Label>
-              <Select
-                id="activity-percent-complete-type"
-                aria-describedby="activity-percent-complete-type-help"
-                {...register('percentCompleteType')}
-              >
-                {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-                  <option key={value} value={value}>
-                    {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-                  </option>
-                ))}
-              </Select>
-              <p id="activity-percent-complete-type-help" className="text-muted-foreground text-sm">
-                {PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates
-                — only how Earned Value measures progress.
-              </p>
-            </div>
-            {percentCompleteType === 'PHYSICAL' ? (
-              <TextField
-                label="Physical % complete (optional)"
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                inputMode="numeric"
-                hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
-                error={errors.physicalPercentComplete?.message}
-                {...register('physicalPercentComplete', {
-                  setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                })}
-              />
+            {EARNED_VALUE_ENABLED ? (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="activity-percent-complete-type">% complete type</Label>
+                  <Select
+                    id="activity-percent-complete-type"
+                    aria-describedby="activity-percent-complete-type-help"
+                    {...register('percentCompleteType')}
+                  >
+                    {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {PERCENT_COMPLETE_TYPE_LABELS[value].label}
+                      </option>
+                    ))}
+                  </Select>
+                  <p
+                    id="activity-percent-complete-type-help"
+                    className="text-muted-foreground text-sm"
+                  >
+                    {PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no
+                    dates — only how Earned Value measures progress.
+                  </p>
+                </div>
+                {percentCompleteType === 'PHYSICAL' ? (
+                  <TextField
+                    label="Physical % complete (optional)"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    inputMode="numeric"
+                    hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
+                    error={errors.physicalPercentComplete?.message}
+                    {...register('physicalPercentComplete', {
+                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                    })}
+                  />
+                ) : null}
+                <TextField
+                  label="Budgeted expense (optional)"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
+                  error={errors.budgetedExpense?.message}
+                  {...register('budgetedExpense', {
+                    setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                  })}
+                />
+                <TextField
+                  label="Actual expense (optional)"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
+                  error={errors.actualExpense?.message}
+                  {...register('actualExpense', {
+                    setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                  })}
+                />
+              </>
             ) : null}
-            <TextField
-              label="Budgeted expense (optional)"
-              type="number"
-              min={0}
-              step="any"
-              inputMode="decimal"
-              hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
-              error={errors.budgetedExpense?.message}
-              {...register('budgetedExpense', {
-                setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-              })}
-            />
-            <TextField
-              label="Actual expense (optional)"
-              type="number"
-              min={0}
-              step="any"
-              inputMode="decimal"
-              hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
-              error={errors.actualExpense?.message}
-              {...register('actualExpense', {
-                setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-              })}
-            />
+            {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the Earned-Value
+                Planned-Value curve, never a date. Its own flag, mirroring the %-complete-type picker. */}
+            {COST_ACCRUAL_ENABLED ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="activity-accrual-type">Cost accrual</Label>
+                <Select
+                  id="activity-accrual-type"
+                  aria-describedby="activity-accrual-type-help"
+                  {...register('accrualType')}
+                >
+                  {ACCRUAL_TYPE_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {ACCRUAL_TYPE_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+                <p id="activity-accrual-type-help" className="text-muted-foreground text-sm">
+                  Sets when this activity’s cost is recognised: Start (all at the start), Uniform
+                  (spread evenly), or End (all at the finish). It changes only when cost is
+                  recognised in Earned Value — never a date.
+                </p>
+              </div>
+            ) : null}
           </fieldset>
         ) : null}
         <div className="flex flex-col gap-1.5">

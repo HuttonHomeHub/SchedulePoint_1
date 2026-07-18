@@ -66,6 +66,9 @@ function assignment(overrides: Partial<ResourceAssignment> = {}): ResourceAssign
     budgetedUnits: new Prisma.Decimal(0),
     unitsPerHour: null,
     isDriving: false,
+    // Resource loading curve (F3 schema, ADR-0044 §31) — already in the committed schema; the parity
+    // default keeps this factory valid after `prisma generate`. F3 owns the curve behaviour/tests.
+    curveType: 'UNIFORM',
     budgetedCost: null,
     actualCost: 0n,
     actualUnits: new Prisma.Decimal(0),

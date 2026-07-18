@@ -97,6 +97,7 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     percentCompleteType: 'DURATION',
     physicalPercentComplete: null,
+    accrualType: 'UNIFORM',
     budgetedExpense: null,
     actualExpense: null,
     parentId: null,

@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ActivityType, ConstraintType, DurationType, PercentCompleteType } from '@prisma/client';
+import {
+  AccrualType,
+  ActivityType,
+  ConstraintType,
+  DurationType,
+  PercentCompleteType,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -134,6 +140,20 @@ export class CreateActivityDto {
   @IsInt()
   @Min(0)
   actualExpense?: number;
+
+  @ApiPropertyOptional({
+    enum: AccrualType,
+    default: AccrualType.UNIFORM,
+    description:
+      'How the activity’s cost accrues across its span in the Earned-Value / cost read-model (M7 ' +
+      'rung 5, ADR-0044 / ADR-0035 §32): START recognises the whole lump-sum at the start (e.g. a ' +
+      'mobilisation charge), END at the finish (e.g. retention), UNIFORM (default) spreads it linearly. ' +
+      'It changes only WHEN cost / Planned Value is recognised — it NEVER changes a CPM date. UNIFORM ' +
+      'is byte-identical to the pre-ADR-0044 PV time-phasing.',
+  })
+  @IsOptional()
+  @IsEnum(AccrualType)
+  accrualType?: AccrualType;
 
   @ApiPropertyOptional({ enum: ConstraintType, description: 'Schedule constraint (with a date).' })
   @IsOptional()

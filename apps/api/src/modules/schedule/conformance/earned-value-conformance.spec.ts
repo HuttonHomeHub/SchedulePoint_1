@@ -1,7 +1,8 @@
+import type { AccrualType } from '@repo/types';
 import { loadFixture } from '@repo/engine-conformance';
 import { describe, expect, it } from 'vitest';
 
-import { allMinutesWorkCalendar, computeEarnedValue } from '../engine';
+import { allMinutesWorkCalendar, computeEarnedValue, type EvActivityInput } from '../engine';
 
 import { buildEvActivityInputsFromFixture, EV_FIXTURE_ACTIVITY_IDS } from './earned-value-adapter';
 
@@ -212,6 +213,106 @@ describe('EV3 conformance — earned value against the real P6 fixture (ADR-0042
       bac: 87480, // unchanged — BAC never reacts to actuals
       ac: 5000, // the booked actual is still reported (the CV signal, surfaced not hidden)
       ev: 0, // still 0% duration-complete ⇒ EV = 0
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────
+  // Cost accrual (M7 rung 5, ADR-0044 §32 / ADR-0035 §32). The adapter reads the fixture's
+  // `expenses.accrual_type` and collapses it onto the one activity `accrualType` (§Q4). Accrual
+  // governs ONLY the PV time-phasing — START recognises the whole PV at the activity start, END at the
+  // finish, UNIFORM linearly (the byte-identical pre-ADR-0044 path). The curated adapter feeds no CPM
+  // dates, so — exactly like the cost-baseline differential above — these goldens supply an explicit
+  // window + data date at the point of use and value a single-expense activity so the phased PV IS the
+  // expense amount to the minor unit (hand-worked below).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────
+  describe('cost accrual (ADR-0044 §32 / ADR-0035 §32)', () => {
+    const expenseById = new Map(fixture.expenses.map((e) => [e.id, e]));
+    // The fixture's `accrual_type` tokens are exactly SchedulePoint's `AccrualType` vocabulary; read
+    // straight through (this golden reads the fixture first-principles rather than via the adapter, so
+    // it can also cover E004 on A12500 — a milestone the curated EV subset doesn't include).
+    const fixtureAccrual = (raw: string): AccrualType =>
+      raw === 'START' || raw === 'END' ? raw : 'UNIFORM';
+
+    /**
+     * A single-expense TASK carrier for one fixture expense: no assignments, so BAC = the expense's
+     * `budgeted_cost` and PV = that amount phased by `accrualType`. `earlyStart`/`earlyFinish` supply
+     * the live-budget PV anchor (no cost baseline, exactly the fixture's honest state); `parentId` null
+     * so the plan total mirrors the row. `accrualType` reads from the fixture expense unless overridden
+     * (the differential flips it).
+     */
+    function soloExpense(expenseId: string, accrualOverride?: AccrualType) {
+      const e = expenseById.get(expenseId)!;
+      return {
+        activityId: e.id,
+        type: 'TASK' as const,
+        parentId: null,
+        percentCompleteType: 'DURATION' as const,
+        percentComplete: 0,
+        physicalPercentComplete: null,
+        accrualType: accrualOverride ?? fixtureAccrual(e.accrual_type),
+        budgetedExpense: e.budgeted_cost,
+        actualExpense: 0,
+        assignments: [],
+        baselineStart: null,
+        baselineFinish: null,
+        baselineBudgetedCost: null,
+        earlyStart: '2026-01-01',
+        earlyFinish: '2026-01-11', // a 10-continuous-day window (allMinutesWorkCalendar)
+      } satisfies EvActivityInput;
+    }
+
+    const pvAt = (activity: EvActivityInput, dataDate: string) =>
+      computeEarnedValue({
+        activities: [activity],
+        dataDate,
+        eacMethod: 'CPI',
+        calendar: allMinutesWorkCalendar,
+      }).total.pv;
+
+    it('(adapter mapping) reads each curated activity’s accrualType from the fixture expenses (§Q4 collapse)', () => {
+      const byId = new Map(activities.map((a) => [a.activityId, a]));
+      // A6100 carries E001 (accrual_type START); A3010→E002 UNIFORM, A10300→E003 UNIFORM.
+      expect(byId.get('A6100')?.accrualType).toBe('START');
+      expect(byId.get('A3010')?.accrualType).toBe('UNIFORM');
+      expect(byId.get('A10300')?.accrualType).toBe('UNIFORM');
+      // An activity with no expense takes the byte-identical default.
+      expect(byId.get('A4200')?.accrualType).toBe('UNIFORM');
+    });
+
+    it('(golden — START full-at-start) E001 (£45,000 crane mobilisation, accrual START) recognises its whole PV the moment the data date reaches the start', () => {
+      const e001 = soloExpense('E001');
+      expect(e001.accrualType).toBe('START'); // sourced from the fixture via the adapter
+      // Before the start: nothing recognised.
+      expect(pvAt(e001, '2025-12-31')).toBe(0);
+      // Data date 2026-01-06 is 5/10 days in, but START recognises the WHOLE £45k at the start ⇒
+      // planned% = 100 ⇒ PV = round(45000 × 1.00) = 45000 (full-at-start, not half).
+      expect(pvAt(e001, '2026-01-06')).toBe(45000);
+    });
+
+    it('(golden — UNIFORM linear) E002 (£68,000, accrual UNIFORM) spreads its PV linearly — the byte-identical pre-ADR-0044 path', () => {
+      const e002 = soloExpense('E002');
+      expect(e002.accrualType).toBe('UNIFORM');
+      // 5/10 continuous days in ⇒ planned% = 50 ⇒ PV = round(68000 × 0.50) = 34000.
+      expect(pvAt(e002, '2026-01-06')).toBe(34000);
+      // End of the window ⇒ 100% ⇒ full amount.
+      expect(pvAt(e002, '2026-01-11')).toBe(68000);
+    });
+
+    it('(golden — END full-at-finish) E004 (£3,500 handover dossier, accrual END) recognises nothing until the data date reaches the finish', () => {
+      const e004 = soloExpense('E004');
+      expect(e004.accrualType).toBe('END');
+      // Mid-window: END recognises nothing yet ⇒ PV = 0.
+      expect(pvAt(e004, '2026-01-06')).toBe(0);
+      // At the finish: the whole £3,500 lands ⇒ PV = 3500.
+      expect(pvAt(e004, '2026-01-11')).toBe(3500);
+    });
+
+    it('(differential — flip the accrual type) the same expense phases a different PV under UNIFORM vs START — ADR-0034 §2', () => {
+      const uniform = pvAt(soloExpense('E002', 'UNIFORM'), '2026-01-06'); // 34000 (50% linear)
+      const start = pvAt(soloExpense('E002', 'START'), '2026-01-06'); // 68000 (100% at start)
+      expect(uniform).toBe(34000);
+      expect(start).toBe(68000);
+      expect(start).not.toBe(uniform); // the flip must differ — the resultsDiffer proof
     });
   });
 });

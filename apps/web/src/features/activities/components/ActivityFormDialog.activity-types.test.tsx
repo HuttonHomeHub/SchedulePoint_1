@@ -72,6 +72,7 @@ const BASE_LOE: ActivitySummary = {
   levelingWindowExceeded: false,
   selfOverAllocated: false,
   percentCompleteType: 'DURATION',
+  accrualType: 'UNIFORM',
   physicalPercentComplete: null,
   budgetedExpense: null,
   actualExpense: null,

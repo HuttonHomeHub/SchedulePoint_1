@@ -182,6 +182,16 @@ every editing entry point (edit-lock M2/M3).
   `false` and is set with a targeted PATCH. The computed `GET …/schedule/summary`
   roll-up carries `externalDrivenCount` (how many activities an external bound
   drove) — engine-derived on a recalculation.
+- An activity's **Earned-Value cost inputs** (ADR-0042 / ADR-0044) are settable
+  definition fields: `percentCompleteType` (`DURATION` default / `UNITS` /
+  `PHYSICAL` — the measure that earns value), `physicalPercentComplete`, the
+  minor-unit `budgetedExpense`/`actualExpense` (cost:read-gated in responses),
+  and **`accrualType`** (`START` / `UNIFORM` default / `END`, ADR-0044 §32 /
+  ADR-0035 §32). `accrualType` governs **when** the activity's cost is recognised
+  in the `GET …/schedule/earned-value` read's Planned-Value time-phasing — START
+  at its start, END at its finish, UNIFORM linearly — and **never changes a CPM
+  date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing. None of these
+  feed the scheduler.
 
 ## Authentication
 

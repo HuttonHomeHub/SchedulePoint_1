@@ -331,6 +331,9 @@ export class ScheduleService {
         percentCompleteType: r.percentCompleteType,
         percentComplete: r.percentComplete,
         physicalPercentComplete: r.physicalPercentComplete,
+        // How the activity's cost accrues (ADR-0044 §32) — governs PV time-phasing only. UNIFORM (the
+        // DB default) is the byte-identical linear path, so a plan with no accrual data reads identically.
+        accrualType: r.accrualType,
         // Money is BIGINT minor units (→ number); an unset lump-sum contributes 0.
         budgetedExpense: Number(r.budgetedExpense ?? 0n),
         actualExpense: Number(r.actualExpense ?? 0n),

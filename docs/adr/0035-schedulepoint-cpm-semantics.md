@@ -27,6 +27,7 @@ stays **Proposed** overall until every clause is built. Current state:
 | §28 (resource levelling), N21           | M7 (levelling)   | **Accepted** |
 | §29 (%-complete-type & EV), N22–N24     | M7 (EV3)         | **Accepted** |
 | §30 (external / inter-project), N25–N26 | IPD (M1)         | **Accepted** |
+| §32 (cost accrual)                      | M7 (rung 5, F1)  | **Accepted** |
 | §15–§16, §25 (arithmetic/boundary)      | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
@@ -364,6 +365,39 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
     auto-derived from the linked plan's computed schedule (cross-plan edges, a cross-plan DAG/cycle
     invariant, cross-plan authorisation, staleness/propagation, programme recalc). M1 covers imported
     dates + the toggle only.
+
+### Cost accrual (→ M7 rung 5, ADR-0044)
+
+> §31 (resource curves) and §33 (weighted steps) are the other two ADR-0044 slices; each Accepts with its
+> own slice (F3 / F2) and adds N27–N29 then. This slice (F1) Accepts §32 only.
+
+32. **Cost-accrual semantics.** Like §29's Earned Value, cost accrual is a **pure read-model** concern —
+    it never enters `computeSchedule`, adds no write pass, and owns no persisted engine column (only the
+    settable `activities.accrual_type` definition input). SchedulePoint's chosen semantics — the golden
+    contract for the fixture's `accrual_start` / `accrual_uniform` / `accrual_end` tags:
+
+    - **Accrual changes _when_ cost is recognised, never a date.** Every activity carries an
+      `accrualType` (`UNIFORM` default | `START` | `END`) that governs how its cost lump-sum (its
+      `budgetedExpense` and any assignment-derived budget — the §29 BAC source) is **time-phased** into
+      the Planned-Value / cost S-curve as the data date advances. It moves no CPM date and never affects
+      EV, AC, BAC, SPI/CPI, or float — only the **PV curve's shape** over time (a crane mobilisation
+      recognised up-front vs retention held to the end is a cash-flow fact, not a scheduling one).
+    - **The three shapes.** `START` recognises the activity's whole PV the moment the data date reaches
+      its **start** (planned % jumps 0 → 100 at the start); `END` recognises nothing until the data date
+      reaches its **finish** (0 → 100 at the finish); `UNIFORM` (default) spreads it **linearly** across
+      the working span `[start, finish)` measured on the plan/activity calendar (ADR-0037) — **exactly
+      the pre-ADR-0044 PV math**, so a plan with no accrual data (every activity `UNIFORM`) reads
+      **byte-identical** to before (the parity gate). A **milestone** is binary on its start regardless
+      of accrual (a zero-span event's cost lands at its instant).
+    - **One accrual type per activity (the fixture's per-expense collapse, ADR-0044 §Q4).** SchedulePoint
+      models a single activity cost lump-sum (the §29 `budgetedExpense` grain), so the fixture's
+      per-`expenses.accrual_type` value collapses onto the one activity `accrualType`; the conformance
+      adapter documents this collapse at the point of use. A per-expense accrual table is deferred until
+      multiple differently-accruing expenses per activity are a real need (ADR-0044 §Q4).
+    - **No negative case.** Accrual is a closed three-value enum with a constant default; there is no
+      out-of-range or divide-by-zero boundary to guard (the degenerate zero-length-span past its start is
+      the §29 PV path's existing "fully planned" fallback). ADR-0044's N27–N29 belong to the **steps**
+      (§33) and **curve** (§31) slices, not this one.
 
 ## Alternatives considered
 

@@ -316,6 +316,24 @@ export const RESOURCE_LEVELLING_ENABLED = flagDefaultOff(import.meta.env.VITE_RE
 export const EARNED_VALUE_ENABLED = flagDefaultOff(import.meta.env.VITE_EARNED_VALUE);
 
 /**
+ * Cost-accrual web surface (M7 rung 5, ADR-0044 F1 / ADR-0035 §32). **OFF by default** — a brand-new
+ * dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships
+ * hidden on `main` and is turned on per-environment during rollout, then flipped default-on once
+ * cleared (the `VITE_EARNED_VALUE` / `VITE_RESOURCE_LEVELLING` pattern). When on, the activity form's
+ * "Cost & earned value" fieldset gains a **Cost accrual** select (Start / Uniform / End):
+ *
+ * - **Cost accrual** — governs WHEN the activity's cost is recognised in the Earned-Value read's
+ *   Planned-Value time-phasing (Start = whole cost at the start, End = at the finish, Uniform = spread
+ *   linearly). It changes no date — only the cost / cash-flow S-curve.
+ *
+ * Everything behind it — the settable `accrualType` create/update activity field and the accrual-aware
+ * PV time-phasing in the `earned-value` read — is already live; the flag only governs whether the web
+ * UI exposes the picker. The cost **S-curve chart** (the period-trend series) is a later, separate
+ * slice. Set `VITE_COST_ACCRUAL=true` to enable it in an environment.
+ */
+export const COST_ACCRUAL_ENABLED = flagDefaultOff(import.meta.env.VITE_COST_ACCRUAL);
+
+/**
  * Inter-project / external dates web surface (F5, ADR-0043 / ADR-0035 §30). **OFF by default** — a
  * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
  * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on

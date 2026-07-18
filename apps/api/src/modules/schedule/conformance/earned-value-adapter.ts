@@ -1,8 +1,20 @@
+import { ACCRUAL_TYPES, type AccrualType } from '@repo/types';
+
 import type { ConformanceFixture, FixtureActivity } from '@repo/engine-conformance';
 
 import type { EvActivityInput, EvAssignmentInput } from '../engine';
 
 import { mapActivityType } from './type-map';
+
+/**
+ * Map the fixture's free-text `expenses.accrual_type` onto the typed {@link AccrualType} the EV
+ * read-model consumes (ADR-0044 §32). The fixture uses the same three tokens SchedulePoint does
+ * (`START`/`UNIFORM`/`END`); an unknown token falls back to `UNIFORM` (the byte-identical default) —
+ * this is a conformance adapter, so it never rejects, it collapses to the parity path.
+ */
+function mapAccrualType(raw: string): AccrualType {
+  return (ACCRUAL_TYPES as readonly string[]).includes(raw) ? (raw as AccrualType) : 'UNIFORM';
+}
 
 /**
  * The **fixture→EV adapter** (EV3 conformance slice, ADR-0042 / ADR-0035 §29). A sibling of
@@ -84,10 +96,22 @@ export function buildEvActivityInputsFromFixture(fixture: ConformanceFixture): E
 
   const priceByResource = new Map(fixture.resources.map((r) => [r.id, r.price_per_unit]));
 
-  const expenseByActivity = new Map<string, { budgeted: number; actual: number }>();
+  // Aggregate each activity's expense lump-sum AND its accrual type. SchedulePoint models ONE
+  // `accrualType` per activity (ADR-0044 §Q4 — the fixture's per-expense `accrual_type` collapses to
+  // a single activity value, mirroring how EV3 already collapsed the per-expense budget to one
+  // lump-sum). The FIRST expense seen for an activity wins the accrual type; every curated fixture
+  // activity carries at most one expense, so no real collision occurs (A6100→START, A3010/A10300→UNIFORM).
+  const expenseByActivity = new Map<
+    string,
+    { budgeted: number; actual: number; accrualType: AccrualType }
+  >();
   for (const expense of fixture.expenses) {
     if (!selected.has(expense.activity)) continue;
-    const existing = expenseByActivity.get(expense.activity) ?? { budgeted: 0, actual: 0 };
+    const existing = expenseByActivity.get(expense.activity) ?? {
+      budgeted: 0,
+      actual: 0,
+      accrualType: mapAccrualType(expense.accrual_type),
+    };
     existing.budgeted += expense.budgeted_cost;
     existing.actual += expense.actual_cost;
     expenseByActivity.set(expense.activity, existing);
@@ -117,7 +141,11 @@ export function buildEvActivityInputsFromFixture(fixture: ConformanceFixture): E
         `EV3 fixture selection "${activity.id}" is an unsupported activity type: ${typeResult.reason}`,
       );
     }
-    const expense = expenseByActivity.get(activity.id) ?? { budgeted: 0, actual: 0 };
+    const expense = expenseByActivity.get(activity.id) ?? {
+      budgeted: 0,
+      actual: 0,
+      accrualType: 'UNIFORM' as AccrualType, // no expense ⇒ the byte-identical default
+    };
     return {
       activityId: activity.id,
       type: typeResult.value,
@@ -125,6 +153,8 @@ export function buildEvActivityInputsFromFixture(fixture: ConformanceFixture): E
       percentCompleteType: activity.percent_complete_type,
       percentComplete: activity.duration_percent_complete,
       physicalPercentComplete: activity.physical_percent_complete,
+      // The fixture's per-expense `accrual_type` collapsed onto the one activity value (ADR-0044 §Q4).
+      accrualType: expense.accrualType,
       budgetedExpense: expense.budgeted,
       actualExpense: expense.actual,
       assignments: assignmentsByActivity.get(activity.id) ?? [],

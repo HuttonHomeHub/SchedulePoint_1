@@ -297,6 +297,10 @@ export class ActivitiesService {
               : {}),
             ...(dto.budgetedExpense !== undefined ? { budgetedExpense: dto.budgetedExpense } : {}),
             ...(dto.actualExpense !== undefined ? { actualExpense: dto.actualExpense } : {}),
+            // Cost accrual (M7 rung 5, ADR-0044 §32): passthrough only; omit to take the DB default
+            // (UNIFORM = the byte-identical linear PV path). Governs the EV read's PV time-phasing,
+            // never a CPM date.
+            ...(dto.accrualType ? { accrualType: dto.accrualType } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
@@ -426,6 +430,9 @@ export class ActivitiesService {
     }
     if (dto.budgetedExpense !== undefined) patch.budgetedExpense = dto.budgetedExpense;
     if (dto.actualExpense !== undefined) patch.actualExpense = dto.actualExpense;
+    // Cost accrual (M7 rung 5, ADR-0044 §32): passthrough only; governs the EV read's PV time-phasing,
+    // never a CPM date. No derivation here (that is the read-model's job).
+    if (dto.accrualType !== undefined) patch.accrualType = dto.accrualType;
     // The activity's own calendar (ADR-0037): null clears to inherit the plan default; a specific
     // id is validated in-org under the calendar lock inside the transaction below (T4).
     const calendarId = dto.calendarId;

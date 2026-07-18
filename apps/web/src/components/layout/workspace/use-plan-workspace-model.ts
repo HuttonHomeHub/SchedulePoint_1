@@ -280,6 +280,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           // sends them, so a canvas move must resend the stored values (money minor → major units) or
           // it would silently clear them, exactly like the duration type above.
           percentCompleteType: activity.percentCompleteType,
+          // Round-trip the cost accrual unchanged (M7 rung 5, ADR-0044 §32) — the update body always
+          // sends it, so a canvas move must resend the stored value or it would silently reset it.
+          accrualType: activity.accrualType,
           physicalPercentComplete: activity.physicalPercentComplete ?? undefined,
           budgetedExpense: minorToMajorInput(activity.budgetedExpense),
           actualExpense: minorToMajorInput(activity.actualExpense),
