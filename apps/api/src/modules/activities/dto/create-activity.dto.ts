@@ -6,6 +6,7 @@ import {
   DurationType,
   PercentCompleteType,
 } from '@prisma/client';
+import { MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -121,24 +122,28 @@ export class CreateActivityDto {
     minimum: 0,
     description:
       'Activity-level lump-sum BUDGET for non-resourced work (EV1, ADR-0042), a component of BAC. ' +
-      'Minor units in the plan currency (integer >= 0, N22); omit for no expense (parity).',
+      'Minor units in the plan currency (integer >= 0, N22); omit for no expense (parity). Capped at ' +
+      'MONEY_MINOR_UNITS_MAX — a value above it is a clean 422, not a BIGINT/precision-loss 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MONEY_MINOR_UNITS_MAX)
   budgetedExpense?: number;
 
   @ApiPropertyOptional({
     minimum: 0,
     description:
       'Activity-level lump-sum ACTUAL spent for non-resourced work (EV1, ADR-0042), a component of AC. ' +
-      'Minor units in the plan currency (integer >= 0, N22); omit for none.',
+      'Minor units in the plan currency (integer >= 0, N22); omit for none. Capped at ' +
+      'MONEY_MINOR_UNITS_MAX — a value above it is a clean 422, not a BIGINT/precision-loss 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MONEY_MINOR_UNITS_MAX)
   actualExpense?: number;
 
   @ApiPropertyOptional({

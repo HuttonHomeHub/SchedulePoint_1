@@ -881,6 +881,15 @@ model Activity {
   // aggregated over that scope (constraintViolationCount) — no predicate targets it; a
   // low-cardinality boolean index would only cost writes (mirrors is_critical/is_driving).
   constraintViolated    Boolean   @default(false) @map("constraint_violated")
+  // External-driven produce-and-flag output (ADR-0043 M1 / ADR-0035 §30.3). True when an imported
+  // external bound drove this activity's schedule this recalc — its external early-start was the
+  // binding forward bound, or its external late-finish the binding backward bound. The per-activity
+  // companion to the plan-level externalDrivenCount; the soft-bound analogue of constraint_violated.
+  // Engine-owned exactly like constraint_violated: defaulted false, never accepted from a write DTO,
+  // written only by the recalc's batched `unnest` UPDATE alongside the CPM columns (ADR-0022). Reads
+  // false until first calculated AND on the no-external path, so existing rows stay byte-identical.
+  // No index (mirrors constraint_violated) — read within the plan-scoped activity load, no predicate.
+  externalDriven        Boolean   @default(false) @map("external_driven")
   // LOE no-span produce-and-flag output (ADR-0035 §21 / N12, M5). True when a
   // LEVEL_OF_EFFORT activity has no resolvable span — missing an SS predecessor or an
   // FF successor — so the engine cannot derive its start/finish from the activities it

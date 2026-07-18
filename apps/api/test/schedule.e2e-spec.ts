@@ -583,6 +583,31 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(acts.get('A')).toMatchObject({ constraintViolated: false });
   });
 
+  it('an external early start that drives an activity is produced, flagged, persisted, and counted (ADR-0043 / ADR-0035 §30)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    // A carries an external early start (01-05) imported from another project; its logic-earliest is
+    // the data date (01-01), so the external bound clamps it UP to 01-05 and flags it external-driven.
+    // B has no external bound and is not flagged — mirroring the constraint_violated case above.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'A', durationDays: 3, externalEarlyStart: '2026-01-05' })
+      .expect(201);
+    await makeActivity(actor, planId, 'B', 2);
+
+    // A recalc persists external_driven per-activity and reports the count in the response summary.
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+    expect(res.body.data).toMatchObject({ externalDrivenCount: 1 });
+
+    const acts = await activitiesByName(actor, planId);
+    expect(acts.get('A')).toMatchObject({ earlyStart: '2026-01-05', externalDriven: true });
+    expect(acts.get('B')).toMatchObject({ externalDriven: false });
+
+    // The no-recompute read summary now reports the TRUE count from the persisted column (was hard-0).
+    const summary = await actor.agent.get(summaryUrl(planId)).expect(200);
+    expect(summary.body.data).toMatchObject({ externalDrivenCount: 1 });
+  });
+
   it('recalculates on a Mon–Fri calendar with a holiday: dates skip weekends & holidays', async () => {
     const { actor } = await adminWithOrg();
     // Thu 1 Jan 2026; makePlan clears the org default, so we start from all-days-work.

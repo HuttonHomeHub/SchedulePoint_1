@@ -454,6 +454,14 @@ export interface ActivitySummary {
    */
   constraintViolated: boolean;
   /**
+   * Engine-owned (ADR-0043 M1 / ADR-0035 §30.3): true when an imported external bound drove this
+   * activity's schedule this recalc — its external early-start was the binding forward bound, or its
+   * external late-finish the binding backward bound. The per-activity companion to the plan-level
+   * `externalDrivenCount`; the soft-bound analogue of `constraintViolated`, surfaced as an "External"
+   * row badge. False for every activity with no binding external bound (and on the no-external path).
+   */
+  externalDriven: boolean;
+  /**
    * Engine-owned (ADR-0035 §21, M5-epic): true when this Level-of-Effort activity has no resolvable
    * span — it is missing an SS predecessor or an FF successor — so the engine placed it at a defined
    * fallback and flagged it (N12 produce-and-flag), never rejecting. False for every non-LOE activity
@@ -1140,6 +1148,24 @@ export interface EarnedValueActivity extends EarnedValueMetrics {
   /** The performance % (0–100) that earned this row's EV. */
   performancePercent: number;
 }
+
+/**
+ * Upper bound for **integer minor-unit money** DTO fields (activity `budgetedExpense`/`actualExpense`,
+ * assignment `budgetedCost`/`actualCost`; ADR-0042). Stored as `BIGINT` but read across the wire via
+ * `Number(bigint)`, so the binding ceiling is `Number.MAX_SAFE_INTEGER` (2⁵³−1) — the point below which
+ * that conversion is lossless. A value above it is rejected 422 rather than silently losing precision
+ * (TECH_DEBT #40a). Well under the `BIGINT` overflow point.
+ */
+export const MONEY_MINOR_UNITS_MAX = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Upper bound for **`Decimal(18,4)`** numeric DTO fields (resource `costPerUnit`/`maxUnitsPerHour`,
+ * assignment `budgetedUnits`/`unitsPerHour`/`actualUnits`; ADR-0039/0040/0042). The column holds 14
+ * integer digits, so a larger value overflows the column (an opaque 500) — this ceiling rejects it 422
+ * first (TECH_DEBT #40a). Conservative: the whole-number column capacity, exactly representable as a
+ * JS number (excludes only the top fractional `.9999`).
+ */
+export const DECIMAL_18_4_MAX = 99_999_999_999_999;
 
 /**
  * The plan's Earned-Value analysis read-model (EV2, ADR-0042 §2) — the wire shape the

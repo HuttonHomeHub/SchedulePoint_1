@@ -62,7 +62,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   ).toEqual([]);
   await dialog.getByLabel('Name').fill('Excavate');
   await dialog.getByLabel('Code (optional)').fill('A100');
-  await dialog.getByLabel(/Duration/).fill('10');
+  await dialog.getByLabel('Duration (working days)', { exact: true }).fill('10');
   // Choosing a constraint reveals its date field — check that revealed state is accessible.
   await dialog.getByLabel('Constraint (optional)').selectOption('SNET');
   await dialog.getByLabel('Constraint date').fill('2026-05-01');
@@ -79,27 +79,32 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   // Adding a milestone hides the duration field and shows an em-dash duration.
   await page.getByRole('button', { name: 'New activity' }).click();
   await dialog.getByLabel('Name').fill('Kickoff');
-  await dialog.getByLabel('Type').selectOption('START_MILESTONE');
-  await expect(dialog.getByLabel(/Duration/)).toBeHidden();
+  await dialog.getByLabel('Type', { exact: true }).selectOption('START_MILESTONE');
+  await expect(dialog.getByLabel('Duration (working days)', { exact: true })).toBeHidden();
   await dialog.getByRole('button', { name: 'Create activity' }).click();
 
   await expect(page.getByRole('cell', { name: 'Kickoff', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Start milestone', exact: true })).toBeVisible();
 
-  // Report progress on the task — the derived status shows in the row afterwards.
-  const progressButton = page.getByRole('button', { name: 'Report progress for Excavate' });
-  await progressButton.click();
+  // Report progress on the task — the derived status shows in the row afterwards. Row actions
+  // live behind an overflow "Actions for …" menu (TECH_DEBT #38): open it, then choose the action.
+  const actionsButton = page.getByRole('button', { name: 'Actions for Excavate' });
+  await actionsButton.click();
+  await page.getByRole('menuitem', { name: 'Report progress' }).click();
   await expect(dialog).toBeVisible();
   // The progress dialog (with its live status preview) is accessible.
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
-  // Cancelling returns focus to the trigger (native <dialog> focus restore).
+  // Cancelling returns focus to the trigger (native <dialog> focus restore) — the menu's
+  // own close-and-restore already returned focus to the "Actions for …" trigger before the
+  // dialog opened, so that's what the dialog restores focus to.
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
-  await expect(progressButton).toBeFocused();
+  await expect(actionsButton).toBeFocused();
 
-  await progressButton.click();
+  await actionsButton.click();
+  await page.getByRole('menuitem', { name: 'Report progress' }).click();
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Percent complete').fill('40');
   // On/before the plan data date (2026-01-05) — an actual after "now" is rejected by N07 (ADR-0035 §6).

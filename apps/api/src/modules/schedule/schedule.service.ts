@@ -242,10 +242,9 @@ export class ScheduleService {
       constraintWarningCount: aggregate.constraintWarningCount,
       loeNoSpanCount: aggregate.loeNoSpanCount,
       resourceDriverMissingCount: aggregate.resourceDriverMissingCount,
-      // External / inter-project driven count (ADR-0043 / ADR-0035 §30) is engine-derived on a recalc and
-      // NOT persisted per-activity in M1, so the read summary cannot recompute it: always 0 here (the
-      // authoritative value comes from the recalculate response). See PlanScheduleSummary.
-      externalDrivenCount: 0,
+      // External / inter-project driven count (ADR-0043 / ADR-0035 §30): a read-time aggregate over the
+      // plan's engine-owned `external_driven` column; 0 when the plan has no external-driven activities.
+      externalDrivenCount: aggregate.externalDrivenCount,
       // Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): a read-time aggregate over the plan's
       // engine-owned leveled columns; 0 / null when the plan does not level.
       leveledActivityCount: aggregate.leveledActivityCount,

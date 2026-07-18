@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceKind } from '@prisma/client';
+import { DECIMAL_18_4_MAX } from '@repo/types';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
@@ -8,6 +9,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateIf,
@@ -74,13 +76,15 @@ export class CreateResourceDto {
     minimum: 0,
     description:
       'Capacity ceiling — the maximum units available per working hour (ADR-0041 §2). Exact numeric ' +
-      '(>= 0, N21); omit for uncapped (no ceiling). Read by the levelling pass when the plan opts in.',
+      '(>= 0, N21); omit for uncapped (no ceiling). Read by the levelling pass when the plan opts in. ' +
+      'Capped at DECIMAL_18_4_MAX — a value above it is a clean 422, not a Decimal(18,4) overflow 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   @Type(() => Number)
   // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
+  @Max(DECIMAL_18_4_MAX)
   maxUnitsPerHour?: number;
 
   @ApiPropertyOptional({
@@ -88,12 +92,14 @@ export class CreateResourceDto {
     description:
       'Planned cost rate in minor units per unit of work (EV1, ADR-0042). A rate coefficient stored as ' +
       'DECIMAL(18,4) (may carry fractional minor units); exact numeric (>= 0, N22); omit for no cost. ' +
-      'Read by the EV read (EV2b) when it derives assignment budgets.',
+      'Read by the EV read (EV2b) when it derives assignment budgets. Capped at DECIMAL_18_4_MAX — a ' +
+      'value above it is a clean 422, not a Decimal(18,4) overflow 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   @Type(() => Number)
   // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
+  @Max(DECIMAL_18_4_MAX)
   costPerUnit?: number;
 }

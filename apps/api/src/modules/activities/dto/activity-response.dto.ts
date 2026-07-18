@@ -238,6 +238,12 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({
     description:
+      'External / inter-project produce-and-flag (engine-owned, ADR-0043 / ADR-0035 §30): true when an imported external bound drove this activity’s start or finish.',
+  })
+  externalDriven!: boolean;
+
+  @ApiProperty({
+    description:
       'LOE no-span produce-and-flag (engine-owned, ADR-0035 §21): true when a Level-of-Effort activity has no resolvable span (missing an SS predecessor or FF successor).',
   })
   loeNoSpan!: boolean;
@@ -409,6 +415,7 @@ export class ActivityResponseDto implements ActivitySummary {
       isCritical: entity.isCritical,
       isNearCritical: entity.isNearCritical,
       constraintViolated: entity.constraintViolated,
+      externalDriven: entity.externalDriven,
       loeNoSpan: entity.loeNoSpan,
       resourceDriverMissing: entity.resourceDriverMissing,
       visualStart: day(entity.visualStart),

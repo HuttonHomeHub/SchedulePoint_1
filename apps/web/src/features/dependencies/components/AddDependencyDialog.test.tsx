@@ -42,6 +42,7 @@ function activity(id: string, name: string): ActivitySummary {
     isCritical: false,
     isNearCritical: false,
     constraintViolated: false,
+    externalDriven: false,
     loeNoSpan: false,
     resourceDriverMissing: false,
     externalEarlyStart: null,

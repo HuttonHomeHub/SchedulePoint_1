@@ -54,6 +54,8 @@ describe.skipIf(!hasDatabase)('Plan edit-lock write-gate (e2e, enforced)', () =>
   async function resetDatabase(): Promise<void> {
     await prisma.planLock.deleteMany();
     await prisma.activityDependency.deleteMany();
+    await prisma.resourceAssignment.deleteMany();
+    await prisma.resource.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();
@@ -234,6 +236,48 @@ describe.skipIf(!hasDatabase)('Plan edit-lock write-gate (e2e, enforced)', () =>
       .patch(`${base(planId)}/activities/positions`)
       .send({ positions: [{ id: a.id, laneIndex: 2, version: a.version }] })
       .expect(200);
+  });
+
+  it('gates resource-assignment create / update / delete on the pen (TECH_DEBT #39)', async () => {
+    const { actor: admin, orgId } = await adminWithOrg();
+    const planner = await addMember(orgId, 'planner@example.com', 'PLANNER');
+    const planId = await makePlan(admin);
+    await acquire(admin, planId);
+    const a = await makeActivity(admin, planId, 'A', 3);
+
+    // A resource is an org-scoped library object (not plan-scoped), so creating one is not pen-gated.
+    const resource = await admin.agent
+      .post('/api/v1/organizations/acme/resources')
+      .send({ name: 'Crew', kind: 'LABOUR' })
+      .expect(201);
+    const resourceId = resource.body.data.id as string;
+    const activityAssignments = `/api/v1/organizations/acme/activities/${a.id}/assignments`;
+
+    // Non-holder (has resource:assign, no pen) → 423 on assign; an assignment persists the owning
+    // activity's derived duration (ADR-0040), a scheduling write, so it must hold the pen.
+    const denied = await planner.agent
+      .post(activityAssignments)
+      .send({ resourceId, budgetedUnits: 40 })
+      .expect(423);
+    expect(denied.body.error).toMatchObject({
+      code: 'LOCKED',
+      details: { reason: 'PLAN_EDIT_LOCK_REQUIRED' },
+    });
+
+    // Holder → 201, then the non-holder is 423 on update and delete of that assignment.
+    const assigned = await admin.agent
+      .post(activityAssignments)
+      .send({ resourceId, budgetedUnits: 40 })
+      .expect(201);
+    const assignmentId = assigned.body.data.id as string;
+    const assignmentUrl = `/api/v1/organizations/acme/assignments/${assignmentId}`;
+
+    await planner.agent.patch(assignmentUrl).send({ budgetedUnits: 80, version: 1 }).expect(423);
+    await planner.agent.delete(assignmentUrl).expect(423);
+
+    // Holder can update and delete.
+    await admin.agent.patch(assignmentUrl).send({ budgetedUnits: 80, version: 1 }).expect(200);
+    await admin.agent.delete(assignmentUrl).expect(204);
   });
 
   it('never gates the Contributor progress path, even without the pen', async () => {

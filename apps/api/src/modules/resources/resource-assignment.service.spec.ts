@@ -11,6 +11,7 @@ import {
 } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 
 import { ResourceAssignmentResponseDto } from './dto/assignment-response.dto';
 import type { ResourceAssignmentRepository } from './resource-assignment.repository';
@@ -110,6 +111,7 @@ describe('ResourceAssignmentService', () => {
   };
   // The activity.updateMany the tx uses to persist a units-driven derived duration (ADR-0040 §3).
   let txActivityUpdateMany: ReturnType<typeof vi.fn>;
+  let editLock: { assertHoldsPen: ReturnType<typeof vi.fn> };
   let service: ResourceAssignmentService;
 
   beforeEach(() => {
@@ -135,11 +137,15 @@ describe('ResourceAssignmentService', () => {
       activity: { findFirst: vi.fn().mockResolvedValue(activity()) },
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    // The plan edit-lock write-gate (ADR-0028, TECH_DEBT #39) — a no-op in these unit tests
+    // (enforcement is exercised in the plan-lock e2e); mocked to resolve so the write path runs.
+    editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     service = new ResourceAssignmentService(
       organizations as unknown as OrganizationsService,
       resources as unknown as ResourceRepository,
       assignments as unknown as ResourceAssignmentRepository,
       prisma as unknown as PrismaService,
+      editLock as unknown as PlanEditLockService,
       logger,
     );
   });
@@ -466,7 +472,9 @@ describe('ResourceAssignmentService', () => {
       await service.update(principalWith(ALL), 'acme', 'asg-1', { budgetedUnits: 7, version: 1 });
 
       expect(lastAssignmentPatch()).toMatchObject({ budgetedUnits: 7 });
-      expect(prisma.activity.findFirst).not.toHaveBeenCalled();
+      // The activity is loaded once — for the edit-lock pen `planId` (TECH_DEBT #39), NOT to
+      // recompute — so no derived-duration write happens (parity).
+      expect(prisma.activity.findFirst).toHaveBeenCalledTimes(1);
       expect(txActivityUpdateMany).not.toHaveBeenCalled();
     });
 

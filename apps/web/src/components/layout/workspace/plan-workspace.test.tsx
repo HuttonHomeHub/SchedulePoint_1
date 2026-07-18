@@ -58,6 +58,15 @@ vi.mock('@/features/plans', async (importOriginal) => ({
       status: 'ACTIVE',
       plannedStart: '2026-01-01',
       description: null,
+      version: 1,
+      // Resource-levelling / external-relationships / Earned-Value settings sections now render in
+      // the Calendar dialog by default (their flags default on) — fill in the fields their read/edit
+      // views need so opening it doesn't crash on an incomplete fixture.
+      levelResources: false,
+      levelWithinFloatOnly: false,
+      ignoreExternalRelationships: false,
+      eacMethod: 'CPI',
+      currencyCode: null,
     }),
   PlanCalendarPicker: () => <div data-testid="calendar-picker" />,
   PlanRecalcModePicker: () => <div data-testid="recalc-mode-picker" />,

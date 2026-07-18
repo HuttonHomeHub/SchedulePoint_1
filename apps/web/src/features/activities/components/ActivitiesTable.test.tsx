@@ -48,6 +48,7 @@ const ACTIVITY: ActivitySummary = {
   isCritical: false,
   isNearCritical: false,
   constraintViolated: false,
+  externalDriven: false,
   loeNoSpan: false,
   resourceDriverMissing: false,
   externalEarlyStart: null,
@@ -94,6 +95,14 @@ function renderTable(
   );
 }
 
+/** Opens the row's overflow "Actions for …" menu and returns its menuitem labels. */
+function openRowMenu(name: string): string[] {
+  fireEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
+  return within(screen.getByRole('menu'))
+    .getAllByRole('menuitem')
+    .map((i) => i.textContent);
+}
+
 describe('ActivitiesTable', () => {
   it('renders code, name, type, duration and in-progress percentage with writer actions', () => {
     renderTable(true);
@@ -102,29 +111,32 @@ describe('ActivitiesTable', () => {
     expect(screen.getByText('Task')).toBeInTheDocument();
     expect(screen.getByText('5 d')).toBeInTheDocument();
     expect(screen.getByText('In progress · 40%')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit Excavate' })).toBeInTheDocument();
+    expect(openRowMenu('Excavate')).toContain('Edit');
   });
 
   it('hides write actions for non-writers', () => {
+    // Resources is a member-level action (VITE_RESOURCES defaults on), so the row still has a
+    // trigger/menu for a non-writer — but the write-only actions (Edit/Delete/Steps) must be absent.
     renderTable(false);
-    expect(screen.queryByRole('button', { name: 'Edit Excavate' })).not.toBeInTheDocument();
+    const items = openRowMenu('Excavate');
+    expect(items).not.toContain('Edit');
+    expect(items).not.toContain('Delete');
+    expect(items).not.toContain('Steps');
   });
 
   it('shows only the progress action for a progress-reporter who cannot write', () => {
     renderTable(false, [ACTIVITY], true);
-    expect(
-      screen.getByRole('button', { name: 'Report progress for Excavate' }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Edit Excavate' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Delete Excavate' })).not.toBeInTheDocument();
+    const items = openRowMenu('Excavate');
+    expect(items).toContain('Report progress');
+    expect(items).not.toContain('Edit');
+    expect(items).not.toContain('Delete');
   });
 
   it('shows progress plus edit/delete for a writer who can also report progress', () => {
     renderTable(true, [ACTIVITY], true);
-    expect(
-      screen.getByRole('button', { name: 'Report progress for Excavate' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit Excavate' })).toBeInTheDocument();
+    const items = openRowMenu('Excavate');
+    expect(items).toContain('Report progress');
+    expect(items).toContain('Edit');
   });
 
   it('shows an em dash duration for a milestone and no percentage when not started', () => {
@@ -222,8 +234,8 @@ describe('ActivitiesTable', () => {
         <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} onOpenLogic={onOpenLogic} />
       </QueryClientProvider>,
     );
-    const button = screen.getByRole('button', { name: 'Logic for Excavate' });
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Excavate' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Logic' }));
     expect(onOpenLogic).toHaveBeenCalledWith(ACTIVITY);
   });
 });

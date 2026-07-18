@@ -30,9 +30,7 @@ function flagDefaultOn(value: string | undefined): boolean {
 /**
  * Reads a boolean `VITE_` flag that defaults **OFF**: enabled only when the operator
  * explicitly opts in with `"true"`/`"1"`. Used for in-progress features whose quality
- * gates (a11y, e2e, perf) are not yet green — the feature ships dark on `main` and is
- * turned on per-environment during rollout, then flipped default-on once cleared
- * (how `VITE_NAV_TREE` / `VITE_TSLD_EDITING` each began).
+ * gates (a11y, e2e, perf) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared.
  */
 export function flagDefaultOff(value: string | undefined): boolean {
   return value === 'true' || value === '1';
@@ -238,24 +236,20 @@ export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
 );
 
 /**
- * Web resource surface (M7.1, ADR-0039). **OFF by default** — a brand-new dark surface whose quality
- * gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and is
- * turned on per-environment during rollout, then flipped default-on once cleared (the pattern
- * `VITE_NAV_TREE` / `VITE_TSLD_EDITING` each began with). When on, the app gains an org-scoped
+ * Web resource surface (M7.1, ADR-0039). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a brand-new dark surface whose quality
+ * gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the app gains an org-scoped
  * **Resources** library screen (list/create/edit/delete resources) reachable from the top nav, and a
  * per-activity **Resources** row action that opens an assignment editor (assign/edit/unassign, with a
  * driving-resource toggle that a MATERIAL resource can never take — ADR-0039 `MATERIAL_CANNOT_DRIVE`).
  * Everything behind it — the resource library + assignment API and the driving-resource-calendar
  * engine wiring — is already live; the flag only governs whether the web UI exposes it. Set
- * `VITE_RESOURCES=true` to enable it in an environment.
+ * `VITE_RESOURCES=false` to disable it (rollback / opt-out).
  */
-export const RESOURCES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCES);
+export const RESOURCES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCES);
 
 /**
- * Duration types & the resource-units triad (M7 rung 4, ADR-0040). **OFF by default** — a new dark
- * surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden
- * on `main` and is turned on per-environment during rollout, then flipped default-on once cleared (the
- * `VITE_RESOURCES` / `VITE_NAV_TREE` pattern). When on, the activity form gains a **duration type**
+ * Duration types & the resource-units triad (M7 rung 4, ADR-0040). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a new dark
+ * surface whose quality gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the activity form gains a **duration type**
  * picker (Fixed Duration & Units/Time (default) / Fixed Duration & Units / Fixed Units / Fixed
  * Units/Time) and — inside the per-activity resource assignment editor (itself behind
  * {@link RESOURCES_ENABLED}) — a **units/time (rate)** field on the driving assignment, with a live
@@ -264,15 +258,13 @@ export const RESOURCES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCES);
  * conformance proof — is already live; the flag only governs whether the web UI exposes it. The rate
  * field is meaningful only alongside the resource surface, so it appears only when BOTH this flag and
  * {@link RESOURCES_ENABLED} are on; the duration-type picker (a plain activity attribute) needs only
- * this flag. Set `VITE_DURATION_TYPES=true` to enable it in an environment.
+ * this flag. Set `VITE_DURATION_TYPES=false` to disable it (rollback / opt-out).
  */
-export const DURATION_TYPES_ENABLED = flagDefaultOff(import.meta.env.VITE_DURATION_TYPES);
+export const DURATION_TYPES_ENABLED = flagDefaultOn(import.meta.env.VITE_DURATION_TYPES);
 
 /**
- * Resource levelling (ADR-0041, the M7 levelling rung). **OFF by default** — a new dark surface whose
- * quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and
- * is turned on per-environment during rollout, then flipped default-on once cleared (the
- * `VITE_RESOURCES` / `VITE_DURATION_TYPES` pattern). When on, the web UI exposes the levelling controls:
+ * Resource levelling (ADR-0041, the M7 levelling rung). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a new dark surface whose
+ * quality gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the web UI exposes the levelling controls:
  *
  * - **Plan levelling settings** — a `Level resources` toggle (the opt-in switch for the second
  *   levelling pass) and, when it is on, a `Level within float only` toggle (delay only within total
@@ -287,15 +279,13 @@ export const DURATION_TYPES_ENABLED = flagDefaultOff(import.meta.env.VITE_DURATI
  * Everything behind it — the plan `levelResources`/`levelWithinFloatOnly` options, resource
  * `maxUnitsPerHour`, activity `levelingPriority`, the opt-in second engine pass and its engine-owned
  * levelled overlay + summary counts — is already live; the flag only governs whether the web UI exposes
- * it. Set `VITE_RESOURCE_LEVELLING=true` to enable it in an environment.
+ * it. Set `VITE_RESOURCE_LEVELLING=false` to disable it (rollback / opt-out).
  */
-export const RESOURCE_LEVELLING_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCE_LEVELLING);
+export const RESOURCE_LEVELLING_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCE_LEVELLING);
 
 /**
- * Earned-Value web surface (EV4b, ADR-0042). **OFF by default** — a brand-new dark surface whose
- * quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships hidden on `main` and
- * is turned on per-environment during rollout, then flipped default-on once cleared (the
- * `VITE_RESOURCE_LEVELLING` / `VITE_DURATION_TYPES` pattern). When on, the web UI exposes the cost &
+ * Earned-Value web surface (EV4b, ADR-0042). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a brand-new dark surface whose
+ * quality gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the web UI exposes the cost &
  * Earned-Value surface:
  *
  * - **Plan Earned-Value settings** — an `EAC method` picker (CPI (default) / Remaining-at-budget /
@@ -311,15 +301,14 @@ export const RESOURCE_LEVELLING_ENABLED = flagDefaultOff(import.meta.env.VITE_RE
  * Everything behind it — the settable cost inputs on the create/update DTOs (EV4a) and the
  * `earned-value` read endpoint — is already live; the flag only governs whether the web UI exposes it.
  * Money on the wire is **integer minor units** in the plan's `currencyCode` (see `lib/format-money`).
- * Set `VITE_EARNED_VALUE=true` to enable it in an environment.
+ * Set `VITE_EARNED_VALUE=false` to disable it (rollback / opt-out).
  */
-export const EARNED_VALUE_ENABLED = flagDefaultOff(import.meta.env.VITE_EARNED_VALUE);
+export const EARNED_VALUE_ENABLED = flagDefaultOn(import.meta.env.VITE_EARNED_VALUE);
 
 /**
- * Cost-accrual web surface (M7 rung 5, ADR-0044 F1 / ADR-0035 §32). **OFF by default** — a brand-new
- * dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it ships
- * hidden on `main` and is turned on per-environment during rollout, then flipped default-on once
- * cleared (the `VITE_EARNED_VALUE` / `VITE_RESOURCE_LEVELLING` pattern). When on, the activity form's
+ * Cost-accrual web surface (M7 rung 5, ADR-0044 F1 / ADR-0035 §32). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — its quality gates
+ * (a11y / ux / component / e2e) and documented pre-flip blockers (TECH_DEBT #38/#39/#40/#41/#44) are
+ * now cleared. When on, the activity form's
  * "Cost & earned value" fieldset gains a **Cost accrual** select (Start / Uniform / End):
  *
  * - **Cost accrual** — governs WHEN the activity's cost is recognised in the Earned-Value read's
@@ -329,15 +318,13 @@ export const EARNED_VALUE_ENABLED = flagDefaultOff(import.meta.env.VITE_EARNED_V
  * Everything behind it — the settable `accrualType` create/update activity field and the accrual-aware
  * PV time-phasing in the `earned-value` read — is already live; the flag only governs whether the web
  * UI exposes the picker. The cost **S-curve chart** (the period-trend series) is a later, separate
- * slice. Set `VITE_COST_ACCRUAL=true` to enable it in an environment.
+ * slice. Set `VITE_COST_ACCRUAL=false` to disable it (rollback / opt-out).
  */
-export const COST_ACCRUAL_ENABLED = flagDefaultOff(import.meta.env.VITE_COST_ACCRUAL);
+export const COST_ACCRUAL_ENABLED = flagDefaultOn(import.meta.env.VITE_COST_ACCRUAL);
 
 /**
- * Weighted activity-steps web surface (M7 rung 5, ADR-0044 §2 / ADR-0035 §33). **OFF by default** — a
- * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
- * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on
- * once cleared (the `VITE_COST_ACCRUAL` / `VITE_EARNED_VALUE` pattern). When on, the activities table
+ * Weighted activity-steps web surface (M7 rung 5, ADR-0044 §2 / ADR-0035 §33). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the activities table
  * gains a per-activity **Steps** row action that opens an editor for the activity's weighted progress
  * checklist:
  *
@@ -349,15 +336,14 @@ export const COST_ACCRUAL_ENABLED = flagDefaultOff(import.meta.env.VITE_COST_ACC
  *
  * Everything behind it — the settable `ActivityStep` rows, the bulk-replace endpoint, and the read-time
  * `rollupPhysicalPercent` resolver — is already live; the flag only governs whether the web UI exposes
- * the editor. Set `VITE_ACTIVITY_STEPS=true` to enable it in an environment.
+ * the editor. Set `VITE_ACTIVITY_STEPS=false` to disable it (rollback / opt-out).
  */
-export const ACTIVITY_STEPS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_STEPS);
+export const ACTIVITY_STEPS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_STEPS);
 
 /**
- * Resource loading-curves web surface (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). **OFF by default** — a
- * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it
- * ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on once
- * cleared (the `VITE_COST_ACCRUAL` / `VITE_ACTIVITY_STEPS` pattern). When on, the web UI exposes resource
+ * Resource loading-curves web surface (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — its quality gates
+ * (a11y / ux / component / e2e) and documented pre-flip blockers (TECH_DEBT #38/#39/#40/#41/#44) are
+ * now cleared. When on, the web UI exposes resource
  * loading curves:
  *
  * - **Loading-curve picker** — a per-assignment curve select (Uniform / Bell / Front-loaded /
@@ -370,15 +356,13 @@ export const ACTIVITY_STEPS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVI
  *
  * Everything behind it — the settable `curveType`, the pure `resource-histogram.ts` read-model, and the
  * `GET …/schedule/resource-histogram` endpoint — is already live; the flag only governs whether the web
- * UI exposes the picker + histogram. Set `VITE_RESOURCE_CURVES=true` to enable it in an environment.
+ * UI exposes the picker + histogram. Set `VITE_RESOURCE_CURVES=false` to disable it (rollback / opt-out).
  */
-export const RESOURCE_CURVES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCE_CURVES);
+export const RESOURCE_CURVES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCE_CURVES);
 
 /**
- * Inter-project / external dates web surface (F5, ADR-0043 / ADR-0035 §30). **OFF by default** — a
- * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
- * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on
- * once cleared (the `VITE_EARNED_VALUE` / `VITE_RESOURCE_LEVELLING` pattern). When on, the web UI
+ * Inter-project / external dates web surface (F5, ADR-0043 / ADR-0035 §30). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the web UI
  * exposes external / inter-project dates:
  *
  * - **Activity External dates** — an `External early start` and `External late finish` date pair on the
@@ -396,4 +380,4 @@ export const RESOURCE_CURVES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOU
  * flag only governs whether the web UI exposes it. Set `VITE_INTER_PROJECT_DATES=true` to enable it in
  * an environment.
  */
-export const INTER_PROJECT_DATES_ENABLED = flagDefaultOff(import.meta.env.VITE_INTER_PROJECT_DATES);
+export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_INTER_PROJECT_DATES);

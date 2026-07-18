@@ -1,3 +1,4 @@
+import { DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { describe, expect, it } from 'vitest';
@@ -58,4 +59,64 @@ describe('assignment DTO validation (ADR-0040 N19 / editedField)', () => {
     });
     expect(errors.some((e) => e.property === 'unitsPerHour')).toBe(true);
   });
+});
+
+/**
+ * Overflow-ceiling boundary for the money (`budgetedCost`/`actualCost`, integer minor-unit BIGINT)
+ * and Decimal(18,4) units/rate (`budgetedUnits`/`unitsPerHour`/`actualUnits`) fields (TECH_DEBT
+ * #40a): a value one above the ceiling is a clean 422 rather than a BIGINT/Decimal overflow 500; a
+ * value AT the ceiling passes.
+ */
+describe('assignment DTO @Max overflow guards (TECH_DEBT #40a)', () => {
+  const DECIMAL_FIELDS = ['budgetedUnits', 'unitsPerHour', 'actualUnits'] as const;
+  const MONEY_FIELDS = ['budgetedCost', 'actualCost'] as const;
+
+  for (const field of DECIMAL_FIELDS) {
+    it(`rejects ${field} one above DECIMAL_18_4_MAX on create`, () => {
+      const errors = errorsFor(CreateAssignmentDto, {
+        resourceId: RESOURCE_ID,
+        [field]: DECIMAL_18_4_MAX + 1,
+      });
+      expect(errors.some((e) => e.property === field)).toBe(true);
+    });
+
+    it(`accepts ${field} exactly at DECIMAL_18_4_MAX on create`, () => {
+      const errors = errorsFor(CreateAssignmentDto, {
+        resourceId: RESOURCE_ID,
+        [field]: DECIMAL_18_4_MAX,
+      });
+      expect(errors.some((e) => e.property === field)).toBe(false);
+    });
+
+    it(`rejects ${field} one above DECIMAL_18_4_MAX on update`, () => {
+      const errors = errorsFor(UpdateAssignmentDto, { version: 1, [field]: DECIMAL_18_4_MAX + 1 });
+      expect(errors.some((e) => e.property === field)).toBe(true);
+    });
+  }
+
+  for (const field of MONEY_FIELDS) {
+    it(`rejects ${field} one above MONEY_MINOR_UNITS_MAX on create`, () => {
+      const errors = errorsFor(CreateAssignmentDto, {
+        resourceId: RESOURCE_ID,
+        [field]: MONEY_MINOR_UNITS_MAX + 1,
+      });
+      expect(errors.some((e) => e.property === field)).toBe(true);
+    });
+
+    it(`accepts ${field} exactly at MONEY_MINOR_UNITS_MAX on create`, () => {
+      const errors = errorsFor(CreateAssignmentDto, {
+        resourceId: RESOURCE_ID,
+        [field]: MONEY_MINOR_UNITS_MAX,
+      });
+      expect(errors.some((e) => e.property === field)).toBe(false);
+    });
+
+    it(`rejects ${field} one above MONEY_MINOR_UNITS_MAX on update`, () => {
+      const errors = errorsFor(UpdateAssignmentDto, {
+        version: 1,
+        [field]: MONEY_MINOR_UNITS_MAX + 1,
+      });
+      expect(errors.some((e) => e.property === field)).toBe(true);
+    });
+  }
 });

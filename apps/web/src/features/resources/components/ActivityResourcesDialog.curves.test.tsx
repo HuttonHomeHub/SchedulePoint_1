@@ -54,7 +54,10 @@ function assignment(overrides: Partial<ResourceAssignmentSummary> = {}): Resourc
   };
 }
 
-function renderDialog(assignments: ResourceAssignmentSummary[]) {
+function renderDialog(
+  assignments: ResourceAssignmentSummary[],
+  props: Partial<React.ComponentProps<typeof ActivityResourcesDialog>> = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -62,7 +65,14 @@ function renderDialog(assignments: ResourceAssignmentSummary[]) {
   queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), assignments);
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityResourcesDialog orgSlug="acme" activityId="a1" open onClose={vi.fn()} canWrite />
+      <ActivityResourcesDialog
+        orgSlug="acme"
+        activityId="a1"
+        open
+        onClose={vi.fn()}
+        canWrite
+        {...props}
+      />
     </QueryClientProvider>,
   );
 }
@@ -105,5 +115,12 @@ describe('ActivityResourcesDialog — loading curve picker (ADR-0044 §3)', () =
       curveType: 'DOUBLE_PEAK',
       version: 3,
     });
+  });
+
+  it('hides the loading-curve picker for a milestone activity, in both the assigned row and the assign form (TECH_DEBT #44b)', () => {
+    renderDialog([assignment({ curveType: 'BELL' })], { isMilestone: true });
+    // Neither the assigned row's picker nor the assign form's picker renders — a milestone
+    // is zero-span, so a loading curve has nothing to distribute units over.
+    expect(screen.queryByLabelText('Loading curve')).not.toBeInTheDocument();
   });
 });

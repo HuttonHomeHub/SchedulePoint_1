@@ -1,6 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { DECIMAL_18_4_MAX } from '@repo/types';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -166,6 +167,14 @@ describe.skipIf(!hasDatabase)('Resources API (e2e)', () => {
     await actor.agent.delete(`${base}/${id}`).expect(204);
     // The name is free once the holder is soft-deleted.
     await createResource(actor, { name: 'Dup', kind: 'EQUIPMENT' });
+  });
+
+  it('rejects a costPerUnit above the Decimal(18,4) ceiling (422, TECH_DEBT #40a)', async () => {
+    const { actor } = await adminWithOrg();
+    await actor.agent
+      .post(base)
+      .send({ name: 'Overflow', kind: 'LABOUR', costPerUnit: DECIMAL_18_4_MAX + 1 })
+      .expect(422);
   });
 
   it('validates a resource calendarId is an active calendar in the same org (404 otherwise)', async () => {

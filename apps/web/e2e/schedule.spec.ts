@@ -69,8 +69,10 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
 
-  // Link Excavate → Pour slab so there is a chain to schedule.
-  await page.getByRole('button', { name: 'Logic for Pour slab' }).click();
+  // Link Excavate → Pour slab so there is a chain to schedule — row actions live behind an
+  // overflow "Actions for …" menu (TECH_DEBT #38): open it, then choose Logic.
+  await page.getByRole('button', { name: 'Actions for Pour slab' }).click();
+  await page.getByRole('menuitem', { name: 'Logic' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Add predecessor' }).click();
   await dialog.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });

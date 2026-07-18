@@ -160,6 +160,8 @@ export interface ScheduleAggregate {
   nearCriticalCount: number;
   /** Activities a mandatory pin drove into a broken relationship (ADR-0035 §7). */
   constraintViolationCount: number;
+  /** Activities an imported external bound drove (ADR-0043 / ADR-0035 §30). */
+  externalDrivenCount: number;
   /** Soft constraint warnings (today N15: a SNET dated before the data date). ADR-0035 §12. */
   constraintWarningCount: number;
   /** Level-of-Effort activities with no resolvable span (N12, ADR-0035 §21). */
@@ -182,7 +184,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the nineteen engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the twenty-one engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -310,6 +312,7 @@ export class ScheduleRepository {
         critical_count: bigint;
         near_critical_count: bigint;
         constraint_violation_count: bigint;
+        external_driven_count: bigint;
         constraint_warning_count: bigint;
         loe_no_span_count: bigint;
         resource_driver_missing_count: bigint;
@@ -326,6 +329,9 @@ export class ScheduleRepository {
         COUNT(*) FILTER (WHERE is_near_critical) AS near_critical_count,
         -- Produce-and-flag: the engine-written flag (ADR-0035 §7), read back like is_critical.
         COUNT(*) FILTER (WHERE constraint_violated) AS constraint_violation_count,
+        -- External / inter-project produce-and-flag (ADR-0043 / ADR-0035 §30): the engine-written flag,
+        -- read back like constraint_violated over the same plan-scoped active set.
+        COUNT(*) FILTER (WHERE external_driven) AS external_driven_count,
         -- N15 (ADR-0035 §12): a SNET dated before the plan's data date — derived from inputs, so it
         -- matches the engine's own count without a stored column. A null data date yields no warning.
         COUNT(*) FILTER (
@@ -364,6 +370,7 @@ export class ScheduleRepository {
       criticalCount: Number(row.critical_count),
       nearCriticalCount: Number(row.near_critical_count),
       constraintViolationCount: Number(row.constraint_violation_count),
+      externalDrivenCount: Number(row.external_driven_count),
       constraintWarningCount: Number(row.constraint_warning_count),
       loeNoSpanCount: Number(row.loe_no_span_count),
       resourceDriverMissingCount: Number(row.resource_driver_missing_count),
@@ -547,7 +554,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the nineteen engine
+   * id can never write across a plan or tenant). Sets only the twenty-one engine
    * columns; a no-op for an empty result set.
    */
   async writeResults(
@@ -572,6 +579,9 @@ export class ScheduleRepository {
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
     const constraintViolated = results.map((r) => r.constraintViolated);
+    // External / inter-project produce-and-flag (ADR-0043 / ADR-0035 §30) — engine-owned like
+    // constraint_violated. Optional on the engine result (absent on the no-external path) ⇒ false.
+    const externalDriven = results.map((r) => r.externalDriven ?? false);
     // LOE no-span produce-and-flag (N12, ADR-0035 §21) — engine-owned like constraint_violated.
     const loeNoSpan = results.map((r) => r.loeNoSpan);
     // Resource-dependent driver-missing produce-and-flag (ADR-0035 §23 / ADR-0039) — engine-owned.
@@ -614,6 +624,7 @@ export class ScheduleRepository {
         is_critical = v.is_critical,
         is_near_critical = v.is_near_critical,
         constraint_violated = v.constraint_violated,
+        external_driven = v.external_driven,
         loe_no_span = v.loe_no_span,
         resource_driver_missing = v.resource_driver_missing,
         visual_effective_start = v.visual_effective_start,
@@ -636,6 +647,7 @@ export class ScheduleRepository {
         ${isCritical}::boolean[],
         ${isNearCritical}::boolean[],
         ${constraintViolated}::boolean[],
+        ${externalDriven}::boolean[],
         ${loeNoSpan}::boolean[],
         ${resourceDriverMissing}::boolean[],
         ${visualEffectiveStart}::date[],
@@ -650,7 +662,7 @@ export class ScheduleRepository {
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
-        loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
+        external_driven, loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
         visual_conflict, visual_drift_days, leveled_start, leveled_finish,
         leveling_delay_minutes, leveling_window_exceeded, self_over_allocated
       )
