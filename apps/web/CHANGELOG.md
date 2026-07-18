@@ -1,5 +1,204 @@
 # @repo/web
 
+## 0.28.0
+
+### Minor Changes
+
+- [#93](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/93) [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Cost accrual (M7 rung 5, ADR-0044 F1 / ADR-0035 §32). Each activity gains a settable `accrualType`
+  (`START` / `UNIFORM` (default) / `END`) that governs **when** its cost lump-sum is recognised in the
+  Earned-Value read's Planned-Value time-phasing — `START` at the activity start, `END` at its finish,
+  `UNIFORM` linearly — reshaping the cost / cash-flow S-curve. It **never changes a CPM date**, feeds the
+  scheduler nothing, and is a pure read-model extension of `earned-value.ts`: `UNIFORM` (or absent) is
+  byte-identical to the pre-ADR-0044 phasing (the parity gate), so the existing Earned-Value goldens stay
+  green. The engine (`compute.ts`) and the levelling pass (`level.ts`) are untouched.
+
+  - **API (`@repo/api`)** — the create/update activity DTOs, the activity response DTO, and the EV read
+    path (`schedule.service.getEarnedValue` + `loadEarnedValueActivities`) all carry `accrualType`
+    (reuses `activity:update`; the EV read stays `cost:read`-gated). `AccrualType` / `ACCRUAL_TYPES`
+    round-trip through `@repo/types`.
+  - **Types (`@repo/types`)** — `ActivitySummary` gains `accrualType: AccrualType`.
+  - **Conformance** — the EV adapter reads the fixture's `expenses.accrual_type` and collapses per-expense
+    → one activity value (ADR-0044 §Q4); new first-principles goldens assert the phased PV to the minor
+    unit for **E001** (£45,000 crane mobilisation, `START` — full PV at the start), **E002** (£68,000,
+    `UNIFORM` — 50% at mid-window) and **E004** (£3,500 retention, `END` — nothing until the finish), plus
+    a `UNIFORM`→`START` flip differential. The `accrual_start` / `accrual_uniform` / `accrual_end`
+    capability tags flip ✅ (32 ✅ / 1 ⚪); ADR-0035 gains an **Accepted §32**.
+  - **Web (`@repo/web`)** — a **Cost accrual** select (Start / Uniform / End) in the activity form's
+    "Cost & earned value" fieldset, behind the new **off-by-default** `VITE_COST_ACCRUAL` flag; wired
+    through the create/update mutation and seeded from the row so a stored value round-trips when hidden.
+
+  Deferred (later ADR-0044 slices, not in this change): the period-trend cost **S-curve** chart series
+  (read-model + web), weighted **activity steps** (F2), and **resource loading curves** (F3).
+
+- [#91](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/91) [`b60f2c7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b60f2c74dfbd297d64083d35f9b1d52e30e3f27e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Duration types & the resource-units rate on the web, behind `VITE_DURATION_TYPES` (default off, M7
+  rung 4, ADR-0040). The activity form gains a **Duration type** picker (Fixed Duration & Units/Time
+  (default) / Fixed Duration & Units / Fixed Units / Fixed Units/Time), shown for types that carry an
+  entered duration. The per-activity resource assignment editor gains, on the **driving** assignment, a
+  **units/time (rate)** field with its own save and a live "Duration becomes N days" preview for a
+  units-driven type — a pure client-side mirror of the server's `resolveTriad` (the server stays
+  authoritative; the preview also mirrors the N20 zero-rate block). A units/rate edit on a rated driving
+  assignment names its `editedField` so the server recomputes the triad and — for `FIXED_UNITS` /
+  `FIXED_UNITS_TIME` — derives the activity's duration, refetched into the table. Everything behind it (the
+  `durationType` / `unitsPerHour` fields, the recompute, the conformance proof) was already live; this only
+  exposes it in the UI. Set `VITE_DURATION_TYPES=true` to enable it in an environment.
+
+- [#91](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/91) [`9e5a4d9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9e5a4d9dc000b9aa7b1115822f165f1680ee3dfe) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Enable the two remaining dark web surfaces by default. **Float & critical plan settings**
+  (`VITE_FLOAT_CRITICAL_SETTINGS`, ADR-0035 §17/§18/§20) and **advanced activity types**
+  (`VITE_ADVANCED_ACTIVITY_TYPES`, ADR-0035 §21/§24 — Level of Effort + WBS summary/parent pickers) now
+  default **on**, having cleared their component/ux/a11y reviews. The engine, API, and conformance behind
+  both were already live; this flips the web pickers on so a planner can use them without an env override.
+  Set either flag to `false` to roll back to the prior surface, byte-for-byte. (The server-side
+  `PLAN_EDIT_LOCK_ENFORCED` stays the one deliberate ops switch, enabled after the pen bundle is live per
+  ADR-0028 §9 — unchanged.)
+
+- [#93](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/93) [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Cost & Earned Value on the web, behind `VITE_EARNED_VALUE` (default off, EV4b / ADR-0042). The plan
+  scheduling settings gain an **EAC method** picker (CPI (default) / Remaining-at-budget / CPI × SPI) and a
+  plan **Currency** (ISO-4217) field. The resource form gains a **Cost per unit** rate; the activity form
+  gains a **% complete type** picker (Duration (default) / Units / Physical), a **Physical % complete**
+  field (shown for the Physical measure), and **Budgeted / Actual expense** money fields — hidden for types
+  with no cost meaning (milestone, LOE, WBS summary); the resource-assignment editor gains **Budgeted cost**
+  (an optional override), **Actual cost**, and **Actual units**. The headline is a new **Earned Value**
+  analysis surface — KPI tiles for the plan total (SPI, CPI, EAC, plus BAC/EV/AC/VAC) and a per-activity +
+  WBS table (BAC, PV, EV, AC, SV, CV, SPI, CPI, EAC) — reading `GET …/schedule/earned-value`; a behind-
+  schedule / over-budget index is flagged with a word + icon, never colour alone (WCAG 2.2 AA), and a
+  **403** (a non-Planner without `cost:read`) renders a friendly "restricted" state rather than a generic
+  error. Money is entered in **major units** (e.g. dollars) and stored/rendered as integer **minor units**
+  in the plan currency (`lib/format-money`, `narrowSymbol`, a 2-decimal-currency assumption). Every cost
+  input seeds from the row even when hidden, so with the flag off the surface is byte-identical to today and
+  an edit never clobbers a stored value. Everything behind it (the settable cost DTOs and the earned-value
+  read endpoint) was already live; this only exposes it in the UI. Set `VITE_EARNED_VALUE=true` to enable
+  it in an environment.
+
+- [#93](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/93) [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Flagged web surface for external / inter-project dates (ADR-0043 / ADR-0035 §30, M1), behind
+  `VITE_INTER_PROJECT_DATES` (default off). The activity form gains an **External dates** section with
+  optional **External early start** / **External late finish** calendar-day fields (imported commitments
+  gating the activity from another project), including a client-side check that the late finish is not
+  before the early start (the N26 rule, also enforced server-side as a 422). Plan settings gain an **Ignore
+  external relationships** toggle that drops all external bounds so the plan can be viewed on its own logic.
+  The schedule summary strip shows an **Externally driven** count when a recalculation reports one. Everything
+  is default-off and additive; a stored external date still round-trips through the form when the flag is off.
+
+- [#93](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/93) [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Resource levelling on the web, behind `VITE_RESOURCE_LEVELLING` (default off, ADR-0041). The plan
+  scheduling settings gain a **Level resources** toggle (the opt-in switch for the second levelling pass)
+  and, when it is on, a **Level within float only** toggle (delay only within total float, never extending
+  the schedule). The resource form gains a **Max units/hour** capacity field (the availability ceiling the
+  levelling pass respects; blank = uncapped), and the activity form gains a **Levelling priority** field
+  (lower wins the resource when two activities contend), hidden for types levelling never moves (milestone,
+  LOE, WBS summary). Once a plan has levelled, the schedule summary shows a **levelled overlay** — the
+  levelled project finish and the levelled / window-exceeded / over-capacity counts — alongside the
+  unchanged pure-network critical path and floats. Everything behind it (the plan `levelResources` /
+  `levelWithinFloatOnly` options, resource `maxUnitsPerHour`, activity `levelingPriority`, the opt-in second
+  engine pass and its levelled overlay + summary counts) was already live; this only exposes it in the UI.
+  Set `VITE_RESOURCE_LEVELLING=true` to enable it in an environment.
+
+- [#91](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/91) [`d366218`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d366218f2e793d06859b1cbb0cdabb64d63f308e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Activity form can create **Level-of-Effort** activities (M5-epic F4, ADR-0035 §21), behind
+  `VITE_ADVANCED_ACTIVITY_TYPES` (default off). When on, the Type picker offers "Level of effort"; picking
+  it hides the Duration and Expected-finish inputs (an LOE's duration is derived from its SS-predecessor →
+  FF-successor span) and explains that the span comes from its links. The picker otherwise offers only the
+  three fully-supported types (Task, Start/Finish milestone) — Hammock and the not-yet-built WBS-summary
+  are no longer offered — while a legacy/seeded value stays visible and selected when editing (the
+  honest-selector pattern). The engine, API and conformance proof for LOE are already live (F1–F3).
+
+- [#93](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/93) [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Resource loading curves (M7 rung 5, ADR-0044 F3 / ADR-0035 §31) — **the final capability-matrix slice**.
+  Each resource assignment gains a settable `curveType` (`UNIFORM` (default) / `BELL` / `FRONT_LOADED` /
+  `BACK_LOADED` / `DOUBLE_PEAK`) — a named P6 loading curve — plus a new pure read-model
+  (`resource-histogram.ts`) that distributes each assignment's `budgetedUnits` across its effective span
+  (`start + assignment-lag → finish`, on the activity's own calendar, ADR-0037) per the named 21-point
+  profile and aggregates a **units-over-time histogram per resource**, **conserving units** exactly
+  (`Σ buckets === Σ budgetedUnits`). It moves **no CPM date**, owns **no engine column**, and does **NOT**
+  feed the levelling pass this rung (Q2). `UNIFORM`/absent is a **flat** load — byte-identical to a
+  flat-rate distribution — so the parity gate is trivial. `compute.ts` and `level.ts` are untouched.
+
+  - **API (`@repo/api`)** — the create/update assignment DTOs, the assignment response DTO, and the
+    assignment repository/service all carry `curveType` (reuses the existing `resource:assign` permission;
+    a plain enum, not cost-gated). New `GET …/schedule/resource-histogram` endpoint (`schedule:read` — the
+    units histogram is **schedule data, not cost**, Q5) with a `granularity` param (`DAY`/`WEEK`/`MONTH`)
+    and offset paging over the per-resource series; the `meta` carries the shared bucket axis, series total,
+    and `curveNormalisedCount` (N29). The new pure `computeResourceHistogram` read-model is a dependency-free
+    sibling of `float-paths.ts` / `earned-value.ts`.
+  - **Types (`@repo/types`)** — `ResourceCurveType` / `RESOURCE_CURVE_TYPES`, the histogram response types
+    (`ResourceHistogram*`, `HistogramGranularity`), and `curveType` on `ResourceAssignmentSummary`.
+  - **Conformance** — a new `resource-histogram-adapter.ts` reads the fixture's `resource_curves` +
+    `assignments.curve`; the built-in profile constants are asserted **byte-equal to the fixture's
+    profiles** (self-baselined, no external oracle, ADR-0034). Goldens prove **AS0026** (FRONT_LOADED,
+    2400 u), **AS0042** (BACK_LOADED, 640 u), **AS0015** (BELL, 1200 u) and **AS0043** (DOUBLE_PEAK, 560 u)
+    distribute to the exact profile shape and sum to `budgetedUnits`, plus a UNIFORM-vs-FRONT_LOADED
+    differential (`resultsDiffer`), the assignment-lag case (**AS0027**), and **N29** (a profile not summing
+    to 100 ⇒ normalise to the budget, units conserved, counted). The `res_curve_bell` /
+    `res_curve_front_loaded` / `res_curve_back_loaded` / `res_curve_double_peak` capability tags flip ✅ —
+    **closing the matrix (34 ✅ / 0 ⚪)**; ADR-0035 gains an **Accepted §31** + N29.
+  - **Web (`@repo/web`)** — a **loading-curve picker** (Uniform / Bell / Front-loaded / Back-loaded /
+    Double-peak) on the resource-assignment dialog and a **Resource histogram** read view (a bar chart with
+    a keyboard-navigable data-table equivalent for WCAG 2.2 AA), behind the new **off-by-default**
+    `VITE_RESOURCE_CURVES` flag; the picker round-trips through the assignment create/update mutation.
+
+- [#91](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/91) [`f3bec8d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3bec8d81e0227b40010c91077a02eec42a9a225) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Flagged web surface for **WBS summaries** (M5-epic F8, ADR-0038 / ADR-0035 §24). Behind
+  `VITE_ADVANCED_ACTIVITY_TYPES` (off by default), the activity form's Type picker now offers **WBS
+  summary** alongside Level of Effort: choosing it hides the Duration/Expected-finish inputs (a summary's
+  dates roll up from its branch) and explains the roll-up. A new flag-gated **WBS parent** picker nests any
+  activity under one of the plan's existing summaries — round-tripping `parentId` through create and update,
+  excluding the activity itself, and keeping a seeded parent visible under an honest label if it isn't in
+  the list (the honest-selector pattern). The picker distinguishes loading, an honest load error, and a
+  resolved-empty plan (which guides the planner to create a summary first) as separate states, and the
+  WBS-summary explainer describes the real nesting flow (open each activity in the branch and set its WBS
+  summary to this one). The engine/API/conformance for WBS rollup are already live (F5–F7); this only lets a
+  planner pick the type and set the parent. Canvas summary-bar rendering and navigator-tree visual nesting
+  remain deferred (TECH_DEBT [#37](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/37)).
+
+- [#91](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/91) [`cc7b02f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cc7b02fcaa36ff130ace19501c245029b377637c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the **resource management** web surface (M7-F6, ADR-0039), behind a new **default-off** flag
+  `VITE_RESOURCES` so it ships dark. An org-level **Resources library** screen
+  (`/orgs/:orgSlug/resources`) lists, creates, edits and deletes resources — each with a name, optional
+  code/description, a kind (Labour / Equipment / Material) and an optional own calendar — and a per-activity
+  **Resources** dialog (from the activities row) assigns a resource with budgeted units and an optional
+  **driving-resource** flag, plus edit/unassign. A Material resource can never be the driving resource: the
+  driving toggle is disabled with an explanatory hint (the API's `MATERIAL_CANNOT_DRIVE` is the backstop),
+  and setting a driver moves the flag off the previous one (announced). Reads are open to any member; create/
+  edit/delete/assign are Planner + Org Admin. With `VITE_RESOURCES` off the app is byte-identical to before —
+  no nav link, no route, no row action. The activities row-actions crowding this adds a fifth item to is
+  recorded as tech debt (migrate the cell to the `Menu` primitive before the flag is flipped on).
+
+- [#93](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/93) [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Weighted activity steps (M7 rung 5, ADR-0044 F2 / ADR-0035 §33). An activity gains a **weighted progress
+  step checklist** (`activity_steps` child table — `seq` / `name` / `weight` / `percentComplete`) whose
+  weight-weighted mean `Σ(w·p)/Σw` becomes the activity's **PHYSICAL** %-complete and **wins** over the
+  manual `physicalPercentComplete` when steps are present. Steps feed the ADR-0042 `PHYSICAL` Earned-Value
+  measure only — they **never change a CPM date**; with no steps the manual field stands exactly (the
+  byte-identical parity path, so the existing EV goldens stay green). The engine (`compute.ts`) and the
+  levelling pass (`level.ts`) are untouched; the pure resolver already in `earned-value.ts`
+  (`rollupPhysicalPercent`) is unchanged — this change only adds layers around it.
+
+  - **API (`@repo/api`)** — a steps sub-resource following the reference-template layering
+    (controller → service → repository, deny-by-default, org-scoped): `GET …/activities/:activityId/steps`
+    (list active, seq-ordered) and `PUT …/activities/:activityId/steps` (`{ version, steps: [...] }`
+    bulk-replace, Q3) — retained rows updated in place, new ones appended, removed ones soft-deleted, the
+    server assigns `seq`, and the parent **activity's** `version` is optimistic-locked (stale ⇒ 409). Reuses
+    `activity:update` (a step is activity-write) — no new permission. **N28** (a step `percentComplete`
+    outside 0–100 ⇒ 422 `STEP_PERCENT_OUT_OF_RANGE`) and a negative `weight` are DTO-boundary rejects,
+    backstopped by DB CHECKs. The EV read (`schedule.service.getEarnedValue` + `loadEarnedValueActivities`)
+    loads each activity's active steps into the `PHYSICAL` rollup and reports a plan-level
+    **`stepWeightZeroCount`** (N27 — all-zero-weight ⇒ manual fallback, never a divide-by-zero), mirroring
+    `costWarningCount`. The soft-delete cascade is wired into `HierarchyLifecycleService` (steps sweep and
+    restore with their activity under the same `delete_batch_id`, both directions).
+  - **Types (`@repo/types`)** — new `ActivityStep`, `ActivityStepInput`, `ReplaceActivityStepsRequest`;
+    `PlanEarnedValue` gains `stepWeightZeroCount`.
+  - **Conformance** — the EV adapter reads the fixture's `steps` and attaches them to A4200 / A7100; new
+    goldens assert the weighted-mean rollup **A4200 → 35.0005%** (the fixture's own
+    `prog_rd_vs_pct_divergence` — steps-physical ≠ its 40% duration-%) and **A7100 → 0%**, a
+    steps-present-vs-manual differential (`resultsDiffer`), and the N27 fallback + count. **N28** is
+    DTO-tested. The `code_steps` capability tag flips ✅ (33 ✅ / 1 ⚪ — only resource curves remain);
+    ADR-0035 gains an **Accepted §33** + N27/N28.
+  - **Web (`@repo/web`)** — an `ActivityStepsEditor` (editable name / weight / %-complete rows with
+    add/remove/reorder) opened from the activities table row menu behind the new **off-by-default**
+    `VITE_ACTIVITY_STEPS` flag, showing the rolled-up physical % and a "steps override the manual %" note,
+    wired to the bulk-PUT mutation (TanStack Query).
+
+  Deferred (the last ADR-0044 slice, not in this change): **resource loading curves** (F3), the one
+  remaining ⚪ capability row.
+
+### Patch Changes
+
+- Updated dependencies [[`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1), [`272eb42`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/272eb420313809d0867ef81753ae4c705f631005), [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1), [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1), [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1), [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1), [`21818b7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/21818b7af12c16f481d7547d6f9c1d0464a05a2c), [`a763a54`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a763a5488370935dfaa44b6dc68198f2706270a4), [`7b29ccb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b29ccb64208a29aed92836dc46bc35cb691a05b), [`7952f5e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7952f5e1c60119ff7ffb31f34908e401dfc2731e), [`816d0a0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/816d0a09f262a1076f1a0aa1cd38b9590d2eec9b), [`62d7a97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/62d7a974d752249fefa31ee7fea7e45e92a3e179), [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1), [`afd4690`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/afd4690ed6832ff43b4e551e530346bbaaaaec68), [`7074b77`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7074b7703ff1b9bf784676a87c5a692a49741bc6), [`481d063`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/481d063a2c65722901dc8f66d6d08d710a1f88a1)]:
+  - @repo/types@0.13.0
+
 ## 0.27.0
 
 ### Minor Changes
