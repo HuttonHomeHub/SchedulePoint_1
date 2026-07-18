@@ -32,6 +32,10 @@ export interface ActivityPatch {
   /** Secondary constraint (ADR-0035 §10): drives the backward pass; paired like the primary. */
   secondaryConstraintType?: ConstraintType | null;
   secondaryConstraintDate?: Date | null;
+  /** External / inter-project early start (ADR-0043 / ADR-0035 §30.1): SNET-shaped forward bound; null clears. */
+  externalEarlyStart?: Date | null;
+  /** External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): FNLT-shaped backward bound; null clears. */
+  externalLateFinish?: Date | null;
   /** The activity's own working-time calendar (ADR-0037, M5); null inherits the plan default. */
   calendarId?: string | null;
   /** WBS parent (ADR-0038, M5-epic); a WBS_SUMMARY in the same plan, or null for top-level. */

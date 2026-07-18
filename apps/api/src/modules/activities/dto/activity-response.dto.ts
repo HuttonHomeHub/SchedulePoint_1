@@ -75,6 +75,24 @@ export class ActivityResponseDto implements ActivitySummary {
     format: 'date',
     nullable: true,
     type: String,
+    description:
+      'External / inter-project early start (ADR-0043 / ADR-0035 §30.1): an SNET-shaped forward bound imported from another project, or null.',
+  })
+  externalEarlyStart!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): an FNLT-shaped backward bound imported from another project, or null.',
+  })
+  externalLateFinish!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
     description: 'Expected-finish target (ADR-0035 §9), or null.',
   })
   expectedFinish!: string | null;
@@ -340,6 +358,10 @@ export class ActivityResponseDto implements ActivitySummary {
       constraintDate: day(entity.constraintDate),
       secondaryConstraintType: entity.secondaryConstraintType,
       secondaryConstraintDate: day(entity.secondaryConstraintDate),
+      // External / inter-project bounds (ADR-0043): stored absolutely (Timestamptz at UTC midnight),
+      // echoed as a calendar day exactly like constraintDate/expectedFinish.
+      externalEarlyStart: day(entity.externalEarlyStart),
+      externalLateFinish: day(entity.externalLateFinish),
       calendarId: entity.calendarId,
       parentId: entity.parentId,
       laneIndex: entity.laneIndex,

@@ -233,6 +233,14 @@ export interface PlanSummary {
    */
   levelWithinFloatOnly: boolean;
   /**
+   * Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4, M1). When true, the recalc
+   * DROPS every activity's external early-start and late-finish bounds (relationships to/from other
+   * projects), scheduling the plan on its own internal logic; internal constraints and logic are
+   * untouched. Default `false` is the byte-parity path (a plan with no external data schedules identically
+   * either way). Client-settable plan option, mirroring the other scheduling-option booleans.
+   */
+  ignoreExternalRelationships: boolean;
+  /**
    * The Earned-Value EAC forecast method (EV1, ADR-0042, Q3). Client-settable plan option; default
    * `CPI` (P6's headline EAC = BAC / CPI). Read by the EV2 read module (a query param may override
    * per-request); dark in EV1 — nothing computes EV yet. Kept in lock-step with the Prisma `EacMethod`.
@@ -325,6 +333,17 @@ export interface ActivitySummary {
    */
   secondaryConstraintType: ConstraintType | null;
   secondaryConstraintDate: string | null;
+  /**
+   * External / inter-project dates (ADR-0043 / ADR-0035 §30, M1): imported commitments from ANOTHER
+   * project, each a calendar day (`YYYY-MM-DD`) or null. `externalEarlyStart` is an SNET-shaped forward
+   * LOWER bound (the earliest an upstream project hands this activity over); `externalLateFinish` an
+   * FNLT-shaped backward UPPER bound (the latest a downstream project allows it to finish). Client-settable
+   * definition fields (NOT engine-owned); either, both, or neither may be set. Soft bounds, never mandatory
+   * pins — the engine clamps early start UP to / late finish DOWN to them, gated on the plan's
+   * `ignoreExternalRelationships`, never setting `constraintViolated`. Null = no external bound (parity).
+   */
+  externalEarlyStart: string | null;
+  externalLateFinish: string | null;
   /**
    * The P6 duration type (ADR-0040, M7 rung 4): which of {Duration, Units, Units/Time} recomputes vs
    * holds when the planner edits another, keeping `Units = Duration × Units/Time` true. Client-settable
@@ -626,6 +645,15 @@ export interface PlanScheduleSummary {
    * unless the plan has a resource-dependent activity with no driver.
    */
   resourceDriverMissingCount: number;
+  /**
+   * How many activities an external / inter-project bound DROVE this run (ADR-0043 / ADR-0035 §30) — its
+   * external early start raised the early start above pure logic, or its external late finish clamped the
+   * late finish below what logic could achieve. Observability only (mirrors `constraintViolationCount`);
+   * an external bound is soft and never an error. **Engine-derived: only a recalculation populates it**
+   * (M1 does not persist a per-activity external-driven flag), so the read summary reports 0. Zero when
+   * the plan carries no external data or `ignoreExternalRelationships` is on.
+   */
+  externalDrivenCount: number;
   /**
    * Resource-levelling roll-up (ADR-0041 / ADR-0035 §28). `leveledActivityCount` is how many activities
    * the opt-in levelling pass delayed (`levelingDelay > 0`); `levelingWindowExceededCount` how many were

@@ -21,7 +21,7 @@ import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
-import { parseCalendarDate } from '../../common/validation/calendar-date';
+import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -141,6 +141,28 @@ export class ActivitiesService {
     }
   }
 
+  /**
+   * N26 (ADR-0043 / ADR-0035 §30): an external late finish may not precede an external early start when
+   * BOTH are set — a self-contradictory imported window. Boundary reject (422 `EXTERNAL_FINISH_BEFORE_START`),
+   * mirroring the actual finish-before-start (N06) and resume-before-suspend cross-field checks; the DB
+   * CHECK `ck_activities_external_finish_after_start` is the backstop. Compares the two calendar-day
+   * strings, which order lexicographically (`YYYY-MM-DD`). Either bound absent = nothing to compare.
+   */
+  private assertExternalDatesOrdered(
+    externalEarlyStart: string | null,
+    externalLateFinish: string | null,
+  ): void {
+    if (
+      externalEarlyStart !== null &&
+      externalLateFinish !== null &&
+      externalLateFinish < externalEarlyStart
+    ) {
+      throw new ValidationError('External late finish cannot precede external early start.', {
+        reason: 'EXTERNAL_FINISH_BEFORE_START',
+      });
+    }
+  }
+
   async list(
     principal: Principal,
     orgSlug: string,
@@ -190,6 +212,11 @@ export class ActivitiesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:create', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
+    // N26 (ADR-0043 / ADR-0035 §30): an external late finish may not precede an external early start
+    // when BOTH are set. Boundary reject before the insert (mirrors the actual finish-before-start and
+    // resume-before-suspend cross-field checks); the DB CHECK ck_activities_external_finish_after_start
+    // is the backstop.
+    this.assertExternalDatesOrdered(dto.externalEarlyStart ?? null, dto.externalLateFinish ?? null);
     const plan = await this.loadActivePlan(planId, organization.id);
     // Structural write — the caller must hold the plan edit-lock (ADR-0028), 423 otherwise.
     await this.editLock.assertHoldsPen(principal, plan.id, organization.id);
@@ -236,6 +263,14 @@ export class ActivitiesService {
               : {}),
             ...(dto.secondaryConstraintDate
               ? { secondaryConstraintDate: parseCalendarDate(dto.secondaryConstraintDate) }
+              : {}),
+            // External / inter-project bounds (ADR-0043 / ADR-0035 §30): imported absolute commitments
+            // stored via the same calendar-day parse as constraintDate; either/both/neither may be set.
+            ...(dto.externalEarlyStart
+              ? { externalEarlyStart: parseCalendarDate(dto.externalEarlyStart) }
+              : {}),
+            ...(dto.externalLateFinish
+              ? { externalLateFinish: parseCalendarDate(dto.externalLateFinish) }
               : {}),
             // Expected-finish target (ADR-0035 §9); honoured only when the plan option is on.
             ...(dto.expectedFinish
@@ -344,6 +379,31 @@ export class ActivitiesService {
     if (dto.laneIndex !== undefined) patch.laneIndex = dto.laneIndex;
     if (dto.scheduleAsLateAsPossible !== undefined) {
       patch.scheduleAsLateAsPossible = dto.scheduleAsLateAsPossible;
+    }
+    // External / inter-project bounds (ADR-0043 / ADR-0035 §30): planner-owned definition inputs; a
+    // date sets the bound, null clears it. Enforce N26 on the RESOLVED effective pair (a provided value
+    // overrides the stored one, null clears, omitted keeps) so a PATCH of one side is still validated
+    // against the other's persisted value — mirrors how updateProgress resolves before its N06 check.
+    const effectiveExternalEarlyStart =
+      dto.externalEarlyStart !== undefined
+        ? dto.externalEarlyStart
+        : existing.externalEarlyStart
+          ? formatCalendarDate(existing.externalEarlyStart)
+          : null;
+    const effectiveExternalLateFinish =
+      dto.externalLateFinish !== undefined
+        ? dto.externalLateFinish
+        : existing.externalLateFinish
+          ? formatCalendarDate(existing.externalLateFinish)
+          : null;
+    this.assertExternalDatesOrdered(effectiveExternalEarlyStart, effectiveExternalLateFinish);
+    if (dto.externalEarlyStart !== undefined) {
+      patch.externalEarlyStart =
+        dto.externalEarlyStart === null ? null : parseCalendarDate(dto.externalEarlyStart);
+    }
+    if (dto.externalLateFinish !== undefined) {
+      patch.externalLateFinish =
+        dto.externalLateFinish === null ? null : parseCalendarDate(dto.externalLateFinish);
     }
     if (dto.expectedFinish !== undefined) {
       patch.expectedFinish =

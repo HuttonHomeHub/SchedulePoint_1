@@ -48,6 +48,8 @@ describe('conformance scenarios (differential scaffold)', () => {
       'S06_LAG_CALENDAR_24H',
       'S07_LONGEST_PATH',
       'S08_OPEN_ENDS_CRITICAL',
+      // S09 became runnable at M1 (ADR-0043 external / inter-project dates).
+      'S09_IGNORE_EXTERNAL',
       // S10 became runnable at M7 (ADR-0041 resource levelling).
       'S10_LEVELLED',
       'S11_MULTIPLE_FLOAT_PATHS',
@@ -174,6 +176,34 @@ describe('conformance scenarios (differential scaffold)', () => {
     }
   });
 
+  it('runs S09 (ignore external relationships) as a differential — the procurement chain pulls left (M1)', () => {
+    const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
+    const ignore = runScenario(fixture, 'S09_IGNORE_EXTERNAL');
+    expect(baseline.ran && ignore.ran).toBe(true);
+    if (!(baseline.ran && ignore.ran)) return;
+
+    // The S01 baseline HONOURS the fixture's imported external early starts (the adapter feeds them
+    // unconditionally); turning ignore-external ON drops them, so the five procurement/engineering
+    // milestones pull back to their internal logic — "flip the option, dates must move" (ADR-0034 §2 /
+    // ADR-0035 §30.4).
+    expect(resultsDiffer(ignore.output, baseline.output)).toBe(true);
+
+    const hon = new Map(baseline.output.results.map((r) => [r.activityId, r]));
+    const ign = new Map(ignore.output.results.map((r) => [r.activityId, r]));
+    // Each of the five external-early-start activities is driven to its imported external date under the
+    // baseline (external-driven), and pulls STRICTLY EARLIER to its own logic when external is ignored.
+    for (const id of ['A2120', 'A2200', 'A2210', 'A2220', 'A2230']) {
+      const h = hon.get(id)!;
+      const i = ign.get(id)!;
+      expect(h.externalDriven).toBe(true);
+      expect(i.earlyStart < h.earlyStart).toBe(true); // pulls left (chronological == lexicographic)
+      expect(i.externalDriven).toBeUndefined(); // no longer external-driven once dropped
+    }
+    // Five activities were external-driven in the baseline; none once the option drops the bounds.
+    expect(baseline.output.summary.externalDrivenCount).toBe(5);
+    expect(ignore.output.summary.externalDrivenCount).toBeUndefined();
+  });
+
   it('runs S10 (resource levelling) as a leveled-date differential — over-allocations serialise (M7)', () => {
     const baseline = runScenario(fixture, 'S01_BASELINE_UNPROGRESSED');
     const levelled = runScenario(fixture, 'S10_LEVELLED');
@@ -240,11 +270,13 @@ describe('conformance scenarios (differential scaffold)', () => {
   });
 
   it('returns a todo (not a fabricated run) for a not-yet-supported scenario', () => {
-    // S09 (ignore external relationships) needs an inter-project relationship model — still honestly a
-    // todo (S10 resource levelling became runnable at M7, ADR-0041).
-    const run = runScenario(fixture, 'S09_IGNORE_EXTERNAL');
+    // S13 (total float = start float) stays honestly a todo: own-calendar float (ADR-0037 §4) makes
+    // start-float == finish-float for unprogressed work, so its mixed-calendar divergence doesn't
+    // reproduce here — a documented semantic difference, not a missing wire (S09 ignore-external became
+    // runnable at M1, ADR-0043).
+    const run = runScenario(fixture, 'S13_TOTAL_FLOAT_START');
     expect(run.ran).toBe(false);
-    if (!run.ran) expect(run.todo).toContain('external');
+    if (!run.ran) expect(run.todo).toContain('float');
   });
 
   it('resultsDiffer detects identity — the S01 run does not differ from itself', () => {

@@ -40,6 +40,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     makeOpenEndsCritical: false,
     levelResources: false,
     levelWithinFloatOnly: false,
+    ignoreExternalRelationships: false,
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
@@ -66,6 +67,8 @@ const activityRow = (
   constraintDate: null,
   secondaryConstraintType: null,
   secondaryConstraintDate: null,
+  externalEarlyStart: null,
+  externalLateFinish: null,
   visualStart: null,
   scheduleAsLateAsPossible: false,
   calendarId: null,
@@ -254,6 +257,35 @@ describe('ScheduleService.recalculate', () => {
     plans.findActiveByIdInOrg.mockResolvedValue(plan({ useExpectedFinishDates: false }));
     const off = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
     expect(off.projectFinish).toBe('2026-01-02');
+  });
+
+  it('threads external / inter-project dates + the ignore flag into the engine (ADR-0043 / ADR-0035 §30)', async () => {
+    // A single activity whose logic-earliest is the data date (01-01), but carrying an external early
+    // start of 01-05 imported from another project. With external honoured (flag off) its early start is
+    // clamped UP to 01-05 and it is flagged external-driven; with ignore-external ON the bound drops and
+    // it falls back to the data date. The service must thread the instants AND the plan flag through.
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 3, { externalEarlyStart: new Date('2026-01-05T00:00:00.000Z') }),
+    ]);
+
+    const honoured = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    const a = results.find((r) => r.activityId === 'A')!;
+    expect(a.earlyStart).toBe('2026-01-05'); // clamped up to the external early start
+    expect(a.externalDriven).toBe(true);
+    expect(honoured.externalDrivenCount).toBe(1);
+
+    // Ignore-external ON drops the bound → back to the data date, no external-driven activity.
+    plans.findActiveByIdInOrg.mockResolvedValue(plan({ ignoreExternalRelationships: true }));
+    const ignored = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , ignoredResults] = schedule.writeResults.mock.calls[1] as [
+      string,
+      string,
+      EngineResult[],
+    ];
+    const aIgnored = ignoredResults.find((r) => r.activityId === 'A')!;
+    expect(aIgnored.earlyStart).toBe('2026-01-01'); // dropped → data date
+    expect(ignored.externalDrivenCount).toBe(0);
   });
 
   it('threads the plan’s critical-path definition into the engine (M6, ADR-0035 §17)', async () => {
@@ -506,6 +538,8 @@ describe('ScheduleService.summary', () => {
       nearCriticalCount: 1,
       constraintViolationCount: 0,
       constraintWarningCount: 0,
+      // External-driven is engine-derived on a recalc only; the read summary always reports 0 (ADR-0043).
+      externalDrivenCount: 0,
     });
   });
 

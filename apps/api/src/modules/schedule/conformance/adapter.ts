@@ -214,6 +214,16 @@ export interface AdaptOptions {
    * when `honorLevelling` is on.
    */
   levelWithinFloatOnly?: boolean;
+  /**
+   * Turn on the plan-level "ignore relationships to/from other projects" option (ADR-0043 / ADR-0035 §30.4,
+   * S09). Default **false** — the adapter always FEEDS each activity's `external_early_start` /
+   * `external_late_finish` (like it always feeds `constraint_date` / `expected_finish`), and the engine
+   * HONOURS those imported bounds by default (unlike expected finish, an external bound needs no option to
+   * act). When **true**, {@link ComputeOptions.ignoreExternalRelationships} drops both directions, so the
+   * five external-early-start milestones (A2120/A2200/A2210/A2220/A2230) pull back to their internal logic
+   * and A12500's external late finish is discarded — the S09 differential (`resultsDiffer(S09, S01)`).
+   */
+  ignoreExternalRelationships?: boolean;
 }
 
 const MINUTES_PER_HOUR = 60;
@@ -254,6 +264,7 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   const honorDurationTypes = opts.honorDurationTypes ?? false;
   const honorLevelling = opts.honorLevelling ?? false;
   const levelWithinFloatOnly = opts.levelWithinFloatOnly ?? false;
+  const ignoreExternalRelationships = opts.ignoreExternalRelationships ?? false;
   const relationshipLagCalendar = opts.relationshipLagCalendar ?? 'PLAN';
   const notes: AdaptationNote[] = [];
 
@@ -405,6 +416,9 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
       honorLevelling
         ? 'resource levelling is honoured (ADR-0041, §28): the opt-in serial priority-list second pass runs after the CPM network pass and serialises over-allocations (NL-CRANE600 A6100/A6200, NL-HYDROPUMP A7700/A7730) into a leveled overlay; the fixture carries no leveling_priority (the schema strips it), so the composite tie-break (total-float → early-start → id) orders placement; the pure early/late/float layer is never recomputed (Q2)'
         : 'resource levelling is not applied; the schedule is the pure CPM network with no leveled overlay (ADR-0041, M7 baseline / the byte-identical parity path)',
+      ignoreExternalRelationships
+        ? 'external / inter-project dates are IGNORED (ADR-0043 / ADR-0035 §30.4, S09): imported early-start / late-finish bounds are dropped, so the procurement milestones pull back to their internal logic'
+        : 'external / inter-project dates are honoured (ADR-0043 / ADR-0035 §30): imported early-start bounds are SNET-shaped forward floors (§30.1), late-finish bounds FNLT-shaped backward caps (§30.2), both soft (a hard pin wins, §30.3)',
       'progress, actuals, suspend/resume and the data-date floor are ignored (ADR-0035 §1–§6, M2)',
       honorLagCalendars
         ? 'the 24-Hour per-relationship lag calendar is honoured (elapsed lag)'
@@ -417,7 +431,12 @@ export function adaptFixture(fixture: ConformanceFixture, opts: AdaptOptions = {
   return {
     activities,
     edges,
-    options: { dataDate, calendar, ...(useExpectedFinishDates ? { useExpectedFinishDates } : {}) },
+    options: {
+      dataDate,
+      calendar,
+      ...(useExpectedFinishDates ? { useExpectedFinishDates } : {}),
+      ...(ignoreExternalRelationships ? { ignoreExternalRelationships } : {}),
+    },
     report,
     ...(leveling ? { leveling } : {}),
   };
@@ -711,6 +730,19 @@ function adaptActivity(
   // option `useExpectedFinishDates` is on (ComputeOptions), for an incomplete activity.
   if (activity.expected_finish) {
     engineActivity.expectedFinish = toCalendarDay(activity.expected_finish);
+  }
+
+  // External / inter-project dates (ADR-0043 / ADR-0035 §30, M1). Fed unconditionally as imported
+  // instants (day-granular, mirroring `constraint_date` / `expected_finish`): an `external_early_start`
+  // is an SNET-shaped forward bound floored at the data date (§30.1), an `external_late_finish` an
+  // FNLT-shaped backward bound (§30.2). Both are HONOURED by default and are dropped only when the plan
+  // option `ignoreExternalRelationships` is on (threaded into ComputeOptions in `adaptFixture`, S09) —
+  // so the parity path (no external data present) is byte-identical regardless of the flag.
+  if (activity.external_early_start) {
+    engineActivity.externalEarlyStart = toCalendarDay(activity.external_early_start);
+  }
+  if (activity.external_late_finish) {
+    engineActivity.externalLateFinish = toCalendarDay(activity.external_late_finish);
   }
 
   // Primary constraint. `AS_LATE_AS_POSSIBLE` is not a date constraint — it maps to the activity's

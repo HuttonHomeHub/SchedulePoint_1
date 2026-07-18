@@ -132,6 +132,25 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     expect(list.body.data).toHaveLength(1);
   });
 
+  it('defaults ignoreExternalRelationships to false and round-trips it via PATCH (ADR-0043)', async () => {
+    const { actor, projectId } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .send({ name: 'Programme', plannedStart: '2026-01-01' })
+      .expect(201);
+    expect(created.body.data).toMatchObject({ ignoreExternalRelationships: false });
+    const id = created.body.data.id as string;
+
+    const patched = await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${id}`)
+      .send({ ignoreExternalRelationships: true, version: 1 })
+      .expect(200);
+    expect(patched.body.data).toMatchObject({ ignoreExternalRelationships: true, version: 2 });
+
+    const got = await actor.agent.get(`/api/v1/organizations/acme/plans/${id}`).expect(200);
+    expect(got.body.data).toMatchObject({ ignoreExternalRelationships: true });
+  });
+
   it('rejects a plan created without a start date (422, ADR-0033 M1)', async () => {
     const { actor, projectId } = await setup();
     const res = await actor.agent

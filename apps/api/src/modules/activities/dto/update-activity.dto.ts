@@ -171,6 +171,34 @@ export class UpdateActivityDto {
     format: 'date',
     nullable: true,
     example: '2026-05-01',
+    description:
+      'External / inter-project early start (ADR-0043 / ADR-0035 §30.1): an SNET-shaped forward lower ' +
+      'bound imported from another project (YYYY-MM-DD), or null to clear it. Soft, dropped when the ' +
+      'plan’s ignoreExternalRelationships is on. Must not be after externalLateFinish when both are set (N26).',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  externalEarlyStart?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-01',
+    description:
+      'External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): an FNLT-shaped backward upper ' +
+      'bound imported from another project (YYYY-MM-DD), or null to clear it. Soft, dropped when the ' +
+      'plan’s ignoreExternalRelationships is on. Must not be before externalEarlyStart when both are set (N26).',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsCalendarDate()
+  externalLateFinish?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    nullable: true,
+    example: '2026-05-01',
     description: 'Expected-finish target (ADR-0035 §9), or null to clear it.',
   })
   @IsOptional()

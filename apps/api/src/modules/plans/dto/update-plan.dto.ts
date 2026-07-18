@@ -133,6 +133,14 @@ export class UpdatePlanDto {
   levelWithinFloatOnly?: boolean;
 
   @ApiPropertyOptional({
+    description:
+      'Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): when on, the recalc drops every activity’s external early-start and late-finish bounds (relationships to/from other projects), scheduling the plan on its own internal logic. Internal constraints/logic are untouched. Default false is the byte-parity path.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  ignoreExternalRelationships?: boolean;
+
+  @ApiPropertyOptional({
     enum: EacMethod,
     description:
       'The Earned-Value EAC forecast method (EV1, ADR-0042, Q3): CPI (default, BAC / CPI), ' +

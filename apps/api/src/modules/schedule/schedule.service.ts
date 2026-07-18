@@ -157,6 +157,9 @@ export class ScheduleService {
         constraintViolationCount: summary.constraintViolationCount,
         constraintWarningCount: summary.constraintWarningCount,
         resourceDriverMissingCount: summary.resourceDriverMissingCount,
+        // External / inter-project bounds that drove an activity this run (ADR-0043 / ADR-0035 §30);
+        // null on the byte-parity path (no external data / ignore-external on).
+        externalDrivenCount: summary.externalDrivenCount ?? null,
         lagCalendarOverrideCount,
         // How many DISTINCT per-activity calendars were built this recalc (ADR-0037, M5) — the
         // signal that per-activity calendars actually shaped the dates (0 on the all-inherit path).
@@ -187,6 +190,9 @@ export class ScheduleService {
       constraintWarningCount: summary.constraintWarningCount,
       loeNoSpanCount: summary.loeNoSpanCount,
       resourceDriverMissingCount: summary.resourceDriverMissingCount,
+      // External / inter-project driven count (ADR-0043 / ADR-0035 §30): engine-derived on a recalc;
+      // 0 on the byte-parity path (no external data / ignore-external on).
+      externalDrivenCount: summary.externalDrivenCount ?? 0,
       // Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): the engine emits these only when the
       // levelling pass ran, so they default to 0 / null on the byte-identical parity path.
       leveledActivityCount: summary.leveledActivityCount ?? 0,
@@ -224,6 +230,10 @@ export class ScheduleService {
       constraintWarningCount: aggregate.constraintWarningCount,
       loeNoSpanCount: aggregate.loeNoSpanCount,
       resourceDriverMissingCount: aggregate.resourceDriverMissingCount,
+      // External / inter-project driven count (ADR-0043 / ADR-0035 §30) is engine-derived on a recalc and
+      // NOT persisted per-activity in M1, so the read summary cannot recompute it: always 0 here (the
+      // authoritative value comes from the recalculate response). See PlanScheduleSummary.
+      externalDrivenCount: 0,
       // Resource-levelling roll-up (ADR-0041 / ADR-0035 §28): a read-time aggregate over the plan's
       // engine-owned leveled columns; 0 / null when the plan does not level.
       leveledActivityCount: aggregate.leveledActivityCount,
@@ -481,6 +491,9 @@ export class ScheduleService {
       criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
       totalFloatMode: plan.totalFloatMode,
       makeOpenEndsCritical: plan.makeOpenEndsCritical,
+      // Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): when on, the engine
+      // drops every activity's external early-start / late-finish bounds. Default false = byte-parity.
+      ignoreExternalRelationships: plan.ignoreExternalRelationships,
     };
 
     // Resource levelling (M7, ADR-0041): the opt-in second pass. Load its demand model ONLY when the
@@ -602,6 +615,11 @@ function toEngineActivity(
     secondaryConstraintDate: row.secondaryConstraintDate
       ? formatCalendarDate(row.secondaryConstraintDate)
       : null,
+    // External / inter-project bounds (ADR-0043 / ADR-0035 §30): stored as absolute Timestamptz (UTC
+    // midnight), crossed to the engine as calendar days — the same date→YYYY-MM-DD conversion as
+    // constraintDate/expectedFinish/actualStart. Dropped inside the engine when ignore-external is on.
+    externalEarlyStart: row.externalEarlyStart ? formatCalendarDate(row.externalEarlyStart) : null,
+    externalLateFinish: row.externalLateFinish ? formatCalendarDate(row.externalLateFinish) : null,
     visualStart: row.visualStart ? formatCalendarDate(row.visualStart) : null,
     scheduleAsLateAsPossible: row.scheduleAsLateAsPossible,
     levelingPriority: row.levelingPriority,

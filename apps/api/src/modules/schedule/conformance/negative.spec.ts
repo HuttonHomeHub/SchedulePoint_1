@@ -19,7 +19,10 @@ import type { EngineActivity, EngineEdge } from '../engine';
  * the DTO/service layer, not the pure engine — they are marked `todo` here so the
  * engine-level gap is visible, and are covered by API e2e as those land.
  *
- * Fixture references: `fixtures/negative_cases.json` (N01–N18).
+ * Fixture references: `fixtures/negative_cases.json` (N01–N18). N25/N26 (ADR-0043 / ADR-0035 §30,
+ * external / inter-project dates) extend the ledger: N25 (external early start before the data date —
+ * clamp + warn) is engine-owned and asserted here; N26 (external late finish before external early start)
+ * is an API-boundary cross-field reject (F4) — the engine only guarantees it doesn't crash on the pair.
  */
 
 const task = (id: string): EngineActivity => ({ id, durationMinutes: 1440, type: 'TASK' });
@@ -175,6 +178,53 @@ describe('negative-case contract (engine-owned cases)', () => {
     expect(Number(b!.earlyStart.slice(0, 4))).toBeGreaterThan(2030);
   });
 
+  it('N25: an external early start before the data date is honoured but clamped, and warned (ADR-0043 §30)', () => {
+    // N25A carries an external early start of 2025-06-01, a year before the 2026-06-01 data date. Like
+    // N15's SNET, an imported external date in the past cannot pull work before the data date — the start
+    // floors there and the plan carries a soft warning (the same N15/N25 warning class), not a violation.
+    const output = computeSchedule(
+      [
+        {
+          id: 'N25A',
+          durationMinutes: 5 * 1440,
+          type: 'TASK',
+          externalEarlyStart: '2025-06-01',
+        },
+      ],
+      [],
+      { dataDate: '2026-06-01', calendar: allMinutesWorkCalendar },
+    );
+    const a = output.results.find((r) => r.activityId === 'N25A')!;
+    expect(a.earlyStart).toBe('2026-06-01'); // floored at the data date, not warped to 2025
+    // Clamped to the data date, it never rose above pure logic ⇒ not flagged external-driven.
+    expect(a.externalDriven).toBeUndefined();
+    expect(output.summary.constraintWarningCount).toBe(1); // the N15/N25 "date before the data date" class
+  });
+
+  it('N26: an external late finish before the external early start is TOLERATED by the engine (produced, not thrown)', () => {
+    // N26 is a cross-field BOUNDARY reject (ADR-0043 / ADR-0035 §30: EXTERNAL_FINISH_BEFORE_START, 422)
+    // owned by the DTO/service (F4), NOT the pure engine. The engine must still honour the "report, never
+    // hang/crash" half of the contract on the hostile pair: the SNET-shaped early start (06-10) drives the
+    // forward pass while the earlier FNLT-shaped late finish (06-05) clamps the backward pass, so the
+    // schedule is PRODUCED with negative float — surfaced, never an error.
+    const output = computeSchedule(
+      [
+        {
+          id: 'N26A',
+          durationMinutes: 2 * 1440,
+          type: 'TASK',
+          externalEarlyStart: '2026-06-10',
+          externalLateFinish: '2026-06-05',
+        },
+      ],
+      [],
+      { dataDate: '2026-06-01', calendar: allMinutesWorkCalendar },
+    );
+    const a = output.results.find((r) => r.activityId === 'N26A')!;
+    expect(a.earlyStart).toBe('2026-06-10'); // external early start drives forward
+    expect(a.totalFloat).toBeLessThan(0); // the earlier external late finish ⇒ negative float, surfaced
+  });
+
   // Input-validity cases owned by the API boundary (DTO/service), not the pure engine
   // (ADR-0035 §25). The engine intentionally does not re-validate these; they are
   // asserted at the API e2e layer as boundary rejection/coercion lands.
@@ -200,4 +250,7 @@ describe('negative-case contract (engine-owned cases)', () => {
 
   it.todo('N09: negative duration is rejected at the API boundary (ADR-0035 §25)');
   it.todo('N17: a milestone with a non-zero duration is coerced to zero (ADR-0035 §25)');
+  it.todo(
+    'N26: the 422 EXTERNAL_FINISH_BEFORE_START cross-field reject is owned by the F4 activity DTO (ADR-0043 §30)',
+  );
 });

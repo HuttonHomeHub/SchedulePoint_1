@@ -24,6 +24,11 @@ export interface ScheduleActivityRow {
   /** Secondary constraint (ADR-0035 §10, M4): drives the backward pass only. */
   secondaryConstraintType: ConstraintType | null;
   secondaryConstraintDate: Date | null;
+  /** External / inter-project bounds (ADR-0043 / ADR-0035 §30): imported absolute instants (Timestamptz).
+   * `externalEarlyStart` is an SNET-shaped forward bound, `externalLateFinish` an FNLT-shaped backward
+   * bound; the service crosses them to the engine as calendar days, dropped when the plan ignores external. */
+  externalEarlyStart: Date | null;
+  externalLateFinish: Date | null;
   /** Visual Planning hand-placement (ADR-0033); advisory input to the effective-Visual pass. */
   visualStart: Date | null;
   /** As-Late-As-Possible placement preference (ADR-0035 §11, M4): display-only, never the pure passes. */
@@ -182,6 +187,8 @@ export class ScheduleRepository {
         constraintDate: true,
         secondaryConstraintType: true,
         secondaryConstraintDate: true,
+        externalEarlyStart: true,
+        externalLateFinish: true,
         visualStart: true,
         scheduleAsLateAsPossible: true,
         calendarId: true,

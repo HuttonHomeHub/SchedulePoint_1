@@ -181,6 +181,34 @@ export class CreateActivityDto {
     format: 'date',
     example: '2026-05-01',
     description:
+      'External / inter-project early start (ADR-0043 / ADR-0035 §30.1): an imported commitment from ' +
+      'another project (a vendor delivery, an IFC release) as a calendar day (YYYY-MM-DD). Acts as an ' +
+      'SNET-shaped forward lower bound (the later of logic and this drives the early start), floored at ' +
+      'the data date. Soft — never a mandatory pin. Dropped when the plan’s ignoreExternalRelationships ' +
+      'is on. Must not be after externalLateFinish when both are set (N26).',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  externalEarlyStart?: string;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description:
+      'External / inter-project late finish (ADR-0043 / ADR-0035 §30.2): an imported downstream ' +
+      'commitment (a commissioning window) as a calendar day (YYYY-MM-DD). Acts as an FNLT-shaped ' +
+      'backward upper bound (the tighter of logic and this); if earlier than logic can achieve, total ' +
+      'float goes negative on the driving chain. Soft — coexists with an internal constraint. Dropped ' +
+      'when ignoreExternalRelationships is on. Must not be before externalEarlyStart when both are set (N26).',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  externalLateFinish?: string;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    example: '2026-05-01',
+    description:
       'Expected-finish target (ADR-0035 §9): when the plan option useExpectedFinishDates is on, an in-progress activity’s remaining work is resized so its early finish lands on this date.',
   })
   @IsOptional()

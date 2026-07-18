@@ -86,6 +86,12 @@ export class PlanResponseDto implements PlanSummary {
   levelWithinFloatOnly!: boolean;
 
   @ApiProperty({
+    description:
+      'Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): when on, the recalc drops every activity’s external early-start and late-finish bounds. Default false (byte-parity).',
+  })
+  ignoreExternalRelationships!: boolean;
+
+  @ApiProperty({
     enum: EacMethod,
     description:
       'The Earned-Value EAC forecast method (EV1, ADR-0042): CPI (default), REMAINING_AT_BUDGET, or ' +
@@ -144,6 +150,8 @@ export class PlanResponseDto implements PlanSummary {
       makeOpenEndsCritical: entity.makeOpenEndsCritical,
       levelResources: entity.levelResources,
       levelWithinFloatOnly: entity.levelWithinFloatOnly,
+      // Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): passthrough echo.
+      ignoreExternalRelationships: entity.ignoreExternalRelationships,
       // Earned-Value plan options (EV1, ADR-0042): passthrough echo; currencyCode null = inherit.
       eacMethod: entity.eacMethod,
       currencyCode: entity.currencyCode,

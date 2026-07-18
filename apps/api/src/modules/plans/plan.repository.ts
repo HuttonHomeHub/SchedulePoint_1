@@ -35,6 +35,8 @@ export interface PlanPatch {
   levelResources?: boolean;
   /** Level-within-float-only option (ADR-0041 §4). */
   levelWithinFloatOnly?: boolean;
+  /** Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): drops external bounds. */
+  ignoreExternalRelationships?: boolean;
   /** Earned-Value EAC forecast method (EV1, ADR-0042). */
   eacMethod?: EacMethod;
   /** The plan's ISO-4217 currency code, or null to clear (inherit). */

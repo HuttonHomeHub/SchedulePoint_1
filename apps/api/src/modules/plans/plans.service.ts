@@ -158,6 +158,11 @@ export class PlansService {
     if (dto.levelWithinFloatOnly !== undefined) {
       patch.levelWithinFloatOnly = dto.levelWithinFloatOnly;
     }
+    // Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): client-settable
+    // scheduling option; the recalc drops external bounds when on. Default false is byte-parity.
+    if (dto.ignoreExternalRelationships !== undefined) {
+      patch.ignoreExternalRelationships = dto.ignoreExternalRelationships;
+    }
     // Earned-Value plan options (EV1, ADR-0042): client-settable passthrough; currencyCode null clears
     // to inherit the org default. Dark until the EV read (EV2b); nothing computes EV yet.
     if (dto.eacMethod !== undefined) patch.eacMethod = dto.eacMethod;

@@ -167,6 +167,21 @@ every editing entry point (edit-lock M2/M3).
 - Requests validated with `class-validator` DTOs; unknown properties rejected.
 - If the app represents money, use **minor units (integer)** with an explicit
   currency code — never floating point. Timestamps are **ISO 8601 UTC** strings.
+- **Calendar-day fields** (a date with no time/timezone) are strict `YYYY-MM-DD`
+  strings — e.g. an activity's `constraintDate`/`expectedFinish` and its
+  **external / inter-project dates** `externalEarlyStart`/`externalLateFinish`
+  (ADR-0043 / ADR-0035 §30: imported commitments from another project, gating
+  this activity; either/both/neither may be set, and dropped from the schedule
+  when the plan's `ignoreExternalRelationships` option is on). A cross-field
+  invalid pair returns **422** with a `details.reason` — e.g.
+  `EXTERNAL_FINISH_BEFORE_START` when `externalLateFinish` precedes
+  `externalEarlyStart` (N26), alongside a nullable-safe DB CHECK backstop.
+- A plan's **scheduling options** are booleans on the plan resource
+  (`makeOpenEndsCritical`, `useExpectedFinishDates`, `levelResources`,
+  `ignoreExternalRelationships`, …); each defaults to a behaviour-preserving
+  `false` and is set with a targeted PATCH. The computed `GET …/schedule/summary`
+  roll-up carries `externalDrivenCount` (how many activities an external bound
+  drove) — engine-derived on a recalculation.
 
 ## Authentication
 
