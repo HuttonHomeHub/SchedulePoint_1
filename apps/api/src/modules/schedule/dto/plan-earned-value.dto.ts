@@ -123,6 +123,13 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
   costWarningCount!: number;
 
   @ApiProperty({
+    description:
+      'The count of leaf activities whose progress steps are all zero-weight (ADR-0044 §33, N27), so ' +
+      'the weighted-mean rollup fell back to the manual physical % — a read-time data-quality warning.',
+  })
+  stepWeightZeroCount!: number;
+
+  @ApiProperty({
     type: [EarnedValueActivityDto],
     description: 'Per-activity rows (incl. WBS summaries), in plan order.',
   })
@@ -141,6 +148,7 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
       currencyCode: result.currencyCode,
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
+      stepWeightZeroCount: result.stepWeightZeroCount,
       activities: result.activities.map((a) => ({ ...a })),
       total: { ...result.total },
     };

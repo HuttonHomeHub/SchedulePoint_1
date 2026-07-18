@@ -334,6 +334,14 @@ export class ScheduleService {
         // How the activity's cost accrues (ADR-0044 §32) — governs PV time-phasing only. UNIFORM (the
         // DB default) is the byte-identical linear path, so a plan with no accrual data reads identically.
         accrualType: r.accrualType,
+        // Weighted progress steps (M7 rung 5, ADR-0044 §33) drive the PHYSICAL measure — steps win over
+        // the manual field via the shared `rollupPhysicalPercent`. An activity with NO steps yields an
+        // empty array, so the manual physicalPercentComplete stands exactly (the byte-identical parity
+        // path; existing EV goldens stay green). Decimal weight → number at this boundary.
+        steps: r.steps.map((s) => ({
+          weight: s.weight.toNumber(),
+          percentComplete: s.percentComplete,
+        })),
         // Money is BIGINT minor units (→ number); an unset lump-sum contributes 0.
         budgetedExpense: Number(r.budgetedExpense ?? 0n),
         actualExpense: Number(r.actualExpense ?? 0n),
@@ -372,6 +380,9 @@ export class ScheduleService {
       currencyCode: plan.currencyCode,
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
+      // N27 (ADR-0044 §33): leaf activities whose steps are all zero-weight, so the manual physical %
+      // fallback was used — a read-time data-quality warning, mirroring costWarningCount.
+      stepWeightZeroCount: result.stepWeightZeroCount,
       activities: result.activities,
       total: result.total,
     };

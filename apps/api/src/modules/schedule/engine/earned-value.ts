@@ -175,6 +175,13 @@ export interface PlanEarnedValueResult {
    * module carries no independent activity status.
    */
   costWarningCount: number;
+  /**
+   * The count of leaf activities whose progress steps are present but **all zero-weight** (ADR-0044 §33,
+   * N27) — so {@link rollupPhysicalPercent} fell back to the manual `physicalPercentComplete`. A
+   * read-time data-quality warning, never a reject (the resolver never divides by zero); mirrors
+   * {@link costWarningCount}.
+   */
+  stepWeightZeroCount: number;
   activities: EvActivityResult[];
   total: EvMetrics;
 }
@@ -257,6 +264,20 @@ function hasCostWarning(activity: EvActivityInput): boolean {
   if (!notStarted) return false;
   if (activity.actualExpense > 0) return true;
   return activity.assignments.some((a) => a.actualCost > 0 || a.actualUnits > 0);
+}
+
+/**
+ * Whether a leaf activity has progress steps present but **all zero-weight** (N27, ADR-0044 §33) — the
+ * case where {@link rollupPhysicalPercent} falls back to the manual physical %. A read-time data-quality
+ * signal (counted into {@link PlanEarnedValueResult.stepWeightZeroCount}), never a reject: an empty /
+ * absent step list is NOT flagged (that is the ordinary no-steps parity path, not a degenerate weighting).
+ */
+function hasAllZeroWeightSteps(activity: EvActivityInput): boolean {
+  const steps = activity.steps;
+  if (!steps || steps.length === 0) return false;
+  let weightSum = 0;
+  for (const step of steps) weightSum += step.weight;
+  return weightSum <= 0;
 }
 
 /** BAC + AC for one leaf activity, from its assignments and activity-level expenses (ADR-0042 §3). */
@@ -375,6 +396,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
   const resultById = new Map<string, EvActivityResult>();
   let costBaselineMissing = false;
   let costWarningCount = 0;
+  let stepWeightZeroCount = 0;
 
   // Leaves first — they do not depend on the rollup.
   for (const activity of activities) {
@@ -384,6 +406,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
     const performancePercent = leafPerformancePercent(activity);
     const ev = Math.round((bac * performancePercent) / 100);
     if (hasCostWarning(activity)) costWarningCount += 1;
+    if (hasAllZeroWeightSteps(activity)) stepWeightZeroCount += 1;
 
     const useBaseline = activity.baselineStart !== null && activity.baselineFinish !== null;
     const start = useBaseline ? activity.baselineStart : activity.earlyStart;
@@ -440,6 +463,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
   return {
     costBaselineMissing,
     costWarningCount,
+    stepWeightZeroCount,
     activities: activities.map((a) => resultById.get(a.activityId)!),
     total,
   };

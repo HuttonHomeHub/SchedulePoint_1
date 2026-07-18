@@ -42,13 +42,16 @@ describe('EV3 conformance — earned value against the real P6 fixture (ADR-0042
 
     // A4200 (pct_physical, the fixture's own prog_rd_vs_pct_divergence case): LAB-CIVIL 2000h×£38 +
     // NL-EXCAV 200h×£65 ⇒ BAC = 76000 + 13000 = 89000. Actuals: 1200h×£38 + 120h×£65 = 45600 + 7800 =
-    // 53400. PHYSICAL 35% (the fixture's own weighted-STEPS figure, deliberately ≠ the 40% duration-%)
-    // ⇒ EV = round(89000 × 0.35) = 31150.
+    // 53400. PHYSICAL % now derives from the fixture's WEIGHTED STEPS (M7 rung 5, ADR-0044 §33): the
+    // adapter reads A4200's four steps — (10·100 + 35·70 + 35·1.43 + 20·0)/100 = 3500.05/100 =
+    // 35.0005% — which WINS over the manual 35.0 field (steps-present ⇒ steps-win) and is deliberately
+    // ≠ the 40% duration-%. EV = round(89000 × 0.350005) = 31150 (the extra 0.0005% rounds away at the
+    // minor unit, so the plan-total/WBS EV below are unchanged).
     expect(byId.get('A4200')).toMatchObject({
       bac: 89000,
       ac: 53400,
       ev: 31150,
-      performancePercent: 35,
+      performancePercent: 35.0005,
     });
 
     // A7100 (pct_physical, NOT_STARTED, 4 assignments all at 0 actual): LAB-PIPE 2400h×£48 +
@@ -121,7 +124,7 @@ describe('EV3 conformance — earned value against the real P6 fixture (ADR-0042
     const physicalRow = run('PHYSICAL').activities.find((r) => r.activityId === 'A4200')!;
     const durationRow = run('DURATION').activities.find((r) => r.activityId === 'A4200')!;
 
-    expect(physicalRow.ev).toBe(31150); // 89000 × 0.35 (physical_percent_complete)
+    expect(physicalRow.ev).toBe(31150); // 89000 × 0.350005 (weighted steps, ADR-0044 §33) → 31150
     expect(durationRow.ev).toBe(35600); // 89000 × 0.40 (duration_percent_complete)
     expect(durationRow.ev).not.toBe(physicalRow.ev); // the flip must differ — ADR-0034 §2
   });
@@ -313,6 +316,97 @@ describe('EV3 conformance — earned value against the real P6 fixture (ADR-0042
       expect(uniform).toBe(34000);
       expect(start).toBe(68000);
       expect(start).not.toBe(uniform); // the flip must differ — the resultsDiffer proof
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────
+  // Weighted activity steps (M7 rung 5, ADR-0044 §33 / ADR-0035 §33). The adapter reads the fixture's
+  // `steps` and attaches them to A4200/A7100; when steps are present the PHYSICAL measure rolls up as
+  // the weight-weighted mean Σ(w·p)/Σw and WINS over the manual `physical_percent_complete`. A4200 is
+  // the fixture's own `prog_rd_vs_pct_divergence` case (physical-via-steps 35.0005% ≠ duration 40%).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────
+  describe('weighted steps (ADR-0044 §33 / ADR-0035 §33)', () => {
+    it('(adapter mapping) attaches the fixture steps to A4200 (4) and A7100 (4), seq-ordered', () => {
+      const byId = new Map(activities.map((a) => [a.activityId, a]));
+      expect(byId.get('A4200')?.steps).toEqual([
+        { weight: 10, percentComplete: 100 },
+        { weight: 35, percentComplete: 70 },
+        { weight: 35, percentComplete: 1.43 },
+        { weight: 20, percentComplete: 0 },
+      ]);
+      // A7100's four steps are all 0% ⇒ a 0% rollup.
+      expect(byId.get('A7100')?.steps).toHaveLength(4);
+      // An activity with no fixture steps has none attached (the manual-field parity path).
+      expect(byId.get('A8010')?.steps).toBeUndefined();
+    });
+
+    it('(golden — weighted-mean physical %) A4200 rolls up to 35.0005% and A7100 to 0% from the real fixture steps', () => {
+      const result = computeEarnedValue({
+        activities,
+        dataDate: null,
+        eacMethod: 'CPI',
+        calendar: allMinutesWorkCalendar,
+      });
+      const byId = new Map(result.activities.map((r) => [r.activityId, r]));
+      // (10·100 + 35·70 + 35·1.43 + 20·0) / 100 = 3500.05 / 100 = 35.0005 — the fixture's own divergence
+      // figure, deliberately ≠ its 40% duration-%. EV = round(89000 × 0.350005) = 31150.
+      expect(byId.get('A4200')!.performancePercent).toBe(35.0005);
+      expect(byId.get('A4200')!.ev).toBe(31150);
+      // A7100 — every step 0% ⇒ 0% physical ⇒ EV 0.
+      expect(byId.get('A7100')!.performancePercent).toBe(0);
+      expect(byId.get('A7100')!.ev).toBe(0);
+      // No all-zero-weight activity in the curated set ⇒ no N27 warning.
+      expect(result.stepWeightZeroCount).toBe(0);
+    });
+
+    it("(differential — steps present vs manual-only) A4200's PHYSICAL EV with steps ≠ its manual-only value — resultsDiffer, ADR-0034 §2", () => {
+      const a4200 = activities.find((a) => a.activityId === 'A4200')!;
+      // The manual field on A4200 is 35.0 (a whole percent). Force a manual value that DIVERGES from the
+      // 35.0005% weighted-steps mean, so "steps win" is observable: drop the steps and the EV changes.
+      const manualOnly = { ...a4200, parentId: null, physicalPercentComplete: 60 };
+      delete (manualOnly as { steps?: unknown }).steps;
+      const withSteps = { ...a4200, parentId: null, physicalPercentComplete: 60 }; // keeps its steps
+
+      const evManual = computeEarnedValue({
+        activities: [manualOnly],
+        dataDate: null,
+        eacMethod: 'CPI',
+        calendar: allMinutesWorkCalendar,
+      }).total.ev;
+      const evSteps = computeEarnedValue({
+        activities: [withSteps],
+        dataDate: null,
+        eacMethod: 'CPI',
+        calendar: allMinutesWorkCalendar,
+      }).total.ev;
+
+      expect(evManual).toBe(53400); // round(89000 × 0.60) — the manual field
+      expect(evSteps).toBe(31150); // round(89000 × 0.350005) — the steps win over the manual 60%
+      expect(evSteps).not.toBe(evManual); // the flip must differ — the resultsDiffer proof
+    });
+
+    it('(N27 — all-zero-weight fallback + count) an activity whose steps are all zero-weight falls back to the manual physical % and is counted, never divides by zero', () => {
+      const a4200 = activities.find((a) => a.activityId === 'A4200')!;
+      const zeroWeighted = {
+        ...a4200,
+        parentId: null,
+        physicalPercentComplete: 60,
+        steps: [
+          { weight: 0, percentComplete: 100 },
+          { weight: 0, percentComplete: 20 },
+        ],
+      };
+      const result = computeEarnedValue({
+        activities: [zeroWeighted],
+        dataDate: null,
+        eacMethod: 'CPI',
+        calendar: allMinutesWorkCalendar,
+      });
+      // All weights zero ⇒ the manual 60% stands (no divide-by-zero) ⇒ EV = round(89000 × 0.60) = 53400.
+      expect(result.activities[0]!.performancePercent).toBe(60);
+      expect(result.total.ev).toBe(53400);
+      // …and the fallback is flagged as a read-time data-quality warning (N27), mirroring costWarningCount.
+      expect(result.stepWeightZeroCount).toBe(1);
     });
   });
 });

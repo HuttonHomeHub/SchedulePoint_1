@@ -600,6 +600,7 @@ describe('ScheduleService.getEarnedValue', () => {
           percentCompleteType: 'DURATION',
           percentComplete: 50,
           physicalPercentComplete: null,
+          steps: [],
           budgetedExpense: 100000n,
           actualExpense: null,
           earlyStart: null,

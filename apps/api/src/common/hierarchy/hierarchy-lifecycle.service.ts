@@ -23,6 +23,8 @@ export interface CascadeCounts {
   dependencies: number;
   /** Baselines swept under the deleted plans (M7, ADR-0025). Their snapshot rows share the batch. */
   baselines: number;
+  /** Activity steps swept when their owning activities are deleted (M7 rung 5, ADR-0044 §2). */
+  steps: number;
 }
 
 export interface CascadeDeleteResult {
@@ -75,6 +77,7 @@ export class HierarchyLifecycleService {
       activities: 0,
       dependencies: 0,
       baselines: 0,
+      steps: 0,
     };
 
     // Soft-delete the active baselines (and their snapshot rows) under a set of plans
@@ -136,6 +139,31 @@ export class HierarchyLifecycleService {
       ).count;
     };
 
+    // Soft-delete the active steps of the activities under a set of plans (M7 rung 5, ADR-0044 §2),
+    // in the same batch — a plan/project/client delete sweeps every step of every activity it contains
+    // (via the step's `activity` relation), the baseline/dependency precedent one level deeper.
+    const deleteStepsUnderPlans = async (planIds: string[]): Promise<number> => {
+      if (planIds.length === 0) return 0;
+      return (
+        await tx.activityStep.updateMany({
+          where: { activity: { planId: { in: planIds } }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
+    // Soft-delete the active steps of a set of activities (M7 rung 5, ADR-0044 §2) — used when an
+    // activity subtree is deleted, so the checklist follows its activity under the one batch id.
+    const deleteStepsForActivities = async (activityIds: string[]): Promise<number> => {
+      if (activityIds.length === 0) return 0;
+      return (
+        await tx.activityStep.updateMany({
+          where: { activityId: { in: activityIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
     // Resolve an activity's active `parent_id` subtree (the row itself + every
     // active descendant), breadth-first. Only a WBS_SUMMARY can be a parent
     // (service-enforced), so a leaf activity resolves to just itself in one hop.
@@ -184,6 +212,7 @@ export class HierarchyLifecycleService {
           : [];
       counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
+      counts.steps = await deleteStepsUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       if (planIds.length > 0) {
         counts.plans = (
@@ -202,6 +231,7 @@ export class HierarchyLifecycleService {
       ).map((p) => p.id);
       counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
+      counts.steps = await deleteStepsUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
@@ -212,6 +242,7 @@ export class HierarchyLifecycleService {
     } else if (entity === 'plan') {
       counts.baselines = await deleteBaselinesUnderPlans([id]);
       counts.dependencies = await deleteLinksUnderPlans([id]);
+      counts.steps = await deleteStepsUnderPlans([id]);
       counts.activities = await deleteActivitiesUnderPlans([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
@@ -223,6 +254,7 @@ export class HierarchyLifecycleService {
       // the root reactivates the subtree together.
       const subtreeIds = await resolveActivitySubtree(id);
       counts.dependencies = await deleteLinksForActivities(subtreeIds);
+      counts.steps = await deleteStepsForActivities(subtreeIds);
       counts.activities = (
         await tx.activity.updateMany({
           where: { id: { in: subtreeIds }, deletedAt: null },
@@ -266,6 +298,7 @@ export class HierarchyLifecycleService {
       activities: 0,
       dependencies: 0,
       baselines: 0,
+      steps: 0,
     };
 
     try {
@@ -292,6 +325,13 @@ export class HierarchyLifecycleService {
           where: { deleteBatchId: batchId },
           data: restore,
         });
+        // Restore the batch's activity steps (M7 rung 5, ADR-0044 §2). A step belongs to exactly one
+        // activity and was swept in the SAME batch as it, so — unlike a dependency — no endpoint guard
+        // is needed: restoring the batch reactivates each step with its owning activity. Steps removed
+        // by a bulk-replace carry their OWN (different) batch id, so they never resurrect here.
+        counts.steps = (
+          await tx.activityStep.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
         // Restore the batch's links AFTER their activities, and only where BOTH
         // endpoints are now active — a link whose other end was deleted separately
         // stays soft-deleted (endpoint-guarded; see ADR-0021 / DECISIONS.md).

@@ -334,6 +334,26 @@ export const EARNED_VALUE_ENABLED = flagDefaultOff(import.meta.env.VITE_EARNED_V
 export const COST_ACCRUAL_ENABLED = flagDefaultOff(import.meta.env.VITE_COST_ACCRUAL);
 
 /**
+ * Weighted activity-steps web surface (M7 rung 5, ADR-0044 §2 / ADR-0035 §33). **OFF by default** — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
+ * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on
+ * once cleared (the `VITE_COST_ACCRUAL` / `VITE_EARNED_VALUE` pattern). When on, the activities table
+ * gains a per-activity **Steps** row action that opens an editor for the activity's weighted progress
+ * checklist:
+ *
+ * - **Activity steps** — an editable ordered list of steps (name, relative weight, % complete) with
+ *   add / remove / reorder, saved in one bulk `PUT …/activities/:activityId/steps`. When an activity
+ *   has steps, its PHYSICAL %-complete rolls up as the weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)` and wins over the
+ *   manual `physicalPercentComplete` (all-zero weights fall back to the manual field). A live preview of
+ *   the rolled-up % is shown in the editor.
+ *
+ * Everything behind it — the settable `ActivityStep` rows, the bulk-replace endpoint, and the read-time
+ * `rollupPhysicalPercent` resolver — is already live; the flag only governs whether the web UI exposes
+ * the editor. Set `VITE_ACTIVITY_STEPS=true` to enable it in an environment.
+ */
+export const ACTIVITY_STEPS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_STEPS);
+
+/**
  * Inter-project / external dates web surface (F5, ADR-0043 / ADR-0035 §30). **OFF by default** — a
  * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
  * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on

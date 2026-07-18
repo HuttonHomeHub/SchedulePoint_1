@@ -28,6 +28,7 @@ stays **Proposed** overall until every clause is built. Current state:
 | §29 (%-complete-type & EV), N22–N24     | M7 (EV3)         | **Accepted** |
 | §30 (external / inter-project), N25–N26 | IPD (M1)         | **Accepted** |
 | §32 (cost accrual)                      | M7 (rung 5, F1)  | **Accepted** |
+| §33 (weighted steps), N27/N28           | M7 (rung 5, F2)  | **Accepted** |
 | §15–§16, §25 (arithmetic/boundary)      | M0/M1            | Proposed¹    |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
@@ -398,6 +399,42 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
       out-of-range or divide-by-zero boundary to guard (the degenerate zero-length-span past its start is
       the §29 PV path's existing "fully planned" fallback). ADR-0044's N27–N29 belong to the **steps**
       (§33) and **curve** (§31) slices, not this one.
+
+### Weighted activity steps (→ M7 rung 5, ADR-0044 §2 / F2)
+
+> §31 (resource curves) is the remaining ADR-0044 slice (F3) and Accepts with it, adding N29. This
+> slice (F2) Accepts §33 + N27/N28.
+
+33. **Weighted-steps semantics.** Like §29's Earned Value and §32's accrual, weighted steps are a **pure
+    read-model / input** concern — they never enter `computeSchedule`, add no write pass, and own no
+    persisted engine column (only the `activity_steps` child table + its bulk-replace sub-resource).
+    SchedulePoint's chosen semantics — the golden contract for the fixture's `code_steps` tag:
+
+    - **Steps roll up to the PHYSICAL %-complete as the weight-weighted mean.** When an activity has
+      steps, its physical %-complete is `Σ(wᵢ·pᵢ)/Σ(wᵢ)` (each `pᵢ` clamped to 0–100), computed by the
+      single shared resolver `rollupPhysicalPercent` used by both the EV read-model and (client-side) the
+      API. It feeds the ADR-0042 `PHYSICAL` Earned-Value measure ONLY — it moves no CPM date and never
+      affects the `DURATION`/`UNITS` measures.
+    - **Steps win over the manual field when present.** With one or more steps carrying a positive total
+      weight, the weighted mean **overrides** the hand-entered `physicalPercentComplete`. With **no steps**
+      the manual field stands exactly as before ADR-0044 — the byte-identical parity path (an activity
+      with no steps reads identically; the EV goldens are unchanged). The fixture's A4200 is the worked
+      case: its four steps roll to **35.0005%** (`(10·100 + 35·70 + 35·1.43 + 20·0)/100`), deliberately ≠
+      its 40% duration-% (the `prog_rd_vs_pct_divergence` discriminator); A7100's four all-zero steps roll
+      to **0%**.
+    - **N27 — all-zero-weight ⇒ manual fallback + count, never a reject.** If steps are present but every
+      weight is 0, the resolver falls back to the manual `physicalPercentComplete` (never a divide-by-zero)
+      and the EV read counts a `stepWeightZeroCount` data-quality warning (the §29 `costWarningCount`
+      precedent) — produce-and-flag, never a reject.
+    - **N28 — step %-complete out of 0–100 ⇒ boundary reject.** A step `percentComplete` outside 0–100 is
+      a **422** `STEP_PERCENT_OUT_OF_RANGE` at the DTO boundary (the ADR-0042 physical-% N23 precedent),
+      backstopped by the DB CHECK `ck_activity_steps_percent_complete_range`; a negative `weight` is
+      likewise a boundary reject backstopped by `ck_activity_steps_weight_nonneg`.
+    - **Bulk-replace is the write model (Q3).** The client sends the full desired ordered list; the server
+      assigns a contiguous `seq`, reconciles (update-in-place / append / soft-delete the removed tail), and
+      optimistic-locks the parent activity's `version`. A step is activity-write data (`activity:update`,
+      no new permission), and the child soft-delete cascades with its activity under one `delete_batch_id`
+      (the assignment/incident-edge precedent).
 
 ## Alternatives considered
 

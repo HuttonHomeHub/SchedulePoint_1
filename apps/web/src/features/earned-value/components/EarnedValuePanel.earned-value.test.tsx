@@ -43,6 +43,7 @@ const EV: PlanEarnedValue = {
   currencyCode: 'USD',
   costBaselineMissing: false,
   costWarningCount: 0,
+  stepWeightZeroCount: 0,
   total: metrics({
     bac: 1000000,
     ev: 800000,

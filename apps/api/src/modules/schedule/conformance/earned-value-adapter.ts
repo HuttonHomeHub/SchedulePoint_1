@@ -2,7 +2,7 @@ import { ACCRUAL_TYPES, type AccrualType } from '@repo/types';
 
 import type { ConformanceFixture, FixtureActivity } from '@repo/engine-conformance';
 
-import type { EvActivityInput, EvAssignmentInput } from '../engine';
+import type { ActivityStepInput, EvActivityInput, EvAssignmentInput } from '../engine';
 
 import { mapActivityType } from './type-map';
 
@@ -117,6 +117,18 @@ export function buildEvActivityInputsFromFixture(fixture: ConformanceFixture): E
     expenseByActivity.set(expense.activity, existing);
   }
 
+  // Weighted progress steps (M7 rung 5, ADR-0044 §33). The fixture's `steps` are seq-ordered per
+  // activity; the read-model consumes only `weight`/`percentComplete` (the weighted-mean inputs), so map
+  // straight through in seq order. A4200 carries the fixture's own `prog_rd_vs_pct_divergence` steps
+  // (Σw·p/Σw = 35.0005% ≠ its 40% duration-%); A7100's four steps are all 0% ⇒ 0%.
+  const stepsByActivity = new Map<string, ActivityStepInput[]>();
+  for (const step of [...fixture.steps].sort((a, b) => a.seq - b.seq)) {
+    if (!selected.has(step.activity)) continue;
+    const list = stepsByActivity.get(step.activity) ?? [];
+    list.push({ weight: step.weight, percentComplete: step.percent_complete });
+    stepsByActivity.set(step.activity, list);
+  }
+
   const assignmentsByActivity = new Map<string, EvAssignmentInput[]>();
   for (const asg of fixture.assignments) {
     if (!selected.has(asg.activity)) continue;
@@ -153,6 +165,9 @@ export function buildEvActivityInputsFromFixture(fixture: ConformanceFixture): E
       percentCompleteType: activity.percent_complete_type,
       percentComplete: activity.duration_percent_complete,
       physicalPercentComplete: activity.physical_percent_complete,
+      // Weighted steps drive the PHYSICAL measure and WIN over the manual field (ADR-0044 §33). Absent
+      // for an activity with no fixture steps ⇒ the manual physical % stands (the parity path).
+      ...(stepsByActivity.has(activity.id) ? { steps: stepsByActivity.get(activity.id)! } : {}),
       // The fixture's per-expense `accrual_type` collapsed onto the one activity value (ADR-0044 §Q4).
       accrualType: expense.accrualType,
       budgetedExpense: expense.budgeted,

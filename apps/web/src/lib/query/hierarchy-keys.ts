@@ -41,6 +41,15 @@ export const activityKeys = {
     [...activityKeys.all(orgSlug), 'detail', activityId] as const,
 };
 
+export const stepKeys = {
+  all: (orgSlug: string) => ['activity-steps', orgSlug] as const,
+  // Keyed by the activity the steps hang off — the bulk replace invalidates the one
+  // activity's step list (ADR-0044 §2), alongside the activity list/detail whose rolled-up
+  // physical % moved.
+  listByActivity: (orgSlug: string, activityId: string) =>
+    [...stepKeys.all(orgSlug), 'activity', activityId] as const,
+};
+
 export const dependencyKeys = {
   all: (orgSlug: string) => ['dependencies', orgSlug] as const,
   byPlan: (orgSlug: string, planId: string) =>

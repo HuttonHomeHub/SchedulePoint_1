@@ -1142,6 +1142,13 @@ export interface PlanEarnedValue {
    * (ADR-0035 §29, N24) — a read-time data-quality WARNING, never a reject.
    */
   costWarningCount: number;
+  /**
+   * The count of leaf activities whose progress steps are all zero-weight (M7 rung 5, ADR-0044 §33,
+   * N27) — so the weighted-mean rollup fell back to the manual `physicalPercentComplete`. A read-time
+   * data-quality WARNING, never a reject (the resolver never divides by zero); mirrors
+   * {@link costWarningCount}.
+   */
+  stepWeightZeroCount: number;
   /** Per-activity rows (incl. WBS summaries), in plan order. */
   activities: EarnedValueActivity[];
   /** The plan-total metric set (the sum over top-level rows). */
@@ -1218,6 +1225,49 @@ export interface ResourceAssignmentSummary {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * One weighted **activity step** (M7 rung 5, ADR-0044 §2 / ADR-0035 §33) — a row of the per-activity
+ * progress checklist. `weight` is the step's relative importance in the weighted-mean physical %
+ * (an exact quantity carried as a `number`; the DB stores `DECIMAL(18,4)`, `>= 0`); `percentComplete`
+ * is the step's own completion (integer 0–100, N28). `seq` is the server-assigned contiguous 1-based
+ * ordering within the activity. When an activity has steps, its PHYSICAL %-complete rolls up as the
+ * weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)` and **wins** over the manual `physicalPercentComplete`; all-zero
+ * weights fall back to the manual field (N27). Kept in lock-step with the API's Prisma `ActivityStep`.
+ */
+export interface ActivityStep {
+  id: string;
+  activityId: string;
+  seq: number;
+  name: string;
+  weight: number;
+  percentComplete: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One step in a bulk-replace request body (M7 rung 5, ADR-0044 §2, Q3). The client sends the desired
+ * ordered list of steps; the server assigns `seq` contiguously, so only the mutable fields appear here.
+ * `weight` must be `>= 0`; `percentComplete` an integer 0–100 (N28 boundary reject —
+ * `STEP_PERCENT_OUT_OF_RANGE`, 422 — mirrors the ADR-0042 physical-% N23 reject).
+ */
+export interface ActivityStepInput {
+  name: string;
+  weight: number;
+  percentComplete: number;
+}
+
+/**
+ * The bulk-replace request for an activity's steps (M7 rung 5, ADR-0044 §2, Q3) —
+ * `PUT …/activities/:activityId/steps`. `version` is the parent activity's optimistic-lock version
+ * (the whole replace bumps it); `steps` is the full desired ordered list (an empty array clears them).
+ */
+export interface ReplaceActivityStepsRequest {
+  version: number;
+  steps: ActivityStepInput[];
 }
 
 /**

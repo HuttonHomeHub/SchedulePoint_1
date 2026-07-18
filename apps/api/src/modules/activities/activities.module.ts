@@ -8,6 +8,9 @@ import { PlansModule } from '../plans/plans.module';
 
 import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
+import { ActivityStepRepository } from './activity-step.repository';
+import { ActivityStepsController } from './activity-steps.controller';
+import { ActivityStepsService } from './activity-steps.service';
 import { ActivityRepository } from './activity.repository';
 import { PlanActivitiesController } from './plan-activities.controller';
 
@@ -20,8 +23,8 @@ import { PlanActivitiesController } from './plan-activities.controller';
  */
 @Module({
   imports: [OrganizationsModule, HierarchyModule, PlansModule, PlanLockModule, CalendarsModule],
-  controllers: [PlanActivitiesController, ActivitiesController],
-  providers: [ActivitiesService, ActivityRepository],
+  controllers: [PlanActivitiesController, ActivitiesController, ActivityStepsController],
+  providers: [ActivitiesService, ActivityRepository, ActivityStepsService, ActivityStepRepository],
   exports: [ActivityRepository],
 })
 export class ActivitiesModule {}

@@ -111,6 +111,8 @@ export interface EarnedValueActivityRow {
   physicalPercentComplete: number | null;
   /** How the activity's cost accrues across its span (ADR-0044 §32); governs PV time-phasing only. */
   accrualType: AccrualType;
+  /** Active weighted progress steps, seq-ordered (M7 rung 5, ADR-0044 §33); drive the PHYSICAL measure. */
+  steps: { weight: Prisma.Decimal; percentComplete: number }[];
   budgetedExpense: bigint | null;
   actualExpense: bigint | null;
   earlyStart: Date | null;
@@ -432,6 +434,13 @@ export class ScheduleRepository {
         percentComplete: true,
         physicalPercentComplete: true,
         accrualType: true,
+        // Active weighted steps, seq-ordered (M7 rung 5, ADR-0044 §33). An activity with no steps yields
+        // an empty array → the manual physical % stands (the byte-identical parity path).
+        steps: {
+          where: { deletedAt: null },
+          orderBy: [{ seq: 'asc' }],
+          select: { weight: true, percentComplete: true },
+        },
         budgetedExpense: true,
         actualExpense: true,
         earlyStart: true,

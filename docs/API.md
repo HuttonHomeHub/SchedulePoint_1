@@ -192,6 +192,20 @@ every editing entry point (edit-lock M2/M3).
   at its start, END at its finish, UNIFORM linearly — and **never changes a CPM
   date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing. None of these
   feed the scheduler.
+- An activity's **weighted progress steps** (ADR-0044 §2 / ADR-0035 §33) are a
+  bulk-replace sub-resource: `GET …/activities/:activityId/steps` lists the active
+  steps (seq-ordered), and `PUT …/activities/:activityId/steps` with
+  `{ version, steps: [{ name, weight, percentComplete }] }` replaces the whole list
+  in one transaction (retained rows updated in place, new ones appended, removed
+  ones soft-deleted; the server assigns `seq`). `version` is the parent **activity's**
+  optimistic-lock version (the replace bumps it; a stale value is a `409`). Steps
+  are activity-write data (`activity:update`, no new permission). When present,
+  their weight-weighted mean `Σ(w·p)/Σw` is the activity's **PHYSICAL** %-complete
+  and **wins** over `physicalPercentComplete` (feeding the `GET …/schedule/earned-value`
+  read only — never a CPM date); with no steps the manual field stands (parity). A
+  step `percentComplete` outside 0–100 is a **422** (`STEP_PERCENT_OUT_OF_RANGE`,
+  N28) and a negative `weight` a 422; all-zero weights fall back to the manual field
+  and raise the read's `stepWeightZeroCount` warning (N27), never a reject.
 
 ## Authentication
 

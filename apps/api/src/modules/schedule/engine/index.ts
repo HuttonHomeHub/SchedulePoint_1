@@ -20,9 +20,11 @@ export { computeFloatPaths, type FloatPath } from './float-paths';
 export {
   computeEarnedValue,
   deriveMetrics,
+  rollupPhysicalPercent,
   type EvInput,
   type EvActivityInput,
   type EvAssignmentInput,
+  type ActivityStepInput,
   type EvMetrics,
   type EvActivityResult,
   type PlanEarnedValueResult,
