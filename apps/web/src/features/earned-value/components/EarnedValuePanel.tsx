@@ -23,6 +23,20 @@ function formatPercent(percent: number): string {
 }
 
 /**
+ * An acronym with its full term exposed via a native `<abbr title>` — a screen-reader and hover
+ * expansion for the EVM acronyms (BAC, PV, EV, …) the table headers and KPI sub-lines use, so the terms
+ * are defined in place without a Tooltip primitive. `title` is the only mechanism that adds no visual
+ * chrome; the visible text stays the compact acronym.
+ */
+function Abbr({ short, full }: { short: string; full: string }): React.ReactElement {
+  return (
+    <abbr title={full} className="no-underline">
+      {short}
+    </abbr>
+  );
+}
+
+/**
  * A performance-index badge (SPI or CPI) that pairs the ratio with a **word + icon**, never colour
  * alone (WCAG 2.2 — 1.4.1 Use of Color): a ratio `< 1` is flagged "Behind"/"Over" with a
  * downward-trend icon and the critical token; `>= 1` (or `null`) reads as plain text. `behindLabel`
@@ -96,20 +110,26 @@ export function EarnedValuePanel({
   const query = useEarnedValue(orgSlug, planId);
 
   const shell = (children: React.ReactNode) => (
-    <section aria-label="Earned Value" className="flex flex-col gap-4">
+    <section aria-label="Earned value" className="flex flex-col gap-4">
       {children}
     </section>
   );
 
-  if (query.isPending) return shell(<Spinner label="Loading Earned Value…" />);
+  if (query.isPending) return shell(<Spinner label="Loading earned value…" />);
 
   if (query.isError) {
     if (isCostReadForbidden(query.error)) {
+      // `role="status"` so a screen-reader user not focused on the panel still hears the permission
+      // boundary when the query resolves from the loading spinner (WCAG 4.1.3) — matching the sibling
+      // async-resolved notices (EditLockBanner, ActivityResourcesDialog).
       return shell(
-        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-          <p className="text-foreground font-medium">Cost &amp; Earned Value is restricted</p>
+        <div
+          role="status"
+          className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm"
+        >
+          <p className="text-foreground font-medium">Cost &amp; earned value is restricted</p>
           <p className="mt-1">
-            Only Planners and Org Admins can view cost and Earned-Value figures for this plan.
+            Only Planners and Org Admins can view cost and earned-value figures for this plan.
           </p>
         </div>,
       );
@@ -117,7 +137,7 @@ export function EarnedValuePanel({
     return shell(
       <div className="flex flex-col items-start gap-3">
         <p role="alert" className="text-destructive-text text-sm">
-          Couldn’t load Earned Value. Please try again.
+          Couldn’t load earned value. Please try again.
         </p>
         <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
           Try again
@@ -137,8 +157,113 @@ export function EarnedValuePanel({
     return activity.code ? `${activity.code} · ${activity.name}` : activity.name;
   };
 
+  // One declarative column spec drives both the header row and each body row, so the 11 columns stay in
+  // step (a header and its cells can't drift apart) instead of two hand-maintained parallel lists. The
+  // acronym headers carry an `<abbr>` so the EVM terms are defined in place (WCAG — labelled clearly).
+  const numericHead = 'py-2 pr-4 text-right font-medium';
+  const numericCell = 'py-2 pr-4 text-right tabular-nums';
+  const columns: {
+    key: string;
+    header: React.ReactNode;
+    headClassName: string;
+    cellClassName: string;
+    cell: (row: EarnedValueActivity) => React.ReactNode;
+  }[] = [
+    {
+      key: 'name',
+      header: 'Activity',
+      headClassName: 'py-2 pr-4 font-medium',
+      cellClassName: 'py-2 pr-4',
+      cell: (row) => rowName(row),
+    },
+    {
+      key: 'percent',
+      header: '% complete',
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => formatPercent(row.performancePercent),
+    },
+    {
+      key: 'bac',
+      header: <Abbr short="BAC" full="Budget at Completion" />,
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => money(row.bac),
+    },
+    {
+      key: 'pv',
+      header: <Abbr short="PV" full="Planned Value" />,
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => money(row.pv),
+    },
+    {
+      key: 'ev',
+      header: <Abbr short="EV" full="Earned Value" />,
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => money(row.ev),
+    },
+    {
+      key: 'ac',
+      header: <Abbr short="AC" full="Actual Cost" />,
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => money(row.ac),
+    },
+    {
+      key: 'sv',
+      header: <Abbr short="SV" full="Schedule Variance" />,
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => money(row.sv),
+    },
+    {
+      key: 'cv',
+      header: <Abbr short="CV" full="Cost Variance" />,
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => money(row.cv),
+    },
+    {
+      key: 'spi',
+      header: <Abbr short="SPI" full="Schedule Performance Index" />,
+      headClassName: numericHead,
+      cellClassName: 'py-2 pr-4 text-right',
+      cell: (row) => (
+        <span className="inline-flex justify-end">
+          <IndexValue ratio={row.spi} behindLabel="Behind" />
+        </span>
+      ),
+    },
+    {
+      key: 'cpi',
+      header: <Abbr short="CPI" full="Cost Performance Index" />,
+      headClassName: numericHead,
+      cellClassName: 'py-2 pr-4 text-right',
+      cell: (row) => (
+        <span className="inline-flex justify-end">
+          <IndexValue ratio={row.cpi} behindLabel="Over" />
+        </span>
+      ),
+    },
+    {
+      key: 'eac',
+      header: <Abbr short="EAC" full="Estimate at Completion" />,
+      headClassName: numericHead,
+      cellClassName: numericCell,
+      cell: (row) => money(row.eac),
+    },
+  ];
+
   return shell(
     <>
+      {currencyCode === null ? (
+        <p className="text-muted-foreground text-sm">
+          No plan currency set — figures show with no currency symbol. Set one in the plan’s
+          Earned-Value settings.
+        </p>
+      ) : null}
       {ev.costBaselineMissing ? (
         <p className="text-muted-foreground text-sm">
           No active cost baseline — Planned Value falls back to the live budget.
@@ -155,17 +280,29 @@ export function EarnedValuePanel({
         <KpiTile
           label="Schedule Performance Index"
           value={<IndexValue ratio={total.spi} behindLabel="Behind" />}
-          sub={<>SV {money(total.sv)}</>}
+          sub={
+            <>
+              <Abbr short="SV" full="Schedule Variance" /> {money(total.sv)}
+            </>
+          }
         />
         <KpiTile
           label="Cost Performance Index"
           value={<IndexValue ratio={total.cpi} behindLabel="Over" />}
-          sub={<>CV {money(total.cv)}</>}
+          sub={
+            <>
+              <Abbr short="CV" full="Cost Variance" /> {money(total.cv)}
+            </>
+          }
         />
         <KpiTile
           label="Estimate at Completion"
           value={money(total.eac)}
-          sub={<>VAC {money(total.vac)}</>}
+          sub={
+            <>
+              <Abbr short="VAC" full="Variance at Completion" /> {money(total.vac)}
+            </>
+          }
         />
         <KpiTile label="Budget at Completion" value={money(total.bac)} />
         <KpiTile label="Earned Value" value={money(total.ev)} />
@@ -173,82 +310,42 @@ export function EarnedValuePanel({
       </dl>
 
       {ev.activities.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+        // `role="status"` so the resolved empty state is announced when the query settles (WCAG 4.1.3).
+        <div
+          role="status"
+          className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm"
+        >
           No activities to measure yet. Add activities with cost or resources, then Recalculate.
         </div>
       ) : (
-        // Focusable + labelled scroll container so a keyboard-only user can scroll the wide table
-        // (WCAG 2.1.1); the caption names the region — mirrors the shared DataTable primitive.
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         <div
           className="overflow-x-auto"
           role="region"
-          aria-label="Earned Value by activity"
-          tabIndex={0}
+          aria-label="Earned value by activity"
+          // Focusable + labelled scroll container so a keyboard-only user can scroll the wide table
+          // (WCAG 2.1.1); the caption names the region — mirrors the shared DataTable primitive. The
+          // inline disable stays on the `tabIndex` line so Prettier can't split it off (a11y review).
+          tabIndex={0 /* eslint-disable-line jsx-a11y/no-noninteractive-tabindex */}
         >
           <table className="w-full text-sm">
-            <caption className="sr-only">Earned Value by activity</caption>
+            <caption className="sr-only">Earned value by activity</caption>
             <thead>
               <tr className="border-border text-muted-foreground border-b text-left">
-                <th scope="col" className="py-2 pr-4 font-medium">
-                  Activity
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  % complete
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  BAC
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  PV
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  EV
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  AC
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  SV
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  CV
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  SPI
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  CPI
-                </th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">
-                  EAC
-                </th>
+                {columns.map((column) => (
+                  <th key={column.key} scope="col" className={column.headClassName}>
+                    {column.header}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {ev.activities.map((row) => (
                 <tr key={row.activityId} className="border-border border-b">
-                  <td className="py-2 pr-4">{rowName(row)}</td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {formatPercent(row.performancePercent)}
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">{money(row.bac)}</td>
-                  <td className="py-2 pr-4 text-right tabular-nums">{money(row.pv)}</td>
-                  <td className="py-2 pr-4 text-right tabular-nums">{money(row.ev)}</td>
-                  <td className="py-2 pr-4 text-right tabular-nums">{money(row.ac)}</td>
-                  <td className="py-2 pr-4 text-right tabular-nums">{money(row.sv)}</td>
-                  <td className="py-2 pr-4 text-right tabular-nums">{money(row.cv)}</td>
-                  <td className="py-2 pr-4 text-right">
-                    <span className="inline-flex justify-end">
-                      <IndexValue ratio={row.spi} behindLabel="Behind" />
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-right">
-                    <span className="inline-flex justify-end">
-                      <IndexValue ratio={row.cpi} behindLabel="Over" />
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">{money(row.eac)}</td>
+                  {columns.map((column) => (
+                    <td key={column.key} className={column.cellClassName}>
+                      {column.cell(row)}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

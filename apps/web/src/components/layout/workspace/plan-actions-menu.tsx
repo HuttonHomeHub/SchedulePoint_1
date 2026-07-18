@@ -64,7 +64,7 @@ export function PlanActionsMenu({
         </MenuItem>
         {EARNED_VALUE_ENABLED ? (
           <MenuItem onSelect={() => setDialog('earned-value')}>
-            <DollarSign aria-hidden="true" className="size-4" /> Earned Value…
+            <DollarSign aria-hidden="true" className="size-4" /> Earned value…
           </MenuItem>
         ) : null}
       </Menu>

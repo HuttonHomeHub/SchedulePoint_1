@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 /**
  * The plan's ISO-4217 **currency** field (EV4b, ADR-0042): a short text input that persists on Save
  * (a targeted PATCH of just `currencyCode` + `version`, via the shared {@link useSetPlanScheduleOption}).
- * A blank field clears the code to `null` (inherit the org default). Validated as three ASCII letters
+ * A blank field clears the code to `null` (figures then show with no currency symbol). Validated as three ASCII letters
  * before the request; the API validates the real code list. Kept a discrete Save (not save-on-change)
  * because a free-text code is only meaningful once fully typed, unlike the adjacent `<select>`.
  */
@@ -93,7 +93,7 @@ function PlanCurrencyField({
       </div>
       <p id={hintId} className="text-muted-foreground text-sm">
         The ISO-4217 code (e.g. USD, GBP) for this plan’s cost and Earned-Value figures. Leave blank
-        to inherit the organisation default.
+        to show figures with no currency symbol.
       </p>
       {localError ? (
         <p id={errorId} className="text-destructive-text text-sm">
@@ -115,8 +115,8 @@ function PlanCurrencyField({
  * - **EAC method** (`eacMethod`) — how the EV read forecasts the estimate at completion: CPI (default),
  *   Remaining-at-budget, or CPI × SPI. A targeted optimistic `<select>` (the shared
  *   {@link PlanScheduleOptionSelect}).
- * - **Currency** (`currencyCode`) — the ISO-4217 code all money figures are shown in; blank inherits
- *   the org default.
+ * - **Currency** (`currencyCode`) — the ISO-4217 code all money figures are shown in; blank shows
+ *   figures with no currency symbol.
  *
  * Writers (`canEdit`) edit them; everyone else sees them read-only. Each change persists immediately as
  * a targeted PATCH; it changes no dates — the Earned-Value read applies them. Flagged behind
@@ -142,7 +142,7 @@ export function PlanEarnedValueSettings({
         </div>
         <div className="flex flex-col gap-1">
           <dt className="text-muted-foreground">Currency</dt>
-          <dd>{plan.currencyCode ?? 'Organisation default'}</dd>
+          <dd>{plan.currencyCode ?? 'Not set (no symbol shown)'}</dd>
         </div>
       </dl>
     );

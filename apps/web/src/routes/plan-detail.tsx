@@ -220,10 +220,10 @@ function LegacyPlanLayout({
 
       {EARNED_VALUE_ENABLED ? (
         <div className="mt-6">
-          <h3 className="text-base font-medium">Earned Value</h3>
+          <h3 className="text-base font-medium">Earned value</h3>
           <p className="text-muted-foreground mt-1 text-sm">
-            Cost and schedule performance measured against the active baseline — SPI, CPI and the
-            forecast at completion, per activity and for the plan as a whole.
+            Cost and schedule performance measured against the active baseline when one exists —
+            SPI, CPI and the forecast at completion, per activity and for the plan as a whole.
           </p>
           <div className="mt-3">
             <EarnedValuePanel

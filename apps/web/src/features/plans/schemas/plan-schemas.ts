@@ -114,16 +114,16 @@ export const EAC_METHOD_LABELS: Record<EacMethod, { label: string; description: 
   CPI: {
     label: 'CPI (performance factor)',
     description:
-      'EAC = BAC ÷ CPI — extrapolates today’s cost performance to completion (P6 default).',
+      'Assumes the rest of the job costs at the same rate as work so far (the P6 default).',
   },
   REMAINING_AT_BUDGET: {
     label: 'Remaining at budget',
-    description: 'EAC = actual cost + (budget − earned) — assumes remaining work runs to budget.',
+    description: 'Assumes the remaining work runs exactly to its original budget.',
   },
   CPI_TIMES_SPI: {
     label: 'CPI × SPI (schedule-adjusted)',
     description:
-      'EAC = actual cost + remaining ÷ (CPI × SPI) — factors both cost and schedule performance.',
+      'Assumes the rest of the job is slowed by both the current cost and schedule performance.',
   },
 };
 

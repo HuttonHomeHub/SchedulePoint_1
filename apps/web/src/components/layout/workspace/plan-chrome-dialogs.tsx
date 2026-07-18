@@ -104,8 +104,8 @@ export function PlanChromeDialogs({
         <Dialog
           open={dialog === 'earned-value'}
           onClose={onClose}
-          title="Earned Value"
-          description="Cost and schedule performance measured against the active baseline — SPI, CPI and the forecast at completion, per activity and for the plan."
+          title="Earned value"
+          description="Cost and schedule performance measured against the active baseline when one exists — SPI, CPI and the forecast at completion, per activity and for the plan."
           size="lg"
         >
           <EarnedValuePanel

@@ -74,6 +74,12 @@ a bug:
 
 - Plain, concise, sentence case. Consistent terminology (a "project" is always a
   "project"). Action labels are verbs ("Add project", not "New").
+  - **Exception — established metric names.** Feature and chrome labels stay sentence
+    case ("Earned value", "Logic diagram"), but the standard EVM metric names shown as
+    data — Budget at Completion, Planned Value, Earned Value, Actual Cost, Estimate at
+    Completion, Schedule/Cost Performance Index, Schedule/Cost Variance — keep their
+    Title Case as proper terms, and their acronyms (BAC, PV, EV, AC, SPI, CPI, …) carry
+    an `<abbr title>` expansion the first place they appear.
 - Error messages say what happened and what to do next — no blame, no jargon,
   no stack traces.
 - Empty states are encouraging and actionable, not dead ends.

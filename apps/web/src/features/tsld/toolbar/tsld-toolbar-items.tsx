@@ -923,7 +923,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <CalendarDays className="size-4" />,
       onActivate: (ctx) => ctx.openCalendar(),
     },
-    // Earned Value (EV4b, ADR-0042) — opens the analysis dialog; a read action (no pen). Gated behind
+    // Earned value (EV4b, ADR-0042) — opens the analysis dialog; a read action (no pen). Gated behind
     // `VITE_EARNED_VALUE`, so it's absent from the bar until the surface ships.
     {
       id: 'earned-value',
@@ -931,7 +931,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'do',
       tier: 2,
       order: 4,
-      label: 'Earned Value…',
+      label: 'Earned value…',
       icon: <DollarSign className="size-4" />,
       isVisible: () => EARNED_VALUE_ENABLED,
       onActivate: (ctx) => ctx.openEarnedValue(),

@@ -124,9 +124,9 @@ describe('EarnedValuePanel', () => {
       new ApiFetchError(403, { code: 'FORBIDDEN', message: 'Forbidden' }),
     );
     renderPanel();
-    expect(await screen.findByText('Cost & Earned Value is restricted')).toBeInTheDocument();
+    expect(await screen.findByText('Cost & earned value is restricted')).toBeInTheDocument();
     expect(
-      screen.queryByText('Couldn’t load Earned Value. Please try again.'),
+      screen.queryByText('Couldn’t load earned value. Please try again.'),
     ).not.toBeInTheDocument();
   });
 
@@ -136,7 +136,7 @@ describe('EarnedValuePanel', () => {
     );
     renderPanel();
     expect(
-      await screen.findByText('Couldn’t load Earned Value. Please try again.'),
+      await screen.findByText('Couldn’t load earned value. Please try again.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });

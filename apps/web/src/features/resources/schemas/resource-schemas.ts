@@ -1,6 +1,8 @@
 import { RESOURCE_KINDS, type ResourceKind, type ResourceSummary } from '@repo/types';
 import { z } from 'zod';
 
+import { moneyMajorAmount } from '@/lib/money-schema';
+
 /** Human labels for the resource kinds — used by the table and the form's kind select. */
 export const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
   LABOUR: 'Labour',
@@ -49,14 +51,7 @@ export const resourceFormSchema = z.object({
   // Registered with a `setValueAs` that maps a blank field to `undefined`, so an empty rate is
   // "absent", not `NaN`. Only editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a
   // stored value round-trips even with the field hidden.
-  costPerUnit: z
-    .number({ message: 'Enter an amount.' })
-    .min(0, 'Cost cannot be negative.')
-    .refine(
-      (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
-      'Use at most 2 decimal places.',
-    )
-    .optional(),
+  costPerUnit: moneyMajorAmount.optional(),
 });
 
 export type ResourceFormValues = z.infer<typeof resourceFormSchema>;
@@ -95,22 +90,8 @@ export const assignmentFormSchema = z.object({
   // Both entered in MAJOR units (×100 → minor on submit, ÷100 to seed). `actualUnits` is the quantity of
   // work done (a plain quantity like budgetedUnits, `>= 0`, at most 4 dp). All optional, `>= 0`. Only
   // editable behind `VITE_EARNED_VALUE`.
-  budgetedCost: z
-    .number({ message: 'Enter an amount.' })
-    .min(0, 'Cost cannot be negative.')
-    .refine(
-      (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
-      'Use at most 2 decimal places.',
-    )
-    .optional(),
-  actualCost: z
-    .number({ message: 'Enter an amount.' })
-    .min(0, 'Cost cannot be negative.')
-    .refine(
-      (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
-      'Use at most 2 decimal places.',
-    )
-    .optional(),
+  budgetedCost: moneyMajorAmount.optional(),
+  actualCost: moneyMajorAmount.optional(),
   actualUnits: z
     .number({ message: 'Enter a number.' })
     .min(0, 'Actual units cannot be negative.')

@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { DURATION_TYPES_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
+import { minorToMajorInput } from '@/lib/format-money';
 
 /** A MATERIAL resource may never drive an activity's dates (ADR-0039). */
 const MATERIAL_DRIVING_HINT = 'A material resource can’t drive an activity’s dates.';
@@ -75,9 +76,14 @@ function DerivedDurationNote({
   );
 }
 
-/** Seed a MAJOR-unit money field from a stored minor-units value: blank when unset, else ÷100. */
+/**
+ * Seed a MAJOR-unit money text field from a stored minor-units value: blank when unset, else the major
+ * amount as a string. Reuses {@link minorToMajorInput} (the shared minor→major conversion) so this
+ * inline editor and the RHF dialogs divide by the same minor-units factor.
+ */
 function seedMoney(minorUnits: number | null): string {
-  return minorUnits === null ? '' : String(minorUnits / 100);
+  const major = minorToMajorInput(minorUnits);
+  return major === undefined ? '' : String(major);
 }
 
 /**

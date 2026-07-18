@@ -432,9 +432,9 @@ export function ActivityFormDialog({
             Duration / Duration-type fields. Money is entered in major units (e.g. dollars). */}
         {EARNED_VALUE_ENABLED && !isDurationDerivedType(type) ? (
           <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
-            <legend className="sr-only">Cost &amp; Earned Value</legend>
+            <legend className="sr-only">Cost &amp; earned value</legend>
             <p className="text-sm font-medium" aria-hidden="true">
-              Cost &amp; Earned Value
+              Cost &amp; earned value
             </p>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="activity-percent-complete-type">% complete type</Label>

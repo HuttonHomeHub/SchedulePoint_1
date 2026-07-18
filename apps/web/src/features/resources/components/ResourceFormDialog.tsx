@@ -228,7 +228,7 @@ export function ResourceFormDialog({
             step="any"
             inputMode="decimal"
             readOnly={readOnly}
-            hint="The cost per unit of work this resource does, in the plan’s currency. Earned Value derives an assignment’s budgeted cost from units × this rate. Leave blank for no rate."
+            hint="The cost per unit of work this resource does, shown in each plan’s own currency when Earned Value reads it. Earned Value derives an assignment’s budgeted cost from units × this rate. Leave blank for no rate."
             error={errors.costPerUnit?.message}
             {...register('costPerUnit', {
               setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),

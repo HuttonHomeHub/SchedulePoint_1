@@ -11,6 +11,8 @@ import {
 } from '@repo/types';
 import { z } from 'zod';
 
+import { moneyMajorAmount } from '@/lib/money-schema';
+
 // The constraint labels live in the shared lib so the form, the table, and the TSLD
 // canvas read constraints in one voice; re-exported here for existing form importers.
 export { CONSTRAINT_TYPE_LABELS } from '@/lib/constraint-format';
@@ -226,22 +228,8 @@ export const activityFormSchema = z
       .min(0, 'Percentage cannot be negative.')
       .max(100, 'Percentage cannot exceed 100.')
       .optional(),
-    budgetedExpense: z
-      .number({ message: 'Enter an amount.' })
-      .min(0, 'Cost cannot be negative.')
-      .refine(
-        (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
-        'Use at most 2 decimal places.',
-      )
-      .optional(),
-    actualExpense: z
-      .number({ message: 'Enter an amount.' })
-      .min(0, 'Cost cannot be negative.')
-      .refine(
-        (value) => Number.isFinite(value) && Math.round(value * 100) === value * 100,
-        'Use at most 2 decimal places.',
-      )
-      .optional(),
+    budgetedExpense: moneyMajorAmount.optional(),
+    actualExpense: moneyMajorAmount.optional(),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
   })
   // Only the type→date direction needs a rule: the dialog hides the date field
