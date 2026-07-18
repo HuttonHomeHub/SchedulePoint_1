@@ -78,7 +78,10 @@ function KpiTile({
     <div className="border-border flex flex-col gap-1 rounded-lg border p-4">
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd className="text-lg font-semibold tabular-nums">{value}</dd>
-      {sub ? <p className="text-muted-foreground text-xs">{sub}</p> : null}
+      {/* A second <dd> (a definition list allows many per <dt>), not a <p>: a <div> grouped inside
+          a <dl> may only contain <dt>/<dd>, so the sub-line must be a <dd> to keep the list valid
+          (axe definition-list / WCAG 1.3.1). */}
+      {sub ? <dd className="text-muted-foreground text-xs">{sub}</dd> : null}
     </div>
   );
 }
