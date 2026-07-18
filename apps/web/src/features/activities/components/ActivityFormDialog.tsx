@@ -35,6 +35,7 @@ import {
   ADVANCED_CONSTRAINTS_ENABLED,
   DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
+  INTER_PROJECT_DATES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
@@ -121,6 +122,8 @@ export function ActivityFormDialog({
       secondaryConstraintDate: '',
       scheduleAsLateAsPossible: false,
       expectedFinish: '',
+      externalEarlyStart: '',
+      externalLateFinish: '',
       calendarId: '',
       parentId: '',
       levelingPriority: undefined,
@@ -150,6 +153,10 @@ export function ActivityFormDialog({
         secondaryConstraintDate: activity?.secondaryConstraintDate ?? '',
         scheduleAsLateAsPossible: activity?.scheduleAsLateAsPossible ?? false,
         expectedFinish: activity?.expectedFinish ?? '',
+        // Always seed the external / inter-project dates from the row so a stored value round-trips even
+        // when the section is hidden (flag off) — an edit then never silently clears an imported bound.
+        externalEarlyStart: activity?.externalEarlyStart ?? '',
+        externalLateFinish: activity?.externalLateFinish ?? '',
         // Always seed from the row so the value round-trips even when the picker is hidden
         // (flag off) — an edit then never silently clears an assigned calendar. '' = inherit.
         calendarId: activity?.calendarId ?? '',
@@ -613,6 +620,37 @@ export function ActivityFormDialog({
                 {...register('expectedFinish')}
               />
             )}
+          </fieldset>
+        ) : null}
+        {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Grouped by the same top-border
+            divider as the other stacked sections (a `<fieldset>`/`<legend>` for the semantic grouping,
+            no box). Shown for every type — a milestone can carry an external late finish too (A12500). */}
+        {INTER_PROJECT_DATES_ENABLED ? (
+          <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
+            <legend className="sr-only">External dates</legend>
+            <p className="text-sm font-medium" aria-hidden="true">
+              External dates
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Imported commitments from another project — a date that lives outside this plan (a
+              vendor delivery, a downstream commissioning window). The later of the activity’s logic
+              and the external early start drives its start; an external late finish earlier than
+              the logic can achieve shows as negative float. They never override a hard constraint.
+            </p>
+            <TextField
+              label="External early start"
+              type="date"
+              hint="The earliest an upstream project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins."
+              error={errors.externalEarlyStart?.message}
+              {...register('externalEarlyStart')}
+            />
+            <TextField
+              label="External late finish"
+              type="date"
+              hint="The latest a downstream project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
+              error={errors.externalLateFinish?.message}
+              {...register('externalLateFinish')}
+            />
           </fieldset>
         ) : null}
         <TextareaField

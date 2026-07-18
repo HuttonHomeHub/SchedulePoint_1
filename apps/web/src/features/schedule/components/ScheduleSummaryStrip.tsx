@@ -2,7 +2,7 @@ import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { RESOURCE_LEVELLING_ENABLED } from '@/config/env';
+import { INTER_PROJECT_DATES_ENABLED, RESOURCE_LEVELLING_ENABLED } from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** One labelled figure in the strip. `hintId` links an explanatory footnote for AT. */
@@ -64,6 +64,9 @@ export function ScheduleSummaryStrip({
 
   const { dataDate, projectFinish, activityCount, criticalCount, nearCriticalCount } = summary.data;
   const { constraintViolationCount, constraintWarningCount } = summary.data;
+  // How many activities an external / inter-project bound drove this recalc (ADR-0043). Shown only
+  // behind the flag and only when non-zero, matching the other engine-count chips.
+  const externalDrivenCount = INTER_PROJECT_DATES_ENABLED ? summary.data.externalDrivenCount : 0;
   const {
     leveledProjectFinish,
     leveledActivityCount,
@@ -111,6 +114,13 @@ export function ScheduleSummaryStrip({
             hintId="constraint-warnings-hint"
           />
         ) : null}
+        {externalDrivenCount > 0 ? (
+          <Stat
+            label="Externally driven"
+            value={externalDrivenCount}
+            hintId="external-driven-hint"
+          />
+        ) : null}
         {hasLevelled ? (
           <>
             <Stat label="Levelled finish" value={formatCalendarDate(leveledProjectFinish)} />
@@ -142,6 +152,12 @@ export function ScheduleSummaryStrip({
         <p id="constraint-warnings-hint" className="text-muted-foreground text-xs">
           Constraint warnings are Start-no-earlier-than constraints dated before the data date. They
           are honoured but cannot pull work before the data date.
+        </p>
+      ) : null}
+      {externalDrivenCount > 0 ? (
+        <p id="external-driven-hint" className="text-muted-foreground text-xs">
+          Externally driven counts activities whose start or finish was set by an imported external
+          date from another project rather than by this plan’s own logic.
         </p>
       ) : null}
       {hasLevelled ? (

@@ -32,6 +32,7 @@ const summary = (overrides: Partial<PlanScheduleSummary> = {}): PlanScheduleSumm
   levelingWindowExceededCount: 0,
   selfOverAllocatedCount: 0,
   leveledProjectFinish: null,
+  externalDrivenCount: 0,
   ...overrides,
 });
 

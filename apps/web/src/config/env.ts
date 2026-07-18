@@ -314,3 +314,27 @@ export const RESOURCE_LEVELLING_ENABLED = flagDefaultOff(import.meta.env.VITE_RE
  * Set `VITE_EARNED_VALUE=true` to enable it in an environment.
  */
 export const EARNED_VALUE_ENABLED = flagDefaultOff(import.meta.env.VITE_EARNED_VALUE);
+
+/**
+ * Inter-project / external dates web surface (F5, ADR-0043 / ADR-0035 §30). **OFF by default** — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
+ * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on
+ * once cleared (the `VITE_EARNED_VALUE` / `VITE_RESOURCE_LEVELLING` pattern). When on, the web UI
+ * exposes external / inter-project dates:
+ *
+ * - **Activity External dates** — an `External early start` and `External late finish` date pair on the
+ *   activity form (imported commitments from another project: the later of logic and the external early
+ *   start drives; an external late finish earlier than logic shows as negative float).
+ * - **Plan Ignore external relationships** — an on/off plan toggle that drops all external early-start
+ *   and late-finish bounds so the plan schedules on its own logic (P6's "ignore relationships to/from
+ *   other projects").
+ * - **Externally-driven count** — the schedule summary strip surfaces `externalDrivenCount` (how many
+ *   activities an external bound drove this recalc) when it is above zero.
+ *
+ * Everything behind it — the settable `externalEarlyStart` / `externalLateFinish` activity fields (with
+ * the N26 `EXTERNAL_FINISH_BEFORE_START` reject), the plan `ignoreExternalRelationships` option, the
+ * engine's two soft clamps and the engine-owned `externalDrivenCount` summary — is already live; the
+ * flag only governs whether the web UI exposes it. Set `VITE_INTER_PROJECT_DATES=true` to enable it in
+ * an environment.
+ */
+export const INTER_PROJECT_DATES_ENABLED = flagDefaultOff(import.meta.env.VITE_INTER_PROJECT_DATES);

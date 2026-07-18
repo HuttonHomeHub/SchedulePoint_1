@@ -193,6 +193,14 @@ export const activityFormSchema = z
     // Expected-finish target (ADR-0035 §9): a calendar day the engine resizes remaining work to when the
     // plan's `useExpectedFinishDates` is on. A raw `<input type="date">` value (`''` = none).
     expectedFinish: z.string().optional(),
+    // External / inter-project dates (ADR-0043 / ADR-0035 §30, M1): imported commitments from ANOTHER
+    // project, each a calendar day (`YYYY-MM-DD`) or `''` = none. `externalEarlyStart` is an SNET-shaped
+    // forward lower bound; `externalLateFinish` an FNLT-shaped backward upper bound. Raw `<input
+    // type="date">` values (like `constraintDate`), only editable behind `VITE_INTER_PROJECT_DATES` but
+    // always seeded from the row so a stored value round-trips even with the section hidden. Cross-field
+    // rule below mirrors the API's N26 `EXTERNAL_FINISH_BEFORE_START` reject.
+    externalEarlyStart: z.string().optional(),
+    externalLateFinish: z.string().optional(),
     // The activity's own working-time calendar (ADR-0037): `''` = inherit the plan default.
     // A raw `<select>` value; the choices are the org's calendar ids (+ inherit), so the id is
     // never free-typed — validation of the UUID/in-org is the API's job (mirrors `constraintDate`).
@@ -243,7 +251,20 @@ export const activityFormSchema = z
   .refine((v) => !v.secondaryConstraintType || Boolean(v.secondaryConstraintDate), {
     message: 'Choose a date for the secondary constraint.',
     path: ['secondaryConstraintDate'],
-  });
+  })
+  // N26 (ADR-0035 §30): an external late finish can't fall before the external early start when both
+  // are set. Mirrors the API's `EXTERNAL_FINISH_BEFORE_START` (422) reject client-side, the same
+  // cross-field date shape as the progress editor's start/finish rule.
+  .refine(
+    (v) =>
+      !v.externalEarlyStart ||
+      !v.externalLateFinish ||
+      v.externalLateFinish >= v.externalEarlyStart,
+    {
+      message: 'External late finish can’t be before the external early start.',
+      path: ['externalLateFinish'],
+    },
+  );
 
 export type ActivityFormValues = z.infer<typeof activityFormSchema>;
 

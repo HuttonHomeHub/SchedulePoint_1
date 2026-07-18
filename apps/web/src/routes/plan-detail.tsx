@@ -15,6 +15,7 @@ import {
   CANVAS_WORKSPACE_ENABLED,
   EARNED_VALUE_ENABLED,
   FLOAT_CRITICAL_SETTINGS_ENABLED,
+  INTER_PROJECT_DATES_ENABLED,
   PROGRESS_INGESTION_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
@@ -27,6 +28,7 @@ import {
   PlanCalendarPicker,
   PlanEarnedValueSettings,
   PlanExpectedFinishToggle,
+  PlanExternalRelationshipsSettings,
   PlanLevellingSettings,
   PlanRecalcModePicker,
   PlanScheduleSettings,
@@ -196,6 +198,15 @@ function LegacyPlanLayout({
       {RESOURCE_LEVELLING_ENABLED ? (
         <div className="mt-3">
           <PlanLevellingSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+        </div>
+      ) : null}
+      {INTER_PROJECT_DATES_ENABLED ? (
+        <div className="mt-3">
+          <PlanExternalRelationshipsSettings
+            orgSlug={orgSlug}
+            plan={plan}
+            canEdit={model.canWrite}
+          />
         </div>
       ) : null}
       {EARNED_VALUE_ENABLED ? (

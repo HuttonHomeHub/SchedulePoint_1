@@ -44,6 +44,8 @@ function activity(id: string, name: string): ActivitySummary {
     constraintViolated: false,
     loeNoSpan: false,
     resourceDriverMissing: false,
+    externalEarlyStart: null,
+    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,

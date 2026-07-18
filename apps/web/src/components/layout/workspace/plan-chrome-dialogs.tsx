@@ -4,6 +4,7 @@ import { Dialog } from '@/components/ui/dialog';
 import {
   ADVANCED_CONSTRAINTS_ENABLED,
   EARNED_VALUE_ENABLED,
+  INTER_PROJECT_DATES_ENABLED,
   PROGRESS_INGESTION_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
@@ -14,6 +15,7 @@ import {
   PlanCalendarPicker,
   PlanEarnedValueSettings,
   PlanExpectedFinishToggle,
+  PlanExternalRelationshipsSettings,
   PlanLevellingSettings,
   PlanRecalcModePicker,
 } from '@/features/plans';
@@ -93,6 +95,13 @@ export function PlanChromeDialogs({
           ) : null}
           {RESOURCE_LEVELLING_ENABLED ? (
             <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          ) : null}
+          {INTER_PROJECT_DATES_ENABLED ? (
+            <PlanExternalRelationshipsSettings
+              orgSlug={model.orgSlug}
+              plan={plan}
+              canEdit={model.canWrite}
+            />
           ) : null}
           {EARNED_VALUE_ENABLED ? (
             <PlanEarnedValueSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />

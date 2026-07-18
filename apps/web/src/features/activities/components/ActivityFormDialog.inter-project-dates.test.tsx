@@ -8,14 +8,15 @@ import { ActivityFormDialog } from './ActivityFormDialog';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The activity levelling-priority field (`levelingPriority`, ADR-0041) with `VITE_RESOURCE_LEVELLING`
- * forced ON — the surface ships dark by default, so this suite pins the flag to prove the field renders,
- * persists (omitted when blank), seeds + round-trips a stored value, and is hidden for a type levelling
- * never moves (a milestone). The flag-off behaviour is covered by `ActivityFormDialog.test.tsx`.
+ * The activity External dates section (`externalEarlyStart` / `externalLateFinish`, ADR-0043 / ADR-0035
+ * §30) with `VITE_INTER_PROJECT_DATES` forced ON — the surface ships dark by default, so this suite pins
+ * the flag to prove the two date inputs render + submit, the client-side N26 rule rejects an inverted
+ * window, and a stored value seeds + round-trips. The flag-off (section hidden) behaviour is covered by
+ * `ActivityFormDialog.test.tsx`.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCE_LEVELLING_ENABLED: true,
+  INTER_PROJECT_DATES_ENABLED: true,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -54,8 +55,8 @@ const ACTIVITY: ActivitySummary = {
   constraintViolated: false,
   loeNoSpan: false,
   resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
+  externalEarlyStart: '2026-02-01',
+  externalLateFinish: '2026-03-01',
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
   parentId: null,
   visualStart: null,
@@ -63,7 +64,7 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveFinish: null,
   visualConflict: false,
   visualDriftDays: null,
-  levelingPriority: 10,
+  levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,
   levelingDelayDays: null,
@@ -87,62 +88,88 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDia
   );
 }
 
-describe('ActivityFormDialog — levelling priority (flag on)', () => {
+describe('ActivityFormDialog — External dates (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
 
-  it('creates an activity carrying the entered levelling priority', async () => {
+  it('creates an activity carrying both external dates', async () => {
     renderDialog();
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText('Levelling priority (optional)'), {
-      target: { value: '5' },
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Procure valves' } });
+    fireEvent.change(screen.getByLabelText('External early start'), {
+      target: { value: '2026-02-01' },
+    });
+    fireEvent.change(screen.getByLabelText('External late finish'), {
+      target: { value: '2026-03-01' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
     expect(JSON.parse(init?.body as string)).toMatchObject({
-      name: 'Pour slab',
-      levelingPriority: 5,
+      name: 'Procure valves',
+      externalEarlyStart: '2026-02-01',
+      externalLateFinish: '2026-03-01',
     });
   });
 
-  it('omits priority on create when the field is left blank', async () => {
+  it('omits both external dates on create when the fields are left blank', async () => {
     renderDialog();
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Unprioritised' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'No external dates' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).not.toHaveProperty('levelingPriority');
+    const body = JSON.parse(init?.body as string);
+    expect(body).not.toHaveProperty('externalEarlyStart');
+    expect(body).not.toHaveProperty('externalLateFinish');
   });
 
-  it('seeds the priority from the row and round-trips it on save', async () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('Levelling priority (optional)')).toHaveValue(10);
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({ levelingPriority: 10, version: 4 });
-  });
-
-  it('clears the priority to null when the field is emptied on edit', async () => {
-    renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('Levelling priority (optional)'), {
-      target: { value: '' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({ levelingPriority: null, version: 4 });
-  });
-
-  it('hides the priority field for a milestone (never levelled)', () => {
+  it('rejects an inverted window client-side (N26) and does not submit', async () => {
     renderDialog();
-    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
-    expect(screen.queryByLabelText('Levelling priority (optional)')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Inverted' } });
+    fireEvent.change(screen.getByLabelText('External early start'), {
+      target: { value: '2026-03-01' },
+    });
+    fireEvent.change(screen.getByLabelText('External late finish'), {
+      target: { value: '2026-02-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    // The message renders both in the field error and the form-error summary at the top.
+    const errors = await screen.findAllByText(
+      'External late finish can’t be before the external early start.',
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('seeds both dates from the row and round-trips them on save', async () => {
+    renderDialog({ activity: ACTIVITY });
+    expect(screen.getByLabelText('External early start')).toHaveValue('2026-02-01');
+    expect(screen.getByLabelText('External late finish')).toHaveValue('2026-03-01');
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(JSON.parse(init?.body as string)).toMatchObject({
+      externalEarlyStart: '2026-02-01',
+      externalLateFinish: '2026-03-01',
+      version: 4,
+    });
+  });
+
+  it('clears an external date to null when the field is emptied on edit', async () => {
+    renderDialog({ activity: ACTIVITY });
+    fireEvent.change(screen.getByLabelText('External late finish'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(JSON.parse(init?.body as string)).toMatchObject({
+      externalEarlyStart: '2026-02-01',
+      externalLateFinish: null,
+      version: 4,
+    });
   });
 });

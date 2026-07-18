@@ -30,6 +30,7 @@ const PLAN: PlanSummary = {
   criticalFloatThreshold: 0,
   totalFloatMode: 'FINISH',
   makeOpenEndsCritical: false,
+  ignoreExternalRelationships: false,
   levelResources: false,
   levelWithinFloatOnly: false,
   eacMethod: 'CPI',

@@ -85,6 +85,10 @@ function createBody(input: ActivityFormValues) {
       : {}),
     ...(input.scheduleAsLateAsPossible ? { scheduleAsLateAsPossible: true } : {}),
     ...(input.expectedFinish ? { expectedFinish: input.expectedFinish } : {}),
+    // External / inter-project dates (ADR-0043): imported commitments from another project. Sent only
+    // when set (absent = none), so a create without the section on stays byte-identical.
+    ...(input.externalEarlyStart ? { externalEarlyStart: input.externalEarlyStart } : {}),
+    ...(input.externalLateFinish ? { externalLateFinish: input.externalLateFinish } : {}),
     // `''` = inherit the plan calendar → omit the field (the API treats absent as inherit).
     ...(input.calendarId ? { calendarId: input.calendarId } : {}),
     // `''` = top-level → omit (absent = no WBS parent). The picker offers only the plan's summaries.
@@ -130,6 +134,10 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
     secondaryConstraintDate: hasSecondary ? input.secondaryConstraintDate : null,
     scheduleAsLateAsPossible: input.scheduleAsLateAsPossible ?? false,
     expectedFinish: input.expectedFinish ? input.expectedFinish : null,
+    // External / inter-project dates (ADR-0043). The dialog always seeds these from the row (even with
+    // the section hidden), so an edit round-trips a stored value; a cleared field sends null.
+    externalEarlyStart: input.externalEarlyStart ? input.externalEarlyStart : null,
+    externalLateFinish: input.externalLateFinish ? input.externalLateFinish : null,
     // `''` (inherit) clears the activity's own calendar → null. The dialog always seeds this from
     // the row (even with the picker hidden), so an edit round-trips the stored value unchanged.
     calendarId: input.calendarId ? input.calendarId : null,

@@ -54,6 +54,8 @@ const ACTIVITY: ActivitySummary = {
   constraintViolated: false,
   loeNoSpan: false,
   resourceDriverMissing: false,
+  externalEarlyStart: null,
+  externalLateFinish: null,
   durationType: 'FIXED_UNITS',
   parentId: null,
   visualStart: null,

@@ -23,4 +23,5 @@ export { PlanExpectedFinishToggle } from './components/PlanExpectedFinishToggle'
 export { PlanScheduleSettings } from './components/PlanScheduleSettings';
 export { PlanLevellingSettings } from './components/PlanLevellingSettings';
 export { PlanEarnedValueSettings } from './components/PlanEarnedValueSettings';
+export { PlanExternalRelationshipsSettings } from './components/PlanExternalRelationshipsSettings';
 export { PLAN_STATUS_LABELS, EAC_METHOD_LABELS } from './schemas/plan-schemas';
