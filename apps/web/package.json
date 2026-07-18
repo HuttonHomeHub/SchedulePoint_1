@@ -1,6 +1,6 @@
 {
   "name": "@repo/web",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "private": true,
   "description": "Blank App web client — React + Vite + Tailwind CSS + shadcn/ui.",
   "license": "MIT",
