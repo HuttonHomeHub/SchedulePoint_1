@@ -79,7 +79,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   // Adding a milestone hides the duration field and shows an em-dash duration.
   await page.getByRole('button', { name: 'New activity' }).click();
   await dialog.getByLabel('Name').fill('Kickoff');
-  await dialog.getByLabel('Type').selectOption('START_MILESTONE');
+  await dialog.getByLabel('Type', { exact: true }).selectOption('START_MILESTONE');
   await expect(dialog.getByLabel('Duration (working days)', { exact: true })).toBeHidden();
   await dialog.getByRole('button', { name: 'Create activity' }).click();
 
