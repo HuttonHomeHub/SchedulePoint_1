@@ -1,5 +1,71 @@
 # @repo/types
 
+## 0.15.0
+
+### Minor Changes
+
+- [#96](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/96) [`7aa0132`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7aa0132662097a928224901833896b07df583f22) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Cross-plan dependency CRUD + the plan-level DAG invariant + authz (inter-project M2, ADR-0045 §3/§6,
+  F3). A new `cross-plan-dependencies` NestJS module — a dark sibling of `dependencies` — lets a Planner
+  draw a **live inter-project link** between two activities in **different plans of the same
+  organisation**. Nothing consumes the edges yet (the derivation seam + programme recalc are F4/F5), so
+  `main` stays byte-identical: the engine and schedule service are untouched.
+
+  - **API (`@repo/api`)** — org-scoped `POST/GET/DELETE …/cross-plan-dependencies` (create derives both
+    plan ids from the endpoint activities; never from input) plus per-plan (incoming) and per-activity
+    (both-direction) list routes. Create loads **both** endpoints active in-org (anti-IDOR uniform 404),
+    rejects a same-plan edge (**422 `CROSS_PLAN_SAME_PLAN`**, N31), and — under a new **org-scoped**
+    advisory lock (a distinct key namespace from the per-plan write lock) inside one transaction —
+    enforces the **plan-level DAG** (**409 `CROSS_PLAN_CYCLE_DETECTED`**, N30), asserts the pen on the
+    **successor** plan (ADR-0028), and rejects a duplicate `(pred, succ, type)` (**409
+    `DUPLICATE_CROSS_PLAN_DEPENDENCY`**, N33). Delete is pen-gated and soft. A new
+    **`dependency:link_cross_plan`** permission (Planner + Org Admin) gates linking; reads reuse
+    `dependency:read`.
+  - **Types (`@repo/types`)** — `CrossPlanDependencySummary` (carries both plan ids, no `isDriving`) and
+    `CROSS_PLAN_DEPENDENCY_CONFLICT_MESSAGES` (the one-voice N30/N31/N33 copy).
+
+- [#96](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/96) [`7aa0132`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7aa0132662097a928224901833896b07df583f22) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Cross-plan schedule staleness tracking (inter-project M2, ADR-0045 §5 / ADR-0035 §30.7, F6). Every CPM
+  recalculation now stamps the plan's `schedule_computed_at` freshness cursor, and the schedule summary
+  read tells a planner whether their plan is **stale** relative to its cross-plan upstreams — so they know
+  to run a programme recalculate. Pull-only (no background push job); the pure engine is untouched.
+
+  - **API (`@repo/api`)** — `recalculatePlan` stamps `schedule_computed_at = now()` inside the same
+    engine-owned write path as the per-activity results (a raw `UPDATE plans …`, so it does **not** bump
+    the plan's optimistic `version`/`updated_at`, ADR-0022). Both the single-plan recalc and the programme
+    solve (which loops that unit, upstream-first) stamp every plan they write. `GET …/schedule/summary`
+    computes staleness **on read**: guarded on the plan having ≥1 cross-plan edge, it resolves the plan's
+    upstream closure (reusing `resolveProgrammeOrder`) and compares each upstream's cursor against the
+    plan's in one batched query — flagging the plan stale iff any upstream is newer (or the plan was never
+    computed while an upstream has).
+  - **Types (`@repo/types`)** — two new **optional** fields on `PlanScheduleSummary`: `scheduleStale`
+    and `staleUpstreamPlanIds`. They are **absent** for a plan with no cross-plan edges, so an ordinary
+    single-plan summary response is byte-identical to before M2 (the parity gate holds). A programme
+    recalculate — which recomputes the closure upstream-first — clears the staleness.
+
+- [#96](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/96) [`7aa0132`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7aa0132662097a928224901833896b07df583f22) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Synchronous programme-recalc orchestration (inter-project M2, ADR-0045 §4 / ADR-0035 §30.8, F5). A new
+  endpoint recalculates a target plan's **upstream cross-plan closure** in dependency order so the target's
+  derived inter-project bounds (F4) read fresh upstream dates. The **pure CPM engine is untouched** and each
+  plan is recalculated with the **existing** single-plan recalc transaction — no recalc body is duplicated.
+
+  - **API (`@repo/api`)** — `POST …/plans/:planId/schedule/recalculate-programme` (`schedule:calculate`,
+    Planner + Org Admin). A pure `resolveProgrammeOrder(targetPlanId, edges)` resolves the target's upstream
+    closure in **topological order, upstream-first** (the target last), tie-broken by plan id so the order —
+    and thus the per-plan advisory-lock acquisition order — is **stable and deadlock-free**. The
+    orchestrator (`ScheduleService.recalculateProgramme`) loops the closure, invoking the shared single-plan
+    recalc unit per plan (each its own ADR-0022 transaction + advisory lock + pen), so every downstream plan
+    reads its upstreams' freshly-written dates. A residual plan-level cycle (unreachable given the F3 DAG
+    invariant) fails loud (`ProgrammeCycleError` → alarm 500, nothing written).
+  - **Fail-fast pen pre-check (default, ADR-0045 CQ-3)** — before any write, the pen is asserted on **every**
+    closure plan, **collecting all** blocked plan ids in one pass; if any is held by another editor the whole
+    solve is refused with a single **423 `PROGRAMME_PLANS_LOCKED`** carrying the `blockedPlanIds` list —
+    nothing is written. Inert unless `PLAN_EDIT_LOCK_ENFORCED` is on.
+  - **Result + roll-up** — the `200` response returns per-plan summaries (in recalculation order) plus a
+    programme roll-up (`planCount`, and the summed **N32** `crossPlanUpstreamMissingCount`).
+  - **Types (`@repo/types`)** — `ProgrammeScheduleResult` / `ProgrammeSchedulePlanResult` and the
+    `ProgrammeScheduleLockedDetails` (`PROGRAMME_PLANS_LOCKED`) 423 payload.
+
+  A programme with no cross-plan edges has a closure of just the target, so this is byte-identical to a
+  single-plan recalc; `main` stays releasable.
+
 ## 0.14.0
 
 ### Minor Changes
