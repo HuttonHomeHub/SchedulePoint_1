@@ -102,6 +102,7 @@ function crossPlanRepoMock() {
     countActiveForPlan: vi.fn().mockResolvedValue(0),
     loadIncomingWithPredecessorDates: vi.fn().mockResolvedValue([]),
     loadOutgoingWithSuccessorDates: vi.fn().mockResolvedValue([]),
+    loadOrgAdjacency: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -119,6 +120,7 @@ describe('ScheduleService.recalculate', () => {
     loadLevellingResources: ReturnType<typeof vi.fn>;
     writeResults: ReturnType<typeof vi.fn>;
     writeDrivingFlags: ReturnType<typeof vi.fn>;
+    stampScheduleComputedAt: ReturnType<typeof vi.fn>;
     summarise: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
@@ -141,6 +143,7 @@ describe('ScheduleService.recalculate', () => {
       loadLevellingResources: vi.fn().mockResolvedValue([]),
       writeResults: vi.fn().mockResolvedValue(undefined),
       writeDrivingFlags: vi.fn().mockResolvedValue(undefined),
+      stampScheduleComputedAt: vi.fn().mockResolvedValue(undefined),
       summarise: vi.fn().mockResolvedValue({
         activityCount: 0,
         criticalCount: 0,
@@ -214,6 +217,21 @@ describe('ScheduleService.recalculate', () => {
       activityCount: 0,
       criticalCount: 0,
     });
+  });
+
+  it('stamps schedule_computed_at via the engine-owned raw write, without a version-bumping plan update (F6, ADR-0045 §5)', async () => {
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    // The freshness cursor is stamped inside the same transaction as the engine writes, keyed by plan id.
+    expect(schedule.stampScheduleComputedAt).toHaveBeenCalledTimes(1);
+    const [stampedPlanId] = schedule.stampScheduleComputedAt.mock.calls[0] as [string, unknown];
+    expect(stampedPlanId).toBe(PLAN_ID);
+    // The stamp is part of the engine-owned write path (alongside writeResults) — the recalc NEVER calls
+    // an optimistic-locked plan update, so it cannot bump `version`/`updated_at` (ADR-0022). The plan repo
+    // is only read (findActiveByIdInOrg), never written.
+    expect(plans.findActiveByIdInOrg).toHaveBeenCalled();
+    expect(
+      (plans as unknown as { updateIfVersionMatches?: unknown }).updateIfVersionMatches,
+    ).toBeUndefined();
   });
 
   it('resolves an in-progress activity’s remaining from percent complete and floors it at the data date (M2)', async () => {
@@ -643,7 +661,11 @@ const READ: Permission[] = ['schedule:read'];
 describe('ScheduleService.summary', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
-  let schedule: { summarise: ReturnType<typeof vi.fn> };
+  let schedule: {
+    summarise: ReturnType<typeof vi.fn>;
+    loadScheduleComputedAt: ReturnType<typeof vi.fn>;
+  };
+  let crossPlan: ReturnType<typeof crossPlanRepoMock>;
   let service: ScheduleService;
 
   beforeEach(() => {
@@ -661,7 +683,9 @@ describe('ScheduleService.summary', () => {
         constraintWarningCount: 0,
         projectFinish: '2026-01-13',
       }),
+      loadScheduleComputedAt: vi.fn().mockResolvedValue(new Map()),
     };
+    crossPlan = crossPlanRepoMock();
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new ScheduleService(
       organizations as unknown as OrganizationsService,
@@ -669,7 +693,7 @@ describe('ScheduleService.summary', () => {
       schedule as unknown as ScheduleRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
-      crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
+      crossPlan as unknown as CrossPlanDependencyRepository,
       logger,
     );
   });
@@ -717,6 +741,53 @@ describe('ScheduleService.summary', () => {
       ForbiddenError,
     );
     expect(schedule.summarise).not.toHaveBeenCalled();
+  });
+
+  // ── F6: cross-plan staleness on the summary read (ADR-0045 §5 / ADR-0035 §30.7) ──────────────────
+
+  it('OMITS the staleness fields entirely for a plan with no cross-plan edges (byte-parity)', async () => {
+    // countActiveForPlan defaults to 0 → the guard short-circuits before any closure/freshness load.
+    const result = await service.summary(principalWith(READ), 'acme', PLAN_ID);
+    expect('scheduleStale' in result).toBe(false);
+    expect('staleUpstreamPlanIds' in result).toBe(false);
+    expect(crossPlan.loadOrgAdjacency).not.toHaveBeenCalled();
+    expect(schedule.loadScheduleComputedAt).not.toHaveBeenCalled();
+  });
+
+  it('sets scheduleStale + the driving upstream ids when an upstream was recalculated more recently', async () => {
+    crossPlan.countActiveForPlan.mockResolvedValue(1);
+    crossPlan.loadOrgAdjacency.mockResolvedValue([
+      { predecessorPlanId: 'up-1', successorPlanId: PLAN_ID },
+    ]);
+    schedule.loadScheduleComputedAt.mockResolvedValue(
+      new Map<string, Date | null>([
+        [PLAN_ID, new Date('2026-07-18T09:00:00Z')], // this plan computed earlier
+        ['up-1', new Date('2026-07-18T15:00:00Z')], // its upstream recomputed later → stale
+      ]),
+    );
+    const result = await service.summary(principalWith(READ), 'acme', PLAN_ID);
+    expect(result.scheduleStale).toBe(true);
+    expect(result.staleUpstreamPlanIds).toEqual(['up-1']);
+    // One batched freshness load over the plan + its upstream closure (no N+1).
+    expect(schedule.loadScheduleComputedAt).toHaveBeenCalledTimes(1);
+    expect(schedule.loadScheduleComputedAt).toHaveBeenCalledWith(ORG_ID, [PLAN_ID, 'up-1']);
+  });
+
+  it('clears scheduleStale once the plan is at least as fresh as its upstream (post programme recalc)', async () => {
+    crossPlan.countActiveForPlan.mockResolvedValue(1);
+    crossPlan.loadOrgAdjacency.mockResolvedValue([
+      { predecessorPlanId: 'up-1', successorPlanId: PLAN_ID },
+    ]);
+    // A programme recalc recomputes upstream-first, so this plan's cursor is now >= its upstream's.
+    schedule.loadScheduleComputedAt.mockResolvedValue(
+      new Map<string, Date | null>([
+        [PLAN_ID, new Date('2026-07-18T15:00:01Z')],
+        ['up-1', new Date('2026-07-18T15:00:00Z')],
+      ]),
+    );
+    const result = await service.summary(principalWith(READ), 'acme', PLAN_ID);
+    expect(result.scheduleStale).toBe(false);
+    expect(result.staleUpstreamPlanIds).toEqual([]);
   });
 });
 

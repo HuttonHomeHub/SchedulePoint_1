@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { PlanScheduleSummary } from '@repo/types';
 
 /**
@@ -90,6 +90,19 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
   })
   leveledProjectFinish!: string | null;
 
+  @ApiPropertyOptional({
+    description:
+      'Whether this plan is STALE relative to its cross-plan upstreams (ADR-0045 §5 / ADR-0035 §30.7): true iff an upstream plan was recalculated more recently than this plan, so its derived inter-project bounds are out of date and a programme recalculate is due. Computed on read (pull; no push job). Present ONLY for a plan with at least one cross-plan edge; absent otherwise.',
+  })
+  scheduleStale?: boolean;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'The upstream plan ids whose schedule is newer than this plan’s — the cross-plan links driving scheduleStale (empty when none is stale). Present ONLY for a plan with at least one cross-plan edge; absent otherwise.',
+  })
+  staleUpstreamPlanIds?: string[];
+
   static from(summary: PlanScheduleSummary): PlanScheduleSummaryDto {
     return {
       dataDate: summary.dataDate,
@@ -106,6 +119,12 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
       levelingWindowExceededCount: summary.levelingWindowExceededCount,
       selfOverAllocatedCount: summary.selfOverAllocatedCount,
       leveledProjectFinish: summary.leveledProjectFinish,
+      // Cross-plan staleness (F6, ADR-0045 §5) — thread through ONLY when set (a plan with cross-plan
+      // edges), so an ordinary plan's summary omits both fields and stays byte-identical to pre-M2.
+      ...(summary.scheduleStale !== undefined ? { scheduleStale: summary.scheduleStale } : {}),
+      ...(summary.staleUpstreamPlanIds !== undefined
+        ? { staleUpstreamPlanIds: summary.staleUpstreamPlanIds }
+        : {}),
     };
   }
 }

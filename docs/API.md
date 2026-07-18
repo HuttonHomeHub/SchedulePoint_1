@@ -243,6 +243,15 @@ the deferred background/queued-solve slice, not a bigger limit.
   `false` and is set with a targeted PATCH. The computed `GET …/schedule/summary`
   roll-up carries `externalDrivenCount` (how many activities an external bound
   drove) — engine-derived on a recalculation.
+- The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
+  (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
+  upstream cross-plan plan was recalculated more recently than this plan, so a
+  programme recalculate is due) and `staleUpstreamPlanIds` (the upstream plan ids
+  driving it). Both are **computed on read** (pull; there is no background push)
+  and are **present only for a plan with at least one cross-plan link** — a plan
+  with no cross-plan edges omits them entirely, so its summary is unchanged. A
+  **programme recalculate** (`POST …/schedule/recalculate-programme`), which
+  recomputes the upstream closure upstream-first, clears the staleness.
 - An activity's **Earned-Value cost inputs** (ADR-0042 / ADR-0044) are settable
   definition fields: `percentCompleteType` (`DURATION` default / `UNITS` /
   `PHYSICAL` — the measure that earns value), `physicalPercentComplete`, the

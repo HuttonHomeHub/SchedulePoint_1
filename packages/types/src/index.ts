@@ -724,6 +724,22 @@ export interface PlanScheduleSummary {
    * finish (the network layer is never recomputed, Q2).
    */
   leveledProjectFinish: string | null;
+  /**
+   * Cross-plan staleness (inter-project M2, ADR-0045 §5 / ADR-0035 §30.7). `true` iff any plan in this
+   * plan's UPSTREAM cross-plan closure was recalculated more recently than this plan — its persisted
+   * dates were derived against an older upstream schedule, so a **programme recalculate** is due.
+   * **Computed on read** (pull; there is no background push job in M2). **Present ONLY for a plan with at
+   * least one cross-plan edge; ABSENT (undefined) otherwise**, so an ordinary single-plan summary is
+   * byte-identical to before M2.
+   */
+  scheduleStale?: boolean;
+  /**
+   * The ids of the upstream plans whose `schedule_computed_at` is newer than this plan's — the cross-plan
+   * links driving {@link scheduleStale}. Empty when the plan has cross-plan edges but none is stale.
+   * **Present ONLY for a plan with at least one cross-plan edge; ABSENT (undefined) otherwise** (paired
+   * with {@link scheduleStale}).
+   */
+  staleUpstreamPlanIds?: string[];
 }
 
 /**

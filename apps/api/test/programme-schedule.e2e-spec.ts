@@ -80,6 +80,10 @@ describe.skipIf(!hasDatabase)('Programme recalculation API (e2e, pen enforced)',
   const server = () => app.getHttpServer();
   const programmeUrl = (planId: string) =>
     `/api/v1/organizations/acme/plans/${planId}/schedule/recalculate-programme`;
+  const recalcUrl = (planId: string) =>
+    `/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`;
+  const summaryUrl = (planId: string) =>
+    `/api/v1/organizations/acme/plans/${planId}/schedule/summary`;
   const lockUrl = (planId: string) => `/api/v1/organizations/acme/plans/${planId}/edit-lock`;
 
   async function signUp(email: string): Promise<Actor> {
@@ -172,5 +176,37 @@ describe.skipIf(!hasDatabase)('Programme recalculation API (e2e, pen enforced)',
       .get(`/api/v1/organizations/acme/plans/${downPlan}/schedule/summary`)
       .expect(200);
     expect(summary.body.data.projectFinish).toBeNull();
+  });
+
+  it('flags the downstream plan STALE after its upstream is re-recalculated, and a programme recalc clears it (F6, ADR-0045 §5)', async () => {
+    const { actor, upPlan, downPlan } = await programme();
+    // Hold both pens so the single-plan recalcs below are permitted under enforcement.
+    await actor.agent.post(lockUrl(upPlan)).send({}).expect(201);
+    await actor.agent.post(lockUrl(downPlan)).send({}).expect(201);
+
+    // Recalculate upstream-first, then downstream: the downstream is now FRESH relative to its upstream.
+    await actor.agent.post(recalcUrl(upPlan)).send({}).expect(200);
+    await actor.agent.post(recalcUrl(downPlan)).send({}).expect(200);
+
+    const fresh = await actor.agent.get(summaryUrl(downPlan)).expect(200);
+    expect(fresh.body.data.scheduleStale).toBe(false);
+    expect(fresh.body.data.staleUpstreamPlanIds).toEqual([]);
+
+    // Re-recalculate ONLY the upstream: the downstream's persisted dates now predate it → stale.
+    await actor.agent.post(recalcUrl(upPlan)).send({}).expect(200);
+    const stale = await actor.agent.get(summaryUrl(downPlan)).expect(200);
+    expect(stale.body.data.scheduleStale).toBe(true);
+    expect(stale.body.data.staleUpstreamPlanIds).toEqual([upPlan]);
+
+    // A programme recalc of the downstream recomputes the closure upstream-first → clears the staleness.
+    await actor.agent.post(programmeUrl(downPlan)).send({}).expect(200);
+    const cleared = await actor.agent.get(summaryUrl(downPlan)).expect(200);
+    expect(cleared.body.data.scheduleStale).toBe(false);
+    expect(cleared.body.data.staleUpstreamPlanIds).toEqual([]);
+
+    // The upstream plan itself has cross-plan edges but NO upstream, so it is present-but-never-stale.
+    const upSummary = await actor.agent.get(summaryUrl(upPlan)).expect(200);
+    expect(upSummary.body.data.scheduleStale).toBe(false);
+    expect(upSummary.body.data.staleUpstreamPlanIds).toEqual([]);
   });
 });

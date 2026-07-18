@@ -59,6 +59,7 @@ import {
   type ScheduleActivityRow,
   type ScheduleEdgeRow,
 } from './schedule.repository';
+import { computeStaleness } from './staleness';
 
 /** A calendar-day (or null) as a `YYYY-MM-DD` string, for the pure EV read (the baselines `day` helper). */
 function day(value: Date | null): string | null {
@@ -191,6 +192,12 @@ export class ScheduleService {
         }
         await this.schedule.writeResults(organization.id, planId, results, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
+        // Stamp this plan's schedule freshness cursor in the SAME engine-owned write path (F6, ADR-0045
+        // §5 / ADR-0035 §30.7): a raw UPDATE that touches ONLY `schedule_computed_at`, never
+        // version/updated_at (ADR-0022). Both the single-plan recalc and the programme solve (which loops
+        // this unit, upstream-first) stamp every plan they write, so a downstream can compare freshness on
+        // read and a programme recalc clears any staleness it introduced.
+        await this.schedule.stampScheduleComputedAt(planId, tx);
         return summary;
       });
     } catch (error) {
@@ -428,7 +435,7 @@ export class ScheduleService {
     if (!plan) throw new NotFoundError('Plan not found.');
 
     const aggregate = await this.schedule.summarise(organization.id, planId);
-    return {
+    const summary: PlanScheduleSummary = {
       dataDate: plan.plannedStart ? formatCalendarDate(plan.plannedStart) : null,
       projectFinish: aggregate.projectFinish,
       activityCount: aggregate.activityCount,
@@ -448,6 +455,34 @@ export class ScheduleService {
       selfOverAllocatedCount: aggregate.selfOverAllocatedCount,
       leveledProjectFinish: aggregate.leveledProjectFinish,
     };
+
+    // Cross-plan staleness (F6, ADR-0045 §5 / ADR-0035 §30.7) — computed on READ (pull; no push job in
+    // M2). GUARDED on "this plan has ≥1 cross-plan edge" (the same cheap count `buildEngineGraph` reads):
+    // a plan with none returns the summary above UNCHANGED, so its two staleness fields stay ABSENT and
+    // existing summary responses/goldens are byte-identical (the parity path). When an edge exists,
+    // resolve the plan's UPSTREAM closure (its transitive cross-plan predecessors) and compare each
+    // upstream's `schedule_computed_at` against this plan's in ONE batched query (no N+1, bounded by the
+    // small plan-level graph): stale iff any upstream is newer (or this plan was never computed while an
+    // upstream has). A programme recalc — which recomputes upstream-first — clears it.
+    const crossPlanEdgeCount = await this.crossPlan.countActiveForPlan(organization.id, planId);
+    if (crossPlanEdgeCount > 0) {
+      const edges = await this.crossPlan.loadOrgAdjacency(organization.id);
+      // The upstream closure, topologically ordered with the target LAST; strip the target to leave its
+      // transitive upstreams (empty when the plan only has outgoing/downstream cross-plan edges).
+      const upstreamPlanIds = resolveProgrammeOrder(planId, edges).filter((id) => id !== planId);
+      const freshnessById = await this.schedule.loadScheduleComputedAt(organization.id, [
+        planId,
+        ...upstreamPlanIds,
+      ]);
+      const { scheduleStale, staleUpstreamPlanIds } = computeStaleness(
+        freshnessById.get(planId) ?? null,
+        upstreamPlanIds.map((id) => ({ planId: id, computedAt: freshnessById.get(id) ?? null })),
+      );
+      summary.scheduleStale = scheduleStale;
+      summary.staleUpstreamPlanIds = staleUpstreamPlanIds;
+    }
+
+    return summary;
   }
 
   /**
