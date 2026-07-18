@@ -171,6 +171,14 @@ jobs:
       - name: Web end-to-end tests (canvas authoring flag on)
         run: pnpm --filter @repo/web test:e2e:authoring
 
+      # Flag-ON live cross-plan / programme scheduling journey (playwright.programme.config.ts) serving
+      # the app with VITE_PROGRAMME_SCHEDULING on (plus VITE_INTER_PROJECT_DATES, on the legacy stacked
+      # plan-detail page with the pen off), so drawing a live cross-plan link and running a programme
+      # recalculate — the result panel, the driven "External" badge, and the staleness cycle — is
+      # exercised end to end (ADR-0045 F8). Runs last, after the prior runs tear down their servers.
+      - name: Web end-to-end tests (programme scheduling flag on)
+        run: pnpm --filter @repo/web test:e2e:programme
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -182,6 +190,7 @@ jobs:
             apps/web/playwright-report-workspace/
             apps/web/playwright-report-toolbar/
             apps/web/playwright-report-authoring/
+            apps/web/playwright-report-programme/
           if-no-files-found: ignore
           retention-days: 7
 

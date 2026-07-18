@@ -6,6 +6,14 @@
  */
 export { ScheduleSummaryStrip } from './components/ScheduleSummaryStrip';
 export { RecalculateButton } from './components/RecalculateButton';
+export { ProgrammeScheduleSection } from './components/ProgrammeScheduleSection';
+export {
+  useRecalculateProgramme,
+  programmeLockedDetails,
+  isProgrammeTooLarge,
+  programmeErrorMessage,
+  PROGRAMME_RECALC_FAILED_MESSAGE,
+} from './api/use-programme-schedule';
 export {
   useScheduleSummary,
   useRecalculate,

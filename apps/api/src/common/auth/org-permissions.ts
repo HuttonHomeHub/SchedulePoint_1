@@ -57,6 +57,12 @@ export type OrgPermission =
   | 'dependency:create'
   | 'dependency:update'
   | 'dependency:delete'
+  // A LIVE cross-plan (inter-project) logic edge (M2, ADR-0045 §6). Linking two activities in
+  // DIFFERENT plans of the same org is an explicit, independently-revocable capability granted to
+  // Planner + Org Admin (the same "write" roles as `dependency:create`), so cross-plan linking is
+  // auditable on its own. Reading/listing cross-plan links reuses `dependency:read` (every member);
+  // deleting reuses the pen on the affected (successor) plan — no distinct delete code is needed.
+  | 'dependency:link_cross_plan'
   // The CPM schedule (M6). Reading the computed schedule/summary is granted to
   // every member (`schedule:read`); triggering a recalculation (`schedule:calculate`)
   // is a Planner + Org Admin action — it rewrites the engine-owned columns of the
@@ -145,6 +151,7 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'dependency:create',
   'dependency:update',
   'dependency:delete',
+  'dependency:link_cross_plan',
   'schedule:calculate',
   'calendar:create',
   'calendar:update',

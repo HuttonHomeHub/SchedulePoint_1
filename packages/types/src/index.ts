@@ -573,6 +573,19 @@ export const DEPENDENCY_CONFLICT_MESSAGES = {
 } as const;
 
 /**
+ * Canonical cross-plan-dependency conflict messages (inter-project M2, ADR-0045 §6, N31/N30/N33),
+ * shared so the same rejection reads identically wherever it surfaces — the API throws them, and the
+ * web cross-plan link editor shows them locally before the write. One voice (the sibling of
+ * {@link DEPENDENCY_CONFLICT_MESSAGES} for the cross-plan edge).
+ */
+export const CROSS_PLAN_DEPENDENCY_CONFLICT_MESSAGES = {
+  SAME_PLAN:
+    'A cross-plan link must join activities in two different plans — use a dependency for same-plan logic.',
+  CYCLE: 'This cross-plan link would create a cycle between plans.',
+  DUPLICATE: 'A cross-plan link of this type already exists between these activities.',
+} as const;
+
+/**
  * One entry in a batch lane-position write (TSLD M4): move activity `id` to `laneIndex`,
  * carrying the `version` it was read at for optimistic locking. The batch is all-or-nothing.
  */
@@ -616,6 +629,31 @@ export interface DependencySummary {
    * on every recalculate; false until the plan is first calculated (or if the edge has slack).
    */
   isDriving: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A cross-plan dependency — a LIVE inter-project logic edge whose predecessor and successor
+ * activities live in DIFFERENT plans of the SAME organisation (inter-project M2, ADR-0045 §1).
+ * It mirrors {@link DependencySummary} but carries BOTH plan ids (denormalised) instead of a
+ * single `planId`, and deliberately OMITS `isDriving`: the CPM engine never consumes cross-plan
+ * edges (they are DERIVED above it — parity by construction), so there is no per-edge driving flag.
+ * `lagDays` is a signed count of working days (a lead is negative).
+ */
+export interface CrossPlanDependencySummary {
+  id: string;
+  /** The plan the predecessor activity belongs to (the upstream plan). */
+  predecessorPlanId: string;
+  /** The plan the successor activity belongs to (the downstream plan — the edge's home, ADR-0045 CQ-2). */
+  successorPlanId: string;
+  type: DependencyType;
+  lagDays: number;
+  /** The calendar the lag is measured on (ADR-0036 §6) — identical semantics to a dependency's. */
+  lagCalendar: LagCalendarSource;
+  predecessor: DependencyEndpoint;
+  successor: DependencyEndpoint;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -686,6 +724,63 @@ export interface PlanScheduleSummary {
    * finish (the network layer is never recomputed, Q2).
    */
   leveledProjectFinish: string | null;
+  /**
+   * Cross-plan staleness (inter-project M2, ADR-0045 §5 / ADR-0035 §30.7). `true` iff any plan in this
+   * plan's UPSTREAM cross-plan closure was recalculated more recently than this plan — its persisted
+   * dates were derived against an older upstream schedule, so a **programme recalculate** is due.
+   * **Computed on read** (pull; there is no background push job in M2). **Present ONLY for a plan with at
+   * least one cross-plan edge; ABSENT (undefined) otherwise**, so an ordinary single-plan summary is
+   * byte-identical to before M2.
+   */
+  scheduleStale?: boolean;
+  /**
+   * The ids of the upstream plans whose `schedule_computed_at` is newer than this plan's — the cross-plan
+   * links driving {@link scheduleStale}. Empty when the plan has cross-plan edges but none is stale.
+   * **Present ONLY for a plan with at least one cross-plan edge; ABSENT (undefined) otherwise** (paired
+   * with {@link scheduleStale}).
+   */
+  staleUpstreamPlanIds?: string[];
+}
+
+/**
+ * One plan's slot in a **programme recalculation** result (inter-project M2, ADR-0045 §4) — the plan id
+ * paired with the single-plan {@link PlanScheduleSummary} the existing ADR-0022 recalc produced for it.
+ * The `plans` array is ordered **upstream-first** (the target plan last), the same order the plans were
+ * recalculated in.
+ */
+export interface ProgrammeSchedulePlanResult {
+  planId: string;
+  summary: PlanScheduleSummary;
+}
+
+/**
+ * The result of a **programme recalculation** (`POST …/schedule/recalculate-programme`, ADR-0045 §4) — a
+ * synchronous solve that recalculated the target plan's upstream cross-plan **closure** in topological
+ * order (upstream-first) so the target's derived inter-project bounds (ADR-0045 §2) are fresh.
+ *
+ * `plans` carries one {@link ProgrammeSchedulePlanResult} per plan in the closure, in recalculation order
+ * (the target is last). `programme` rolls the run up: `planCount` is the closure size (1 for a plan with no
+ * cross-plan edges — a plain single-plan recalc); `crossPlanUpstreamMissingCount` sums the N32 warnings
+ * across the closure (edges whose upstream had never been calculated, so they contributed no derived
+ * bound — never an error, ADR-0035 §30.5 / N32).
+ */
+export interface ProgrammeScheduleResult {
+  plans: ProgrammeSchedulePlanResult[];
+  programme: {
+    planCount: number;
+    crossPlanUpstreamMissingCount: number;
+  };
+}
+
+/**
+ * The `details` payload on the **423 Locked** a programme recalculation raises when one or more plans in
+ * the target's closure are held by another editor (ADR-0045 §4, Critical Question 3 — fail-fast, write
+ * nothing). `reason` is stable; `blockedPlanIds` lists every closure plan whose pen is held (collected in
+ * a single pre-flight pass, not one at a time), so the UI can offer to request/override the pen on each.
+ */
+export interface ProgrammeScheduleLockedDetails {
+  reason: 'PROGRAMME_PLANS_LOCKED';
+  blockedPlanIds: string[];
 }
 
 /**

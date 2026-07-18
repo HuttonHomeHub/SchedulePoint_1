@@ -683,6 +683,42 @@ export class ScheduleRepository {
   }
 
   /**
+   * Stamp the plan's schedule **freshness cursor** (F6 staleness, ADR-0045 §5 / ADR-0035 §30.7) — a raw,
+   * parameterised `UPDATE plans SET schedule_computed_at = now()`. Called inside `recalculatePlan`'s
+   * transaction right after {@link writeResults}/{@link writeDrivingFlags}, so it rides the SAME
+   * engine-owned write path for BOTH the single-plan recalc and the programme solve (which loops that
+   * unit). Like the two writes above it deliberately touches ONLY the cursor column — NEVER `version`,
+   * `updated_at`, or `updated_by` — so a recalculation cannot bump the optimistic lock or masquerade as a
+   * user edit (ADR-0022). A raw UPDATE, not a Prisma `update` (which would touch `updated_at`/`version`).
+   */
+  async stampScheduleComputedAt(planId: string, db: Prisma.TransactionClient): Promise<void> {
+    await db.$executeRaw`
+      UPDATE plans
+      SET schedule_computed_at = now()
+      WHERE id = ${planId}::uuid
+    `;
+  }
+
+  /**
+   * The `schedule_computed_at` freshness cursor for a set of plans (the F6 staleness read, ADR-0045 §5) —
+   * ONE batched query (never N+1) over the plan plus its upstream closure. Org-scoped (anti-IDOR) and
+   * soft-delete filtered. Returns a `planId → cursor` map (null cursor = never calculated); a plan absent
+   * from the result (soft-deleted / other org) is simply not in the map, so the caller reads it as null.
+   */
+  async loadScheduleComputedAt(
+    organizationId: string,
+    planIds: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, Date | null>> {
+    if (planIds.length === 0) return new Map();
+    const rows = await db.plan.findMany({
+      where: { organizationId, id: { in: [...planIds] }, deletedAt: null },
+      select: { id: true, scheduleComputedAt: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.scheduleComputedAt]));
+  }
+
+  /**
    * Persist the engine's per-edge driving flags in one `unnest` UPDATE, keyed by
    * dependency id and re-asserting the plan/org/active scope. Like {@link writeResults}
    * this sets ONLY the engine-owned `is_driving` column — never `version`/`updated_at`/

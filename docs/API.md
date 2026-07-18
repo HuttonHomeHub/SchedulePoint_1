@@ -131,16 +131,77 @@ override needs `plan:override_lock` (Org Admin).
 
 **Gated writes.** The structural write endpoints — activity
 create/update/delete/restore, `…/activities/positions`, dependency
-create/update/delete, and `…/schedule/recalculate` — additionally require holding
-the pen and return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from the
-409 version clash). The Contributor progress path (`…/activities/:id/progress`),
-all reads, and plan-metadata `PATCH …/plans/:id` are **not** pen-gated.
+create/update/delete, cross-plan dependency create/delete (on the **successor**
+plan), and `…/schedule/recalculate` — additionally require holding the pen and
+return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from the 409 version
+clash). The Contributor progress path (`…/activities/:id/progress`), all reads,
+and plan-metadata `PATCH …/plans/:id` are **not** pen-gated.
 
 The write-gate is **behind a staged-rollout flag** `PLAN_EDIT_LOCK_ENFORCED`
 (default off): the lock mechanism ships inert so it never breaks the existing
 (flag-on) activities-table / dependency-editor / recalculate flows, which don't
 acquire a lock yet. Ops enable it only once the front end acquires the pen across
 every editing entry point (edit-lock M2/M3).
+
+### Cross-plan dependencies (ADR-0045)
+
+A **live cross-plan dependency** is an inter-project logic edge whose predecessor
+and successor activities live in **different plans of the same organisation**
+(inter-project M2). It is a sibling of the intra-plan dependency, kept on its own
+resource because it carries **two** plan ids and is derived above the pure engine
+(never fed to it). Create is **org-scoped** (not nested under a plan): both plan
+ids are derived server-side from the two endpoint activities, so a caller only
+supplies the endpoint ids. Listing reuses `dependency:read`; create/delete need
+the dedicated **`dependency:link_cross_plan`** (Planner + Org Admin) and hold the
+pen on the **successor** plan (the edge's home).
+
+| Method | Path                                               | Notes                                                                                      |
+| ------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| POST   | `…/cross-plan-dependencies`                        | Link two activities across plans · 422 `CROSS_PLAN_SAME_PLAN` · 409 cycle/duplicate · 423. |
+| GET    | `…/cross-plan-dependencies/:id`                    | Fetch one (org-scoped, anti-IDOR 404).                                                     |
+| DELETE | `…/cross-plan-dependencies/:id`                    | Soft-delete · 204, pen on the successor plan.                                              |
+| GET    | `…/plans/:planId/cross-plan-dependencies`          | The plan's **incoming** cross-plan links (cursor-paginated).                               |
+| GET    | `…/activities/:activityId/cross-plan-dependencies` | An activity's links, **both directions** (cursor-paginated).                               |
+
+Anti-IDOR is uniform: a foreign, other-org, or deleted endpoint id is an
+indistinguishable **404**. The programme graph is a **plan-level DAG** — a create
+that would close a cycle between two plans is rejected **409
+`CROSS_PLAN_CYCLE_DETECTED`** (N30), a same-plan edge is **422
+`CROSS_PLAN_SAME_PLAN`** (N31), and a duplicate `(predecessor, successor, type)`
+is **409 `DUPLICATE_CROSS_PLAN_DEPENDENCY`** (N33). Concurrent mirror creates are
+serialised by an **org-scoped advisory lock** so exactly one wins.
+
+### Programme recalculation (ADR-0045 §4)
+
+`POST …/plans/:planId/schedule/recalculate-programme` (`schedule:calculate` —
+Planner + Org Admin) recalculates the target plan's **upstream cross-plan
+closure** — the plan plus every plan it transitively depends on over cross-plan
+edges — in **topological order, upstream-first** (the target last), so the
+target's derived inter-project bounds (the live cross-plan derivation, ADR-0045
+§2) read fresh upstream dates. Each plan is recalculated with the **existing
+single-plan recalc transaction** (its own advisory lock + pen), acquired in the
+deterministic topological order (a stable lock order ⇒ deadlock-free). The **pure
+engine is untouched**; a plan with **no** cross-plan edges recalculates just
+itself (equivalent to `…/schedule/recalculate`).
+
+Because the solve **writes** every plan in the closure, the default policy
+(ADR-0045 Critical Question 3) is **fail-fast**: a pre-flight pass asserts the pen
+on **every** closure plan _before any write_, collecting **all** blocked plans and
+throwing a single **423 `PROGRAMME_PLANS_LOCKED`** (with the `blockedPlanIds`
+list) if any is held by another editor — **nothing is written**. The `200`
+response carries the per-plan summaries (in recalculation order) plus a programme
+roll-up (`planCount`, and `crossPlanUpstreamMissingCount` — the summed **N32**
+warnings for cross-plan edges whose upstream had never been calculated, which
+contribute no derived bound and are never an error).
+
+The solve is **synchronous and bounded**: the upstream closure is capped at **50
+plans**; a larger programme rejects with **422 `PROGRAMME_TOO_LARGE`** (recalculate
+a smaller sub-programme) rather than open an unbounded request. Lifting the cap is
+the deferred background/queued-solve slice, not a bigger limit.
+
+| Method | Path                                             | Notes                                                                                                                              |
+| ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/plans/:planId/schedule/recalculate-programme` | Recalculate the plan's upstream cross-plan closure in dependency order · 423 `PROGRAMME_PLANS_LOCKED` · 422 `PROGRAMME_TOO_LARGE`. |
 
 ## Pagination, filtering, sorting
 
@@ -182,6 +243,15 @@ every editing entry point (edit-lock M2/M3).
   `false` and is set with a targeted PATCH. The computed `GET …/schedule/summary`
   roll-up carries `externalDrivenCount` (how many activities an external bound
   drove) — engine-derived on a recalculation.
+- The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
+  (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
+  upstream cross-plan plan was recalculated more recently than this plan, so a
+  programme recalculate is due) and `staleUpstreamPlanIds` (the upstream plan ids
+  driving it). Both are **computed on read** (pull; there is no background push)
+  and are **present only for a plan with at least one cross-plan link** — a plan
+  with no cross-plan edges omits them entirely, so its summary is unchanged. A
+  **programme recalculate** (`POST …/schedule/recalculate-programme`), which
+  recomputes the upstream closure upstream-first, clears the staleness.
 - An activity's **Earned-Value cost inputs** (ADR-0042 / ADR-0044) are settable
   definition fields: `percentCompleteType` (`DURATION` default / `UNITS` /
   `PHYSICAL` — the measure that earns value), `physicalPercentComplete`, the

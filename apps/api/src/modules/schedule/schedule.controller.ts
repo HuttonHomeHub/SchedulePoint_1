@@ -24,6 +24,7 @@ import {
   ResourceHistogramSeriesDto,
 } from './dto/plan-resource-histogram.dto';
 import { PlanScheduleSummaryDto } from './dto/plan-schedule-summary.dto';
+import { ProgrammeScheduleResultDto } from './dto/programme-schedule-result.dto';
 import { ResourceHistogramQueryDto } from './dto/resource-histogram-query.dto';
 import { ScheduleService } from './schedule.service';
 
@@ -55,6 +56,37 @@ export class ScheduleController {
     @Param('planId', ParseUuidPipe) planId: string,
   ): Promise<PlanScheduleSummaryDto> {
     return PlanScheduleSummaryDto.from(await this.service.recalculate(principal, orgSlug, planId));
+  }
+
+  @Post('recalculate-programme')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Recalculate a plan’s upstream cross-plan closure in dependency order (Planner or Org Admin, ADR-0045 §4).',
+    description:
+      'Resolves the target plan’s UPSTREAM cross-plan closure and recalculates each plan upstream-first ' +
+      'using the existing single-plan recalc transaction (its own advisory lock + pen, in a deterministic, ' +
+      'deadlock-free topological order), so the target’s derived inter-project bounds are fresh. The pure ' +
+      'engine is untouched. A plan with no cross-plan edges recalculates just itself (a single-plan recalc). ' +
+      'Default fail-fast policy (CQ-3): if any plan in the closure is edited by someone else, a pre-flight ' +
+      'check throws 423 with the blocked-plan list and writes nothing.',
+  })
+  @ApiOkResponse({ type: ProgrammeScheduleResultDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiUnprocessableEntityResponse({
+    description: 'A plan in the closure has no start date (PLAN_START_REQUIRED).',
+  })
+  @ApiLockedResponse(
+    'One or more plans in the closure are held by another editor (PROGRAMME_PLANS_LOCKED) — nothing written.',
+  )
+  async recalculateProgramme(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<ProgrammeScheduleResultDto> {
+    return ProgrammeScheduleResultDto.from(
+      await this.service.recalculateProgramme(principal, orgSlug, planId),
+    );
   }
 
   @Get('summary')

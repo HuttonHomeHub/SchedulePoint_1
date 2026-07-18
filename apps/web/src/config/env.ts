@@ -381,3 +381,34 @@ export const RESOURCE_CURVES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOUR
  * an environment.
  */
 export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_INTER_PROJECT_DATES);
+
+/**
+ * Live cross-plan / programme scheduling web surface (inter-project **Milestone 2**, F8; ADR-0045 /
+ * ADR-0035 §30.5–§30.8). **OFF by default** — an in-progress, first user-visible slice of the live
+ * cross-plan solve, gated until its quality gates (component / ux / a11y / e2e) are green. When on,
+ * the web UI exposes the programme surface, layered on the static M1 inter-project surface
+ * ({@link INTER_PROJECT_DATES_ENABLED}):
+ *
+ * - **Cross-plan links** — a section in the activity panel (the SUCCESSOR activity's home, ADR-0045
+ *   CQ-2) to draw a **live** inter-project link from an upstream activity in ANOTHER plan of the org:
+ *   an org-scoped endpoint picker (client → project → plan → activity), the FS/SS/FF/SF type + signed
+ *   lag + lag-calendar inputs (mirroring the intra-plan dependency editor), and a link list with
+ *   delete. Same-plan (N31) is caught client-side; cycle (N30) / duplicate (N33) surface the shared
+ *   `CROSS_PLAN_DEPENDENCY_CONFLICT_MESSAGES` copy from the server.
+ * - **Recalculate programme** — an action beside the existing Recalculate that runs the synchronous
+ *   `…/schedule/recalculate-programme` solve (the plan's upstream cross-plan closure, upstream-first),
+ *   with a result panel (per-plan summaries + the summed missing-upstream N32 warning), the **423
+ *   `PROGRAMME_PLANS_LOCKED`** blocked-plans path (with the pen request/override hint), and the **422
+ *   `PROGRAMME_TOO_LARGE`** too-large path.
+ * - **Stale banner** — shown (`role="status"`) when the plan summary carries `scheduleStale` (an
+ *   upstream plan was recalculated more recently), prompting a programme recalculate.
+ *
+ * The whole surface is unobtrusive: it appears only for a plan that actually has cross-plan edges (the
+ * summary's `scheduleStale` field is present only then). Everything behind it — the cross-plan link
+ * CRUD, the derivation seam, the programme-recalc orchestration and the staleness read — is already
+ * live on the API (F2–F7); the flag only governs whether the web UI exposes it. Set
+ * `VITE_PROGRAMME_SCHEDULING=true` to enable it in an environment.
+ */
+export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_PROGRAMME_SCHEDULING,
+);

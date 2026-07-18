@@ -1,5 +1,7 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { PROGRAMME_SCHEDULING_ENABLED } from '@/config/env';
+import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { DependencyEditor } from '@/features/dependencies';
 import { PlanFormDialog } from '@/features/plans';
 
@@ -27,6 +29,19 @@ export function PlanDialogs({
         open={model.logicActivity !== undefined}
         onClose={() => model.setLogicActivity(undefined)}
         {...(model.logicActivity ? { activity: model.logicActivity } : {})}
+        {...(PROGRAMME_SCHEDULING_ENABLED && model.logicActivity
+          ? {
+              crossPlanSlot: (
+                <CrossPlanLinksSection
+                  orgSlug={model.orgSlug}
+                  planId={model.planId}
+                  activity={model.logicActivity}
+                  canManageLogic={model.canManageLogic}
+                  enabled={model.logicActivity !== undefined}
+                />
+              ),
+            }
+          : {})}
       />
 
       {model.canWrite ? (

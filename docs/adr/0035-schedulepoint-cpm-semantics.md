@@ -13,27 +13,32 @@
 Clauses accept per owning milestone as that milestone lands (they are not all-or-nothing); the ADR
 stays **Proposed** overall until every clause is built. Current state:
 
-| Clauses                                 | Owning milestone | Status       |
-| --------------------------------------- | ---------------- | ------------ |
-| §1–§6 (progress & the data date)        | M2               | **Accepted** |
-| §7–§11 (constraints), §12 (N15)         | M4               | **Accepted** |
-| §13–§14 (duplicate/cycle report)        | M4 (F8)          | **Accepted** |
-| §22 (zero-duration task)                | M4               | **Accepted** |
-| §17–§20 (float & critical)              | M6               | **Accepted** |
-| §21 (level of effort)                   | M5-epic          | **Accepted** |
-| §24 (WBS-summary rollup)                | M5-epic          | **Accepted** |
-| §23 (resource-dependent)                | M7               | **Accepted** |
-| §26–§27 (duration types), N19/N20       | M7 (rung 4)      | **Accepted** |
-| §28 (resource levelling), N21           | M7 (levelling)   | **Accepted** |
-| §29 (%-complete-type & EV), N22–N24     | M7 (EV3)         | **Accepted** |
-| §30 (external / inter-project), N25–N26 | IPD (M1)         | **Accepted** |
-| §31 (resource curves), N29              | M7 (rung 5, F3)  | **Accepted** |
-| §32 (cost accrual)                      | M7 (rung 5, F1)  | **Accepted** |
-| §33 (weighted steps), N27/N28           | M7 (rung 5, F2)  | **Accepted** |
-| §15–§16, §25 (arithmetic/boundary)      | M0/M1            | Proposed¹    |
+| Clauses                                 | Owning milestone  | Status            |
+| --------------------------------------- | ----------------- | ----------------- |
+| §1–§6 (progress & the data date)        | M2                | **Accepted**      |
+| §7–§11 (constraints), §12 (N15)         | M4                | **Accepted**      |
+| §13–§14 (duplicate/cycle report)        | M4 (F8)           | **Accepted**      |
+| §22 (zero-duration task)                | M4                | **Accepted**      |
+| §17–§20 (float & critical)              | M6                | **Accepted**      |
+| §21 (level of effort)                   | M5-epic           | **Accepted**      |
+| §24 (WBS-summary rollup)                | M5-epic           | **Accepted**      |
+| §23 (resource-dependent)                | M7                | **Accepted**      |
+| §26–§27 (duration types), N19/N20       | M7 (rung 4)       | **Accepted**      |
+| §28 (resource levelling), N21           | M7 (levelling)    | **Accepted**      |
+| §29 (%-complete-type & EV), N22–N24     | M7 (EV3)          | **Accepted**      |
+| §30 (external / inter-project), N25–N26 | IPD (M1)          | **Accepted**      |
+| §30.5–§30.8 (live cross-plan), N30–N33  | IPD M2 (ADR-0045) | Accepts w/ F1–F8² |
+| §31 (resource curves), N29              | M7 (rung 5, F3)   | **Accepted**      |
+| §32 (cost accrual)                      | M7 (rung 5, F1)   | **Accepted**      |
+| §33 (weighted steps), N27/N28           | M7 (rung 5, F2)   | **Accepted**      |
+| §15–§16, §25 (arithmetic/boundary)      | M0/M1             | Proposed¹         |
 
 ¹ Behaviour already exists in the engine/boundary from earlier milestones; formal clause acceptance
 is folded into the next conformance pass that asserts them as goldens (out of M4 scope).
+
+² §30.5 Accepts with F4 (derivation seam), §30.6 with F3 (plan-level DAG), §30.7 with F6 (staleness),
+§30.8 with F5 (programme recalc); N30/N31/N33 with F3, N32 with F4/F5. Full acceptance lands with the
+F7 conformance slice (cross-plan differential + goldens). See ADR-0045.
 
 ## Context
 
@@ -363,10 +368,38 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
       (mirroring N06's actual-finish-before-start) — an inverted window is invalid input, caught before the
       engine ever sees it.
 
-    **Deferred (ADR-0043 Milestone 2, not decided here):** a live cross-plan solve whose external dates are
-    auto-derived from the linked plan's computed schedule (cross-plan edges, a cross-plan DAG/cycle
-    invariant, cross-plan authorisation, staleness/propagation, programme recalc). M1 covers imported
-    dates + the toggle only.
+    **Live cross-plan solve (ADR-0045, inter-project Milestone 2).** The §30.1–§30.4 clamps are unchanged;
+    M2 adds a live cross-plan edge that _derives_ the M1 external instants above the pure engine, so the
+    parity gate holds by construction (no cross-plan edge ⇒ identical engine input):
+
+    - **§30.5 Live derivation composes with the manual column.** A live cross-plan edge derives the
+      successor's external early start (predecessor's **persisted computed** early dates + the edge's typed
+      FS/SS/FF/SF lag, §30.1-shaped) and, symmetrically, an outgoing edge derives an external late finish
+      (§30.2-shaped). The effective bound fed to the engine is the **later-of** (forward) / **tighter-of**
+      (backward) the derived value and the M1 hand-entered column. Derived values are transient (recomputed
+      each recalc) and never overwrite the M1 columns. Absent a cross-plan edge, the M1 column stands.
+    - **§30.6 Plan-level DAG.** The directed graph of plans (nodes) and cross-plan edges is **acyclic**; with
+      each plan's activity DAG (ADR-0021) the programme graph is acyclic and the solve is a single
+      topological pass (no fixpoint). One direction only between any two plans (bidirectional interfaces are
+      out of scope for M2).
+    - **§30.7 Staleness is pull-computed.** A single-plan recalc leaves downstream plans **stale**; staleness
+      is a read-time comparison of `schedule_computed_at` across the upstream closure (`scheduleStale` + the
+      stale upstream plan ids on the summary). A programme recalc clears it upstream-first. No
+      auto-propagation in M2.
+    - **§30.8 Programme order & determinism.** A programme recalc resolves the target plan's upstream closure,
+      sorts it topologically, and recalculates each plan **upstream-first** using the unchanged ADR-0022
+      single-plan transaction; per-plan advisory locks are acquired in the deterministic topological order
+      (deadlock-free). Default: the caller must hold the pen (ADR-0028) on every plan the solve writes, else
+      fail-fast 423 with the blocked-plan list (no partial write).
+    - **N30 — cross-plan edge that would close a plan-level cycle: reject** 409 `CROSS_PLAN_CYCLE_DETECTED`
+      (plan-grain analogue of ADR-0021 `CYCLE_DETECTED`).
+    - **N31 — cross-plan edge with both endpoints in the same plan: reject** 422 `CROSS_PLAN_SAME_PLAN` (use
+      an intra-plan dependency).
+    - **N32 — programme recalc where an upstream plan has never been calculated: warn-and-proceed.** That
+      edge contributes **no** derived bound (treated as absent) and is counted in `crossPlanUpstreamMissingCount`;
+      never an error.
+    - **N33 — duplicate cross-plan edge (same predecessor/successor/type among active rows): reject** 409
+      `DUPLICATE_CROSS_PLAN_DEPENDENCY` (partial-unique index, mirrors `DUPLICATE_DEPENDENCY`).
 
 ### Resource loading curves (→ M7 rung 5, ADR-0044 §3 / F3)
 

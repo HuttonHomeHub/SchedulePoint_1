@@ -20,9 +20,14 @@ import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
-import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import {
+  CANVAS_AUTHORING_ENABLED,
+  PROGRAMME_SCHEDULING_ENABLED,
+  SCHEDULING_MODES_ENABLED,
+} from '@/config/env';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
+import { ProgrammeScheduleSection } from '@/features/schedule';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
@@ -276,6 +281,18 @@ export function ToolbarPlanWorkspace({
           />
         </div>
       </div>
+
+      {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
+          has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}
+      {PROGRAMME_SCHEDULING_ENABLED ? (
+        <div className="px-4 pt-2">
+          <ProgrammeScheduleSection
+            orgSlug={model.orgSlug}
+            planId={model.planId}
+            canRecalc={model.canRecalc}
+          />
+        </div>
+      ) : null}
 
       {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
       {lateOverlayActive && model.canEditSchedule ? (

@@ -62,6 +62,15 @@ export const dependencyKeys = {
     [...dependencyKeys.all(orgSlug), 'activity', activityId, 'successors'] as const,
 };
 
+export const crossPlanDependencyKeys = {
+  all: (orgSlug: string) => ['cross-plan-dependencies', orgSlug] as const,
+  // Keyed by the activity the links are incident to — the list-by-activity read returns BOTH
+  // directions (ADR-0045), and create/delete invalidate the whole org namespace (a link touches two
+  // activities in two plans, so a coarse-but-correct sweep, mirroring `dependencyKeys` invalidation).
+  byActivity: (orgSlug: string, activityId: string) =>
+    [...crossPlanDependencyKeys.all(orgSlug), 'activity', activityId] as const,
+};
+
 export const calendarKeys = {
   all: (orgSlug: string) => ['calendars', orgSlug] as const,
   list: (orgSlug: string) => [...calendarKeys.all(orgSlug), 'list'] as const,

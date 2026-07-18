@@ -77,6 +77,11 @@ export function useRecalculate(orgSlug: string, planId: string) {
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, planId) }),
+        // Cross-plan staleness (ADR-0045 §5) is pull-computed in each plan's summary: recalculating a
+        // plan can make its DOWNSTREAM cross-plan plans stale (their persisted dates now predate this
+        // one). Those live under other plans' summary keys, so sweep the whole org schedule namespace
+        // — inactive summaries just refetch when next viewed, so the downstream stale banner appears.
+        queryClient.invalidateQueries({ queryKey: scheduleKeys.all(orgSlug) }),
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: dependencyKeys.byPlan(orgSlug, planId) }),
