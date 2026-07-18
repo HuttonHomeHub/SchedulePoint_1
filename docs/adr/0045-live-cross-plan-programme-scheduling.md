@@ -240,9 +240,19 @@ Added under §30 (inter-project dates), each **Accepts with its owning M2 featur
 - New table + a new permission + a new endpoint + a plan `schedule_computed_at` column; all additive
   (constant/nullable defaults, no backfill), but a genuine schema and API surface increase.
 
+**Backpressure.** M2 solves a programme **synchronously** in one request (N sequential per-plan
+transactions), so the upstream closure is capped at **`MAX_PROGRAMME_PLANS` (50)** — beyond it the endpoint
+rejects with **422 `PROGRAMME_TOO_LARGE`** rather than open an unbounded request (backend-performance
+review). Lifting the ceiling means the deferred background/queued solve below, not a bigger constant.
+
 **Follow-ups / new debt.**
 
-- Background **push propagation** (ADR-0009) and **auto-recalc-on-upstream-change** — the M2 → M3 slice.
+- Background **push propagation** (ADR-0009) and **auto-recalc-on-upstream-change** — the M2 → M3 slice;
+  also the home for lifting the synchronous `MAX_PROGRAMME_PLANS` cap.
+- Programme-recalc micro-optimisations (backend-performance review, non-blocking): resolve the org once
+  and thread it through the per-plan loop (avoid N repeat `resolveScope` reads); `Promise.all` the pen
+  pre-flight once enforcement is on; a denormalised `plans.has_cross_plan_edges` boolean to let the
+  no-edge fast path skip even the `countActiveForPlan` guard query.
 - An explicit **Programme** entity (portfolio views, programme baselines, cross-plan reporting).
 - **Activity-level cross-plan acyclicity + iterative solve** if bidirectional interfaces are demanded.
 - Cross-org / cross-tenant interfaces (currently rejected) if the product ever needs them.

@@ -121,6 +121,21 @@ describe('ScheduleService.recalculateProgramme', () => {
     expect(result.programme.planCount).toBe(3);
   });
 
+  it('rejects (422 PROGRAMME_TOO_LARGE) an over-large closure BEFORE any pen check or write', async () => {
+    // A 51-edge chain P000→…→P051 → the target's upstream closure is 52 plans, above the 50-plan cap.
+    const ids = Array.from({ length: 52 }, (_, i) => `P${String(i).padStart(3, '0')}`);
+    const chain = ids.slice(0, -1).map((from, i) => edge(from, ids[i + 1]!));
+    crossPlan.loadOrgAdjacency.mockResolvedValue(chain);
+    const targetId = ids[ids.length - 1]!;
+    plans.findActiveByIdInOrg.mockResolvedValue({ id: targetId, organizationId: ORG_ID });
+    await expect(
+      service.recalculateProgramme(principalWith(CAN), 'acme', targetId),
+    ).rejects.toMatchObject({ details: { reason: 'PROGRAMME_TOO_LARGE', planCount: 52 } });
+    // Rejected up-front: neither the pen pre-flight nor any per-plan recalc ran.
+    expect(editLock.assertHoldsPen).not.toHaveBeenCalled();
+    expect(recalcSpy).not.toHaveBeenCalled();
+  });
+
   it('sums crossPlanUpstreamMissingCount (N32) across the closure into the roll-up', async () => {
     crossPlan.loadOrgAdjacency.mockResolvedValue([edge('A', 'C'), edge('B', 'C')]);
     // A contributes 2 missing-upstream warnings, B contributes 1, C none.

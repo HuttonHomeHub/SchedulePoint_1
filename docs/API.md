@@ -194,9 +194,14 @@ roll-up (`planCount`, and `crossPlanUpstreamMissingCount` — the summed **N32**
 warnings for cross-plan edges whose upstream had never been calculated, which
 contribute no derived bound and are never an error).
 
-| Method | Path                                             | Notes                                                                                                  |
-| ------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| POST   | `…/plans/:planId/schedule/recalculate-programme` | Recalculate the plan's upstream cross-plan closure in dependency order · 423 `PROGRAMME_PLANS_LOCKED`. |
+The solve is **synchronous and bounded**: the upstream closure is capped at **50
+plans**; a larger programme rejects with **422 `PROGRAMME_TOO_LARGE`** (recalculate
+a smaller sub-programme) rather than open an unbounded request. Lifting the cap is
+the deferred background/queued-solve slice, not a bigger limit.
+
+| Method | Path                                             | Notes                                                                                                                              |
+| ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/plans/:planId/schedule/recalculate-programme` | Recalculate the plan's upstream cross-plan closure in dependency order · 423 `PROGRAMME_PLANS_LOCKED` · 422 `PROGRAMME_TOO_LARGE`. |
 
 ## Pagination, filtering, sorting
 

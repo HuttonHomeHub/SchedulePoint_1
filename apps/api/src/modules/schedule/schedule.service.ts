@@ -71,7 +71,21 @@ export const SCHEDULE_ERROR = {
   PLAN_START_REQUIRED: 'PLAN_START_REQUIRED',
   /** The requested histogram granularity would produce too many buckets (ask for a coarser one). */
   HISTOGRAM_GRANULARITY_TOO_FINE: 'HISTOGRAM_GRANULARITY_TOO_FINE',
+  /** The programme's upstream closure exceeds {@link MAX_PROGRAMME_PLANS} — too many plans to solve
+   * synchronously in one request (ADR-0045: M2 is a synchronous, bounded solve; a background/queued
+   * programme recalc is the deferred next slice). */
+  PROGRAMME_TOO_LARGE: 'PROGRAMME_TOO_LARGE',
 } as const;
+
+/**
+ * The hard ceiling on a programme recalc's upstream closure (ADR-0045 §4). M2 solves a programme
+ * **synchronously** in one HTTP request — N sequential per-plan transactions — so an unbounded closure
+ * is an unbounded-latency risk (backend-performance-review). A construction programme's interdependent
+ * plan count is small; beyond this we reject with 422 `PROGRAMME_TOO_LARGE` rather than run an
+ * open-ended request. Lifting this ceiling means the deferred background/queued solve (ADR-0009), not
+ * a bigger number here.
+ */
+const MAX_PROGRAMME_PLANS = 50;
 
 /** An active plan row as loaded for scheduling — carries the engine-relevant option fields. */
 type ActivePlan = NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdInOrg']>>>;
@@ -306,6 +320,18 @@ export class ScheduleService {
         );
       }
       throw error;
+    }
+
+    // Backpressure (backend-performance-review): M2 solves the programme synchronously — one request,
+    // N sequential per-plan transactions — so cap the closure. Reject up-front (422) before the pen
+    // pre-flight or any write, so an over-large programme can never open an unbounded request. The
+    // ceiling is a plan count (the closure is plan-grain, not activities).
+    if (order.length > MAX_PROGRAMME_PLANS) {
+      throw new ValidationError(
+        `This programme spans ${order.length} interdependent plans, above the ${MAX_PROGRAMME_PLANS}-plan ` +
+          'limit for a single recalculation. Recalculate a smaller sub-programme.',
+        { reason: SCHEDULE_ERROR.PROGRAMME_TOO_LARGE, planCount: order.length },
+      );
     }
 
     // Pre-flight pen check (fail-fast, CQ-3 default): assert the pen on EVERY closure plan BEFORE any
