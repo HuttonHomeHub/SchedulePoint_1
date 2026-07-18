@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 
 import { CalendarsModule } from '../calendars/calendars.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { PlanLockModule } from '../plan-lock/plan-lock.module';
 
 import { ResourceAssignmentRepository } from './resource-assignment.repository';
 import { ResourceAssignmentService } from './resource-assignment.service';
@@ -24,7 +25,7 @@ import { ResourcesService } from './resources.service';
  * RESOURCE_DEPENDENT activity's driving assignment + calendar.
  */
 @Module({
-  imports: [OrganizationsModule, forwardRef(() => CalendarsModule)],
+  imports: [OrganizationsModule, forwardRef(() => CalendarsModule), PlanLockModule],
   controllers: [ResourcesController, ResourceAssignmentsController],
   providers: [
     ResourcesService,

@@ -259,6 +259,7 @@ function AssignmentRow({
   assignment,
   resource,
   durationType,
+  showCurve,
   canWrite,
   onRemoved,
 }: {
@@ -270,6 +271,8 @@ function AssignmentRow({
   resource: ResourceSummary | undefined;
   /** The owning activity's duration type, for the derived-duration preview (ADR-0040). */
   durationType: DurationType | undefined;
+  /** Whether the loading-curve control is applicable (false for a zero-span milestone, TECH_DEBT #44b). */
+  showCurve: boolean;
   canWrite: boolean;
   /** Called after a successful unassign so the parent can restore focus (the row unmounts). */
   onRemoved: () => void;
@@ -537,8 +540,9 @@ function AssignmentRow({
               onChange={(event) => toggleDriving(event.target.checked)}
             />
             {/* Loading curve (M7 rung 5, ADR-0044 §3) — shapes the resource histogram, not the dates.
-                Behind the flag; UNIFORM is the flat default. Saved immediately on change. */}
-            {RESOURCE_CURVES_ENABLED ? (
+                Behind the flag and hidden for a zero-span milestone (#44b); UNIFORM is the flat
+                default. Saved immediately on change. */}
+            {showCurve ? (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={curveId}>Loading curve</Label>
                 <Select
@@ -585,7 +589,7 @@ function AssignmentRow({
             ? ` · ${assignment.unitsPerHour} units/time`
             : ''}
           {assignment.isDriving ? ' · driving' : ''}
-          {RESOURCE_CURVES_ENABLED && assignment.curveType !== 'UNIFORM'
+          {showCurve && assignment.curveType !== 'UNIFORM'
             ? ` · ${RESOURCE_CURVE_LABELS[assignment.curveType]} curve`
             : ''}
         </p>
@@ -612,6 +616,7 @@ export function ActivityResourcesDialog({
   activityId,
   activityName,
   activityDurationType,
+  isMilestone = false,
   open,
   onClose,
   canWrite,
@@ -626,6 +631,9 @@ export function ActivityResourcesDialog({
   activityName?: string;
   /** The owning activity's duration type (ADR-0040), for the driving assignment's derived-duration preview. */
   activityDurationType?: DurationType;
+  /** True when the owning activity is a zero-span milestone: the loading-curve picker is hidden then,
+   * since a curve has no span to distribute units over (TECH_DEBT #44b). Defaults false. */
+  isMilestone?: boolean;
   open: boolean;
   onClose: () => void;
   canWrite: boolean;
@@ -638,6 +646,9 @@ export function ActivityResourcesDialog({
   const resourceSelectId = useId();
   const curveSelectId = useId();
   const curveHelpId = useId();
+  // The loading-curve picker distributes units across the activity's span, so it is meaningless for a
+  // zero-span milestone — hidden there (TECH_DEBT #44b), in both the assigned rows and the assign form.
+  const showCurve = RESOURCE_CURVES_ENABLED && !isMilestone;
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
   const assignedIds = new Set((assignments.data ?? []).map((a) => a.resourceId));
@@ -724,6 +735,7 @@ export function ActivityResourcesDialog({
                   assignment={assignment}
                   resource={resourceById.get(assignment.resourceId)}
                   durationType={activityDurationType}
+                  showCurve={showCurve}
                   canWrite={canWrite}
                   onRemoved={() => closeButtonRef.current?.focus()}
                 />
@@ -792,9 +804,10 @@ export function ActivityResourcesDialog({
                   {...register('isDriving')}
                 />
                 {/* Loading curve (M7 rung 5, ADR-0044 §3) — the named P6 profile the resource histogram
-                    distributes budgeted units by across the span. Behind the flag; UNIFORM is the flat
-                    default. Shapes only the histogram, never the dates. */}
-                {RESOURCE_CURVES_ENABLED ? (
+                    distributes budgeted units by across the span. Behind the flag and hidden for a
+                    zero-span milestone (#44b); UNIFORM is the flat default. Shapes only the
+                    histogram, never the dates. */}
+                {showCurve ? (
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor={curveSelectId}>Loading curve</Label>
                     <Select

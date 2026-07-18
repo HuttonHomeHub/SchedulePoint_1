@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceKind } from '@prisma/client';
+import { DECIMAL_18_4_MAX } from '@repo/types';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
@@ -9,6 +10,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateIf,
@@ -69,7 +71,8 @@ export class UpdateResourceDto {
     nullable: true,
     description:
       'Capacity ceiling in units per working hour (ADR-0041 §2), or null to clear (uncapped). ' +
-      'Exact numeric (>= 0, N21).',
+      'Exact numeric (>= 0, N21). Capped at DECIMAL_18_4_MAX — a value above it is a clean 422, not a ' +
+      'Decimal(18,4) overflow 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   // Allow an explicit null (clear to uncapped); validate the shape only for a value.
@@ -77,6 +80,7 @@ export class UpdateResourceDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
+  @Max(DECIMAL_18_4_MAX)
   maxUnitsPerHour?: number | null;
 
   @ApiPropertyOptional({
@@ -84,7 +88,8 @@ export class UpdateResourceDto {
     nullable: true,
     description:
       'Planned cost rate in minor units per unit of work (EV1, ADR-0042), or null to clear (no cost). ' +
-      'A rate coefficient stored as DECIMAL(18,4); exact numeric (>= 0, N22).',
+      'A rate coefficient stored as DECIMAL(18,4); exact numeric (>= 0, N22). Capped at DECIMAL_18_4_MAX ' +
+      '— a value above it is a clean 422, not a Decimal(18,4) overflow 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   // Allow an explicit null (clear to no cost); validate the shape only for a value.
@@ -92,6 +97,7 @@ export class UpdateResourceDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
+  @Max(DECIMAL_18_4_MAX)
   costPerUnit?: number | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })

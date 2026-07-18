@@ -50,8 +50,10 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
   await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
 
-  // Open the Logic panel for the activity.
-  await page.getByRole('button', { name: 'Logic for Excavate' }).click();
+  // Open the Logic panel for the activity — row actions live behind an overflow
+  // "Actions for …" menu (TECH_DEBT #38): open it, then choose Logic.
+  await page.getByRole('button', { name: 'Actions for Excavate' }).click();
+  await page.getByRole('menuitem', { name: 'Logic' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('heading', { name: /Logic for Excavate/ })).toBeVisible();
   await expect(dialog.getByText(/No predecessors/)).toBeVisible();
@@ -108,7 +110,8 @@ test('a planner adds a dependency, is stopped from making a loop, and removes it
   const dialog = page.getByRole('dialog');
 
   // Add Excavate as a predecessor of Pour slab (Excavate → Pour slab).
-  await page.getByRole('button', { name: 'Logic for Pour slab' }).click();
+  await page.getByRole('button', { name: 'Actions for Pour slab' }).click();
+  await page.getByRole('menuitem', { name: 'Logic' }).click();
   await dialog.getByRole('button', { name: 'Add predecessor' }).click();
   await dialog.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
   await dialog.getByRole('button', { name: 'Add dependency' }).click();

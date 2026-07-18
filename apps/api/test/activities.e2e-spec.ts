@@ -1,6 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -191,6 +192,15 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     await actor.agent
       .post(base)
       .send({ name: 'F', secondaryConstraintDate: '2026-05-01' })
+      .expect(422);
+  });
+
+  it('rejects a budgetedExpense above the money ceiling (422, TECH_DEBT #40a)', async () => {
+    const { actor, planId } = await setup();
+    const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+    await actor.agent
+      .post(base)
+      .send({ name: 'Overflow', budgetedExpense: MONEY_MINOR_UNITS_MAX + 1 })
       .expect(422);
   });
 

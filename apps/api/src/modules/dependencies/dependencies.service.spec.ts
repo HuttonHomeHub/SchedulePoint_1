@@ -91,6 +91,7 @@ function activity(id: string, overrides: Partial<Activity> = {}): Activity {
     isCritical: false,
     isNearCritical: false,
     constraintViolated: false,
+    externalDriven: false,
     loeNoSpan: false,
     resourceDriverMissing: false,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',

@@ -513,6 +513,7 @@ describe('ScheduleService.summary', () => {
         criticalCount: 2,
         nearCriticalCount: 1,
         constraintViolationCount: 0,
+        externalDrivenCount: 2,
         constraintWarningCount: 0,
         projectFinish: '2026-01-13',
       }),
@@ -538,8 +539,9 @@ describe('ScheduleService.summary', () => {
       nearCriticalCount: 1,
       constraintViolationCount: 0,
       constraintWarningCount: 0,
-      // External-driven is engine-derived on a recalc only; the read summary always reports 0 (ADR-0043).
-      externalDrivenCount: 0,
+      // The read summary now threads the aggregated `external_driven` count straight from `summarise`
+      // (ADR-0043 / ADR-0035 §30) — no longer hard-coded 0.
+      externalDrivenCount: 2,
     });
   });
 

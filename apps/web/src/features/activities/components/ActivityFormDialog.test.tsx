@@ -51,6 +51,7 @@ const ACTIVITY: ActivitySummary = {
   isCritical: false,
   isNearCritical: false,
   constraintViolated: false,
+  externalDriven: false,
   loeNoSpan: false,
   resourceDriverMissing: false,
   externalEarlyStart: null,
@@ -95,7 +96,9 @@ describe('ActivityFormDialog', () => {
   it('creates a task with name, type and duration', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText(/Duration/), { target: { value: '10' } });
+    // "Duration type" (VITE_DURATION_TYPES defaults on) is a separate field/label — target the
+    // working-days field by its exact label so the two don't collide.
+    fireEvent.change(screen.getByLabelText('Duration (working days)'), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());

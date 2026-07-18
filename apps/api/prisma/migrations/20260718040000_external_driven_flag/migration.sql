@@ -1,0 +1,35 @@
+-- IPD M1 external produce-and-flag: the per-activity external-driven output
+-- (ADR-0043 Milestone 1, ADR-0035 §30.3).
+--
+-- `external_driven` is engine-owned CPM output, the machine-readable half of
+-- produce-and-flag: true when an imported inter-project bound (external_early_start /
+-- external_late_finish) drove this activity's computed dates — the SNET-shaped early-
+-- start floor or FNLT-shaped late-finish ceiling won over the network logic bound. The
+-- engine PRODUCES the (externally gated) schedule and FLAGS it, never repairs it, and
+-- external bounds are soft so this never overlaps constraint_violated. It is the direct
+-- analogue of the existing activity engine columns (early_start/is_critical/
+-- constraint_violated) and of dependencies.is_driving: defaulted, NOT NULL, never set
+-- from a user-facing write DTO, and written only by the CPM engine's batched raw UPDATE,
+-- which touches engine columns alone (never version/updated_at/updated_by) so a recalc
+-- stays invisible to optimistic locking (ADR-0022). It is the per-activity companion to
+-- the plan-level externalDrivenCount, letting the read-summary path aggregate the true
+-- count and the web show a per-row "External" badge (mirroring the "Conflict" badge).
+--
+-- Fully additive and reversible. The constant DEFAULT false backfills every existing
+-- row in the same statement (rows read "not externally driven" until the plan is first
+-- calculated, and on the no-external / all-inherit path), so existing data and the
+-- byte-parity golden path are unchanged. On Postgres 11+ an ADD COLUMN with a constant
+-- DEFAULT is a metadata-only change — no table rewrite, no full-table scan, no lock
+-- held beyond a brief ACCESS EXCLUSIVE for the catalog update — so this is fast and
+-- safe at any data volume (same posture as m4_constraint_violated; docs/DATABASE.md).
+--
+-- No new index: the flag is read as part of the already plan-scoped activity load
+-- (WHERE organization_id / plan_id / deleted_at, served by the existing
+-- (plan_id, created_at, id) index) and aggregated over that same scope for the
+-- plan-level externalDrivenCount; no predicate ever targets it in isolation. An index
+-- on a low-cardinality boolean that no query filters or sorts by would only cost
+-- writes for no read benefit (docs/DATABASE.md: index real query patterns, not columns).
+ALTER TABLE "activities" ADD COLUMN "external_driven" BOOLEAN NOT NULL DEFAULT false;
+
+-- Down (forward-only in prod; documented for completeness): fully reversible —
+--   ALTER TABLE "activities" DROP COLUMN "external_driven";

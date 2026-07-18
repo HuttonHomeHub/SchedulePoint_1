@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceCurveType } from '@prisma/client';
+import { DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -8,6 +9,7 @@ import {
   IsInt,
   IsNumber,
   IsOptional,
+  Max,
   Min,
   ValidateIf,
 } from 'class-validator';
@@ -27,12 +29,18 @@ type AssignmentEditedField = (typeof ASSIGNMENT_EDITED_FIELDS)[number];
  * boundary (N14) as a clean reject; the DB CHECK backstops it.
  */
 export class UpdateAssignmentDto {
-  @ApiPropertyOptional({ minimum: 0, description: 'Budgeted quantity of work (>= 0).' })
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Budgeted quantity of work (>= 0). Capped at DECIMAL_18_4_MAX — a value above it is a clean 422, ' +
+      'not a Decimal(18,4) overflow 500 (TECH_DEBT #40a).',
+  })
   @IsOptional()
   @Type(() => Number)
   // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
+  @Max(DECIMAL_18_4_MAX)
   budgetedUnits?: number;
 
   @ApiPropertyOptional({
@@ -40,13 +48,15 @@ export class UpdateAssignmentDto {
     description:
       'Planned rate (units/time) — the Units/Time term of the triad Units = Duration × Units/Time ' +
       '(M7 rung 4, ADR-0040). Exact numeric (>= 0, N19). Only the driving assignment participates in ' +
-      'the recompute; the DB CHECK backstops the boundary.',
+      'the recompute; the DB CHECK backstops the boundary. Capped at DECIMAL_18_4_MAX — a value above ' +
+      'it is a clean 422, not a Decimal(18,4) overflow 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   @Type(() => Number)
   // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
+  @Max(DECIMAL_18_4_MAX)
   unitsPerHour?: number;
 
   @ApiPropertyOptional({
@@ -65,7 +75,8 @@ export class UpdateAssignmentDto {
     nullable: true,
     description:
       'Optional OVERRIDE of the derived budgeted cost (EV1, ADR-0042). Minor units in the plan currency ' +
-      '(integer >= 0, N22); send null to clear (derive at read time). Derivation is EV2b.',
+      '(integer >= 0, N22); send null to clear (derive at read time). Derivation is EV2b. Capped at ' +
+      'MONEY_MINOR_UNITS_MAX — a value above it is a clean 422, not a BIGINT/precision-loss 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   // Allow an explicit null (clear to derive); validate the shape only for a value.
@@ -73,31 +84,36 @@ export class UpdateAssignmentDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MONEY_MINOR_UNITS_MAX)
   budgetedCost?: number | null;
 
   @ApiPropertyOptional({
     minimum: 0,
     description:
       'Cost actually spent on this assignment (EV1, ADR-0042). Minor units in the plan currency ' +
-      '(integer >= 0, N22).',
+      '(integer >= 0, N22). Capped at MONEY_MINOR_UNITS_MAX — a value above it is a clean 422, not a ' +
+      'BIGINT/precision-loss 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MONEY_MINOR_UNITS_MAX)
   actualCost?: number;
 
   @ApiPropertyOptional({
     minimum: 0,
     description:
       'Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. Exact numeric ' +
-      '(>= 0, N14; DECIMAL(18,4)).',
+      '(>= 0, N14; DECIMAL(18,4)). Capped at DECIMAL_18_4_MAX — a value above it is a clean 422, not a ' +
+      'Decimal(18,4) overflow 500 (TECH_DEBT #40a).',
   })
   @IsOptional()
   @Type(() => Number)
   // DECIMAL(18,4) storage: reject more than 4 fractional digits at the boundary (a clean 422).
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
+  @Max(DECIMAL_18_4_MAX)
   actualUnits?: number;
 
   @ApiPropertyOptional({

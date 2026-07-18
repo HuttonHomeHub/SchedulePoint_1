@@ -371,13 +371,21 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
   migration) and unindexed (read only on the full-plan recalc load).
 - **CPM output — engine-owned** (`early_start`/`early_finish`,
   `late_start`/`late_finish`, `total_float`, `is_critical`, `is_near_critical`,
-  `constraint_violated`): nullable/defaulted, **never accepted from a write DTO**.
+  `constraint_violated`, `external_driven`): nullable/defaulted, **never accepted
+  from a write DTO**.
   They are populated by the CPM engine; until a plan is recalculated they read as
   null/false ("—" in the UI). `constraint_violated` (M4, ADR-0035 §7) is a
   defaulted (`false`) **NOT NULL** boolean — true when a mandatory pin
   (`MANDATORY_START`/`MANDATORY_FINISH`) drove the activity earlier than logic
   allowed (produce-and-flag; the schedule is produced as pinned, never repaired).
-  Storing these avoids a wide migration when features that read them land.
+  `external_driven` (ADR-0043 M1 / ADR-0035 §30.3) is its direct analogue — a
+  defaulted (`false`) **NOT NULL** boolean, true when an imported inter-project
+  bound (`external_early_start`/`external_late_finish`) drove the activity's
+  computed dates (produce-and-flag; external bounds are soft, so it never overlaps
+  `constraint_violated`). It is the per-activity companion to the plan-level
+  `externalDrivenCount` (a read-time `COUNT` over the same plan scope), letting the
+  web show a per-row "External" badge beside the `constraint_violated` "Conflict"
+  badge. Storing these avoids a wide migration when features that read them land.
 - **`calendar_id`** is the activity's own working-time calendar (**M5, ADR-0037**):
   a nullable, **client-settable** UUID FK to `calendars` (`onDelete: Restrict`),
   mirroring `Plan.calendar` exactly. `null` means **inherit the plan default** —

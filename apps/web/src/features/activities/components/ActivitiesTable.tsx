@@ -1,4 +1,5 @@
 import type { ActivitySummary, BaselineVarianceRow, CalendarSummary } from '@repo/types';
+import { MoreHorizontal } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -19,10 +20,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { Menu, MenuItem } from '@/components/ui/menu';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
+  EARNED_VALUE_ENABLED,
+  INTER_PROJECT_DATES_ENABLED,
   RESOURCES_ENABLED,
 } from '@/config/env';
 import { ActivityResourcesDialog } from '@/features/resources';
@@ -133,6 +137,13 @@ export function ActivitiesTable({
   const [stepsId, setStepsId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The per-row actions overflow menu (one open at a time, ADR-0029 `Menu` primitive / TECH_DEBT #38).
+  // `anchor` is the trigger's viewport position; `menuTriggerRef` restores focus to it on close.
+  const [menu, setMenu] = useState<{
+    activity: ActivitySummary;
+    anchor: { x: number; y: number };
+  } | null>(null);
+  const menuTriggerRef = useRef<HTMLElement | null>(null);
 
   const editing = editingId ? activities.data?.find((a) => a.id === editingId) : undefined;
   const reporting = progressId ? activities.data?.find((a) => a.id === progressId) : undefined;
@@ -140,6 +151,57 @@ export function ActivitiesTable({
     ? activities.data?.find((a) => a.id === resourcesId)
     : undefined;
   const editingSteps = stepsId ? activities.data?.find((a) => a.id === stepsId) : undefined;
+
+  // The per-row action list, role-/flag-gated (ADR-0039/0044). Feeds both the decision to show a
+  // row's "⋯" trigger and the items in its overflow `Menu` (TECH_DEBT #38: dense row actions belong
+  // behind the APG `Menu`, never a spread of hover-only ghost buttons — docs/UX_STANDARDS.md).
+  type RowAction = { key: string; label: string; destructive?: boolean; onSelect: () => void };
+  const actionsFor = (activity: ActivitySummary): RowAction[] => {
+    const actions: RowAction[] = [];
+    if (onOpenLogic) {
+      actions.push({ key: 'logic', label: 'Logic', onSelect: () => onOpenLogic(activity) });
+    }
+    if (canReportProgress) {
+      actions.push({
+        key: 'progress',
+        label: 'Report progress',
+        onSelect: () => setProgressId(activity.id),
+      });
+    }
+    // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
+    // writes inside are gated on `canWrite`).
+    if (RESOURCES_ENABLED) {
+      actions.push({
+        key: 'resources',
+        label: 'Resources',
+        onSelect: () => setResourcesId(activity.id),
+      });
+    }
+    // Dark surface (ADR-0044 §2): weighted steps are a writer authoring surface whose only effect is
+    // an Earned-Value physical-% input, so gate on BOTH flags (TECH_DEBT #44a). Hidden for a
+    // duration-derived type (milestone / LOE / WBS summary), where steps are inert — matching the form.
+    if (
+      ACTIVITY_STEPS_ENABLED &&
+      EARNED_VALUE_ENABLED &&
+      canWrite &&
+      !isDurationDerivedType(activity.type)
+    ) {
+      actions.push({ key: 'steps', label: 'Steps', onSelect: () => setStepsId(activity.id) });
+    }
+    if (canWrite) {
+      actions.push({ key: 'edit', label: 'Edit', onSelect: () => setEditingId(activity.id) });
+      actions.push({
+        key: 'delete',
+        label: 'Delete',
+        destructive: true,
+        onSelect: () => {
+          setDeleteError(null);
+          setDeleting(activity);
+        },
+      });
+    }
+    return actions;
+  };
 
   const columns: Column<ActivitySummary>[] = [
     {
@@ -160,6 +222,12 @@ export function ActivitiesTable({
         // (never colour alone, WCAG 1.4.1); an sr-only clause spells out the cause for non-hover
         // users, matching the summary strip's wording. Only shown when the M4 surface is on.
         const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
+        // An imported external bound drove this activity's schedule (engine-owned, ADR-0043 M1):
+        // the per-activity companion to the summary strip's "Externally driven" count, so a planner
+        // can see WHICH activities an external commitment gated. Informational (soft bound), so a
+        // neutral pill, not the critical Conflict tone. Text + sr-only clause carry the meaning
+        // (never colour alone, WCAG 1.4.1). Only shown when the inter-project surface is on.
+        const externalDriven = INTER_PROJECT_DATES_ENABLED && activity.externalDriven;
         return (
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{activity.name}</span>
@@ -174,6 +242,20 @@ export function ActivitiesTable({
                   {' '}
                   — a mandatory constraint forces a date earlier than the logic allows; shown as
                   pinned, not corrected. Review the dates.
+                </span>
+              </Badge>
+            ) : null}
+            {externalDriven ? (
+              <Badge
+                variant="neutral"
+                size="sm"
+                title="An imported date from another project drove this activity's schedule this recalculation."
+              >
+                External
+                <span className="sr-only">
+                  {' '}
+                  — an imported date from another project drove this activity’s schedule this
+                  recalculation.
                 </span>
               </Badge>
             ) : null}
@@ -300,79 +382,27 @@ export function ActivitiesTable({
       srHeader: true,
       headClassName: 'py-2 font-medium',
       cellClassName: 'py-2 text-right whitespace-nowrap',
-      cell: (activity) => (
-        <div className="flex justify-end gap-2">
-          {onOpenLogic ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenLogic(activity)}
-              aria-label={`Logic for ${activity.name}`}
-            >
-              Logic
-            </Button>
-          ) : null}
-          {canReportProgress ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setProgressId(activity.id)}
-              aria-label={`Report progress for ${activity.name}`}
-            >
-              Progress
-            </Button>
-          ) : null}
-          {/* Dark surface (ADR-0039): any member may open the assignments editor (reads are
-              member-level); writes inside it are gated on `canWrite`. */}
-          {RESOURCES_ENABLED ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setResourcesId(activity.id)}
-              aria-label={`Resources for ${activity.name}`}
-            >
-              Resources
-            </Button>
-          ) : null}
-          {/* Dark surface (ADR-0044 §2): the weighted-steps editor is an authoring surface — writers
-              only, gated on the flag. Hidden for a duration-derived type (milestone / LOE / WBS
-              summary): weighted steps are inert there — the EV engine hardcodes their physical %,
-              matching how the form hides %-complete / expense for those (ux review). */}
-          {ACTIVITY_STEPS_ENABLED && canWrite && !isDurationDerivedType(activity.type) ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setStepsId(activity.id)}
-              aria-label={`Steps for ${activity.name}`}
-            >
-              Steps
-            </Button>
-          ) : null}
-          {canWrite ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setEditingId(activity.id)}
-                aria-label={`Edit ${activity.name}`}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setDeleteError(null);
-                  setDeleting(activity);
-                }}
-                aria-label={`Delete ${activity.name}`}
-              >
-                Delete
-              </Button>
-            </>
-          ) : null}
-        </div>
-      ),
+      cell: (activity) => {
+        const actions = actionsFor(activity);
+        if (actions.length === 0) return null;
+        const openHere = menu?.activity.id === activity.id;
+        return (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Actions for ${activity.name}`}
+            aria-haspopup="menu"
+            aria-expanded={openHere}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              menuTriggerRef.current = event.currentTarget;
+              setMenu({ activity, anchor: { x: rect.left, y: rect.bottom } });
+            }}
+          >
+            <MoreHorizontal aria-hidden="true" className="size-4" />
+          </Button>
+        );
+      },
     });
   }
 
@@ -431,12 +461,16 @@ export function ActivitiesTable({
                 activityId: managingResources.id,
                 activityName: managingResources.name,
                 activityDurationType: managingResources.durationType,
+                // A milestone is zero-span, so a loading curve has nothing to distribute over — the
+                // dialog hides the curve picker (TECH_DEBT #44b). Classified here (the activities
+                // feature owns the type helpers) so the resources feature stays free of a back-import.
+                isMilestone: isMilestoneType(managingResources.type),
               }
             : {})}
         />
       ) : null}
 
-      {ACTIVITY_STEPS_ENABLED && canWrite ? (
+      {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED && canWrite ? (
         <ActivityStepsDialog
           orgSlug={orgSlug}
           planId={planId}
@@ -475,6 +509,26 @@ export function ActivitiesTable({
             error={deleteError}
           />
         </>
+      ) : null}
+
+      {menu ? (
+        <Menu
+          open
+          onClose={() => setMenu(null)}
+          anchor={menu.anchor}
+          label={`Actions for ${menu.activity.name}`}
+          restoreFocusRef={menuTriggerRef}
+        >
+          {actionsFor(menu.activity).map((action) => (
+            <MenuItem
+              key={action.key}
+              destructive={action.destructive ?? false}
+              onSelect={action.onSelect}
+            >
+              {action.label}
+            </MenuItem>
+          ))}
+        </Menu>
       ) : null}
     </div>
   );

@@ -43,6 +43,7 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     isCritical: false,
     isNearCritical: false,
     constraintViolated: false,
+    externalDriven: false,
     loeNoSpan: false,
     resourceDriverMissing: false,
     externalEarlyStart: null,

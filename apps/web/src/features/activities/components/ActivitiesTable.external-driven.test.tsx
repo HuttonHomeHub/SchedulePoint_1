@@ -8,15 +8,15 @@ import { activityKeys } from '../api/use-activities';
 import { ActivitiesTable } from './ActivitiesTable';
 
 /**
- * The activities table's "Conflict" badge (M4, ADR-0035 §7) with `VITE_ADVANCED_CONSTRAINTS` forced
- * ON. An engine-flagged `constraintViolated` activity — a mandatory pin that broke logic, produced
- * and flagged rather than repaired — surfaces a critical pill in the Constraint cell. The badge text
- * carries the meaning (never colour alone, WCAG 1.4.1). Flag-off (no badge) is the default the other
- * table suites exercise.
+ * The activities table's "External" badge (ADR-0043 M1) with `VITE_INTER_PROJECT_DATES` forced ON.
+ * An engine-flagged `externalDriven` activity — one whose schedule this recalculation was gated by an
+ * imported date from another project — surfaces a neutral informational pill in the Name cell,
+ * mirroring the "Conflict" badge test. Flag-off (no badge) is the default the other table suites
+ * exercise.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_CONSTRAINTS_ENABLED: true,
+  INTER_PROJECT_DATES_ENABLED: true,
 }));
 
 const BASE: ActivitySummary = {
@@ -27,8 +27,8 @@ const BASE: ActivitySummary = {
   description: null,
   type: 'TASK',
   durationDays: 5,
-  constraintType: 'MANDATORY_START',
-  constraintDate: '2026-05-01',
+  constraintType: null,
+  constraintDate: null,
   secondaryConstraintType: null,
   secondaryConstraintDate: null,
   calendarId: null,
@@ -89,16 +89,16 @@ function renderTable(data: ActivitySummary[]) {
   );
 }
 
-describe('ActivitiesTable — constraint-violation badge (flag on)', () => {
-  it('shows a Conflict badge on a violated activity, and none on a clean one', () => {
+describe('ActivitiesTable — external-driven badge (flag on)', () => {
+  it('shows an External badge on an externally-driven activity, and none on an unaffected one', () => {
     renderTable([
-      { ...BASE, id: 'a1', name: 'Broken', constraintViolated: true },
-      { ...BASE, id: 'a2', name: 'Fine', constraintViolated: false },
+      { ...BASE, id: 'a1', name: 'Imported', externalDriven: true },
+      { ...BASE, id: 'a2', name: 'Local', externalDriven: false },
     ]);
-    const broken = screen.getByText('Broken').closest('tr')!;
-    expect(within(broken).getByText('Conflict')).toBeInTheDocument();
+    const imported = screen.getByText('Imported').closest('tr')!;
+    expect(within(imported).getByText('External')).toBeInTheDocument();
 
-    const fine = screen.getByText('Fine').closest('tr')!;
-    expect(within(fine).queryByText('Conflict')).not.toBeInTheDocument();
+    const local = screen.getByText('Local').closest('tr')!;
+    expect(within(local).queryByText('External')).not.toBeInTheDocument();
   });
 });

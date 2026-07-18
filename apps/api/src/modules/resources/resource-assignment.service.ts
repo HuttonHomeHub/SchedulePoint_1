@@ -13,6 +13,7 @@ import {
 } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { resolveTriad } from '../schedule/duration-type/resolve-triad';
 
 import type { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -57,6 +58,7 @@ export class ResourceAssignmentService {
     private readonly resources: ResourceRepository,
     private readonly assignments: ResourceAssignmentRepository,
     private readonly prisma: PrismaService,
+    private readonly editLock: PlanEditLockService,
     @InjectPinoLogger(ResourceAssignmentService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -97,6 +99,12 @@ export class ResourceAssignmentService {
     const activity = await this.loadActiveActivity(activityId, organization.id);
     const resource = await this.resources.findActiveByIdInOrg(dto.resourceId, organization.id);
     if (!resource) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+
+    // Single-editor write-gate (ADR-0028, TECH_DEBT #39): assigning a resource can persist the
+    // owning activity's server-derived `durationMinutes` (a units-driven type, ADR-0040 §3), a
+    // scheduling mutation — so it must hold the plan's edit-lock like the activity write path
+    // (inert unless PLAN_EDIT_LOCK_ENFORCED). Placed after the 403/404 checks, before business rules.
+    await this.editLock.assertHoldsPen(principal, activity.planId, organization.id);
 
     const isDriving = dto.isDriving ?? false;
     // A MATERIAL resource may never drive (invariant (b)) — the DB cannot read the kind.
@@ -200,6 +208,13 @@ export class ResourceAssignmentService {
     const existing = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
     if (!existing) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
 
+    // Single-editor write-gate (ADR-0028, TECH_DEBT #39): an assignment rate/units edit can persist
+    // the owning activity's derived `durationMinutes` (ADR-0040 §3), so it must hold the plan's
+    // edit-lock like the activity write path (inert unless PLAN_EDIT_LOCK_ENFORCED). The activity is
+    // resolved here for its `planId` and reused by the triad recompute below.
+    const activity = await this.loadActiveActivity(existing.activityId, organization.id);
+    await this.editLock.assertHoldsPen(principal, activity.planId, organization.id);
+
     const patch: AssignmentPatch = {};
     if (dto.budgetedUnits !== undefined) patch.budgetedUnits = dto.budgetedUnits;
     if (dto.unitsPerHour !== undefined) patch.unitsPerHour = dto.unitsPerHour;
@@ -239,7 +254,6 @@ export class ResourceAssignmentService {
 
     let activityDurationUpdate: ActivityDurationUpdate | null = null;
     if (dto.editedField && effectiveDriving && effectiveRate !== null) {
-      const activity = await this.loadActiveActivity(existing.activityId, organization.id);
       const resolved = resolveTriad(activity.durationType, dto.editedField, {
         durationMinutes: activity.durationMinutes,
         budgetedUnits: effectiveUnits,
@@ -299,6 +313,11 @@ export class ResourceAssignmentService {
 
     const existing = await this.assignments.findActiveByIdInOrg(assignmentId, organization.id);
     if (!existing) throw new NotFoundError(RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND);
+
+    // Single-editor write-gate (ADR-0028, TECH_DEBT #39): unassigning is a structural write on the
+    // plan, gated like the activity write path (inert unless PLAN_EDIT_LOCK_ENFORCED).
+    const activity = await this.loadActiveActivity(existing.activityId, organization.id);
+    await this.editLock.assertHoldsPen(principal, activity.planId, organization.id);
 
     await this.assignments.softDelete(assignmentId, principal.userId);
     this.logger.info(
