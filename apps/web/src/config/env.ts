@@ -354,6 +354,27 @@ export const COST_ACCRUAL_ENABLED = flagDefaultOff(import.meta.env.VITE_COST_ACC
 export const ACTIVITY_STEPS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_STEPS);
 
 /**
+ * Resource loading-curves web surface (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). **OFF by default** — a
+ * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so it
+ * ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on once
+ * cleared (the `VITE_COST_ACCRUAL` / `VITE_ACTIVITY_STEPS` pattern). When on, the web UI exposes resource
+ * loading curves:
+ *
+ * - **Loading-curve picker** — a per-assignment curve select (Uniform / Bell / Front-loaded /
+ *   Back-loaded / Double-peak) on the resource-assignment dialog (create form + each assigned row),
+ *   naming the named P6 profile the resource-histogram read distributes the assignment's budgeted units
+ *   by across the activity span. `UNIFORM` (the default) is a flat load.
+ * - **Resource histogram** — a read view (a bar chart with a keyboard-navigable data-table equivalent
+ *   for WCAG 2.2 AA) of the plan's `GET …/schedule/resource-histogram`, showing each resource's
+ *   curve-shaped units over time.
+ *
+ * Everything behind it — the settable `curveType`, the pure `resource-histogram.ts` read-model, and the
+ * `GET …/schedule/resource-histogram` endpoint — is already live; the flag only governs whether the web
+ * UI exposes the picker + histogram. Set `VITE_RESOURCE_CURVES=true` to enable it in an environment.
+ */
+export const RESOURCE_CURVES_ENABLED = flagDefaultOff(import.meta.env.VITE_RESOURCE_CURVES);
+
+/**
  * Inter-project / external dates web surface (F5, ADR-0043 / ADR-0035 §30). **OFF by default** — a
  * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) are not yet green, so
  * it ships hidden on `main` and is turned on per-environment during rollout, then flipped default-on

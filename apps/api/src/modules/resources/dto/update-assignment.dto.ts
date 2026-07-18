@@ -1,6 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ResourceCurveType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, Min, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 
 /**
  * The triad fields a driving-assignment write may name as the edited one (M7 rung 4, ADR-0040).
@@ -98,6 +108,16 @@ export class UpdateAssignmentDto {
   @IsOptional()
   @IsBoolean()
   isDriving?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ResourceCurveType,
+    description:
+      'The named P6 loading curve for the resource-histogram read-model (M7 rung 5, ADR-0044 §3 / ' +
+      'ADR-0035 §31). Shapes only the histogram — no CPM date, no levelling (Q2). UNIFORM is a flat load.',
+  })
+  @IsOptional()
+  @IsEnum(ResourceCurveType)
+  curveType?: ResourceCurveType;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

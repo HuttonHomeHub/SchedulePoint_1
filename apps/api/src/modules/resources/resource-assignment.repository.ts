@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import { Prisma, type ResourceAssignment } from '@prisma/client';
+import { Prisma, type ResourceAssignment, type ResourceCurveType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -14,6 +14,8 @@ export interface CreateAssignmentInput {
   /** Planned rate (units/time), the triad's Units/Time term (M7 rung 4, ADR-0040); null = no rate. */
   unitsPerHour: number | null;
   isDriving: boolean;
+  /** Named P6 loading curve (M7 rung 5, ADR-0044 §3); UNIFORM = flat. Histogram read-model only. */
+  curveType: ResourceCurveType;
   /** Optional budgeted-cost override in minor units (EV1, ADR-0042); null = derive at read time. BIGINT. */
   budgetedCost: number | null;
   /** Actual cost spent in minor units (EV1, ADR-0042); defaults to 0. Stored as BIGINT. */
@@ -30,6 +32,8 @@ export interface AssignmentPatch {
   /** Planned rate (units/time), the triad's Units/Time term (M7 rung 4, ADR-0040); null = no rate. */
   unitsPerHour?: number | null;
   isDriving?: boolean;
+  /** Named P6 loading curve (M7 rung 5, ADR-0044 §3); histogram read-model only, no CPM effect. */
+  curveType?: ResourceCurveType;
   /** Optional budgeted-cost override in minor units (EV1, ADR-0042); null clears to derive-at-read. */
   budgetedCost?: number | null;
   /** Actual cost spent in minor units (EV1, ADR-0042). Stored as BIGINT. */
@@ -68,6 +72,7 @@ export class ResourceAssignmentRepository {
         budgetedUnits: input.budgetedUnits,
         unitsPerHour: input.unitsPerHour,
         isDriving: input.isDriving,
+        curveType: input.curveType,
         budgetedCost: input.budgetedCost,
         actualCost: input.actualCost,
         actualUnits: input.actualUnits,

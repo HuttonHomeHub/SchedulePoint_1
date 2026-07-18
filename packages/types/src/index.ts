@@ -1075,6 +1075,26 @@ export const ACCRUAL_TYPES = ['START', 'UNIFORM', 'END'] as const;
 export type AccrualType = (typeof ACCRUAL_TYPES)[number];
 
 /**
+ * The named P6 resource **loading curve** a resource assignment's `budgetedUnits` is distributed by
+ * across the activity's span in the resource-histogram read-model (M7 rung 5, ADR-0044 §3 / ADR-0035
+ * §31). It shapes only the units-over-time **histogram** — it moves no CPM date, owns no engine column,
+ * and does NOT feed the levelling pass this rung (Q2). `UNIFORM` (default) is a **flat** load — exactly
+ * a flat-rate distribution, so an assignment with no curve reads byte-identically; `BELL` peaks mid-span;
+ * `FRONT_LOADED`/`BACK_LOADED` weight the early/late span; `DOUBLE_PEAK` has two humps. The 21-point
+ * profile constants live in the API's pure `resource-histogram.ts` read-model, not here. Const-array
+ * source-of-truth kept in lock-step with the API's Prisma `ResourceCurveType` enum.
+ */
+export const RESOURCE_CURVE_TYPES = [
+  'UNIFORM',
+  'BELL',
+  'FRONT_LOADED',
+  'BACK_LOADED',
+  'DOUBLE_PEAK',
+] as const;
+
+export type ResourceCurveType = (typeof RESOURCE_CURVE_TYPES)[number];
+
+/**
  * The P6 Earned-Value metric set for one level of the read-model (EV2, ADR-0042 / ADR-0035 §29) —
  * an activity, a WBS summary, or the plan total. Money fields are **integer minor units** in the
  * plan's {@link PlanEarnedValue.currencyCode}; the index ratios (`spi`/`cpi`/`tcpi`) are 4-dp floats,
@@ -1156,6 +1176,54 @@ export interface PlanEarnedValue {
 }
 
 /**
+ * The time-bucket granularity a resource histogram is aggregated at (M7 rung 5, ADR-0044 §3 /
+ * ADR-0035 §31). Buckets are calendar-date periods spanning the plan's assignment date range; each
+ * assignment's curve-shaped units are distributed into them by working-time overlap on the activity's
+ * own calendar (ADR-0037).
+ */
+export const HISTOGRAM_GRANULARITIES = ['DAY', 'WEEK', 'MONTH'] as const;
+
+export type HistogramGranularity = (typeof HISTOGRAM_GRANULARITIES)[number];
+
+/**
+ * One time bucket on the shared histogram axis (M7 rung 5, ADR-0044 §3). `start` is inclusive, `end`
+ * exclusive (`= the next bucket's start`), both `YYYY-MM-DD`. Every {@link ResourceHistogramSeries}
+ * aligns its `values` index-for-index to this axis.
+ */
+export interface ResourceHistogramBucket {
+  start: string;
+  end: string;
+}
+
+/**
+ * One resource's units-over-time series (M7 rung 5, ADR-0044 §3 / ADR-0035 §31): `values[i]` is the
+ * curve-shaped `budgetedUnits` this resource is loaded with in bucket `i` (exact quantity, `>= 0`),
+ * aligned to {@link ResourceHistogram.buckets}. `total` is the resource's whole distributed load
+ * (`Σ values`, equal to the sum of its assignments' `budgetedUnits` — units are conserved).
+ */
+export interface ResourceHistogramSeries {
+  resourceId: string;
+  values: number[];
+  total: number;
+}
+
+/**
+ * A plan's **resource loading histogram** (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — the shape the
+ * `schedule:read`-gated `GET …/schedule/resource-histogram` endpoint returns as its `data`. A pure
+ * read-model over the persisted CPM dates + each assignment's `curveType`; it schedules nothing, moves
+ * no date, is NOT cost data (so it is `schedule:read`, not `cost:read`, Q5), and does not feed the
+ * levelling pass (Q2). `buckets` is the shared time axis; `series` carries one units-over-time row per
+ * loaded resource. `curveNormalisedCount` (also mirrored into the response `meta`) counts assignments
+ * whose curve profile did not sum to 100 and was normalised to conserve units (N29).
+ */
+export interface ResourceHistogram {
+  granularity: HistogramGranularity;
+  buckets: ResourceHistogramBucket[];
+  series: ResourceHistogramSeries[];
+  curveNormalisedCount: number;
+}
+
+/**
  * A resource in the org-scoped resource library (M7.1, ADR-0039) — a reusable
  * sibling of the calendar library. The list/detail shape mirrors the other
  * `*Summary` types. `code` is an optional natural-key handle (unique per org among
@@ -1206,6 +1274,12 @@ export interface ResourceAssignmentSummary {
   budgetedUnits: number;
   unitsPerHour: number | null;
   isDriving: boolean;
+  /**
+   * The named P6 loading **curve** (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) the resource-histogram
+   * read-model distributes this assignment's `budgetedUnits` by across the activity span. `UNIFORM`
+   * (default) is a flat load; it shapes only the histogram — no CPM date, no levelling. Always present.
+   */
+  curveType: ResourceCurveType;
   /**
    * Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. An exact quantity
    * carried as a `number` (`DECIMAL(18,4)`; `>= 0`, N14). Defaults to 0. Dark until the EV2 read reads it.

@@ -153,6 +153,9 @@ export class ResourceAssignmentService {
             budgetedUnits: storedUnits,
             unitsPerHour: storedRate,
             isDriving,
+            // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain settable enum feeding the
+            // histogram read-model; UNIFORM (the DB default) when omitted = a flat load (parity).
+            curveType: dto.curveType ?? 'UNIFORM',
             // Earned-Value cost inputs (EV1, ADR-0042): passthrough only, no derivation (that is EV2b).
             // budgetedCost null/omitted = derive at read time; actualCost/actualUnits default 0.
             budgetedCost: dto.budgetedCost ?? null,
@@ -201,6 +204,8 @@ export class ResourceAssignmentService {
     if (dto.budgetedUnits !== undefined) patch.budgetedUnits = dto.budgetedUnits;
     if (dto.unitsPerHour !== undefined) patch.unitsPerHour = dto.unitsPerHour;
     if (dto.isDriving !== undefined) patch.isDriving = dto.isDriving;
+    // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain settable enum, histogram read-model only.
+    if (dto.curveType !== undefined) patch.curveType = dto.curveType;
     // Earned-Value cost inputs (EV1, ADR-0042): passthrough only. budgetedCost null clears to
     // derive-at-read; actualCost/actualUnits are NOT NULL, so no clearing. No derivation here (EV2b).
     if (dto.budgetedCost !== undefined) patch.budgetedCost = dto.budgetedCost;

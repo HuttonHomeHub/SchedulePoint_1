@@ -1,4 +1,10 @@
-import { RESOURCE_KINDS, type ResourceKind, type ResourceSummary } from '@repo/types';
+import {
+  RESOURCE_CURVE_TYPES,
+  RESOURCE_KINDS,
+  type ResourceCurveType,
+  type ResourceKind,
+  type ResourceSummary,
+} from '@repo/types';
 import { z } from 'zod';
 
 import { moneyMajorAmount } from '@/lib/money-schema';
@@ -8,6 +14,18 @@ export const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
   LABOUR: 'Labour',
   EQUIPMENT: 'Equipment',
   MATERIAL: 'Material',
+};
+
+/**
+ * Human labels for the resource loading curves (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — used by the
+ * assignment dialog's curve picker. `UNIFORM` is the flat (default) load.
+ */
+export const RESOURCE_CURVE_LABELS: Record<ResourceCurveType, string> = {
+  UNIFORM: 'Uniform (flat)',
+  BELL: 'Bell',
+  FRONT_LOADED: 'Front-loaded',
+  BACK_LOADED: 'Back-loaded',
+  DOUBLE_PEAK: 'Double-peak',
 };
 
 /**
@@ -85,6 +103,11 @@ export const assignmentFormSchema = z.object({
     )
     .optional(),
   isDriving: z.boolean(),
+  // Resource loading curve (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — the named P6 profile the histogram
+  // read distributes budgeted units by. Optional; blank/absent = UNIFORM (a flat load, the parity path).
+  // Only editable behind `VITE_RESOURCE_CURVES`, but always seeded from the row so a stored value
+  // round-trips when the picker is hidden.
+  curveType: z.enum(RESOURCE_CURVE_TYPES).optional(),
   // Assignment cost & actuals (EV4b, ADR-0042). `budgetedCost` is an optional override (blank = derive
   // from budgetedUnits × the resource's costPerUnit at EV read time); `actualCost` is the booked cost.
   // Both entered in MAJOR units (×100 → minor on submit, ÷100 to seed). `actualUnits` is the quantity of

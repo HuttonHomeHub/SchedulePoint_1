@@ -1,4 +1,12 @@
-import type { EditedField, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
+import type {
+  EditedField,
+  HistogramGranularity,
+  ResourceAssignmentSummary,
+  ResourceCurveType,
+  ResourceHistogramBucket,
+  ResourceHistogramSeries,
+  ResourceSummary,
+} from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -9,9 +17,9 @@ import {
 
 import type { AssignmentFormValues, ResourceFormValues } from '../schemas/resource-schemas';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
 import { majorInputToMinor } from '@/lib/format-money';
-import { activityKeys, assignmentKeys, resourceKeys } from '@/lib/query/hierarchy-keys';
+import { activityKeys, assignmentKeys, planKeys, resourceKeys } from '@/lib/query/hierarchy-keys';
 
 export { assignmentKeys, resourceKeys };
 
@@ -154,6 +162,9 @@ export function useCreateAssignment(orgSlug: string, activityId: string) {
             // edit in the row editor, where the "edited field" is unambiguous.
             ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             isDriving: input.isDriving,
+            // Resource loading curve (M7 rung 5, ADR-0044 §3): omit when blank so an absent curve stays
+            // UNIFORM (a flat load, the API default).
+            ...(input.curveType ? { curveType: input.curveType } : {}),
             // Assignment cost & actuals (EV4b, ADR-0042): the money fields carry major → minor units.
             // Omit when blank so an absent value stays absent (the API derives budgeted cost from
             // units × rate, and defaults actuals to 0).
@@ -185,6 +196,8 @@ export function useUpdateAssignment(orgSlug: string) {
       isDriving: boolean;
       /** Set/change the driving assignment's rate (ADR-0040); omit to leave it unchanged. */
       unitsPerHour?: number;
+      /** Set the loading curve (M7 rung 5, ADR-0044 §3); omit to leave it unchanged. */
+      curveType?: ResourceCurveType;
       /**
        * Which triad quantity the planner edited (ADR-0040) — sent only for a units/rate edit on the
        * driving assignment, so the server holds it and recomputes the dependent (a same-row Units/Rate,
@@ -208,6 +221,7 @@ export function useUpdateAssignment(orgSlug: string) {
             budgetedUnits: input.budgetedUnits,
             ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             ...(input.editedField ? { editedField: input.editedField } : {}),
+            ...(input.curveType ? { curveType: input.curveType } : {}),
             isDriving: input.isDriving,
             ...(input.budgetedCost !== undefined ? { budgetedCost: input.budgetedCost } : {}),
             ...(input.actualCost !== undefined ? { actualCost: input.actualCost } : {}),
@@ -246,4 +260,54 @@ export function useDeleteAssignment(orgSlug: string) {
         queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
       }),
   });
+}
+
+/**
+ * A plan's resource loading histogram (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — the `{ data, meta }`
+ * shape of `GET …/schedule/resource-histogram`: `data` is the per-resource series, `meta` the shared
+ * bucket axis + `granularity` + `curveNormalisedCount`. Read via {@link apiFetchEnvelope} because the
+ * caller needs the `meta` roll-up (the shared axis + normalise count), like the baseline-variance read.
+ */
+export interface ResourceHistogramResult {
+  series: ResourceHistogramSeries[];
+  buckets: ResourceHistogramBucket[];
+  granularity: HistogramGranularity;
+  curveNormalisedCount: number;
+}
+
+export function resourceHistogramQueryOptions(
+  orgSlug: string,
+  planId: string,
+  granularity: HistogramGranularity,
+) {
+  return queryOptions({
+    queryKey: [...planKeys.detail(orgSlug, planId), 'resource-histogram', granularity] as const,
+    queryFn: async (): Promise<ResourceHistogramResult> => {
+      const { data, meta } = await apiFetchEnvelope<
+        ResourceHistogramSeries[],
+        {
+          buckets: ResourceHistogramBucket[];
+          granularity: HistogramGranularity;
+          curveNormalisedCount: number;
+        }
+      >(
+        `/organizations/${orgSlug}/plans/${planId}/schedule/resource-histogram?granularity=${granularity}`,
+      );
+      return {
+        series: data,
+        buckets: meta?.buckets ?? [],
+        granularity: meta?.granularity ?? granularity,
+        curveNormalisedCount: meta?.curveNormalisedCount ?? 0,
+      };
+    },
+    enabled: Boolean(planId),
+  });
+}
+
+export function useResourceHistogram(
+  orgSlug: string,
+  planId: string,
+  granularity: HistogramGranularity,
+): UseQueryResult<ResourceHistogramResult> {
+  return useQuery(resourceHistogramQueryOptions(orgSlug, planId, granularity));
 }

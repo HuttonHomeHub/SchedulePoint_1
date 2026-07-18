@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { PlanEarnedValue, PlanFloatPaths, PlanScheduleSummary } from '@repo/types';
+import type {
+  HistogramGranularity,
+  PlanEarnedValue,
+  PlanFloatPaths,
+  PlanScheduleSummary,
+  ResourceHistogramSeries,
+} from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -16,8 +22,11 @@ import {
   allMinutesWorkCalendar,
   computeEarnedValue,
   computeFloatPaths,
+  computeResourceHistogram,
   computeSchedule,
+  HistogramTooManyBucketsError,
   levelSchedule,
+  resolveCurveProfile,
   ScheduleGraphNotADagError,
   type ComputeOptions,
   type EngineActivity,
@@ -26,6 +35,7 @@ import {
   type EngineResource,
   type EngineSummary,
   type EvActivityInput,
+  type HistogramAssignmentInput,
   type WorkingTimeCalendar,
 } from './engine';
 import { buildPlanCalendar } from './plan-calendar';
@@ -44,6 +54,8 @@ function day(value: Date | null): string | null {
 export const SCHEDULE_ERROR = {
   /** The plan has no `plannedStart`, so there is no data date to schedule from. */
   PLAN_START_REQUIRED: 'PLAN_START_REQUIRED',
+  /** The requested histogram granularity would produce too many buckets (ask for a coarser one). */
+  HISTOGRAM_GRANULARITY_TOO_FINE: 'HISTOGRAM_GRANULARITY_TOO_FINE',
 } as const;
 
 /** An active plan row as loaded for scheduling — carries the engine-relevant option fields. */
@@ -385,6 +397,98 @@ export class ScheduleService {
       stepWeightZeroCount: result.stepWeightZeroCount,
       activities: result.activities,
       total: result.total,
+    };
+  }
+
+  /**
+   * The plan's **resource loading histogram** (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — a pure READ over
+   * the persisted CPM dates plus each active assignment's loading `curveType`, gated on `schedule:read`
+   * (every member). The units histogram is **schedule data, not cost** (Q5), so it is deliberately NOT
+   * `cost:read`-gated (contrast {@link getEarnedValue}). Resolves the org from the caller's memberships
+   * (anti-IDOR), 404s if the plan is not in the caller's org, then loads the plan's active assignments +
+   * their activities' persisted dates/calendars and runs the pure `computeResourceHistogram`. It NEVER
+   * recomputes or mutates: no write lock, no `computeSchedule`, no engine column — curves feed the
+   * histogram only, not the levelling pass (Q2). The per-resource series are offset-paged; the shared
+   * bucket axis + `curveNormalisedCount` (N29) ride in the meta.
+   */
+  async getResourceHistogram(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    granularity: HistogramGranularity,
+    limit: number,
+    offset: number,
+  ): Promise<{
+    series: ResourceHistogramSeries[];
+    buckets: { start: string; end: string }[];
+    granularity: HistogramGranularity;
+    total: number;
+    hasMore: boolean;
+    curveNormalisedCount: number;
+  }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'schedule:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    const rows = await this.schedule.loadResourceHistogramAssignments(organization.id, planId);
+
+    // Resolve each DISTINCT activity calendar ONCE (ADR-0037): a null calendarId (or the plan calendar)
+    // inherits the plan default. A histogram distributes units over the activity's OWN calendar; the
+    // driving-resource-calendar substitution used for *scheduling* a RESOURCE_DEPENDENT activity is not
+    // reapplied here — the dates are already computed, and the own-calendar phasing is the ADR-0037 grain.
+    const planCalendar = await this.resolveCalendar(organization.id, plan.calendarId);
+    const portByCalId = new Map<string, WorkingTimeCalendar>();
+    for (const calId of new Set(
+      rows
+        .map((r) => r.calendarId)
+        .filter((id): id is string => id != null && id !== plan.calendarId),
+    )) {
+      portByCalId.set(calId, await this.resolveCalendar(organization.id, calId));
+    }
+    const portFor = (calId: string | null): WorkingTimeCalendar =>
+      calId == null || calId === plan.calendarId
+        ? planCalendar
+        : (portByCalId.get(calId) ?? planCalendar);
+
+    const assignments: HistogramAssignmentInput[] = rows.map((r) => ({
+      resourceId: r.resourceId,
+      activityId: r.activityId,
+      budgetedUnits: r.budgetedUnits.toNumber(),
+      // Resolve the named curve to its built-in P6 profile; UNIFORM → null → a flat load (parity).
+      profile: resolveCurveProfile(r.curveType),
+      start: r.earlyStart ? formatCalendarDate(r.earlyStart) : null,
+      finish: r.earlyFinish ? formatCalendarDate(r.earlyFinish) : null,
+      // SchedulePoint does not model a per-assignment lag column (the fixture's assignment_lag_h is a
+      // conformance-only concept, exercised via the adapter); production always distributes over the
+      // whole activity span.
+      lagMinutes: 0,
+      calendar: portFor(r.calendarId),
+    }));
+
+    let histogram;
+    try {
+      histogram = computeResourceHistogram({ assignments, granularity });
+    } catch (error) {
+      if (error instanceof HistogramTooManyBucketsError) {
+        throw new ValidationError(
+          'The requested granularity produces too many buckets for this plan’s span; use a coarser one.',
+          { reason: SCHEDULE_ERROR.HISTOGRAM_GRANULARITY_TOO_FINE },
+        );
+      }
+      throw error;
+    }
+
+    const total = histogram.series.length;
+    const page = histogram.series.slice(offset, offset + limit);
+    return {
+      series: page,
+      buckets: histogram.buckets,
+      granularity: histogram.granularity,
+      total,
+      hasMore: offset + page.length < total,
+      curveNormalisedCount: histogram.curveNormalisedCount,
     };
   }
 

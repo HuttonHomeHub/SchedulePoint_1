@@ -206,6 +206,26 @@ every editing entry point (edit-lock M2/M3).
   step `percentComplete` outside 0–100 is a **422** (`STEP_PERCENT_OUT_OF_RANGE`,
   N28) and a negative `weight` a 422; all-zero weights fall back to the manual field
   and raise the read's `stepWeightZeroCount` warning (N27), never a reject.
+- A **resource assignment** (`…/activities/:activityId/assignments`) carries a
+  settable **`curveType`** (`UNIFORM` default / `BELL` / `FRONT_LOADED` /
+  `BACK_LOADED` / `DOUBLE_PEAK`, ADR-0044 §3 / ADR-0035 §31) — the named P6 loading
+  curve the resource-histogram read distributes the assignment's `budgetedUnits` by
+  across the activity span. It shapes only the histogram — **no CPM date, no
+  levelling** — and `UNIFORM` (the default) is a flat load (byte-identical to a
+  flat-rate distribution). It is a plain enum (not cost-gated).
+- `GET …/schedule/resource-histogram` reads a plan's **resource loading histogram**
+  (ADR-0044 §3 / ADR-0035 §31, `schedule:read` — every member; the units histogram
+  is **schedule data, not cost**, so it is **not** `cost:read`-gated). A
+  `granularity` query param (`DAY` default / `WEEK` / `MONTH`) sets the shared
+  time-bucket axis; `limit`/`offset` page over the **per-resource series** (`data`).
+  Each assignment's `budgetedUnits` is distributed across its effective span per its
+  `curveType`, **conserving units** (`Σ buckets === Σ budgetedUnits` per resource);
+  the response `meta` carries the shared `buckets` axis, `granularity`, the total
+  series count, `hasMore`, and **`curveNormalisedCount`** (N29 — assignments whose
+  profile did not sum to 100 and were normalised to conserve units). It reads the
+  persisted CPM dates only — no recompute, no CPM date moved, no levelling. A
+  granularity too fine for the plan's span returns **422**
+  (`HISTOGRAM_GRANULARITY_TOO_FINE`); request a coarser one.
 
 ## Authentication
 

@@ -27,6 +27,7 @@ stays **Proposed** overall until every clause is built. Current state:
 | §28 (resource levelling), N21           | M7 (levelling)   | **Accepted** |
 | §29 (%-complete-type & EV), N22–N24     | M7 (EV3)         | **Accepted** |
 | §30 (external / inter-project), N25–N26 | IPD (M1)         | **Accepted** |
+| §31 (resource curves), N29              | M7 (rung 5, F3)  | **Accepted** |
 | §32 (cost accrual)                      | M7 (rung 5, F1)  | **Accepted** |
 | §33 (weighted steps), N27/N28           | M7 (rung 5, F2)  | **Accepted** |
 | §15–§16, §25 (arithmetic/boundary)      | M0/M1            | Proposed¹    |
@@ -366,6 +367,51 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
     auto-derived from the linked plan's computed schedule (cross-plan edges, a cross-plan DAG/cycle
     invariant, cross-plan authorisation, staleness/propagation, programme recalc). M1 covers imported
     dates + the toggle only.
+
+### Resource loading curves (→ M7 rung 5, ADR-0044 §3 / F3)
+
+> §32 (cost accrual) and §33 (weighted steps) are the other two ADR-0044 slices. This slice (F3) Accepts
+> §31 + N29 and **closes the ADR-0044 rung** (the last capability-matrix ⚪ → ✅).
+
+31. **Resource-curve semantics.** Like §29's Earned Value, §32's accrual and §33's steps, resource
+    loading curves are a **pure read-model** concern — they never enter `computeSchedule`, add no write
+    pass, own no persisted engine column (only the settable `resource_assignments.curve_type` enum), and
+    (this rung) do **NOT** feed the levelling pass (`level.ts` stays flat-rate, Q2). SchedulePoint's chosen
+    semantics — the golden contract for the fixture's `res_curve_*` tags:
+
+    - **A curve shapes the histogram, never a date.** Each assignment carries a `curveType`
+      (`UNIFORM` default | `BELL` | `FRONT_LOADED` | `BACK_LOADED` | `DOUBLE_PEAK`) — a named P6 21-point
+      profile the pure `resource-histogram.ts` read-model distributes the assignment's `budgetedUnits` by
+      across its **effective span** (`start + assignment-lag → finish`, on the activity's own calendar,
+      ADR-0037), aggregating a **units-over-time histogram per resource**. It moves no CPM date and never
+      touches float, EV, or the levelling overlay — only the **loading shape over time**.
+    - **Units are conserved.** The whole `budgetedUnits` is distributed across the span, so a resource's
+      `Σ buckets === Σ its assignments' budgetedUnits` **exactly** (a sub-grain rounding residual is folded
+      into the largest bucket at the `DECIMAL(18,4)` storage grain). The curve is a **density**: the
+      profile's 21 per-interval weights define a piecewise-linear CDF over the normalised span, and a
+      bucket receives `budgetedUnits × (CDF(uHi) − CDF(uLo))`.
+    - **UNIFORM / absent is a flat load — byte-identical to a flat rate.** `UNIFORM` has no profile: it is
+      a genuine flat distribution `CDF(u) = u` at any bucket count (the fixture's `LINEAR` curve maps to
+      it — a flat load, not the fixture's discretised twenty-of-5 array), so an assignment with no curve
+      reads identically to a plain flat-rate load (the parity path). The built-in `BELL` / `FRONT_LOADED`
+      / `BACK_LOADED` / `DOUBLE_PEAK` profile constants are **byte-equal to the fixture's `resource_curves`
+      points**, so the goldens self-baseline first-principles (ADR-0034, no external oracle).
+    - **Named P6 profiles only (Q1).** The five named enum values fully serve the fixture; a **user-defined
+      point-array curve library** (org-scoped curve entities + CRUD + authoring UI) is deferred — it is a
+      whole parallel model for value the named enum already delivers.
+    - **Curves do NOT feed levelling this rung (Q2).** Levelling (§28 / ADR-0041) reads a **flat**
+      `units_per_hour` as demand; curve-aware levelling would reshape `level.ts`'s demand sweep and
+      re-baseline the S10 golden — an engine-adjacent change. The curve is a **histogram read-model** only;
+      if curve-aware levelling is later wanted it is a separate ADR amending ADR-0041.
+    - **The histogram is `schedule:read`, not `cost:read` (Q5).** A units histogram is **schedule** data,
+      not commercially-sensitive money, so `GET …/schedule/resource-histogram` is gated on `schedule:read`
+      (every member) — unlike the `cost:read` Earned-Value read.
+    - **N29 — a profile that does not sum to 100 ⇒ normalise to the budget, never a reject.** The
+      read-model normalises **any** profile by its own weight sum, so units are conserved regardless; when
+      a present profile does not sum to 100 (within epsilon) it is counted as a `curveNormalisedCount`
+      data-quality signal (the §29 `costWarningCount` precedent) — produce-and-flag, never a reject, never
+      a divide-by-zero (an all-zero or empty profile falls back to the flat load). The built-in profiles
+      all sum to 100, so N29 fires only for a hostile/synthetic profile.
 
 ### Cost accrual (→ M7 rung 5, ADR-0044)
 

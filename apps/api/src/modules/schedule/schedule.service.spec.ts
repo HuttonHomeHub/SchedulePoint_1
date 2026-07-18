@@ -668,3 +668,118 @@ describe('ScheduleService.getEarnedValue', () => {
     expect(result.costBaselineMissing).toBe(false);
   });
 });
+
+describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-0035 §31)', () => {
+  let organizations: { resolveScope: ReturnType<typeof vi.fn> };
+  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let schedule: {
+    loadResourceHistogramAssignments: ReturnType<typeof vi.fn>;
+    loadPlanCalendar: ReturnType<typeof vi.fn>;
+  };
+  let service: ScheduleService;
+
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    resourceId: 'res-1',
+    activityId: 'act-1',
+    budgetedUnits: new Prisma.Decimal(1200),
+    curveType: 'BELL' as const,
+    // A 21-day span on the (null-calendar → all-days-work) plan calendar, DAY-aligned to the profile.
+    earlyStart: new Date('2026-01-01T00:00:00Z'),
+    earlyFinish: new Date('2026-01-22T00:00:00Z'),
+    calendarId: null,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    organizations = {
+      resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'VIEWER' }),
+    };
+    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    schedule = {
+      loadResourceHistogramAssignments: vi.fn().mockResolvedValue([row()]),
+      loadPlanCalendar: vi.fn().mockResolvedValue(null),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    service = new ScheduleService(
+      organizations as unknown as OrganizationsService,
+      plans as unknown as PlanRepository,
+      schedule as unknown as ScheduleRepository,
+      { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
+      { $transaction: vi.fn() } as unknown as PrismaService,
+      logger,
+    );
+  });
+
+  it('denies a caller without schedule:read (403) before any load', async () => {
+    await expect(
+      service.getResourceHistogram(principalWith([]), 'acme', PLAN_ID, 'DAY', 50, 0),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(schedule.loadResourceHistogramAssignments).not.toHaveBeenCalled();
+  });
+
+  it('404s when the plan is not in the caller’s org', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(null);
+    await expect(
+      service.getResourceHistogram(principalWith(READ), 'acme', PLAN_ID, 'DAY', 50, 0),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('curve-shapes the histogram (BELL) and conserves units to the buckets', async () => {
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    expect(result.granularity).toBe('DAY');
+    expect(result.buckets).toHaveLength(21);
+    expect(result.series).toHaveLength(1);
+    const series = result.series[0]!;
+    expect(series.resourceId).toBe('res-1');
+    // 1200 × BELL peak 9% ⇒ 108 at buckets 9 & 10; Σ = 1200.
+    expect(series.values[9]).toBe(108);
+    expect(series.values.reduce((a, b) => a + b, 0)).toBeCloseTo(1200, 4);
+    expect(series.total).toBe(1200);
+    expect(result.total).toBe(1);
+    expect(result.hasMore).toBe(false);
+    expect(result.curveNormalisedCount).toBe(0);
+  });
+
+  it('UNIFORM (the default) is a flat load', async () => {
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ curveType: 'UNIFORM', budgetedUnits: new Prisma.Decimal(210) }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    expect(result.series[0]!.values).toEqual(new Array(21).fill(10));
+    expect(result.curveNormalisedCount).toBe(0);
+  });
+
+  it('offset-pages the per-resource series', async () => {
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ resourceId: 'res-1' }),
+      row({ resourceId: 'res-2' }),
+      row({ resourceId: 'res-3' }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      1,
+      1,
+    );
+    expect(result.total).toBe(3);
+    expect(result.series).toHaveLength(1);
+    expect(result.series[0]!.resourceId).toBe('res-2'); // sorted, page of 1 at offset 1
+    expect(result.hasMore).toBe(true);
+  });
+});

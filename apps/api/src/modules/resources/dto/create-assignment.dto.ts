@@ -1,6 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ResourceCurveType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, Matches, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Matches,
+  Min,
+} from 'class-validator';
 
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
@@ -113,4 +123,17 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsBoolean()
   isDriving?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ResourceCurveType,
+    default: ResourceCurveType.UNIFORM,
+    description:
+      'The named P6 loading curve the resource-histogram read-model distributes this assignment’s ' +
+      'budgetedUnits by across the activity span (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). Shapes only ' +
+      'the histogram — no CPM date, no levelling (Q2). Omit for UNIFORM (a flat load; the byte-identical ' +
+      'default).',
+  })
+  @IsOptional()
+  @IsEnum(ResourceCurveType)
+  curveType?: ResourceCurveType;
 }

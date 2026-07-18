@@ -1,5 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { DurationType, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
+import {
+  RESOURCE_CURVE_TYPES,
+  type DurationType,
+  type ResourceAssignmentSummary,
+  type ResourceCurveType,
+  type ResourceSummary,
+} from '@repo/types';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -16,6 +22,7 @@ import {
   type DurationDerivationPreview,
 } from '../schemas/duration-triad';
 import {
+  RESOURCE_CURVE_LABELS,
   RESOURCE_KIND_LABELS,
   assignmentFormSchema,
   isMaterialResource,
@@ -33,7 +40,11 @@ import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { DURATION_TYPES_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
+import {
+  DURATION_TYPES_ENABLED,
+  EARNED_VALUE_ENABLED,
+  RESOURCE_CURVES_ENABLED,
+} from '@/config/env';
 import { minorToMajorInput } from '@/lib/format-money';
 
 /** A MATERIAL resource may never drive an activity's dates (ADR-0039). */
@@ -266,6 +277,7 @@ function AssignmentRow({
   const rateId = useId();
   const rateErrorId = useId();
   const rateNoteId = useId();
+  const curveId = useId();
   // Seeded from the row's persisted value. The parent keys this component by the
   // assignment id (not its version), so a save/driving-toggle refetch keeps the row
   // mounted — focus is preserved — while the persisted-value diff below drives Save.
@@ -385,6 +397,25 @@ function AssignmentRow({
     );
   };
 
+  // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain enum save (like the driving toggle),
+  // preserving the other fields; it never triggers a triad recompute (no editedField).
+  const changeCurve = (next: ResourceCurveType): void => {
+    update.mutate(
+      {
+        assignmentId: assignment.id,
+        activityId,
+        version: assignment.version,
+        budgetedUnits: assignment.budgetedUnits,
+        isDriving: assignment.isDriving,
+        curveType: next,
+      },
+      {
+        onSuccess: () =>
+          announce(`Loading curve for “${name}” set to ${RESOURCE_CURVE_LABELS[next]}.`),
+      },
+    );
+  };
+
   const unassign = (): void => {
     remove.mutate(
       { assignmentId: assignment.id, activityId },
@@ -499,6 +530,26 @@ function AssignmentRow({
               hint={isMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
               onChange={(event) => toggleDriving(event.target.checked)}
             />
+            {/* Loading curve (M7 rung 5, ADR-0044 §3) — shapes the resource histogram, not the dates.
+                Behind the flag; UNIFORM is the flat default. Saved immediately on change. */}
+            {RESOURCE_CURVES_ENABLED ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={curveId}>Loading curve</Label>
+                <Select
+                  id={curveId}
+                  value={assignment.curveType}
+                  disabled={update.isPending}
+                  onChange={(event) => changeCurve(event.target.value as ResourceCurveType)}
+                  className="w-40"
+                >
+                  {RESOURCE_CURVE_TYPES.map((curve) => (
+                    <option key={curve} value={curve}>
+                      {RESOURCE_CURVE_LABELS[curve]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -527,6 +578,9 @@ function AssignmentRow({
             ? ` · ${assignment.unitsPerHour} units/time`
             : ''}
           {assignment.isDriving ? ' · driving' : ''}
+          {RESOURCE_CURVES_ENABLED && assignment.curveType !== 'UNIFORM'
+            ? ` · ${RESOURCE_CURVE_LABELS[assignment.curveType]} curve`
+            : ''}
         </p>
       )}
     </li>
@@ -570,6 +624,7 @@ export function ActivityResourcesDialog({
   const announce = useAnnounce();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const resourceSelectId = useId();
+  const curveSelectId = useId();
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
   const assignedIds = new Set((assignments.data ?? []).map((a) => a.resourceId));
@@ -584,12 +639,12 @@ export function ActivityResourcesDialog({
     formState: { errors },
   } = useForm<AssignmentFormValues>({
     resolver: zodResolver(assignmentFormSchema),
-    defaultValues: { resourceId: '', budgetedUnits: 0, isDriving: false },
+    defaultValues: { resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' },
   });
 
   useEffect(() => {
     if (open) {
-      reset({ resourceId: '', budgetedUnits: 0, isDriving: false });
+      reset({ resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' });
       create.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
@@ -618,7 +673,7 @@ export function ActivityResourcesDialog({
         onSuccess: () => {
           const name = resourceById.get(values.resourceId)?.name ?? 'Resource';
           announce(`“${name}” assigned.`);
-          reset({ resourceId: '', budgetedUnits: 0, isDriving: false });
+          reset({ resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' });
         },
       },
     );
@@ -722,6 +777,25 @@ export function ActivityResourcesDialog({
                   hint={selectedIsMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
                   {...register('isDriving')}
                 />
+                {/* Loading curve (M7 rung 5, ADR-0044 §3) — the named P6 profile the resource histogram
+                    distributes budgeted units by across the span. Behind the flag; UNIFORM is the flat
+                    default. Shapes only the histogram, never the dates. */}
+                {RESOURCE_CURVES_ENABLED ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={curveSelectId}>Loading curve</Label>
+                    <Select id={curveSelectId} {...register('curveType')}>
+                      {RESOURCE_CURVE_TYPES.map((curve) => (
+                        <option key={curve} value={curve}>
+                          {RESOURCE_CURVE_LABELS[curve]}
+                        </option>
+                      ))}
+                    </Select>
+                    <p className="text-muted-foreground text-sm">
+                      Shapes how this resource’s units spread over the activity — the resource
+                      histogram only. It doesn’t move any dates.
+                    </p>
+                  </div>
+                ) : null}
                 {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
                     driving box is ticked, and only behind the flag. An initial rate is stored inert; the
                     duration derivation happens on a later units/rate edit in the row above. */}

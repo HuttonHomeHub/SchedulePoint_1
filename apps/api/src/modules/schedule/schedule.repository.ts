@@ -7,6 +7,7 @@ import {
   type DependencyType,
   type LagCalendarSource,
   type PercentCompleteType,
+  type ResourceCurveType,
 } from '@prisma/client';
 
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
@@ -124,6 +125,24 @@ export interface EarnedValueActivityRow {
     actualUnits: Prisma.Decimal;
     resource: { costPerUnit: Prisma.Decimal | null };
   }[];
+}
+
+/**
+ * One active resource assignment as the **resource-histogram read-model** loads it (M7 rung 5,
+ * ADR-0044 §3 / ADR-0035 §31): the assignment's loading `curveType` + `budgetedUnits`, joined to its
+ * owning activity's persisted CPM dates and own calendar (ADR-0037). A pure read — never taken under a
+ * write lock or a recompute; it schedules nothing.
+ */
+export interface ResourceHistogramAssignmentRow {
+  resourceId: string;
+  activityId: string;
+  budgetedUnits: Prisma.Decimal;
+  curveType: ResourceCurveType;
+  /** The owning activity's persisted early start / finish (the span); null = never-calculated ⇒ off-axis. */
+  earlyStart: Date | null;
+  earlyFinish: Date | null;
+  /** The owning activity's own calendar (ADR-0037); null = inherit the plan default. */
+  calendarId: string | null;
 }
 
 /** The active baseline's cost-snapshot row the EV read time-phases PV against (EV2b, ADR-0042). */
@@ -457,6 +476,45 @@ export class ScheduleRepository {
         },
       },
     });
+  }
+
+  /**
+   * A plan's active resource assignments (of active resources) projected to the resource-histogram
+   * read-model inputs (M7 rung 5, ADR-0044 §3): each assignment's loading `curveType` + `budgetedUnits`
+   * joined to its owning activity's persisted CPM dates + own calendar (ADR-0037). Org + plan scoped
+   * (anti-IDOR), soft-deletes excluded (assignment, activity, and resource). A pure read — never taken
+   * under a write lock or a recompute. Backed by the ADR-0039 assignment indexes; one batched query.
+   */
+  async loadResourceHistogramAssignments(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ResourceHistogramAssignmentRow[]> {
+    const rows = await db.resourceAssignment.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        activity: { planId, deletedAt: null },
+        resource: { deletedAt: null },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        resourceId: true,
+        activityId: true,
+        budgetedUnits: true,
+        curveType: true,
+        activity: { select: { earlyStart: true, earlyFinish: true, calendarId: true } },
+      },
+    });
+    return rows.map((r) => ({
+      resourceId: r.resourceId,
+      activityId: r.activityId,
+      budgetedUnits: r.budgetedUnits,
+      curveType: r.curveType,
+      earlyStart: r.activity.earlyStart,
+      earlyFinish: r.activity.earlyFinish,
+      calendarId: r.activity.calendarId,
+    }));
   }
 
   /**
