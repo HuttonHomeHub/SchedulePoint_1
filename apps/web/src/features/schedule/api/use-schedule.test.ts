@@ -40,9 +40,12 @@ describe('useRecalculate', () => {
     // summary, the activities list, the baseline variance, and the dependencies (where the M3
     // `isDriving` flag lives — else driving styling is stale after a reposition/create).
     const invalidatedKeys = invalidate.mock.calls.map(([arg]) => JSON.stringify(arg?.queryKey));
+    // It also sweeps the org-wide schedule namespace so a downstream cross-plan plan's pull-computed
+    // staleness (ADR-0045 §5) refreshes after an upstream recalc.
     expect(invalidatedKeys).toEqual(
       expect.arrayContaining([
         JSON.stringify(scheduleKeys.summary('acme', 'p1')),
+        JSON.stringify(scheduleKeys.all('acme')),
         JSON.stringify(activityKeys.listByPlan('acme', 'p1')),
         JSON.stringify(baselineKeys.variance('acme', 'p1')),
         JSON.stringify(dependencyKeys.byPlan('acme', 'p1')),

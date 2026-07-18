@@ -54,20 +54,34 @@ test('a planner links plans across projects and recalculates the programme', asy
   await add.getByLabel('Activity').selectOption({ label: 'Deliver steel' });
   await add.getByRole('button', { name: 'Add cross-plan link' }).click();
 
-  // The link lists in the Logic panel as an incoming ("Driven by") edge from the upstream activity.
-  await expect(logic.getByRole('cell', { name: 'Deliver steel' })).toBeVisible();
+  // The add succeeds and the link is created. The durable, deterministic signal is the **programme
+  // surface**, which appears only once the plan has a cross-plan edge — independent of the Logic panel,
+  // which can close here when the create invalidates the schedule summary (a benign flag-off race,
+  // TECH_DEBT #45). Assert on that, then re-open the panel fresh to confirm the edge lists.
+  await expect(add).toBeHidden();
+  const programme = page.getByRole('region', { name: 'Programme scheduling' });
+  await expect(programme).toBeVisible();
+
+  // Dismiss the Logic panel if it is still open, then re-open it and confirm the link lists as an
+  // incoming ("Driven by") edge from the upstream activity. `exact` so the predecessor NAME cell wins —
+  // the actions cell's "Remove cross-plan link to Deliver steel" button would otherwise also match this
+  // (substring) role query and trip strict mode.
+  await page.keyboard.press('Escape');
+  await expect(logic).toBeHidden();
+  await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
+  await page.getByRole('menuitem', { name: 'Logic' }).click();
+  await expect(logic.getByRole('cell', { name: 'Deliver steel', exact: true })).toBeVisible();
   await expect(logic.getByText('Driven by')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(logic).toBeHidden();
 
-  // The programme surface now appears. Recalculate the programme (upstream-first).
-  const programme = page.getByRole('region', { name: 'Programme scheduling' });
-  await expect(programme).toBeVisible();
+  // Recalculate the programme (upstream-first).
   await programme.getByRole('button', { name: 'Recalculate programme' }).click();
 
-  // The result panel lists the closure upstream-first (the target last).
+  // The result panel lists the closure upstream-first (the target last). `exact` on the target row so
+  // it doesn't also match the section's intro copy ("This plan has live cross-plan links…").
   await expect(programme.getByText('Upstream plan 1')).toBeVisible();
-  await expect(programme.getByText('This plan')).toBeVisible();
+  await expect(programme.getByText('This plan', { exact: true })).toBeVisible();
 
   // The downstream date is now driven by the upstream commitment → the "External" driven badge lights
   // up in the activities table (the M1 badge the programme surface reuses; matched by its sr-only text).
