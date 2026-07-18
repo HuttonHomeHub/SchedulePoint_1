@@ -2,7 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 
 import { CalendarsModule } from '../calendars/calendars.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
-import { PlanLockModule } from '../plan-lock/plan-lock.module';
 
 import { ResourceAssignmentRepository } from './resource-assignment.repository';
 import { ResourceAssignmentService } from './resource-assignment.service';
@@ -23,9 +22,14 @@ import { ResourcesService } from './resources.service';
  * active resources) — a bidirectional module dependency resolved with `forwardRef` on both
  * sides. Exports the two repositories so the M7.2 schedule module can resolve a
  * RESOURCE_DEPENDENT activity's driving assignment + calendar.
+ *
+ * The assignment write path pen-gates on `PlanEditLockService` (ADR-0028), which is
+ * provided by the global `PlanLockModule` — importing that module here would close a
+ * `resources → plan-lock → plans → calendars → resources` bootstrap cycle, so the pen
+ * is injected globally instead (see `PlanLockModule`'s `@Global`).
  */
 @Module({
-  imports: [OrganizationsModule, forwardRef(() => CalendarsModule), PlanLockModule],
+  imports: [OrganizationsModule, forwardRef(() => CalendarsModule)],
   controllers: [ResourcesController, ResourceAssignmentsController],
   providers: [
     ResourcesService,
