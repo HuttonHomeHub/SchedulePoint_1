@@ -1498,4 +1498,53 @@ export const RESOURCE_ERROR = {
 /** A machine-readable resource-module error reason (a key of {@link RESOURCE_ERROR}). */
 export type ResourceErrorReason = keyof typeof RESOURCE_ERROR;
 
+// ---------------------------------------------------------------------------
+// Notes (the Notes feature, ADR-0046) — attributed, time-ordered note threads
+// attached to an entity. Plans and activities in v1; client/project reserved.
+// ---------------------------------------------------------------------------
+
+/** The entity kinds a note can attach to (v1: plan, activity; client/project reserved). */
+export const NOTE_ENTITY_TYPES = ['PLAN', 'ACTIVITY'] as const;
+
+/** Which entity a note is attached to — the polymorphic discriminator (ADR-0046). */
+export type NoteEntityType = (typeof NOTE_ENTITY_TYPES)[number];
+
+/**
+ * One note in an entity's thread — an attributed, timestamped free-text entry (ADR-0046). A note is
+ * NOT a schedule input (no dates/logic); it records the *why* behind the plan. `authorId` is the
+ * opaque user id that created it (the note's owner — only the author may edit/delete it, enforced in
+ * the service); `authorName` is that user's display name resolved server-side, or null if unresolved.
+ * `edited` is true once the author has revised the body since posting. `planId` is always present (an
+ * activity note carries its activity's plan id, the denormalised cascade key); `activityId` is set iff
+ * `entityType` is `ACTIVITY`. Timestamps are ISO instants.
+ */
+export interface NoteSummary {
+  id: string;
+  entityType: NoteEntityType;
+  /** The owning plan (a PLAN note's parent, or an ACTIVITY note's plan). Always present in v1. */
+  planId: string;
+  /** The owning activity — present iff `entityType` is `ACTIVITY`, else null. */
+  activityId: string | null;
+  /** The note text (plain, 1–5000 chars; no markdown). */
+  body: string;
+  /** The opaque id of the user who wrote the note (its owner), or null if unattributed. */
+  authorId: string | null;
+  /** The author's display name resolved server-side, or null if it can't be resolved. */
+  authorName: string | null;
+  /** True once the author has edited the body since it was first posted (`updatedAt` > `createdAt`). */
+  edited: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * How many (non-deleted) notes an activity has — the payload of the batch note-counts read used to
+ * badge rows without an N+1. Only activities with ≥1 note are returned; an absent id means zero.
+ */
+export interface ActivityNoteCount {
+  activityId: string;
+  count: number;
+}
+
 export {};

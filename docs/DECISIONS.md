@@ -10,6 +10,31 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-19 — Notes: polymorphic single table, `plan_id` on every note, fail-closed parent CHECK (ADR-0046)
+
+**Decision.** Threaded notes are a **single polymorphic `notes` table** (ADR-0046), not
+per-entity tables: a `NoteEntityType` discriminator (`PLAN`/`ACTIVITY`; `CLIENT`/`PROJECT`
+reserved) + nullable typed parent FKs (`plan_id`, `activity_id`) + a raw-SQL CHECK
+`ck_notes_exactly_one_parent` written as `CASE entity_type … ELSE false` so a future enum value
+inserted before its CHECK branch **fails closed** (never silently unenforced). A **denormalised
+`plan_id` on every note** (an activity note carries its activity's `plan_id`) doubles as the
+PLAN-note parent pointer (the `Activity` precedent) **and** the cascade key, so the
+`HierarchyLifecycleService` plan-cascade is one join-free `updateMany WHERE plan_id IN (…)` with
+no double-count; restore rides the parent's `delete_batch_id` with **no endpoint guard** (a note
+has exactly one parent — the `activity_steps` precedent, unlike a dependency's two endpoints).
+
+**Why.** The locked requirement is "drop client/project in later with no rework" — a polymorphic
+table extends via a nullable column + one CHECK branch + one cascade sweep, where per-entity
+tables would fork the module/table/component/cascade per type. Typed FKs (not a bare
+`entity_id`) keep real referential integrity.
+
+**Consequences.** `plan_id` does double duty (parent + scope) — documented, not to be "fixed"
+into two columns; it goes nullable via a safe expand-only ALTER only when a parent-less
+client/project note lands. Body is plain text 1–5000 (`ck_notes_body_length` backstop). The CPM
+engine is untouched (notes are non-scheduling; migration is byte-parity). Author-ownership on
+edit/delete, `updated_by` on edit, optimistic-`version` 409, and copy-scope-from-parent are
+**service-layer** invariants the DB cannot enforce (M2). Full ADR: `docs/adr/0046-polymorphic-entity-notes.md`.
+
 ### 2026-07-17 — L1 resource-levelling schema: `leveling_priority` is nullable (NULL = unset), not defaulted
 
 **Decision.** The client-settable levelling tie-break `activities.leveling_priority` (ADR-0041 §1,

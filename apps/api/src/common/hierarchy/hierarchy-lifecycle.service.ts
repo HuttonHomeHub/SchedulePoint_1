@@ -25,6 +25,12 @@ export interface CascadeCounts {
   baselines: number;
   /** Activity steps swept when their owning activities are deleted (M7 rung 5, ADR-0044 §2). */
   steps: number;
+  /**
+   * Notes swept under the deleted plans/activities (the Notes feature, ADR-0046). Every note carries
+   * a denormalised `plan_id`, so a plan/project/client delete sweeps PLAN + ACTIVITY notes in one pass
+   * (no double-count); a single-activity delete sweeps that activity subtree's notes by `activity_id`.
+   */
+  notes: number;
 }
 
 export interface CascadeDeleteResult {
@@ -78,6 +84,7 @@ export class HierarchyLifecycleService {
       dependencies: 0,
       baselines: 0,
       steps: 0,
+      notes: 0,
     };
 
     // Soft-delete the active baselines (and their snapshot rows) under a set of plans
@@ -164,6 +171,33 @@ export class HierarchyLifecycleService {
       ).count;
     };
 
+    // Soft-delete the active notes under a set of plans (the Notes feature, ADR-0046), in the same
+    // batch. Every note — PLAN and ACTIVITY alike — carries the denormalised `plan_id`, so this SINGLE
+    // sweep by `plan_id` catches both kinds with NO double-count (an activity note is not swept again
+    // by `deleteNotesForActivities` here — that helper is only for a single-activity delete).
+    const deleteNotesUnderPlans = async (planIds: string[]): Promise<number> => {
+      if (planIds.length === 0) return 0;
+      return (
+        await tx.note.updateMany({
+          where: { planId: { in: planIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
+    // Soft-delete the active notes of a set of activities (ADR-0046) — used when an activity subtree is
+    // deleted, so an activity's note thread follows it under the one batch id. Swept by `activity_id`
+    // (PLAN notes have none), the step/link precedent.
+    const deleteNotesForActivities = async (activityIds: string[]): Promise<number> => {
+      if (activityIds.length === 0) return 0;
+      return (
+        await tx.note.updateMany({
+          where: { activityId: { in: activityIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
     // Resolve an activity's active `parent_id` subtree (the row itself + every
     // active descendant), breadth-first. Only a WBS_SUMMARY can be a parent
     // (service-enforced), so a leaf activity resolves to just itself in one hop.
@@ -213,6 +247,7 @@ export class HierarchyLifecycleService {
       counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.steps = await deleteStepsUnderPlans(planIds);
+      counts.notes = await deleteNotesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       if (planIds.length > 0) {
         counts.plans = (
@@ -232,6 +267,7 @@ export class HierarchyLifecycleService {
       counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.steps = await deleteStepsUnderPlans(planIds);
+      counts.notes = await deleteNotesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
@@ -243,6 +279,7 @@ export class HierarchyLifecycleService {
       counts.baselines = await deleteBaselinesUnderPlans([id]);
       counts.dependencies = await deleteLinksUnderPlans([id]);
       counts.steps = await deleteStepsUnderPlans([id]);
+      counts.notes = await deleteNotesUnderPlans([id]);
       counts.activities = await deleteActivitiesUnderPlans([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
@@ -255,6 +292,7 @@ export class HierarchyLifecycleService {
       const subtreeIds = await resolveActivitySubtree(id);
       counts.dependencies = await deleteLinksForActivities(subtreeIds);
       counts.steps = await deleteStepsForActivities(subtreeIds);
+      counts.notes = await deleteNotesForActivities(subtreeIds);
       counts.activities = (
         await tx.activity.updateMany({
           where: { id: { in: subtreeIds }, deletedAt: null },
@@ -299,6 +337,7 @@ export class HierarchyLifecycleService {
       dependencies: 0,
       baselines: 0,
       steps: 0,
+      notes: 0,
     };
 
     try {
@@ -331,6 +370,14 @@ export class HierarchyLifecycleService {
         // by a bulk-replace carry their OWN (different) batch id, so they never resurrect here.
         counts.steps = (
           await tx.activityStep.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
+        // Restore the batch's notes (the Notes feature, ADR-0046). A note has exactly ONE parent and
+        // was swept in the SAME batch as it, so — like a step, unlike a dependency — no endpoint guard
+        // is needed: restoring the batch reactivates each note with its parent, and the parent's own
+        // top-down `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A
+        // note deleted individually (its own fresh batch) carries a different id and never resurrects here.
+        counts.notes = (
+          await tx.note.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
         // Restore the batch's links AFTER their activities, and only where BOTH
         // endpoints are now active — a link whose other end was deleted separately

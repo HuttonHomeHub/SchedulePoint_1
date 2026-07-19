@@ -115,7 +115,7 @@ enum OrganizationRole {
 }
 
 model Organization {
-  id                  String               @id @default(uuid(7)) @db.Uuid
+  id                  String                @id @default(uuid(7)) @db.Uuid
   name                String
   // URL-safe, unique per deployment, immutable in v1. Uniqueness is enforced by
   // a PARTIAL unique index that ignores soft-deleted rows (uq_organizations_slug
@@ -123,12 +123,12 @@ model Organization {
   // added as raw SQL in the migration. This index also serves slug lookups
   // (which always filter deleted_at IS NULL), so no separate @@index is needed.
   slug                String
-  version             Int                  @default(1)
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy           String?              @map("created_by")
-  updatedBy           String?              @map("updated_by")
-  deletedAt           DateTime?            @map("deleted_at") @db.Timestamptz(3)
+  version             Int                   @default(1)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy           String?               @map("created_by")
+  updatedBy           String?               @map("updated_by")
+  deletedAt           DateTime?             @map("deleted_at") @db.Timestamptz(3)
   members             OrgMember[]
   invitations         Invitation[]
   // Domain hierarchy owned by this organisation. Project/Plan back-relations
@@ -171,6 +171,11 @@ model Organization {
   // denormalised from the plan (copied by the service, never client input) purely as
   // a scope tag for scoped reads/audit; the row itself is owned by its plan.
   planLocks           PlanLock[]
+  // Threaded annotations on plans & activities (M1, ADR-0046). Note's organization_id
+  // is denormalised from its parent (plan or activity), copied by the service inside
+  // the create transaction, never client input — the Activity/ResourceAssignment
+  // pattern; so an org-scope/IDOR check and the cascade batch filter one indexed column.
+  notes               Note[]
 
   @@map("organizations")
 }
@@ -460,6 +465,18 @@ enum ConstraintType {
   MANDATORY_FINISH
 }
 
+// The parent-entity kind a Note hangs off (the polymorphic discriminator, ADR-0046).
+// v1 covers PLAN + ACTIVITY only; CLIENT + PROJECT are reserved for a later slice and
+// added with `ALTER TYPE "NoteEntityType" ADD VALUE …` (a non-breaking additive enum
+// change) alongside the nullable `client_id`/`project_id` FK columns and a one-branch
+// amendment to ck_notes_exactly_one_parent — the locked "drop client/project in later
+// with no rework" requirement. MUST stay in lock-step with the TypeScript
+// `NoteEntityType` union in @repo/types (M1 Task 1.2).
+enum NoteEntityType {
+  PLAN
+  ACTIVITY
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -651,12 +668,12 @@ model Plan {
   deletedAt                   DateTime?              @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId               String?                @map("delete_batch_id") @db.Uuid
 
-  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project      Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  calendar     Calendar?            @relation(fields: [calendarId], references: [id], onDelete: Restrict)
-  activities   Activity[]
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project           Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  calendar          Calendar?             @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  activities        Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
-  dependencies ActivityDependency[]
+  dependencies      ActivityDependency[]
   // Live cross-plan (inter-project) edges incident on this plan (M2, ADR-0045). Two
   // named relations disambiguate the two plan FKs on CrossPlanDependency:
   // `crossPlanOutgoing` are the edges where this plan is the PREDECESSOR (feeds a
@@ -668,12 +685,18 @@ model Plan {
   // Plan-of-record snapshots captured from this plan (M7, ADR-0025). At most one is
   // active at a time (partial unique in the migration). FK is RESTRICT; baseline
   // soft-delete + cascade is service-owned (HierarchyLifecycleService).
-  baselines    Baseline[]
+  baselines         Baseline[]
   // The (optional) edit-lock row for this plan (ADR-0028). 1:1 — PlanLock's PK IS the
   // plan id, so presence = someone holds the pen, absence = free. FK is ON DELETE
   // CASCADE (the lock is ephemeral state owned by the plan, not a soft-deleted domain
   // record), so a plan hard-purge removes it and is never blocked by a stale lock.
-  planLock     PlanLock?
+  planLock          PlanLock?
+  // Threaded notes (M1, ADR-0046). Both PLAN notes (parent = this plan) AND ACTIVITY
+  // notes (parent = an activity IN this plan) carry this plan_id — the latter as a
+  // DENORMALISED cascade key — so the plan-cascade sweep is ONE updateMany by plan_id
+  // and no note is double-counted. FK is RESTRICT; note soft-delete/restore is
+  // service-owned (HierarchyLifecycleService, Task 1.4).
+  notes             Note[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -1057,6 +1080,13 @@ model Activity {
   // (stamped with the same delete_batch_id, mirroring the assignment sweep above) — a
   // HierarchyLifecycleService follow-on for the F2 build, NOT this schema slice.
   steps ActivityStep[]
+
+  // Threaded notes on this activity (M1, ADR-0046). Parent = this activity (an
+  // ACTIVITY note carries activity_id here AND this activity's plan_id as the
+  // denormalised cascade key). RESTRICT FK; notes soft-delete only. Soft-deleting an
+  // activity sweeps its active notes by activity_id under the same delete_batch_id
+  // (HierarchyLifecycleService, Task 1.4) — the incident-dependency / step precedent.
+  notes Note[]
 
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
@@ -1946,4 +1976,88 @@ model ActivityStep {
   // restore.
   @@index([organizationId])
   @@map("activity_steps")
+}
+
+// A Note — one authored, timestamped entry in an entity's append-accumulating
+// thread (M1, ADR-0046). Notes are a POLYMORPHIC single table: an `entity_type`
+// discriminator + nullable typed parent FKs, with a DB CHECK
+// (ck_notes_exactly_one_parent) that pins the parent pointer to entity_type.
+// v1 hangs off PLAN + ACTIVITY; CLIENT + PROJECT drop in later as a nullable-column
+// + one-branch-CHECK + one-line-per-cascade change (the locked "no rework" goal).
+//
+// Non-structural: a note is NOT a scheduling input — the CPM engine never reads it,
+// and note writes are NOT pen-gated (ADR-0028). Follows every house standard: UUID v7
+// PK, snake_case via @map, timestamptz UTC, TEXT audit ids (Better Auth ids are opaque
+// TEXT — `created_by` IS the author), optimistic-locking `version`, soft delete +
+// delete_batch_id. Body is plain text bounded 1–5000 chars by ck_notes_body_length
+// (raw SQL) behind the DTO 422 — Q1 default, ADR-0046.
+//
+// Two denormalised scope columns, both copied from the resolved parent by the service
+// inside the create transaction (NEVER client input; the Activity/ActivityDependency
+// invariant):
+//   * organization_id — the tenant scope tag every scope/IDOR check filters.
+//   * plan_id — the CASCADE key on EVERY note. A PLAN note's parent IS this plan; an
+//     ACTIVITY note carries its activity's plan_id (the activity's own denormalised
+//     org/plan). So the plan-cascade sweep is ONE `updateMany WHERE plan_id IN (…)`
+//     that catches BOTH note kinds with no double-count (Task 1.4), and plan_id doubles
+//     as the parent pointer for PLAN notes (the Activity precedent — plan_id is an
+//     Activity's parent AND scope). plan_id is NOT NULL for both v1 types; it becomes
+//     NULLABLE (a safe expand-only ALTER) only when a parent-less CLIENT/PROJECT note
+//     lands.
+model Note {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent (plan or activity); never client input. RESTRICT.
+  organizationId String         @map("organization_id") @db.Uuid
+  entityType     NoteEntityType @map("entity_type")
+  // Denormalised cascade key + the parent pointer for PLAN notes (see the block
+  // comment). NOT NULL for PLAN + ACTIVITY notes. RESTRICT.
+  planId         String         @map("plan_id") @db.Uuid
+  // Parent pointer for ACTIVITY notes; NULL for PLAN notes. Set IFF entity_type =
+  // ACTIVITY (ck_notes_exactly_one_parent). RESTRICT.
+  activityId     String?        @map("activity_id") @db.Uuid
+  // Plain text, 1–5000 chars (Q1 default, ADR-0046). No markdown. `text` per house
+  // style; the 1–5000 bound is a DB backstop (ck_notes_body_length, raw SQL) behind the
+  // DTO @MinLength(1)@MaxLength(5000). The service trims-then-validates (whitespace-only
+  // ⇒ 422); the DB CHECK guards the length bounds only (it cannot trim).
+  body           String
+
+  // Housekeeping (as ResourceAssignment/ActivityStep): TEXT audit ids — `created_by`
+  // is the AUTHOR (an opaque Better Auth id, no FK, like every audit stamp); the M2
+  // service enforces author-ownership on edit/delete on top of the role permission, and
+  // stamps `updated_by` on edit. Optimistic-lock `version` (edit → 409 on stale),
+  // soft delete + restore-batch correlation.
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  activity     Activity?    @relation(fields: [activityId], references: [id], onDelete: Restrict)
+
+  // Indexes (see docs/DATABASE.md "Domain hierarchy … Notes"). Two Prisma-expressible
+  // indexes are declared here; three PARTIAL indexes are raw SQL in the migration
+  // (Prisma cannot express a WHERE predicate) and are NOT declared as @@index (to avoid
+  // a conflicting full index) — the calendar_id / delete_batch_id precedent:
+  //
+  //   * (plan_id, created_at, id) — FULL composite, three jobs at once (the
+  //     activities_plan_id_created_at_id_idx pattern): the plan_id FK (RESTRICT,
+  //     leftmost prefix), the PLAN-notes thread list + its newest-first cursor (the
+  //     query adds `entity_type='PLAN' AND deleted_at IS NULL` on top of the plan_id
+  //     scan; ORDER BY created_at DESC, id DESC is a backward index scan), AND the plan
+  //     cascade sweep by plan_id. Full (not partial) exactly like every sibling scope
+  //     composite; subsumes a standalone plan_id index.
+  //   * (organization_id) — org FK (RESTRICT) + org-scoped IDOR loads (the
+  //     denormalised-org sibling pattern; notes are never listed org-wide, so no
+  //     composite is needed here).
+  //
+  // Raw-SQL partials (migration): idx_notes_activity_created (the ACTIVITY-notes thread
+  // list), idx_notes_plan_activity_counts (the badge counts groupBy), and
+  // idx_notes_delete_batch_id (batch restore).
+  @@index([planId, createdAt, id])
+  @@index([organizationId])
+  @@map("notes")
 }
