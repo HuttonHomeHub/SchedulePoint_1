@@ -107,6 +107,13 @@ keep `main` releasable.
   selected activity's notes), and **Clear visual placement** (drop a hand-placed `visualStart`). The
   canvas selection is lifted into the workspace so the selection-aware items gate on a real target;
   each reuses an existing REST mutation — no API/schema/engine change (spec `docs/specs/toolbar-quick-wins/`).
+- **Canvas insight lenses (web).** Three more Look-row placeholders wired to already-shipped data as pure
+  client render lenses and **on by default** (`VITE_CANVAS_LENSES`): **Filter/Search** (dim non-matching
+  bars), **Colour by** (Criticality / Total-float bucket / WBS group, mode-aware Legend, contrast-safe
+  labels), and **Baseline overlay** (ghost bars at the active baseline's captured dates). Theme-reactive,
+  culled within the ADR-0026 draw budget; no API/schema/engine change (spec `docs/specs/canvas-lenses/`).
+  Driving-resource colouring is a deferred fast-follow (needs `VITE_RESOURCES`). Stage A of the
+  toolbar-placeholder burn-down.
 
 ## Next
 

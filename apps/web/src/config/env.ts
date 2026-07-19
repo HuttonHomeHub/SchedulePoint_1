@@ -490,12 +490,16 @@ export const UNDO_REDO_ENABLED = flagDefaultOn(import.meta.env.VITE_UNDO_REDO);
  * - **Baseline overlay** — ghost outline bars behind the live bars at the active baseline's captured
  *   dates (reusing the shipped variance read), with a Legend key; disabled-with-reason otherwise.
  *
- * Each of the four ids resolves to its real behaviour when on, and to its existing stub when off —
- * `search` renders the disabled `SearchFieldControl`, and `filter`/`colour-by`/`baseline-overlay`
- * render their `placeholderItem()` "Coming soon" stubs — and the `TsldScene` carries no
- * `dimmedIds`/`barFill`/`baselineGhosts`, so `VITE_CANVAS_LENSES=false` restores the toolbar AND the
- * canvas paint byte-for-byte (emergency rollback / opt-out). The driving-resource Colour-by mode is a
+ * **ON by default** (2026-07-19, product sign-off) now that the three lenses are wired to shipped data
+ * and the performance / accessibility / ux / component / security / test reviews are green (every
+ * blocking finding folded: ghost-culling, theme-reactive colour via {@link useThemeVersion}, band-paired
+ * label ink ≥ 4.5:1, roving-tabindex-safe search, Filter reason + pressed state). Each of the four ids
+ * resolves to its real behaviour when on, and to its existing stub when off — `search` renders the
+ * disabled `SearchFieldControl`, and `filter`/`colour-by`/`baseline-overlay` render their
+ * `placeholderItem()` "Coming soon" stubs — and the `TsldScene` carries no
+ * `dimmedIds`/`barFill`/`barInk`/`baselineGhosts`, so `VITE_CANVAS_LENSES=false` restores the toolbar AND
+ * the canvas paint byte-for-byte (emergency rollback / opt-out). The driving-resource Colour-by mode is a
  * deferred fast-follow (needs `VITE_RESOURCES`); the colour machinery is mode-generic so it drops in
  * additively.
  */
-export const CANVAS_LENSES_ENABLED = flagDefaultOff(import.meta.env.VITE_CANVAS_LENSES);
+export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_LENSES);

@@ -776,11 +776,12 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *
  * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
- * "Coming soon" stubs (filter, snap-to-grid, next-conflict, colour-by, baseline-overlay, resource-view,
- * export/print/share, plus Hammock / Level-of-effort in the Add menu) that make the toolbar read as fully
- * designed and are switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
+ * "Coming soon" stubs (snap-to-grid, next-conflict, isolate-logic-path, resource-view, export/print/share,
+ * plus Hammock / Level-of-effort in the Add menu) that make the toolbar read as fully designed and are
+ * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
  * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
- * clear-visual-placement swap in under `VITE_TOOLBAR_QUICK_WINS` — placeholders only when that flag is off.)
+ * clear-visual-placement under `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
+ * under `VITE_CANVAS_LENSES` — placeholders only when the owning flag is off.)
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom

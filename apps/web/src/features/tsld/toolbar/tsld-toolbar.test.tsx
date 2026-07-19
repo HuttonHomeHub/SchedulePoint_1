@@ -17,6 +17,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // Pin undo/redo OFF here so the "Coming soon" placeholder assertions below exercise the flag-off
   // rollback path; the real flag-on Undo/Redo items are covered in tsld-toolbar-undo-redo.test.tsx.
   UNDO_REDO_ENABLED: false,
+  // Pin the canvas insight lenses OFF here too (this is the flag-off registry suite): the search field
+  // stays the disabled stub and filter/colour-by/baseline-overlay stay "Coming soon" placeholders. The
+  // real flag-on lens controls are covered in tsld-toolbar-lenses.test.tsx.
+  CANVAS_LENSES_ENABLED: false,
 }));
 
 const spies = {

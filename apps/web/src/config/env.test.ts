@@ -42,11 +42,11 @@ describe('TOOLBAR_QUICK_WINS_ENABLED', () => {
 });
 
 describe('CANVAS_LENSES_ENABLED', () => {
-  it('is OFF by default during build (flagDefaultOff; no VITE_CANVAS_LENSES set)', () => {
-    // The canvas insight lenses ship dark during the build and flip on at M4 once the specialist
-    // reviews are green. With no env set, `flagDefaultOff` keeps them off — so the search field is the
-    // disabled stub, filter/colour-by/baseline-overlay are "Coming soon" placeholders, and the canvas
-    // paints byte-for-byte today's.
-    expect(CANVAS_LENSES_ENABLED).toBe(false);
+  it('is on by default (delivered & enabled, 2026-07-19; no VITE_CANVAS_LENSES set)', () => {
+    // The three canvas insight lenses are wired to shipped data and on by default now that their
+    // specialist reviews (perf / a11y / ux / component / security / test) are green (M4). Setting
+    // VITE_CANVAS_LENSES=false ships the four ids as their disabled/"Coming soon" stubs and the canvas
+    // paints byte-for-byte today's — the rollback path.
+    expect(CANVAS_LENSES_ENABLED).toBe(true);
   });
 });
