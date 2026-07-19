@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { LegendPanelPosition } from '../toolbar/use-legend-panel-prefs';
 
-import { TsldLegend } from './TsldLegend';
+import { TsldLegend, type LensLegendInfo } from './TsldLegend';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,9 @@ export interface TsldLegendPanelProps {
   position: LegendPanelPosition | null;
   onClose: () => void;
   onPositionChange: (position: LegendPanelPosition) => void;
+  /** The active-lens legend key (insight lenses, `docs/specs/canvas-lenses/`, flag-on) — the Colour-by
+   * mode's bands + the baseline-overlay entry. Absent ⇒ today's default key. */
+  lens?: LensLegendInfo;
 }
 
 /**
@@ -35,6 +38,7 @@ export function TsldLegendPanel({
   position,
   onClose,
   onPositionChange,
+  lens,
 }: TsldLegendPanelProps): React.ReactElement | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const dragOrigin = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(
@@ -167,7 +171,7 @@ export function TsldLegendPanel({
         </Button>
       </div>
       <div className="px-2.5 py-2">
-        <TsldLegend orientation="vertical" />
+        <TsldLegend orientation="vertical" {...(lens ? { lens } : {})} />
       </div>
     </div>
   );

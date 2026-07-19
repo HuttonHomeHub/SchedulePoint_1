@@ -27,4 +27,29 @@ describe('useTsldCanvasUiState', () => {
     renderHook(() => useTsldCanvasUiState()); // unrelated render elsewhere
     expect(result.current).toBe(after);
   });
+
+  it('drives the lens view state (filter query / attrs / colour mode / baseline overlay)', () => {
+    const { result } = renderHook(() => useTsldCanvasUiState());
+    // Defaults are the "no lens active" identity.
+    expect(result.current.lensState).toEqual({
+      filterQuery: '',
+      filterAttrs: new Set(),
+      colourMode: 'criticality',
+      baselineOverlay: false,
+    });
+
+    act(() => result.current.setFilterQuery('concrete'));
+    expect(result.current.lensState.filterQuery).toBe('concrete');
+
+    act(() => result.current.toggleFilterAttr('critical'));
+    expect(result.current.lensState.filterAttrs.has('critical')).toBe(true);
+    act(() => result.current.toggleFilterAttr('critical'));
+    expect(result.current.lensState.filterAttrs.has('critical')).toBe(false);
+
+    act(() => result.current.setColourMode('totalFloat'));
+    expect(result.current.lensState.colourMode).toBe('totalFloat');
+
+    act(() => result.current.toggleBaselineOverlay());
+    expect(result.current.lensState.baselineOverlay).toBe(true);
+  });
 });

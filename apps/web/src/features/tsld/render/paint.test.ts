@@ -53,6 +53,7 @@ function mockCtx() {
     fillStyle: '',
     strokeStyle: '',
     lineWidth: 1,
+    globalAlpha: 1,
     font: '',
     textBaseline: 'alphabetic' as CanvasTextBaseline,
     textAlign: 'start' as CanvasTextAlign,
@@ -594,5 +595,137 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     expect(ctx.fillText).toHaveBeenCalledTimes(2);
     // Lane rows are x-sorted, so the crowded left diamond is drawn first — and truncated.
     expect((ctx.fillText.mock.calls[0]![0] as string).endsWith('…')).toBe(true);
+  });
+});
+
+// ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────────────────────────────────
+// A recording ctx that logs method calls AND property assignments in order, so two paints can be
+// compared byte-for-byte (the flag-off / no-lens parity gate).
+function recordingCtx(): {
+  ctx: Parameters<typeof paintScene>[0];
+  log: string[];
+} {
+  const target: Record<string | symbol, unknown> = mockCtx();
+  const log: string[] = [];
+  const proxy = new Proxy(target, {
+    get(t, prop) {
+      const value = t[prop];
+      if (typeof value === 'function') {
+        return (...args: unknown[]) => {
+          log.push(`${String(prop)}(${JSON.stringify(args)})`);
+          return (value as (...a: unknown[]) => unknown)(...args);
+        };
+      }
+      return value;
+    },
+    set(t, prop, value) {
+      log.push(`${String(prop)}=${String(value)}`);
+      t[prop] = value;
+      return true;
+    },
+  });
+  return { ctx: proxy as unknown as Parameters<typeof paintScene>[0], log };
+}
+
+describe('paintScene — insight lenses', () => {
+  const lensScene: TsldScene = {
+    activities: [
+      task({ id: 'a', isCritical: true }),
+      task({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-08' }),
+    ],
+    edges: [],
+    dataDate: DATA_DATE,
+  };
+
+  it('is byte-for-byte identical whether the lens fields are absent or explicitly undefined (parity)', () => {
+    const a = recordingCtx();
+    paintScene(a.ctx, lensScene, VIEW, SIZE, PALETTE);
+    const b = recordingCtx();
+    paintScene(
+      b.ctx,
+      { ...lensScene, dimmedIds: undefined, barFill: undefined, baselineGhosts: undefined },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(b.log).toEqual(a.log);
+  });
+
+  it('dims a filtered-out bar via reduced alpha but restores full alpha for the outline/badges', () => {
+    const { ctx, log } = recordingCtx();
+    paintScene(ctx, { ...lensScene, dimmedIds: new Set(['b']) }, VIEW, SIZE, PALETTE);
+    // The dimmed bar drops alpha; the loop restores it to 1 before drawing outlines/cues.
+    expect(log).toContain('globalAlpha=0.3');
+    expect(log).toContain('globalAlpha=1');
+  });
+
+  it('never reduces alpha when no bar is dimmed', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(r.ctx, lensScene, VIEW, SIZE, PALETTE);
+      return r;
+    })();
+    expect(log.some((entry) => entry.startsWith('globalAlpha=') && entry !== 'globalAlpha=1')).toBe(
+      false,
+    );
+  });
+
+  it('honours a Colour-by barFill override, falling back to today for absent ids', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(
+        r.ctx,
+        { ...lensScene, barFill: new Map([['a', '#override']]) },
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      return r;
+    })();
+    // The overridden id paints with the map colour; the other bar falls back to today's fill.
+    expect(log).toContain('fillStyle=#override');
+    expect(log).toContain(`fillStyle=${PALETTE.bar}`);
+  });
+
+  it('draws a culled dashed ghost layer for the baseline overlay, beneath the bars', () => {
+    const ctx = mockCtx();
+    const withGhost: TsldScene = {
+      ...lensScene,
+      baselineGhosts: [
+        { id: 'a', baselineStart: '2026-01-02', baselineFinish: '2026-01-04', laneIndex: 0 },
+      ],
+    };
+    const strokeRectsWithout = ((): number => {
+      const c = mockCtx();
+      paintScene(c, lensScene, VIEW, SIZE, PALETTE);
+      return c.strokeRect.mock.calls.length;
+    })();
+    paintScene(ctx, withGhost, VIEW, SIZE, PALETTE);
+    // The ghost adds an outline stroke rect (the critical bar 'a' already strokes its outline).
+    expect(ctx.strokeRect.mock.calls.length).toBeGreaterThan(strokeRectsWithout);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([2, 2]);
+  });
+
+  it('culls an off-screen ghost (no stroke for a ghost far outside the viewport)', () => {
+    const ctx = mockCtx();
+    const before = ((): number => {
+      const c = mockCtx();
+      paintScene(c, lensScene, VIEW, SIZE, PALETTE);
+      return c.strokeRect.mock.calls.length;
+    })();
+    paintScene(
+      ctx,
+      {
+        ...lensScene,
+        // A ghost 10 years out is far to the right of the 800px viewport.
+        baselineGhosts: [
+          { id: 'a', baselineStart: '2036-01-02', baselineFinish: '2036-01-04', laneIndex: 0 },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.strokeRect.mock.calls.length).toBe(before);
   });
 });

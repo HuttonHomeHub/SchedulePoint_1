@@ -68,6 +68,7 @@ function makeModel(): PlanWorkspaceModel {
       redo: vi.fn(),
     },
     autoRecalc: { isPending: false, flush: vi.fn(), notify: vi.fn() },
+    variance: { data: undefined, isPending: false, isError: false },
   } as unknown as PlanWorkspaceModel;
 }
 
@@ -86,6 +87,16 @@ function makeCanvasUi(lateOverlay = false): TsldCanvasUiState {
     setCreateType: vi.fn(),
     linkType: 'FS',
     setLinkType: vi.fn(),
+    lensState: {
+      filterQuery: '',
+      filterAttrs: new Set(),
+      colourMode: 'criticality',
+      baselineOverlay: false,
+    },
+    setFilterQuery: vi.fn(),
+    toggleFilterAttr: vi.fn(),
+    setColourMode: vi.fn(),
+    toggleBaselineOverlay: vi.fn(),
   } as unknown as TsldCanvasUiState;
 }
 

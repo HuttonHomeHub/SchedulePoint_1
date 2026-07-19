@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { TOOLBAR_QUICK_WINS_ENABLED, UNDO_REDO_ENABLED, flagDefaultOff } from './env';
+import {
+  CANVAS_LENSES_ENABLED,
+  TOOLBAR_QUICK_WINS_ENABLED,
+  UNDO_REDO_ENABLED,
+  flagDefaultOff,
+} from './env';
 
 describe('flagDefaultOff', () => {
   it('is on ONLY for an explicit opt-in ("true"/"1")', () => {
@@ -33,5 +38,15 @@ describe('TOOLBAR_QUICK_WINS_ENABLED', () => {
     // VITE_TOOLBAR_QUICK_WINS=false ships the five ids as their "Coming soon" placeholders — the
     // byte-for-byte rollback path.
     expect(TOOLBAR_QUICK_WINS_ENABLED).toBe(true);
+  });
+});
+
+describe('CANVAS_LENSES_ENABLED', () => {
+  it('is OFF by default during build (flagDefaultOff; no VITE_CANVAS_LENSES set)', () => {
+    // The canvas insight lenses ship dark during the build and flip on at M4 once the specialist
+    // reviews are green. With no env set, `flagDefaultOff` keeps them off — so the search field is the
+    // disabled stub, filter/colour-by/baseline-overlay are "Coming soon" placeholders, and the canvas
+    // paints byte-for-byte today's.
+    expect(CANVAS_LENSES_ENABLED).toBe(false);
   });
 });

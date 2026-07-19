@@ -1,3 +1,4 @@
+import type { GhostBar } from './lenses';
 import { createMeasureCache } from './measure';
 import {
   activityRect,
@@ -6,12 +7,16 @@ import {
   dependencyPolyline,
   isMilestone,
   labelPlacement,
+  rectsIntersect,
   screenXOfDay,
+  screenYOfLane,
   truncateToWidth,
+  BAR_HEIGHT,
   LABEL_FONT,
   LABEL_GAP_PX,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
+  LANE_HEIGHT,
   MILESTONE_RADIUS,
   type Point,
   type Rect,
@@ -107,6 +112,19 @@ export interface TsldScene {
   isWorkingDay?: ((dayOffset: number) => boolean) | null | undefined;
   /** Day offset (from `dataDate`) of "today", or null when today is outside a schedulable range. */
   todayOffset?: number | null | undefined;
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // ALL default-absent ⇒ byte-for-byte today's paint (the flag-off / no-active-lens parity gate).
+  /** Ids of activities the active filter dimmed (non-matches). Members paint muted (reduced alpha)
+   * while keeping the criticality outline, so the diagram geometry stays stable and the shape cue
+   * survives the dim. Absent ⇒ no filter active ⇒ every bar at full emphasis. */
+  dimmedIds?: ReadonlySet<string> | undefined;
+  /** Per-activity Colour-by fill override (id → CSS colour), precomputed by `buildColourMap`. When a
+   * bar's id is present the painter uses this fill; absent ids (and an absent map) fall back to today's
+   * `barColour`. Passed only for the non-default Colour-by modes, so Criticality ⇒ absent ⇒ parity. */
+  barFill?: ReadonlyMap<string, string> | undefined;
+  /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay).
+   * Absent ⇒ the overlay is off / no active baseline ⇒ no ghost layer (parity). */
+  baselineGhosts?: readonly GhostBar[] | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -135,16 +153,36 @@ export type Ctx2D = Pick<
   fillStyle: string | CanvasGradient | CanvasPattern;
   strokeStyle: string | CanvasGradient | CanvasPattern;
   lineWidth: number;
+  /** Global opacity multiplier (0–1). Used to dim filter non-matches without a second fill colour. */
+  globalAlpha: number;
   font: string;
   textBaseline: CanvasTextBaseline;
   textAlign: CanvasTextAlign;
 };
 
-function barColour(activity: RenderActivity, palette: TsldPalette): string {
+/**
+ * The fill for a bar. A Colour-by lens (`barFill`) overrides per id when present (precomputed from the
+ * design tokens by `buildColourMap`); absent — the default, and every id when no lens is active — it
+ * falls back to today's criticality fill, so the default paint is byte-for-byte unchanged.
+ */
+function barColour(
+  activity: RenderActivity,
+  palette: TsldPalette,
+  barFill?: ReadonlyMap<string, string>,
+): string {
+  const override = barFill?.get(activity.id);
+  if (override !== undefined) return override;
   if (activity.isCritical) return palette.critical;
   if (activity.isNearCritical) return palette.nearCritical;
   return palette.bar;
 }
+
+/** The reduced alpha a filter-dimmed bar paints at — enough to recede without vanishing (the
+ * criticality outline is still drawn at full strength, so the shape cue survives the dim). */
+const DIMMED_ALPHA = 0.3;
+
+/** Line dash + width of a baseline ghost's outline (thin, dashed — visibly not a live bar). */
+const GHOST_DASH: readonly number[] = [2, 2];
 
 /**
  * The dash pattern that encodes criticality without relying on colour (WCAG 1.4.1):
@@ -335,6 +373,28 @@ export function paintScene(
     ctx.lineWidth = 1;
   }
 
+  // Layer 2.5: baseline ghost bars (the Baseline overlay lens, `docs/specs/canvas-lenses/`) — the
+  // captured baseline span drawn as a thin dashed outline BENEATH the live bars, so slip reads on the
+  // canvas. Culled exactly like the bar layer (only ghosts whose rect intersects the viewport draw),
+  // and batched into one stroke state. Absent ⇒ this whole block is skipped ⇒ byte-for-byte parity.
+  if (scene.baselineGhosts && scene.baselineGhosts.length > 0) {
+    const viewport: Rect = { x: 0, y: 0, w: size.width, h: size.height };
+    ctx.strokeStyle = palette.edge;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(GHOST_DASH as number[]);
+    for (const ghost of scene.baselineGhosts) {
+      const startDay = daysBetween(scene.dataDate, ghost.baselineStart);
+      const finishDay = daysBetween(scene.dataDate, ghost.baselineFinish);
+      const x1 = screenXOfDay(startDay, view);
+      const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
+      const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
+      const w = Math.max(2, x2 - x1);
+      if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+      ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+    }
+    ctx.setLineDash([]);
+  }
+
   // Each visible activity's screen rect is computed once here and reused by the bar, label, and
   // selection layers below, rather than recomputed per layer — each recompute re-parses the
   // activity's ISO dates (two Date.parse calls), so a shared map keeps the per-frame draw within
@@ -352,7 +412,12 @@ export function paintScene(
   for (const [id, rect] of rects) {
     const activity = byId.get(id)!;
     const dash = criticalDash(activity);
-    ctx.fillStyle = barColour(activity, palette);
+    // Filter lens: a dimmed (non-matching) bar recedes via reduced alpha, but its criticality outline
+    // is drawn at full strength below (alpha restored), so the shape cue survives the dim (WCAG 1.4.1
+    // — never colour/emphasis alone). Absent `dimmedIds` ⇒ this is a no-op ⇒ byte-for-byte parity.
+    const dimmed = scene.dimmedIds?.has(id) ?? false;
+    ctx.globalAlpha = dimmed ? DIMMED_ALPHA : 1;
+    ctx.fillStyle = barColour(activity, palette, scene.barFill);
     if (isMilestone(activity.type)) {
       // A diamond centred in the bounding box.
       const cx = rect.x + rect.w / 2;
@@ -363,6 +428,7 @@ export function paintScene(
       ctx.lineTo(cx, cy + MILESTONE_RADIUS);
       ctx.lineTo(cx - MILESTONE_RADIUS, cy);
       ctx.fill();
+      ctx.globalAlpha = 1; // outline + badges below stay full-strength even on a dimmed bar
       if (dash) {
         ctx.strokeStyle = palette.outline;
         ctx.lineWidth = 1.5;
@@ -372,6 +438,7 @@ export function paintScene(
       }
     } else {
       ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      ctx.globalAlpha = 1; // outline + badges below stay full-strength even on a dimmed bar
       if (dash) {
         ctx.strokeStyle = palette.outline;
         ctx.lineWidth = 1.5;

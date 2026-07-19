@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TsldCanvasHandle } from '../components/TsldCanvas';
 import type { EditMode } from '../interaction/gesture-machine';
+import type { ColourMode, FilterAttr } from '../render/lenses';
 import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
@@ -45,7 +46,35 @@ export interface TsldCanvasUiState {
    */
   linkType: DependencyType;
   setLinkType: React.Dispatch<React.SetStateAction<DependencyType>>;
+  /**
+   * The **insight-lens** view state (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) —
+   * the client filter query + attribute toggles, the Colour-by mode, and the Baseline-overlay switch.
+   * Pure CLIENT VIEW STATE, exactly like {@link viewToggles}: never server state, never persisted; it
+   * re-derives the scene's dimmed-id / colour / ghost maps whenever it or the queries change. Defaults
+   * (empty query, no attrs, Criticality, overlay off) produce no dim/fill/ghost ⇒ byte-for-byte parity.
+   */
+  lensState: LensState;
+  setFilterQuery: (query: string) => void;
+  toggleFilterAttr: (attr: FilterAttr) => void;
+  setColourMode: (mode: ColourMode) => void;
+  toggleBaselineOverlay: () => void;
 }
+
+/** The lens view-state shape (see {@link TsldCanvasUiState.lensState}). */
+export interface LensState {
+  filterQuery: string;
+  filterAttrs: ReadonlySet<FilterAttr>;
+  colourMode: ColourMode;
+  baselineOverlay: boolean;
+}
+
+/** The lens defaults — the "no lens active" identity (dims nothing, today's fills, overlay off). */
+const DEFAULT_LENS_STATE: LensState = {
+  filterQuery: '',
+  filterAttrs: new Set<FilterAttr>(),
+  colourMode: 'criticality',
+  baselineOverlay: false,
+};
 
 export function useTsldCanvasUiState(): TsldCanvasUiState {
   const [mode, setMode] = useState<EditMode>('select');
@@ -56,6 +85,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   const [showHelp, setShowHelp] = useState(false);
   const [createType, setCreateType] = useState<ActivityType>('TASK');
   const [linkType, setLinkType] = useState<DependencyType>('FS');
+  const [lensState, setLensState] = useState<LensState>(DEFAULT_LENS_STATE);
   const canvasControlRef = useRef<TsldCanvasHandle>(null);
 
   const toggleView = useCallback(
@@ -64,6 +94,28 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   );
   const requestFit = useCallback((): void => setFitSignal((n) => n + 1), []);
   const requestAutoArrange = useCallback((): void => setAutoArrangeSignal((n) => n + 1), []);
+  const setFilterQuery = useCallback(
+    (filterQuery: string): void => setLensState((s) => ({ ...s, filterQuery })),
+    [],
+  );
+  const toggleFilterAttr = useCallback(
+    (attr: FilterAttr): void =>
+      setLensState((s) => {
+        const filterAttrs = new Set(s.filterAttrs);
+        if (filterAttrs.has(attr)) filterAttrs.delete(attr);
+        else filterAttrs.add(attr);
+        return { ...s, filterAttrs };
+      }),
+    [],
+  );
+  const setColourMode = useCallback(
+    (colourMode: ColourMode): void => setLensState((s) => ({ ...s, colourMode })),
+    [],
+  );
+  const toggleBaselineOverlay = useCallback(
+    (): void => setLensState((s) => ({ ...s, baselineOverlay: !s.baselineOverlay })),
+    [],
+  );
 
   // Memoised on its own values (setters/ref are stable), so the object's identity only changes when
   // the canvas view-state actually changes — an unrelated parent re-render (e.g. an activity-panel
@@ -87,6 +139,11 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setCreateType,
       linkType,
       setLinkType,
+      lensState,
+      setFilterQuery,
+      toggleFilterAttr,
+      setColourMode,
+      toggleBaselineOverlay,
     }),
     [
       mode,
@@ -100,6 +157,11 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       showHelp,
       createType,
       linkType,
+      lensState,
+      setFilterQuery,
+      toggleFilterAttr,
+      setColourMode,
+      toggleBaselineOverlay,
     ],
   );
 }

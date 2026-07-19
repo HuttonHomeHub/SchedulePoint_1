@@ -1,8 +1,15 @@
-import type { ActivitySummary, ActivityType, DependencySummary, DependencyType } from '@repo/types';
+import type {
+  ActivitySummary,
+  ActivityType,
+  BaselineVarianceRow,
+  DependencySummary,
+  DependencyType,
+} from '@repo/types';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_LENSES_ENABLED,
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
@@ -15,7 +22,14 @@ import {
   summarizeLogic,
 } from '../render/a11y';
 import { packLanes } from '../render/auto-pack';
+import {
+  buildBaselineGhosts,
+  buildColourMap,
+  isFilterActive,
+  matchesActivityFilter,
+} from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
+import { resolveLensPalette } from '../render/palette';
 import { daysBetween, type Point } from '../render/render-model';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
@@ -164,6 +178,11 @@ export interface TsldPanelProps {
    * it from the plan's `schedulingMode` + the Late overlay toggle, gated by `VITE_SCHEDULING_MODES`
    * (flag-off it stays `early`, byte-for-byte). */
   barDateSource?: BarDateSource;
+  /** The plan's baseline-variance rows (`useBaselineVariance`), for the **Baseline overlay** lens
+   * (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`). The host passes the shipped
+   * variance data (already route-composed for the activities table) so no new fetch is added; the
+   * ghost geometry joins these captured dates to the live lanes. Absent/empty ⇒ no ghost layer. */
+  varianceRows?: readonly BaselineVarianceRow[] | undefined;
 }
 
 interface PendingCreate {
@@ -210,6 +229,7 @@ export function TsldPanel({
   chromeless = false,
   canvasUi,
   barDateSource = 'early',
+  varianceRows,
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -243,6 +263,7 @@ export function TsldPanel({
     canvasControlRef,
     createType,
     linkType,
+    lensState,
   } = canvasUi ?? ownCanvasUi;
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
@@ -290,6 +311,54 @@ export function TsldPanel({
       ]),
     );
   }, [activities, renderActivities]);
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // Precomputed, memoised maps handed to the painter via the `TsldScene`, so the culled rAF loop draws
+  // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
+  // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
+  // so the scene carries no lens fields and the paint is byte-for-byte today's.
+  const { filterQuery, filterAttrs, colourMode, baselineOverlay } = lensState;
+  const filterActive = CANVAS_LENSES_ENABLED && isFilterActive(filterQuery, filterAttrs);
+  // The ids of the NON-matching activities (dimmed on the canvas + marked in the listbox). Absent when
+  // no filter is active, so an empty/cleared filter dims nothing (parity).
+  const dimmedIds = useMemo<Set<string> | undefined>(() => {
+    if (!filterActive) return undefined;
+    const set = new Set<string>();
+    for (const a of activities) {
+      if (!matchesActivityFilter(a, filterQuery, filterAttrs)) set.add(a.id);
+    }
+    return set;
+  }, [filterActive, activities, filterQuery, filterAttrs]);
+  // The Colour-by fill override. Criticality (the default) ⇒ `undefined` so the painter's own criticality
+  // fills run (byte-for-byte parity); the other modes precompute a per-id map from the token palette.
+  // NB the palette is resolved once here; a theme switch repaints the canvas but keeps these lens fills
+  // until the mode/activities change (a known follow-up; the critical outline stays theme-correct).
+  const barFill = useMemo<Map<string, string> | undefined>(() => {
+    if (!CANVAS_LENSES_ENABLED || colourMode === 'criticality') return undefined;
+    return buildColourMap(activities, colourMode, resolveLensPalette());
+  }, [colourMode, activities]);
+  // The baseline ghost bars — the captured baseline spans joined to the live lanes. Absent unless the
+  // overlay is on AND there are variance rows to draw (and at least one joins a live activity).
+  const baselineGhosts = useMemo(() => {
+    if (!CANVAS_LENSES_ENABLED || !baselineOverlay || !varianceRows || varianceRows.length === 0) {
+      return undefined;
+    }
+    const laneById = new Map(activities.map((a) => [a.id, { laneIndex: a.laneIndex }]));
+    const ghosts = buildBaselineGhosts(varianceRows, laneById);
+    return ghosts.length > 0 ? ghosts : undefined;
+  }, [baselineOverlay, varianceRows, activities]);
+  // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
+  // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles, and the
+  // announcement clears (nothing spoken) when the filter is cleared. Off when the flag is off.
+  useEffect(() => {
+    if (!filterActive) return;
+    const total = activities.length;
+    const matched = total - (dimmedIds?.size ?? 0);
+    const handle = setTimeout(() => {
+      announce(matched === 0 ? 'No activities match.' : `${matched} of ${total} activities match.`);
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [filterActive, activities.length, dimmedIds, announce]);
+
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
   // computed schedule (`isCalculated`), but canvas-first authoring (ADR-0032) mounts a **blank,
@@ -776,6 +845,9 @@ export function TsldPanel({
               view={viewToggles}
               isWorkingDay={workingDayPredicate}
               todayOffset={todayOffset}
+              dimmedIds={dimmedIds}
+              barFill={barFill}
+              baselineGhosts={baselineGhosts}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
               {...(selectionActionsWired ? { selectionAnchorRef } : {})}
@@ -824,16 +896,24 @@ export function TsldPanel({
                 if (!selectedId && activities[0]) select(activities[0].id);
               }}
             >
-              {activities.map((a) => (
-                <li
-                  key={a.id}
-                  id={optionId(a.id)}
-                  role="option"
-                  aria-selected={a.id === selectedId}
-                >
-                  {optionDescriptions.get(a.id)}
-                </li>
-              ))}
+              {activities.map((a) => {
+                // Insight-lens filter (`docs/specs/canvas-lenses/`): mirror the canvas dimming in the
+                // parallel listbox so the filter isn't conveyed by colour/emphasis alone (WCAG 1.4.1).
+                // A non-matching option is `aria-disabled` with a spoken "(filtered out)" suffix.
+                const filteredOut = dimmedIds?.has(a.id) ?? false;
+                return (
+                  <li
+                    key={a.id}
+                    id={optionId(a.id)}
+                    role="option"
+                    aria-selected={a.id === selectedId}
+                    {...(filteredOut ? { 'aria-disabled': true } : {})}
+                  >
+                    {optionDescriptions.get(a.id)}
+                    {filteredOut ? ' (filtered out)' : ''}
+                  </li>
+                );
+              })}
             </ul>
           </>
         ) : (

@@ -10,6 +10,7 @@ import {
   type GestureState,
   type Modifiers,
 } from '../interaction/gesture-machine';
+import type { GhostBar } from '../render/lenses';
 import { linkLegality } from '../render/link-legality';
 import {
   paintInteractionLayer,
@@ -112,6 +113,14 @@ export interface TsldCanvasProps {
   isWorkingDay?: ((dayOffset: number) => boolean) | null;
   /** Day offset (from `dataDate`) of "today", or null when it isn't placeable. */
   todayOffset?: number | null;
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // All default-absent ⇒ byte-for-byte today's paint. `TsldPanel` derives these (memoised).
+  /** Ids of activities the active filter dimmed (non-matches); they paint muted, keeping the outline. */
+  dimmedIds?: ReadonlySet<string> | undefined;
+  /** Per-activity Colour-by fill override (id → CSS colour); absent ⇒ today's criticality fills. */
+  barFill?: ReadonlyMap<string, string> | undefined;
+  /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay). */
+  baselineGhosts?: readonly GhostBar[] | undefined;
   /** Imperative handle so the toolbar can command zoom presets / steps (ADR-0026 D3 seam). */
   controlRef?: React.Ref<TsldCanvasHandle>;
   /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
@@ -275,6 +284,9 @@ export function TsldCanvas({
   view,
   isWorkingDay = null,
   todayOffset = null,
+  dimmedIds,
+  barFill,
+  baselineGhosts,
   controlRef,
   onZoomStopChange,
   selectionAnchorRef,
@@ -319,6 +331,9 @@ export function TsldCanvas({
     view,
     isWorkingDay,
     todayOffset,
+    dimmedIds,
+    barFill,
+    baselineGhosts,
   });
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
@@ -355,10 +370,25 @@ export function TsldCanvas({
       view,
       isWorkingDay,
       todayOffset,
+      dimmedIds,
+      barFill,
+      baselineGhosts,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
-  }, [activities, edges, dataDate, selectedId, showEdgeHandles, view, isWorkingDay, todayOffset]);
+  }, [
+    activities,
+    edges,
+    dataDate,
+    selectedId,
+    showEdgeHandles,
+    view,
+    isWorkingDay,
+    todayOffset,
+    dimmedIds,
+    barFill,
+    baselineGhosts,
+  ]);
 
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
   // sites only). Kept off the per-frame path since pan never changes pxPerDay.

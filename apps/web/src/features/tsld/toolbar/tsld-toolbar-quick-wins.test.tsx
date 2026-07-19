@@ -89,6 +89,17 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     canEditSchedule: true,
     lateOverlayActive: false,
     clearVisualPlacement: spies.clearVisualPlacement,
+    filterQuery: '',
+    setFilterQuery: vi.fn(),
+    filterAttrs: new Set(),
+    toggleFilterAttr: vi.fn(),
+    colourMode: 'criticality',
+    setColourMode: vi.fn(),
+    baselineOverlay: false,
+    toggleBaselineOverlay: vi.fn(),
+    hasActiveBaseline: false,
+    varianceLoading: false,
+    varianceError: false,
     ...over,
   };
 }

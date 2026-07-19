@@ -22,6 +22,7 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_LENSES_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
@@ -33,7 +34,10 @@ import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection } from '@/features/schedule';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
+import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
 import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
+import { buildColourLegend } from '@/features/tsld/render/lenses';
+import { resolveLensPalette } from '@/features/tsld/render/palette';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
@@ -237,17 +241,32 @@ export function ToolbarPlanWorkspace({
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
+      // Baseline overlay lens (VITE_CANVAS_LENSES): reuse the shipped variance rows (route-composed for
+      // the activities table) — no new fetch. Absent when the flag is off ⇒ no ghost layer.
+      {...(CANVAS_LENSES_ENABLED ? { varianceRows: model.variance.data?.rows } : {})}
     />
   );
 
   // The floating Legend panel is overlaid on whichever canvas region is active (its container is
-  // `relative`); it renders null when closed, so dropping it in both layout branches is cheap.
+  // `relative`); it renders null when closed, so dropping it in both layout branches is cheap. Under
+  // VITE_CANVAS_LENSES it renders the ACTIVE Colour-by mode's key + the baseline-overlay entry (from the
+  // lens view state + the token palette); flag-off it renders today's default key, byte-for-byte.
+  const lensLegend = useMemo<LensLegendInfo | undefined>(() => {
+    if (!CANVAS_LENSES_ENABLED) return undefined;
+    const { colourMode, baselineOverlay } = canvasUi.lensState;
+    return {
+      colourMode,
+      baselineOverlay,
+      colour: buildColourLegend(model.activities.data ?? [], colourMode, resolveLensPalette()),
+    };
+  }, [canvasUi.lensState, model.activities.data]);
   const legendPanel = (
     <TsldLegendPanel
       open={legend.open}
       position={legend.position}
       onClose={legend.close}
       onPositionChange={legend.setPosition}
+      {...(lensLegend ? { lens: lensLegend } : {})}
     />
   );
 
