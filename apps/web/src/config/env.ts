@@ -434,20 +434,23 @@ export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
 
 /**
  * Client-side command-stack undo/redo for plan authoring (ADR-0048, spec `docs/specs/undo-redo/`).
- * **OFF by default** — an in-progress feature shipping **dark** while its milestones land: M1/M2 record
- * commands at the workspace-model seam and M3.1/M3.2 add the user-visible surface (the conflict/pen-loss
- * contract, the toolbar Undo/Redo controls, the `Cmd/Ctrl+Z` keybindings and the announcements). It
- * stays default-off until M3.3 (a11y/component/ux reviews + the flag-on Playwright journey) flips it on.
+ * **ON by default** (2026-07-19, product sign-off) now that M1–M3 have landed and their a11y / ux /
+ * component reviews + the flag-on Playwright journey are green. When on, structural plan edits
+ * (reposition / relane / definition update / create / delete / dependency add-remove / `visualStart` /
+ * auto-arrange) push an inverse onto a bounded (50), per-plan, per-pen-session in-memory stack, and the
+ * toolbar Undo/Redo + `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` · `Ctrl+Y` keys replay plan **INPUTS** through
+ * the existing REST mutation hooks — never engine-owned derived columns. The normal ADR-0032 auto-recalc
+ * redraws the outputs, so the CPM engine and its recalc **parity gate are untouched**. Undo is pen-gated
+ * exactly like a first-class edit: every inverse flows through the unchanged `assertHoldsPen` (423) +
+ * RBAC + org-scope + optimistic `version` gates, so the client stack can never escalate.
  *
- * When on, structural plan edits (reposition / relane / definition update, then create/delete/link in
- * later milestones) push an inverse onto a bounded, per-plan, per-pen-session in-memory stack, and
- * Undo/Redo replay plan **INPUTS** through the existing REST mutation hooks — never engine-owned
- * derived columns. The normal ADR-0032 auto-recalc redraws the outputs, so the CPM engine and its recalc
- * **parity gate are untouched** (this feature cannot regress them). Undo is pen-gated exactly like a
- * first-class edit: every inverse flows through the unchanged `assertHoldsPen` (423) + RBAC + org-scope
- * + optimistic `version` gates, so the client stack is a convenience that can never escalate.
+ * BACK/FORWARD SUPPRESSION (the pre-flip gate, cf. {@link TSLD_EDITING_ENABLED}): that `Cmd/Ctrl+Z`
+ * doesn't trigger the browser's Back is asserted on **Chromium** by the flag-on Playwright journey
+ * (`e2e-undo/undo.spec.ts` via `pnpm --filter @repo/web test:e2e:undo`); the **Firefox / Safari / Edge**
+ * manual sweep is the same operator gate `VITE_TSLD_EDITING` used (docs/TECH_DEBT.md #25) — do it before
+ * wide rollout.
  *
- * With the flag off, no command is recorded and every edit behaves byte-for-byte as it does today. Set
- * `VITE_UNDO_REDO=true` to opt in while the feature is dark.
+ * Set `VITE_UNDO_REDO=false` to ship it inert (no store, no keybindings, placeholder toolbar items) —
+ * byte-for-byte the prior behaviour (emergency rollback / opt-out).
  */
-export const UNDO_REDO_ENABLED = flagDefaultOff(import.meta.env.VITE_UNDO_REDO);
+export const UNDO_REDO_ENABLED = flagDefaultOn(import.meta.env.VITE_UNDO_REDO);

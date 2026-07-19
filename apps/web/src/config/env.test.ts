@@ -19,9 +19,9 @@ describe('flagDefaultOff', () => {
 });
 
 describe('UNDO_REDO_ENABLED', () => {
-  it('is off by default (dark M1 — no VITE_UNDO_REDO set in the test env)', () => {
-    // The undo/redo feature ships dark: with the flag unset, no command is recorded and behaviour
-    // is byte-identical to today. A per-flag default guard mirroring the dark-by-default contract.
-    expect(UNDO_REDO_ENABLED).toBe(false);
+  it('is on by default (delivered & enabled, 2026-07-19; no VITE_UNDO_REDO set in the test env)', () => {
+    // Undo/redo is on by default now that its gates are green (ADR-0048). Setting VITE_UNDO_REDO=false
+    // ships it inert (no store/keys, placeholder toolbar items) — the rollback path.
+    expect(UNDO_REDO_ENABLED).toBe(true);
   });
 });

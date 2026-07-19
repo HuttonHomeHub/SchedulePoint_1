@@ -126,13 +126,13 @@ discriminators. Each becomes a spec/plan before build:
   threads (ADR-0046) on **plans and activities** (client/project reserved for a later slice): a
   polymorphic `notes` table + cascade (M1), the non-pen-gated CRUD + counts API (M2), and the web
   thread/composer/badge in the activity Logic panel and plan workspace (M3). The weekly-progress "why".
-- **Undo/redo.** **Delivered behind `VITE_NOTES`-style flag `VITE_UNDO_REDO` (default-off)** — a
-  client-side, per-plan, per-pen-session command stack (ADR-0048) that undoes plan **inputs** through the
-  existing mutations (engine + parity gate untouched): reposition/relane/update/create/delete/dependency/
-  `visualStart`/auto-arrange, with drag coalescing, pen-gated toolbar Undo/Redo + keyboard shortcuts,
-  abort-and-refetch conflict handling, and announcements. Complete bar the flag-flip (which needs a manual
-  cross-browser Back/Forward-suppression sweep, per TECH_DEBT #25); id-stable cascade/WBS delete-undo is a
-  deferred M4.
+- **Undo/redo.** **Delivered & enabled (`VITE_UNDO_REDO` on by default)** — a client-side, per-plan,
+  per-pen-session command stack (ADR-0048) that undoes plan **inputs** through the existing mutations
+  (engine + parity gate untouched): reposition/relane/update/create/delete/dependency/`visualStart`/
+  auto-arrange, with drag coalescing, pen-gated toolbar Undo/Redo + keyboard shortcuts, abort-and-refetch
+  conflict handling, and announcements. Chromium Back/Forward suppression is asserted by the flag-on
+  Playwright journey; the Firefox/Safari/Edge manual sweep is the operator gate (TECH_DEBT #25).
+  Id-stable cascade/WBS delete-undo is a deferred M4.
 - **Gantt view** — the secondary tabular projection of the same model.
 - **Export** (PDF/CSV) and **resources** (library + assignments) —
   Must/Should-have per the brief. (Resources have since shipped — M7.)

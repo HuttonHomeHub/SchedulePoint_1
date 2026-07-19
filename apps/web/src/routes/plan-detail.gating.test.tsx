@@ -201,6 +201,13 @@ beforeEach(() => {
   ]) {
     fn.mockReset().mockResolvedValue(undefined);
   }
+  // With VITE_UNDO_REDO on by default, a successful reposition/relane records an undo command that
+  // reads the mutation response's `version` (production returns the saved row) — so these write
+  // mutations must resolve with a versioned activity. Recording doesn't change the hook routing or
+  // recalc the tests assert; it only needs a `version` on the response.
+  const saved = { id: 'a1', version: 4, name: 'Excavate', laneIndex: 0 };
+  h.updateActivity.mockResolvedValue(saved);
+  h.repositionLane.mockResolvedValue(saved);
 });
 
 afterEach(() => vi.clearAllMocks());

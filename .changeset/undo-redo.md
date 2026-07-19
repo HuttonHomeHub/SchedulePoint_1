@@ -3,8 +3,8 @@
 ---
 
 Undo / redo for plan authoring (ADR-0048) — a client-side, per-plan, per-pen-session command stack,
-shipped behind a **new default-off flag `VITE_UNDO_REDO`** (byte-identical until an operator opts in).
-Undo replays plan **inputs** through the existing mutation hooks and the normal auto-recalc redraws, so
+**on by default** (`VITE_UNDO_REDO`, set it to `false` to ship it inert). Undo replays plan **inputs**
+through the existing mutation hooks and the normal auto-recalc redraws, so
 the CPM engine and the recalc parity gate are structurally untouched; every inverse rides the unchanged
 pen (423) + RBAC + org-scope + optimistic (409) gates.
 
