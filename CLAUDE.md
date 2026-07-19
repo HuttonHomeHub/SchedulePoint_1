@@ -444,6 +444,18 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   recreate (ADR-0018), so the pull **is** the deploy. A `WATCHTOWER_MONITOR_ONLY` toggle gives
   notify-without-update (a manual gate). A GHCR webhook-receiver and a CI-side SSH deploy were
   rejected (inbound exposure / CI-held host credentials). Builds on ADR-0018/0027.
+- **ADR-0048** _(Accepted)_ — Client-side command-stack undo/redo for plan authoring: a **client-side,
+  per-plan, per-pen-session, in-memory command stack** that undoes plan **inputs only** (reposition/
+  relane/update/create/delete/dependency/`visualStart`) by composing inverses from the **existing** REST
+  mutations, then lets the ADR-0032 coalesced recalc redraw — so the CPM engine and the recalc **parity
+  gate are structurally untouched**. Each inverse rides the unchanged `assertHoldsPen` (423) + RBAC +
+  org-scope + optimistic (409) gates (the API stays the sole trust boundary — undo can't escalate).
+  Linear history (new edit clears redo), depth 50, cleared on plan switch / pen release / reload;
+  conflict = **abort-and-refetch + clear-redo** (no silent skip/auto-retry/merge). Delete-undo is
+  **re-create** (new id) in M1–M2; id-stable/cascade-clean restore is an **optional M4** additive
+  endpoint reusing soft-delete/`deleteBatchId` (no schema change). Progress edits out of scope
+  (non-pen-gated). No schema/API for M1–M3; behind `VITE_UNDO_REDO` (default off). A server-persisted
+  undo log and full-plan snapshots were rejected for v1. Builds on ADR-0022/0028/0031/0032/0033.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
