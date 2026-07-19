@@ -104,11 +104,13 @@ describe('NoteThread', () => {
     renderThread('u1');
     const mine = (await screen.findByText('Mine')).closest('li')!;
     const theirs = screen.getByText('Theirs').closest('li')!;
-    expect(within(mine).getByRole('button', { name: /^Edit note by/ })).toBeInTheDocument();
-    expect(within(mine).getByRole('button', { name: /^Delete note by/ })).toBeInTheDocument();
-    expect(within(theirs).queryByRole('button', { name: /^Edit note by/ })).not.toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: /^Edit note \d+ by/ })).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: /^Delete note \d+ by/ })).toBeInTheDocument();
     expect(
-      within(theirs).queryByRole('button', { name: /^Delete note by/ }),
+      within(theirs).queryByRole('button', { name: /^Edit note \d+ by/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(theirs).queryByRole('button', { name: /^Delete note \d+ by/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -132,7 +134,7 @@ describe('NoteThread', () => {
     );
     renderThread('u1');
 
-    fireEvent.click(await screen.findByRole('button', { name: /^Edit note by/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit note \d+ by/ }));
     fireEvent.change(screen.getByLabelText('Edit note'), { target: { value: 'My change' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -165,5 +167,49 @@ describe('NoteThread', () => {
     expect(await screen.findByText('Older')).toBeInTheDocument();
     // The second request carried the cursor from page one.
     expect(vi.mocked(apiFetchEnvelope).mock.calls[1]![0]).toContain('cursor=c1');
+  });
+
+  it('when "Load more" exhausts the thread, focus moves to the region and completion is announced', async () => {
+    vi.mocked(apiFetchEnvelope)
+      .mockResolvedValueOnce(
+        page([note({ id: 'n2', body: 'Newest' })], { nextCursor: 'c1', hasMore: true }),
+      )
+      .mockResolvedValueOnce(
+        page([note({ id: 'n1', body: 'Older' })], { nextCursor: null, hasMore: false }),
+      );
+    renderThread();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    // The button unmounts on the last page, so focus must not fall to <body>.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument(),
+    );
+    const region = screen.getByRole('list').parentElement!;
+    expect(region).toHaveFocus();
+    // The announcer writes on a requestAnimationFrame tick (clear-then-set), so poll for it.
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent('All notes loaded.'),
+    );
+  });
+
+  it('gives same-author, same-minute notes distinct Edit/Delete accessible names (a 1-based ordinal)', async () => {
+    vi.mocked(apiFetchEnvelope).mockResolvedValue(
+      page(
+        [
+          note({ id: 'a', body: 'First', authorId: 'u1', createdAt: '2026-01-02T10:00:00Z' }),
+          note({ id: 'b', body: 'Second', authorId: 'u1', createdAt: '2026-01-02T10:00:30Z' }),
+        ],
+        { nextCursor: null, hasMore: false },
+      ),
+    );
+    renderThread('u1');
+
+    // Both notes render the same author and the same minute-precision timestamp, yet the ordinal keeps
+    // each button's accessible name unique (WCAG 2.4.4 / 4.1.2).
+    const editButtons = await screen.findAllByRole('button', { name: /^Edit note \d+ by/ });
+    const names = editButtons.map((b) => b.getAttribute('aria-label'));
+    expect(new Set(names).size).toBe(2);
+    expect(screen.getByRole('button', { name: /^Edit note 1 by/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Edit note 2 by/ })).toBeInTheDocument();
   });
 });

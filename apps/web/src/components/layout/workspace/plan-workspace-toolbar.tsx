@@ -304,6 +304,7 @@ export function ToolbarPlanWorkspace({
             orgSlug={model.orgSlug}
             planId={model.planId}
             canWrite={model.canWriteNotes}
+            bounded
           />
         </div>
       ) : null}

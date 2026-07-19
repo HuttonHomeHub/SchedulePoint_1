@@ -22,9 +22,14 @@ import { formatTimestamp } from '@/lib/format-date';
 /** A neutral fallback when the author's display name couldn't be resolved server-side (ADR-0046). */
 const UNKNOWN_AUTHOR = 'Unknown author';
 
-/** A short, human label for a note used in per-control accessible names so they're distinguishable. */
-function noteLabel(note: NoteSummary): string {
-  return `${note.authorName ?? UNKNOWN_AUTHOR}, ${formatTimestamp(note.createdAt)}`;
+/**
+ * A short, human label for a note used in per-control accessible names so they're distinguishable. The
+ * 1-based `position` disambiguates notes that share an author and (minute-precision) timestamp — two
+ * quick consecutive notes would otherwise give their Edit/Delete buttons identical accessible names
+ * (WCAG 2.4.4 / 4.1.2), which axe can't detect since the DOM ids differ.
+ */
+function noteLabel(note: NoteSummary, position: number): string {
+  return `note ${position} by ${note.authorName ?? UNKNOWN_AUTHOR}, ${formatTimestamp(note.createdAt)}`;
 }
 
 /**
@@ -39,19 +44,25 @@ export function NoteItem({
   orgSlug,
   target,
   note,
+  position,
   currentUserId,
   onThreadStale,
-  onDeleted,
+  onFocusRegion,
 }: {
   orgSlug: string;
   target: NoteTarget;
   note: NoteSummary;
+  /** 1-based position in the thread — folded into the Edit/Delete accessible names so they're unique. */
+  position: number;
   /** The signed-in user's id — the note's author iff it equals `note.authorId`. */
   currentUserId?: string | null | undefined;
   /** Called after a 409/403 so the thread refetches the server truth for a retry. */
   onThreadStale: () => void;
-  /** Called after this note is deleted, so the thread can move focus off the unmounting row. */
-  onDeleted: () => void;
+  /**
+   * Move focus to the thread's region sink. Called after a delete (the row unmounts) and after a 403
+   * loses authorship (the Edit affordance unmounts) so focus never falls to `<body>` (SC 2.4.3).
+   */
+  onFocusRegion: () => void;
 }): React.ReactElement {
   const isAuthor = note.authorId != null && note.authorId === currentUserId;
   const announce = useAnnounce();
@@ -131,8 +142,12 @@ export function NoteItem({
               'This note was updated elsewhere. We’ve refreshed it — review the latest and edit again if needed.',
             );
           } else if (error instanceof ApiFetchError && error.status === 403) {
-            closeEditor();
+            // Authorship was lost server-side: on refetch the Edit affordance (and its button) unmounts,
+            // so don't arm the restore-to-Edit-button path (`closeEditor`) — that focus target vanishes.
+            // Close the editor directly and hand focus to the thread region sink instead (SC 2.4.3).
+            setEditing(false);
             onThreadStale();
+            onFocusRegion();
             setConflict('You can no longer edit this note.');
           }
           // Other errors surface via the form's inline `update.isError` message below.
@@ -149,7 +164,7 @@ export function NoteItem({
         // thread region so it doesn't fall to <body> (the ClientsTable/DependencyEditor precedent).
         flushSync(() => setDeleting(false));
         announce('Note deleted.');
-        onDeleted();
+        onFocusRegion();
       },
       onError: (error) => setDeleteError(error.message),
     });
@@ -227,7 +242,7 @@ export function NoteItem({
                   setConflict(null);
                   setEditing(true);
                 }}
-                aria-label={`Edit note by ${noteLabel(note)}`}
+                aria-label={`Edit ${noteLabel(note, position)}`}
               >
                 Edit
               </Button>
@@ -238,7 +253,7 @@ export function NoteItem({
                   setDeleteError(null);
                   setDeleting(true);
                 }}
-                aria-label={`Delete note by ${noteLabel(note)}`}
+                aria-label={`Delete ${noteLabel(note, position)}`}
               >
                 Delete
               </Button>

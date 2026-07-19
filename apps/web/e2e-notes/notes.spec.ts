@@ -41,7 +41,7 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   await expect(logic.getByText('· edited')).toBeHidden();
 
   // Edit the own note (author-only control, distinguishable accessible name) → shows "edited".
-  await logic.getByRole('button', { name: /^Edit note by/ }).click();
+  await logic.getByRole('button', { name: /^Edit note \d+ by/ }).click();
   await logic.getByLabel('Edit note').fill('Poured the slab this morning');
   await logic.getByRole('button', { name: 'Save' }).click();
   await expect(logic.getByText('Poured the slab this morning')).toBeVisible();
@@ -61,7 +61,7 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   // Re-open and delete the note → the thread empties.
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  await logic.getByRole('button', { name: /^Delete note by/ }).click();
+  await logic.getByRole('button', { name: /^Delete note \d+ by/ }).click();
   const confirm = page.getByRole('alertdialog', { name: 'Delete note' });
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(logic.getByText('No notes yet.')).toBeVisible();

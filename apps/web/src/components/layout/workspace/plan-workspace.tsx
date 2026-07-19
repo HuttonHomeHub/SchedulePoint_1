@@ -273,7 +273,12 @@ function PlanHeaderBar({
       {NOTES_ENABLED ? (
         // Mounted under the header's plan `h1`, so the default `h2` heading is correct (ADR-0046),
         // at the same site as the programme section.
-        <PlanNotesSection orgSlug={orgSlug} planId={planId} canWrite={model.canWriteNotes} />
+        <PlanNotesSection
+          orgSlug={orgSlug}
+          planId={planId}
+          canWrite={model.canWriteNotes}
+          bounded
+        />
       ) : null}
     </header>
   );

@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useId } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateNote } from '../api/use-notes';
@@ -31,6 +32,9 @@ export function NoteComposer({
 }): React.ReactElement {
   const create = useCreateNote(orgSlug, target);
   const announce = useAnnounce();
+  // A stable, unique id for the character-count description — two composers (plan + activity) can be
+  // mounted at once, so a hardcoded id would duplicate in the DOM and break `aria-describedby` (WCAG 4.1.1).
+  const countId = useId();
 
   const {
     register,
@@ -64,12 +68,12 @@ export function NoteComposer({
         rows={3}
         placeholder={placeholder}
         error={errors.body?.message}
-        aria-describedby="note-composer-count"
+        aria-describedby={countId}
         {...register('body')}
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p
-          id="note-composer-count"
+          id={countId}
           className={overLimit ? 'text-destructive-text text-xs' : 'text-muted-foreground text-xs'}
         >
           {value.length.toLocaleString()} / {NOTE_BODY_MAX.toLocaleString()}

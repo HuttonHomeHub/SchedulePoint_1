@@ -19,12 +19,18 @@ export function PlanNotesSection({
   planId,
   canWrite = false,
   headingLevel = 2,
+  bounded = false,
 }: {
   orgSlug: string;
   planId: string;
   /** Contributor upward (role-derived by the host); Viewer reads only. */
   canWrite?: boolean;
   headingLevel?: 2 | 3;
+  /**
+   * Cap the thread height with an internal scroll — set when mounted in the fixed-height canvas
+   * workspace header so a growing thread can't push the canvas below its floor (ADR-0030/0031).
+   */
+  bounded?: boolean;
 }): React.ReactElement {
   const session = useSession();
   const currentUserId = session.data?.user.id ?? null;
@@ -47,7 +53,12 @@ export function PlanNotesSection({
         </p>
       </div>
       {canWrite ? <NoteComposer orgSlug={orgSlug} target={target} /> : null}
-      <NoteThread orgSlug={orgSlug} target={target} currentUserId={currentUserId} />
+      <NoteThread
+        orgSlug={orgSlug}
+        target={target}
+        currentUserId={currentUserId}
+        bounded={bounded}
+      />
     </section>
   );
 }
