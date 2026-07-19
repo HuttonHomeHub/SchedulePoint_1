@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UNDO_REDO_ENABLED, flagDefaultOff } from './env';
+import { TOOLBAR_QUICK_WINS_ENABLED, UNDO_REDO_ENABLED, flagDefaultOff } from './env';
 
 describe('flagDefaultOff', () => {
   it('is on ONLY for an explicit opt-in ("true"/"1")', () => {
@@ -23,5 +23,15 @@ describe('UNDO_REDO_ENABLED', () => {
     // Undo/redo is on by default now that its gates are green (ADR-0048). Setting VITE_UNDO_REDO=false
     // ships it inert (no store/keys, placeholder toolbar items) — the rollback path.
     expect(UNDO_REDO_ENABLED).toBe(true);
+  });
+});
+
+describe('TOOLBAR_QUICK_WINS_ENABLED', () => {
+  it('is on by default (delivered & enabled, 2026-07-19; no VITE_TOOLBAR_QUICK_WINS set)', () => {
+    // The five quick-wins are wired to shipped features and on by default now that their specialist
+    // reviews (a11y / ux / component / perf / security / test) are green (M3). Setting
+    // VITE_TOOLBAR_QUICK_WINS=false ships the five ids as their "Coming soon" placeholders — the
+    // byte-for-byte rollback path.
+    expect(TOOLBAR_QUICK_WINS_ENABLED).toBe(true);
   });
 });

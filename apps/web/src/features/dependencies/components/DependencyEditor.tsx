@@ -1,6 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useDeleteDependency, usePredecessors, useSuccessors } from '../api/use-dependencies';
@@ -149,6 +149,8 @@ export function DependencyEditor({
   onRemoved,
   crossPlanSlot,
   notesSlot,
+  notesHeadingRef,
+  revealNotes = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -176,6 +178,19 @@ export function DependencyEditor({
    * feature stays free of a sideways feature → feature import. Absent (the default) is byte-identical.
    */
   notesSlot?: React.ReactNode;
+  /**
+   * A ref to the {@link notesSlot}'s heading (the composition root wires the same ref into its
+   * `ActivityNotesSection`), so that when the panel is opened via the toolbar **Add note** button
+   * ({@link revealNotes}) it scrolls the Notes section into view + moves focus to it — parity with the
+   * Comments reveal for plan notes (toolbar quick-wins U4/A4). Absent ⇒ byte-identical.
+   */
+  notesHeadingRef?: RefObject<HTMLHeadingElement | null>;
+  /**
+   * Reveal + focus the Notes section on open (see {@link notesHeadingRef}). Set by the composition root
+   * only for the toolbar **Add note** entry point; a plain open (canvas "Open logic" / the table) leaves
+   * it false, so the panel opens on Predecessors as before. Default false ⇒ byte-identical.
+   */
+  revealNotes?: boolean;
 }): React.ReactElement {
   const activityId = activity?.id ?? '';
   const enabled = open && activity !== undefined;
@@ -184,6 +199,18 @@ export function DependencyEditor({
   const deleteDependency = useDeleteDependency(orgSlug);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
+
+  // Toolbar **Add note** reveal (toolbar quick-wins U4/A4): when this panel opens via that entry point,
+  // scroll its Notes section into view + move focus onto its heading, so the user lands ready to write a
+  // note rather than on Predecessors. Runs after the dialog's own open-focus (effect timing), so it wins.
+  // A plain open (`revealNotes` false) or an absent ref is inert — byte-identical.
+  useEffect(() => {
+    if (!open || !revealNotes) return;
+    const heading = notesHeadingRef?.current;
+    if (!heading) return;
+    heading.scrollIntoView({ block: 'start' });
+    heading.focus();
+  }, [open, revealNotes, notesHeadingRef]);
 
   const [adding, setAdding] = useState<LinkDirection | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);

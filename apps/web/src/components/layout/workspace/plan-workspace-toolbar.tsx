@@ -27,6 +27,7 @@ import {
   SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
+import { ActivityProgressDialog } from '@/features/activities';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -69,12 +70,25 @@ export function ToolbarPlanWorkspace({
   // The on-canvas floating Legend panel (ADR-0031 amendment): open state + drag position persist here,
   // toggled from the toolbar's Legend control and rendered over the canvas below.
   const legend = useLegendPanelPrefs();
+  // The **Comments** button's reveal target (toolbar quick-wins F2): a ref on the plan-notes heading +
+  // a stable, guarded callback that scrolls it into view and moves focus to it. A no-op when the
+  // section isn't mounted (the responsive single-pane toggle / `VITE_NOTES` off), so it never throws.
+  const notesHeadingRef = useRef<HTMLHeadingElement>(null);
+  const revealComments = useCallback(() => {
+    const el = notesHeadingRef.current;
+    // No explicit `behavior` — let the app's global `prefers-reduced-motion` CSS `scroll-behavior`
+    // opt-out govern it (A3); an explicit `behavior: 'smooth'` would bypass that (mirrors
+    // `features/plan-lock/lib/use-pen-lock-view.ts`, which omits `behavior` deliberately).
+    el?.scrollIntoView({ block: 'start' });
+    el?.focus();
+  }, []);
   const ctx = useTsldToolbarContext({
     model,
     plan,
     canvasUi,
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
+    revealComments,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
@@ -219,6 +233,7 @@ export function ToolbarPlanWorkspace({
       onOpenLogic={model.setLogicActivity}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      onSelectionChange={model.onSelectionChange}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
@@ -328,6 +343,7 @@ export function ToolbarPlanWorkspace({
             planId={model.planId}
             canWrite={model.canWriteNotes}
             bounded
+            headingRef={notesHeadingRef}
           />
         </div>
       ) : null}
@@ -411,6 +427,20 @@ export function ToolbarPlanWorkspace({
 
       {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
       <ActivityCrudDialogs model={model} />
+
+      {/* The progress editor the toolbar's **Update progress…** opens (toolbar quick-wins F3), driven by
+          `model.progressActivityId`. Mounted-and-toggled like the crud dialogs; its target re-derives
+          from the live query, so it closes when the row is deleted. Role-gated (Contributor+), not
+          pen-gated (the progress precedent, ADR-0046). */}
+      {model.canProgress ? (
+        <ActivityProgressDialog
+          orgSlug={model.orgSlug}
+          planId={model.planId}
+          open={model.progressActivity !== undefined}
+          onClose={() => model.setProgressActivityId(null)}
+          {...(model.progressActivity ? { activity: model.progressActivity } : {})}
+        />
+      ) : null}
     </div>
   );
 }

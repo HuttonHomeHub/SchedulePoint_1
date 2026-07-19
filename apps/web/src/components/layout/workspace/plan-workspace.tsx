@@ -144,6 +144,7 @@ function Adr0030PlanWorkspace({
       onOpenLogic={model.setLogicActivity}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      onSelectionChange={model.onSelectionChange}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
@@ -212,6 +213,8 @@ function Adr0030PlanWorkspace({
 
       {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
       <ActivityCrudDialogs model={model} />
+      {/* NB no `ActivityProgressDialog` here: `progressActivityId` is set only from the toolbar surface
+          (`ToolbarPlanWorkspace`), so hosting it in this legacy layout was unreachable dead code. */}
     </div>
   );
 }

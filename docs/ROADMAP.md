@@ -101,6 +101,12 @@ keep `main` releasable.
   ([`docs/runbooks/tsld-editing-enablement.md`](runbooks/tsld-editing-enablement.md)).
 - **Project Explorer** — see above. **Remaining canvas polish:** the deferred per-activity
   driving summary in the parallel listbox, plus the debt items in `TECH_DEBT.md`.
+- **Toolbar quick-wins (web).** Five previously-"Coming soon" TSLD toolbar buttons are now wired to
+  already-shipped features and **on by default** (`VITE_TOOLBAR_QUICK_WINS`): **Go to today** (viewport
+  jump), **Comments** (reveal the plan notes thread), **Update progress…**, **Add note** (open the
+  selected activity's notes), and **Clear visual placement** (drop a hand-placed `visualStart`). The
+  canvas selection is lifted into the workspace so the selection-aware items gate on a real target;
+  each reuses an existing REST mutation — no API/schema/engine change (spec `docs/specs/toolbar-quick-wins/`).
 
 ## Next
 

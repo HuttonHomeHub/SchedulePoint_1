@@ -49,4 +49,6 @@ interface ImportMetaEnv {
   readonly VITE_NOTES?: string;
   /** Client-side undo/redo for plan authoring (ADR-0048). "true"/"1" enables it; off by default while it ships dark (M1 records commands with no visible UI; M3 adds the controls). */
   readonly VITE_UNDO_REDO?: string;
+  /** TSLD toolbar quick-wins — wires five previously-"Coming soon" toolbar buttons (Recenter-on-today, Comments, Update-progress, Add-note, Clear-visual-placement) to already-shipped features (docs/specs/toolbar-quick-wins/). "true"/"1" enables it; off by default during build (flips on at M3). */
+  readonly VITE_TOOLBAR_QUICK_WINS?: string;
 }

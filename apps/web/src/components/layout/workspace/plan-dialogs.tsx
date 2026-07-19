@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { NOTES_ENABLED, PROGRAMME_SCHEDULING_ENABLED } from '@/config/env';
@@ -20,6 +22,10 @@ export function PlanDialogs({
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
 }): React.ReactElement {
+  // The activity Notes-section heading ref (toolbar quick-wins U4/A4): wired into both the
+  // `ActivityNotesSection` (which makes the heading focusable) and the `DependencyEditor` (which scrolls
+  // + focuses it when the panel is opened via the toolbar **Add note** button, `logicRevealNotes`).
+  const notesHeadingRef = useRef<HTMLHeadingElement>(null);
   return (
     <>
       <DependencyEditor
@@ -30,6 +36,8 @@ export function PlanDialogs({
         open={model.logicActivity !== undefined}
         onClose={() => model.setLogicActivity(undefined)}
         onRemoved={model.recordDependencyRemove}
+        notesHeadingRef={notesHeadingRef}
+        revealNotes={model.logicRevealNotes}
         {...(model.logicActivity ? { activity: model.logicActivity } : {})}
         {...(PROGRAMME_SCHEDULING_ENABLED && model.logicActivity
           ? {
@@ -53,6 +61,7 @@ export function PlanDialogs({
                   activity={model.logicActivity}
                   canWrite={model.canWriteNotes}
                   enabled={model.logicActivity !== undefined}
+                  headingRef={notesHeadingRef}
                 />
               ),
             }

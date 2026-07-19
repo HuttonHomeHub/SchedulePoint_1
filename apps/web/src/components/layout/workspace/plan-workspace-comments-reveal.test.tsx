@@ -2,26 +2,26 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
- * the real `PlanDetailScreen` with both `CANVAS_WORKSPACE_ENABLED` and `CANVAS_TOOLBAR_ENABLED`
- * forced on. Proves the flag routes to the toolbar layout: the two command rows (Look / Do), a
- * full-height chromeless canvas, the activities panel collapsed by default, and the plan actions
- * reachable inline on Row 2. The canvas + heavy children are stubbed (jsdom has no Canvas 2D).
+ * T2 — the **Comments** reveal through the REAL production path (toolbar quick-wins F2):
+ * `ToolbarPlanWorkspace` builds `revealComments` (a ref on the mounted `PlanNotesSection` heading),
+ * threads it through `useTsldToolbarContext`, and the registry's Comments item calls it. Rendered via
+ * the real `PlanDetailScreen` with the canvas/heavy children stubbed — a broken ref or renamed prop
+ * anywhere along that chain would fail this test (unlike a hand-duplicated harness). The notes data
+ * layer is stubbed to an empty thread; the heading still mounts and must receive focus on the click.
  */
-
 const h = vi.hoisted(() => ({ role: 'PLANNER' }));
 
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_WORKSPACE_ENABLED: true,
   CANVAS_TOOLBAR_ENABLED: true,
-  // This suite asserts the ADR-0031 toolbar *layout*, not authoring; pin the (now default-on)
-  // authoring flag off so the plain Add toggle + inert empty canvas are the subject. Authoring is
-  // covered by the tsld-toolbar-authoring / TsldPanel.authoring suites + the flag-on e2e journey.
   CANVAS_AUTHORING_ENABLED: false,
+  SCHEDULING_MODES_ENABLED: false,
+  NOTES_ENABLED: true,
+  TOOLBAR_QUICK_WINS_ENABLED: true,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -35,12 +35,23 @@ vi.mock('@/hooks/use-org-role', async (importOriginal) => ({
   useOrgRole: () => h.role,
 }));
 vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'user-me' } } }) }));
-
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanPen: () => ({ penManaged: false }),
   CompactPenStatus: () => null,
 }));
+
+// Keep the notes thread/counts network-free (empty thread); the heading still mounts.
+import type * as ApiClient from '@/lib/api/client';
+vi.mock('@/lib/api/client', async (importActual) => {
+  const actual = await importActual<typeof ApiClient>();
+  return {
+    ...actual,
+    apiFetchEnvelope: vi
+      .fn()
+      .mockResolvedValue({ data: [], meta: { nextCursor: null, hasMore: false } }),
+  };
+});
 
 const query = <T,>(data: T) => ({ data, isPending: false, isError: false, refetch: vi.fn() });
 
@@ -93,18 +104,13 @@ vi.mock('@/features/dependencies', () => ({
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
-
-// The TSLD panel needs Canvas 2D; stub it so the layout renders in jsdom.
 vi.mock('@/features/tsld', () => ({
   TsldPanel: () => <div data-testid="tsld-panel" />,
   barDateSourceFor: () => 'early',
 }));
-
-// Schedule: stub the summary strip + the recalc/summary hooks the toolbar builder reads.
 vi.mock('@/features/schedule', () => ({
   ScheduleSummaryStrip: () => <div data-testid="summary-strip" />,
   RecalculateButton: () => <div data-testid="recalculate-button" />,
-  // The model reads useRecalculate from the barrel (the builder uses the api-path mock below).
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({ notify: vi.fn(), flush: vi.fn(), isPending: false }),
 }));
@@ -114,7 +120,6 @@ vi.mock('@/features/schedule/api/use-schedule', () => ({
   useScheduleSummary: () => query({ projectFinish: '2026-08-01' }),
 }));
 
-const { formatCalendarDate } = await import('@/lib/format-date');
 const { PlanDetailScreen } = await import('@/routes/plan-detail');
 
 function renderScreen() {
@@ -126,67 +131,23 @@ function renderScreen() {
   );
 }
 
+beforeAll(() => {
+  // jsdom doesn't implement scrollIntoView; the reveal calls it.
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = function scrollIntoView(): void {};
+  }
+});
 beforeEach(() => {
   h.role = 'PLANNER';
 });
 
-describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
-  it('renders the two command rows over the canvas', () => {
+describe('ToolbarPlanWorkspace — Comments reveal (F2, production path)', () => {
+  it('moves focus to the plan Notes heading when the toolbar Comments button is clicked', () => {
     renderScreen();
-    expect(screen.getByRole('toolbar', { name: 'View and navigate' })).toBeInTheDocument();
-    expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
-    expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
-    // Row 1 · Look hosts Fit; Row 2 · Do hosts Add activity.
-    expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
-  });
-
-  it('pins the Project-finish chip inline in the toolbar (decision #1)', () => {
-    renderScreen();
-    expect(screen.getByText('Finish')).toBeInTheDocument();
-    expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
-  });
-
-  it('collapses the activities panel by default (canvas-maximal)', () => {
-    renderScreen();
-    expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Collapse activities panel' }),
-    ).not.toBeInTheDocument();
-    // Expanding reveals the docked table.
-    fireEvent.click(screen.getByRole('button', { name: 'Expand activities panel' }));
-    expect(screen.getByRole('button', { name: 'Collapse activities panel' })).toBeInTheDocument();
-    expect(screen.getByTestId('activities-table')).toBeInTheDocument();
-  });
-
-  it('reaches Baselines inline on Row 2 (no capability lost)', () => {
-    renderScreen();
-    // Plan actions are inline (tier-2 icon buttons) on the Do row, not behind a `⋯` overflow.
-    fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
-    expect(screen.getByRole('dialog', { name: 'Baselines' })).toBeInTheDocument();
-    expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
-  });
-
-  it('toggles the floating Legend panel on the canvas from the Row-1 control', () => {
-    renderScreen();
-    // The legend lives on the canvas now (ADR-0031 amendment): the Row-1 Legend control shows/hides
-    // a floating, draggable key overlaid on the diagram, rather than opening a toolbar popover.
-    expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Legend' }));
-    const panel = screen.getByRole('group', { name: 'Diagram legend' });
-    expect(panel).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Hide legend' }));
-    expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
-  });
-
-  it('offers a header edit-pencil to writers (folded from the toolbar), hidden for viewers', () => {
-    // The standalone Edit-plan toolbar button folded into a header pencil beside the status pill.
-    const writer = renderScreen();
-    expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument();
-    writer.unmount();
-
-    h.role = 'VIEWER';
-    renderScreen();
-    expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument();
+    // The plan-level Notes section is mounted (the reveal target).
+    const heading = screen.getByRole('heading', { name: 'Notes' });
+    expect(heading).not.toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
+    expect(heading).toHaveFocus();
   });
 });

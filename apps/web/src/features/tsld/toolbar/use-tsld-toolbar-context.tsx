@@ -62,6 +62,7 @@ export function useTsldToolbarContext({
   canvasUi,
   openDialog,
   legend,
+  revealComments,
 }: {
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
@@ -70,6 +71,9 @@ export function useTsldToolbarContext({
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
    * Legend control shows/hides it rather than rendering the key in a popover. */
   legend: Pick<UseLegendPanelPrefs, 'open' | 'toggle'>;
+  /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
+   * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
+  revealComments: () => void;
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
@@ -83,6 +87,26 @@ export function useTsldToolbarContext({
     plan.plannedStart !== null;
 
   const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
+  // Selection-aware quick-wins (spec `docs/specs/toolbar-quick-wins/`): the lifted canvas selection +
+  // the role capabilities + the shipped seams the five items call. Read directly off the model so no
+  // rule is re-derived; nothing here does anything until a flag-on item reads it. The two open-*
+  // callbacks are defined inline in the memo below (keyed on the selection, which is exactly when the
+  // context re-identifies anyway), so they need no separate stabilisation.
+  const {
+    todayIso,
+    selectedActivityId,
+    selectedActivity,
+    canProgress,
+    canWriteNotes,
+    revealActivityNotes,
+    setProgressActivityId,
+    clearVisualPlacement,
+  } = model;
+  // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing; the workspace derives it the
+  // same way to build `authoringEnabled`. Expose it on the context so a pen-gated item disabled BY the
+  // overlay (not by role/pen) can still explain why (toolbar quick-wins A1) — `canEditSchedule` stays
+  // true under the overlay, so without this the button would disable with no reason.
+  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
   // Edit-plan opens the plan form (writer only). Shared by the Summary popover's shortcut and the
   // header edit-pencil. Memoised so it doesn't re-identify the toolbar context each render.
   const editPlan = useMemo(
@@ -239,6 +263,26 @@ export function useTsldToolbarContext({
       projectFinishContent,
 
       hasDiagram,
+
+      // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) — the lifted selection + shipped seams the five
+      // real items call. Inert while the flag is off (the ids resolve to their placeholder stubs).
+      todayIso,
+      selectedActivityId,
+      selectedActivity,
+      revealComments,
+      canProgress,
+      // Update progress (F3): set the workspace-hosted dialog's target to the current selection.
+      openProgress: () => setProgressActivityId(selectedActivityId),
+      canWriteNotes,
+      // Add note (F4/U4): open the selected activity's Logic panel AND reveal + focus its Notes section
+      // (parity with Comments for plan notes), so the user lands on notes rather than Predecessors. A
+      // no-op when nothing is selected.
+      openActivityNotes: () => {
+        if (selectedActivity) revealActivityNotes(selectedActivity);
+      },
+      canEditSchedule,
+      lateOverlayActive,
+      clearVisualPlacement,
     }),
     [
       zoomPreset,
@@ -272,6 +316,19 @@ export function useTsldToolbarContext({
       summaryContent,
       projectFinishContent,
       hasDiagram,
+      // Toolbar quick-wins — re-identify the context only when the selection / resolved row / a
+      // capability actually changes (the callbacks are stable). `todayIso` is value-stable (a fresh
+      // string of the same value each render), so it never churns the memo.
+      todayIso,
+      selectedActivityId,
+      selectedActivity,
+      revealComments,
+      canProgress,
+      canWriteNotes,
+      setProgressActivityId,
+      revealActivityNotes,
+      lateOverlayActive,
+      clearVisualPlacement,
     ],
   );
 }

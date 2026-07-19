@@ -98,7 +98,22 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canCalculate: canCalculateSchedule(role),
   });
   const [editing, setEditing] = useState(false);
-  const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
+  const [logicActivity, setLogicActivityState] = useState<ActivitySummary | undefined>(undefined);
+  // Whether the Logic panel, when open, should reveal + focus its Notes section (toolbar quick-wins
+  // U4/A4): only the toolbar **Add note** path sets it, so a canvas "Open logic" / table open lands on
+  // Predecessors as before. `setLogicActivity` clears it on any plain open/close; `revealActivityNotes`
+  // sets it. Inert (never read) when `VITE_NOTES`/quick-wins are off.
+  const [logicRevealNotes, setLogicRevealNotes] = useState(false);
+  const setLogicActivity = useCallback((activity: ActivitySummary | undefined) => {
+    setLogicRevealNotes(false);
+    setLogicActivityState(activity);
+  }, []);
+  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
+  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
+  const revealActivityNotes = useCallback((activity: ActivitySummary) => {
+    setLogicRevealNotes(true);
+    setLogicActivityState(activity);
+  }, []);
   // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
   // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
   // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
@@ -107,6 +122,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null);
   const onEditActivity = useCallback((a: ActivitySummary) => setEditActivityId(a.id), []);
   const onDeleteActivity = useCallback((a: ActivitySummary) => setDeleteActivityId(a.id), []);
+  // The canvas selection lifted to the workspace (toolbar quick-wins F0, spec
+  // `docs/specs/toolbar-quick-wins/`): the TSLD panel reports its selection here so the main toolbar's
+  // selection-aware items (Update progress / Add note / Clear visual placement) can read it — mirroring
+  // the `editActivityId`/`deleteActivityId` precedent. Held as an id; the resolved row is derived below
+  // from the live query so it clears when the row is deleted. Inert when nothing reads it (flag off).
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const onSelectionChange = useCallback((id: string | null) => setSelectedActivityId(id), []);
+  // The activity targeted by the toolbar's **Update progress…** action (F3), driving the
+  // workspace-hosted `ActivityProgressDialog` (beside `ActivityCrudDialogs`). Held as an id like the
+  // crud dialogs so a 409 retry re-derives the current version; the derived row (below) closes the
+  // dialog when its target vanishes.
+  const [progressActivityId, setProgressActivityId] = useState<string | null>(null);
 
   const plan = usePlan(orgSlug, planId);
   const project = useProject(orgSlug, plan.data?.projectId ?? '');
@@ -156,6 +183,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     if (!NOTES_ENABLED || !noteCounts.data) return undefined;
     return new Map<string, number>(noteCounts.data.map((entry) => [entry.activityId, entry.count]));
   }, [noteCounts.data]);
+
+  // Resolve the lifted selection / progress target from the live query (toolbar quick-wins F0/F3), so
+  // each carries the current `version` and becomes undefined the moment its row is deleted — the
+  // selection-aware toolbar items then re-disable and the progress dialog closes, with no extra effect.
+  const selectedActivity = useMemo(
+    () =>
+      selectedActivityId
+        ? (activities.data ?? []).find((a) => a.id === selectedActivityId)
+        : undefined,
+    [selectedActivityId, activities.data],
+  );
+  const progressActivity = useMemo(
+    () =>
+      progressActivityId
+        ? (activities.data ?? []).find((a) => a.id === progressActivityId)
+        : undefined,
+    [progressActivityId, activities.data],
+  );
 
   // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
   // the canvas *or* the activities table — triggers a coalesced recalculation, so the canvas plots
@@ -609,6 +654,72 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     void variance.refetch();
   };
 
+  // The live activities held in a ref so `clearVisualPlacement` can read the pre-clear row WITHOUT
+  // taking `activities.data` as a dependency — react-query hands a fresh array reference on every
+  // recalc, so depending on it would re-identify the callback each recalc cycle and churn the toolbar
+  // context memo (which keys on this callback), re-rendering all ~46 toolbar buttons flag-independently
+  // (perf review P1). Mirrors the `usePlanAutoRecalc` live-ref precedent.
+  const activitiesRef = useRef(activities.data);
+  useEffect(() => {
+    activitiesRef.current = activities.data;
+  });
+  // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
+  // — the **Clear visual placement** command. A faithful subset of the reposition VISUAL branch above:
+  // the minimal `visualStart: null` PATCH → (flag-guarded) the `visualStartCommand` inverse restoring the
+  // prior placement → announce + `autoRecalc.notify()` so the effective-Visual pass re-plots the bar at
+  // its computed date. A stale-version 409 surfaces the (announced) conflict non-destructively, and a
+  // pen-loss 423 defers to the shared pen banner: either way nothing applied, nothing recorded, never
+  // re-sent — exactly like a reposition. It touches only the existing PATCH hook + auto-recalc, so the
+  // CPM engine and its recalc parity gate are untouched. Stable identity (the toolbar context memo
+  // depends on it): the member handles below are hoisted into stable locals and the pre-clear row is
+  // read through `activitiesRef` at call time, so the deps array is all-stable (no eslint-disable).
+  const notifyRecalc = autoRecalc.notify;
+  const onPenWriteRejected = pen.onWriteRejected;
+  const setVisualStartAsync = setVisualStart.mutateAsync;
+  const clearVisualPlacement = useCallback(
+    async (activityId: string, version: number): Promise<void> => {
+      const activity = (activitiesRef.current ?? []).find((a) => a.id === activityId);
+      const name = activity?.name ?? 'the activity';
+      try {
+        const saved = await setVisualStartAsync({ activityId, visualStart: null, version });
+        // Record the clear for undo (ADR-0048) — the single user edit, NOT the follow-up recalc. The
+        // inverse restores the prior `visualStart` (lane unchanged). Guarded on the flag, like the
+        // reposition VISUAL branch — byte-identical when off.
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            visualStartCommand({
+              setVisualStart: setVisualStartAsync,
+              activityId,
+              before: {
+                visualStart: activity?.visualStart ?? null,
+                laneIndex: activity?.laneIndex ?? 0,
+              },
+              after: { visualStart: null, laneIndex: activity?.laneIndex ?? 0 },
+              version: saved.version,
+            }),
+          );
+        }
+      } catch (err) {
+        if (onPenWriteRejected(err).kind === 'lock') return;
+        // Stale version — the clear was NOT applied (nothing changed); never re-send, never record.
+        // Surface it non-destructively (announced), mirroring the reposition VISUAL branch's conflict
+        // path (which shows + announces rather than silently no-op'ing), then stop.
+        if (err instanceof ApiFetchError && err.status === 409) {
+          announce(
+            'This plan changed since you opened it — the visual placement wasn’t cleared. Refresh to see the latest.',
+          );
+          return;
+        }
+        throw err;
+      }
+      // Announce success so the (otherwise-silent) canvas re-plot is reachable to AT (WCAG 4.1.3),
+      // matching the reposition VISUAL branch's "dates will update" wording.
+      announce(`Cleared the visual placement for “${name}”; dates will update.`);
+      notifyRecalc();
+    },
+    [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce],
+  );
+
   return {
     orgSlug,
     planId,
@@ -643,6 +754,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setEditing,
     logicActivity,
     setLogicActivity,
+    // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the
+    // toolbar **Add note** opener that sets it. Inert unless `VITE_NOTES`/quick-wins are on.
+    logicRevealNotes,
+    revealActivityNotes,
     // Activity edit/delete targeted from the floating selection bar (rendered by ActivityCrudDialogs).
     editActivityId,
     setEditActivityId,
@@ -650,6 +765,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setDeleteActivityId,
     onEditActivity,
     onDeleteActivity,
+    // Canvas selection lifted to the workspace (toolbar quick-wins F0) + the toolbar's Update-progress
+    // target (F3). Inert when nothing reads them (flag off). `selectedActivity`/`progressActivity`
+    // resolve from the live query, so they clear when their row is deleted.
+    selectedActivityId,
+    onSelectionChange,
+    selectedActivity,
+    progressActivityId,
+    setProgressActivityId,
+    progressActivity,
+    // Clear a hand-placed `visualStart` (toolbar quick-wins F5) — the null-visualStart PATCH + undo
+    // inverse + auto-recalc; only the existing PATCH hook, so the parity gate is untouched.
+    clearVisualPlacement,
     // Undo/redo recording seam (ADR-0048, dark M1). `ActivityCrudDialogs` calls this when the shared
     // edit dialog saves so a definition edit joins the reposition/relane commands recorded inline in
     // the TSLD callbacks. A no-op when `VITE_UNDO_REDO` is off; undo/redo controls arrive in M3.
