@@ -213,10 +213,19 @@ What it does and does not touch:
   Postgres or itself.
 - **Reuses your GHCR login.** It mounts the host Docker config
   (`/config.json`, read-only) rather than taking a PAT in the compose env. If your
-  `config.json` isn't at `/root/.docker`, set `DOCKER_CONFIG_DIR` to its directory.
+  `config.json` isn't at `/root/.docker`, set `DOCKER_CONFIG_DIR` to its directory —
+  an **absolute** path (Compose does not reliably expand `~`). That config must hold an
+  **inline `auth` entry** for `ghcr.io`; if `docker login` used a credential helper
+  (`credsStore`/`credHelpers` — common on Docker Desktop), Watchtower can't reach the
+  helper and the private pull fails. Check with `grep ghcr.io ~/.docker/config.json`.
 - **Self-migrates.** The recreated API applies pending migrations on startup
   (ADR-0018), so the pull **is** the deploy — no extra step.
 - **Rolling + tidy.** It recreates one container at a time and prunes the old image.
+  It recreates each container independently via the Docker API, so on a simultaneous
+  web+api release it does **not** honour the compose `depends_on` health-gate that a
+  manual `docker compose up -d` does — a brief cross-version window until both settle
+  (harmless: the web nginx just retries `/api`). Use monitor-only + a manual
+  `pull && up -d` if you need strict ordering.
 
 **Knobs** (compose env, all optional):
 

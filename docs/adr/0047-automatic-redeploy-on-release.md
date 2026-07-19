@@ -59,6 +59,11 @@ Concretely:
   container at a time; `WATCHTOWER_CLEANUP=true` prunes the superseded image.
 - **Pinned image.** `containrrr/watchtower:1.7.1` (no `:latest` for an infra
   dependency).
+- **Per-app tag selection.** The stack selects each image via `WEB_IMAGE_TAG` /
+  `API_IMAGE_TAG` (default `latest`, the two versioning independently — ADR-0027),
+  with `IMAGE_TAG` as a shared override for branch/sha builds. A **pinned** version
+  (not `latest`) is not moved by Watchtower — so rollback-by-pin genuinely holds a
+  host on a known version even while the updater runs.
 
 Rollback is unchanged: pin the previous version tag and recreate (ADR-0027,
 `docs/DEPLOYMENT.md` → _Runtime health & rollout_).
