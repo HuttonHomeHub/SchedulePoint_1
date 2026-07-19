@@ -1,8 +1,9 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
-import { PROGRAMME_SCHEDULING_ENABLED } from '@/config/env';
+import { NOTES_ENABLED, PROGRAMME_SCHEDULING_ENABLED } from '@/config/env';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { DependencyEditor } from '@/features/dependencies';
+import { ActivityNotesSection } from '@/features/notes';
 import { PlanFormDialog } from '@/features/plans';
 
 /**
@@ -37,6 +38,19 @@ export function PlanDialogs({
                   planId={model.planId}
                   activity={model.logicActivity}
                   canManageLogic={model.canManageLogic}
+                  enabled={model.logicActivity !== undefined}
+                />
+              ),
+            }
+          : {})}
+        {...(NOTES_ENABLED && model.logicActivity
+          ? {
+              notesSlot: (
+                <ActivityNotesSection
+                  orgSlug={model.orgSlug}
+                  planId={model.planId}
+                  activity={model.logicActivity}
+                  canWrite={model.canWriteNotes}
                   enabled={model.logicActivity !== undefined}
                 />
               ),

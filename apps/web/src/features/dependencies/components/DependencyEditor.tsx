@@ -147,6 +147,7 @@ export function DependencyEditor({
   open,
   onClose,
   crossPlanSlot,
+  notesSlot,
 }: {
   orgSlug: string;
   planId: string;
@@ -162,6 +163,12 @@ export function DependencyEditor({
    * of a sideways feature → feature import. Absent (the default) leaves the panel byte-identical.
    */
   crossPlanSlot?: React.ReactNode;
+  /**
+   * An optional extra panel rendered below the cross-plan slot — the composition root passes the
+   * `VITE_NOTES` activity notes section here (ADR-0046), same slot pattern as `crossPlanSlot` so this
+   * feature stays free of a sideways feature → feature import. Absent (the default) is byte-identical.
+   */
+  notesSlot?: React.ReactNode;
 }): React.ReactElement {
   const activityId = activity?.id ?? '';
   const enabled = open && activity !== undefined;
@@ -265,6 +272,9 @@ export function DependencyEditor({
           {/* Cross-plan links (ADR-0045) — passed by the composition root only when
               VITE_PROGRAMME_SCHEDULING is on; absent (byte-identical) otherwise. */}
           {crossPlanSlot}
+          {/* Notes (ADR-0046) — passed by the composition root only when VITE_NOTES is on; absent
+              (byte-identical) otherwise. */}
+          {notesSlot}
         </div>
       </Dialog>
 

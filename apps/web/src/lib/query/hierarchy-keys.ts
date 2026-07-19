@@ -71,6 +71,21 @@ export const crossPlanDependencyKeys = {
     [...crossPlanDependencyKeys.all(orgSlug), 'activity', activityId] as const,
 };
 
+export const noteKeys = {
+  all: (orgSlug: string) => ['notes', orgSlug] as const,
+  // A per-entity thread (newest-first, cursor-paginated). Plan and activity notes are separate caches
+  // (separate endpoints), so keyed by the entity they hang off (ADR-0046). A create/edit/delete
+  // invalidates the one thread it touched.
+  planThread: (orgSlug: string, planId: string) =>
+    [...noteKeys.all(orgSlug), 'plan', planId, 'thread'] as const,
+  activityThread: (orgSlug: string, activityId: string) =>
+    [...noteKeys.all(orgSlug), 'activity', activityId, 'thread'] as const,
+  // The batch per-activity counts for a plan's row badges — ONE grouped query for the whole table (not
+  // per-row). Keyed by the plan; an activity-note create/delete invalidates it so the badge tracks.
+  activityCounts: (orgSlug: string, planId: string) =>
+    [...noteKeys.all(orgSlug), 'plan', planId, 'activity-counts'] as const,
+};
+
 export const calendarKeys = {
   all: (orgSlug: string) => ['calendars', orgSlug] as const,
   list: (orgSlug: string) => [...calendarKeys.all(orgSlug), 'list'] as const,

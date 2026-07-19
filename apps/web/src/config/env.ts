@@ -412,3 +412,23 @@ export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_IN
 export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOff(
   import.meta.env.VITE_PROGRAMME_SCHEDULING,
 );
+
+/**
+ * Notes web surface (Notes M3, ADR-0046). **OFF by default** — an in-progress feature gated until its
+ * quality gates (component / ux / a11y / e2e) are green. When on, the web UI exposes attributed,
+ * time-ordered note **threads** on plans and activities (the "weekly progress journey"):
+ *
+ * - **Activity notes** — a **Notes** section in the activity Logic panel (thread + composer for that
+ *   activity), plus a small per-row **count badge** on the activities table (fed by one batch
+ *   `activity-counts` query, never an N+1).
+ * - **Plan notes** — a **Notes** section on the plan detail route and the canvas plan workspace.
+ *
+ * Who can write is role-derived (Contributor / Planner / Org Admin write; Viewer reads) — notes are
+ * **not** pen-gated (the progress precedent, ADR-0046). Editing/deleting is limited to the note's own
+ * author (a 403 the API enforces; the UI shows the controls only to the author), with the optimistic
+ * `version` giving a 409 "updated elsewhere" path. Everything behind it — the notes CRUD + the batch
+ * counts read — is already live on the API (M2); the flag only governs whether the web UI exposes it.
+ * Default off ⇒ the app is byte-identical (no thread mounts, no counts query fires). Set
+ * `VITE_NOTES=true` to enable it in an environment.
+ */
+export const NOTES_ENABLED = flagDefaultOff(import.meta.env.VITE_NOTES);

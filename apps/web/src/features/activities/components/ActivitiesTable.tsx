@@ -27,8 +27,10 @@ import {
   ADVANCED_CONSTRAINTS_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
+  NOTES_ENABLED,
   RESOURCES_ENABLED,
 } from '@/config/env';
+import { NoteCountBadge } from '@/features/notes';
 import { ActivityResourcesDialog } from '@/features/resources';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -91,6 +93,7 @@ export function ActivitiesTable({
   canReportProgress = false,
   onOpenLogic,
   varianceByActivityId,
+  noteCountByActivityId,
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
@@ -111,6 +114,13 @@ export function ActivitiesTable({
    * (a shared `@repo/types` shape, no cross-feature import).
    */
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow>;
+  /**
+   * Per-activity note counts (ADR-0046), route-composed like `varianceByActivityId` from ONE batch
+   * query (never per-row). When present (the plan's counts loaded behind `VITE_NOTES`), a row with
+   * ≥1 note shows a small count badge beside its name. A shared `@repo/types` shape, so activities
+   * stays dependency-free of the notes feature's data layer.
+   */
+  noteCountByActivityId?: ReadonlyMap<string, number>;
   /**
    * The org's calendars (ADR-0037), route-composed like `varianceByActivityId` — used to name an
    * activity's own calendar in the "Calendar" column (shown only when `ACTIVITY_CALENDAR_ENABLED`)
@@ -228,9 +238,13 @@ export function ActivitiesTable({
         // neutral pill, not the critical Conflict tone. Text + sr-only clause carry the meaning
         // (never colour alone, WCAG 1.4.1). Only shown when the inter-project surface is on.
         const externalDriven = INTER_PROJECT_DATES_ENABLED && activity.externalDriven;
+        // Per-activity note count (ADR-0046), route-composed like variance — a small badge only when
+        // the map is supplied (behind `VITE_NOTES`) and the row has ≥1 note (the badge hides at zero).
+        const noteCount = NOTES_ENABLED ? (noteCountByActivityId?.get(activity.id) ?? 0) : 0;
         return (
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{activity.name}</span>
+            <NoteCountBadge count={noteCount} />
             {violated ? (
               <Badge
                 variant="critical"

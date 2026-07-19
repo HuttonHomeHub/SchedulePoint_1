@@ -17,6 +17,7 @@
     "e2e-workspace",
     "e2e-toolbar",
     "e2e-authoring",
-    "e2e-programme"
+    "e2e-programme",
+    "e2e-notes"
   ]
 }

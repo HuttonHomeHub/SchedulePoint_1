@@ -2,7 +2,7 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, NOTES_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
 import {
   useActivities,
   useCreatePlacedActivity,
@@ -17,6 +17,7 @@ import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { useCreateDependency, usePlanDependencies } from '@/features/dependencies';
+import { useActivityNoteCounts } from '@/features/notes';
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
 import { usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
@@ -35,6 +36,7 @@ import {
   canCalculateSchedule,
   canManageHierarchy,
   canReportProgress,
+  canWriteNotes,
   useOrgRole,
 } from '@/hooks/use-org-role';
 import { ApiFetchError } from '@/lib/api/client';
@@ -58,6 +60,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // unset) `penManaged` is false and gating falls back to role only — today's behaviour.
   const pen = usePlanPen(orgSlug, planId);
   const canWrite = canManageHierarchy(role); // role only — plan metadata + baselines
+  // Notes (ADR-0046) are collaborative annotations: Contributor upward may write, and unlike schedule
+  // editing they are NOT pen-gated (the progress precedent). Role-only, like `canWrite`.
+  const canWriteNotesValue = canWriteNotes(role);
   // The on-canvas schedule model (activities/dependencies/positions/recalculate) is
   // additionally pen-gated: a Planner must hold the pen to edit it (spec §3.1 / ADR-0028).
   const { canEditSchedule, canRecalc, canProgress, penReadOnly } = derivePlanGating({
@@ -116,6 +121,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     );
   }, [variance.data]);
   const canManageLogic = canEditSchedule; // dependency write is pen-gated schedule editing
+
+  // Per-activity note counts for the activities-table row badge (ADR-0046), route-composed like
+  // `varianceByActivityId` — ONE batch query for the whole table (never per-row). Gated on `VITE_NOTES`
+  // via `enabled`, so with the flag off the query never fires and the map stays undefined (the
+  // activities table then renders no badge column) — byte-identical to today.
+  const noteCounts = useActivityNoteCounts(orgSlug, planId, NOTES_ENABLED);
+  const noteCountByActivityId = useMemo(() => {
+    if (!NOTES_ENABLED || !noteCounts.data) return undefined;
+    return new Map<string, number>(noteCounts.data.map((entry) => [entry.activityId, entry.count]));
+  }, [noteCounts.data]);
 
   // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
   // the canvas *or* the activities table — triggers a coalesced recalculation, so the canvas plots
@@ -412,10 +427,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     tsldCalendar,
     todayIso,
     varianceByActivityId,
+    // Per-activity note counts for the row badge (ADR-0046) — undefined when `VITE_NOTES` is off.
+    noteCountByActivityId,
     // Gating / identity
     pen,
     currentUserId,
     canWrite,
+    canWriteNotes: canWriteNotesValue,
     canEditSchedule,
     canRecalc,
     canProgress,

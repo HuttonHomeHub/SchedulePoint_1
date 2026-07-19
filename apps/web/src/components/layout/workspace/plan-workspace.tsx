@@ -19,9 +19,11 @@ import { PanelResizer } from '@/components/ui/panel-resizer';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   CANVAS_TOOLBAR_ENABLED,
+  NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
+import { PlanNotesSection } from '@/features/notes';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import {
@@ -267,6 +269,11 @@ function PlanHeaderBar({
       <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
       {PROGRAMME_SCHEDULING_ENABLED ? (
         <ProgrammeScheduleSection orgSlug={orgSlug} planId={planId} canRecalc={model.canRecalc} />
+      ) : null}
+      {NOTES_ENABLED ? (
+        // Mounted under the header's plan `h1`, so the default `h2` heading is correct (ADR-0046),
+        // at the same site as the programme section.
+        <PlanNotesSection orgSlug={orgSlug} planId={planId} canWrite={model.canWriteNotes} />
       ) : null}
     </header>
   );

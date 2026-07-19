@@ -16,6 +16,7 @@ import {
   EARNED_VALUE_ENABLED,
   FLOAT_CRITICAL_SETTINGS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
+  NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   PROGRESS_INGESTION_ENABLED,
   RESOURCE_CURVES_ENABLED,
@@ -24,6 +25,7 @@ import {
 import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
 import { BaselinesPanel, BaselineVarianceSummary } from '@/features/baselines';
 import { EarnedValuePanel } from '@/features/earned-value';
+import { PlanNotesSection } from '@/features/notes';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import {
   PLAN_STATUS_LABELS,
@@ -234,6 +236,18 @@ function LegacyPlanLayout({
           />
         </div>
       ) : null}
+      {NOTES_ENABLED ? (
+        <div className="mt-3">
+          {/* Nests beside the Schedule block's `h3` siblings (Programme / Baselines), so pass `3`
+              — mounted at the same site as the programme section (ADR-0046). */}
+          <PlanNotesSection
+            orgSlug={orgSlug}
+            planId={planId}
+            canWrite={model.canWriteNotes}
+            headingLevel={3}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <h3 className="text-base font-medium">Baselines</h3>
@@ -339,6 +353,9 @@ function LegacyPlanLayout({
           calendarsError={model.calendars.isError}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
+            : {})}
+          {...(model.noteCountByActivityId
+            ? { noteCountByActivityId: model.noteCountByActivityId }
             : {})}
         />
       </div>
