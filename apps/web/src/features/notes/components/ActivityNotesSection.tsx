@@ -1,4 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
+import type { Ref } from 'react';
 
 import type { NoteTarget } from '../schemas/note-schemas';
 
@@ -20,6 +21,7 @@ export function ActivityNotesSection({
   activity,
   canWrite = false,
   enabled,
+  headingRef,
 }: {
   orgSlug: string;
   planId: string;
@@ -28,6 +30,13 @@ export function ActivityNotesSection({
   canWrite?: boolean;
   /** Keep the thread query idle while the host dialog is closed (mirrors the dependency editor). */
   enabled: boolean;
+  /**
+   * A ref to the section heading, so the Logic dialog can scroll it into view + move focus to it when
+   * opened via the toolbar **Add note** button (toolbar quick-wins U4/A4). When set, the heading is made
+   * programmatically focusable (`tabIndex={-1}`) without joining the tab order (WCAG 2.4.3), mirroring
+   * {@link PlanNotesSection}'s `headingRef`. Absent ⇒ unchanged (no ref, no tabindex).
+   */
+  headingRef?: Ref<HTMLHeadingElement>;
 }): React.ReactElement {
   const session = useSession();
   const currentUserId = session.data?.user.id ?? null;
@@ -35,7 +44,12 @@ export function ActivityNotesSection({
 
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">Notes</h3>
+      <h3
+        className="text-sm font-medium"
+        {...(headingRef ? { ref: headingRef, tabIndex: -1 } : {})}
+      >
+        Notes
+      </h3>
       <p className="text-muted-foreground text-sm">
         Attributed notes on this activity — the reasoning behind its dates. Newest first.
       </p>

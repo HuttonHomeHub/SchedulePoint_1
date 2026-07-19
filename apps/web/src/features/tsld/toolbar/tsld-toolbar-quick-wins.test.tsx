@@ -87,6 +87,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     canWriteNotes: true,
     openActivityNotes: spies.openActivityNotes,
     canEditSchedule: true,
+    lateOverlayActive: false,
     clearVisualPlacement: spies.clearVisualPlacement,
     ...over,
   };
@@ -117,26 +118,26 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar quick-wins (flag on)', () => {
-  // --- F1 · Recenter on today ---------------------------------------------------------------
-  it('Recenter on today: enabled with a diagram, recenters via goToDate(todayIso)', () => {
+  // --- F1 · Go to today ---------------------------------------------------------------------
+  it('Go to today: enabled with a diagram, jumps via goToDate(todayIso)', () => {
     renderRows(ctx());
-    const btn = screen.getByRole('button', { name: 'Recenter on today' });
+    const btn = screen.getByRole('button', { name: 'Go to today' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.goToDate).toHaveBeenCalledWith('2026-07-19');
   });
 
-  it('Recenter on today: disabled with a reason when there is no diagram', () => {
+  it('Go to today: disabled with a reason when there is no diagram', () => {
     renderRows(ctx({ hasDiagram: false }));
-    const btn = screen.getByRole('button', { name: 'Recenter on today' });
+    const btn = screen.getByRole('button', { name: 'Go to today' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Recenter on today — Add an activity to recenter');
+    expect(btn).toHaveAttribute('title', 'Go to today — Add an activity to go to today');
   });
 
-  it('Recenter on today: works for a read-only viewer (not pen-gated)', () => {
-    // authoringEnabled false = no pen. Recenter is view-only, so it stays enabled.
+  it('Go to today: works for a read-only viewer (not pen-gated)', () => {
+    // authoringEnabled false = no pen. Go-to-today is view-only, so it stays enabled.
     renderRows(ctx(), false);
-    const btn = screen.getByRole('button', { name: 'Recenter on today' });
+    const btn = screen.getByRole('button', { name: 'Go to today' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.goToDate).toHaveBeenCalledWith('2026-07-19');
@@ -158,17 +159,29 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(btn).toHaveAttribute('title', 'Update progress… — Select an activity first');
   });
 
-  it('Update progress: enabled with a selection + canProgress; opens the dialog (not pen-gated)', () => {
+  it('Update progress: enabled with a resolved selection + canProgress; opens the dialog (not pen-gated)', () => {
     // authoringEnabled false (no pen) — progress is Contributor+, NOT pen-gated, so it stays enabled.
-    renderRows(ctx({ selectedActivityId: 'a1', canProgress: true }), false);
+    renderRows(
+      ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canProgress: true }),
+      false,
+    );
     const btn = screen.getByRole('button', { name: 'Update progress…' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.openProgress).toHaveBeenCalledOnce();
   });
 
+  it('Update progress: disabled when the selected row is gone (U3 — resolved selection, not the raw id)', () => {
+    // The id is still held but its row was deleted elsewhere, so `selectedActivity` is undefined — the
+    // button must NOT be enabled (a click would be a silent no-op on a missing target).
+    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: undefined, canProgress: true }));
+    const btn = screen.getByRole('button', { name: 'Update progress…' });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAttribute('title', 'Update progress… — Select an activity first');
+  });
+
   it('Update progress: disabled with the role reason for a viewer who cannot report progress', () => {
-    renderRows(ctx({ selectedActivityId: 'a1', canProgress: false }));
+    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canProgress: false }));
     const btn = screen.getByRole('button', { name: 'Update progress…' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute(
@@ -177,34 +190,98 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     );
   });
 
+  it('Update progress: role reason wins over selection for a viewer with nothing selected (U2/A5 precedence)', () => {
+    // A permanently-blocked user with no selection is told the role reason, not (misleadingly) to
+    // select an activity first.
+    renderRows(ctx({ selectedActivityId: null, selectedActivity: undefined, canProgress: false }));
+    const btn = screen.getByRole('button', { name: 'Update progress…' });
+    expect(btn).toHaveAttribute(
+      'title',
+      'Update progress… — You don’t have permission to report progress',
+    );
+  });
+
   // --- F4 · Add note ------------------------------------------------------------------------
-  it('Add note: enabled with a selection + canWriteNotes; opens the activity notes (not pen-gated)', () => {
-    renderRows(ctx({ selectedActivityId: 'a1', canWriteNotes: true }), false);
+  it('Add note: enabled with a resolved selection + canWriteNotes; opens the activity notes (not pen-gated)', () => {
+    renderRows(
+      ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canWriteNotes: true }),
+      false,
+    );
     const btn = screen.getByRole('button', { name: 'Add note' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.openActivityNotes).toHaveBeenCalledOnce();
   });
 
+  it('Add note: disabled when the selected row is gone (U3 — resolved selection)', () => {
+    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: undefined, canWriteNotes: true }));
+    const btn = screen.getByRole('button', { name: 'Add note' });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAttribute('title', 'Add note — Select an activity first');
+  });
+
   it('Add note: disabled with "Select an activity first" when nothing is selected', () => {
-    renderRows(ctx({ selectedActivityId: null }));
+    renderRows(ctx({ selectedActivityId: null, selectedActivity: undefined }));
     const btn = screen.getByRole('button', { name: 'Add note' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute('title', 'Add note — Select an activity first');
   });
 
   it('Add note: disabled with the role reason for a viewer who cannot write notes', () => {
-    renderRows(ctx({ selectedActivityId: 'a1', canWriteNotes: false }));
+    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canWriteNotes: false }));
+    const btn = screen.getByRole('button', { name: 'Add note' });
+    expect(btn).toHaveAttribute('title', 'Add note — You don’t have permission to add notes');
+  });
+
+  it('Add note: role reason wins over selection for a viewer with nothing selected (U2/A5 precedence)', () => {
+    renderRows(
+      ctx({ selectedActivityId: null, selectedActivity: undefined, canWriteNotes: false }),
+    );
     const btn = screen.getByRole('button', { name: 'Add note' });
     expect(btn).toHaveAttribute('title', 'Add note — You don’t have permission to add notes');
   });
 
   // --- F5 · Clear visual placement ----------------------------------------------------------
-  it('Clear visual placement: hidden outside Visual mode', () => {
-    renderRows(ctx({ schedulingMode: 'EARLY', selectedActivityId: 'a1' }));
-    expect(
-      screen.queryByRole('button', { name: 'Clear visual placement' }),
-    ).not.toBeInTheDocument();
+  it('Clear visual placement: shaded (not hidden) outside Visual mode, with a mode reason (U1)', () => {
+    // Shade-don't-hide: the button stays on the bar in Early mode (so Early↔Visual doesn't shift the
+    // silhouette) and disables with the reason, rather than disappearing.
+    renderRows(
+      ctx({ schedulingMode: 'EARLY', selectedActivityId: 'a1', selectedActivity: SELECTED }),
+    );
+    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAttribute('title', 'Clear visual placement — Only available in Visual mode');
+  });
+
+  it('Clear visual placement: Late-start overlay gives a reason, not a bare disable (A1)', () => {
+    // The overlay makes `authoringEnabled` false (so the penGated item is disabled) while
+    // `canEditSchedule` stays true — the reason must come from `lateOverlayActive`, not fall through.
+    renderRows(
+      ctx({
+        schedulingMode: 'VISUAL',
+        selectedActivityId: 'a1',
+        selectedActivity: SELECTED,
+        canEditSchedule: true,
+        lateOverlayActive: true,
+      }),
+      false,
+    );
+    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAttribute(
+      'title',
+      'Clear visual placement — Turn off the Late-start overlay to clear the placement',
+    );
+  });
+
+  it('Clear visual placement: disabled when the selected row is gone (U3 — resolved selection)', () => {
+    renderRows(
+      ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: undefined }),
+      true,
+    );
+    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAttribute('title', 'Clear visual placement — Select an activity first');
   });
 
   it('Clear visual placement: in Visual mode + pen + selection, clears via clearVisualPlacement(id, version)', () => {

@@ -607,10 +607,11 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *
  * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
- * "Coming soon" stubs (undo/redo, filter, recenter-on-today, snap-to-grid, clear-visual-placement,
- * next-conflict, colour-by, baseline-overlay, resource-view, add-note, export/print/share/comments,
- * update-progress, plus Hammock / Level-of-effort in the Add menu) that make the toolbar read as fully
+ * "Coming soon" stubs (filter, snap-to-grid, next-conflict, colour-by, baseline-overlay, resource-view,
+ * export/print/share, plus Hammock / Level-of-effort in the Add menu) that make the toolbar read as fully
  * designed and are switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
+ * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
+ * clear-visual-placement swap in under `VITE_TOOLBAR_QUICK_WINS` — placeholders only when that flag is off.)
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom
@@ -621,10 +622,59 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *    group stops overflowing narrow bars (which used to silently demote Year/Quarter into `⋯`).
  *
  * NB the persisted **data date** has no toolbar control (it is set at plan creation and changed via
- * *Edit plan*); `recenter-on-today` is a viewport **recenter** placeholder, distinct from the "Today
- * line" display toggle in `View▾` (which only shows/hides the marker).
+ * *Edit plan*); `today` is a viewport **Go-to-today** jump (today at the left inset, not centred),
+ * distinct from the "Today line" display toggle in `View▾` (which only shows/hides the marker).
  */
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
+  // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/tier/order/
+  // label/icon each of the five ids carries in BOTH its real (flag-on) item and its
+  // `placeholderItem()` (flag-off) stub, declared once and spread into both so the two branches can't
+  // drift (component review C1; mirrors the `add-activity` shared-shape pattern below).
+  const todayShape = {
+    id: 'today',
+    group: 'frame' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 13,
+    label: 'Go to today',
+    icon: <LocateFixed className="size-4" />,
+  };
+  const addNoteShape = {
+    id: 'add-note',
+    group: 'tools' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 4,
+    label: 'Add note',
+    icon: <StickyNote className="size-4" />,
+  };
+  const clearVisualPlacementShape = {
+    id: 'clear-visual-placement',
+    group: 'tools' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 6,
+    label: 'Clear visual placement',
+    icon: <Eraser className="size-4" />,
+  };
+  const updateProgressShape = {
+    id: 'update-progress',
+    group: 'object' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 6,
+    label: 'Update progress…',
+    icon: <Gauge className="size-4" />,
+  };
+  const commentsShape = {
+    id: 'comments',
+    group: 'object' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 10,
+    label: 'Comments',
+    icon: <MessageSquare className="size-4" />,
+  };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
     // "Go to date" is a pure view pan (ADR-0033 M2) offered to every role — navigating never mutates.
@@ -691,32 +741,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to fit the view'),
       onActivate: (ctx) => ctx.fit(),
     },
-    // Recenter-on-today — a viewport recenter command (distinct from the "Today line" *display*
-    // toggle in `View▾`). Shown inline (tier 2 icon) with the zoom/nav cluster. Flag-on it reuses the
-    // `goToDate` view jump (toolbar quick-wins F1) — view-only, so a Viewer can use it; flag-off it is
-    // the "Coming soon" placeholder, byte-for-byte.
+    // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
+    // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
+    // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
+    // the zoom/nav cluster. Flag-on it reuses the `goToDate` view jump (toolbar quick-wins F1) — view-only,
+    // so a Viewer can use it; flag-off it is the "Coming soon" placeholder, byte-for-byte.
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
-          id: 'today',
-          group: 'frame',
-          row: 'look',
-          tier: 2,
-          order: 13,
-          label: 'Recenter on today',
-          icon: <LocateFixed className="size-4" />,
+          ...todayShape,
           isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to recenter'),
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to go to today'),
           onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
         }
-      : placeholderItem({
-          id: 'today',
-          group: 'frame',
-          row: 'look',
-          tier: 2,
-          order: 13,
-          label: 'Recenter on today',
-          icon: <LocateFixed className="size-4" />,
-        }),
+      : placeholderItem(todayShape),
 
     // --- 2 · Lens / display (Row 1 · Look) ----------------------------------------------------
     {
@@ -922,32 +959,22 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // is no notes section to open). Flag-off it is the "Coming soon" placeholder, byte-for-byte.
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
-          id: 'add-note',
-          group: 'tools',
-          row: 'do',
-          tier: 2,
-          order: 4,
-          label: 'Add note',
-          icon: <StickyNote className="size-4" />,
+          ...addNoteShape,
           isVisible: () => NOTES_ENABLED,
-          isEnabled: (ctx) => ctx.canWriteNotes && ctx.selectedActivityId !== null,
+          // Gate on the RESOLVED row (U3): an id whose row was deleted elsewhere resolves to undefined,
+          // so an enabled button always has a real target for `openActivityNotes`.
+          isEnabled: (ctx) => ctx.canWriteNotes && ctx.selectedActivity != null,
+          // Permanent role gate BEFORE the transient selection (U2/A5): a Contributor-lacking user is
+          // told they can't add notes, not (misleadingly) to select something first.
           disabledReason: (ctx) =>
-            ctx.selectedActivityId === null
-              ? 'Select an activity first'
-              : ctx.canWriteNotes
-                ? undefined
-                : 'You don’t have permission to add notes',
+            !ctx.canWriteNotes
+              ? 'You don’t have permission to add notes'
+              : ctx.selectedActivity == null
+                ? 'Select an activity first'
+                : undefined,
           onActivate: (ctx) => ctx.openActivityNotes(),
         }
-      : placeholderItem({
-          id: 'add-note',
-          group: 'tools',
-          row: 'do',
-          tier: 2,
-          order: 4,
-          label: 'Add note',
-          icon: <StickyNote className="size-4" />,
-        }),
+      : placeholderItem(addNoteShape),
     // Snap-to-grid — a Visual-planning authoring aid (snaps hand-placed bars to working-day gridlines).
     // Moved into the authoring cluster (was in the Lens group). Inline "Coming soon" icon.
     placeholderItem({
@@ -960,44 +987,44 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <Grid3x3 className="size-4" />,
     }),
     // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
-    // falls back to the computed date, toolbar quick-wins F5). Only meaningful in Visual mode, so it is
-    // hidden outside it (like the other mode-scoped items); pen-gated + `canEditSchedule` + a selection.
-    // It calls only the existing PATCH + auto-recalc — the CPM engine + parity gate are untouched.
-    // Flag-off it is the "Coming soon" placeholder, byte-for-byte.
+    // falls back to the computed date, toolbar quick-wins F5). Only *meaningful* in Visual mode, but per
+    // the registry's shade-don't-hide rule (ADR-0031 + docs/TOOLBAR_ROADMAP.md) it stays VISIBLE in both
+    // modes and is disabled-with-a-reason outside Visual (U1) — like the mode-early/mode-visual siblings —
+    // so toggling Early↔Visual doesn't shift the bar's silhouette. Pen-gated; it calls only the existing
+    // PATCH + auto-recalc, so the CPM engine + parity gate are untouched. Flag-off it is the "Coming soon"
+    // placeholder, byte-for-byte.
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
-          id: 'clear-visual-placement',
-          group: 'tools',
-          row: 'do',
-          tier: 2,
-          order: 6,
-          label: 'Clear visual placement',
-          icon: <Eraser className="size-4" />,
+          ...clearVisualPlacementShape,
           penGated: true,
-          isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.schedulingMode === 'VISUAL',
-          isEnabled: (ctx) => ctx.canEditSchedule && ctx.selectedActivityId !== null,
-          // No selection → the specific reason; else the pen/role reason (mirrors the sibling authoring
-          // commands' "Start editing…" copy). Enabled ⇒ undefined.
+          isVisible: () => SCHEDULING_MODES_ENABLED,
+          // Enabled only when it's actionable end-to-end: Visual mode AND the pen/role AND not the
+          // read-only Late overlay AND a RESOLVED selection (U3 — a deleted row resolves to undefined).
+          isEnabled: (ctx) =>
+            ctx.schedulingMode === 'VISUAL' &&
+            ctx.canEditSchedule &&
+            !ctx.lateOverlayActive &&
+            ctx.selectedActivity != null,
+          // Precedence ladder (U1/A1/U2/A5): the PERMANENT gates before the transient selection, so a
+          // Viewer with nothing selected isn't first told to "Select an activity". Mode → role/pen →
+          // Late overlay (A1: the generic Toolbar disables penGated items under the overlay while
+          // `canEditSchedule` stays true, so the reason must come from `lateOverlayActive`) → selection.
           disabledReason: (ctx) =>
-            ctx.selectedActivityId === null
-              ? 'Select an activity first'
-              : ctx.canEditSchedule
-                ? undefined
-                : 'Start editing to clear the placement',
+            ctx.schedulingMode !== 'VISUAL'
+              ? 'Only available in Visual mode'
+              : !ctx.canEditSchedule
+                ? 'Start editing to clear the placement'
+                : ctx.lateOverlayActive
+                  ? 'Turn off the Late-start overlay to clear the placement'
+                  : ctx.selectedActivity == null
+                    ? 'Select an activity first'
+                    : undefined,
           onActivate: (ctx) => {
             const activity = ctx.selectedActivity;
             if (activity) ctx.clearVisualPlacement(activity.id, activity.version);
           },
         }
-      : placeholderItem({
-          id: 'clear-visual-placement',
-          group: 'tools',
-          row: 'do',
-          tier: 2,
-          order: 6,
-          label: 'Clear visual placement',
-          icon: <Eraser className="size-4" />,
-        }),
+      : placeholderItem(clearVisualPlacementShape),
     // Recalculate + Undo/Redo close the authoring cluster (moved here from the Object/History groups so
     // the pen-gated set is contiguous). Recalculate is enabled only with the pen and when not in flight.
     {
@@ -1124,31 +1151,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // is the notes/progress precedent). Flag-off it is the "Coming soon" placeholder, byte-for-byte.
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
-          id: 'update-progress',
-          group: 'object',
-          row: 'do',
-          tier: 2,
-          order: 6,
-          label: 'Update progress…',
-          icon: <Gauge className="size-4" />,
-          isEnabled: (ctx) => ctx.canProgress && ctx.selectedActivityId !== null,
+          ...updateProgressShape,
+          // Gate on the RESOLVED row (U3): a deleted-elsewhere id resolves to undefined, so an enabled
+          // button always has a real target for `openProgress`.
+          isEnabled: (ctx) => ctx.canProgress && ctx.selectedActivity != null,
+          // Permanent role gate BEFORE the transient selection (U2/A5): a Viewer is told they can't
+          // report progress, not (misleadingly) to select an activity first.
           disabledReason: (ctx) =>
-            ctx.selectedActivityId === null
-              ? 'Select an activity first'
-              : ctx.canProgress
-                ? undefined
-                : 'You don’t have permission to report progress',
+            !ctx.canProgress
+              ? 'You don’t have permission to report progress'
+              : ctx.selectedActivity == null
+                ? 'Select an activity first'
+                : undefined,
           onActivate: (ctx) => ctx.openProgress(),
         }
-      : placeholderItem({
-          id: 'update-progress',
-          group: 'object',
-          row: 'do',
-          tier: 2,
-          order: 6,
-          label: 'Update progress…',
-          icon: <Gauge className="size-4" />,
-        }),
+      : placeholderItem(updateProgressShape),
     placeholderItem({
       id: 'export',
       group: 'object',
@@ -1181,25 +1198,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // "Coming soon" placeholder, byte-for-byte.
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
-          id: 'comments',
-          group: 'object',
-          row: 'do',
-          tier: 2,
-          order: 10,
-          label: 'Comments',
-          icon: <MessageSquare className="size-4" />,
+          ...commentsShape,
           isVisible: () => NOTES_ENABLED,
           onActivate: (ctx) => ctx.revealComments(),
         }
-      : placeholderItem({
-          id: 'comments',
-          group: 'object',
-          row: 'do',
-          tier: 2,
-          order: 10,
-          label: 'Comments',
-          icon: <MessageSquare className="size-4" />,
-        }),
+      : placeholderItem(commentsShape),
 
     // --- 6 · Help -----------------------------------------------------------------------------
     // Legend rides Row 1 (Look) at the far right; Shortcuts sits beside it. (Undo/Redo moved to the

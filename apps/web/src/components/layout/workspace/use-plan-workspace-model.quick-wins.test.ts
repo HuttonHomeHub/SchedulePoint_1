@@ -16,7 +16,8 @@ const h = vi.hoisted(() => ({
   record: vi.fn(),
   setVisualMutateAsync: vi.fn(),
   notify: vi.fn(),
-  onWriteRejected: vi.fn(() => ({ kind: 'none' as const })),
+  announce: vi.fn(),
+  onWriteRejected: vi.fn((): { kind: 'none' | 'lock' } => ({ kind: 'none' })),
 }));
 
 vi.mock('@/config/env', async (importOriginal) => {
@@ -46,7 +47,7 @@ vi.mock('@/features/undo-redo', async (importOriginal) => ({
 
 const query = <T>(data: T) => ({ data, isPending: false, isError: false, refetch: vi.fn() });
 
-vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
+vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => h.announce }));
 vi.mock('@/hooks/use-org-role', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useOrgRole: () => 'PLANNER',
@@ -255,5 +256,61 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     });
     expect(h.record).not.toHaveBeenCalled();
     expect(h.notify).not.toHaveBeenCalled();
+  });
+
+  it('A2: announces success on a clear (named, "dates will update")', async () => {
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.clearVisualPlacement('a1', 7);
+    });
+    expect(h.announce).toHaveBeenCalledWith(
+      'Cleared the visual placement for “Excavate”; dates will update.',
+    );
+  });
+
+  it('A2: a 409 announces the conflict non-destructively (never silent), no success announce', async () => {
+    h.setVisualMutateAsync.mockRejectedValueOnce(
+      new ApiFetchError(409, { message: 'stale', code: 'CONFLICT' }),
+    );
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.clearVisualPlacement('a1', 7);
+    });
+    expect(h.announce).toHaveBeenCalledTimes(1);
+    expect(h.announce).toHaveBeenCalledWith(
+      'This plan changed since you opened it — the visual placement wasn’t cleared. Refresh to see the latest.',
+    );
+  });
+
+  it('T4: a 423 pen-loss is non-destructive — nothing recorded, no recalc, no announce contradiction', async () => {
+    h.undoRedo = true;
+    h.onWriteRejected.mockReturnValueOnce({ kind: 'lock' as const });
+    h.setVisualMutateAsync.mockRejectedValueOnce(
+      new ApiFetchError(423, { message: 'locked', code: 'LOCKED' }),
+    );
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.clearVisualPlacement('a1', 7);
+    });
+    expect(h.record).not.toHaveBeenCalled();
+    expect(h.notify).not.toHaveBeenCalled();
+    // The shared pen banner owns the 423 message; the clear must NOT announce a success/conflict.
+    expect(h.announce).not.toHaveBeenCalled();
+  });
+
+  it('T5: a non-409/non-lock error rethrows (never silently swallowed)', async () => {
+    h.onWriteRejected.mockReturnValueOnce({ kind: 'none' as const });
+    h.setVisualMutateAsync.mockRejectedValueOnce(new Error('network down'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await expect(
+      act(async () => {
+        await result.current.clearVisualPlacement('a1', 7);
+      }),
+    ).rejects.toThrow('network down');
+    expect(h.notify).not.toHaveBeenCalled();
+    // No success announce on a failed clear.
+    expect(h.announce).not.toHaveBeenCalledWith(
+      'Cleared the visual placement for “Excavate”; dates will update.',
+    );
   });
 });

@@ -98,7 +98,22 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canCalculate: canCalculateSchedule(role),
   });
   const [editing, setEditing] = useState(false);
-  const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
+  const [logicActivity, setLogicActivityState] = useState<ActivitySummary | undefined>(undefined);
+  // Whether the Logic panel, when open, should reveal + focus its Notes section (toolbar quick-wins
+  // U4/A4): only the toolbar **Add note** path sets it, so a canvas "Open logic" / table open lands on
+  // Predecessors as before. `setLogicActivity` clears it on any plain open/close; `revealActivityNotes`
+  // sets it. Inert (never read) when `VITE_NOTES`/quick-wins are off.
+  const [logicRevealNotes, setLogicRevealNotes] = useState(false);
+  const setLogicActivity = useCallback((activity: ActivitySummary | undefined) => {
+    setLogicRevealNotes(false);
+    setLogicActivityState(activity);
+  }, []);
+  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
+  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
+  const revealActivityNotes = useCallback((activity: ActivitySummary) => {
+    setLogicRevealNotes(true);
+    setLogicActivityState(activity);
+  }, []);
   // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
   // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
   // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
@@ -639,27 +654,41 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     void variance.refetch();
   };
 
+  // The live activities held in a ref so `clearVisualPlacement` can read the pre-clear row WITHOUT
+  // taking `activities.data` as a dependency — react-query hands a fresh array reference on every
+  // recalc, so depending on it would re-identify the callback each recalc cycle and churn the toolbar
+  // context memo (which keys on this callback), re-rendering all ~46 toolbar buttons flag-independently
+  // (perf review P1). Mirrors the `usePlanAutoRecalc` live-ref precedent.
+  const activitiesRef = useRef(activities.data);
+  useEffect(() => {
+    activitiesRef.current = activities.data;
+  });
   // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
   // — the **Clear visual placement** command. A faithful subset of the reposition VISUAL branch above:
   // the minimal `visualStart: null` PATCH → (flag-guarded) the `visualStartCommand` inverse restoring the
-  // prior placement → `autoRecalc.notify()` so the effective-Visual pass re-plots the bar at its computed
-  // date. A stale-version 409 (or a pen-loss 423) is non-destructive: nothing applied, nothing recorded,
-  // never re-sent — exactly like a reposition. It touches only the existing PATCH hook + auto-recalc, so
-  // the CPM engine and its recalc parity gate are untouched. Stable identity (the toolbar context memo
-  // depends on it) — it reads the pre-clear row through the live query at call time. Only offered in
-  // Visual mode (the item's gate requires `schedulingMode === 'VISUAL'`, which needs canvas authoring).
+  // prior placement → announce + `autoRecalc.notify()` so the effective-Visual pass re-plots the bar at
+  // its computed date. A stale-version 409 surfaces the (announced) conflict non-destructively, and a
+  // pen-loss 423 defers to the shared pen banner: either way nothing applied, nothing recorded, never
+  // re-sent — exactly like a reposition. It touches only the existing PATCH hook + auto-recalc, so the
+  // CPM engine and its recalc parity gate are untouched. Stable identity (the toolbar context memo
+  // depends on it): the member handles below are hoisted into stable locals and the pre-clear row is
+  // read through `activitiesRef` at call time, so the deps array is all-stable (no eslint-disable).
+  const notifyRecalc = autoRecalc.notify;
+  const onPenWriteRejected = pen.onWriteRejected;
+  const setVisualStartAsync = setVisualStart.mutateAsync;
   const clearVisualPlacement = useCallback(
     async (activityId: string, version: number): Promise<void> => {
-      const activity = (activities.data ?? []).find((a) => a.id === activityId);
+      const activity = (activitiesRef.current ?? []).find((a) => a.id === activityId);
+      const name = activity?.name ?? 'the activity';
       try {
-        const saved = await setVisualStart.mutateAsync({ activityId, visualStart: null, version });
+        const saved = await setVisualStartAsync({ activityId, visualStart: null, version });
         // Record the clear for undo (ADR-0048) — the single user edit, NOT the follow-up recalc. The
         // inverse restores the prior `visualStart` (lane unchanged). Guarded on the flag, like the
         // reposition VISUAL branch — byte-identical when off.
         if (UNDO_REDO_ENABLED) {
           editHistory.record(
             visualStartCommand({
-              setVisualStart: setVisualStart.mutateAsync,
+              setVisualStart: setVisualStartAsync,
               activityId,
               before: {
                 visualStart: activity?.visualStart ?? null,
@@ -671,26 +700,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           );
         }
       } catch (err) {
-        if (pen.onWriteRejected(err).kind === 'lock') return;
+        if (onPenWriteRejected(err).kind === 'lock') return;
         // Stale version — the clear was NOT applied (nothing changed); never re-send, never record.
-        if (err instanceof ApiFetchError && err.status === 409) return;
+        // Surface it non-destructively (announced), mirroring the reposition VISUAL branch's conflict
+        // path (which shows + announces rather than silently no-op'ing), then stop.
+        if (err instanceof ApiFetchError && err.status === 409) {
+          announce(
+            'This plan changed since you opened it — the visual placement wasn’t cleared. Refresh to see the latest.',
+          );
+          return;
+        }
         throw err;
       }
-      autoRecalc.notify();
+      // Announce success so the (otherwise-silent) canvas re-plot is reachable to AT (WCAG 4.1.3),
+      // matching the reposition VISUAL branch's "dates will update" wording.
+      announce(`Cleared the visual placement for “${name}”; dates will update.`);
+      notifyRecalc();
     },
-    // The member handles below (`setVisualStart.mutateAsync`, `autoRecalc.notify`, `pen.onWriteRejected`)
-    // are the stable references this callback needs; depending on the enclosing `setVisualStart` /
-    // `autoRecalc` / `pen` objects instead (as exhaustive-deps wants for a *called* member) would churn
-    // the toolbar-context memo that keys on this callback's identity. Same pattern as the sibling
-    // reposition handler's stable-handle usage (and `components/ui/menu.tsx`).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      activities.data,
-      setVisualStart.mutateAsync,
-      editHistory,
-      autoRecalc.notify,
-      pen.onWriteRejected,
-    ],
+    [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce],
   );
 
   return {
@@ -727,6 +754,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setEditing,
     logicActivity,
     setLogicActivity,
+    // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the
+    // toolbar **Add note** opener that sets it. Inert unless `VITE_NOTES`/quick-wins are on.
+    logicRevealNotes,
+    revealActivityNotes,
     // Activity edit/delete targeted from the floating selection bar (rendered by ActivityCrudDialogs).
     editActivityId,
     setEditActivityId,

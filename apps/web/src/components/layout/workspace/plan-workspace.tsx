@@ -23,7 +23,6 @@ import {
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
-import { ActivityProgressDialog } from '@/features/activities';
 import { PlanNotesSection } from '@/features/notes';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -214,19 +213,8 @@ function Adr0030PlanWorkspace({
 
       {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
       <ActivityCrudDialogs model={model} />
-
-      {/* Progress editor (toolbar quick-wins F3), hosted beside the crud dialogs so both layouts share
-          one host. Opened via `model.progressActivityId` (only the toolbar surface sets it, so this is
-          inert here); mounted-and-toggled, target re-derived from the live query. */}
-      {model.canProgress ? (
-        <ActivityProgressDialog
-          orgSlug={model.orgSlug}
-          planId={model.planId}
-          open={model.progressActivity !== undefined}
-          onClose={() => model.setProgressActivityId(null)}
-          {...(model.progressActivity ? { activity: model.progressActivity } : {})}
-        />
-      ) : null}
+      {/* NB no `ActivityProgressDialog` here: `progressActivityId` is set only from the toolbar surface
+          (`ToolbarPlanWorkspace`), so hosting it in this legacy layout was unreachable dead code. */}
     </div>
   );
 }

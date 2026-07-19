@@ -98,10 +98,15 @@ export function useTsldToolbarContext({
     selectedActivity,
     canProgress,
     canWriteNotes,
-    setLogicActivity,
+    revealActivityNotes,
     setProgressActivityId,
     clearVisualPlacement,
   } = model;
+  // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing; the workspace derives it the
+  // same way to build `authoringEnabled`. Expose it on the context so a pen-gated item disabled BY the
+  // overlay (not by role/pen) can still explain why (toolbar quick-wins A1) — `canEditSchedule` stays
+  // true under the overlay, so without this the button would disable with no reason.
+  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
   // Edit-plan opens the plan form (writer only). Shared by the Summary popover's shortcut and the
   // header edit-pencil. Memoised so it doesn't re-identify the toolbar context each render.
   const editPlan = useMemo(
@@ -269,12 +274,14 @@ export function useTsldToolbarContext({
       // Update progress (F3): set the workspace-hosted dialog's target to the current selection.
       openProgress: () => setProgressActivityId(selectedActivityId),
       canWriteNotes,
-      // Add note (F4): open the selected activity's Logic panel (same path as canvas "Open logic"), so
-      // the DependencyEditor renders its Notes slot. No-op when nothing is selected.
+      // Add note (F4/U4): open the selected activity's Logic panel AND reveal + focus its Notes section
+      // (parity with Comments for plan notes), so the user lands on notes rather than Predecessors. A
+      // no-op when nothing is selected.
       openActivityNotes: () => {
-        if (selectedActivity) setLogicActivity(selectedActivity);
+        if (selectedActivity) revealActivityNotes(selectedActivity);
       },
       canEditSchedule,
+      lateOverlayActive,
       clearVisualPlacement,
     }),
     [
@@ -319,7 +326,8 @@ export function useTsldToolbarContext({
       canProgress,
       canWriteNotes,
       setProgressActivityId,
-      setLogicActivity,
+      revealActivityNotes,
+      lateOverlayActive,
       clearVisualPlacement,
     ],
   );

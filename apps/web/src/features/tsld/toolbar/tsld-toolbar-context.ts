@@ -150,6 +150,10 @@ export interface TsldToolbarContext {
   /** Whether the viewer may edit the schedule (`canEditSchedule`, Planner+ **and** the pen). Gates the
    * **Clear visual placement** item (F5), which is additionally pen-gated + Visual-mode-only. */
   canEditSchedule: boolean;
+  /** Whether the read-only Late-start overlay (ADR-0033 M4) is on — the workspace's `authoringEnabled`
+   * excludes it, so a pen-gated item can be disabled by the overlay while {@link canEditSchedule} is
+   * still true. Exposed so **Clear visual placement**'s disabled reason can explain that case (F5/A1). */
+  lateOverlayActive: boolean;
   /** Clear a bar's hand-placed `visualStart` so it reverts to its computed date (F5, Visual mode). A
    * faithful subset of the reposition VISUAL branch: the null-`visualStart` PATCH → undo inverse (when
    * `VITE_UNDO_REDO` is on) → auto-recalc; a stale-version 409 is a non-destructive no-op. */

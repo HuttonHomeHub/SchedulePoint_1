@@ -16,6 +16,14 @@ to fit (e.g. below `md`), at which point tier-2 items demote into it.
 `onActivate`/`render`, `isEnabled`, `disabledReason`, and a context seam), add tests, and remove the
 row from the table below. No taxonomy or primitive change is required — the slot already exists.
 
+**Wired behind a flag (in-progress).** The **TSLD toolbar quick-wins** slice
+(`docs/specs/toolbar-quick-wins/`) wires five of the ids below — `today`, `comments`,
+`update-progress`, `add-note`, `clear-visual-placement` — to already-shipped features. Each resolves at
+build time to its **real** `ToolbarItem` when `VITE_TOOLBAR_QUICK_WINS` is on, and to its existing
+`placeholderItem()` "Coming soon" stub when off. So while the flag is off (its build default) the table
+below still describes today's bar exactly; the rows are annotated _Wired (quick-wins)_ and their
+descriptions updated to what they actually do.
+
 **Placeholder vs. capability-unavailable.** A disabled placeholder ("Coming soon") is distinct from a
 control that is merely _temporarily_ unavailable (e.g. zoom before a diagram is computed, which reads
 "Add an activity to enable zoom") or an authoring tool shaded while viewing. All look greyed; the
@@ -23,40 +31,43 @@ tooltip copy differentiates them.
 
 ## Catalogue
 
-| Id                       | Group  | Row  | Placement    | Intended feature                                                                                                                                         |
-| ------------------------ | ------ | ---- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `undo`                   | tools  | do   | inline       | Undo the last structural edit (needs an edit-history stack).                                                                                             |
-| `redo`                   | tools  | do   | inline       | Redo a reverted edit.                                                                                                                                    |
-| `today`                  | frame  | look | inline       | **Recenter on today** — pan the viewport to the today line (distinct from the "Today line" _display_ toggle in `View▾`).                                 |
-| `search`                 | find   | look | inline field | **Search / filter** — leads the Find cluster as a real (disabled) search input; jump to an activity by name or code.                                     |
-| `filter`                 | find   | look | inline       | **Filter / Critical-only** — narrow the canvas to a subset (e.g. critical path, a WBS branch).                                                           |
-| `isolate-logic`          | find   | look | inline       | **Isolate logic path** — highlight the driving/longest path, or a selection's predecessors & successors.                                                 |
-| `next-conflict`          | find   | look | inline       | Step the viewport through engine-flagged Visual-planning conflicts.                                                                                      |
-| `colour-by`              | lens   | look | inline       | **Colour by** — recolour bars by status / WBS / critical / resource.                                                                                     |
-| `baseline-overlay`       | lens   | look | inline       | **Baseline overlay** — ghost the active baseline's bars behind the live ones (captured; not yet drawn). Becomes a `View▾` toggle when built.             |
-| `resource-view`          | lens   | look | inline       | **Resource view** — a second lens (resource histogram / over-allocation); the real `view-mode` lens switch.                                              |
-| `snap-to-grid`           | tools  | do   | inline       | Snap hand-placed (Visual-mode) bars to working-day gridlines while dragging.                                                                             |
-| `clear-visual-placement` | tools  | do   | inline       | Drop a bar's hand-placed `visualStart` so it falls back to the computed date (Visual mode).                                                              |
-| `add-note`               | tools  | do   | inline       | **Add note** — a free-text annotation / callout pinned to the canvas or an activity (review markup).                                                     |
-| `update-progress`        | object | do   | inline       | **Update progress** — apply actuals and advance the data date (the "status the plan" workflow; becomes the home of the data date).                       |
-| `export`                 | object | do   | inline       | **Export** — the diagram (PDF/PNG) or the schedule (XER/MSP/CSV).                                                                                        |
-| `print`                  | object | do   | inline       | **Print**.                                                                                                                                               |
-| `share`                  | object | do   | inline       | **Share** — surface the ADR-0012 per-plan External-Guest link as a toolbar action.                                                                       |
-| `comments`               | object | do   | inline       | **Comments** — activity comment threads (leans on the multi-tenant + guest-share model).                                                                 |
-| `hammock` / `loe`        | (Add▾) | do   | Add menu     | **Span between activities** — Hammock + Level-of-effort, created by picking two endpoints (not point-and-draw). Previewed as disabled "Soon" menu items. |
+| Id                       | Group  | Row  | Placement    | Intended feature                                                                                                                                                                                              |
+| ------------------------ | ------ | ---- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `undo`                   | tools  | do   | inline       | Undo the last structural edit (needs an edit-history stack).                                                                                                                                                  |
+| `redo`                   | tools  | do   | inline       | Redo a reverted edit.                                                                                                                                                                                         |
+| `today`                  | frame  | look | inline       | _Wired (quick-wins)._ **Go to today** — pan the viewport so today sits at the left edge (not centred; reuses `goToDate`), distinct from the "Today line" _display_ toggle in `View▾`. View-only (every role). |
+| `search`                 | find   | look | inline field | **Search / filter** — leads the Find cluster as a real (disabled) search input; jump to an activity by name or code.                                                                                          |
+| `filter`                 | find   | look | inline       | **Filter / Critical-only** — narrow the canvas to a subset (e.g. critical path, a WBS branch).                                                                                                                |
+| `isolate-logic`          | find   | look | inline       | **Isolate logic path** — highlight the driving/longest path, or a selection's predecessors & successors.                                                                                                      |
+| `next-conflict`          | find   | look | inline       | Step the viewport through engine-flagged Visual-planning conflicts.                                                                                                                                           |
+| `colour-by`              | lens   | look | inline       | **Colour by** — recolour bars by status / WBS / critical / resource.                                                                                                                                          |
+| `baseline-overlay`       | lens   | look | inline       | **Baseline overlay** — ghost the active baseline's bars behind the live ones (captured; not yet drawn). Becomes a `View▾` toggle when built.                                                                  |
+| `resource-view`          | lens   | look | inline       | **Resource view** — a second lens (resource histogram / over-allocation); the real `view-mode` lens switch.                                                                                                   |
+| `snap-to-grid`           | tools  | do   | inline       | Snap hand-placed (Visual-mode) bars to working-day gridlines while dragging.                                                                                                                                  |
+| `clear-visual-placement` | tools  | do   | inline       | _Wired (quick-wins)._ Drop a bar's hand-placed `visualStart` so it falls back to the computed date. **Shaded, not hidden, in Early mode** (shade-don't-hide); Visual mode + pen + a selection to operate.     |
+| `add-note`               | tools  | do   | inline       | _Wired (quick-wins, needs `VITE_NOTES`)._ **Add note** — open the selected activity's Logic panel at its Notes section (`ActivityNotesSection`); Contributor+ (not pen-gated).                                |
+| `update-progress`        | object | do   | inline       | _Wired (quick-wins)._ **Update progress** — open `ActivityProgressDialog` for the selected activity; Contributor+ (not pen-gated). (Advancing the data date is a later, separate slice.)                      |
+| `export`                 | object | do   | inline       | **Export** — the diagram (PDF/PNG) or the schedule (XER/MSP/CSV).                                                                                                                                             |
+| `print`                  | object | do   | inline       | **Print**.                                                                                                                                                                                                    |
+| `share`                  | object | do   | inline       | **Share** — surface the ADR-0012 per-plan External-Guest link as a toolbar action.                                                                                                                            |
+| `comments`               | object | do   | inline       | _Wired (quick-wins, needs `VITE_NOTES`)._ **Comments** — reveal + focus the **plan-level** notes thread (`PlanNotesSection`), not per-activity threads. Read for every role.                                  |
+| `hammock` / `loe`        | (Add▾) | do   | Add menu     | **Span between activities** — Hammock + Level-of-effort, created by picking two endpoints (not point-and-draw). Previewed as disabled "Soon" menu items.                                                      |
 
 ## Notes
 
-- The Visual-planning placeholders (`snap-to-grid`, `clear-visual-placement`, `next-conflict`) are
-  only meaningful in **Visual** scheduling mode (ADR-0033). When built, they should follow the
-  shade-don't-hide rule: shown disabled in Early mode rather than removed.
+- The Visual-planning items (`snap-to-grid`, `clear-visual-placement`, `next-conflict`) are only
+  meaningful in **Visual** scheduling mode (ADR-0033) and follow the shade-don't-hide rule: shown
+  disabled in Early mode (with the reason "Only available in Visual mode") rather than removed.
+  `clear-visual-placement` is **wired** to this rule now (quick-wins); `snap-to-grid` / `next-conflict`
+  remain placeholders that should adopt it when built.
 - `resource-view` is the visible "Coming soon" preview of a second lens; the `view-mode` slot remains a
   genuinely-reserved **hidden** stub (`isVisible: () => false`) that becomes the real lens **switch**
   (TSLD / Gantt / Resource) once more than one view exists — at which point `resource-view` folds into
   it. The Gantt/Resource switch is intentionally **not** surfaced as a visible control until then.
-- Several placeholders become **`View▾` toggles** rather than toolbar buttons when built (`baseline-overlay`,
-  and a future show/hide-notes toggle for `add-note`); the button is a stand-in for the affordance, not a
-  commitment to its final shape.
+- Several placeholders become **`View▾` toggles** rather than toolbar buttons when built (e.g.
+  `baseline-overlay`); the button is a stand-in for the affordance, not a commitment to its final shape.
+  (`add-note` is now wired to open the selected activity's Logic-panel Notes section rather than becoming
+  a canvas-markup toggle.)
 - **Hammock / Level of effort** are not `placeholderItem`s — they are disabled `MenuItem`s in the Add
   split-button's "Span between activities" section (they're derived from two endpoints, not drawn). When
   built, they arm an endpoint-pick flow rather than a draw mode.

@@ -86,6 +86,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     canWriteNotes: true,
     openActivityNotes: vi.fn(),
     canEditSchedule: true,
+    lateOverlayActive: false,
     clearVisualPlacement: vi.fn(),
     ...over,
   };
@@ -313,7 +314,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     // of the five ids resolves to its existing placeholder stub — disabled, "Coming soon", never wired.
     renderRows(ctx({ selectedActivityId: 'a1', schedulingMode: 'VISUAL' }));
     for (const name of [
-      'Recenter on today',
+      'Go to today',
       'Comments',
       'Update progress…',
       'Add note',

@@ -76,7 +76,10 @@ export function ToolbarPlanWorkspace({
   const notesHeadingRef = useRef<HTMLHeadingElement>(null);
   const revealComments = useCallback(() => {
     const el = notesHeadingRef.current;
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // No explicit `behavior` — let the app's global `prefers-reduced-motion` CSS `scroll-behavior`
+    // opt-out govern it (A3); an explicit `behavior: 'smooth'` would bypass that (mirrors
+    // `features/plan-lock/lib/use-pen-lock-view.ts`, which omits `behavior` deliberately).
+    el?.scrollIntoView({ block: 'start' });
     el?.focus();
   }, []);
   const ctx = useTsldToolbarContext({

@@ -151,7 +151,9 @@ Everything else has a stated default and is not blocking.
 >   the schedule recalculates (auto-recalc), re-plotting the bar at its computed
 >   date.
 > - **Given** Early mode, or no pen, or no selection **when** I look at the button
->   **then** it is disabled/hidden with the matching reason.
+>   **then** it is **visible but disabled (shaded)** with the matching reason — Early → "Only
+>   available in Visual mode", no pen → "Start editing…", Late overlay on → "Turn off the Late-start
+>   overlay…", no selection → "Select an activity first" (shade-don't-hide, reconciled per U1 review).
 > - **Given** a stale version (409) **when** I clear **then** nothing is applied
 >   and the standard "changed since you opened it" conflict message shows (the
 >   existing reposition contract; never re-sent).
@@ -170,7 +172,7 @@ already-shipped code.
 - **Stale version on clear-placement** — 409 → not applied, conflict copy, undo not recorded (mirror the reposition VISUAL branch exactly).
 - **Flag off** — every button is its current placeholder; F0 selection-lift is inert.
 - **`VITE_NOTES` off** — Comments and Add note are absent (nothing to reveal / no notes section).
-- **Not in Visual mode / `VITE_SCHEDULING_MODES` off** — Clear visual placement hidden (there is no `visualStart` surface).
+- **Not in Visual mode** — Clear visual placement stays **visible but shaded** with the reason "Only available in Visual mode" (shade-don't-hide, ADR-0031 — reconciled from the earlier "hidden outside Visual mode" choice per the U1 review finding, so toggling Early↔Visual doesn't shift the bar's silhouette). **`VITE_SCHEDULING_MODES` off** — absent (nothing to place).
 - **Responsive single-pane (below `md`)** — Comments must still reveal the plan-notes section (it is mounted in the header stack, present in both panes); if a layout ever hides it, fall back to a no-op-safe guard (see risks).
 
 ### Permissions (RBAC + scope, ADR-0012)
@@ -339,9 +341,13 @@ optionally deep-link/scroll to the notes section within it. Gated on
 **F5 — Clear visual placement.** `ctx.clearVisualPlacement(id, version)` →
 `model.clearVisualPlacement` which calls `useSetActivityVisualStart` with
 `visualStart: null`, records the inverse `visualStartCommand` (ADR-0048, flag-guarded),
-then `autoRecalc.notify()` — a faithful subset of the reposition VISUAL branch
-(`use-plan-workspace-model.ts:415-435`). Item gated `isVisible`/`isEnabled` on
-`schedulingMode === 'VISUAL'` + `canEditSchedule` + a selection; `penGated: true`.
+then announce + `autoRecalc.notify()` — a faithful subset of the reposition VISUAL branch
+(`use-plan-workspace-model.ts:415-435`). Item `isVisible: () => SCHEDULING_MODES_ENABLED`
+(shade-don't-hide — visible in both modes, U1); `isEnabled` on `schedulingMode === 'VISUAL'` +
+`canEditSchedule` + not the Late overlay + a **resolved** selection (U3); `penGated: true`. Its
+`disabledReason` ladder checks the permanent gates (mode → role/pen → Late overlay) before the
+transient selection (U2/A5), and reads `ctx.lateOverlayActive` so an overlay-disabled state is
+explained (A1). Success + a 409 conflict are **announced** via the shared live region (A2).
 
 ### Flag strategy
 

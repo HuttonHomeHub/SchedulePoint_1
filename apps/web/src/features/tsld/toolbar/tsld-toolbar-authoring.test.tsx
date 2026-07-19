@@ -70,6 +70,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     canWriteNotes: true,
     openActivityNotes: vi.fn(),
     canEditSchedule: true,
+    lateOverlayActive: false,
     clearVisualPlacement: vi.fn(),
     ...over,
   };
