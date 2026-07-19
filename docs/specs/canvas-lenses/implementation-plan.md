@@ -1,7 +1,9 @@
 # Implementation Plan: TSLD canvas insight lenses
 
 - **Feature spec:** `docs/specs/canvas-lenses/feature-spec.md`
-- **Status:** Draft (awaiting approval)
+- **Status:** Approved (2026-07-19). Decisions: **CQ-1** — Colour-by v1 ships Criticality + Total-float
+  bucket + WBS group; driving-resource deferred to a fast-follow (needs `VITE_RESOURCES`). **CQ-2** —
+  Filter **dims** non-matches (shade-don't-remove). Single flip at M4, one release.
 - **Owner:** _TBD_
 
 ## Breakdown
