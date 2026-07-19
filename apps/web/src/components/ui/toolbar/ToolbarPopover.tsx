@@ -25,6 +25,8 @@ export function ToolbarPopover({
   icon,
   itemProps,
   disabled,
+  active,
+  title,
   align = 'start',
   children,
 }: {
@@ -33,6 +35,13 @@ export function ToolbarPopover({
   /** From the toolbar item's `render(ctx, api)` — joins the trigger to the roving tab order. */
   itemProps: ToolbarItemRenderApi['itemProps'];
   disabled?: boolean;
+  /** Reflect an **engaged** state on the trigger even while the panel is closed (e.g. an attribute
+   * filter is on) — `aria-pressed`/active becomes `open || active`, so the cue survives closing the
+   * popover (mirrors the Colour-by picker's `api.active || open`). Absent ⇒ pressed only while open. */
+  active?: boolean;
+  /** Native tooltip on the trigger — used to surface a disabled reason (an `aria-disabled` button's
+   * bare state has no explanation otherwise), matching the plain `ToolbarButton`. Absent ⇒ no title. */
+  title?: string;
   /** Align the panel's inline-start (`start`) or inline-end (`end`) to the trigger. */
   align?: 'start' | 'end';
   children: React.ReactNode;
@@ -110,12 +119,16 @@ export function ToolbarPopover({
         aria-disabled={disabled || undefined}
         aria-haspopup="dialog"
         aria-expanded={open}
+        {...(active !== undefined ? { 'aria-pressed': open || active } : {})}
+        {...(title ? { title } : {})}
         onClick={() => {
           if (disabled) return;
           if (open) close(false);
           else openPanel();
         }}
-        className={cn(toolbarControlVariants({ active: open, disabled: disabled === true }))}
+        className={cn(
+          toolbarControlVariants({ active: open || active === true, disabled: disabled === true }),
+        )}
       >
         {icon ? (
           <span aria-hidden="true" className="inline-flex shrink-0 items-center">

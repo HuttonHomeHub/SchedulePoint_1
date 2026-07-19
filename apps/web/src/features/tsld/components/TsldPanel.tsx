@@ -24,15 +24,17 @@ import {
 import { packLanes } from '../render/auto-pack';
 import {
   buildBaselineGhosts,
+  buildColourInkMap,
   buildColourMap,
   isFilterActive,
   matchesActivityFilter,
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { resolveLensPalette } from '../render/palette';
-import { daysBetween, type Point } from '../render/render-model';
+import { daysBetween, isMilestone, type Point } from '../render/render-model';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
+import { useThemeVersion } from '../render/use-theme-version';
 import {
   SelectionActionsBar,
   type SelectionActionContext,
@@ -317,6 +319,9 @@ export function TsldPanel({
   // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
   // so the scene carries no lens fields and the paint is byte-for-byte today's.
   const { filterQuery, filterAttrs, colourMode, baselineOverlay } = lensState;
+  // Bumps on a light/dark/system switch so the Colour-by fill + ink maps re-resolve their token colours
+  // (the canvas paints concrete colours, not `var()`), matching the base painter's re-theme (C1/U3).
+  const themeVersion = useThemeVersion();
   const filterActive = CANVAS_LENSES_ENABLED && isFilterActive(filterQuery, filterAttrs);
   // The ids of the NON-matching activities (dimmed on the canvas + marked in the listbox). Absent when
   // no filter is active, so an empty/cleared filter dims nothing (parity).
@@ -328,29 +333,47 @@ export function TsldPanel({
     }
     return set;
   }, [filterActive, activities, filterQuery, filterAttrs]);
-  // The Colour-by fill override. Criticality (the default) ⇒ `undefined` so the painter's own criticality
-  // fills run (byte-for-byte parity); the other modes precompute a per-id map from the token palette.
-  // NB the palette is resolved once here; a theme switch repaints the canvas but keeps these lens fills
-  // until the mode/activities change (a known follow-up; the critical outline stays theme-correct).
+  // The Colour-by fill + inside-label ink overrides. Criticality (the default) ⇒ `undefined` so the
+  // painter's own criticality fills/inks run (byte-for-byte parity); the other modes precompute per-id
+  // maps from the token palette. Re-resolved on a theme switch (`themeVersion`) so the recoloured bars
+  // and their labels track light/dark, like the base painter (C1/U3). `barInk` is paired 1:1 with
+  // `barFill` so an inside-bar label clears 4.5:1 on the recoloured hue (WCAG 1.4.3; U2/A1).
   const barFill = useMemo<Map<string, string> | undefined>(() => {
     if (!CANVAS_LENSES_ENABLED || colourMode === 'criticality') return undefined;
     return buildColourMap(activities, colourMode, resolveLensPalette());
-  }, [colourMode, activities]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
+  }, [colourMode, activities, themeVersion]);
+  const barInk = useMemo<Map<string, string> | undefined>(() => {
+    if (!CANVAS_LENSES_ENABLED || colourMode === 'criticality') return undefined;
+    return buildColourInkMap(activities, colourMode, resolveLensPalette());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
+  }, [colourMode, activities, themeVersion]);
   // The baseline ghost bars — the captured baseline spans joined to the live lanes. Absent unless the
   // overlay is on AND there are variance rows to draw (and at least one joins a live activity).
   const baselineGhosts = useMemo(() => {
     if (!CANVAS_LENSES_ENABLED || !baselineOverlay || !varianceRows || varianceRows.length === 0) {
       return undefined;
     }
-    const laneById = new Map(activities.map((a) => [a.id, { laneIndex: a.laneIndex }]));
+    const laneById = new Map(
+      activities.map((a) => [a.id, { laneIndex: a.laneIndex, isMilestone: isMilestone(a.type) }]),
+    );
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
   }, [baselineOverlay, varianceRows, activities]);
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
-  // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles, and the
-  // announcement clears (nothing spoken) when the filter is cleared. Off when the flag is off.
+  // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
+  // filter clears (active → inactive), announce a neutral empty message so the polite live region drops
+  // the stale "N of M activities match" text rather than leaving it to be re-read. Off when the flag is
+  // off (the effect early-returns, so it is inert then).
+  const filterWasActiveRef = useRef(false);
   useEffect(() => {
-    if (!filterActive) return;
+    if (!CANVAS_LENSES_ENABLED) return;
+    if (!filterActive) {
+      if (filterWasActiveRef.current) announce(''); // clear the stale count only on the clear transition
+      filterWasActiveRef.current = false;
+      return;
+    }
+    filterWasActiveRef.current = true;
     const total = activities.length;
     const matched = total - (dimmedIds?.size ?? 0);
     const handle = setTimeout(() => {
@@ -847,6 +870,7 @@ export function TsldPanel({
               todayOffset={todayOffset}
               dimmedIds={dimmedIds}
               barFill={barFill}
+              barInk={barInk}
               baselineGhosts={baselineGhosts}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
@@ -899,7 +923,9 @@ export function TsldPanel({
               {activities.map((a) => {
                 // Insight-lens filter (`docs/specs/canvas-lenses/`): mirror the canvas dimming in the
                 // parallel listbox so the filter isn't conveyed by colour/emphasis alone (WCAG 1.4.1).
-                // A non-matching option is `aria-disabled` with a spoken "(filtered out)" suffix.
+                // A non-matching option keeps a spoken "(filtered out)" suffix but stays fully
+                // selectable/navigable (dim-not-hide) — so NO `aria-disabled`, which would wrongly
+                // signal an inoperable option (a11y review).
                 const filteredOut = dimmedIds?.has(a.id) ?? false;
                 return (
                   <li
@@ -907,7 +933,6 @@ export function TsldPanel({
                     id={optionId(a.id)}
                     role="option"
                     aria-selected={a.id === selectedId}
-                    {...(filteredOut ? { 'aria-disabled': true } : {})}
                   >
                     {optionDescriptions.get(a.id)}
                     {filteredOut ? ' (filtered out)' : ''}

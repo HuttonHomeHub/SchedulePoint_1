@@ -122,6 +122,12 @@ export interface TsldScene {
    * bar's id is present the painter uses this fill; absent ids (and an absent map) fall back to today's
    * `barColour`. Passed only for the non-default Colour-by modes, so Criticality ⇒ absent ⇒ parity. */
   barFill?: ReadonlyMap<string, string> | undefined;
+  /** Per-activity Colour-by inside-label **ink** override (id → CSS colour), paired 1:1 with `barFill`
+   * (precomputed by `buildColourInkMap`), so an inside-bar label clears 4.5:1 on the recoloured bar
+   * (WCAG 1.4.3). When a bar's id is present the painter uses this ink for its inside label; absent ids
+   * (and an absent map) fall back to today's criticality-based ink. Passed only for the non-default
+   * Colour-by modes, so Criticality ⇒ absent ⇒ byte-for-byte parity. */
+  barInk?: ReadonlyMap<string, string> | undefined;
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay).
    * Absent ⇒ the overlay is off / no active baseline ⇒ no ghost layer (parity). */
   baselineGhosts?: readonly GhostBar[] | undefined;
@@ -375,22 +381,58 @@ export function paintScene(
 
   // Layer 2.5: baseline ghost bars (the Baseline overlay lens, `docs/specs/canvas-lenses/`) — the
   // captured baseline span drawn as a thin dashed outline BENEATH the live bars, so slip reads on the
-  // canvas. Culled exactly like the bar layer (only ghosts whose rect intersects the viewport draw),
-  // and batched into one stroke state. Absent ⇒ this whole block is skipped ⇒ byte-for-byte parity.
+  // canvas. Culled by count exactly like the bar layer: `visibleIds.has(ghost.id)` is the FIRST check,
+  // so a ghost whose live bar is off-screen does no date math / allocation at all (matching the `rects`
+  // path, built only over `visibleIds`); the per-ghost `rectsIntersect` then culls a slipped ghost whose
+  // own span left the viewport. Batched into one stroke state. Absent ⇒ this whole block is skipped ⇒
+  // byte-for-byte parity. A milestone ghosts as a diamond outline (matching its live shape, ADR-0026),
+  // and a filter-dimmed ghost recedes at the same reduced alpha as its dimmed live bar.
   if (scene.baselineGhosts && scene.baselineGhosts.length > 0) {
     const viewport: Rect = { x: 0, y: 0, w: size.width, h: size.height };
     ctx.strokeStyle = palette.edge;
     ctx.lineWidth = 1;
     ctx.setLineDash(GHOST_DASH as number[]);
     for (const ghost of scene.baselineGhosts) {
+      if (!visibleIds.has(ghost.id)) continue; // cull by count before any date math / allocation
       const startDay = daysBetween(scene.dataDate, ghost.baselineStart);
       const finishDay = daysBetween(scene.dataDate, ghost.baselineFinish);
       const x1 = screenXOfDay(startDay, view);
       const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
       const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
-      const w = Math.max(2, x2 - x1);
-      if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
-      ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+      const dimmed = scene.dimmedIds?.has(ghost.id) ?? false;
+      if (ghost.isMilestone) {
+        // A zero-width diamond outline centred on the baseline point, matching the live milestone.
+        const cx = (x1 + x2) / 2;
+        const cy = top + BAR_HEIGHT / 2;
+        if (
+          !rectsIntersect(
+            {
+              x: cx - MILESTONE_RADIUS,
+              y: cy - MILESTONE_RADIUS,
+              w: MILESTONE_RADIUS * 2,
+              h: MILESTONE_RADIUS * 2,
+            },
+            viewport,
+          )
+        ) {
+          continue;
+        }
+        if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - MILESTONE_RADIUS);
+        ctx.lineTo(cx + MILESTONE_RADIUS, cy);
+        ctx.lineTo(cx, cy + MILESTONE_RADIUS);
+        ctx.lineTo(cx - MILESTONE_RADIUS, cy);
+        ctx.lineTo(cx, cy - MILESTONE_RADIUS); // close manually (Ctx2D has no closePath)
+        ctx.stroke();
+        if (dimmed) ctx.globalAlpha = 1;
+      } else {
+        const w = Math.max(2, x2 - x1);
+        if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+        if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
+        ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+        if (dimmed) ctx.globalAlpha = 1;
+      }
     }
     ctx.setLineDash([]);
   }
@@ -529,11 +571,18 @@ export function paintScene(
         if (placement === 'inside') {
           const text = truncateToWidth(activity.label, rect.w - LABEL_PAD_PX * 2, measure);
           if (!text) continue;
-          ctx.fillStyle = activity.isCritical
-            ? palette.labelInsideCritical
-            : activity.isNearCritical
-              ? palette.labelInsideNearCritical
-              : palette.labelInside;
+          // A Colour-by lens repaints the bar a non-criticality hue, so the criticality-based ink can
+          // fail contrast (e.g. white-on-warning-yellow at 2.02:1). When `barInk` carries a paired,
+          // contrast-safe ink for this bar (non-default modes only), use it; else fall back to today's
+          // criticality ink (absent map / Criticality mode ⇒ byte-for-byte parity, WCAG 1.4.3).
+          const inkOverride = scene.barInk?.get(activity.id);
+          ctx.fillStyle =
+            inkOverride ??
+            (activity.isCritical
+              ? palette.labelInsideCritical
+              : activity.isNearCritical
+                ? palette.labelInsideNearCritical
+                : palette.labelInside);
           ctx.fillText(text, rect.x + LABEL_PAD_PX, cy);
         } else {
           const startX = rect.x + rect.w + LABEL_GAP_PX;

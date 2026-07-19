@@ -80,13 +80,18 @@ export interface LensLegendInfo {
   colourMode: ColourMode;
   colour: ColourLegend;
   baselineOverlay: boolean;
+  /** Whether the read-only Late-Start overlay (ADR-0033) is also on — when both are on, the ghost
+   * comparison is baseline-vs-*late* view, so the ghost key spells that out (edge case; ADR-0033 seam). */
+  lateOverlay?: boolean;
 }
 
-/** The baseline-overlay ghost key — a thin dashed outline (no fill), matching the canvas ghost bars. */
-const BASELINE_GHOST_ITEM: LegendItem = {
-  label: 'Baseline (as captured)',
+/** The baseline-overlay ghost key — a thin dashed outline (no fill), matching the canvas ghost bars.
+ * When the Late overlay is also on, the live bars follow the late dates, so the key qualifies that the
+ * ghost is compared against the current (late) view (ADR-0033), not the early dates. */
+const baselineGhostItem = (lateOverlay: boolean): LegendItem => ({
+  label: lateOverlay ? 'Baseline (as captured, vs late view)' : 'Baseline (as captured)',
   swatch: { border: '1px dashed var(--color-muted-foreground)' },
-};
+});
 
 /** Build the legend item list for the active lenses (or today's default when no lens is provided). */
 function legendItems(lens: LensLegendInfo | undefined): ReadonlyArray<LegendItem> {
@@ -105,7 +110,7 @@ function legendItems(lens: LensLegendInfo | undefined): ReadonlyArray<LegendItem
     items.push(...CRITICALITY_OUTLINES);
   }
   items.push(...SHARED_CUES);
-  if (lens.baselineOverlay) items.push(BASELINE_GHOST_ITEM);
+  if (lens.baselineOverlay) items.push(baselineGhostItem(lens.lateOverlay ?? false));
   return items;
 }
 

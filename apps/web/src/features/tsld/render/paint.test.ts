@@ -643,7 +643,13 @@ describe('paintScene — insight lenses', () => {
     const b = recordingCtx();
     paintScene(
       b.ctx,
-      { ...lensScene, dimmedIds: undefined, barFill: undefined, baselineGhosts: undefined },
+      {
+        ...lensScene,
+        dimmedIds: undefined,
+        barFill: undefined,
+        barInk: undefined,
+        baselineGhosts: undefined,
+      },
       VIEW,
       SIZE,
       PALETTE,
@@ -692,7 +698,13 @@ describe('paintScene — insight lenses', () => {
     const withGhost: TsldScene = {
       ...lensScene,
       baselineGhosts: [
-        { id: 'a', baselineStart: '2026-01-02', baselineFinish: '2026-01-04', laneIndex: 0 },
+        {
+          id: 'a',
+          baselineStart: '2026-01-02',
+          baselineFinish: '2026-01-04',
+          laneIndex: 0,
+          isMilestone: false,
+        },
       ],
     };
     const strokeRectsWithout = ((): number => {
@@ -719,7 +731,13 @@ describe('paintScene — insight lenses', () => {
         ...lensScene,
         // A ghost 10 years out is far to the right of the 800px viewport.
         baselineGhosts: [
-          { id: 'a', baselineStart: '2036-01-02', baselineFinish: '2036-01-04', laneIndex: 0 },
+          {
+            id: 'a',
+            baselineStart: '2036-01-02',
+            baselineFinish: '2036-01-04',
+            laneIndex: 0,
+            isMilestone: false,
+          },
         ],
       },
       VIEW,
@@ -727,5 +745,120 @@ describe('paintScene — insight lenses', () => {
       PALETTE,
     );
     expect(ctx.strokeRect.mock.calls.length).toBe(before);
+  });
+
+  it('culls a ghost BY COUNT when its live bar is off-screen, before any geometry (P1)', () => {
+    const ctx = mockCtx();
+    // The live activity is far off-screen (culled — not in `visibleIds`), so even though the ghost's
+    // OWN baseline span is on-screen, the ghost must not stroke: the id-in-visibleIds check runs first.
+    paintScene(
+      ctx,
+      {
+        activities: [task({ id: 'far', earlyStart: '2027-06-01', earlyFinish: '2027-06-02' })],
+        edges: [],
+        dataDate: DATA_DATE,
+        baselineGhosts: [
+          {
+            id: 'far',
+            baselineStart: '2026-01-02', // on-screen dates
+            baselineFinish: '2026-01-04',
+            laneIndex: 0,
+            isMilestone: false,
+          },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The far bar is culled (no fill) and its ghost is culled by count (no stroke).
+    expect(ctx.fillRect).not.toHaveBeenCalled();
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('ghosts a milestone as a diamond OUTLINE (a stroked path), not a rect', () => {
+    const ctx = mockCtx();
+    const strokeRectsWithout = ((): number => {
+      const c = mockCtx();
+      paintScene(c, lensScene, VIEW, SIZE, PALETTE);
+      return c.strokeRect.mock.calls.length;
+    })();
+    paintScene(
+      ctx,
+      {
+        ...lensScene,
+        baselineGhosts: [
+          {
+            id: 'a',
+            baselineStart: '2026-01-03',
+            baselineFinish: '2026-01-03', // a point (milestone)
+            laneIndex: 0,
+            isMilestone: true,
+          },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The milestone ghost adds NO strokeRect (it's a diamond path) but does open + stroke a path with
+    // the ghost dash — lensScene's bars are rects, so `beginPath` here comes from the diamond.
+    expect(ctx.strokeRect.mock.calls.length).toBe(strokeRectsWithout);
+    expect(ctx.beginPath).toHaveBeenCalled();
+    expect(ctx.setLineDash).toHaveBeenCalledWith([2, 2]);
+  });
+
+  it('dims a ghost whose id is filtered out (reduced alpha), matching its dimmed live bar', () => {
+    const { ctx, log } = recordingCtx();
+    paintScene(
+      ctx,
+      {
+        ...lensScene,
+        dimmedIds: new Set(['b']),
+        baselineGhosts: [
+          {
+            id: 'b',
+            baselineStart: '2026-01-06',
+            baselineFinish: '2026-01-08',
+            laneIndex: 0,
+            isMilestone: false,
+          },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The ghost layer runs before the bars, so the FIRST strokeRect is the ghost; the most recent
+    // globalAlpha set before it must be the dim (0.3) — the ghost recedes with its dimmed live bar.
+    const firstStroke = log.findIndex((e) => e.startsWith('strokeRect('));
+    const priorAlpha = log
+      .slice(0, firstStroke)
+      .filter((e) => e.startsWith('globalAlpha='))
+      .at(-1);
+    expect(priorAlpha).toBe('globalAlpha=0.3');
+  });
+
+  it('honours a Colour-by barInk override for the inside-bar label ink', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(
+        r.ctx,
+        {
+          activities: [task({ id: 'w', label: 'A1020 Erect steel · 4d' })],
+          edges: [],
+          dataDate: DATA_DATE,
+          barFill: new Map([['w', '#fill']]),
+          barInk: new Map([['w', '#ink']]),
+        },
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      return r;
+    })();
+    // The bar paints the override fill and its inside label paints the paired override ink.
+    expect(log).toContain('fillStyle=#fill');
+    expect(log).toContain('fillStyle=#ink');
   });
 });

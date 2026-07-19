@@ -3,11 +3,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
+import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
-import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
  * Flag-ON TSLD toolbar quick-wins (spec `docs/specs/toolbar-quick-wins/`). Pins `VITE_TOOLBAR_QUICK_WINS`
@@ -37,71 +37,16 @@ const spies = {
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return {
-    zoomPreset: 'week',
-    setZoomPreset: vi.fn(),
-    stepZoom: vi.fn(),
-    fit: vi.fn(),
-    plannedStart: '2026-01-01',
+  return makeTsldToolbarContext({
     goToDate: spies.goToDate,
-    viewToggles: DEFAULT_VIEW_TOGGLES,
-    toggleView: vi.fn(),
-    schedulingMode: 'EARLY',
-    setSchedulingMode: vi.fn(),
-    isAddingActivity: false,
-    toggleAddActivity: vi.fn(),
-    createType: 'TASK',
-    setCreateType: vi.fn(),
-    isLinking: false,
-    toggleLinkMode: vi.fn(),
-    linkType: 'FS',
-    setLinkType: vi.fn(),
-    canAutoArrange: false,
-    requestAutoArrange: vi.fn(),
-    canUndo: false,
-    canRedo: false,
-    undoLabel: null,
-    redoLabel: null,
-    undo: vi.fn(),
-    redo: vi.fn(),
-    canRecalc: true,
-    recalcPending: false,
-    recalculate: vi.fn(),
-    openBaselines: vi.fn(),
-    openCalendar: vi.fn(),
-    openEarnedValue: vi.fn(),
-    openResourceHistogram: vi.fn(),
-    editPlan: vi.fn(),
-    openShortcuts: vi.fn(),
-    legendOpen: false,
-    toggleLegend: vi.fn(),
     summaryContent: null,
     projectFinishContent: null,
-    hasDiagram: true,
-    todayIso: '2026-07-19',
-    selectedActivityId: null,
-    selectedActivity: undefined,
     revealComments: spies.revealComments,
-    canProgress: true,
     openProgress: spies.openProgress,
-    canWriteNotes: true,
     openActivityNotes: spies.openActivityNotes,
-    canEditSchedule: true,
-    lateOverlayActive: false,
     clearVisualPlacement: spies.clearVisualPlacement,
-    filterQuery: '',
-    setFilterQuery: vi.fn(),
-    filterAttrs: new Set(),
-    toggleFilterAttr: vi.fn(),
-    colourMode: 'criticality',
-    setColourMode: vi.fn(),
-    baselineOverlay: false,
-    toggleBaselineOverlay: vi.fn(),
-    hasActiveBaseline: false,
-    varianceLoading: false,
-    varianceError: false,
     ...over,
-  };
+  });
 }
 
 /** Render both rows the workspace renders (Row 1 · Look + Row 2 · Do). */

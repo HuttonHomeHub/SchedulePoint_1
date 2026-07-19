@@ -213,6 +213,11 @@ for the table. The toolbar's advertised design gets materially closer to complet
 - **WBS with hundreds of parents** — palette cycles deterministically; the legend caps
   displayed groups and notes "+N more" rather than an unbounded key.
 - **Baseline removed rows** (in baseline, no live activity) — omitted from the overlay.
+- **Ghost shape + dimming (Stage-A review fold-in).** A baseline ghost mirrors its live activity's
+  **shape**: a milestone ghosts as a diamond outline (not a rect), carried via `GhostBar.isMilestone`
+  from the joined live activity (matching the ADR-0026 live milestone convention). When both the Filter
+  and Baseline overlay are active, a ghost whose id is in `dimmedIds` **dims** to the same reduced alpha
+  as its filtered-out live bar, so a filtered activity never keeps a full-strength ghost.
 - **Baseline overlay + Late/Visual view source** — the ghost is always the baseline's
   captured dates; the live bar follows the active view source (ADR-0033). Both draw; the
   comparison is baseline-vs-current-view (documented in the Legend copy).

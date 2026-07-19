@@ -17,6 +17,7 @@ import {
   paintScene,
   type InteractionOverlay,
   type LinkOverlay,
+  type TsldPalette,
   type TsldScene,
   type TsldViewToggles,
 } from '../render/paint';
@@ -44,6 +45,7 @@ import {
   type ZoomLevel,
 } from '../render/render-model';
 import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
+import { useThemeVersion } from '../render/use-theme-version';
 import type { SelectionAnchor } from '../toolbar/selection-actions';
 
 import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
@@ -119,6 +121,9 @@ export interface TsldCanvasProps {
   dimmedIds?: ReadonlySet<string> | undefined;
   /** Per-activity Colour-by fill override (id → CSS colour); absent ⇒ today's criticality fills. */
   barFill?: ReadonlyMap<string, string> | undefined;
+  /** Per-activity Colour-by inside-label ink override (id → CSS colour), paired with `barFill`; absent ⇒
+   * today's criticality-based label ink. */
+  barInk?: ReadonlyMap<string, string> | undefined;
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay). */
   baselineGhosts?: readonly GhostBar[] | undefined;
   /** Imperative handle so the toolbar can command zoom presets / steps (ADR-0026 D3 seam). */
@@ -286,11 +291,19 @@ export function TsldCanvas({
   todayOffset = null,
   dimmedIds,
   barFill,
+  barInk,
   baselineGhosts,
   controlRef,
   onZoomStopChange,
   selectionAnchorRef,
 }: TsldCanvasProps): React.ReactElement {
+  // The painter draws from concrete resolved token colours (Canvas 2D `fillStyle` can't take a `var()`),
+  // so the palette must re-resolve on a theme switch. `useThemeVersion` (the shared theme-mutation
+  // counter, one source of truth) bumps then; an effect below re-resolves `paletteRef` + repaints. The
+  // rAF loop reads the ref, so no per-frame work and no stale closure.
+  const themeVersion = useThemeVersion();
+  const paletteRef = useRef<TsldPalette | null>(null);
+  paletteRef.current ??= resolveTsldPalette();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const interactionCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -333,6 +346,7 @@ export function TsldCanvas({
     todayOffset,
     dimmedIds,
     barFill,
+    barInk,
     baselineGhosts,
   });
 
@@ -372,6 +386,7 @@ export function TsldCanvas({
       todayOffset,
       dimmedIds,
       barFill,
+      barInk,
       baselineGhosts,
     };
     dirtyRef.current = true;
@@ -387,6 +402,7 @@ export function TsldCanvas({
     todayOffset,
     dimmedIds,
     barFill,
+    barInk,
     baselineGhosts,
   ]);
 
@@ -486,7 +502,6 @@ export function TsldCanvas({
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    let palette = resolveTsldPalette();
     let raf = 0;
 
     const measure = (): void => {
@@ -566,7 +581,7 @@ export function TsldCanvas({
       // frames — never on the many idle frames of a held selection (perf review).
       const movedThisFrame = dirtyRef.current;
       if (dirtyRef.current) {
-        paintScene(ctx, sceneRef.current, viewRef.current, size, palette, dpr);
+        paintScene(ctx, sceneRef.current, viewRef.current, size, paletteRef.current!, dpr);
         dirtyRef.current = false;
       }
       // Keep the date ruler pixel-synced to the same viewport snapshot the painter just used, so the
@@ -592,7 +607,7 @@ export function TsldCanvas({
             sceneRef.current.dataDate,
           ),
         };
-        paintInteractionLayer(ictx, overlay, size, palette, dpr);
+        paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
       }
       // Publish the selected activity's live viewport anchor for the floating selection bar (ADR-0031):
@@ -648,19 +663,6 @@ export function TsldCanvas({
         : null;
     io?.observe(container);
 
-    const mo =
-      typeof MutationObserver !== 'undefined'
-        ? new MutationObserver(() => {
-            palette = resolveTsldPalette();
-            dirtyRef.current = true;
-            interactionDirtyRef.current = true;
-          })
-        : null;
-    mo?.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'data-theme'],
-    });
-
     const onWheel = (e: WheelEvent): void => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -706,11 +708,18 @@ export function TsldCanvas({
       cancelAnimationFrame(raf);
       ro?.disconnect();
       io?.disconnect();
-      mo?.disconnect();
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
     };
   }, [editing, selectionAnchorRef]);
+
+  // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
+  // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
+  useEffect(() => {
+    paletteRef.current = resolveTsldPalette();
+    dirtyRef.current = true;
+    interactionDirtyRef.current = true;
+  }, [themeVersion]);
 
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const localPoint = (e: React.PointerEvent | React.MouseEvent): Point => {

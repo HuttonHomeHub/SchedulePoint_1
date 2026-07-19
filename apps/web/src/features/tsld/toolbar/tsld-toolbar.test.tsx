@@ -2,11 +2,11 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
+import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
-import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 // This suite covers the **flag-off** registry (plain Add toggle, no Link tool). Now that
 // `VITE_CANVAS_AUTHORING` defaults on, pin it off here; the flag-on registry is covered by
@@ -36,35 +36,12 @@ const spies = {
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return {
-    zoomPreset: 'week',
+  return makeTsldToolbarContext({
     setZoomPreset: spies.setZoomPreset,
     stepZoom: spies.stepZoom,
     fit: spies.fit,
-    plannedStart: '2026-01-01',
-    goToDate: vi.fn(),
-    viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: spies.toggleView,
-    schedulingMode: 'EARLY',
-    setSchedulingMode: vi.fn(),
-    isAddingActivity: false,
     toggleAddActivity: spies.toggleAddActivity,
-    createType: 'TASK',
-    setCreateType: vi.fn(),
-    isLinking: false,
-    toggleLinkMode: vi.fn(),
-    linkType: 'FS',
-    setLinkType: vi.fn(),
-    canAutoArrange: false,
-    requestAutoArrange: vi.fn(),
-    canUndo: false,
-    canRedo: false,
-    undoLabel: null,
-    redoLabel: null,
-    undo: vi.fn(),
-    redo: vi.fn(),
-    canRecalc: true,
-    recalcPending: false,
     recalculate: spies.recalculate,
     openBaselines: spies.openBaselines,
     openCalendar: spies.openCalendar,
@@ -72,35 +49,9 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     openResourceHistogram: spies.openResourceHistogram,
     editPlan: spies.editPlan,
     openShortcuts: spies.openShortcuts,
-    legendOpen: false,
     toggleLegend: spies.toggleLegend,
-    summaryContent: <div data-testid="summary-body">summary</div>,
-    projectFinishContent: <span>Finish: 01 Aug 2026</span>,
-    hasDiagram: true,
-    todayIso: '2026-07-19',
-    selectedActivityId: null,
-    selectedActivity: undefined,
-    revealComments: vi.fn(),
-    canProgress: true,
-    openProgress: vi.fn(),
-    canWriteNotes: true,
-    openActivityNotes: vi.fn(),
-    canEditSchedule: true,
-    lateOverlayActive: false,
-    clearVisualPlacement: vi.fn(),
-    filterQuery: '',
-    setFilterQuery: vi.fn(),
-    filterAttrs: new Set(),
-    toggleFilterAttr: vi.fn(),
-    colourMode: 'criticality',
-    setColourMode: vi.fn(),
-    baselineOverlay: false,
-    toggleBaselineOverlay: vi.fn(),
-    hasActiveBaseline: false,
-    varianceLoading: false,
-    varianceError: false,
     ...over,
-  };
+  });
 }
 
 /** Render the two-row toolbar the workspace renders (ADR-0031 amendment): Row 1 · Look + Row 2 · Do. */

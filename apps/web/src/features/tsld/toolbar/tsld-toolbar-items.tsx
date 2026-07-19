@@ -478,12 +478,22 @@ function LiveSearchControl({
         {...api.itemProps}
         type="search"
         value={ctx.filterQuery}
-        disabled={disabled}
-        onChange={(event) => ctx.setFilterQuery(event.target.value)}
+        // Use `aria-disabled`, NOT the native `disabled` attribute (A3): the toolbar's roving tabindex /
+        // `activeId` can still target this control, and a natively-`disabled` field drops out of the
+        // focus order — stranding focus and hiding the reason (WCAG 2.1.1 / 2.4.3 / 2.4.7). Staying
+        // focusable, it ignores typing (no-op onChange) and shows the reason via `title` while shaded.
+        aria-disabled={disabled || undefined}
+        onChange={(event) => {
+          if (!disabled) ctx.setFilterQuery(event.target.value);
+        }}
+        {...(disabled ? { readOnly: true } : {})}
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities"
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
-        className="h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm"
+        className={cn(
+          'h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm',
+          disabled && 'cursor-not-allowed opacity-50',
+        )}
       />
     </div>
   );
@@ -508,7 +518,11 @@ function FilterMenuControl({
       label="Filter"
       icon={<Filter className="size-4" />}
       itemProps={api.itemProps}
+      // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
+      // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
+      active={api.active}
       {...(api.disabled ? { disabled: true } : {})}
+      {...(api.disabled && api.disabledReason ? { title: api.disabledReason } : {})}
     >
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Show only</legend>

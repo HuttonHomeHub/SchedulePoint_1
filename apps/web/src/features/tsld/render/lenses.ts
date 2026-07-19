@@ -164,14 +164,35 @@ export interface LensPalette {
   floatHigh: string;
   /** A deterministic, ordered cycle of distinguishable hues for WBS groups (cycled by index). */
   wbsCycle: readonly string[];
+  // ── Inside-bar label inks (WCAG 1.4.3, ≥ 4.5:1) ─────────────────────────────────────────
+  // Each lens fill band carries a paired, contrast-safe foreground so an on-bar label stays legible
+  // when Colour-by repaints the bar a non-criticality hue (the painter's criticality-based ink assumed
+  // the critical/near-critical/primary fills, and e.g. white-on-warning-yellow measured only 2.02:1).
+  // Resolved from the same tokens as the fills; ratios are documented at {@link resolveLensPalette}.
+  /** Ink for the neutral (uncomputed / ungrouped) fill. */
+  neutralInk: string;
+  floatCriticalInk: string;
+  floatLowInk: string;
+  floatMediumInk: string;
+  floatHighInk: string;
+  /** Contrast-safe inks paired 1:1 with {@link wbsCycle} (same index/cycle). */
+  wbsInkCycle: readonly string[];
 }
 
 /**
- * The maximum number of distinct WBS groups the on-canvas Legend spells out before collapsing the
- * remainder into a "+N more" row (edge case: hundreds of parents). The colour cycle itself is
- * unbounded (it wraps deterministically); this only caps the *legend* length.
+ * The **upper bound** on how many distinct WBS groups the on-canvas Legend spells out before collapsing
+ * the remainder into a "+N more" row (edge case: hundreds of parents). The *effective* cap is the
+ * smaller of this and the palette's {@link LensPalette.wbsCycle} length ({@link legendGroupCap}), so the
+ * key never shows two groups with the **same** swatch (the cycle wraps at `wbsCycle.length`, so groups
+ * beyond it re-use earlier colours — listing them with distinct labels would be misleading, a11y). The
+ * colour cycle itself stays unbounded; this only caps the *legend* length.
  */
 export const WBS_LEGEND_CAP = 8;
+
+/** The effective WBS legend cap: never more than the palette has distinct swatches (see {@link WBS_LEGEND_CAP}). */
+function legendGroupCap(palette: LensPalette): number {
+  return Math.min(WBS_LEGEND_CAP, palette.wbsCycle.length);
+}
 
 /**
  * The resolved fill colour for a mode's key. Criticality/near-critical/normal read the painter-mirror
@@ -247,6 +268,61 @@ export function buildColourMap(
   return map;
 }
 
+/**
+ * The contrast-safe **ink** paired with a key's {@link fillForKey} fill, so an inside-bar label clears
+ * 4.5:1 on the recoloured bar (WCAG 1.4.3). Float buckets read their band's `*-foreground` token; WBS
+ * cycles {@link LensPalette.wbsInkCycle} by the same stable index as the fill; the neutral key and the
+ * Criticality mode (never passed as a lens override — the painter owns its own criticality inks) fall
+ * back to the neutral ink.
+ */
+function inkForKey(
+  key: ColourKey,
+  mode: ColourMode,
+  palette: LensPalette,
+  wbsIndexOf: ReadonlyMap<string, number>,
+): string {
+  if (key === NEUTRAL_COLOUR_KEY) return palette.neutralInk;
+  if (mode === 'totalFloat') {
+    switch (key) {
+      case 'critical':
+        return palette.floatCriticalInk;
+      case 'low':
+        return palette.floatLowInk;
+      case 'medium':
+        return palette.floatMediumInk;
+      default:
+        return palette.floatHighInk;
+    }
+  }
+  if (mode === 'wbs') {
+    const index = wbsIndexOf.get(key) ?? 0;
+    const cycle = palette.wbsInkCycle;
+    return cycle[index % cycle.length] ?? palette.neutralInk;
+  }
+  return palette.neutralInk;
+}
+
+/**
+ * The per-activity **ink** map the painter reads as `barInk` (id → CSS colour), paired 1:1 with
+ * {@link buildColourMap}'s fills, so an inside-bar label stays ≥ 4.5:1 on the recoloured bar
+ * (WCAG 1.4.3). `TsldPanel` passes it into the scene only for the non-default Colour-by modes (as with
+ * `barFill`), so Criticality ⇒ absent ⇒ the painter's own criticality inks run ⇒ byte-for-byte parity.
+ * Precomputed once (memoised); the paint path does a single `Map.get` per bar, no allocation.
+ */
+export function buildColourInkMap(
+  activities: readonly ColourableActivity[],
+  mode: ColourMode,
+  palette: LensPalette,
+): Map<string, string> {
+  const wbsIndexOf = mode === 'wbs' ? buildWbsIndex(activities) : new Map<string, number>();
+  const map = new Map<string, string>();
+  for (const activity of activities) {
+    const key = colourKeyFor(activity, mode);
+    map.set(activity.id, inkForKey(key, mode, palette, wbsIndexOf));
+  }
+  return map;
+}
+
 // ── Baseline overlay ────────────────────────────────────────────────────────────────────
 
 /**
@@ -260,11 +336,16 @@ export interface GhostBar {
   baselineStart: string;
   baselineFinish: string;
   laneIndex: number;
+  /** Whether the live activity is a milestone, so the painter ghosts it as a diamond outline (not a
+   * rect), matching the live milestone convention (ADR-0026). Carried from the joined live activity. */
+  isMilestone: boolean;
 }
 
-/** The minimal live-activity shape the ghost builder joins against — just the current lane, by id. */
+/** The minimal live-activity shape the ghost builder joins against — the current lane + whether it is a
+ * milestone (so the ghost matches its live bar's shape), by id. */
 export interface GhostLaneSource {
   laneIndex: number;
+  isMilestone: boolean;
 }
 
 /**
@@ -290,6 +371,7 @@ export function buildBaselineGhosts(
       baselineStart: row.baselineStart,
       baselineFinish: row.baselineFinish,
       laneIndex: live.laneIndex,
+      isMilestone: live.isMilestone,
     });
   }
   return ghosts;
@@ -348,11 +430,13 @@ export function buildColourLegend(
   }
 
   // WBS: groups in first-appearance order, labelled by the parent activity, capped with "+N more".
+  // The cap never exceeds the palette's distinct-swatch count, so no two shown bands share a colour.
+  const cap = legendGroupCap(palette);
   const wbsIndexOf = buildWbsIndex(activities);
   const nameById = new Map(activities.map((a) => [a.id, a.code ?? a.name]));
   const groups = [...wbsIndexOf.entries()].sort((a, b) => a[1] - b[1]);
   const bands: LegendBand[] = [];
-  const shown = groups.slice(0, WBS_LEGEND_CAP);
+  const shown = groups.slice(0, cap);
   for (const [parentId, index] of shown) {
     const cycle = palette.wbsCycle;
     bands.push({
@@ -363,5 +447,5 @@ export function buildColourLegend(
   if (activities.some((a) => a.parentId === null)) {
     bands.push({ label: 'Ungrouped', colour: palette.neutral });
   }
-  return { bands, moreCount: Math.max(0, groups.length - WBS_LEGEND_CAP) };
+  return { bands, moreCount: Math.max(0, groups.length - cap) };
 }

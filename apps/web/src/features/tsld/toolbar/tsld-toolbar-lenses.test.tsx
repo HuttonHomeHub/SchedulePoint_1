@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
-import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 // The flag-ON insight-lenses registry: the search field goes live and filter / colour-by /
 // baseline-overlay swap their placeholders for real controls. The flag-off stubs are covered by
@@ -23,71 +23,14 @@ const spies = {
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return {
-    zoomPreset: 'week',
-    setZoomPreset: vi.fn(),
-    stepZoom: vi.fn(),
-    fit: vi.fn(),
-    plannedStart: '2026-01-01',
-    goToDate: vi.fn(),
-    viewToggles: DEFAULT_VIEW_TOGGLES,
-    toggleView: vi.fn(),
-    schedulingMode: 'EARLY',
-    setSchedulingMode: vi.fn(),
-    isAddingActivity: false,
-    toggleAddActivity: vi.fn(),
-    createType: 'TASK',
-    setCreateType: vi.fn(),
-    isLinking: false,
-    toggleLinkMode: vi.fn(),
-    linkType: 'FS',
-    setLinkType: vi.fn(),
-    canAutoArrange: false,
-    requestAutoArrange: vi.fn(),
-    canUndo: false,
-    canRedo: false,
-    undoLabel: null,
-    redoLabel: null,
-    undo: vi.fn(),
-    redo: vi.fn(),
-    canRecalc: true,
-    recalcPending: false,
-    recalculate: vi.fn(),
-    openBaselines: vi.fn(),
-    openCalendar: vi.fn(),
-    openEarnedValue: vi.fn(),
-    openResourceHistogram: vi.fn(),
-    editPlan: vi.fn(),
-    openShortcuts: vi.fn(),
-    legendOpen: false,
-    toggleLegend: vi.fn(),
-    summaryContent: <div>summary</div>,
-    projectFinishContent: <span>Finish</span>,
-    hasDiagram: true,
-    todayIso: '2026-07-19',
-    selectedActivityId: null,
-    selectedActivity: undefined,
-    revealComments: vi.fn(),
-    canProgress: true,
-    openProgress: vi.fn(),
-    canWriteNotes: true,
-    openActivityNotes: vi.fn(),
-    canEditSchedule: true,
-    lateOverlayActive: false,
-    clearVisualPlacement: vi.fn(),
-    filterQuery: '',
+  return makeTsldToolbarContext({
     setFilterQuery: spies.setFilterQuery,
-    filterAttrs: new Set(),
     toggleFilterAttr: spies.toggleFilterAttr,
-    colourMode: 'criticality',
     setColourMode: spies.setColourMode,
-    baselineOverlay: false,
     toggleBaselineOverlay: spies.toggleBaselineOverlay,
     hasActiveBaseline: true,
-    varianceLoading: false,
-    varianceError: false,
     ...over,
-  };
+  });
 }
 
 function renderRows(context: TsldToolbarContext) {
@@ -117,9 +60,20 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
     expect(spies.setFilterQuery).toHaveBeenCalledWith('concrete');
   });
 
-  it('shades the search field on an empty/uncomputed canvas', () => {
+  it('shades the search field with aria-disabled (NOT native disabled) so it stays focusable, exposing its reason (A3)', () => {
     renderRows(ctx({ hasDiagram: false }));
-    expect(screen.getByRole('searchbox', { name: 'Search or filter activities' })).toBeDisabled();
+    const search = screen.getByRole('searchbox', { name: 'Search or filter activities' });
+    // Native `disabled` would drop the control from the roving tabindex order (focus stranding); use
+    // aria-disabled so it stays focusable and the reason is reachable (WCAG 2.1.1 / 2.4.3 / 2.4.7).
+    expect(search).not.toBeDisabled();
+    expect(search).toHaveAttribute('aria-disabled', 'true');
+    expect(search).toHaveAttribute('title', 'Add an activity first');
+    // Focusable (not removed from the tab order)…
+    search.focus();
+    expect(search).toHaveFocus();
+    // …and typing is a no-op while shaded (never drives the filter).
+    fireEvent.change(search, { target: { value: 'x' } });
+    expect(spies.setFilterQuery).not.toHaveBeenCalled();
   });
 
   it('opens the Filter menu and toggles an attribute', () => {
@@ -128,6 +82,25 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
     const panel = screen.getByRole('dialog', { name: 'Filter' });
     fireEvent.click(within(panel).getByLabelText('Critical'));
     expect(spies.toggleFilterAttr).toHaveBeenCalledWith('critical');
+  });
+
+  it('reflects an engaged attribute filter as pressed once the popover is closed (U1)', () => {
+    renderRows(ctx({ filterAttrs: new Set(['critical']) }));
+    // The popover is closed, but the trigger still shows the engaged (pressed) state.
+    const trigger = screen.getByRole('button', { name: /Filter/ });
+    expect(trigger).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows no pressed state when no attribute filter is engaged', () => {
+    renderRows(ctx());
+    expect(screen.getByRole('button', { name: /Filter/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('shades the Filter trigger with its disabled reason on an empty canvas (A2)', () => {
+    renderRows(ctx({ hasDiagram: false }));
+    const trigger = screen.getByRole('button', { name: /Filter/ });
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger).toHaveAttribute('title', 'Add an activity first');
   });
 
   it('opens the Colour-by picker and switches mode', () => {
@@ -166,5 +139,33 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
       'title',
       'Baseline overlay — Loading baseline…',
     );
+  });
+
+  // U4 — the pinned Look-row lens render controls (search / Filter / Colour-by) never demote into `⋯`
+  // (render items stay inline), so at a constrained width they must remain KEYBOARD/AT-reachable — the
+  // toolbar's roving tabindex always includes them (they carry `data-toolbar-focusable`), so a keyboard
+  // user reaches them by Arrow keys and they are never a trap, even when the row is narrow. (Real
+  // horizontal clipping is a property of the shared `overflow-hidden` primitive — not lens-specific —
+  // and the demotable buttons overflow first to make room.)
+  it('keeps the pinned lens controls keyboard-reachable at a constrained width (U4)', () => {
+    const { container } = render(
+      <div style={{ width: 320 }}>
+        <Toolbar
+          items={splitByRow(buildTsldToolbarItems()).look}
+          context={ctx()}
+          label="View and navigate"
+          authoringEnabled
+          alignEndGroup="object"
+        />
+      </div>,
+    );
+    for (const id of ['search', 'filter', 'colour-by']) {
+      const el = container.querySelector(`[data-toolbar-item="${id}"]`);
+      expect(el).not.toBeNull();
+      // A roving-tabindex member (focusable marker present) — reachable by Arrow keys, not stranded.
+      expect(el).toHaveAttribute('data-toolbar-focusable', '');
+      (el as HTMLElement).focus();
+      expect(el).toHaveFocus();
+    }
   });
 });
