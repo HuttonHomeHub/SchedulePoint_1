@@ -424,6 +424,18 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   across the upstream closure). New `cross_plan_dependencies` table (separate from `dependencies`), a
   `dependency:link_cross_plan` permission, and a flagged web surface (`VITE_PROGRAMME_SCHEDULING`).
   Semantics accepted as ADR-0035 **§30.5–§30.8** (+ N30–N33). Amends ADR-0021/0022/0043.
+- **ADR-0046** _(Accepted; Notes M1)_ — Polymorphic entity notes: threaded, attributed,
+  time-ordered annotations modelled as a **single polymorphic `notes` table** — an
+  `entity_type` discriminator + **nullable typed parent FKs** (`plan_id`/`activity_id` now,
+  `client_id`/`project_id` reserved) + a **fail-closed exactly-one-parent CHECK**
+  (`ck_notes_exactly_one_parent`, `CASE … ELSE false`) — over per-entity tables, so
+  client/project notes drop in with **no rework**. A denormalised `plan_id` on **every** note
+  (an activity note carries its activity's `plan_id`) makes the `HierarchyLifecycleService`
+  plan-cascade a **single** join-free `updateMany` sweep with no double-count; restore is
+  batch-cohesion-guarded (no endpoint guard — a note has exactly one parent). Org-scoped,
+  audited, soft-deleted, plain-text body 1–5000 chars; **non-scheduling — the CPM engine is
+  untouched** and writes are not pen-gated (ADR-0028). Author-ownership on edit/delete is a
+  service-layer check (M2). Builds on ADR-0012/0016; child-table precedents ADR-0025/0038/0044.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

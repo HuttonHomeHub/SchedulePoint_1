@@ -19,6 +19,7 @@
     "test:e2e:toolbar": "playwright test --config playwright.toolbar.config.ts --pass-with-no-tests",
     "test:e2e:authoring": "playwright test --config playwright.authoring.config.ts --pass-with-no-tests",
     "test:e2e:programme": "playwright test --config playwright.programme.config.ts --pass-with-no-tests",
+    "test:e2e:notes": "playwright test --config playwright.notes.config.ts --pass-with-no-tests",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {

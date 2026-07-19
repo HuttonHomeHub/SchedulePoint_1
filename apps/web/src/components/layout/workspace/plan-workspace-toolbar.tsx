@@ -22,9 +22,11 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   CANVAS_AUTHORING_ENABLED,
+  NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
+import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection } from '@/features/schedule';
@@ -290,6 +292,19 @@ export function ToolbarPlanWorkspace({
             orgSlug={model.orgSlug}
             planId={model.planId}
             canRecalc={model.canRecalc}
+          />
+        </div>
+      ) : null}
+
+      {/* Notes (ADR-0046, VITE_NOTES) — mounted at the same site as the programme section, under the
+          (visually-hidden) plan `h1`, so the default `h2` heading is correct. */}
+      {NOTES_ENABLED ? (
+        <div className="px-4 pt-2">
+          <PlanNotesSection
+            orgSlug={model.orgSlug}
+            planId={model.planId}
+            canWrite={model.canWriteNotes}
+            bounded
           />
         </div>
       ) : null}

@@ -45,4 +45,6 @@ interface ImportMetaEnv {
   readonly VITE_INTER_PROJECT_DATES?: string;
   /** Live cross-plan / programme scheduling web surface — the activity-panel cross-plan links section, the programme recalc control + result/423/422 handling, and the staleness banner (inter-project M2, F8, ADR-0045). "true"/"1" enables it; off by default. */
   readonly VITE_PROGRAMME_SCHEDULING?: string;
+  /** Notes web surface — attributed note threads + composer on plans (plan-detail/workspace) and activities (Logic panel), plus the per-row count badge (Notes M3, ADR-0046). "true"/"1" enables it; off by default. */
+  readonly VITE_NOTES?: string;
 }

@@ -240,6 +240,11 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `activity_steps_organization_id_idx`          | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
 | `uq_activity_steps_activity_seq`              | `(activity_id, seq)`                   | partial unique | one **active** step per `(activity, seq)` (`WHERE deleted_at IS NULL`); backs the bulk-replace dup-seq (409); its leftmost prefix `activity_id` (pre-sorted by `seq`) subsumes an active-step list index                   |
 | `idx_activity_steps_delete_batch_id`          | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
+| `notes_plan_id_created_at_id_idx`             | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + the PLAN-notes thread list & newest-first cursor (filter `entity_type='PLAN'`, backward scan) + the plan cascade sweep by `plan_id` — subsumes a standalone `plan_id` index (ADR-0046)                      |
+| `notes_organization_id_idx`                   | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
+| `idx_notes_activity_created`                  | `(activity_id, created_at, id)`        | partial        | the ACTIVITY-notes thread list & newest-first cursor (`WHERE deleted_at IS NULL AND activity_id IS NOT NULL` — excludes PLAN notes + soft-deleted)                                                                         |
+| `idx_notes_plan_activity_counts`              | `(plan_id, activity_id)`               | partial        | the badge note-counts `GROUP BY activity_id` for a plan (`WHERE deleted_at IS NULL AND entity_type='ACTIVITY'`; a grouped scan, no N+1)                                                                                    |
+| `idx_notes_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -826,6 +831,49 @@ NULL` (raw SQL) — one active step per `(activity, seq)`; a soft-deleted step f
 
 The two enums `AccrualType` and `ResourceCurveType` are Postgres enums (Prisma-managed), each
 kept in lock-step with its `@repo/types` union by the build features.
+
+### Note: polymorphic threaded annotations (ADR-0046)
+
+The `notes` table (Notes M1, ADR-0046) is threaded, attributed, time-ordered commentary on a
+plan or activity — a **single polymorphic table**, not per-entity tables, so client/project
+notes drop in later with no rework. It follows every house standard (UUID v7 PK, snake_case via
+`@map`, timestamptz UTC, TEXT audit ids, optimistic-locking `version`, soft delete +
+`delete_batch_id`, scoped indexes) and is **non-scheduling** — the CPM engine never reads it and
+note writes are not pen-gated (ADR-0028), so the migration is byte-parity (a catalog-only enum +
+table create).
+
+- **Polymorphism.** An `entity_type` discriminator (`NoteEntityType`: `PLAN`/`ACTIVITY`;
+  `CLIENT`/`PROJECT` reserved) + **nullable typed parent FKs** (`plan_id`, `activity_id`; both
+  `RESTRICT`). `client_id`/`project_id` arrive later as `ALTER TYPE … ADD VALUE` + nullable
+  columns + a one-branch CHECK amendment — the locked "no rework" goal.
+- **Exactly-one-parent CHECK** (`ck_notes_exactly_one_parent`, raw SQL — Prisma cannot express a
+  CHECK). A `CASE entity_type … ELSE false`: `PLAN` ⇒ `plan_id` set, `activity_id` NULL;
+  `ACTIVITY` ⇒ `activity_id` set, `plan_id` set. **`ELSE false` = fail-closed** — a future enum
+  value inserted before its branch is added is rejected, never silently unenforced. A second
+  CHECK `ck_notes_body_length` bounds the plain-text body to 1–5000 chars (spec Q1), the DB
+  backstop behind the DTO 422 (the service trims-then-validates; the CHECK guards length only).
+- **Two denormalised scope columns**, both service-copied from the resolved parent inside the
+  create transaction (never client input — the `Activity`/`ActivityDependency` invariant):
+  `organization_id` (the tenant scope tag) and **`plan_id` on _every_ note**. A PLAN note's
+  parent **is** `plan_id`; an ACTIVITY note carries its **activity's** `plan_id` (the `Activity`
+  precedent: `plan_id` is an activity's parent **and** scope), so the plan cascade is one
+  join-free `updateMany WHERE plan_id IN (…)` catching both note kinds with **no double-count**.
+  `plan_id` is `NOT NULL` for both v1 types and goes nullable (a safe expand-only ALTER) only
+  when a parent-less client/project note lands.
+- **Cascade & restore** reuse `HierarchyLifecycleService` (Task 1.4): a plan/project/client
+  delete sweeps notes by `plan_id`; a single-activity (or WBS-subtree) delete sweeps that
+  activity's notes by `activity_id`; both stamp the shared `delete_batch_id`. `CascadeCounts`
+  gains a `notes` count. Restore is a plain `updateMany where deleteBatchId` with **no endpoint
+  guard** — a note has exactly one parent and is always swept in its parent's batch, so restoring
+  the batch reactivates it with its parent (and the parent's own `assertParentActive` top-down
+  guard forbids resurrecting under a still-deleted ancestor) — the `activity_steps` precedent,
+  unlike a dependency's endpoint-guarded restore. An individually-deleted note (M2
+  `NotesService.remove`, its own fresh batch) never resurrects with a parent's batch.
+- **Service-layer obligations the DB can't enforce (M2):** author-ownership on edit/delete
+  (`created_by === principal.userId` else 403), `updated_by` on edit, the optimistic-`version`
+  409, and that the denormalised `organization_id`/`plan_id` equal the parent's (the CHECK
+  enforces shape, not value equality — a unit-tested service invariant, like every
+  denormalised-scope sibling).
 
 ## Testing & performance
 

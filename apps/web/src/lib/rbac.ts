@@ -25,6 +25,25 @@ export function canReportProgress(role: OrganizationRole | undefined): boolean {
 }
 
 /**
+ * Roles allowed to write notes (mirrors the API's `note:create/update/delete` — Contributor upward,
+ * the `PROGRESS_WRITE` grant surface, NOT `HIERARCHY_WRITE`; ADR-0046). Notes are collaborative
+ * annotations, so the lowest write role can add them; edit/delete is further limited to the note's own
+ * author (a row-level check the API enforces, surfaced in the UI by showing the controls only to the
+ * author). Named separately from {@link canReportProgress} so the gate reads intentfully and the two
+ * can diverge later without touching call sites.
+ */
+export const NOTE_WRITER_ROLES: readonly OrganizationRole[] = [
+  'CONTRIBUTOR',
+  'PLANNER',
+  'ORG_ADMIN',
+];
+
+/** Whether a role may write notes (add; edit/delete is author-limited on top). Pure — safe in loaders. */
+export function canWriteNotes(role: OrganizationRole | undefined): boolean {
+  return role !== undefined && NOTE_WRITER_ROLES.includes(role);
+}
+
+/**
  * Whether a role may edit schedule **logic** (create/update/delete dependencies).
  * Mirrors the API's `dependency:create/update/delete` — the same Planner + Org
  * Admin roles as hierarchy write. A named helper so the gate reads intentfully

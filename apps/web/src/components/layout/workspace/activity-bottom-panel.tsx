@@ -90,6 +90,9 @@ export function ActivityBottomPanel({
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
             : {})}
+          {...(model.noteCountByActivityId
+            ? { noteCountByActivityId: model.noteCountByActivityId }
+            : {})}
         />
       </div>
     </section>

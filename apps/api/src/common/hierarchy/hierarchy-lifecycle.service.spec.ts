@@ -28,6 +28,7 @@ function makeTx() {
     activityStep: model(),
     baseline: model(),
     baselineActivity: model(),
+    note: model(),
   };
 }
 
@@ -61,6 +62,7 @@ describe('HierarchyLifecycleService', () => {
         dependencies: 0,
         baselines: 0,
         steps: 0,
+        notes: 0,
       });
       // Activities deleted are those under the client's active plans.
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -94,6 +96,7 @@ describe('HierarchyLifecycleService', () => {
         dependencies: 0,
         baselines: 0,
         steps: 0,
+        notes: 0,
       });
     });
 
@@ -113,6 +116,7 @@ describe('HierarchyLifecycleService', () => {
         dependencies: 0,
         baselines: 0,
         steps: 0,
+        notes: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1'] }, deletedAt: null },
@@ -142,6 +146,7 @@ describe('HierarchyLifecycleService', () => {
         dependencies: 0,
         baselines: 0,
         steps: 0,
+        notes: 0,
       });
     });
 
@@ -167,6 +172,7 @@ describe('HierarchyLifecycleService', () => {
         dependencies: 0,
         baselines: 0,
         steps: 0,
+        notes: 0,
       });
     });
 
@@ -279,6 +285,33 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
+    it("sweeps a plan's notes (PLAN + ACTIVITY) into the batch via one plan_id sweep (ADR-0046)", async () => {
+      tx.activity.updateMany.mockResolvedValue({ count: 5 });
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.note.updateMany.mockResolvedValue({ count: 9 });
+      const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      expect(result.counts.notes).toBe(9);
+      // Every note (PLAN and ACTIVITY) carries the denormalised plan_id, so ONE sweep by plan_id
+      // catches both kinds in the batch — no per-activity sweep, no double-count.
+      expect(tx.note.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId, updatedBy: ACTOR }),
+      });
+    });
+
+    it("sweeps a deleted activity subtree's notes into its batch by activity_id (ADR-0046)", async () => {
+      tx.activity.findMany.mockResolvedValue([]); // leaf subtree = { a1 }
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      tx.note.updateMany.mockResolvedValue({ count: 4 });
+      const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(result.counts.notes).toBe(4);
+      // A single-activity delete sweeps that subtree's notes by activity_id (PLAN notes have none).
+      expect(tx.note.updateMany).toHaveBeenCalledWith({
+        where: { activityId: { in: ['a1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+    });
+
     it('deletes a dependency alone as a leaf (its own batch)', async () => {
       tx.activityDependency.updateMany.mockResolvedValue({ count: 1 });
       const result = await service.cascadeSoftDelete(asTx(), 'dependency', 'd1', ACTOR);
@@ -331,6 +364,7 @@ describe('HierarchyLifecycleService', () => {
         dependencies: 0,
         baselines: 0,
         steps: 0,
+        notes: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-9' },
@@ -383,6 +417,22 @@ describe('HierarchyLifecycleService', () => {
       // activity, swept in the same batch), unlike a dependency.
       expect(tx.activityStep.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-a' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+    });
+
+    it("restores the batch's notes with their parent (ADR-0046)", async () => {
+      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-p', projectId: 'pr1' });
+      tx.project.findFirst.mockResolvedValue({ id: 'pr1' }); // parent project active
+      tx.note.updateMany.mockResolvedValue({ count: 6 });
+
+      const counts = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+      expect(counts.notes).toBe(6);
+      // Notes come back purely by their batch id — no endpoint guard (a note has exactly one parent,
+      // swept in the same batch), like a step and unlike a dependency.
+      expect(tx.note.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-p' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
     });

@@ -203,6 +203,38 @@ the deferred background/queued-solve slice, not a bigger limit.
 | ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | POST   | `…/plans/:planId/schedule/recalculate-programme` | Recalculate the plan's upstream cross-plan closure in dependency order · 423 `PROGRAMME_PLANS_LOCKED` · 422 `PROGRAMME_TOO_LARGE`. |
 
+### Notes (ADR-0046)
+
+A **note** is an attributed, timestamped, plain-text entry (1–5000 chars, no
+markdown) in an entity's thread — the "why" behind a schedule. v1 hangs off
+**plans** and **activities** (the model extends to clients/projects later with no
+rework). Notes are **org-scoped, audited, soft-deleted**, and cascaded/restored
+with their parent by `HierarchyLifecycleService`. Reading needs **`note:read`**
+(every member); writing needs **`note:create` / `note:update` / `note:delete`**
+(**Contributor upward**, the `activity:update_progress` grant surface). Notes are
+**non-structural**: writes are deliberately **NOT pen-gated** (no edit-lock, no
+423). On create the caller sends **only `body`** — the organisation, entity type,
+plan id (an activity note copies its activity's plan id) and activity id are all
+derived server-side from the resolved parent. Threads are **newest-first**,
+cursor-paginated.
+
+| Method | Path                                    | Notes                                                                                                            |
+| ------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/plans/:planId/notes`                 | A plan's PLAN-type notes, newest-first (cursor-paginated). `note:read`.                                          |
+| POST   | `…/plans/:planId/notes`                 | Add a note to the plan · 422 empty/whitespace-only or over-long body. `note:create`. **Not pen-gated.**          |
+| GET    | `…/plans/:planId/notes/activity-counts` | Per-activity active-note counts for the plan (`ActivityNoteCount[]`), one grouped query (no N+1). `note:read`.   |
+| GET    | `…/activities/:activityId/notes`        | An activity's notes, newest-first (cursor-paginated). `note:read`.                                               |
+| POST   | `…/activities/:activityId/notes`        | Add a note to the activity · 422 bad body. `note:create`. **Not pen-gated.**                                     |
+| PATCH  | `…/notes/:noteId`                       | Edit **your own** note (body + optimistic `version`) · 403 non-author · 409 stale · 422 bad body. `note:update`. |
+| DELETE | `…/notes/:noteId`                       | Delete **your own** note (soft) · 204 · 403 non-author. `note:delete`.                                           |
+
+Anti-IDOR is uniform: a foreign, other-org, or deleted parent or note is an
+indistinguishable **404**. Edit/delete are additionally constrained to the note's
+**author** (`created_by === principal.userId`) — the permission alone is not
+enough; anyone else is **403** (Org-Admin moderation of others' notes is out of
+v1). The response carries `authorId`, the server-resolved `authorName` (or null),
+and `edited` (true once the body has been revised).
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

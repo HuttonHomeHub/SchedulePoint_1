@@ -6,6 +6,16 @@ import { Label } from '@/components/ui/label';
 import { Textarea, type TextareaProps } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
+/**
+ * Merge the field's own error/hint description id with any caller-supplied `aria-describedby` (rather
+ * than letting one clobber the other). Space-separated per WAI-ARIA — a caller can point the control at
+ * an extra description (e.g. a live character count) without silencing the validation error, and vice
+ * versa. Order puts the field's own error/hint first so it's announced before caller-supplied context.
+ */
+function mergeDescribedBy(own: string | undefined, caller: string | undefined): string | undefined {
+  return [own, caller].filter(Boolean).join(' ') || undefined;
+}
+
 export interface TextFieldProps extends InputProps {
   label: string;
   /** Validation message for this field, if any (from React Hook Form). */
@@ -21,14 +31,17 @@ export interface TextFieldProps extends InputProps {
  * Hook Form's `register()` can be spread directly onto it.
  */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, error, hint, id, className, ...props },
+  { label, error, hint, id, className, 'aria-describedby': ariaDescribedBy, ...props },
   ref,
 ) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const errorId = `${fieldId}-error`;
   const hintId = `${fieldId}-hint`;
-  const describedBy = error ? errorId : hint ? hintId : undefined;
+  const describedBy = mergeDescribedBy(
+    error ? errorId : hint ? hintId : undefined,
+    ariaDescribedBy,
+  );
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -70,12 +83,18 @@ export interface CheckboxFieldProps extends Omit<InputProps, 'type'> {
  * checkbox chrome so it isn't hand-rolled per feature (DESIGN_SYSTEM.md — no one-off styling).
  */
 export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
-  function CheckboxField({ label, error, hint, id, className, ...props }, ref) {
+  function CheckboxField(
+    { label, error, hint, id, className, 'aria-describedby': ariaDescribedBy, ...props },
+    ref,
+  ) {
     const generatedId = useId();
     const fieldId = id ?? generatedId;
     const errorId = `${fieldId}-error`;
     const hintId = `${fieldId}-hint`;
-    const describedBy = error ? errorId : hint ? hintId : undefined;
+    const describedBy = mergeDescribedBy(
+      error ? errorId : hint ? hintId : undefined,
+      ariaDescribedBy,
+    );
 
     return (
       <div className="flex flex-col gap-1.5">
@@ -122,12 +141,18 @@ export interface TextareaFieldProps extends TextareaProps {
  * error/hint via `aria-describedby`. Forwards its ref for `register()`.
  */
 export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>(
-  function TextareaField({ label, error, hint, id, className, ...props }, ref) {
+  function TextareaField(
+    { label, error, hint, id, className, 'aria-describedby': ariaDescribedBy, ...props },
+    ref,
+  ) {
     const generatedId = useId();
     const fieldId = id ?? generatedId;
     const errorId = `${fieldId}-error`;
     const hintId = `${fieldId}-hint`;
-    const describedBy = error ? errorId : hint ? hintId : undefined;
+    const describedBy = mergeDescribedBy(
+      error ? errorId : hint ? hintId : undefined,
+      ariaDescribedBy,
+    );
 
     return (
       <div className="flex flex-col gap-1.5">

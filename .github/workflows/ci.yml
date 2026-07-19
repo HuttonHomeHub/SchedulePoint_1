@@ -179,6 +179,13 @@ jobs:
       - name: Web end-to-end tests (programme scheduling flag on)
         run: pnpm --filter @repo/web test:e2e:programme
 
+      # Flag-ON Notes journey (playwright.notes.config.ts) serving the app with VITE_NOTES on (on the
+      # legacy stacked plan-detail page with the pen off — notes are not pen-gated), so adding, editing
+      # and deleting an activity note, the per-row count badge tracking it, and an axe pass are
+      # exercised end to end (ADR-0046). Runs last, after the prior runs tear down their servers.
+      - name: Web end-to-end tests (notes flag on)
+        run: pnpm --filter @repo/web test:e2e:notes
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -191,6 +198,7 @@ jobs:
             apps/web/playwright-report-toolbar/
             apps/web/playwright-report-authoring/
             apps/web/playwright-report-programme/
+            apps/web/playwright-report-notes/
           if-no-files-found: ignore
           retention-days: 7
 

@@ -115,7 +115,18 @@ export type OrgPermission =
   // Setting the cost inputs is already gated by the existing hierarchy writes (a cost rate rides
   // on `resource:update`, an activity budget on `activity:update`, an assignment cost on
   // `resource:assign`), so this is a **read** code only.
-  | 'cost:read';
+  | 'cost:read'
+  // Notes — attributed, time-ordered note threads on entities (plans + activities now; the Notes
+  // feature, ADR-0046). Reading is granted to every member (`note:read`, part of `HIERARCHY_READ`).
+  // Writing (`note:create/update/delete`) is granted to **Contributor upward** — like
+  // `activity:update_progress`, annotating the record is a non-structural act that reporters do, so
+  // it deliberately does NOT ride on `HIERARCHY_WRITE` and needs no edit-lock pen. Edit/delete are
+  // further constrained to the note's own author by the service layer (a row-level check RBAC can't
+  // express); Org Admin moderation of others' notes is out of v1.
+  | 'note:read'
+  | 'note:create'
+  | 'note:update'
+  | 'note:delete';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -128,6 +139,7 @@ const HIERARCHY_READ: readonly OrgPermission[] = [
   'calendar:read',
   'baseline:read',
   'resource:read',
+  'note:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -174,6 +186,15 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
 const PROGRESS_WRITE: readonly OrgPermission[] = ['activity:update_progress'];
 
 /**
+ * Write notes (create / update / delete) — Contributor upward, exactly like `PROGRESS_WRITE`.
+ * Annotating an entity is non-structural (it touches no schedule dates/logic), so a Contributor may
+ * add/edit/delete notes without the hierarchy write or the plan edit-lock pen (ADR-0046, Notes). The
+ * service layer further constrains update/delete to the note's own author (a row-level check RBAC
+ * cannot express). Planners/Org Admins also hold it (they can do everything).
+ */
+const NOTE_WRITE: readonly OrgPermission[] = ['note:create', 'note:update', 'note:delete'];
+
+/**
  * Coordinate the plan edit-lock (ADR-0028) — acquire/heartbeat/release/hand-off own
  * lock and request control of another's live lock (the peer hand-off). Planner +
  * Org Admin (the schedule-editing roles), deliberately NOT Contributor.
@@ -209,12 +230,18 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
   // Contributor adds activity-progress updates; Planner adds full hierarchy write;
   // Org Admin adds member/invitation administration on top.
   [OrganizationRole.VIEWER]: [...MEMBER_BASELINE, ...HIERARCHY_READ],
-  [OrganizationRole.CONTRIBUTOR]: [...MEMBER_BASELINE, ...HIERARCHY_READ, ...PROGRESS_WRITE],
+  [OrganizationRole.CONTRIBUTOR]: [
+    ...MEMBER_BASELINE,
+    ...HIERARCHY_READ,
+    ...PROGRESS_WRITE,
+    ...NOTE_WRITE,
+  ],
   [OrganizationRole.PLANNER]: [
     ...MEMBER_BASELINE,
     ...HIERARCHY_READ,
     ...HIERARCHY_WRITE,
     ...PROGRESS_WRITE,
+    ...NOTE_WRITE,
     ...LOCK_COORDINATE,
     ...COST_READ,
   ],
@@ -223,6 +250,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...HIERARCHY_READ,
     ...HIERARCHY_WRITE,
     ...PROGRESS_WRITE,
+    ...NOTE_WRITE,
     ...LOCK_COORDINATE,
     ...LOCK_OVERRIDE,
     ...COST_READ,
