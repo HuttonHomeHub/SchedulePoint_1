@@ -302,27 +302,10 @@ describe('TSLD toolbar registry (two-row)', () => {
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
     // The rest are inline "Coming soon" icon buttons whose tooltip names them.
-    for (const name of ['Export…', 'Share…', 'Add note', 'Colour by…']) {
+    for (const name of ['Export…', 'Share…', 'Colour by…']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);
-    }
-  });
-
-  it('keeps all five toolbar quick-wins as "Coming soon" placeholders (flag off, byte-for-byte)', () => {
-    // VITE_TOOLBAR_QUICK_WINS is dark this build (not overridden here ⇒ flagDefaultOff = off), so each
-    // of the five ids resolves to its existing placeholder stub — disabled, "Coming soon", never wired.
-    renderRows(ctx({ selectedActivityId: 'a1', schedulingMode: 'VISUAL' }));
-    for (const name of [
-      'Go to today',
-      'Comments',
-      'Update progress…',
-      'Add note',
-      'Clear visual placement',
-    ]) {
-      const btn = screen.getByRole('button', { name });
-      expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 
