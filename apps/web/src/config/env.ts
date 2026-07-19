@@ -414,8 +414,8 @@ export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOff(
 );
 
 /**
- * Notes web surface (Notes M3, ADR-0046). **OFF by default** — an in-progress feature gated until its
- * quality gates (component / ux / a11y / e2e) are green. When on, the web UI exposes attributed,
+ * Notes web surface (Notes M3, ADR-0046). **ON by default** — the quality gates (component / ux / a11y
+ * / e2e) are green and the reviewer blockers are resolved. When on, the web UI exposes attributed,
  * time-ordered note **threads** on plans and activities (the "weekly progress journey"):
  *
  * - **Activity notes** — a **Notes** section in the activity Logic panel (thread + composer for that
@@ -428,7 +428,6 @@ export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOff(
  * author (a 403 the API enforces; the UI shows the controls only to the author), with the optimistic
  * `version` giving a 409 "updated elsewhere" path. Everything behind it — the notes CRUD + the batch
  * counts read — is already live on the API (M2); the flag only governs whether the web UI exposes it.
- * Default off ⇒ the app is byte-identical (no thread mounts, no counts query fires). Set
- * `VITE_NOTES=true` to enable it in an environment.
+ * Set `VITE_NOTES=false` to hide the web surface in an environment (the API is unaffected).
  */
-export const NOTES_ENABLED = flagDefaultOff(import.meta.env.VITE_NOTES);
+export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);

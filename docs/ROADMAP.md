@@ -122,11 +122,10 @@ discriminators. Each becomes a spec/plan before build:
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
-- **Notes.** **Delivered behind `VITE_NOTES` (default-off)** — attributed, time-ordered note
+- **Notes.** **Delivered & enabled (`VITE_NOTES` on by default)** — attributed, time-ordered note
   threads (ADR-0046) on **plans and activities** (client/project reserved for a later slice): a
-  polymorphic `notes` table + cascade (M1), the non-pen-gated CRUD + counts API (M2), and the flagged
-  web thread/composer/badge in the activity Logic panel and plan workspace (M3). The weekly-progress
-  "why", complete bar the flag-flip.
+  polymorphic `notes` table + cascade (M1), the non-pen-gated CRUD + counts API (M2), and the web
+  thread/composer/badge in the activity Logic panel and plan workspace (M3). The weekly-progress "why".
 - **Gantt view** — the secondary tabular projection of the same model.
 - **Undo/redo**, **export** (PDF/CSV), and **resources** (library + assignments) —
   all Must/Should-have per the brief. (Resources have since shipped — M7.)
