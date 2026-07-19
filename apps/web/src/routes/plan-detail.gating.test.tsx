@@ -125,6 +125,7 @@ vi.mock('@/features/activities', () => ({
     />
   ),
   ActivityFormDialog: () => null,
+  ActivityProgressDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));
 

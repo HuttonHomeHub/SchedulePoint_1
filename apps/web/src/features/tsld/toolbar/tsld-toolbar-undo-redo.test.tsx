@@ -65,6 +65,16 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     summaryContent: null,
     projectFinishContent: null,
     hasDiagram: true,
+    todayIso: '2026-07-19',
+    selectedActivityId: null,
+    selectedActivity: undefined,
+    revealComments: vi.fn(),
+    canProgress: true,
+    openProgress: vi.fn(),
+    canWriteNotes: true,
+    openActivityNotes: vi.fn(),
+    canEditSchedule: true,
+    clearVisualPlacement: vi.fn(),
     ...over,
   };
 }

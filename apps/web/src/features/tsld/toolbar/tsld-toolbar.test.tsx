@@ -77,6 +77,16 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     summaryContent: <div data-testid="summary-body">summary</div>,
     projectFinishContent: <span>Finish: 01 Aug 2026</span>,
     hasDiagram: true,
+    todayIso: '2026-07-19',
+    selectedActivityId: null,
+    selectedActivity: undefined,
+    revealComments: vi.fn(),
+    canProgress: true,
+    openProgress: vi.fn(),
+    canWriteNotes: true,
+    openActivityNotes: vi.fn(),
+    canEditSchedule: true,
+    clearVisualPlacement: vi.fn(),
     ...over,
   };
 }
@@ -295,6 +305,23 @@ describe('TSLD toolbar registry (two-row)', () => {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);
+    }
+  });
+
+  it('keeps all five toolbar quick-wins as "Coming soon" placeholders (flag off, byte-for-byte)', () => {
+    // VITE_TOOLBAR_QUICK_WINS is dark this build (not overridden here ⇒ flagDefaultOff = off), so each
+    // of the five ids resolves to its existing placeholder stub — disabled, "Coming soon", never wired.
+    renderRows(ctx({ selectedActivityId: 'a1', schedulingMode: 'VISUAL' }));
+    for (const name of [
+      'Recenter on today',
+      'Comments',
+      'Update progress…',
+      'Add note',
+      'Clear visual placement',
+    ]) {
+      const btn = screen.getByRole('button', { name });
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 

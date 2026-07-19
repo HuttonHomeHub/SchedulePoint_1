@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UNDO_REDO_ENABLED, flagDefaultOff } from './env';
+import { TOOLBAR_QUICK_WINS_ENABLED, UNDO_REDO_ENABLED, flagDefaultOff } from './env';
 
 describe('flagDefaultOff', () => {
   it('is on ONLY for an explicit opt-in ("true"/"1")', () => {
@@ -23,5 +23,14 @@ describe('UNDO_REDO_ENABLED', () => {
     // Undo/redo is on by default now that its gates are green (ADR-0048). Setting VITE_UNDO_REDO=false
     // ships it inert (no store/keys, placeholder toolbar items) — the rollback path.
     expect(UNDO_REDO_ENABLED).toBe(true);
+  });
+});
+
+describe('TOOLBAR_QUICK_WINS_ENABLED', () => {
+  it('is a flagDefaultOff flag — OFF during build with no VITE_TOOLBAR_QUICK_WINS set', () => {
+    // The toolbar quick-wins flag is dark by default this build (it flips on after the specialist
+    // reviews, M3). With no env set, the five ids stay their "Coming soon" placeholders — byte-for-byte
+    // today's toolbar. It must NOT default on.
+    expect(TOOLBAR_QUICK_WINS_ENABLED).toBe(false);
   });
 });

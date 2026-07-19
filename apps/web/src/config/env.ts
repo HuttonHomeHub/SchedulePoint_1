@@ -433,6 +433,25 @@ export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOff(
 export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
 
 /**
+ * TSLD toolbar quick-wins (spec `docs/specs/toolbar-quick-wins/`). **OFF by default during build** —
+ * it will flip on after the specialist reviews (a11y / ux / component / perf) are green (M3). When on,
+ * it wires five previously-"Coming soon" TSLD toolbar buttons to already-shipped features — no new
+ * domain capability, no API/schema/engine change:
+ *
+ * - **Recenter on today** — pans the canvas to today's date line (reuses the `goToDate` view jump).
+ * - **Comments** — reveals + focuses the plan-level notes thread (`PlanNotesSection`, `VITE_NOTES`).
+ * - **Update progress…** — opens `ActivityProgressDialog` for the selected activity (Contributor+).
+ * - **Add note** — opens the selected activity's Logic panel at its Notes section (`VITE_NOTES`).
+ * - **Clear visual placement** — drops the selected bar's hand-placed `visualStart` (Visual mode, pen).
+ *
+ * Each of the five ids resolves to its real {@link ToolbarItem} when on, and to its existing
+ * `placeholderItem()` "Coming soon" stub when off — so `VITE_TOOLBAR_QUICK_WINS=false` keeps the
+ * placeholders, byte-for-byte the current toolbar. Set `VITE_TOOLBAR_QUICK_WINS=true` to enable it in
+ * an environment.
+ */
+export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOff(import.meta.env.VITE_TOOLBAR_QUICK_WINS);
+
+/**
  * Client-side command-stack undo/redo for plan authoring (ADR-0048, spec `docs/specs/undo-redo/`).
  * **ON by default** (2026-07-19, product sign-off) now that M1–M3 have landed and their a11y / ux /
  * component reviews + the flag-on Playwright journey are green. When on, structural plan edits

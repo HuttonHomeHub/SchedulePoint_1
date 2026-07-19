@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type Ref } from 'react';
 
 import type { NoteTarget } from '../schemas/note-schemas';
 
@@ -20,6 +20,7 @@ export function PlanNotesSection({
   canWrite = false,
   headingLevel = 2,
   bounded = false,
+  headingRef,
 }: {
   orgSlug: string;
   planId: string;
@@ -31,6 +32,13 @@ export function PlanNotesSection({
    * workspace header so a growing thread can't push the canvas below its floor (ADR-0030/0031).
    */
   bounded?: boolean;
+  /**
+   * A ref to the section heading, so the toolbar **Comments** button (toolbar quick-wins F2) can
+   * scroll it into view + move focus to it. When set, the heading is made programmatically focusable
+   * (`tabIndex={-1}`) without joining the tab order — so keyboard users aren't stranded on reveal
+   * (WCAG 2.4.3). Absent ⇒ unchanged (no ref, no tabindex).
+   */
+  headingRef?: Ref<HTMLHeadingElement>;
 }): React.ReactElement {
   const session = useSession();
   const currentUserId = session.data?.user.id ?? null;
@@ -44,7 +52,11 @@ export function PlanNotesSection({
       className="border-border flex flex-col gap-3 rounded-lg border p-4"
     >
       <div className="flex flex-col gap-0.5">
-        <Heading id={headingId} className="text-sm font-medium">
+        <Heading
+          id={headingId}
+          className="text-sm font-medium"
+          {...(headingRef ? { ref: headingRef, tabIndex: -1 } : {})}
+        >
           Notes
         </Heading>
         <p className="text-muted-foreground text-sm">

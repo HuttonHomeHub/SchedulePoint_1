@@ -133,6 +133,11 @@ export interface TsldPanelProps {
   onEditActivity?: (activity: ActivitySummary) => void;
   /** Delete an activity (host-owned confirm) — the floating selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
+  /** Report the current canvas selection to the host (toolbar quick-wins F0) — the id of the selected
+   * activity, or null when none. Called on every selection transition (select / chain-nav / focus /
+   * delete-reconcile) so the main toolbar's selection-aware items can read it. Optional: absent ⇒ no
+   * behaviour change (the in-panel `SelectionActionContext` is unaffected). */
+  onSelectionChange?: (id: string | null) => void;
   /** Refetch the plan's server truth (activities/links/variance). Wired to the conflict banner's
    * Refresh so the "this changed elsewhere" cases have a real recovery action, not just copy. */
   onRefresh?: () => void;
@@ -197,6 +202,7 @@ export function TsldPanel({
   onOpenLogic,
   onEditActivity,
   onDeleteActivity,
+  onSelectionChange,
   onRefresh,
   calendar = null,
   todayIso,
@@ -352,6 +358,15 @@ export function TsldPanel({
     setSelectedId(next ? next.id : null);
     announce('Activity removed.');
   }, [activities, selectedId, announce]);
+
+  // Report the selection to the host on every transition (toolbar quick-wins F0), so the main toolbar's
+  // selection-aware items track it. One effect covers all paths — select / chain-nav / focus and the
+  // delete-reconcile above — rather than threading the callback through each `setSelectedId` site. The
+  // host's callback is a stable `useCallback`, so this fires only on a real selection change; an absent
+  // callback is a no-op (unchanged behaviour for the flag-off / legacy hosts).
+  useEffect(() => {
+    onSelectionChange?.(selectedId);
+  }, [selectedId, onSelectionChange]);
 
   // Coalesced keyboard nudge (M5 5.2) — a held Alt+arrow becomes one net write per burst, read at
   // the live version, serialized, flushed on unmount, and race-free vs. an in-flight pointer drag.

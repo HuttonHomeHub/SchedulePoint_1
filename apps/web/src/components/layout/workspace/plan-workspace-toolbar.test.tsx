@@ -84,6 +84,7 @@ vi.mock('@/features/activities', () => ({
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   ActivitiesTable: () => <div data-testid="activities-table" />,
   ActivityFormDialog: () => null,
+  ActivityProgressDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));
 vi.mock('@/features/dependencies', () => ({

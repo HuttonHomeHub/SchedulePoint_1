@@ -1,4 +1,4 @@
-import type { ActivityType, DependencyType, SchedulingMode } from '@repo/types';
+import type { ActivitySummary, ActivityType, DependencyType, SchedulingMode } from '@repo/types';
 import type { ReactNode } from 'react';
 
 import type { TsldViewToggles } from '../render/paint';
@@ -31,6 +31,9 @@ export interface TsldToolbarContext {
    * state (ADR-0033 M2, CQ-1). Drives the **Go to date** navigation control (flag-on only), which is
    * available to every role including read-only viewers because navigating never mutates the plan. */
   goToDate: (iso: string) => void;
+  /** Today as a local calendar day (`YYYY-MM-DD`) — the target of the **Recenter on today** command
+   * (`VITE_TOOLBAR_QUICK_WINS`), which reuses {@link goToDate}. View-only; offered to every role. */
+  todayIso: string;
 
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
@@ -118,4 +121,37 @@ export interface TsldToolbarContext {
   // --- Visibility gates ---------------------------------------------------------------------
   /** True once the plan has activities to plot — the view/summary/legend controls appear then. */
   hasDiagram: boolean;
+
+  // --- Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) ------------------------------------------
+  // These wire five previously-"Coming soon" placeholders to shipped features (spec
+  // `docs/specs/toolbar-quick-wins/`). Populated on every build; nothing reads them while the flag is
+  // off (the five ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
+  /** The canvas selection lifted to the main toolbar (F0), or null when nothing is selected. Drives
+   * the selection-aware items' enabled state. */
+  selectedActivityId: string | null;
+  /** The resolved selected activity (id + live `version`), or undefined when nothing is selected or the
+   * row is gone (deleted/stale). The selection-aware `onActivate`s read its id/version. */
+  selectedActivity: ActivitySummary | undefined;
+  /** Reveal + focus the plan-level notes thread (the **Comments** button, F2). A guarded no-op when the
+   * `PlanNotesSection` isn't mounted (the responsive single-pane toggle can unmount it). */
+  revealComments: () => void;
+  /** Whether the viewer may report progress (`canProgress`, Contributor+; NOT pen-gated). Gates the
+   * **Update progress…** item (F3). */
+  canProgress: boolean;
+  /** Open the progress editor for the selected activity (F3) — sets the workspace-hosted dialog's
+   * target. A no-op when nothing is selected. */
+  openProgress: () => void;
+  /** Whether the viewer may write notes (`canWriteNotes`, Contributor+; NOT pen-gated). Gates the
+   * **Add note** item (F4). */
+  canWriteNotes: boolean;
+  /** Open the selected activity's Logic panel at its Notes section (F4) — the same path as the canvas
+   * "Open logic". A no-op when nothing is selected. */
+  openActivityNotes: () => void;
+  /** Whether the viewer may edit the schedule (`canEditSchedule`, Planner+ **and** the pen). Gates the
+   * **Clear visual placement** item (F5), which is additionally pen-gated + Visual-mode-only. */
+  canEditSchedule: boolean;
+  /** Clear a bar's hand-placed `visualStart` so it reverts to its computed date (F5, Visual mode). A
+   * faithful subset of the reposition VISUAL branch: the null-`visualStart` PATCH → undo inverse (when
+   * `VITE_UNDO_REDO` is on) → auto-recalc; a stale-version 409 is a non-destructive no-op. */
+  clearVisualPlacement: (activityId: string, version: number) => void;
 }

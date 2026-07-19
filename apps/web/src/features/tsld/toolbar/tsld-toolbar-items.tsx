@@ -53,8 +53,10 @@ import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import {
   CANVAS_AUTHORING_ENABLED,
   EARNED_VALUE_ENABLED,
+  NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULING_MODES_ENABLED,
+  TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
@@ -690,17 +692,31 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       onActivate: (ctx) => ctx.fit(),
     },
     // Recenter-on-today — a viewport recenter command (distinct from the "Today line" *display*
-    // toggle in `View▾`). Shown inline (tier 2 icon) with the zoom/nav cluster; a "Coming soon"
-    // placeholder for now.
-    placeholderItem({
-      id: 'today',
-      group: 'frame',
-      row: 'look',
-      tier: 2,
-      order: 13,
-      label: 'Recenter on today',
-      icon: <LocateFixed className="size-4" />,
-    }),
+    // toggle in `View▾`). Shown inline (tier 2 icon) with the zoom/nav cluster. Flag-on it reuses the
+    // `goToDate` view jump (toolbar quick-wins F1) — view-only, so a Viewer can use it; flag-off it is
+    // the "Coming soon" placeholder, byte-for-byte.
+    TOOLBAR_QUICK_WINS_ENABLED
+      ? {
+          id: 'today',
+          group: 'frame',
+          row: 'look',
+          tier: 2,
+          order: 13,
+          label: 'Recenter on today',
+          icon: <LocateFixed className="size-4" />,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to recenter'),
+          onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
+        }
+      : placeholderItem({
+          id: 'today',
+          group: 'frame',
+          row: 'look',
+          tier: 2,
+          order: 13,
+          label: 'Recenter on today',
+          icon: <LocateFixed className="size-4" />,
+        }),
 
     // --- 2 · Lens / display (Row 1 · Look) ----------------------------------------------------
     {
@@ -900,17 +916,38 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isEnabled: (ctx) => ctx.canAutoArrange,
       onActivate: (ctx) => ctx.requestAutoArrange(),
     },
-    // Add note — a free-text annotation / callout pinned to the canvas or an activity (review markup).
-    // Inline "Coming soon" icon; leans on the multi-tenant + guest-share model for review workflows.
-    placeholderItem({
-      id: 'add-note',
-      group: 'tools',
-      row: 'do',
-      tier: 2,
-      order: 4,
-      label: 'Add note',
-      icon: <StickyNote className="size-4" />,
-    }),
+    // Add note — opens the selected activity's Logic panel at its Notes section (toolbar quick-wins F4,
+    // the same path as the canvas "Open logic"). Role-gated (`canWriteNotes`, Contributor+) + a
+    // selection; NOT pen-gated (the notes precedent, ADR-0046). Absent when `VITE_NOTES` is off (there
+    // is no notes section to open). Flag-off it is the "Coming soon" placeholder, byte-for-byte.
+    TOOLBAR_QUICK_WINS_ENABLED
+      ? {
+          id: 'add-note',
+          group: 'tools',
+          row: 'do',
+          tier: 2,
+          order: 4,
+          label: 'Add note',
+          icon: <StickyNote className="size-4" />,
+          isVisible: () => NOTES_ENABLED,
+          isEnabled: (ctx) => ctx.canWriteNotes && ctx.selectedActivityId !== null,
+          disabledReason: (ctx) =>
+            ctx.selectedActivityId === null
+              ? 'Select an activity first'
+              : ctx.canWriteNotes
+                ? undefined
+                : 'You don’t have permission to add notes',
+          onActivate: (ctx) => ctx.openActivityNotes(),
+        }
+      : placeholderItem({
+          id: 'add-note',
+          group: 'tools',
+          row: 'do',
+          tier: 2,
+          order: 4,
+          label: 'Add note',
+          icon: <StickyNote className="size-4" />,
+        }),
     // Snap-to-grid — a Visual-planning authoring aid (snaps hand-placed bars to working-day gridlines).
     // Moved into the authoring cluster (was in the Lens group). Inline "Coming soon" icon.
     placeholderItem({
@@ -923,16 +960,44 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <Grid3x3 className="size-4" />,
     }),
     // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
-    // falls back to the computed date). Inline "Coming soon" icon.
-    placeholderItem({
-      id: 'clear-visual-placement',
-      group: 'tools',
-      row: 'do',
-      tier: 2,
-      order: 6,
-      label: 'Clear visual placement',
-      icon: <Eraser className="size-4" />,
-    }),
+    // falls back to the computed date, toolbar quick-wins F5). Only meaningful in Visual mode, so it is
+    // hidden outside it (like the other mode-scoped items); pen-gated + `canEditSchedule` + a selection.
+    // It calls only the existing PATCH + auto-recalc — the CPM engine + parity gate are untouched.
+    // Flag-off it is the "Coming soon" placeholder, byte-for-byte.
+    TOOLBAR_QUICK_WINS_ENABLED
+      ? {
+          id: 'clear-visual-placement',
+          group: 'tools',
+          row: 'do',
+          tier: 2,
+          order: 6,
+          label: 'Clear visual placement',
+          icon: <Eraser className="size-4" />,
+          penGated: true,
+          isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.schedulingMode === 'VISUAL',
+          isEnabled: (ctx) => ctx.canEditSchedule && ctx.selectedActivityId !== null,
+          // No selection → the specific reason; else the pen/role reason (mirrors the sibling authoring
+          // commands' "Start editing…" copy). Enabled ⇒ undefined.
+          disabledReason: (ctx) =>
+            ctx.selectedActivityId === null
+              ? 'Select an activity first'
+              : ctx.canEditSchedule
+                ? undefined
+                : 'Start editing to clear the placement',
+          onActivate: (ctx) => {
+            const activity = ctx.selectedActivity;
+            if (activity) ctx.clearVisualPlacement(activity.id, activity.version);
+          },
+        }
+      : placeholderItem({
+          id: 'clear-visual-placement',
+          group: 'tools',
+          row: 'do',
+          tier: 2,
+          order: 6,
+          label: 'Clear visual placement',
+          icon: <Eraser className="size-4" />,
+        }),
     // Recalculate + Undo/Redo close the authoring cluster (moved here from the Object/History groups so
     // the pen-gated set is contiguous). Recalculate is enabled only with the pen and when not in flight.
     {
@@ -1054,15 +1119,36 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // docs/TOOLBAR_ROADMAP.md). Update progress (apply actuals + advance the data date); Export the
     // diagram (PDF/PNG) or schedule (XER/MSP/CSV); Print; Share (the ADR-0012 per-plan guest link);
     // Comments (activity threads).
-    placeholderItem({
-      id: 'update-progress',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 6,
-      label: 'Update progress…',
-      icon: <Gauge className="size-4" />,
-    }),
+    // Update progress — opens the shared `ActivityProgressDialog` for the selected activity (toolbar
+    // quick-wins F3). Role-gated (`canProgress`, Contributor+) + a selection; NOT pen-gated (progress
+    // is the notes/progress precedent). Flag-off it is the "Coming soon" placeholder, byte-for-byte.
+    TOOLBAR_QUICK_WINS_ENABLED
+      ? {
+          id: 'update-progress',
+          group: 'object',
+          row: 'do',
+          tier: 2,
+          order: 6,
+          label: 'Update progress…',
+          icon: <Gauge className="size-4" />,
+          isEnabled: (ctx) => ctx.canProgress && ctx.selectedActivityId !== null,
+          disabledReason: (ctx) =>
+            ctx.selectedActivityId === null
+              ? 'Select an activity first'
+              : ctx.canProgress
+                ? undefined
+                : 'You don’t have permission to report progress',
+          onActivate: (ctx) => ctx.openProgress(),
+        }
+      : placeholderItem({
+          id: 'update-progress',
+          group: 'object',
+          row: 'do',
+          tier: 2,
+          order: 6,
+          label: 'Update progress…',
+          icon: <Gauge className="size-4" />,
+        }),
     placeholderItem({
       id: 'export',
       group: 'object',
@@ -1090,15 +1176,30 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Share…',
       icon: <Share2 className="size-4" />,
     }),
-    placeholderItem({
-      id: 'comments',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 10,
-      label: 'Comments',
-      icon: <MessageSquare className="size-4" />,
-    }),
+    // Comments — reveals + focuses the plan-level notes thread (toolbar quick-wins F2). Read action for
+    // every role; absent when `VITE_NOTES` is off (there is nothing to reveal). Flag-off it is the
+    // "Coming soon" placeholder, byte-for-byte.
+    TOOLBAR_QUICK_WINS_ENABLED
+      ? {
+          id: 'comments',
+          group: 'object',
+          row: 'do',
+          tier: 2,
+          order: 10,
+          label: 'Comments',
+          icon: <MessageSquare className="size-4" />,
+          isVisible: () => NOTES_ENABLED,
+          onActivate: (ctx) => ctx.revealComments(),
+        }
+      : placeholderItem({
+          id: 'comments',
+          group: 'object',
+          row: 'do',
+          tier: 2,
+          order: 10,
+          label: 'Comments',
+          icon: <MessageSquare className="size-4" />,
+        }),
 
     // --- 6 · Help -----------------------------------------------------------------------------
     // Legend rides Row 1 (Look) at the far right; Shortcuts sits beside it. (Undo/Redo moved to the
