@@ -436,6 +436,14 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   audited, soft-deleted, plain-text body 1–5000 chars; **non-scheduling — the CPM engine is
   untouched** and writes are not pen-gated (ADR-0028). Author-ownership on edit/delete is a
   service-layer check (M2). Builds on ADR-0012/0016; child-table precedents ADR-0025/0038/0044.
+- **ADR-0047** _(Accepted)_ — Automatic redeploy of released images: an **opt-in, host-side pull
+  trigger** (Watchtower) shipped **dormant** in `docker-compose.release.yml` behind a compose
+  `autodeploy` profile, closing the "shipped but not live" gap (TECH_DEBT #29). It polls GHCR and
+  pulls + recreates **only the label-enabled** `web`/`api` containers (never the db or itself) on a
+  moved `:latest`, reusing the host's `docker login ghcr.io` credentials; the API self-migrates on
+  recreate (ADR-0018), so the pull **is** the deploy. A `WATCHTOWER_MONITOR_ONLY` toggle gives
+  notify-without-update (a manual gate). A GHCR webhook-receiver and a CI-side SSH deploy were
+  rejected (inbound exposure / CI-held host credentials). Builds on ADR-0018/0027.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

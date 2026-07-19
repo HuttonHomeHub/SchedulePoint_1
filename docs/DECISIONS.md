@@ -10,6 +10,31 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-19 — Auto-deploy via an opt-in, host-side Watchtower pull (ADR-0047)
+
+**Decision.** Close the "shipped but not live" gap (TECH_DEBT #29) with an **opt-in**
+[Watchtower](https://containrrr.dev/watchtower/) service shipped **dormant** in
+`docker-compose.release.yml` behind a compose `autodeploy` profile. It polls GHCR and
+pulls + recreates **only the label-enabled** `web`/`api` containers (never `db` or itself)
+on a moved `:latest`, reusing the host's `docker login ghcr.io` credentials via a mounted
+read-only Docker config; the API self-migrates on recreate (ADR-0018), so the pull is the
+whole deploy. `WATCHTOWER_MONITOR_ONLY` offers notify-without-update (a manual gate).
+
+**Why.** The production topology is a self-hosted Dockge stack behind NPM + Cloudflare
+tracking `:latest`; the host isn't publicly reachable and the images are private. A
+host-side poll needs no inbound exposure and no CI-held host credentials — unlike a GHCR
+webhook-receiver (custom endpoint on a non-public host) or a CI-side SSH deploy (long-lived
+host creds as CI secrets), both rejected. Dormant/opt-in keeps auto-deploy a deliberate,
+per-host operator choice (auto-deploy to prod is outward-facing).
+
+**Consequences.** A release reaches an opted-in host within one poll interval; the manual
+`pull && up -d` and monitor-only both remain available. Watchtower needs the Docker socket
+(root-equivalent) — accepted, and the reason it is label-scoped and dormant. Rollback is
+unchanged (pin the previous version tag). Full runbook in `docs/DEPLOYMENT.md` → "Automatic
+redeploy (Watchtower, opt-in)".
+
+---
+
 ### 2026-07-19 — Notes: polymorphic single table, `plan_id` on every note, fail-closed parent CHECK (ADR-0046)
 
 **Decision.** Threaded notes are a **single polymorphic `notes` table** (ADR-0046), not
