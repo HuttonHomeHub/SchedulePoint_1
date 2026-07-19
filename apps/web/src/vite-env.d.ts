@@ -51,4 +51,6 @@ interface ImportMetaEnv {
   readonly VITE_UNDO_REDO?: string;
   /** TSLD toolbar quick-wins — wires five previously-"Coming soon" toolbar buttons (Recenter-on-today, Comments, Update-progress, Add-note, Clear-visual-placement) to already-shipped features (docs/specs/toolbar-quick-wins/). "true"/"1" enables it; off by default during build (flips on at M3). */
   readonly VITE_TOOLBAR_QUICK_WINS?: string;
+  /** TSLD canvas insight lenses — filter/search dimming, Colour-by (Criticality/Total-float/WBS), and the baseline ghost overlay, turning three Look-row toolbar placeholders into real client-side read lenses (docs/specs/canvas-lenses/). "true"/"1" enables it; off by default during build (flips on at M4). */
+  readonly VITE_CANVAS_LENSES?: string;
 }

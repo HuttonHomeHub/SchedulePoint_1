@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { TOOLBAR_QUICK_WINS_ENABLED, UNDO_REDO_ENABLED, flagDefaultOff } from './env';
+import {
+  CANVAS_LENSES_ENABLED,
+  TOOLBAR_QUICK_WINS_ENABLED,
+  UNDO_REDO_ENABLED,
+  flagDefaultOff,
+} from './env';
 
 describe('flagDefaultOff', () => {
   it('is on ONLY for an explicit opt-in ("true"/"1")', () => {
@@ -33,5 +38,15 @@ describe('TOOLBAR_QUICK_WINS_ENABLED', () => {
     // VITE_TOOLBAR_QUICK_WINS=false ships the five ids as their "Coming soon" placeholders — the
     // byte-for-byte rollback path.
     expect(TOOLBAR_QUICK_WINS_ENABLED).toBe(true);
+  });
+});
+
+describe('CANVAS_LENSES_ENABLED', () => {
+  it('is on by default (delivered & enabled, 2026-07-19; no VITE_CANVAS_LENSES set)', () => {
+    // The three canvas insight lenses are wired to shipped data and on by default now that their
+    // specialist reviews (perf / a11y / ux / component / security / test) are green (M4). Setting
+    // VITE_CANVAS_LENSES=false ships the four ids as their disabled/"Coming soon" stubs and the canvas
+    // paints byte-for-byte today's — the rollback path.
+    expect(CANVAS_LENSES_ENABLED).toBe(true);
   });
 });

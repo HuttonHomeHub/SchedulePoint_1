@@ -39,6 +39,7 @@ import {
   Waypoints,
 } from 'lucide-react';
 
+import { FILTER_ATTRS, type ColourMode } from '../render/lenses';
 import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
@@ -52,6 +53,7 @@ import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_LENSES_ENABLED,
   EARNED_VALUE_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
@@ -329,6 +331,9 @@ function LinkControl({
 
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
+/** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
+const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
+
 /**
  * The **zoom-preset dropdown** — a single compact menu-button replacing the five segmented
  * scale buttons (Day/Week/Month/Quarter/Year). The trigger shows the current level and opens a
@@ -445,6 +450,170 @@ function SearchFieldControl({
         className="h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm"
       />
     </div>
+  );
+}
+
+/**
+ * The **live search field** (insight lenses, `docs/specs/canvas-lenses/`, flag-on) — the operable
+ * successor to {@link SearchFieldControl}. Search-as-you-type drives `ctx.setFilterQuery`, dimming
+ * non-matching bars on the canvas (the panel derives the dimmed-id set + announces the count). A single
+ * focusable control that spreads `itemProps` so it joins the toolbar's roving-tabindex model; shaded
+ * (disabled-with-reason) on an empty/uncomputed canvas, mirroring the zoom cluster's stable shape.
+ */
+function LiveSearchControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const disabled = api.disabled;
+  return (
+    <div className="ml-3 flex items-center">
+      <Search
+        aria-hidden="true"
+        className="text-muted-foreground pointer-events-none -mr-6 size-4"
+      />
+      <Input
+        {...api.itemProps}
+        type="search"
+        value={ctx.filterQuery}
+        // Use `aria-disabled`, NOT the native `disabled` attribute (A3): the toolbar's roving tabindex /
+        // `activeId` can still target this control, and a natively-`disabled` field drops out of the
+        // focus order — stranding focus and hiding the reason (WCAG 2.1.1 / 2.4.3 / 2.4.7). Staying
+        // focusable, it ignores typing (no-op onChange) and shows the reason via `title` while shaded.
+        aria-disabled={disabled || undefined}
+        onChange={(event) => {
+          if (!disabled) ctx.setFilterQuery(event.target.value);
+        }}
+        {...(disabled ? { readOnly: true } : {})}
+        placeholder="Search or filter activities…"
+        aria-label="Search or filter activities"
+        {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
+        className={cn(
+          'h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm',
+          disabled && 'cursor-not-allowed opacity-50',
+        )}
+      />
+    </div>
+  );
+}
+
+/**
+ * The **Filter menu** (insight lenses, flag-on) — a `View▾`-style checkbox popover offering the three
+ * canvas attributes (Critical / Has constraint / Has conflict). Multi-select (the popover stays open
+ * while toggling), each toggle driving `ctx.toggleFilterAttr`; the match set is the intersection of
+ * these with the text query. Mirrors {@link ViewTogglesPanel}'s idiom so filtering reads like the
+ * display toggles. Pressed state (any attribute on) is reflected by the item's `isActive`.
+ */
+function FilterMenuControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  return (
+    <ToolbarPopover
+      label="Filter"
+      icon={<Filter className="size-4" />}
+      itemProps={api.itemProps}
+      // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
+      // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
+      active={api.active}
+      {...(api.disabled ? { disabled: true } : {})}
+      {...(api.disabled && api.disabledReason ? { title: api.disabledReason } : {})}
+    >
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium">Show only</legend>
+        {FILTER_ATTRS.map(({ attr, label }) => (
+          <label key={attr} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={ctx.filterAttrs.has(attr)}
+              onChange={() => ctx.toggleFilterAttr(attr)}
+              className="accent-primary size-4"
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+    </ToolbarPopover>
+  );
+}
+
+/** The Colour-by modes the picker offers, in menu order (insight lenses; ADR-0031 taxonomy). Criticality
+ * is the default and byte-for-byte today's fills; driving-resource is a deferred fast-follow (CQ-1). */
+const COLOUR_MODES: ReadonlyArray<{ mode: ColourMode; label: string }> = [
+  { mode: 'criticality', label: 'Criticality' },
+  { mode: 'totalFloat', label: 'Total float' },
+  { mode: 'wbs', label: 'WBS group' },
+];
+const COLOUR_MODE_LABELS: Record<ColourMode, string> = {
+  criticality: 'Criticality',
+  totalFloat: 'Total float',
+  wbs: 'WBS group',
+};
+
+/**
+ * The **Colour-by picker** (insight lenses, flag-on) — a single APG menu-button (mirroring
+ * {@link ZoomPresetControl}) that shows the active mode and opens a `Menu` of single-choice radio items
+ * to recolour bars by Criticality (default) / Total float / WBS group. Picking a mode drives
+ * `ctx.setColourMode`; the canvas repaints from the precomputed colour map and the Legend swaps to the
+ * mode's key. Pressed (non-default active) state is reflected by the item's `isActive`.
+ */
+function ColourByControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const disabled = api.disabled;
+  const activeLabel = COLOUR_MODE_LABELS[ctx.colourMode];
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        aria-label={`Colour by: ${activeLabel}`}
+        title={disabled ? (api.disabledReason ?? 'Colour by…') : `Colour by: ${activeLabel}`}
+        onClick={() => {
+          if (!disabled) toggle();
+        }}
+        className={cn(toolbarControlVariants({ active: api.active || open, disabled }))}
+      >
+        <Palette aria-hidden="true" className="size-4" />
+        <span className="truncate">{activeLabel}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label="Colour by"
+        restoreFocusRef={triggerRef}
+      >
+        {COLOUR_MODES.map(({ mode, label }) => (
+          <MenuItem
+            key={mode}
+            selected={ctx.colourMode === mode}
+            onSelect={() => ctx.setColourMode(mode)}
+          >
+            <Check
+              aria-hidden="true"
+              className={cn('size-4', ctx.colourMode === mode ? 'opacity-100' : 'opacity-0')}
+            />
+            {label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
   );
 }
 
@@ -607,11 +776,12 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *
  * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
- * "Coming soon" stubs (filter, snap-to-grid, next-conflict, colour-by, baseline-overlay, resource-view,
- * export/print/share, plus Hammock / Level-of-effort in the Add menu) that make the toolbar read as fully
- * designed and are switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
+ * "Coming soon" stubs (snap-to-grid, next-conflict, isolate-logic-path, resource-view, export/print/share,
+ * plus Hammock / Level-of-effort in the Add menu) that make the toolbar read as fully designed and are
+ * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
  * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
- * clear-visual-placement swap in under `VITE_TOOLBAR_QUICK_WINS` — placeholders only when that flag is off.)
+ * clear-visual-placement under `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
+ * under `VITE_CANVAS_LENSES` — placeholders only when the owning flag is off.)
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom
@@ -674,6 +844,46 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     order: 10,
     label: 'Comments',
     icon: <MessageSquare className="size-4" />,
+  };
+  // Insight-lens (VITE_CANVAS_LENSES) shared item shapes — the id/group/row/tier/order/label(/icon)
+  // each lens id carries in BOTH its real (flag-on) item and its stub (flag-off `SearchFieldControl` /
+  // `placeholderItem()`), declared once and spread into both branches so they can't drift (mirrors the
+  // quick-wins / add-activity shared-shape pattern). All four sit on Row 1 · Look and gate on a
+  // computed diagram (shade-don't-hide), matching the zoom cluster.
+  const searchShape = {
+    id: 'search',
+    group: 'find' as const,
+    row: 'look' as const,
+    tier: 1 as const,
+    order: -1,
+    label: 'Search or filter activities',
+  };
+  const filterShape = {
+    id: 'filter',
+    group: 'find' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 0,
+    label: 'Filter',
+    icon: <Filter className="size-4" />,
+  };
+  const colourByShape = {
+    id: 'colour-by',
+    group: 'lens' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 3,
+    label: 'Colour by…',
+    icon: <Palette className="size-4" />,
+  };
+  const baselineOverlayShape = {
+    id: 'baseline-overlay',
+    group: 'lens' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 4,
+    label: 'Baseline overlay',
+    icon: <Layers2 className="size-4" />,
   };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -826,24 +1036,41 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // so the intended lenses read at a glance beside the search field (ADR-0031 two-row amendment).
     // Colour-by recolours bars by status/WBS/critical/resource; baseline-overlay ghosts the active
     // baseline; resource-view is the second (histogram) lens that folds into `view-mode` when built.
-    placeholderItem({
-      id: 'colour-by',
-      group: 'lens',
-      row: 'look',
-      tier: 2,
-      order: 3,
-      label: 'Colour by…',
-      icon: <Palette className="size-4" />,
-    }),
-    placeholderItem({
-      id: 'baseline-overlay',
-      group: 'lens',
-      row: 'look',
-      tier: 2,
-      order: 4,
-      label: 'Baseline overlay',
-      icon: <Layers2 className="size-4" />,
-    }),
+    // Colour-by — flag-on recolours bars by Criticality (default, today's fills) / Total float / WBS
+    // group with a mode-aware Legend (spec `docs/specs/canvas-lenses/`); flag-off the "Coming soon"
+    // placeholder, byte-for-byte. Pressed when a non-default mode is active.
+    CANVAS_LENSES_ENABLED
+      ? {
+          ...colourByShape,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+          isActive: (ctx) => ctx.colourMode !== 'criticality',
+          render: (ctx, api) => <ColourByControl ctx={ctx} api={api} />,
+        }
+      : placeholderItem(colourByShape),
+    // Baseline overlay — flag-on a pressed-state toggle that ghosts the active baseline behind the live
+    // bars (spec `docs/specs/canvas-lenses/`), disabled-with-reason when there's no diagram / the
+    // variance query is loading or errored / there's no active baseline; flag-off the "Coming soon"
+    // placeholder, byte-for-byte.
+    CANVAS_LENSES_ENABLED
+      ? {
+          ...baselineOverlayShape,
+          isActive: (ctx) => ctx.baselineOverlay,
+          isEnabled: (ctx) =>
+            ctx.hasDiagram && !ctx.varianceLoading && !ctx.varianceError && ctx.hasActiveBaseline,
+          disabledReason: (ctx) =>
+            !ctx.hasDiagram
+              ? LENS_NO_DIAGRAM_REASON
+              : ctx.varianceLoading
+                ? 'Loading baseline…'
+                : ctx.varianceError
+                  ? 'Baseline unavailable'
+                  : !ctx.hasActiveBaseline
+                    ? 'No active baseline'
+                    : undefined,
+          onActivate: (ctx) => ctx.toggleBaselineOverlay(),
+        }
+      : placeholderItem(baselineOverlayShape),
     placeholderItem({
       id: 'resource-view',
       group: 'lens',
@@ -858,27 +1085,33 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // Search / filter field — leads the Find cluster as a real (disabled) input, so the affordance
     // reads the way the old app's did (ADR-0031 two-row amendment). Presentational until wired, so it
     // isn't a roving-tabindex stop while inert.
-    {
-      id: 'search',
-      group: 'find',
-      row: 'look',
-      tier: 1,
-      order: -1,
-      label: 'Search or filter activities',
-      presentational: true,
-      render: (_ctx, api) => <SearchFieldControl itemProps={api.itemProps} />,
-    },
-    // Filter / critical-only, isolate-logic and next-conflict — inline "Coming soon" icon placeholders
-    // trailing the search field (tier 2; no longer parked in `⋯`).
-    placeholderItem({
-      id: 'filter',
-      group: 'find',
-      row: 'look',
-      tier: 2,
-      order: 0,
-      label: 'Filter',
-      icon: <Filter className="size-4" />,
-    }),
+    // Flag-on (VITE_CANVAS_LENSES) the search field goes live — search-as-you-type dims non-matching
+    // bars (spec `docs/specs/canvas-lenses/`); flag-off it is the disabled `SearchFieldControl`,
+    // byte-for-byte. Shaded (disabled-with-reason) on an empty/uncomputed canvas, like the zoom cluster.
+    CANVAS_LENSES_ENABLED
+      ? {
+          ...searchShape,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+          render: (ctx, api) => <LiveSearchControl ctx={ctx} api={api} />,
+        }
+      : {
+          ...searchShape,
+          presentational: true,
+          render: (_ctx, api) => <SearchFieldControl itemProps={api.itemProps} />,
+        },
+    // Filter — flag-on a real attribute Filter menu (Critical / Has constraint / Has conflict), whose
+    // match set intersects with the search query; flag-off the "Coming soon" placeholder, byte-for-byte.
+    // isolate-logic and next-conflict stay inline "Coming soon" placeholders (tier 2).
+    CANVAS_LENSES_ENABLED
+      ? {
+          ...filterShape,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+          isActive: (ctx) => ctx.filterAttrs.size > 0,
+          render: (ctx, api) => <FilterMenuControl ctx={ctx} api={api} />,
+        }
+      : placeholderItem(filterShape),
     placeholderItem({
       id: 'isolate-logic',
       group: 'find',

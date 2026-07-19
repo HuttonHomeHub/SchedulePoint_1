@@ -1,3 +1,4 @@
+import type { LensPalette } from './lenses';
 import type { TsldPalette } from './paint';
 
 /**
@@ -39,5 +40,108 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
     labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
     labelBeside: token('--color-foreground', '#e6e8ee'),
+  };
+}
+
+/**
+ * Resolve the Colour-by **lens** palette (spec `docs/specs/canvas-lenses/`, behind
+ * `VITE_CANVAS_LENSES`) from the same semantic design tokens (ADR-0006), so the recoloured bars stay
+ * theme-aware without hardcoding colour. `critical`/`nearCritical`/`bar` mirror {@link resolveTsldPalette}
+ * (same tokens + fallbacks), so Colour-by's **Criticality** mode is byte-identical to today's fills; the
+ * float bands run destructive → warning → info → success (less → more slack); WBS groups cycle the five
+ * chart tokens deterministically; `neutral` is the muted "uncomputed / ungrouped" colour. Call again on
+ * a theme change to repaint. Falls back to sensible values when the DOM/tokens are unavailable (jsdom).
+ */
+export function resolveLensPalette(root: Element = document.documentElement): LensPalette {
+  const styles = getComputedStyle(root);
+  const token = (name: string, fallback: string): string => {
+    const value = styles.getPropertyValue(name).trim();
+    return value || fallback;
+  };
+  return {
+    // Mirror the painter (same tokens + fallbacks) so Criticality mode paints byte-for-byte today's fills.
+    critical: token('--color-destructive', '#c83c3c'),
+    nearCritical: token('--color-warning', '#d29628'),
+    bar: token('--color-primary', '#3b6fbf'),
+    // The muted "uncomputed / ungrouped" fill — a null total float or a null WBS parent.
+    neutral: token('--color-muted-foreground', '#7a8090'),
+    // Total-float bands: less slack (red) → more slack (green), each a distinct semantic hue.
+    floatCritical: token('--color-destructive', '#c83c3c'),
+    floatLow: token('--color-warning', '#d29628'),
+    floatMedium: token('--color-info', '#3b6fbf'),
+    floatHigh: token('--color-success', '#2f9e44'),
+    // WBS groups cycle the five chart tokens (a deterministic, distinguishable categorical ramp).
+    wbsCycle: [
+      token('--color-chart-1', '#3b6fbf'),
+      token('--color-chart-2', '#2f9e44'),
+      token('--color-chart-3', '#d29628'),
+      token('--color-chart-4', '#9c5cc4'),
+      token('--color-chart-5', '#c83c3c'),
+    ],
+    // Contrast-safe inside-bar label inks paired 1:1 with the fills above (WCAG 1.4.3, ≥ 4.5:1). Each
+    // float band reuses its fill token's `*-foreground` (destructive/warning/info/success map 1:1); the
+    // neutral ink is the page `--color-background` (white-on-grey in light, dark-on-grey in dark); the
+    // WBS cycle pairs chart-1 with `primary-foreground` (theme-flipping, chart-1 mirrors `primary`) and
+    // chart-2…5 with the stable-dark `warning-foreground` (0.205 in both themes). Contrast ratios
+    // (computed from the oklch tokens in `styles/globals.css`, light / dark — see `lenses.test.ts`):
+    //   float critical 4.56 / 5.87 · low 8.48 / 10.12 · medium 5.51 / 6.82 · high 4.87 / 7.03
+    //   neutral 4.73 / 7.63 · wbs chart-1 4.72 / 5.50 · chart-2 5.01 / 7.21 · chart-3 4.82 / 7.03
+    //   chart-4 8.48 / 10.12 (the 2.02:1 white-on-yellow case, now fixed) · chart-5 4.58 / 6.14
+    neutralInk: token('--color-background', '#ffffff'),
+    floatCriticalInk: token('--color-destructive-foreground', '#ffffff'),
+    floatLowInk: token('--color-warning-foreground', '#1a1a1a'),
+    floatMediumInk: token('--color-info-foreground', '#ffffff'),
+    floatHighInk: token('--color-success-foreground', '#ffffff'),
+    wbsInkCycle: [
+      token('--color-primary-foreground', '#ffffff'),
+      token('--color-warning-foreground', '#1a1a1a'),
+      token('--color-warning-foreground', '#1a1a1a'),
+      token('--color-warning-foreground', '#1a1a1a'),
+      token('--color-warning-foreground', '#1a1a1a'),
+    ],
+  };
+}
+
+/**
+ * The Colour-by **legend** palette expressed as raw CSS `var(--color-*)` references (not resolved
+ * values). The on-canvas Legend swatches render as inline `background-color`, where a `var()` is
+ * inherently theme-reactive — so the DOM legend re-colours on a light/dark switch with **zero JS** and
+ * never goes theme-stale (unlike the canvas fills, which must resolve concrete colours for `fillStyle`).
+ * The band order + WBS cycle length mirror {@link resolveLensPalette} exactly, so the legend key matches
+ * the painted bars. Inks are canvas-only (the legend shows fills + text labels), so they are omitted here
+ * via placeholder `var()`s that the legend never reads.
+ */
+export function lensLegendVarPalette(): LensPalette {
+  const v = (name: string): string => `var(${name})`;
+  return {
+    critical: v('--color-destructive'),
+    nearCritical: v('--color-warning'),
+    bar: v('--color-primary'),
+    neutral: v('--color-muted-foreground'),
+    floatCritical: v('--color-destructive'),
+    floatLow: v('--color-warning'),
+    floatMedium: v('--color-info'),
+    floatHigh: v('--color-success'),
+    wbsCycle: [
+      v('--color-chart-1'),
+      v('--color-chart-2'),
+      v('--color-chart-3'),
+      v('--color-chart-4'),
+      v('--color-chart-5'),
+    ],
+    // Inks are unused by the legend (it renders swatch fills + muted-foreground text), so mirror the
+    // fill vars — never read.
+    neutralInk: v('--color-background'),
+    floatCriticalInk: v('--color-destructive-foreground'),
+    floatLowInk: v('--color-warning-foreground'),
+    floatMediumInk: v('--color-info-foreground'),
+    floatHighInk: v('--color-success-foreground'),
+    wbsInkCycle: [
+      v('--color-primary-foreground'),
+      v('--color-warning-foreground'),
+      v('--color-warning-foreground'),
+      v('--color-warning-foreground'),
+      v('--color-warning-foreground'),
+    ],
   };
 }

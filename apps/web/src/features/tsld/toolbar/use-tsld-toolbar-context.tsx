@@ -155,7 +155,20 @@ export function useTsldToolbarContext({
     setCreateType,
     linkType,
     setLinkType,
+    lensState,
+    setFilterQuery,
+    toggleFilterAttr,
+    setColourMode,
+    toggleBaselineOverlay,
   } = canvasUi;
+
+  // Insight lenses (VITE_CANVAS_LENSES): the Baseline-overlay gate reads the SAME variance query the
+  // activities table + the ghost builder consume (route-composed in the model) — no new fetch. An
+  // active baseline exists iff the summary carries a `baselineId`; loading/error feed the toolbar item's
+  // disabled-with-reason (ADR-0031 shade-don't-hide), so the toggle never enables without ghosts to draw.
+  const hasActiveBaseline = model.variance.data?.summary.baselineId != null;
+  const varianceLoading = model.variance.isPending;
+  const varianceError = model.variance.isError;
 
   // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
   // drag, the 15s pen poll) doesn't hand `<Toolbar>` a fresh context and churn its resolve →
@@ -283,6 +296,20 @@ export function useTsldToolbarContext({
       canEditSchedule,
       lateOverlayActive,
       clearVisualPlacement,
+
+      // Insight lenses (VITE_CANVAS_LENSES) — read the lens view state + wire its setters; the Baseline
+      // gate reads the shared variance query. Inert while the flag is off (the ids resolve to stubs).
+      filterQuery: lensState.filterQuery,
+      setFilterQuery,
+      filterAttrs: lensState.filterAttrs,
+      toggleFilterAttr,
+      colourMode: lensState.colourMode,
+      setColourMode,
+      baselineOverlay: lensState.baselineOverlay,
+      toggleBaselineOverlay,
+      hasActiveBaseline,
+      varianceLoading,
+      varianceError,
     }),
     [
       zoomPreset,
@@ -329,6 +356,17 @@ export function useTsldToolbarContext({
       revealActivityNotes,
       lateOverlayActive,
       clearVisualPlacement,
+      // Insight lenses — re-identify only when the lens view state / variance status changes (setters
+      // are stable). `lensState` is one memoised object off `useTsldCanvasUiState`, so it churns only
+      // on a real lens change.
+      lensState,
+      setFilterQuery,
+      toggleFilterAttr,
+      setColourMode,
+      toggleBaselineOverlay,
+      hasActiveBaseline,
+      varianceLoading,
+      varianceError,
     ],
   );
 }

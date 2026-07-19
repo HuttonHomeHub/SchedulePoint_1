@@ -1,6 +1,7 @@
 import type { ActivitySummary, ActivityType, DependencyType, SchedulingMode } from '@repo/types';
 import type { ReactNode } from 'react';
 
+import type { ColourMode, FilterAttr } from '../render/lenses';
 import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
@@ -158,4 +159,34 @@ export interface TsldToolbarContext {
    * faithful subset of the reposition VISUAL branch: the null-`visualStart` PATCH → undo inverse (when
    * `VITE_UNDO_REDO` is on) → auto-recalc; a stale-version 409 is a non-destructive no-op. */
   clearVisualPlacement: (activityId: string, version: number) => void;
+
+  // --- Insight lenses (VITE_CANVAS_LENSES, group 2/3 · Row 1 · Look) -------------------------
+  // Client view state over already-shipped reads (spec `docs/specs/canvas-lenses/`): the filter/search
+  // dimming, the Colour-by picker, and the Baseline overlay. Populated on every build from
+  // `canvasUi.lensState` + the variance query; nothing reads them while the flag is off (the ids then
+  // resolve to their `SearchFieldControl` / `placeholderItem()` stubs), so they are inert by default.
+  /** The live filter query text (drives the search field's value). */
+  filterQuery: string;
+  /** Set the filter query text (search-as-you-type). */
+  setFilterQuery: (query: string) => void;
+  /** The toggled filter attributes (Critical / Has constraint / Has conflict) — the match set is the
+   * intersection of the text query AND every toggled attribute. */
+  filterAttrs: ReadonlySet<FilterAttr>;
+  /** Toggle a filter attribute on/off. */
+  toggleFilterAttr: (attr: FilterAttr) => void;
+  /** The active Colour-by mode (drives the picker's pressed state); Criticality is the default. */
+  colourMode: ColourMode;
+  /** Switch the Colour-by mode. */
+  setColourMode: (mode: ColourMode) => void;
+  /** Whether the Baseline overlay is on (drives the toggle's pressed state). */
+  baselineOverlay: boolean;
+  /** Toggle the Baseline overlay on/off (gated by {@link hasActiveBaseline} + the variance query state). */
+  toggleBaselineOverlay: () => void;
+  /** True when the plan has an active baseline to ghost (`summary.baselineId != null`). Gates the
+   * Baseline-overlay item (disabled-with-reason "No active baseline" otherwise, ADR-0031 shade-don't-hide). */
+  hasActiveBaseline: boolean;
+  /** True while the baseline-variance query is still loading (overlay disabled, reason "Loading baseline…"). */
+  varianceLoading: boolean;
+  /** True when the baseline-variance query errored (overlay disabled, reason "Baseline unavailable"). */
+  varianceError: boolean;
 }

@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
-import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
  * Scheduling-modes toolbar items (ADR-0033): the Go-to-date navigation jump + the Early | Visual mode
@@ -20,60 +20,12 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return {
-    zoomPreset: 'week',
-    setZoomPreset: vi.fn(),
-    stepZoom: vi.fn(),
-    fit: vi.fn(),
-    plannedStart: '2026-01-01',
-    goToDate: vi.fn(),
-    viewToggles: DEFAULT_VIEW_TOGGLES,
-    toggleView: vi.fn(),
-    schedulingMode: 'EARLY',
-    setSchedulingMode: vi.fn(),
-    isAddingActivity: false,
-    toggleAddActivity: vi.fn(),
-    createType: 'TASK',
-    setCreateType: vi.fn(),
-    isLinking: false,
-    toggleLinkMode: vi.fn(),
-    linkType: 'FS',
-    setLinkType: vi.fn(),
-    canAutoArrange: false,
-    requestAutoArrange: vi.fn(),
-    canUndo: false,
-    canRedo: false,
-    undoLabel: null,
-    redoLabel: null,
-    undo: vi.fn(),
-    redo: vi.fn(),
-    canRecalc: true,
-    recalcPending: false,
-    recalculate: vi.fn(),
-    openBaselines: vi.fn(),
-    openCalendar: vi.fn(),
-    openEarnedValue: vi.fn(),
-    openResourceHistogram: vi.fn(),
-    editPlan: vi.fn(),
-    openShortcuts: vi.fn(),
-    legendOpen: false,
-    toggleLegend: vi.fn(),
+  return makeTsldToolbarContext({
     summaryContent: null,
     projectFinishContent: null,
     hasDiagram: false,
-    todayIso: '2026-07-19',
-    selectedActivityId: null,
-    selectedActivity: undefined,
-    revealComments: vi.fn(),
-    canProgress: true,
-    openProgress: vi.fn(),
-    canWriteNotes: true,
-    openActivityNotes: vi.fn(),
-    canEditSchedule: true,
-    lateOverlayActive: false,
-    clearVisualPlacement: vi.fn(),
     ...over,
-  };
+  });
 }
 
 /** Render the Row 1 · Look toolbar (Go-to-date, the mode selector, the View popover live here). */

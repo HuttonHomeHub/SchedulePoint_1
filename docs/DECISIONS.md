@@ -10,6 +10,30 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-19 — TSLD canvas insight lenses: client render state, not an ADR
+
+**Decision.** The three canvas insight lenses (Filter/Colour-by/Baseline overlay, spec
+`docs/specs/canvas-lenses/`) are **client render state layered on the existing canvas** (ADR-0026)
+and the toolbar registry (ADR-0031) — no new architectural boundary — so they get this log entry
+rather than an ADR. Two sub-decisions recorded here:
+
+- **Colour-by taxonomy (v1).** Three modes — **Criticality** (default; byte-for-byte today's fills),
+  **Total-float bucket** (`critical ≤0 / low 1–5 / medium 6–20 / high >20`, null → neutral), and **WBS
+  group** (deterministic first-appearance id→palette cycle). Driving-resource colouring is deferred
+  (needs `VITE_RESOURCES`); the colour machinery is mode-generic so it drops in additively. Every mode
+  keeps the critical outline + a text Legend (never colour-only, WCAG 1.4.1), and pairs each band with a
+  contrast-safe label ink (≥4.5:1 both themes) via `TsldScene.barInk`.
+
+- **Scene lens-layer contract.** The lenses extend `TsldScene` with **optional, default-absent**
+  fields — `dimmedIds` / `barFill` / `barInk` / `baselineGhosts` — so the flag-off / no-lens-active paint
+  is byte-for-byte identical (proven by the paint-parity test). Ghost geometry reuses the shipped
+  `useBaselineVariance` rows (no new fetch) and is culled by `visibleIds` like the live-bar layer. Lens
+  fills + the Legend re-resolve on a theme switch via a shared `useThemeVersion` hook.
+
+**Why.** Reuses shipped data + the established toolbar/scene seams; keeps the CPM engine and its recalc
+parity gate untouched. **Consequences.** Behind `VITE_CANVAS_LENSES` (on by default 2026-07-19);
+`=false` restores the placeholders + today's paint. Driving-resource is a tracked fast-follow.
+
 ### 2026-07-19 — Auto-deploy via an opt-in, host-side Watchtower pull (ADR-0047)
 
 **Decision.** Close the "shipped but not live" gap (TECH_DEBT #29) with an **opt-in**
