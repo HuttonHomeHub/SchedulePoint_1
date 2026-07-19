@@ -29,6 +29,7 @@ export function PlanDialogs({
         canManageLogic={model.canManageLogic}
         open={model.logicActivity !== undefined}
         onClose={() => model.setLogicActivity(undefined)}
+        onRemoved={model.recordDependencyRemove}
         {...(model.logicActivity ? { activity: model.logicActivity } : {})}
         {...(PROGRAMME_SCHEDULING_ENABLED && model.logicActivity
           ? {

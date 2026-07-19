@@ -146,6 +146,7 @@ export function DependencyEditor({
   canManageLogic = false,
   open,
   onClose,
+  onRemoved,
   crossPlanSlot,
   notesSlot,
 }: {
@@ -157,6 +158,12 @@ export function DependencyEditor({
   canManageLogic?: boolean;
   open: boolean;
   onClose: () => void;
+  /**
+   * Called with the just-removed edge after a successful remove (ADR-0048 M2) — the composition root
+   * passes the undo/redo recording seam here, keeping this feature free of a sideways feature import.
+   * Absent (the default) leaves the panel byte-identical.
+   */
+  onRemoved?: (dependency: DependencySummary) => void;
   /**
    * An optional extra panel rendered below Successors — the composition root passes the
    * `VITE_PROGRAMME_SCHEDULING` cross-plan links section here (ADR-0045), keeping this feature free
@@ -208,8 +215,12 @@ export function DependencyEditor({
 
   const confirmRemove = (): void => {
     if (!removing) return;
+    // Snapshot the pre-remove edge for the undo command (ADR-0048 M2) — captured before the mutation
+    // so the inverse can re-create the link from its endpoints/type/lag.
+    const snapshot = removing;
     deleteDependency.mutate(removing.id, {
       onSuccess: () => {
+        onRemoved?.(snapshot);
         // Close the confirm dialog synchronously before moving focus: while the
         // native <dialog> is still modal, focusing an element outside it is a
         // no-op and focus would fall to <body> once the removed row unmounts on

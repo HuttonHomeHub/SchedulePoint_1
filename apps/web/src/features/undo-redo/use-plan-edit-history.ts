@@ -8,6 +8,15 @@ import type { Command } from './commands';
  */
 export const MAX_HISTORY_DEPTH = 50;
 
+/**
+ * Interaction window (ms) within which two consecutively-recorded, same-key commands coalesce into one
+ * undo step (ADR-0048 M2.3). Mirrors the ADR-0032 coalesced-recalc boundary: a pointer drag or a
+ * held-key nudge fires its intermediate writes far tighter than this, so they fold into one step,
+ * while two deliberate gestures (seconds apart) stay separate. An undo/redo or a different-key edit
+ * also ends the window (a fresh gesture must never merge into a pre-undo step).
+ */
+export const COALESCE_WINDOW_MS = 500;
+
 export interface PlanEditHistory {
   /** Push a just-applied edit's inverse onto the undo stack; clears the redo branch (linear history). */
   record: (command: Command) => void;
@@ -38,6 +47,9 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
   const undoStackRef = useRef<Command[]>([]);
   const redoStackRef = useRef<Command[]>([]);
   const runningRef = useRef(false);
+  // When the top-of-undo-stack command was recorded (epoch ms). A same-key command recorded within
+  // COALESCE_WINDOW_MS folds into it; set to -Infinity to end the window (after undo/redo/clear).
+  const lastRecordAtRef = useRef(Number.NEGATIVE_INFINITY);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
@@ -49,6 +61,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
   const clear = useCallback(() => {
     undoStackRef.current = [];
     redoStackRef.current = [];
+    lastRecordAtRef.current = Number.NEGATIVE_INFINITY;
     sync();
   }, [sync]);
 
@@ -61,11 +74,30 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
   const record = useCallback(
     (command: Command) => {
       const undoStack = undoStackRef.current;
+      const now = Date.now();
+      const top = undoStack[undoStack.length - 1];
+      // Coalesce (ADR-0048 M2.3): a same-key command recorded within the interaction window folds
+      // into the current top step instead of pushing a new one, so a whole drag/nudge gesture is one
+      // undo. The merged command spans the FIRST pre-edit and the LATEST post-edit state.
+      if (
+        command.coalescing !== undefined &&
+        top?.coalescing !== undefined &&
+        top.coalescing.key === command.coalescing.key &&
+        now - lastRecordAtRef.current <= COALESCE_WINDOW_MS
+      ) {
+        undoStack[undoStack.length - 1] = command.coalescing.merge(top);
+        lastRecordAtRef.current = now;
+        // A fresh edit still invalidates the redo branch (linear history).
+        redoStackRef.current = [];
+        sync();
+        return;
+      }
       undoStack.push(command);
       // Bounded depth: drop the OLDEST when full so the newest edits stay undoable.
       if (undoStack.length > MAX_HISTORY_DEPTH) undoStack.shift();
       // Linear history — a new edit invalidates any redo branch.
       redoStackRef.current = [];
+      lastRecordAtRef.current = now;
       sync();
     },
     [sync],
@@ -83,6 +115,9 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       undoStackRef.current.pop();
       redoStackRef.current.push(command);
       if (redoStackRef.current.length > MAX_HISTORY_DEPTH) redoStackRef.current.shift();
+      // End the coalescing window — a new edit after an undo starts a fresh step, never merges into
+      // the now-exposed top command.
+      lastRecordAtRef.current = Number.NEGATIVE_INFINITY;
       sync();
     } finally {
       runningRef.current = false;
@@ -99,6 +134,8 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       redoStackRef.current.pop();
       undoStackRef.current.push(command);
       if (undoStackRef.current.length > MAX_HISTORY_DEPTH) undoStackRef.current.shift();
+      // End the coalescing window — a new edit after a redo starts a fresh step.
+      lastRecordAtRef.current = Number.NEGATIVE_INFINITY;
       sync();
     } finally {
       runningRef.current = false;

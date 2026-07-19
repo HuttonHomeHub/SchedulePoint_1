@@ -1,8 +1,9 @@
+import type { ActivitySummary } from '@repo/types';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Command } from './commands';
-import { MAX_HISTORY_DEPTH, usePlanEditHistory } from './use-plan-edit-history';
+import { relaneCommand, type Command, type RepositionLaneFn } from './commands';
+import { COALESCE_WINDOW_MS, MAX_HISTORY_DEPTH, usePlanEditHistory } from './use-plan-edit-history';
 
 /** A command whose undo/redo push a tag onto a shared log so replay order is observable. */
 function cmd(tag: string, log: string[]): Command {
@@ -170,5 +171,131 @@ describe('usePlanEditHistory', () => {
       await first;
     });
     expect(log).toEqual(['undo:b', 'undo:slow']);
+  });
+});
+
+/**
+ * Coalescing (ADR-0048 M2.3): a drag / nudge burst fires many intermediate writes for one gesture,
+ * each recording a same-key command; they must collapse to a SINGLE undo step. Uses the real
+ * {@link relaneCommand} (its coalescing carries lane before/after + version) with a fake lane PATCH.
+ */
+describe('usePlanEditHistory coalescing', () => {
+  /** A fake `useRepositionLane().mutateAsync` that echoes the lane with a bumped version. */
+  function fakeLane(): RepositionLaneFn {
+    let version = 1000;
+    return vi.fn((input: { activityId: string; laneIndex: number; version: number }) =>
+      Promise.resolve({
+        id: input.activityId,
+        laneIndex: input.laneIndex,
+        version: (version += 1),
+      } as unknown as ActivitySummary),
+    );
+  }
+  const lane = (
+    fn: RepositionLaneFn,
+    from: number,
+    to: number,
+    version: number,
+    activityId = 'a1',
+  ) =>
+    relaneCommand({
+      repositionLane: fn,
+      activityId,
+      fromLaneIndex: from,
+      toLaneIndex: to,
+      version,
+    });
+
+  it('collapses a rapid same-key burst into ONE step spanning the first→last position', async () => {
+    const fn = fakeLane();
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => {
+      result.current.record(lane(fn, 0, 1, 10));
+      result.current.record(lane(fn, 1, 2, 11));
+      result.current.record(lane(fn, 2, 3, 12));
+    });
+    expect(result.current.canUndo).toBe(true);
+
+    await act(async () => {
+      await result.current.undo();
+    });
+    // One undo restores the ORIGINAL lane (0) at the NEWEST version (12), and nothing is left to
+    // undo — the three intermediate writes were a single reversible step.
+    expect(fn).toHaveBeenLastCalledWith({ activityId: 'a1', laneIndex: 0, version: 12 });
+    expect(result.current.canUndo).toBe(false);
+    expect(result.current.canRedo).toBe(true);
+  });
+
+  it('keeps two same-key edits SEPARATED by more than the interaction window as distinct steps', async () => {
+    vi.useFakeTimers();
+    try {
+      const fn = fakeLane();
+      const { result } = renderHook(() => usePlanEditHistory('pl1'));
+      act(() => result.current.record(lane(fn, 0, 1, 10)));
+      act(() => {
+        vi.advanceTimersByTime(COALESCE_WINDOW_MS + 1);
+      });
+      act(() => result.current.record(lane(fn, 1, 2, 11)));
+
+      // Two deliberate gestures → two steps: it takes two undos to empty the stack.
+      await act(async () => {
+        await result.current.undo();
+      });
+      expect(result.current.canUndo).toBe(true);
+      await act(async () => {
+        await result.current.undo();
+      });
+      expect(result.current.canUndo).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not coalesce commands that target a different activity (different key)', async () => {
+    const fn = fakeLane();
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => {
+      result.current.record(lane(fn, 0, 1, 10, 'a1'));
+      result.current.record(lane(fn, 0, 1, 20, 'a2'));
+    });
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.canUndo).toBe(true); // a second, distinct step remains
+  });
+
+  it('does not coalesce a non-coalescing command (a dialog edit) into a drag step', async () => {
+    const fn = fakeLane();
+    const plain: Command = {
+      label: 'Edit',
+      undo: () => Promise.resolve(),
+      redo: () => Promise.resolve(),
+    };
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => {
+      result.current.record(lane(fn, 0, 1, 10));
+      result.current.record(plain); // no coalescing key — a new step even back-to-back
+    });
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.canUndo).toBe(true);
+  });
+
+  it('ends the window after an undo — a later same-key edit starts a fresh step', async () => {
+    const fn = fakeLane();
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => {
+      result.current.record(lane(fn, 0, 1, 10));
+      result.current.record(lane(fn, 1, 2, 11)); // merges → one step
+    });
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.canUndo).toBe(false);
+    // A same-key edit after the undo is its OWN step, not a merge into the (now empty) history.
+    act(() => result.current.record(lane(fn, 0, 5, 30)));
+    expect(result.current.canUndo).toBe(true);
+    expect(result.current.canRedo).toBe(false); // the fresh edit cleared the redo branch
   });
 });

@@ -104,12 +104,13 @@ vi.mock('@/features/baselines', () => ({
 
 vi.mock('@/features/activities', () => ({
   useActivities: () => query(h.activities),
+  useCreateActivity: () => ({ mutateAsync: vi.fn() }),
   useCreatePlacedActivity: () => ({ mutateAsync: h.createPlaced }),
   useUpdateActivity: () => ({ mutateAsync: h.updateActivity }),
   useRepositionLane: () => ({ mutateAsync: h.repositionLane }),
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: h.batchPositions }),
-  useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   ActivitiesTable: ({
     canWrite,
     canReportProgress,
@@ -130,6 +131,7 @@ vi.mock('@/features/activities', () => ({
 vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: h.createDependency }),
+  useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   DependencyEditor: ({ canManageLogic }: { canManageLogic: boolean }) => (
     <div data-testid="dependency-editor" data-can-manage={String(canManageLogic)} />
   ),

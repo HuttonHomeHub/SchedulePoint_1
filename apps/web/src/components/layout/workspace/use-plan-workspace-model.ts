@@ -1,4 +1,4 @@
-import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -10,18 +10,24 @@ import {
 } from '@/config/env';
 import {
   useActivities,
+  useCreateActivity,
   useCreatePlacedActivity,
   useUpdateActivity,
   useRepositionLane,
   useSetActivityVisualStart,
   useBatchPositions,
+  useDeleteActivity,
   isMilestoneType,
 } from '@/features/activities';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, useCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
-import { useCreateDependency, usePlanDependencies } from '@/features/dependencies';
+import {
+  useCreateDependency,
+  useDeleteDependency,
+  usePlanDependencies,
+} from '@/features/dependencies';
 import { useActivityNoteCounts } from '@/features/notes';
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
 import { usePlan } from '@/features/plans';
@@ -38,10 +44,17 @@ import {
   type TsldEditOutcome,
 } from '@/features/tsld';
 import {
+  autoArrangeCommand,
+  createActivityCommand,
+  deleteActivityCommand,
+  dependencyAddCommand,
+  dependencyRemoveCommand,
   relaneCommand,
   repositionCommand,
   updateCommand,
+  visualStartCommand,
   usePlanEditHistory,
+  type LanePlacement,
 } from '@/features/undo-redo';
 import {
   canCalculateSchedule,
@@ -199,6 +212,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
   // with an SNET constraint, then the authoritative recalc places it.
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
+  // Full-definition create + delete, used only by the undo/redo inverses (ADR-0048 M2): undoing a
+  // create deletes it; undoing a leaf delete re-creates its whole definition (a new id). Instantiated
+  // here (not in the dialog) so the command's inverse re-issues through the same authorised endpoints.
+  const createActivity = useCreateActivity(orgSlug, planId);
+  const deleteActivity = useDeleteActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
     // Post-M1 every saved plan has a mandatory start (ADR-0033 M1), so the ADR-0032 "first draw pins
@@ -216,15 +234,29 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // VISUAL mode (ADR-0033 M3): the drop hand-places `visualStart`, no implicit SNET constraint;
     // EARLY mode keeps the SNET-at-start pin. Either way recalc then lands the dates.
     const dropDate = addCalendarDays(plannedStart, input.startDay);
-    await createPlacedActivity.mutateAsync({
+    const placedInput = {
       name: input.name,
       type: input.type,
       durationDays: isMilestoneType(input.type) ? 0 : input.endDay - input.startDay + 1,
       laneIndex: input.laneIndex,
       ...(isVisualMode
         ? { visualStart: dropDate }
-        : { constraintType: 'SNET', constraintDate: dropDate }),
-    });
+        : { constraintType: 'SNET' as const, constraintDate: dropDate }),
+    };
+    const created = await createPlacedActivity.mutateAsync(placedInput);
+    // Record the create for undo (ADR-0048 M2) — the single user edit, NOT the follow-up recalc.
+    // Undo deletes the created activity; redo re-creates it from the same placement input. Guarded on
+    // the flag so behaviour is byte-identical when off.
+    if (UNDO_REDO_ENABLED) {
+      editHistory.record(
+        createActivityCommand({
+          created,
+          input: placedInput,
+          createPlaced: createPlacedActivity.mutateAsync,
+          deleteActivity: deleteActivity.mutateAsync,
+        }),
+      );
+    }
     // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
     // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
     // await + recalc-conflict semantics byte-for-byte.
@@ -250,6 +282,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const updateActivity = useUpdateActivity(orgSlug, planId);
   const repositionLane = useRepositionLane(orgSlug, planId);
   const setVisualStart = useSetActivityVisualStart(orgSlug, planId);
+  // Dependency create/delete. `createDependency` backs the canvas link (onTsldLink); both also back the
+  // undo/redo inverses (ADR-0048 M2) — undoing a link removes it, undoing a remove re-creates it.
+  const createDependency = useCreateDependency(orgSlug);
+  const deleteDependency = useDeleteDependency(orgSlug);
   // Record an activity DEFINITION edit (rename / duration / constraint / …) on the undo stack (ADR-0048,
   // dark M1). Called by `ActivityCrudDialogs` when the shared edit dialog saves, with the pre-edit row
   // and the server's post-edit row; the inverse re-PATCHes the full definition through the same
@@ -260,6 +296,53 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       editHistory.record(updateCommand({ update: updateActivity.mutateAsync, before, after }));
     },
     [editHistory, updateActivity.mutateAsync],
+  );
+  // Record an activity DELETE on the undo stack (ADR-0048 M2). Called by `ActivityCrudDialogs` after a
+  // successful delete, with the pre-delete row. A **leaf** delete is reversible: undo re-creates the
+  // whole definition (a NEW id — the conservative rule; id-stable/cascade-clean restore is M4). A
+  // **cascade** (a WBS summary with a subtree, ADR-0038) is NOT cleanly reversible in M2, so rather
+  // than offer a broken partial undo we record an explicit non-undoable boundary that **truncates**
+  // the history (clear the stack). A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
+  const recordActivityDelete = useCallback(
+    (activity: ActivitySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      const hasSubtree = (activities.data ?? []).some((a) => a.parentId === activity.id);
+      if (activity.type === 'WBS_SUMMARY' && hasSubtree) {
+        editHistory.clear();
+        return;
+      }
+      editHistory.record(
+        deleteActivityCommand({
+          activity,
+          createActivity: createActivity.mutateAsync,
+          repositionLane: repositionLane.mutateAsync,
+          deleteActivity: deleteActivity.mutateAsync,
+        }),
+      );
+    },
+    [
+      editHistory,
+      activities.data,
+      createActivity.mutateAsync,
+      repositionLane.mutateAsync,
+      deleteActivity.mutateAsync,
+    ],
+  );
+  // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the `DependencyEditor` after
+  // a successful remove, with the pre-remove edge. The inverse re-creates the link (a new id) from its
+  // endpoints/type/lag; redo removes it again. A no-op unless `VITE_UNDO_REDO` is on.
+  const recordDependencyRemove = useCallback(
+    (dependency: DependencySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      editHistory.record(
+        dependencyRemoveCommand({
+          dependency,
+          createDependency: createDependency.mutateAsync,
+          deleteDependency: deleteDependency.mutateAsync,
+        }),
+      );
+    },
+    [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
   );
   // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
   // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
@@ -317,12 +400,26 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     const droppedDate = addCalendarDays(plannedStart, startDay);
     try {
       if (isVisualMode) {
-        await setVisualStart.mutateAsync({
+        const saved = await setVisualStart.mutateAsync({
           activityId,
           visualStart: droppedDate,
           version: activity.version,
           ...(laneIndex !== undefined ? { laneIndex } : {}),
         });
+        // Record the Visual-mode placement for undo (ADR-0048 M2) — the single user edit, NOT the
+        // follow-up recalc. The inverse restores the prior `visualStart` (and lane); a drag/nudge
+        // burst coalesces to one step (the command carries a coalescing key). Guarded on the flag.
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            visualStartCommand({
+              setVisualStart: setVisualStart.mutateAsync,
+              activityId,
+              before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
+              after: { visualStart: droppedDate, laneIndex: laneIndex ?? activity.laneIndex },
+              version: saved.version,
+            }),
+          );
+        }
       } else {
         const saved = await updateActivity.mutateAsync({
           activityId,
@@ -389,14 +486,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
   // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
   // engine rejects — surfaced non-destructively (nothing was created), never retried.
-  const createDependency = useCreateDependency(orgSlug);
   const onTsldLink = async ({
     predecessorId,
     successorId,
     type,
   }: TsldLinkInput): Promise<TsldLinkOutcome> => {
     try {
-      await createDependency.mutateAsync({
+      const created = await createDependency.mutateAsync({
         planId,
         predecessorId,
         successorId,
@@ -404,6 +500,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         lagDays: 0,
         lagCalendar: 'PROJECT_DEFAULT',
       });
+      // Record the link for undo (ADR-0048 M2) — the single user edit, NOT the follow-up recalc.
+      // Undo removes the created edge; redo re-creates it from the captured endpoints/type/lag.
+      if (UNDO_REDO_ENABLED) {
+        editHistory.record(
+          dependencyAddCommand({
+            dependency: created,
+            createDependency: createDependency.mutateAsync,
+            deleteDependency: deleteDependency.mutateAsync,
+          }),
+        );
+      }
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
@@ -436,14 +543,36 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const onTsldAutoArrange = async (
     changes: readonly { id: string; laneIndex: number }[],
   ): Promise<TsldEditOutcome> => {
-    const versionById = new Map((activities.data ?? []).map((a) => [a.id, a.version]));
+    const rows = activities.data ?? [];
+    const versionById = new Map(rows.map((a) => [a.id, a.version]));
+    const laneById = new Map(rows.map((a) => [a.id, a.laneIndex]));
     const positions = changes.flatMap((c) => {
       const version = versionById.get(c.id);
       return version === undefined ? [] : [{ id: c.id, laneIndex: c.laneIndex, version }];
     });
     if (positions.length === 0) return { applied: false, conflict: null };
+    // Snapshot each affected row's prior lane so the undo can restore it (ADR-0048 M2.3). `after` is
+    // the packed target; `before` the pre-arrange lane. Only rows we can source a prior lane for.
+    const before: LanePlacement[] = positions.flatMap((p) => {
+      const laneIndex = laneById.get(p.id);
+      return laneIndex === undefined ? [] : [{ id: p.id, laneIndex }];
+    });
+    const after: LanePlacement[] = positions.map((p) => ({ id: p.id, laneIndex: p.laneIndex }));
     try {
-      await batchPositions.mutateAsync({ positions });
+      const saved = await batchPositions.mutateAsync({ positions });
+      // Record the whole batch as ONE reversible step (ADR-0048 M2.3): undo restores every prior
+      // lane, redo re-applies the pack. Versions are seeded from this forward response so the inverse
+      // carries current versions. Guarded on the flag; a lane batch has no recalc to double-record.
+      if (UNDO_REDO_ENABLED) {
+        editHistory.record(
+          autoArrangeCommand({
+            batchPositions: batchPositions.mutateAsync,
+            before,
+            after,
+            versions: new Map(saved.map((row) => [row.id, row.version])),
+          }),
+        );
+      }
       return { applied: true, conflict: null };
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
@@ -512,6 +641,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // edit dialog saves so a definition edit joins the reposition/relane commands recorded inline in
     // the TSLD callbacks. A no-op when `VITE_UNDO_REDO` is off; undo/redo controls arrive in M3.
     recordActivityUpdate,
+    // Undo/redo recording seams for delete (ADR-0048 M2). `ActivityCrudDialogs` calls
+    // `recordActivityDelete` after a successful delete (leaf → reversible re-create; cascade → history
+    // truncation); the `DependencyEditor` calls `recordDependencyRemove` after a successful link
+    // removal. No-ops when `VITE_UNDO_REDO` is off.
+    recordActivityDelete,
+    recordDependencyRemove,
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,

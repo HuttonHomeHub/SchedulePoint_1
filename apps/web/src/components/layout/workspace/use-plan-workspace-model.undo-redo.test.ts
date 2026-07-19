@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   undoRedo: false,
   record: vi.fn(),
+  clear: vi.fn(),
   updateMutateAsync: vi.fn(),
   relaneMutateAsync: vi.fn(),
   recalcMutateAsync: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock('@/features/undo-redo', async (importOriginal) => ({
     record: h.record,
     undo: vi.fn(),
     redo: vi.fn(),
-    clear: vi.fn(),
+    clear: h.clear,
     canUndo: false,
     canRedo: false,
   }),
@@ -73,7 +74,8 @@ vi.mock('@/features/baselines', () => ({ useBaselineVariance: () => query(undefi
 vi.mock('@/features/notes', () => ({ useActivityNoteCounts: () => query(undefined) }));
 vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
-  useCreateDependency: () => ({ mutateAsync: vi.fn() }),
+  useCreateDependency: () => ({ mutateAsync: vi.fn().mockResolvedValue(DEPENDENCY) }),
+  useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@/features/schedule', () => ({
   useRecalculate: () => ({ mutateAsync: h.recalcMutateAsync }),
@@ -140,15 +142,36 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
+// A WBS summary (`sum-1`) with a child (`child-1`) — the cascade-delete case (ADR-0038 / ADR-0048 M2.3):
+// deleting the summary truncates history rather than offering a broken partial undo.
+const SUMMARY: ActivitySummary = { ...ACTIVITY, id: 'sum-1', name: 'Phase 1', type: 'WBS_SUMMARY' };
+const CHILD: ActivitySummary = { ...ACTIVITY, id: 'child-1', name: 'Child', parentId: 'sum-1' };
+
 vi.mock('@/features/activities', () => ({
-  useActivities: () => query([ACTIVITY]),
-  useCreatePlacedActivity: () => ({ mutateAsync: vi.fn() }),
+  useActivities: () => query([ACTIVITY, SUMMARY, CHILD]),
+  useCreateActivity: () => ({ mutateAsync: vi.fn().mockResolvedValue(ACTIVITY) }),
+  useCreatePlacedActivity: () => ({ mutateAsync: vi.fn().mockResolvedValue(ACTIVITY) }),
   useUpdateActivity: () => ({ mutateAsync: h.updateMutateAsync }),
   useRepositionLane: () => ({ mutateAsync: h.relaneMutateAsync }),
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
-  useBatchPositions: () => ({ mutateAsync: vi.fn() }),
+  useBatchPositions: () => ({ mutateAsync: vi.fn().mockResolvedValue([ACTIVITY]) }),
+  useDeleteActivity: () => ({ mutateAsync: vi.fn() }),
   isMilestoneType: (t: string) => t === 'START_MILESTONE' || t === 'FINISH_MILESTONE',
 }));
+
+const DEPENDENCY = {
+  id: 'dep-1',
+  planId: 'p1',
+  type: 'FS',
+  lagDays: 0,
+  lagCalendar: 'PROJECT_DEFAULT',
+  predecessor: { id: 'a1', code: null, name: 'Excavate' },
+  successor: { id: 'a2', code: null, name: 'Pour' },
+  isDriving: false,
+  version: 1,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+} as const;
 
 // Imported AFTER the mocks are declared.
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
@@ -213,5 +236,77 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
     expect(h.relaneMutateAsync).toHaveBeenCalledTimes(1);
     expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('flag ON: a create records exactly one command; flag OFF records nothing', async () => {
+    h.undoRedo = true;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    await act(async () => {
+      await result.current.onTsldCreate({
+        name: 'Dig',
+        type: 'TASK',
+        startDay: 0,
+        endDay: 2,
+        laneIndex: 1,
+      });
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+
+    h.undoRedo = false;
+    h.record.mockClear();
+    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    await act(async () => {
+      await off.result.current.onTsldCreate({
+        name: 'Dig',
+        type: 'TASK',
+        startDay: 0,
+        endDay: 2,
+        laneIndex: 1,
+      });
+    });
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('flag ON: a dependency link records exactly one command', async () => {
+    h.undoRedo = true;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    await act(async () => {
+      await result.current.onTsldLink({ predecessorId: 'a1', successorId: 'a2', type: 'FS' });
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+  });
+
+  it('flag ON: an auto-arrange records exactly one command (the whole batch = one step)', async () => {
+    h.undoRedo = true;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    await act(async () => {
+      await result.current.onTsldAutoArrange([{ id: 'a1', laneIndex: 3 }]);
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+  });
+
+  it('flag ON: a leaf delete records one command; a cascade (summary+subtree) truncates history', () => {
+    h.undoRedo = true;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+
+    // A leaf (TASK, no children) is reversible — one command, no truncation.
+    act(() => result.current.recordActivityDelete(ACTIVITY));
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.clear).not.toHaveBeenCalled();
+
+    h.record.mockClear();
+    // A WBS summary WITH a subtree is not cleanly reversible in M2 — clear the stack, record nothing.
+    act(() => result.current.recordActivityDelete(SUMMARY));
+    expect(h.clear).toHaveBeenCalledTimes(1);
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('flag OFF: neither a leaf delete nor a cascade delete touches the history', () => {
+    h.undoRedo = false;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    act(() => result.current.recordActivityDelete(ACTIVITY));
+    act(() => result.current.recordActivityDelete(SUMMARY));
+    expect(h.record).not.toHaveBeenCalled();
+    expect(h.clear).not.toHaveBeenCalled();
   });
 });

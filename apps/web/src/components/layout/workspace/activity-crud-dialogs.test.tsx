@@ -44,6 +44,7 @@ function makeModel(over: Partial<Record<string, unknown>> = {}): PlanWorkspaceMo
     setEditActivityId: vi.fn(),
     setDeleteActivityId: vi.fn(),
     recordActivityUpdate: vi.fn(),
+    recordActivityDelete: vi.fn(),
     ...over,
   } as unknown as PlanWorkspaceModel;
 }
