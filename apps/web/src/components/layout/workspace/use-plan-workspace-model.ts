@@ -54,6 +54,7 @@ import {
   updateCommand,
   visualStartCommand,
   usePlanEditHistory,
+  usePlanUndoRedo,
   type LanePlacement,
 } from '@/features/undo-redo';
 import {
@@ -166,6 +167,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // `VITE_UNDO_REDO`; nothing is recorded and no behaviour changes when the flag is off. The store is
   // keyed on `planId` so switching plans resets history. No visible surface yet — M3 wires the UI.
   const editHistory = usePlanEditHistory(planId);
+  // Undo/redo user-visible surface (ADR-0048 M3): wraps the dark M1/M2 store with the conflict +
+  // pen-loss contract (409/404 → refetch + clear redo; 423 → clear history + shared pen contract) and
+  // the success announcements. Shared by the toolbar controls + keybindings (the SAME store the
+  // recording seams above push onto). Inert unless `VITE_UNDO_REDO` is on — the wrapper only acts when
+  // the user invokes undo/redo, which the flag-gated surface never does when off, so byte-identical.
+  const undoRedo = usePlanUndoRedo({
+    history: editHistory,
+    orgSlug,
+    planId,
+    announce,
+    onLockLost: pen.onWriteRejected,
+  });
   const autoRecalc = usePlanAutoRecalc(orgSlug, planId, {
     enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
     onMessage: announce,
@@ -647,6 +660,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // removal. No-ops when `VITE_UNDO_REDO` is off.
     recordActivityDelete,
     recordDependencyRemove,
+    // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace
+    // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
+    // Inert (never invoked) unless `VITE_UNDO_REDO` is on.
+    undoRedo,
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,

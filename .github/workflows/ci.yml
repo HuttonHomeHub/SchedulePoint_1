@@ -186,6 +186,14 @@ jobs:
       - name: Web end-to-end tests (notes flag on)
         run: pnpm --filter @repo/web test:e2e:notes
 
+      # Flag-ON undo/redo journey (playwright.undo.config.ts) serving the app with VITE_UNDO_REDO on
+      # (layered on the canvas authoring/toolbar/workspace/editing/pen flags, with the pen enforced), so
+      # the user-visible undo surface — the toolbar Undo/Redo controls, the Ctrl/Cmd+Z keybinding, the
+      # announcements — is exercised end to end (ADR-0048 M3). Runs last, after the prior runs tear down
+      # their servers, reusing the ports.
+      - name: Web end-to-end tests (undo/redo flag on)
+        run: pnpm --filter @repo/web test:e2e:undo
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -199,6 +207,7 @@ jobs:
             apps/web/playwright-report-authoring/
             apps/web/playwright-report-programme/
             apps/web/playwright-report-notes/
+            apps/web/playwright-report-undo/
           if-no-files-found: ignore
           retention-days: 7
 

@@ -20,14 +20,29 @@ export const COALESCE_WINDOW_MS = 500;
 export interface PlanEditHistory {
   /** Push a just-applied edit's inverse onto the undo stack; clears the redo branch (linear history). */
   record: (command: Command) => void;
-  /** Run the top undo command's inverse, then move it to the redo stack. Rejects if the inverse throws. */
-  undo: () => Promise<void>;
-  /** Re-apply the top redo command, then move it back to the undo stack. Rejects if it throws. */
-  redo: () => Promise<void>;
-  /** Drop both stacks (plan switch, and — wired by the caller in M3 — pen loss / conflict). */
+  /**
+   * Run the top undo command's inverse, then move it to the redo stack. Resolves with the executed
+   * command's {@link Command.label} (for the M3 success announcement), or `null` when there is nothing
+   * to undo or a replay is already in flight. Rejects if the inverse throws — the stacks are left
+   * intact and the M3 conflict contract ({@link usePlanUndoRedo}) classifies the rejection.
+   */
+  undo: () => Promise<string | null>;
+  /** Re-apply the top redo command, then move it back to the undo stack. Resolves/rejects like {@link undo}. */
+  redo: () => Promise<string | null>;
+  /** Drop both stacks (plan switch, and — wired by the M3 surface — pen loss). */
   clear: () => void;
+  /**
+   * Drop **only** the redo stack, leaving the undo stack intact (the M3 conflict contract, ADR-0048):
+   * a 409/404 on an inverse aborts non-destructively and clears the now-untrustworthy redo branch
+   * without discarding the undo history.
+   */
+  clearRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  /** The next undo step's {@link Command.label} (M3 accessible name / announcement); null when empty. */
+  undoLabel: string | null;
+  /** The next redo step's {@link Command.label}; null when empty. */
+  redoLabel: string | null;
 }
 
 /**
@@ -52,16 +67,29 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
   const lastRecordAtRef = useRef(Number.NEGATIVE_INFINITY);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  // The top-of-stack labels are reactive state (not just refs) so the M3 toolbar controls can name
+  // the pending action ("Undo move activity") and re-render when it changes.
+  const [undoLabel, setUndoLabel] = useState<string | null>(null);
+  const [redoLabel, setRedoLabel] = useState<string | null>(null);
 
   const sync = useCallback(() => {
-    setCanUndo(undoStackRef.current.length > 0);
-    setCanRedo(redoStackRef.current.length > 0);
+    const undoStack = undoStackRef.current;
+    const redoStack = redoStackRef.current;
+    setCanUndo(undoStack.length > 0);
+    setCanRedo(redoStack.length > 0);
+    setUndoLabel(undoStack[undoStack.length - 1]?.label ?? null);
+    setRedoLabel(redoStack[redoStack.length - 1]?.label ?? null);
   }, []);
 
   const clear = useCallback(() => {
     undoStackRef.current = [];
     redoStackRef.current = [];
     lastRecordAtRef.current = Number.NEGATIVE_INFINITY;
+    sync();
+  }, [sync]);
+
+  const clearRedo = useCallback(() => {
+    redoStackRef.current = [];
     sync();
   }, [sync]);
 
@@ -103,15 +131,15 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     [sync],
   );
 
-  const undo = useCallback(async () => {
-    if (runningRef.current) return;
+  const undo = useCallback(async (): Promise<string | null> => {
+    if (runningRef.current) return null;
     const command = undoStackRef.current[undoStackRef.current.length - 1];
-    if (!command) return;
+    if (!command) return null;
     runningRef.current = true;
     try {
       await command.undo();
       // Move it across only after the inverse succeeds; a throw above leaves the stacks untouched
-      // and propagates out of this promise (M3 shows the error and the user can retry).
+      // and propagates out of this promise (the M3 conflict contract classifies it and the user retries).
       undoStackRef.current.pop();
       redoStackRef.current.push(command);
       if (redoStackRef.current.length > MAX_HISTORY_DEPTH) redoStackRef.current.shift();
@@ -119,15 +147,16 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       // the now-exposed top command.
       lastRecordAtRef.current = Number.NEGATIVE_INFINITY;
       sync();
+      return command.label;
     } finally {
       runningRef.current = false;
     }
   }, [sync]);
 
-  const redo = useCallback(async () => {
-    if (runningRef.current) return;
+  const redo = useCallback(async (): Promise<string | null> => {
+    if (runningRef.current) return null;
     const command = redoStackRef.current[redoStackRef.current.length - 1];
-    if (!command) return;
+    if (!command) return null;
     runningRef.current = true;
     try {
       await command.redo();
@@ -137,10 +166,11 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       // End the coalescing window — a new edit after a redo starts a fresh step.
       lastRecordAtRef.current = Number.NEGATIVE_INFINITY;
       sync();
+      return command.label;
     } finally {
       runningRef.current = false;
     }
   }, [sync]);
 
-  return { record, undo, redo, clear, canUndo, canRedo };
+  return { record, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel };
 }

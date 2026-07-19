@@ -1,5 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -176,6 +178,12 @@ const DEPENDENCY = {
 // Imported AFTER the mocks are declared.
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
+// The model now composes the M3 undo/redo wrapper (`usePlanUndoRedo`), which reads the query client to
+// refetch server truth on a conflict — so the hook must render inside a QueryClientProvider (the real
+// wrapper is unmocked; only the history store is swapped for the record spy above).
+const wrapper = ({ children }: { children: ReactNode }) =>
+  createElement(QueryClientProvider, { client: new QueryClient() }, children);
+
 beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
@@ -187,7 +195,7 @@ beforeEach(() => {
 describe('usePlanWorkspaceModel undo/redo recording seam', () => {
   it('flag ON: a day reposition issues its update AND records exactly one command', async () => {
     h.undoRedo = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     await act(async () => {
       await result.current.onTsldReposition({ activityId: 'a1', startDay: 4 });
@@ -203,7 +211,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag OFF: the same reposition issues its update but records nothing', async () => {
     h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     await act(async () => {
       await result.current.onTsldReposition({ activityId: 'a1', startDay: 4 });
@@ -215,7 +223,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag ON: a pure lane move records exactly one command and issues no recalc', async () => {
     h.undoRedo = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     await act(async () => {
       await result.current.onTsldReposition({ activityId: 'a1', laneIndex: 2 });
@@ -228,7 +236,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag OFF: a pure lane move records nothing', async () => {
     h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     await act(async () => {
       await result.current.onTsldReposition({ activityId: 'a1', laneIndex: 2 });
@@ -240,7 +248,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag ON: a create records exactly one command; flag OFF records nothing', async () => {
     h.undoRedo = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldCreate({
         name: 'Dig',
@@ -254,7 +262,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
     h.undoRedo = false;
     h.record.mockClear();
-    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await off.result.current.onTsldCreate({
         name: 'Dig',
@@ -269,7 +277,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag ON: a dependency link records exactly one command', async () => {
     h.undoRedo = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldLink({ predecessorId: 'a1', successorId: 'a2', type: 'FS' });
     });
@@ -278,7 +286,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag ON: an auto-arrange records exactly one command (the whole batch = one step)', async () => {
     h.undoRedo = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldAutoArrange([{ id: 'a1', laneIndex: 3 }]);
     });
@@ -287,7 +295,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag ON: a leaf delete records one command; a cascade (summary+subtree) truncates history', () => {
     h.undoRedo = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     // A leaf (TASK, no children) is reversible — one command, no truncation.
     act(() => result.current.recordActivityDelete(ACTIVITY));
@@ -303,7 +311,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
   it('flag OFF: neither a leaf delete nor a cascade delete touches the history', () => {
     h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     act(() => result.current.recordActivityDelete(ACTIVITY));
     act(() => result.current.recordActivityDelete(SUMMARY));
     expect(h.record).not.toHaveBeenCalled();

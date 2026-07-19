@@ -25,6 +25,7 @@ import {
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
+  UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
@@ -39,6 +40,7 @@ import {
   useTsldToolbarContext,
   type PlanDialogKind,
 } from '@/features/tsld/toolbar/use-tsld-toolbar-context';
+import { useUndoRedoKeybindings } from '@/features/undo-redo';
 import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
@@ -161,6 +163,18 @@ export function ToolbarPlanWorkspace({
   // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
   // tools read as live while doing nothing on the canvas (ux/a11y review).
   const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
+
+  // Undo/Redo keybindings (ADR-0048 M3.2), scoped to the workspace root (like the `?` shortcut above) —
+  // `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` / `Ctrl+Y`, suppressing the browser default via preventDefault
+  // (TECH_DEBT #25). Enabled only when the flag is on AND the user can author (holds the pen, not the
+  // read-only Late overlay) — the same `authoringEnabled` predicate the toolbar's pen-gated cluster
+  // uses, so the keyboard path and the buttons gate identically. Flag-off ⇒ no listener (byte-identical).
+  useUndoRedoKeybindings({
+    rootRef,
+    enabled: UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive,
+    undo: model.undoRedo.undo,
+    redo: model.undoRedo.redo,
+  });
 
   // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
   // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so

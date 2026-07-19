@@ -198,6 +198,16 @@ export function useTsldToolbarContext({
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 
+      // Undo / redo (ADR-0048 M3): the model's wrapped store (conflict contract + announcements),
+      // shared with the workspace keybindings. Pen-gated as part of the authoring cluster at the
+      // toolbar; the items themselves swap in only when `VITE_UNDO_REDO` is on (else Coming-soon stubs).
+      canUndo: model.undoRedo.canUndo,
+      canRedo: model.undoRedo.canRedo,
+      undoLabel: model.undoRedo.undoLabel,
+      redoLabel: model.undoRedo.redoLabel,
+      undo: model.undoRedo.undo,
+      redo: model.undoRedo.redo,
+
       // Object / plan actions. With canvas-first authoring on, the manual button flushes the shared
       // auto-recalc coalescer (ADR-0032 M3) so it and the debounced auto-recalcs are one path;
       // flag-off it's the standalone recalc command, byte-for-byte.
@@ -248,6 +258,7 @@ export function useTsldToolbarContext({
       linkType,
       setLinkType,
       requestAutoArrange,
+      model.undoRedo,
       setShowHelp,
       canRecalc,
       canEditSchedule,

@@ -33,3 +33,13 @@ export {
   COALESCE_WINDOW_MS,
   type PlanEditHistory,
 } from './use-plan-edit-history';
+export {
+  usePlanUndoRedo,
+  UNDO_CONFLICT_MESSAGE,
+  REDO_CONFLICT_MESSAGE,
+  PEN_LOST_MESSAGE,
+  UNDO_FAILED_MESSAGE,
+  REDO_FAILED_MESSAGE,
+  type PlanUndoRedo,
+} from './use-plan-undo-redo';
+export { useUndoRedoKeybindings } from './use-undo-redo-keybindings';

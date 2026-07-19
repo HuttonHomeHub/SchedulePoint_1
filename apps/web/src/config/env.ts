@@ -434,9 +434,10 @@ export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
 
 /**
  * Client-side command-stack undo/redo for plan authoring (ADR-0048, spec `docs/specs/undo-redo/`).
- * **OFF by default** — an in-progress feature shipping **dark** while its milestones land: M1 records
- * commands at the workspace-model seam with **no visible UI**, and only a later milestone adds the
- * toolbar Undo/Redo controls, keybindings and announcements before this flag is flipped on by default.
+ * **OFF by default** — an in-progress feature shipping **dark** while its milestones land: M1/M2 record
+ * commands at the workspace-model seam and M3.1/M3.2 add the user-visible surface (the conflict/pen-loss
+ * contract, the toolbar Undo/Redo controls, the `Cmd/Ctrl+Z` keybindings and the announcements). It
+ * stays default-off until M3.3 (a11y/component/ux reviews + the flag-on Playwright journey) flips it on.
  *
  * When on, structural plan edits (reposition / relane / definition update, then create/delete/link in
  * later milestones) push an inverse onto a bounded, per-plan, per-pen-session in-memory stack, and

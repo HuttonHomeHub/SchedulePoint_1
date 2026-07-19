@@ -55,6 +55,7 @@ import {
   EARNED_VALUE_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULING_MODES_ENABLED,
+  UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { cn } from '@/lib/utils';
@@ -479,6 +480,105 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
 }
 
 /**
+ * The **Undo / Redo controls** (ADR-0048 M3.2) — icon-only authoring-cluster buttons whose accessible
+ * name reflects the pending step ("Undo move activity") when the history knows it, falling back to the
+ * bare verb. Rendered as native buttons (mirroring {@link AddActivityControl}) spreading `itemProps`
+ * onto the single focusable control, so they join the toolbar's roving-tabindex model; `api.disabled`
+ * carries both pen-gating (the whole authoring cluster) and the empty-stack state (`canUndo`/`canRedo`).
+ */
+function UndoRedoControl({
+  direction,
+  ctx,
+  api,
+}: {
+  direction: 'undo' | 'redo';
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const disabled = api.disabled;
+  const stepLabel = direction === 'undo' ? ctx.undoLabel : ctx.redoLabel;
+  const verb = direction === 'undo' ? 'Undo' : 'Redo';
+  // Name the pending action where a label exists ("Undo move activity"), else the bare verb.
+  const label = stepLabel ? `${verb} ${stepLabel.toLowerCase()}` : verb;
+  return (
+    <button
+      {...api.itemProps}
+      type="button"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      title={label}
+      onClick={() => {
+        if (!disabled) (direction === 'undo' ? ctx.undo : ctx.redo)();
+      }}
+      className={cn(toolbarControlVariants({ disabled }))}
+    >
+      {direction === 'undo' ? (
+        <Undo2 aria-hidden="true" className="size-4" />
+      ) : (
+        <Redo2 aria-hidden="true" className="size-4" />
+      )}
+    </button>
+  );
+}
+
+/**
+ * The Undo/Redo authoring-cluster items (ADR-0048 M3.2). Flag-**off** keeps the ADR-0031 "Coming soon"
+ * placeholder stubs so the toolbar is byte-for-byte the current bar; flag-**on** swaps in the real
+ * pen-gated commands (disabled from `canUndo`/`canRedo`, dynamic accessible name, driving `ctx.undo` /
+ * `ctx.redo`). They sit at the end of the pen-gated cluster (after Recalculate), tier-2 icon buttons.
+ */
+function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
+  if (!UNDO_REDO_ENABLED) {
+    return [
+      placeholderItem({
+        id: 'undo',
+        group: 'tools',
+        row: 'do',
+        tier: 2,
+        order: 8,
+        label: 'Undo',
+        icon: <Undo2 className="size-4" />,
+      }),
+      placeholderItem({
+        id: 'redo',
+        group: 'tools',
+        row: 'do',
+        tier: 2,
+        order: 9,
+        label: 'Redo',
+        icon: <Redo2 className="size-4" />,
+      }),
+    ];
+  }
+  return [
+    {
+      id: 'undo',
+      group: 'tools',
+      row: 'do',
+      tier: 2,
+      order: 8,
+      label: 'Undo',
+      penGated: true,
+      isEnabled: (ctx) => ctx.canUndo,
+      disabledReason: (ctx) => (ctx.canUndo ? undefined : 'Nothing to undo'),
+      render: (ctx, api) => <UndoRedoControl direction="undo" ctx={ctx} api={api} />,
+    },
+    {
+      id: 'redo',
+      group: 'tools',
+      row: 'do',
+      tier: 2,
+      order: 9,
+      label: 'Redo',
+      penGated: true,
+      isEnabled: (ctx) => ctx.canRedo,
+      disabledReason: (ctx) => (ctx.canRedo ? undefined : 'Nothing to redo'),
+      render: (ctx, api) => <UndoRedoControl direction="redo" ctx={ctx} api={api} />,
+    },
+  ];
+}
+
+/**
  * The TSLD command registry (ADR-0031, two-row amendment) — every canvas control expressed as a
  * {@link ToolbarItem} over the {@link TsldToolbarContext}, grouped by the fixed 7-group taxonomy and
  * split across **two toolbar rows** via each item's `row`:
@@ -844,24 +944,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             : 'Start editing to recalculate',
       onActivate: (ctx) => ctx.recalculate(),
     },
-    placeholderItem({
-      id: 'undo',
-      group: 'tools',
-      row: 'do',
-      tier: 2,
-      order: 8,
-      label: 'Undo',
-      icon: <Undo2 className="size-4" />,
-    }),
-    placeholderItem({
-      id: 'redo',
-      group: 'tools',
-      row: 'do',
-      tier: 2,
-      order: 9,
-      label: 'Redo',
-      icon: <Redo2 className="size-4" />,
-    }),
+    // Undo / Redo close the pen-gated authoring cluster (ADR-0048 M3.2). Flag-off these are the
+    // ADR-0031 "Coming soon" placeholders (byte-for-byte the current bar); flag-on they are the real
+    // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
+    ...undoRedoToolbarItems(),
 
     // --- 5 · Object / plan actions ------------------------------------------------------------
     // Finish read-out + Summary popover stay on Row 1 (Look): they report the computed schedule and

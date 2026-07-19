@@ -67,6 +67,19 @@ export interface TsldToolbarContext {
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */
   requestAutoArrange: () => void;
+  // --- Undo / redo (group 4, pen-gated — ADR-0048 M3) ---------------------------------------
+  /** Whether there is a reversible edit to undo (drives the Undo item's enabled state). */
+  canUndo: boolean;
+  /** Whether there is an undone edit to redo (drives the Redo item's enabled state). */
+  canRedo: boolean;
+  /** The next undo step's label, for the Undo control's accessible name ("Undo move activity"). */
+  undoLabel: string | null;
+  /** The next redo step's label, for the Redo control's accessible name. */
+  redoLabel: string | null;
+  /** Run the top undo step (pen-gated; applies the M3.1 conflict contract + announcement). */
+  undo: () => void;
+  /** Run the top redo step. */
+  redo: () => void;
 
   // --- Object / plan actions (group 5) ------------------------------------------------------
   /** Whether the plan can be recalculated now (role + pen; from the model). */
