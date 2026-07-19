@@ -1,0 +1,44 @@
+/** Public surface of the undo-redo feature (ADR-0048). Dark until M3 wires the toolbar + keybindings. */
+export {
+  activityDefinitionInput,
+  dependencyLinkOf,
+  relaneCommand,
+  repositionCommand,
+  updateCommand,
+  createActivityCommand,
+  deleteActivityCommand,
+  dependencyAddCommand,
+  dependencyRemoveCommand,
+  visualStartCommand,
+  autoArrangeCommand,
+  type Command,
+  type CommandCoalescing,
+  type RepositionLaneFn,
+  type UpdateActivityFn,
+  type UpdateActivityInput,
+  type CreatePlacedActivityFn,
+  type CreateActivityFn,
+  type DeleteActivityFn,
+  type CreateDependencyFn,
+  type DeleteDependencyFn,
+  type DependencyLinkInput,
+  type SetVisualStartFn,
+  type VisualPlacement,
+  type BatchPositionsFn,
+  type LanePlacement,
+} from './commands';
+export {
+  usePlanEditHistory,
+  MAX_HISTORY_DEPTH,
+  COALESCE_WINDOW_MS,
+  type PlanEditHistory,
+} from './use-plan-edit-history';
+export {
+  usePlanUndoRedo,
+  UNDO_CONFLICT_MESSAGE,
+  REDO_CONFLICT_MESSAGE,
+  UNDO_FAILED_MESSAGE,
+  REDO_FAILED_MESSAGE,
+  type PlanUndoRedo,
+} from './use-plan-undo-redo';
+export { useUndoRedoKeybindings } from './use-undo-redo-keybindings';

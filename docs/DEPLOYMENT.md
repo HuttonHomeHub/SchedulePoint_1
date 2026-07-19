@@ -187,6 +187,65 @@ Two ways to run it:
 **Rollback:** pin the previous version tag and Update (plus any compensating
 migration) — see _Runtime health & rollout_.
 
+### Automatic redeploy (Watchtower, opt-in — ADR-0047)
+
+So a release reaches the host without a manual pull, the reference stack ships an
+**optional** [Watchtower](https://containrrr.dev/watchtower/) service that polls
+GHCR and pulls + recreates the app containers when their `:latest` digest moves.
+It is **dormant by default** (a compose `autodeploy` profile) and **opt-in per
+host** — nothing auto-deploys until you enable it.
+
+**Enable it:**
+
+```bash
+# One-time: log the host in to GHCR so Watchtower can pull the private images.
+echo $GHCR_PAT | docker login ghcr.io -u <github-user> --password-stdin   # read:packages
+
+# Start the stack WITH the updater (Dockge: add COMPOSE_PROFILES=autodeploy to the
+# stack .env, then Update):
+COMPOSE_PROFILES=autodeploy docker compose -f docker-compose.release.yml up -d
+```
+
+What it does and does not touch:
+
+- **Only the app containers.** It updates just the `web`/`api` containers (they
+  carry `com.centurylinklabs.watchtower.enable=true`); it **never** recreates
+  Postgres or itself.
+- **Reuses your GHCR login.** It mounts the host Docker config
+  (`/config.json`, read-only) rather than taking a PAT in the compose env. If your
+  `config.json` isn't at `/root/.docker`, set `DOCKER_CONFIG_DIR` to its directory —
+  an **absolute** path (Compose does not reliably expand `~`). That config must hold an
+  **inline `auth` entry** for `ghcr.io`; if `docker login` used a credential helper
+  (`credsStore`/`credHelpers` — common on Docker Desktop), Watchtower can't reach the
+  helper and the private pull fails. Check with `grep ghcr.io ~/.docker/config.json`.
+- **Self-migrates.** The recreated API applies pending migrations on startup
+  (ADR-0018), so the pull **is** the deploy — no extra step.
+- **Rolling + tidy.** It recreates one container at a time and prunes the old image.
+  It recreates each container independently via the Docker API, so on a simultaneous
+  web+api release it does **not** honour the compose `depends_on` health-gate that a
+  manual `docker compose up -d` does — a brief cross-version window until both settle
+  (harmless: the web nginx just retries `/api`). Use monitor-only + a manual
+  `pull && up -d` if you need strict ordering.
+
+**Knobs** (compose env, all optional):
+
+| Variable                      | Default         | Effect                                                                                            |
+| ----------------------------- | --------------- | ------------------------------------------------------------------------------------------------- |
+| `WATCHTOWER_POLL_INTERVAL`    | `300`           | Seconds between GHCR checks.                                                                      |
+| `WATCHTOWER_MONITOR_ONLY`     | `false`         | `true` = **notify only, don't update** — a manual gate that still tells you a release is waiting. |
+| `WATCHTOWER_NOTIFICATION_URL` | _unset_         | Optional [shoutrrr](https://containrrr.dev/shoutrrr/) URL for release notifications.              |
+| `DOCKER_CONFIG_DIR`           | `/root/.docker` | Host directory holding the GHCR `config.json` to mount.                                           |
+
+**Disable it:** drop `autodeploy` from `COMPOSE_PROFILES` and `up -d` (or
+`docker compose … --profile autodeploy down` to remove the container); the app
+containers keep running. Note the updater needs the **Docker socket**, which is
+root-equivalent on the host — an accepted cost of any host-side auto-updater, and
+the reason it is label-scoped and opt-in (ADR-0047).
+
+**Rollback still wins.** A pinned `WEB_IMAGE_TAG`/`API_IMAGE_TAG` (an explicit
+version, not `latest`) is not moved by Watchtower — pin to roll back or to hold a
+host on a known version.
+
 ## Pre-release checklist
 
 - [ ] CI green on `main` (lint, typecheck, unit, e2e)

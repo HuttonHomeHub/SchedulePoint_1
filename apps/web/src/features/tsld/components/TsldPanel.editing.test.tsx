@@ -12,6 +12,8 @@ vi.mock('../../../config/env', async (importOriginal) => {
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
+import { UNDO_REDO_ENABLED } from '../../../config/env';
+
 import { TsldPanel } from './TsldPanel';
 
 beforeEach(() => announceSpy.mockClear());
@@ -584,9 +586,15 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
-    // A confirm dialog guards the no-undo bulk reorder.
+    // A confirm dialog guards the bulk reorder. The "can’t be undone yet" caveat is shown only with
+    // undo/redo OFF (this file mocks the flag off); with it on, auto-arrange records a reversible
+    // command (ADR-0048 M2.3), so the caveat is dropped (B6).
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('can’t be undone');
+    if (UNDO_REDO_ENABLED) {
+      expect(dialog).not.toHaveTextContent('can’t be undone');
+    } else {
+      expect(dialog).toHaveTextContent('can’t be undone');
+    }
     fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange' }));
     // Only the overlapping second bar moves — the minimal diff.
     await waitFor(() => expect(onAutoArrange).toHaveBeenCalledWith([{ id: 'a2', laneIndex: 1 }]));

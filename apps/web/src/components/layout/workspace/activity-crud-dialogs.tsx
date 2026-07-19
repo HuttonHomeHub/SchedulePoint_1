@@ -36,8 +36,14 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
   const confirmDelete = (): void => {
     if (!deleting) return;
     const name = deleting.name;
+    // Snapshot the pre-delete row for the undo command (ADR-0048 M2) — captured before the mutation so
+    // the inverse can re-create its whole definition.
+    const snapshot = deleting;
     deleteActivity.mutate(deleting.id, {
       onSuccess: () => {
+        // Record the delete for undo (leaf → reversible; cascade → history truncation). Only the user
+        // edit is recorded here, never the follow-up recalc. A no-op when `VITE_UNDO_REDO` is off.
+        model.recordActivityDelete(snapshot);
         // Close synchronously before the announcement so focus/AT state settles in one paint (as
         // ActivitiesTable does); the canvas then reconciles the selection to the nearest survivor.
         flushSync(() => {
@@ -57,6 +63,7 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         planId={planId}
         open={editing !== undefined}
         onClose={() => model.setEditActivityId(null)}
+        onSaved={model.recordActivityUpdate}
         calendars={model.calendars.data ?? []}
         calendarsLoading={model.calendars.isPending}
         calendarsError={model.calendars.isError}

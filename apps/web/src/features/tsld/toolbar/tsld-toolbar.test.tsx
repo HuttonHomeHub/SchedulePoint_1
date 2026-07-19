@@ -14,6 +14,9 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
+  // Pin undo/redo OFF here so the "Coming soon" placeholder assertions below exercise the flag-off
+  // rollback path; the real flag-on Undo/Redo items are covered in tsld-toolbar-undo-redo.test.tsx.
+  UNDO_REDO_ENABLED: false,
 }));
 
 const spies = {
@@ -54,6 +57,12 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     setLinkType: vi.fn(),
     canAutoArrange: false,
     requestAutoArrange: vi.fn(),
+    canUndo: false,
+    canRedo: false,
+    undoLabel: null,
+    redoLabel: null,
+    undo: vi.fn(),
+    redo: vi.fn(),
     canRecalc: true,
     recalcPending: false,
     recalculate: spies.recalculate,

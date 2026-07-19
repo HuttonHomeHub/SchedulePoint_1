@@ -1,4 +1,5 @@
 import { Dialog } from '@/components/ui/dialog';
+import { UNDO_REDO_ENABLED } from '@/config/env';
 
 interface Shortcut {
   keys: string;
@@ -22,6 +23,15 @@ const EDIT_SHORTCUTS: readonly Shortcut[] = [
     keys: 'n',
     action: 'Create an activity in the focused lane and start (uses the armed Add type)',
   },
+];
+
+/**
+ * Undo/redo accelerators (ADR-0048 M3.2) — appended to the Edit list only when `VITE_UNDO_REDO` is on,
+ * so the sheet stays byte-for-byte identical with the flag off.
+ */
+const UNDO_REDO_SHORTCUTS: readonly Shortcut[] = [
+  { keys: 'Cmd / Ctrl + Z', action: 'Undo the last edit' },
+  { keys: 'Cmd / Ctrl + Shift + Z  ·  Ctrl + Y', action: 'Redo' },
 ];
 
 function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactElement {
@@ -51,6 +61,9 @@ export function TsldShortcutsHelp({
   onClose: () => void;
   editingEnabled: boolean;
 }): React.ReactElement {
+  const editShortcuts = UNDO_REDO_ENABLED
+    ? [...EDIT_SHORTCUTS, ...UNDO_REDO_SHORTCUTS]
+    : EDIT_SHORTCUTS;
   return (
     <Dialog
       open={open}
@@ -66,7 +79,7 @@ export function TsldShortcutsHelp({
         {editingEnabled ? (
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">Edit</h3>
-            <ShortcutList items={EDIT_SHORTCUTS} />
+            <ShortcutList items={editShortcuts} />
           </section>
         ) : null}
       </div>

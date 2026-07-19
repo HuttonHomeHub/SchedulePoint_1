@@ -75,12 +75,13 @@ vi.mock('@/features/baselines', () => ({
 vi.mock('@/features/activities', () => ({
   useActivities: () =>
     query([{ id: 'a1', version: 3, name: 'Excavate', earlyStart: '2026-01-02' }]),
+  useCreateActivity: () => ({ mutateAsync: vi.fn() }),
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn() }),
   useUpdateActivity: () => ({ mutateAsync: vi.fn() }),
   useRepositionLane: () => ({ mutateAsync: vi.fn() }),
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
-  useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   ActivitiesTable: () => <div data-testid="activities-table" />,
   ActivityFormDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
@@ -88,6 +89,7 @@ vi.mock('@/features/activities', () => ({
 vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
+  useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 

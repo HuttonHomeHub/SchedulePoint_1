@@ -243,6 +243,29 @@ describe('ActivityFormDialog', () => {
     });
   });
 
+  it('calls onSaved with the pre-edit and server post-edit rows on a successful edit (ADR-0048)', async () => {
+    const saved = { ...ACTIVITY, name: 'Excavate deeper', version: 5 };
+    vi.mocked(apiFetch).mockReset().mockResolvedValue(saved);
+    const onSaved = vi.fn();
+    renderDialog({ activity: ACTIVITY, onSaved });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Excavate deeper' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    // Pre-edit row first (the undo target), then the server's post-edit row (the redo target).
+    expect(onSaved).toHaveBeenCalledWith(ACTIVITY, saved);
+  });
+
+  it('does not call onSaved when creating (create-undo is a later milestone)', async () => {
+    const onSaved = vi.fn();
+    renderDialog({ onSaved });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it('round-trips seeded advanced-constraint values on a no-op save with the flag off', async () => {
     // The advanced fields (secondary constraint, ALAP, expected finish) aren't rendered while
     // VITE_ADVANCED_CONSTRAINTS is off (the default here), but the dialog still seeds them from the

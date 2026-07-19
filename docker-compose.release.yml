@@ -5,8 +5,14 @@
 #      echo $GHCR_PAT | docker login ghcr.io -u <github-user> --password-stdin
 #      (PAT needs the `read:packages` scope.)
 #
-# 2. Pick the image tag (defaults to `main`):
-#      export IMAGE_TAG=main        # or a specific build: 0.2.0 / sha-<short>
+# 2. Pick the image tag. Each app selects its OWN tag, defaulting to `latest`
+#    (the newest release of that image — the two version independently, ADR-0027):
+#      export WEB_IMAGE_TAG=0.31.0     # pin web (rollback / staged rollout)
+#      export API_IMAGE_TAG=0.18.0     # pin api independently
+#    Or set IMAGE_TAG to override BOTH at once (e.g. a branch build / sha):
+#      export IMAGE_TAG=main           # or sha-<short>
+#    A pinned WEB_IMAGE_TAG/API_IMAGE_TAG (a version, not `latest`) is NOT moved by
+#    the optional auto-updater below — pin to roll back or hold a known version.
 #
 # 3. Start the stack:
 #      docker compose -f docker-compose.release.yml up -d
@@ -37,6 +43,10 @@ services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
+    # Belt-and-braces: never auto-updated even if WATCHTOWER_LABEL_ENABLE is ever dropped
+    # (the updater already only touches enable=true containers; ADR-0047).
+    labels:
+      com.centurylinklabs.watchtower.enable: 'false'
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
@@ -52,8 +62,12 @@ services:
       retries: 5
 
   api:
-    image: ghcr.io/huttonhomehub/schedulepoint_1/api:${IMAGE_TAG:-main}
+    image: ghcr.io/huttonhomehub/schedulepoint_1/api:${API_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
+    # Opt-in auto-redeploy (ADR-0047): only label-enabled containers are updated by
+    # the optional `watchtower` service, so Postgres is never recreated by it.
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
     depends_on:
       db:
         condition: service_healthy
@@ -69,13 +83,49 @@ services:
       - '3000:3000'
 
   web:
-    image: ghcr.io/huttonhomehub/schedulepoint_1/web:${IMAGE_TAG:-main}
+    image: ghcr.io/huttonhomehub/schedulepoint_1/web:${WEB_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
     depends_on:
       api:
         condition: service_healthy
     ports:
       - '8080:8080'
+
+  # Optional automatic redeploy (ADR-0047, TECH_DEBT #29). DORMANT by default —
+  # it only runs when you opt in with the `autodeploy` profile:
+  #
+  #   COMPOSE_PROFILES=autodeploy docker compose -f docker-compose.release.yml up -d
+  #
+  # It polls GHCR and pulls + recreates ONLY the label-enabled app containers
+  # (web, api) when their :latest digest moves — never the db or itself. The API
+  # self-migrates on recreate (prisma migrate deploy, ADR-0018), so this is a
+  # complete deploy. It reuses the host's `docker login ghcr.io` credentials via
+  # the mounted Docker config (the private images need `read:packages`) — set
+  # DOCKER_CONFIG_DIR to the directory holding that config.json if it isn't at
+  # /root/.docker. Set WATCHTOWER_MONITOR_ONLY=true to be NOTIFIED of a new image
+  # without auto-updating (a manual gate). See docs/DEPLOYMENT.md.
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    profiles: ['autodeploy']
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_CONFIG_DIR:-/root/.docker}/config.json:/config.json:ro
+    environment:
+      # Only touch containers explicitly labelled — never Postgres or Watchtower itself.
+      WATCHTOWER_LABEL_ENABLE: 'true'
+      # Poll GHCR on this interval (seconds); 300s = every 5 minutes.
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+      # Prune the superseded image after a successful pull.
+      WATCHTOWER_CLEANUP: 'true'
+      # Recreate one app container at a time to avoid simultaneous downtime.
+      WATCHTOWER_ROLLING_RESTART: 'true'
+      # Set to 'true' to be notified of a new image WITHOUT auto-updating (a manual gate).
+      WATCHTOWER_MONITOR_ONLY: ${WATCHTOWER_MONITOR_ONLY:-false}
+      # Optional shoutrrr URL for release notifications (Slack/Discord/email/…); unset = quiet.
+      WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL:-}
 
 volumes:
   db-data:
