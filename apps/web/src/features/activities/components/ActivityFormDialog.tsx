@@ -61,6 +61,7 @@ export function ActivityFormDialog({
   planId,
   open,
   onClose,
+  onSaved,
   activity,
   calendars = [],
   calendarsLoading = false,
@@ -73,6 +74,12 @@ export function ActivityFormDialog({
   planId: string;
   open: boolean;
   onClose: () => void;
+  /**
+   * Called after an EDIT saves, with the pre-edit row and the server's post-edit row — the seam the
+   * workspace uses to record an undo command (ADR-0048). Optional and additive: callers that don't
+   * pass it (e.g. the activities table) behave exactly as before, and it never fires on create.
+   */
+  onSaved?: (before: ActivitySummary, after: ActivitySummary) => void;
   activity?: ActivitySummary;
   /** The org's calendars, for the calendar picker's options (route-composed). */
   calendars?: CalendarSummary[];
@@ -217,8 +224,11 @@ export function ActivityFormDialog({
       update.mutate(
         { activityId: activity.id, version: activity.version, ...values },
         {
-          onSuccess: () => {
+          onSuccess: (saved) => {
             announce(`Activity “${values.name}” saved.`);
+            // Hand the before/after rows to the workspace so it can record an undo command (ADR-0048).
+            // Optional — absent for the activities-table dialog, so that path is byte-identical.
+            onSaved?.(activity, saved);
             onClose();
           },
         },

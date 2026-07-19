@@ -6,11 +6,23 @@ const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
 const mutateSpy = vi.fn();
+const onSavedSpy = vi.fn();
 vi.mock('@/features/activities', () => ({
   useDeleteActivity: () => ({ mutate: mutateSpy, isPending: false }),
-  // A probe standing in for the real edit dialog — surfaces the open state + which activity.
-  ActivityFormDialog: ({ open, activity }: { open: boolean; activity?: { name: string } }) =>
-    open ? <div data-testid="edit-dialog">Editing {activity?.name}</div> : null,
+  // A probe standing in for the real edit dialog — surfaces the open state + which activity, and
+  // captures the `onSaved` prop so we can assert the workspace's undo-recording seam is wired through.
+  ActivityFormDialog: ({
+    open,
+    activity,
+    onSaved,
+  }: {
+    open: boolean;
+    activity?: { name: string };
+    onSaved?: unknown;
+  }) => {
+    onSavedSpy(onSaved);
+    return open ? <div data-testid="edit-dialog">Editing {activity?.name}</div> : null;
+  },
 }));
 
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
@@ -31,6 +43,7 @@ function makeModel(over: Partial<Record<string, unknown>> = {}): PlanWorkspaceMo
     deleteActivityId: null,
     setEditActivityId: vi.fn(),
     setDeleteActivityId: vi.fn(),
+    recordActivityUpdate: vi.fn(),
     ...over,
   } as unknown as PlanWorkspaceModel;
 }
@@ -41,6 +54,14 @@ describe('ActivityCrudDialogs', () => {
   it('opens the edit dialog for the targeted activity', () => {
     render(<ActivityCrudDialogs model={makeModel({ editActivityId: 'a2' })} />);
     expect(screen.getByTestId('edit-dialog')).toHaveTextContent('Editing Excavate');
+  });
+
+  it('wires the model’s undo-recording seam into the edit dialog (ADR-0048)', () => {
+    const recordActivityUpdate = vi.fn();
+    render(<ActivityCrudDialogs model={makeModel({ recordActivityUpdate })} />);
+    // The dialog receives the model's `recordActivityUpdate` as its `onSaved` callback, so a saved
+    // edit records an undo command at the workspace seam.
+    expect(onSavedSpy).toHaveBeenLastCalledWith(recordActivityUpdate);
   });
 
   it('renders no dialogs when nothing is targeted', () => {

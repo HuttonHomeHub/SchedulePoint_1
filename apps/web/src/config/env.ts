@@ -431,3 +431,22 @@ export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOff(
  * Set `VITE_NOTES=false` to hide the web surface in an environment (the API is unaffected).
  */
 export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
+
+/**
+ * Client-side command-stack undo/redo for plan authoring (ADR-0048, spec `docs/specs/undo-redo/`).
+ * **OFF by default** — an in-progress feature shipping **dark** while its milestones land: M1 records
+ * commands at the workspace-model seam with **no visible UI**, and only a later milestone adds the
+ * toolbar Undo/Redo controls, keybindings and announcements before this flag is flipped on by default.
+ *
+ * When on, structural plan edits (reposition / relane / definition update, then create/delete/link in
+ * later milestones) push an inverse onto a bounded, per-plan, per-pen-session in-memory stack, and
+ * Undo/Redo replay plan **INPUTS** through the existing REST mutation hooks — never engine-owned
+ * derived columns. The normal ADR-0032 auto-recalc redraws the outputs, so the CPM engine and its recalc
+ * **parity gate are untouched** (this feature cannot regress them). Undo is pen-gated exactly like a
+ * first-class edit: every inverse flows through the unchanged `assertHoldsPen` (423) + RBAC + org-scope
+ * + optimistic `version` gates, so the client stack is a convenience that can never escalate.
+ *
+ * With the flag off, no command is recorded and every edit behaves byte-for-byte as it does today. Set
+ * `VITE_UNDO_REDO=true` to opt in while the feature is dark.
+ */
+export const UNDO_REDO_ENABLED = flagDefaultOff(import.meta.env.VITE_UNDO_REDO);

@@ -2,7 +2,12 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED, NOTES_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import {
+  CANVAS_AUTHORING_ENABLED,
+  NOTES_ENABLED,
+  SCHEDULING_MODES_ENABLED,
+  UNDO_REDO_ENABLED,
+} from '@/config/env';
 import {
   useActivities,
   useCreatePlacedActivity,
@@ -32,6 +37,12 @@ import {
   type TsldRepositionOutcome,
   type TsldEditOutcome,
 } from '@/features/tsld';
+import {
+  relaneCommand,
+  repositionCommand,
+  updateCommand,
+  usePlanEditHistory,
+} from '@/features/undo-redo';
 import {
   canCalculateSchedule,
   canManageHierarchy,
@@ -138,6 +149,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // pen + a start date); guarded live at fire time. Recalc failures announce (rare). The manual
   // button becomes `flush()`. Flag-off: this stays inert and the callbacks keep their inline recalc.
   const announce = useAnnounce();
+  // Undo/redo command stack (ADR-0048, dark M1). Records the inverse of each structural edit behind
+  // `VITE_UNDO_REDO`; nothing is recorded and no behaviour changes when the flag is off. The store is
+  // keyed on `planId` so switching plans resets history. No visible surface yet — M3 wires the UI.
+  const editHistory = usePlanEditHistory(planId);
   const autoRecalc = usePlanAutoRecalc(orgSlug, planId, {
     enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
     onMessage: announce,
@@ -235,6 +250,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const updateActivity = useUpdateActivity(orgSlug, planId);
   const repositionLane = useRepositionLane(orgSlug, planId);
   const setVisualStart = useSetActivityVisualStart(orgSlug, planId);
+  // Record an activity DEFINITION edit (rename / duration / constraint / …) on the undo stack (ADR-0048,
+  // dark M1). Called by `ActivityCrudDialogs` when the shared edit dialog saves, with the pre-edit row
+  // and the server's post-edit row; the inverse re-PATCHes the full definition through the same
+  // `useUpdateActivity` endpoint. A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
+  const recordActivityUpdate = useCallback(
+    (before: ActivitySummary, after: ActivitySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      editHistory.record(updateCommand({ update: updateActivity.mutateAsync, before, after }));
+    },
+    [editHistory, updateActivity.mutateAsync],
+  );
   // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
   // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
   // EARLY mode) the schedule mode is always EARLY, so today's SNET path is byte-for-byte unchanged.
@@ -253,7 +279,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     if (startDay === undefined) {
       if (laneIndex === undefined) return { applied: false, conflict: null };
       try {
-        await repositionLane.mutateAsync({ activityId, laneIndex, version: activity.version });
+        const saved = await repositionLane.mutateAsync({
+          activityId,
+          laneIndex,
+          version: activity.version,
+        });
+        // Record the lane move for undo (ADR-0048, dark M1) — only the user edit, never the recalc
+        // (a pure lane move has none). Guarded on the flag so behaviour is unchanged when off.
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            relaneCommand({
+              repositionLane: repositionLane.mutateAsync,
+              activityId,
+              fromLaneIndex: activity.laneIndex,
+              toLaneIndex: laneIndex,
+              version: saved.version,
+            }),
+          );
+        }
         return { applied: true, conflict: null };
       } catch (err) {
         if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
@@ -281,7 +324,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           ...(laneIndex !== undefined ? { laneIndex } : {}),
         });
       } else {
-        await updateActivity.mutateAsync({
+        const saved = await updateActivity.mutateAsync({
           activityId,
           version: activity.version,
           name: activity.name,
@@ -305,6 +348,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           constraintDate: droppedDate,
           ...(laneIndex !== undefined ? { laneIndex } : {}),
         });
+        // Record the reposition for undo (ADR-0048, dark M1) — the single user edit, NOT the follow-up
+        // recalc below (recompute-don't-restore: the inverse replays the input, recalc redraws). The
+        // inverse restores the pre-edit definition (its prior constraint) and lane. Guarded on the flag.
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            repositionCommand({
+              update: updateActivity.mutateAsync,
+              before: activity,
+              after: saved,
+            }),
+          );
+        }
       }
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
@@ -453,6 +508,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setDeleteActivityId,
     onEditActivity,
     onDeleteActivity,
+    // Undo/redo recording seam (ADR-0048, dark M1). `ActivityCrudDialogs` calls this when the shared
+    // edit dialog saves so a definition edit joins the reposition/relane commands recorded inline in
+    // the TSLD callbacks. A no-op when `VITE_UNDO_REDO` is off; undo/redo controls arrive in M3.
+    recordActivityUpdate,
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,

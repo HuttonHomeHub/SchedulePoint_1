@@ -47,4 +47,6 @@ interface ImportMetaEnv {
   readonly VITE_PROGRAMME_SCHEDULING?: string;
   /** Notes web surface — attributed note threads + composer on plans (plan-detail/workspace) and activities (Logic panel), plus the per-row count badge (Notes M3, ADR-0046). "true"/"1" enables it; off by default. */
   readonly VITE_NOTES?: string;
+  /** Client-side undo/redo for plan authoring (ADR-0048). "true"/"1" enables it; off by default while it ships dark (M1 records commands with no visible UI; M3 adds the controls). */
+  readonly VITE_UNDO_REDO?: string;
 }
