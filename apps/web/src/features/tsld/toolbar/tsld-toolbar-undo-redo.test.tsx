@@ -106,16 +106,31 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
     expect(redo).toHaveBeenCalledTimes(1);
   });
 
-  it('disables Undo when canUndo is false and Redo when canRedo is false (and does not invoke)', () => {
+  it('disables Undo/Redo on an empty stack and surfaces the reason in the accessible name (and does not invoke)', () => {
+    // An empty stack disables via `isEnabled`, so the registry's `disabledReason` resolves — B4 threads
+    // it through the render path so the control names WHY it's off, not just the bare verb.
     const bar = doRow(ctx({ canUndo: false, canRedo: false }));
-    const undoBtn = within(bar).getByRole('button', { name: 'Undo move activity' });
-    const redoBtn = within(bar).getByRole('button', { name: 'Redo add link' });
+    const undoBtn = within(bar).getByRole('button', { name: 'Undo — Nothing to undo' });
+    const redoBtn = within(bar).getByRole('button', { name: 'Redo — Nothing to redo' });
     expect(undoBtn).toHaveAttribute('aria-disabled', 'true');
     expect(redoBtn).toHaveAttribute('aria-disabled', 'true');
+    expect(undoBtn).toHaveAttribute('title', 'Undo — Nothing to undo');
     fireEvent.click(undoBtn);
     fireEvent.click(redoBtn);
     expect(undo).not.toHaveBeenCalled();
     expect(redo).not.toHaveBeenCalled();
+  });
+
+  it('advertises the keyboard accelerator via aria-keyshortcuts (S3)', () => {
+    const bar = doRow(ctx());
+    expect(within(bar).getByRole('button', { name: 'Undo move activity' })).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Control+Z',
+    );
+    expect(within(bar).getByRole('button', { name: 'Redo add link' })).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Control+Shift+Z',
+    );
   });
 
   it('shades the controls (pen-gated) when authoring is not enabled — the whole cluster is off', () => {

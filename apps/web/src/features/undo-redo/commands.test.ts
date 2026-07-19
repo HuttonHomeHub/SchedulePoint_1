@@ -186,7 +186,7 @@ describe('repositionCommand', () => {
   it('defaults its label but accepts an override', () => {
     const update = fakeUpdate();
     expect(repositionCommand({ update, before: activity(), after: activity() }).label).toBe(
-      'Move activity',
+      'Move “Excavate”',
     );
     expect(
       repositionCommand({ update, before: activity(), after: activity(), label: 'Nudge' }).label,
@@ -248,7 +248,7 @@ describe('updateCommand', () => {
     expect(update).toHaveBeenLastCalledWith(
       expect.objectContaining({ name: 'Excavate', durationDays: 5 }),
     );
-    expect(command.label).toBe('Edit activity');
+    expect(command.label).toBe('Edit “Excavate”');
   });
 });
 
@@ -291,7 +291,7 @@ describe('createActivityCommand', () => {
     // A second undo deletes the RE-created id (new-2), not the stale original — the toggle tracks it.
     await command.undo();
     expect(deleteActivity).toHaveBeenLastCalledWith('new-2');
-    expect(command.label).toBe('Add activity');
+    expect(command.label).toBe('Add “Excavate”');
   });
 
   it('does not re-delete when already absent, nor re-create when already present', async () => {
@@ -353,7 +353,7 @@ describe('deleteActivityCommand', () => {
 
     await command.redo();
     expect(deleteActivity).toHaveBeenCalledExactlyOnceWith('reborn'); // deletes the re-created id
-    expect(command.label).toBe('Delete activity');
+    expect(command.label).toBe('Delete “Excavate”');
   });
 
   it('skips the lane restore when the re-created activity already lands on the original lane', async () => {

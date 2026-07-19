@@ -189,7 +189,9 @@ export function repositionCommand(params: {
   label?: string;
 }): Command {
   return definitionSnapshotCommand({
-    label: params.label ?? 'Move activity',
+    // Name the entity so the toolbar accessible name + the "Undid …" announcement read concretely
+    // ("Undid move “Excavate”"), mirroring the app's `Activity “${name}” …` toast convention (S1).
+    label: params.label ?? `Move “${params.before.name}”`,
     update: params.update,
     before: params.before,
     after: params.after,
@@ -253,7 +255,8 @@ export function updateCommand(params: {
   label?: string;
 }): Command {
   return definitionSnapshotCommand({
-    label: params.label ?? 'Edit activity',
+    // Name the entity ("Edit “Excavate”"), like {@link repositionCommand} (S1).
+    label: params.label ?? `Edit “${params.before.name}”`,
     update: params.update,
     before: params.before,
     after: params.after,
@@ -315,7 +318,8 @@ export function createActivityCommand(params: {
     remove: params.deleteActivity,
   });
   return {
-    label: params.label ?? 'Add activity',
+    // Name the created entity ("Add “Excavate”"), mirroring the toast convention (S1).
+    label: params.label ?? `Add “${params.created.name}”`,
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
   };
@@ -355,7 +359,8 @@ export function deleteActivityCommand(params: {
     remove: params.deleteActivity,
   });
   return {
-    label: params.label ?? 'Delete activity',
+    // Name the deleted entity ("Delete “Excavate”"), mirroring the toast convention (S1).
+    label: params.label ?? `Delete “${activity.name}”`,
     undo: toggle.ensurePresent,
     redo: toggle.ensureAbsent,
   };

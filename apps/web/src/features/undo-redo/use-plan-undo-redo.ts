@@ -16,9 +16,10 @@ import {
  * (`useAnnounce`) so a screen-reader user hears why an undo/redo didn't apply — the visual canvas
  * change is otherwise silent to AT (WCAG 4.1.3). Exported for the unit tests.
  */
-export const UNDO_CONFLICT_MESSAGE = 'Couldn’t undo — the plan changed; review and try again.';
-export const REDO_CONFLICT_MESSAGE = 'Couldn’t redo — the plan changed; review and try again.';
-export const PEN_LOST_MESSAGE = 'Editing is paused — you don’t hold the pen.';
+export const UNDO_CONFLICT_MESSAGE =
+  'This plan changed since you opened it — your undo wasn’t applied. Refresh to see the latest.';
+export const REDO_CONFLICT_MESSAGE =
+  'This plan changed since you opened it — your redo wasn’t applied. Refresh to see the latest.';
 export const UNDO_FAILED_MESSAGE = 'Couldn’t undo just now. Please try again.';
 export const REDO_FAILED_MESSAGE = 'Couldn’t redo just now. Please try again.';
 
@@ -88,10 +89,11 @@ export function usePlanUndoRedo(params: {
     (direction: 'undo' | 'redo', err: unknown): void => {
       if (err instanceof ApiFetchError && err.status === 423) {
         // Pen lost — the history belongs to the pen session, so drop it whole; the shared pen contract
-        // shows the lost-control banner + refetches the lock.
+        // shows the lost-control banner + refetches the lock. That banner is its own `role="status"`
+        // live region and is the SINGLE source of the announcement (see `usePlanPen`) — so we do NOT
+        // also `announce(...)` here, which would be a double utterance for one event (a11y review).
         onLockLost(err);
         history.clear();
-        announce(PEN_LOST_MESSAGE);
         return;
       }
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 404)) {

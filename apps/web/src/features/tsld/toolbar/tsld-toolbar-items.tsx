@@ -482,9 +482,16 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
 /**
  * The **Undo / Redo controls** (ADR-0048 M3.2) — icon-only authoring-cluster buttons whose accessible
  * name reflects the pending step ("Undo move activity") when the history knows it, falling back to the
- * bare verb. Rendered as native buttons (mirroring {@link AddActivityControl}) spreading `itemProps`
- * onto the single focusable control, so they join the toolbar's roving-tabindex model; `api.disabled`
- * carries both pen-gating (the whole authoring cluster) and the empty-stack state (`canUndo`/`canRedo`).
+ * bare verb, and — when disabled — folds in the item's `disabledReason` ("Nothing to undo") so the
+ * reason is reachable to AT (a disabled button's bare `title` isn't reliably announced, so it goes in
+ * the accessible name). Rendered as native buttons (mirroring {@link AddActivityControl}) spreading
+ * `itemProps` onto the single focusable control, so they join the toolbar's roving-tabindex model;
+ * `api.disabled` carries both pen-gating (the whole authoring cluster) and the empty-stack state
+ * (`canUndo`/`canRedo`). `aria-keyshortcuts` advertises the accelerator so AT can discover it.
+ *
+ * These are `render` items, so they are **pinned inline** and never demoted into the `⋯` overflow
+ * (unlike the flag-off placeholder buttons) — an intentional choice: undo/redo must always be one
+ * reachable click, not buried behind a narrow-bar overflow menu.
  */
 function UndoRedoControl({
   direction,
@@ -498,13 +505,17 @@ function UndoRedoControl({
   const disabled = api.disabled;
   const stepLabel = direction === 'undo' ? ctx.undoLabel : ctx.redoLabel;
   const verb = direction === 'undo' ? 'Undo' : 'Redo';
-  // Name the pending action where a label exists ("Undo move activity"), else the bare verb.
-  const label = stepLabel ? `${verb} ${stepLabel.toLowerCase()}` : verb;
+  // Name the pending action where a label exists ("Undo move activity"), else the bare verb; when
+  // disabled, surface the reason ("Undo — Nothing to undo"), matching the icon-only ToolbarButton.
+  const liveLabel = stepLabel ? `${verb} ${stepLabel.toLowerCase()}` : verb;
+  const label = disabled && api.disabledReason ? `${verb} — ${api.disabledReason}` : liveLabel;
+  const keyShortcuts = direction === 'undo' ? 'Control+Z' : 'Control+Shift+Z';
   return (
     <button
       {...api.itemProps}
       type="button"
       aria-label={label}
+      aria-keyshortcuts={keyShortcuts}
       aria-disabled={disabled || undefined}
       title={label}
       onClick={() => {

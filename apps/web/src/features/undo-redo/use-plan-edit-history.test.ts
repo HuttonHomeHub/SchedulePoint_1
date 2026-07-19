@@ -105,6 +105,88 @@ describe('usePlanEditHistory', () => {
     expect(result.current.canRedo).toBe(false);
   });
 
+  it('clearRedo() empties ONLY the redo stack, leaving the undo stack intact', async () => {
+    const log: string[] = [];
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+
+    act(() => {
+      result.current.record(cmd('a', log));
+      result.current.record(cmd('b', log));
+    });
+    await act(async () => {
+      await result.current.undo(); // pops 'b' onto the redo stack
+    });
+    expect(result.current.canUndo).toBe(true);
+    expect(result.current.canRedo).toBe(true);
+
+    act(() => result.current.clearRedo());
+    expect(result.current.canRedo).toBe(false); // redo dropped…
+    expect(result.current.canUndo).toBe(true); // …undo intact
+
+    // The surviving undo ('a') still replays; nothing was redone.
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(log).toEqual(['undo:b', 'undo:a']);
+  });
+
+  it('tracks undoLabel/redoLabel through record → undo → redo → clearRedo, reverting to null', async () => {
+    const log: string[] = [];
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    expect(result.current.undoLabel).toBeNull();
+    expect(result.current.redoLabel).toBeNull();
+
+    act(() => {
+      result.current.record(cmd('a', log));
+      result.current.record(cmd('b', log));
+    });
+    // The top-of-undo-stack label leads.
+    expect(result.current.undoLabel).toBe('b');
+    expect(result.current.redoLabel).toBeNull();
+
+    await act(async () => {
+      await result.current.undo(); // 'b' moves to the redo stack; 'a' now tops undo
+    });
+    expect(result.current.undoLabel).toBe('a');
+    expect(result.current.redoLabel).toBe('b');
+
+    await act(async () => {
+      await result.current.redo(); // 'b' back on the undo stack
+    });
+    expect(result.current.undoLabel).toBe('b');
+    expect(result.current.redoLabel).toBeNull();
+
+    // Undo once, then clearRedo drops the redo branch → redoLabel back to null, undoLabel stays.
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.redoLabel).toBe('b');
+    act(() => result.current.clearRedo());
+    expect(result.current.redoLabel).toBeNull();
+    expect(result.current.undoLabel).toBe('a');
+
+    // clear() empties both → both labels null.
+    act(() => result.current.clear());
+    expect(result.current.undoLabel).toBeNull();
+    expect(result.current.redoLabel).toBeNull();
+  });
+
+  it('coalescing tracks undoLabel to the merged step, and label is null once the stack empties', async () => {
+    const log: string[] = [];
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => {
+      // Two same-key, in-window records collapse to one step whose label leads.
+      result.current.record({ ...cmd('drag', log), coalescing: { key: 'k', merge: (p) => p } });
+      result.current.record({ ...cmd('drag', log), coalescing: { key: 'k', merge: (p) => p } });
+    });
+    expect(result.current.undoLabel).toBe('drag');
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.undoLabel).toBeNull(); // one merged step → one undo empties it
+    expect(result.current.redoLabel).toBe('drag');
+  });
+
   it('resets history when the plan changes', () => {
     const log: string[] = [];
     const { result, rerender } = renderHook(({ planId }) => usePlanEditHistory(planId), {

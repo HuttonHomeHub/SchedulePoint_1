@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlanEditHistory } from './use-plan-edit-history';
 import {
-  PEN_LOST_MESSAGE,
   REDO_CONFLICT_MESSAGE,
   REDO_FAILED_MESSAGE,
   UNDO_CONFLICT_MESSAGE,
@@ -103,16 +102,18 @@ describe('usePlanUndoRedo — 409 / 404 conflict (abort non-destructively)', () 
 });
 
 describe('usePlanUndoRedo — 423 pen lost (clear whole history)', () => {
-  it('clears the whole history, runs the shared pen contract, and announces', async () => {
+  it('clears the whole history and runs the shared pen contract, WITHOUT a second announcement', async () => {
     const history = fakeHistory({ undo: vi.fn().mockRejectedValue(err(423)) });
     const { result, announce, onLockLost } = setup(history);
 
     act(() => result.current.undo());
 
-    await waitFor(() => expect(announce).toHaveBeenCalledWith(PEN_LOST_MESSAGE));
+    // The shared pen contract (the `EditLockBanner`'s own live region) is the single source of the
+    // pen-loss announcement — this feature must NOT `announce(...)` a second, near-identical utterance.
+    await waitFor(() => expect(onLockLost).toHaveBeenCalledTimes(1));
     expect(history.clear).toHaveBeenCalledTimes(1);
-    expect(onLockLost).toHaveBeenCalledTimes(1);
     expect(history.clearRedo).not.toHaveBeenCalled();
+    expect(announce).not.toHaveBeenCalled();
   });
 });
 

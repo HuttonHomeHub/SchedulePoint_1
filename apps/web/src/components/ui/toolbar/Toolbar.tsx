@@ -261,6 +261,7 @@ export function Toolbar<Ctx>({
               >
                 {r.item.render(context, {
                   disabled: !r.enabled,
+                  disabledReason: r.disabledReason,
                   active: r.active,
                   itemProps: r.item.presentational
                     ? { tabIndex: -1, 'data-toolbar-item': r.item.id }

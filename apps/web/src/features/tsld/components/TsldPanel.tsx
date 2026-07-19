@@ -1,7 +1,11 @@
 import type { ActivitySummary, ActivityType, DependencySummary, DependencyType } from '@repo/types';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { CANVAS_AUTHORING_ENABLED, TSLD_EDITING_ENABLED } from '../../../config/env';
+import {
+  CANVAS_AUTHORING_ENABLED,
+  TSLD_EDITING_ENABLED,
+  UNDO_REDO_ENABLED,
+} from '../../../config/env';
 import type { EditIntent } from '../interaction/gesture-machine';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
@@ -840,7 +844,13 @@ export function TsldPanel({
         onClose={() => setConfirmArrange(false)}
         onConfirm={runAutoArrange}
         title="Auto-arrange lanes?"
-        description="This repacks activities into the fewest lanes with no time-overlap. It changes only vertical layout, not dates — but it can’t be undone yet."
+        description={
+          // The no-undo caveat is only true with undo/redo OFF; flag-on, auto-arrange records a
+          // reversible `autoArrangeCommand` (ADR-0048 M2.3), so drop the stale warning (B6).
+          UNDO_REDO_ENABLED
+            ? 'This repacks activities into the fewest lanes with no time-overlap. It changes only vertical layout, not dates.'
+            : 'This repacks activities into the fewest lanes with no time-overlap. It changes only vertical layout, not dates — but it can’t be undone yet.'
+        }
         confirmLabel="Auto-arrange"
         pendingLabel="Arranging…"
         confirmVariant="default"

@@ -14,9 +14,9 @@ let input: HTMLInputElement;
 const undo = vi.fn();
 const redo = vi.fn();
 
-function mount(enabled = true) {
+function mount(enabled = true, modalOpen = false) {
   return renderHook(() =>
-    useUndoRedoKeybindings({ rootRef: { current: root }, enabled, undo, redo }),
+    useUndoRedoKeybindings({ rootRef: { current: root }, enabled, modalOpen, undo, redo }),
   );
 }
 
@@ -71,6 +71,36 @@ describe('useUndoRedoKeybindings', () => {
     expect(press({ key: 'z', ctrlKey: true })).toBe(false);
     expect(undo).not.toHaveBeenCalled();
     expect(redo).not.toHaveBeenCalled();
+  });
+
+  it('does nothing while a modal dialog is open (undo/redo must not fire under a modal)', () => {
+    // A confirm/edit dialog is open — e.g. focus on a ConfirmDialog's Cancel button (not a text
+    // field), so the field guard wouldn't catch it; the modalOpen guard must (B2).
+    mount(true, true);
+    expect(press({ key: 'z', ctrlKey: true })).toBe(false);
+    expect(press({ key: 'z', ctrlKey: true, shiftKey: true })).toBe(false);
+    expect(press({ key: 'y', ctrlKey: true })).toBe(false);
+    expect(undo).not.toHaveBeenCalled();
+    expect(redo).not.toHaveBeenCalled();
+  });
+
+  it('resumes firing once the modal closes (live guard, no re-subscribe needed)', () => {
+    const { rerender } = renderHook(
+      ({ modalOpen }) =>
+        useUndoRedoKeybindings({
+          rootRef: { current: root },
+          enabled: true,
+          modalOpen,
+          undo,
+          redo,
+        }),
+      { initialProps: { modalOpen: true } },
+    );
+    expect(press({ key: 'z', ctrlKey: true })).toBe(false);
+    expect(undo).not.toHaveBeenCalled();
+    rerender({ modalOpen: false });
+    expect(press({ key: 'z', ctrlKey: true })).toBe(true);
+    expect(undo).toHaveBeenCalledTimes(1);
   });
 
   it('does not treat Cmd+Y as redo (a macOS history shortcut, not our binding)', () => {

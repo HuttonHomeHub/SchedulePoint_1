@@ -90,7 +90,14 @@ export function ToolbarPlanWorkspace({
   // dialog / edit form (whose modal keydown still bubbles to this root).
   const openShortcuts = canvasUi.setShowHelp;
   const rootRef = useRef<HTMLDivElement>(null);
-  const anotherDialogOpen = dialog !== null || model.editing;
+  // "A modal is open" — the plan dialogs + the edit-plan form + the activity edit/delete dialogs.
+  // Gates both the `?` shortcut (don't stack the sheet on an open modal) and the undo/redo keybindings
+  // (don't mutate plan state from beneath an open `ConfirmDialog`/`ActivityFormDialog`, ADR-0048).
+  const anotherDialogOpen =
+    dialog !== null ||
+    model.editing ||
+    model.editActivityId !== null ||
+    model.deleteActivityId !== null;
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -172,6 +179,8 @@ export function ToolbarPlanWorkspace({
   useUndoRedoKeybindings({
     rootRef,
     enabled: UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive,
+    // Inert while any modal is open, so `Ctrl+Z` never mutates plan state under a dialog (ADR-0048).
+    modalOpen: anotherDialogOpen,
     undo: model.undoRedo.undo,
     redo: model.undoRedo.redo,
   });

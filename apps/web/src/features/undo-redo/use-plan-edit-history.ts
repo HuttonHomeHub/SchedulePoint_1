@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Command } from './commands';
 
@@ -172,5 +172,14 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     }
   }, [sync]);
 
-  return { record, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel };
+  // Return a **stable** object: the callbacks are already stable (useCallback), so identity changes
+  // only when a reactive field flips. Without this memo a fresh literal every render would cascade
+  // through `usePlanUndoRedo` → `model.undoRedo` → the ADR-0031 toolbar-context memo, re-triggering
+  // the Toolbar's resolve → partition → measure on every unrelated re-render (pen poll / query
+  // settle) and defeating the documented perf invariant — mirroring `usePlanAutoRecalc`'s memoised
+  // return.
+  return useMemo(
+    () => ({ record, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel }),
+    [record, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel],
+  );
 }

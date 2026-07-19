@@ -52,6 +52,12 @@ export type ToolbarRow = 'look' | 'do';
 export interface ToolbarItemRenderApi {
   /** Resolved enabled state (respects `isEnabled` + pen-gating) — mirror it on custom controls. */
   disabled: boolean;
+  /**
+   * The resolved {@link ToolbarItem.disabledReason} when the item is disabled (else `undefined`) —
+   * so a `render` control can surface *why* it's off (title / accessible name), matching the plain
+   * `ToolbarButton`. Absent-reason is normal (a disable with no explanatory copy).
+   */
+  disabledReason: string | undefined;
   /** Resolved active/pressed state (`isActive`). */
   active: boolean;
   /**
