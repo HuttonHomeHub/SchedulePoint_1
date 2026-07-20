@@ -28,9 +28,20 @@ export interface ImportXerInput {
   readonly caps?: Partial<XerParseCaps>;
 }
 
+/**
+ * Hard graph-size ceiling (ADR-0050, security/perf). The parser's byte/row caps bound the *file*, but a
+ * compact tab-delimited file can still map to a very large graph; a graph past this ceiling is
+ * **hard-rejected** BEFORE validate/repair (whose cycle repair is bounded by it, B2) and before any
+ * persistence (whose single commit transaction is sized by it, B3). The values are generous headroom
+ * above the product's ~2,000-activity ceiling (brief §17) while still bounding a hostile file to a graph
+ * the pipeline can process well within the interactive-transaction budget.
+ */
+export const MAX_ACTIVITIES = 5000;
+export const MAX_DEPENDENCIES = 10000;
+
 /** A typed, user-safe import rejection. `stage` says where it failed; `code`/`message` never leak internals. */
 export interface ImportError {
-  readonly stage: 'parse' | 'adapt';
+  readonly stage: 'parse' | 'adapt' | 'limit';
   readonly code: string;
   readonly message: string;
   /** 1-based physical line for a parse error, when attributable. */
@@ -88,6 +99,30 @@ export function importXer(input: ImportXerInput): ImportXerResult {
 
   // 3. Map canonical → SchedulePoint import graph.
   const mapped = mapCanonicalToImportGraph(adapted.model);
+
+  // 3a. Hard graph-size ceiling. Reject a graph past the documented cap BEFORE validate/repair (its
+  // cycle repair is bounded by this, B2) and before any commit (the single persistence transaction is
+  // sized by this, B3) — never hang the event loop / blow the transaction budget on a hostile file.
+  if (mapped.graph.activities.length > MAX_ACTIVITIES) {
+    return {
+      ok: false,
+      error: {
+        stage: 'limit',
+        code: 'TOO_MANY_ACTIVITIES',
+        message: `This schedule has ${mapped.graph.activities.length} activities, above the ${MAX_ACTIVITIES}-activity import limit.`,
+      },
+    };
+  }
+  if (mapped.graph.dependencies.length > MAX_DEPENDENCIES) {
+    return {
+      ok: false,
+      error: {
+        stage: 'limit',
+        code: 'TOO_MANY_DEPENDENCIES',
+        message: `This schedule has ${mapped.graph.dependencies.length} relationships, above the ${MAX_DEPENDENCIES}-relationship import limit.`,
+      },
+    };
+  }
 
   // 4. Validate / repair the graph (dangling, duplicate, cyclic, duplicate codes).
   const validated = validateAndRepair(mapped.graph);

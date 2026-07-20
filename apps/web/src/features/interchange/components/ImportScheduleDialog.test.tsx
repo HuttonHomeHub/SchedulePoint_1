@@ -117,6 +117,36 @@ describe('ImportScheduleDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('announces the resolved dry-run report to the live region (WCAG 4.1.3)', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: REPORT }));
+    renderDialog();
+    pickFile();
+
+    await screen.findByText('214');
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(
+        'Report ready — 214 activities, 231 relationships mapped.',
+      ),
+    );
+  });
+
+  it('announces the committed import to the live region (WCAG 4.1.3)', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(200, { data: REPORT }))
+      .mockResolvedValueOnce(jsonResponse(201, { data: { planId: 'plan-9', report: REPORT } }));
+    renderDialog();
+    pickFile();
+    await screen.findByText('214');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(
+        'Imported schedule — 214 activities. Opening the plan.',
+      ),
+    );
+  });
+
   it('surfaces a friendly reject message on a 422 UNPARSEABLE_FILE (nothing created)', async () => {
     vi.mocked(fetch).mockResolvedValue(
       jsonResponse(422, {

@@ -30,6 +30,12 @@ export interface XerParseCaps {
 /**
  * Sane defaults tuned to the product's ~2,000-activity ceiling (a real 2k-activity XER is a few MiB and
  * tens of thousands of rows) with generous headroom, while still bounding a hostile file to a safe size.
+ *
+ * These are **coarse file-shape caps** (raw rows across every table, including out-of-scope ones), not
+ * the domain graph ceiling. The authoritative activity/dependency limit is enforced downstream on the
+ * mapped graph by `importXer` (`MAX_ACTIVITIES` / `MAX_DEPENDENCIES`, ADR-0050) — a file may parse under
+ * `maxRows` yet still be rejected there if it maps to too large a network. `maxRows` therefore stays a
+ * generous upper bound; the graph ceiling is the real gate.
  */
 export const DEFAULT_XER_PARSE_CAPS: XerParseCaps = {
   maxBytes: 64 * 1024 * 1024, // 64 MiB

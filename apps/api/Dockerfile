@@ -18,15 +18,18 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/config/package.json packages/config/
 COPY packages/types/package.json packages/types/
+COPY packages/interchange/package.json packages/interchange/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @repo/api...
 
 # --- Build: compile the API and generate the Prisma client -------------------
 FROM deps AS build
 COPY . .
-# Build the shared @repo/types package first (its compiled JS is required at
-# runtime — the raw TypeScript source cannot be loaded by plain Node).
+# Build the shared workspace packages first (their compiled JS is required at
+# runtime — the raw TypeScript source cannot be loaded by plain Node). @repo/api
+# consumes both @repo/types and @repo/interchange (ADR-0019 build contract).
 RUN pnpm --filter @repo/types build \
+    && pnpm --filter @repo/interchange build \
     && pnpm --filter @repo/api prisma:generate \
     && pnpm --filter @repo/api build \
     && pnpm --filter @repo/api --prod --legacy deploy /out \

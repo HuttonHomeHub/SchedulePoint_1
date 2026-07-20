@@ -23,6 +23,12 @@ import { InterchangeService } from './interchange.service';
  * `$transaction` — the same repository-composition pattern the domain services use for atomic multi-row
  * writes — then invokes ScheduleService to recalculate the new plan (the CPM engine is only called,
  * never modified).
+ *
+ * The uploaded bytes are a **transient, in-memory parse-and-discard buffer**: Multer buffers the file
+ * (bounded by the ADR-0050 byte cap), the pure pipeline parses it, and the buffer is dropped when the
+ * request ends — it is NEVER persisted to object storage. This is deliberately NOT ADR-0011 durable
+ * file storage; the only persisted artefact of an import is the created plan (and, later, an optional
+ * import-audit row). MSPDI (M3) and any large-file BullMQ offload (ADR-0009) keep this same property.
  */
 @Module({
   imports: [

@@ -15,7 +15,7 @@ export function InterchangeReportTable({
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-4">
-      <dl className="grid grid-cols-3 gap-2">
+      <dl aria-label="Mapped" className="grid grid-cols-3 gap-2">
         <Count label="Activities" value={report.mapped.activities} />
         <Count label="Relationships" value={report.mapped.relationships} />
         <Count label="Calendars" value={report.mapped.calendars} />

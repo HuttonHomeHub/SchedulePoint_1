@@ -427,7 +427,8 @@ Versioned under `/api/v1`, standard envelopes, OpenAPI-annotated, deny-by-defaul
   re-uploaded file) → `201 { data: { planId, report } }`. Creates the plan; runs recalc.
 - `GET …/interchange/imports/:id` — (async) job/report status → `{ data: { status, report? } }`.
 - Errors per the §2 table with the standard `{ error: { code, message, details? } }` envelope; DTOs
-  validated by the global pipe. (Exact colon-action vs sub-resource pathing finalised with **api-reviewer**.)
+  validated by the global pipe. (Exact colon-action vs sub-resource pathing **RESOLVED with api-reviewer**:
+  sub-resource paths chosen — `POST …/projects/:projectId/interchange/dry-run` and `…/interchange/commit`.)
 
 ### Component changes
 

@@ -95,6 +95,21 @@ export class ActivityRepository {
     return db.activity.create({ data });
   }
 
+  /**
+   * Batch-insert many activities in ONE statement, inside the caller's transaction (interchange
+   * commit, ADR-0050 B3). Ids may be client-assigned (the `@default(uuid(7))` is bypassed) so the
+   * caller can resolve dependency endpoints before the write. All rows are brand-new (a fresh plan),
+   * so no optimistic-lock/audit ceremony beyond the create defaults. Avoids a per-row `create` loop
+   * that risked Prisma's interactive-transaction timeout at the import ceiling.
+   */
+  async createMany(
+    rows: readonly Prisma.ActivityCreateManyInput[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await db.activity.createMany({ data: [...rows] });
+  }
+
   /** An active activity scoped to its organisation (anti-IDOR). */
   findActiveByIdInOrg(
     id: string,

@@ -95,6 +95,7 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 | 403  | Authenticated but not authorised                           |
 | 404  | Resource not found                                         |
 | 409  | Conflict (e.g. duplicate, optimistic-lock version clash)   |
+| 413  | Payload too large — upload exceeds the boundary cap        |
 | 422  | Validation failed                                          |
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
 | 429  | Rate limited                                               |

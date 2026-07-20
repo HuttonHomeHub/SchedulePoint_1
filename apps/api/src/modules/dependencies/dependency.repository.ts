@@ -55,6 +55,21 @@ export class DependencyRepository {
     return db.activityDependency.create({ data, ...withEndpoints });
   }
 
+  /**
+   * Batch-insert many dependencies in ONE statement, inside the caller's transaction (interchange
+   * commit, ADR-0050 B3). Ids may be client-assigned (the `@default(uuid(7))` is bypassed). The caller
+   * guarantees the graph is acyclic + de-duped and every endpoint resolves (Task 1.3 + a single
+   * whole-graph `containsCycle` check), so the per-row cycle guard is replaced by that one check.
+   * Avoids a per-row `create` loop that risked Prisma's interactive-transaction timeout at the ceiling.
+   */
+  async createMany(
+    rows: readonly Prisma.ActivityDependencyCreateManyInput[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await db.activityDependency.createMany({ data: [...rows] });
+  }
+
   /** An active dependency scoped to its organisation (anti-IDOR), with endpoints. */
   findActiveByIdInOrg(
     id: string,

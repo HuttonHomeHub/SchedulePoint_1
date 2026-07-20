@@ -91,7 +91,15 @@ function ImportFlow({
       setClientError(sizeError);
       return;
     }
-    dryRun.mutate(picked);
+    dryRun.mutate(picked, {
+      // Announce that the report resolved so a screen-reader user not focused on the mounting
+      // report region still hears it — the Confirm button silently enabling otherwise (WCAG 4.1.3).
+      onSuccess: (report) => {
+        announce(
+          `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.`,
+        );
+      },
+    });
   };
 
   const onConfirm = (): void => {
@@ -124,7 +132,13 @@ function ImportFlow({
           type="file"
           accept=".xer"
           onChange={onPickFile}
-          aria-describedby="interchange-file-hint"
+          aria-invalid={!!errorMessage}
+          // Point the control at the error text only while it shows, so a screen-reader user
+          // moving onto the field hears the failure with it (WCAG 1.3.1 / 3.3.1 / 4.1.2) —
+          // mirroring the PlanCalendarPicker hint+error pattern.
+          aria-describedby={
+            errorMessage ? 'interchange-file-hint interchange-file-error' : 'interchange-file-hint'
+          }
           className="border-input bg-background text-foreground file:bg-secondary file:text-secondary-foreground focus-visible:ring-ring focus-visible:ring-offset-background block w-full rounded-md border text-sm file:mr-3 file:cursor-pointer file:border-0 file:px-3 file:py-2 file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         />
         <p id="interchange-file-hint" className="text-muted-foreground text-xs">
@@ -133,7 +147,7 @@ function ImportFlow({
       </div>
 
       {errorMessage ? (
-        <p role="alert" className="text-destructive-text text-sm">
+        <p id="interchange-file-error" role="alert" className="text-destructive-text text-sm">
           {errorMessage}
         </p>
       ) : null}
@@ -158,6 +172,13 @@ function ImportFlow({
               Download report
             </Button>
           </div>
+        </div>
+      ) : null}
+
+      {commit.isPending ? (
+        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Spinner label="Importing the schedule…" />
+          <span>Importing the schedule…</span>
         </div>
       ) : null}
 

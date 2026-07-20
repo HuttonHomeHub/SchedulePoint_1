@@ -1,6 +1,13 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { importXer, type ImportGraph, type InterchangeReport } from '@repo/interchange';
+import {
+  containsCycle,
+  importXer,
+  type ImportGraph,
+  type InterchangeReport,
+} from '@repo/interchange';
 import { WorkingWeekdays } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -14,8 +21,10 @@ import {
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
-import { CalendarRepository } from '../calendars/calendar.repository';
-import { wouldCreateCycle } from '../dependencies/cycle-detector';
+import {
+  CalendarRepository,
+  type ImportCalendarBatchInput,
+} from '../calendars/calendar.repository';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -173,19 +182,26 @@ export class InterchangeService {
   }
 
   /**
-   * Persist one import graph as a new plan inside the caller's transaction. Order is calendars →
-   * plan → activities → dependencies so every foreign key resolves as it is written:
-   * - **Calendars** first, materialising each source-derived `key` → the created id, so the plan default
-   *   and per-activity calendars resolve. Each calendar's intraday shift windows are approximated to the
-   *   calendar module's weekday-mask contract (a weekday is worked iff it has ≥1 window — richer shift
-   *   calendars are not API-modelled in M1); each exception maps to a whole-day working/non-working day.
-   * - The **plan**, with `plannedStart` = the source data date and its default calendar resolved.
+   * Persist one import graph as a new plan inside the caller's transaction. Ids for the client-assignable
+   * (`@default(uuid(7))`) rows are **pre-generated in memory** and the source `key` → id maps built up
+   * front, so every foreign key resolves before any DB write and the whole graph lands in a handful of
+   * **batched `createMany`s** (constant statement count, independent of graph size) — sidestepping the
+   * per-row-insert loop that risked Prisma's 5s interactive-transaction timeout at the import ceiling
+   * (ADR-0050 B3). Order stays FK-safe: calendars (+ shifts/exceptions/windows) → plan → activities →
+   * dependencies:
+   * - **Calendars** first, materialising each source-derived `key` → the pre-generated id, so the plan
+   *   default and per-activity calendars resolve. Each calendar's intraday shift windows are approximated
+   *   to the calendar module's weekday-mask contract (a weekday is worked iff it has ≥1 window — richer
+   *   shift calendars are not API-modelled in M1); each exception maps to a whole-day working/non-working
+   *   day. All inserted by {@link CalendarRepository.createManyForImport} in one batch per table.
+   * - The **plan** (a single insert), with `plannedStart` = the source data date and its default calendar
+   *   resolved.
    * - **Activities**, resolving each activity's `calendarKey` → id and assigning a **deterministic
-   *   `laneIndex` = its 0-based position in the graph's activity list** (source order). This is a simple,
-   *   stable M1 lane assignment; an auto-arrange pass can refine it later.
-   * - **Dependencies**, resolving `predecessorKey` / `successorKey` → activity ids. The graph is already
-   *   acyclic + de-duped, but the incremental `wouldCreateCycle` guard and the DB uniqueness constraint
-   *   still run (defence-in-depth) — a rejection rolls the whole transaction back.
+   *   `laneIndex` = its 0-based position in the graph's activity list** (source order), all in one batch.
+   * - **Dependencies**, resolving `predecessorKey` / `successorKey` → activity ids, in one batch. The
+   *   graph is already acyclic + de-duped (Task 1.3); a **single whole-graph `containsCycle` check**
+   *   re-asserts the DAG invariant (ADR-0021) ONCE up front (replacing the old O(E²) per-row
+   *   `wouldCreateCycle` loop), and the DB partial-unique constraint still backstops duplicates.
    *
    * Returns the new plan id and the created calendar ids (for the phase-2 recalc-failure compensation).
    */
@@ -198,40 +214,42 @@ export class InterchangeService {
     const stamp = { createdBy: principal.userId, updatedBy: principal.userId };
     const organizationId = project.organizationId;
 
-    // 1. Calendars (+ their whole-day exceptions), mapping source key → created id.
-    const calendarIdByKey = new Map<string, string>();
-    const createdCalendarIds: string[] = [];
-    for (const calendar of graph.calendars) {
-      const created = await this.calendars.create(
-        {
-          organizationId,
-          name: calendar.name,
-          workingWeekdays: this.maskFromShifts(calendar.shifts),
-          description: null,
-          ...stamp,
-        },
-        tx,
-      );
-      calendarIdByKey.set(calendar.key, created.id);
-      createdCalendarIds.push(created.id);
-      for (const exception of calendar.exceptions) {
-        await this.calendars.createException(
-          {
-            organizationId,
-            calendarId: created.id,
-            // The mapper emits single-day exceptions (startDate == endDate); the calendar module
-            // stores a whole-day working/non-working exception (a window present ⇒ a worked day).
-            date: parseCalendarDate(exception.startDate),
-            isWorking: exception.windows.length > 0,
-            label: exception.label,
-            ...stamp,
-          },
-          tx,
-        );
-      }
+    // Defence-in-depth: the pure pipeline already guarantees an acyclic graph (Task 1.3). Re-assert the
+    // DAG invariant (ADR-0021) with ONE whole-graph check over the import keys — O(V+E) once, not the
+    // old O(E²) per-row loop. Unreachable on the normal path; if a cycle slipped through, reject so the
+    // whole transaction rolls back and nothing is created.
+    if (containsCycle(graph.dependencies)) {
+      throw new ConflictError('The imported schedule contains a dependency cycle.', {
+        reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
+      });
     }
 
-    // 2. The plan, with its default calendar resolved from the graph's default key.
+    // 1. Pre-generate calendar (+ exception) ids and map source key → id, then batch-insert.
+    const calendarIdByKey = new Map<string, string>();
+    const createdCalendarIds: string[] = [];
+    const calendarInputs: ImportCalendarBatchInput[] = graph.calendars.map((calendar) => {
+      const id = randomUUID();
+      calendarIdByKey.set(calendar.key, id);
+      createdCalendarIds.push(id);
+      return {
+        id,
+        organizationId,
+        name: calendar.name,
+        workingWeekdays: this.maskFromShifts(calendar.shifts),
+        exceptions: calendar.exceptions.map((exception) => ({
+          id: randomUUID(),
+          // The mapper emits single-day exceptions (startDate == endDate); the calendar module stores a
+          // whole-day working/non-working exception (a window present ⇒ a worked day).
+          date: parseCalendarDate(exception.startDate),
+          isWorking: exception.windows.length > 0,
+          label: exception.label,
+        })),
+        ...stamp,
+      };
+    });
+    await this.calendars.createManyForImport(calendarInputs, tx);
+
+    // 2. The plan (single insert), with its default calendar resolved from the graph's default key.
     const defaultCalendarId = this.resolveCalendarId(
       graph.plan.defaultCalendarKey,
       calendarIdByKey,
@@ -250,12 +268,14 @@ export class InterchangeService {
       tx,
     );
 
-    // 3. Activities, mapping source key → created id and assigning a deterministic lane per source order.
+    // 3. Pre-generate activity ids, map source key → id (deterministic lane per source order), batch-insert.
     const activityIdByKey = new Map<string, string>();
-    let laneIndex = 0;
-    for (const activity of graph.activities) {
-      const created = await this.activities.create(
-        {
+    const activityRows: Prisma.ActivityCreateManyInput[] = graph.activities.map(
+      (activity, laneIndex) => {
+        const id = randomUUID();
+        activityIdByKey.set(activity.key, id);
+        return {
+          id,
           organizationId,
           planId: plan.id,
           code: activity.code,
@@ -266,34 +286,24 @@ export class InterchangeService {
           calendarId: this.resolveCalendarId(activity.calendarKey, calendarIdByKey),
           laneIndex,
           ...stamp,
-        },
-        tx,
-      );
-      activityIdByKey.set(activity.key, created.id);
-      laneIndex += 1;
-    }
+        };
+      },
+    );
+    await this.activities.createMany(activityRows, tx);
 
-    // 4. Dependencies, resolving endpoints and running the acyclicity guard incrementally.
-    const edges: { predecessorId: string; successorId: string }[] = [];
-    for (const dependency of graph.dependencies) {
-      const predecessorId = activityIdByKey.get(dependency.predecessorKey);
-      const successorId = activityIdByKey.get(dependency.successorKey);
-      if (!predecessorId || !successorId) {
-        // Defensive: the pure pipeline guarantees every endpoint resolves. If it somehow does not,
-        // fail loud so the whole transaction rolls back rather than silently dropping an edge.
-        throw new ValidationError('The imported schedule references an unknown activity.', {
-          reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
-        });
-      }
-      if (wouldCreateCycle(edges, predecessorId, successorId)) {
-        // Defensive: the graph is guaranteed acyclic (Task 1.3). If a cycle slipped through, reject
-        // and roll back rather than persist a graph that would break the DAG invariant (ADR-0021).
-        throw new ConflictError('The imported schedule contains a dependency cycle.', {
-          reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
-        });
-      }
-      await this.dependencies.create(
-        {
+    // 4. Dependencies, resolving endpoints to ids, batch-insert (cycle already asserted once above).
+    const dependencyRows: Prisma.ActivityDependencyCreateManyInput[] = graph.dependencies.map(
+      (dependency) => {
+        const predecessorId = activityIdByKey.get(dependency.predecessorKey);
+        const successorId = activityIdByKey.get(dependency.successorKey);
+        if (!predecessorId || !successorId) {
+          // Defensive: the pure pipeline guarantees every endpoint resolves. If it somehow does not,
+          // fail loud so the whole transaction rolls back rather than silently dropping an edge.
+          throw new ValidationError('The imported schedule references an unknown activity.', {
+            reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
+          });
+        }
+        return {
           organizationId,
           planId: plan.id,
           predecessorId,
@@ -301,11 +311,10 @@ export class InterchangeService {
           type: dependency.type,
           lagMinutes: dependency.lagMinutes,
           ...stamp,
-        },
-        tx,
-      );
-      edges.push({ predecessorId, successorId });
-    }
+        };
+      },
+    );
+    await this.dependencies.createMany(dependencyRows, tx);
 
     return { planId: plan.id, createdCalendarIds };
   }

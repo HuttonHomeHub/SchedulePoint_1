@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { importGraphSchema } from './import-graph.js';
-import { importXer } from './import-xer.js';
+import { importXer, MAX_ACTIVITIES, MAX_DEPENDENCIES } from './import-xer.js';
 import { interchangeReportSchema, type ReportFinding } from './report.js';
 import { buildXer, standardClndrData, type XerTableSpec } from './xer.fixtures.js';
 
@@ -294,6 +294,88 @@ describe('importXer — structural rejection', () => {
       expect(result.error.stage).toBe('adapt');
       expect(result.error.code).toBe('NO_PROJECT');
     }
+  });
+});
+
+describe('importXer — graph-size ceiling (B1)', () => {
+  const taskFields = [
+    'task_id',
+    'proj_id',
+    'task_code',
+    'task_name',
+    'task_type',
+    'target_drtn_hr_cnt',
+  ];
+
+  /** An XER with `count` distinct tasks (unique codes) and no logic. */
+  function manyTasksXer(count: number): string {
+    const rows: string[][] = [];
+    for (let i = 1; i <= count; i += 1) {
+      rows.push([`T${i}`, 'P1', `A${i}`, `Task ${i}`, 'TT_Task', '8']);
+    }
+    return buildXer([PROJECT, CALENDAR, { name: 'TASK', fields: taskFields, rows }]);
+  }
+
+  /**
+   * An XER with `activityCount` tasks and exactly `edgeCount` unique, acyclic FS edges (the first
+   * `edgeCount` of the `i < j` upper-triangular pairs) — so the dependency ceiling can be probed
+   * independently of the activity ceiling.
+   */
+  function denseDepsXer(activityCount: number, edgeCount: number): string {
+    const taskRows: string[][] = [];
+    for (let i = 1; i <= activityCount; i += 1) {
+      taskRows.push([`T${i}`, 'P1', `A${i}`, `Task ${i}`, 'TT_Task', '8']);
+    }
+    const predRows: string[][] = [];
+    let e = 0;
+    for (let i = 1; i <= activityCount && e < edgeCount; i += 1) {
+      for (let j = i + 1; j <= activityCount && e < edgeCount; j += 1) {
+        e += 1;
+        // TASKPRED: task_id = successor, pred_task_id = predecessor ⇒ Ti → Tj (i < j, acyclic).
+        predRows.push([`R${e}`, `T${j}`, `T${i}`, 'PR_FS', '0']);
+      }
+    }
+    return buildXer([
+      PROJECT,
+      CALENDAR,
+      { name: 'TASK', fields: taskFields, rows: taskRows },
+      {
+        name: 'TASKPRED',
+        fields: ['task_pred_id', 'task_id', 'pred_task_id', 'pred_type', 'lag_hr_cnt'],
+        rows: predRows,
+      },
+    ]);
+  }
+
+  it('rejects a schedule just over the activity ceiling', () => {
+    const result = importXer({ content: manyTasksXer(MAX_ACTIVITIES + 1) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.stage).toBe('limit');
+      expect(result.error.code).toBe('TOO_MANY_ACTIVITIES');
+      expect(result.error.message).toContain(String(MAX_ACTIVITIES));
+    }
+  });
+
+  it('accepts a schedule exactly at the activity ceiling', () => {
+    const result = importXer({ content: manyTasksXer(MAX_ACTIVITIES) });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.graph.activities).toHaveLength(MAX_ACTIVITIES);
+  });
+
+  it('rejects a schedule just over the dependency ceiling', () => {
+    const result = importXer({ content: denseDepsXer(200, MAX_DEPENDENCIES + 1) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.stage).toBe('limit');
+      expect(result.error.code).toBe('TOO_MANY_DEPENDENCIES');
+    }
+  });
+
+  it('accepts a schedule exactly at the dependency ceiling', () => {
+    const result = importXer({ content: denseDepsXer(200, MAX_DEPENDENCIES) });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.graph.dependencies).toHaveLength(MAX_DEPENDENCIES);
   });
 });
 
