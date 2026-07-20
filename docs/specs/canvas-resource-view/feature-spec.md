@@ -424,17 +424,25 @@ primitive, add an on-bar highlight over shipped levelling flags; new dark flag
   lens is in-context reading against the diagram; a modal already exists and is the thing
   we're improving on.
 
-### Critical questions (with recommended defaults)
+### Critical questions — RESOLVED at approval (2026-07-20, product sign-off)
 
-- **Q1 — Reuse the shipped histogram vs build a new canvas resource panel?**
-  **Recommended default: REUSE.** `ResourceHistogram` + `useResourceHistogram` +
-  `GET …/schedule/resource-histogram` all ship (`VITE_RESOURCE_CURVES` on). Dock the
-  existing component; do not rebuild. This is the single biggest scope reducer.
-- **Q2 — Histogram panel vs on-bar over-allocation overlay vs both?**
-  **Recommended default: BOTH, sliced** — M1 docked histogram panel (primary value,
-  frontend-only), M2 on-bar over-allocation highlight over shipped levelling flags
-  (frontend-only). Sub-question (panel dock vs split-button mode for the highlight, and
-  the below-`md` responsive placement) resolved during M2 design with ux/component review.
+- **Q1 — Reuse the shipped histogram vs build a new canvas-axis-aligned resource strip?**
+  **RESOLVED: BUILD THE CANVAS-AXIS-ALIGNED STRIP.** The product owner chose the
+  higher-fidelity path over the reuse default: M1 is a resource strip whose **time axis is
+  pixel-aligned to the TSLD canvas's zoom/scroll** (demand bars aligned under the diagram
+  columns), not the modal `ResourceHistogram` with its own independent axis. This is
+  **new render work** within the ADR-0026 draw budget and needs a **ui-architect design
+  pass** first (render-layer choice — Canvas layer vs viewport-synced DOM/SVG — the shared
+  coordinate/viewport model, culling, and the parallel a11y table). It still reuses the
+  shipped **demand read-model** (`useResourceHistogram` / `GET …/schedule/resource-histogram`)
+  as the data source and stays **frontend-only** (no API/schema/`@repo/types`/CPM-engine
+  change; parity gate byte-identical). The shipped modal `ResourceHistogram`'s a11y table +
+  bucket-size control are reused/mirrored where possible.
+- **Q2 — Histogram strip vs on-bar over-allocation overlay vs both?**
+  **RESOLVED: BOTH, sliced** — M1 the canvas-axis-aligned demand strip, M2 the on-bar
+  over-allocation highlight over the shipped per-activity levelling flags (frontend-only).
+  Responsive/below-`md` placement and dock-height contention (activities dock + resource
+  strip) resolved during design with ux/component review.
 - **Q3 — New `VITE_CANVAS_RESOURCE_VIEW` flag vs reuse `VITE_RESOURCES`?**
   **Recommended default: NEW flag** (`flagDefaultOff` → specialist reviews → flip),
   **gated on `RESOURCE_CURVES_ENABLED`** so it can't show with no data. Mirrors Stage
