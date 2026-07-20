@@ -235,6 +235,31 @@ enough; anyone else is **403** (Org-Admin moderation of others' notes is out of
 v1). The response carries `authorId`, the server-resolved `authorName` (or null),
 and `edited` (true once the body has been revised).
 
+### Schedule interchange (ADR-0050)
+
+**Import** a foreign schedule file (a P6 **XER** for M1; MS Project MSPDI later) into a chosen project as a
+**new plan**, best-effort and transparently. The parsing/mapping/validation is the pure, engine-free
+`@repo/interchange` package; the API module is thin (upload, authz, org-scope). The flow is **two-phase**:
+a stateless **dry-run** parses the file and returns an **interchange report** (detected format/version,
+mapped counts, and the approximation / repair / drop findings — the runtime instance of ADR-0050's mapping
+contract) **without writing anything**, then a separate **commit** creates the plan. Import needs
+**`interchange:import`** (**Planner + Org Admin**, a hierarchy-write capability, deliberately not
+Contributor); the authoritative org-scope check is on the **target project** (anti-IDOR). Uploads are
+multipart with a **byte cap enforced at the boundary** (→ 413 before the file is fully buffered).
+
+| Method | Path                                        | Notes                                                                                                                                                            |
+| ------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. 422 unrecognised/malformed/no file · 413 oversize. `interchange:import`. |
+
+The dry-run is **read-only** (returns `200`, not `201` — no resource is created). A parseable file returns
+its report **even when it needed repairs** (dangling edge dropped, duplicate `(pred,succ,type)`
+de-duplicated, cycle broken, duplicate code suffixed, units coerced — each named in `report.repairs` /
+`report.approximations`, never silent). A structurally-impossible file (not XER / malformed / no project)
+is a user-safe **422** (`details.reason = UNPARSEABLE_FILE`); a missing `file` is **422**
+(`NO_FILE`). Anti-IDOR is uniform: a foreign or other-org project (or a caller who is not a member of the
+org) is an indistinguishable **404**; a malformed project id is **400**. The commit endpoint (create plan +
+calendars + activities + dependencies via existing services, then recalculate) is a separate task.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

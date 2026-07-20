@@ -126,7 +126,14 @@ export type OrgPermission =
   | 'note:read'
   | 'note:create'
   | 'note:update'
-  | 'note:delete';
+  | 'note:delete'
+  // Schedule interchange — importing a foreign schedule file (P6 XER now; MSPDI later) as a new plan
+  // (ADR-0050, C2). `interchange:import` is granted to **Planner + Org Admin only** — it creates a plan
+  // plus its activities, logic and calendars (a hierarchy-write capability), so it follows the same
+  // "write" rule as the hierarchy and is deliberately NOT Contributor (reporting progress ≠ standing up
+  // a whole plan). The authoritative org-scope check is on the **target project** (anti-IDOR) in the
+  // service. `interchange:export` is reserved for the deferred export milestone (a read-egress code).
+  | 'interchange:import';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -211,6 +218,13 @@ const LOCK_OVERRIDE: readonly OrgPermission[] = ['plan:override_lock'];
  */
 const COST_READ: readonly OrgPermission[] = ['cost:read'];
 
+/**
+ * Import a foreign schedule file as a new plan (ADR-0050, C2) - Planner + Org Admin. A hierarchy-write
+ * capability (it creates a plan + activities + logic + calendars), deliberately NOT Contributor. The
+ * authoritative check is org-scoped on the target project (anti-IDOR) in the interchange service.
+ */
+const INTERCHANGE: readonly OrgPermission[] = ['interchange:import'];
+
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
 
@@ -244,6 +258,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...NOTE_WRITE,
     ...LOCK_COORDINATE,
     ...COST_READ,
+    ...INTERCHANGE,
   ],
   [OrganizationRole.ORG_ADMIN]: [
     ...ADMIN,
@@ -254,6 +269,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...LOCK_COORDINATE,
     ...LOCK_OVERRIDE,
     ...COST_READ,
+    ...INTERCHANGE,
   ],
 };
 

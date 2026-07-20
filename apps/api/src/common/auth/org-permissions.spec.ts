@@ -137,6 +137,16 @@ describe('permissionsForRole — CPM schedule (read vs calculate)', () => {
       expect(permissionsForRole(role)).toContain('cost:read');
     }
   });
+
+  it('grants interchange:import (schedule file import) to Planner + Org Admin only', () => {
+    // Import creates a plan + activities + logic + calendars — a hierarchy-write capability (ADR-0050).
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      expect(permissionsForRole(role)).not.toContain('interchange:import');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      expect(permissionsForRole(role)).toContain('interchange:import');
+    }
+  });
 });
 
 describe('permissionsForRole — calendar library (read vs write)', () => {
