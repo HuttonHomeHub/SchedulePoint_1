@@ -4,6 +4,7 @@ import { ActivitiesModule } from '../activities/activities.module';
 import { CalendarsModule } from '../calendars/calendars.module';
 import { DependenciesModule } from '../dependencies/dependencies.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { ScheduleModule } from '../schedule/schedule.module';
@@ -39,6 +40,7 @@ import { InterchangeService } from './interchange.service';
     ActivitiesModule,
     DependenciesModule,
     ScheduleModule,
+    PlanLockModule,
   ],
   controllers: [InterchangeController],
   providers: [InterchangeService],

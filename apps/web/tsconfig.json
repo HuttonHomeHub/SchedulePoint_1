@@ -21,6 +21,7 @@
     "e2e-notes",
     "e2e-undo",
     "e2e-loe",
-    "e2e-resource-view"
+    "e2e-resource-view",
+    "e2e-interchange"
   ]
 }

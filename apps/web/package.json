@@ -23,6 +23,7 @@
     "test:e2e:undo": "playwright test --config playwright.undo.config.ts --pass-with-no-tests",
     "test:e2e:loe": "playwright test --config playwright.loe.config.ts --pass-with-no-tests",
     "test:e2e:resource-view": "playwright test --config playwright.resource-view.config.ts --pass-with-no-tests",
+    "test:e2e:interchange": "playwright test --config playwright.interchange.config.ts --pass-with-no-tests",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
@@ -50,6 +51,7 @@
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
+    "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^6.0.3",

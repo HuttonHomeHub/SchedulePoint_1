@@ -27,6 +27,7 @@ import {
 } from '../calendars/calendar.repository';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { ProjectRepository } from '../projects/project.repository';
 import { ScheduleService } from '../schedule/schedule.service';
@@ -73,6 +74,7 @@ export class InterchangeService {
     private readonly activities: ActivityRepository,
     private readonly dependencies: DependencyRepository,
     private readonly schedule: ScheduleService,
+    private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(InterchangeService.name) private readonly logger: PinoLogger,
   ) {}
@@ -155,12 +157,18 @@ export class InterchangeService {
     );
 
     // Phase 2 — recalculate the new plan (ADR-0022; ScheduleService owns its own transaction + engine).
+    // Recalc is a pen-gated plan mutation (ADR-0028): under PLAN_EDIT_LOCK_ENFORCED it asserts the caller
+    // holds the plan's edit-lock. The importer just created this plan in-request, so no one else can hold
+    // its pen — take it (uncontended) for the importer, recalc, then release so the plan is left unlocked
+    // for whoever opens it. (With enforcement off, assertHoldsPen is inert and this is a harmless no-op.)
     // A recalc failure on a freshly-created, valid, acyclic graph is not expected, but honour the
     // "nothing is created on failure" contract by compensating: hard-delete the just-created rows (which
     // no caller has seen — the id is returned only on success), then rethrow.
+    await this.editLock.acquire(principal, orgSlug, planId, false);
     try {
       await this.schedule.recalculate(principal, orgSlug, planId);
     } catch (error) {
+      await this.editLock.release(principal, orgSlug, planId).catch(() => undefined);
       await this.compensate(planId, createdCalendarIds);
       this.logger.error(
         {
@@ -173,6 +181,9 @@ export class InterchangeService {
       );
       throw error;
     }
+
+    // Release the pen so the imported plan opens unlocked for whoever navigates to it.
+    await this.editLock.release(principal, orgSlug, planId).catch(() => undefined);
 
     this.logger.info(
       { organizationId: organization.id, projectId: project.id, planId, userId: principal.userId },
@@ -330,6 +341,9 @@ export class InterchangeService {
       // Children before parents, and the plan before its calendars (plan/activity → calendar is RESTRICT).
       await tx.activityDependency.deleteMany({ where: { planId } });
       await tx.activity.deleteMany({ where: { planId } });
+      // The pen we took for the recalc is released best-effort before this runs; clear any residual
+      // lock row too so the plan delete can't FK-fail on plan_lock.
+      await tx.planLock.deleteMany({ where: { planId } });
       await tx.plan.deleteMany({ where: { id: planId } });
       if (calendarIds.length > 0) {
         await tx.calendarExceptionWindow.deleteMany({
