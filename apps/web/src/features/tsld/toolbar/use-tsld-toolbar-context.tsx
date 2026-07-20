@@ -6,6 +6,7 @@ import { buildScheduleCsv } from '../export/export-csv';
 import { buildExportViewport, EXPORT_TOP_BAND, type ExportExtent } from '../export/export-image';
 import { buildExportFilename } from '../export/filename';
 import { exportDiagramToPdf } from '../export/pdf';
+import { printDiagramImage } from '../export/PrintSurface';
 import { renderExportImage } from '../export/render-export-image';
 import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
 import { isFilterActive, matchesActivityFilter } from '../render/lenses';
@@ -107,6 +108,11 @@ export function useTsldToolbarContext({
   // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
   // client state; nothing persists.
   const [pdfExporting, setPdfExporting] = useState(false);
+  // Browser Print (M4): true while the whole-diagram image is being produced for print (the build is
+  // async). Guards re-entry (a second Print click before the image resolves is a no-op) — mirroring
+  // `pdfExporting`. Session-local client state; nothing persists and it is never surfaced on the context
+  // (the Print item is a plain action button — no loading UI), so no interface field is added.
+  const [printing, setPrinting] = useState(false);
 
   // Stabilise the activities reference (a `?? []` is a fresh array each render) so the memos keyed on it
   // (the conflict ordering + `goToNextConflict`) don't rebuild every render.
@@ -516,7 +522,7 @@ export function useTsldToolbarContext({
 
       // Export & print (VITE_EXPORT_PRINT) — client deliverables over already-fetched data. Inert while
       // the flag is off (the `export`/`print` ids resolve to their placeholder stubs, so none of these
-      // are ever called). CSV lands at M1; PNG/PDF/Print are no-op stubs filled by M2–M4.
+      // are ever called). CSV (M1) / PNG (M2) / PDF (M3) / Print (M4) are all wired.
       exportScheduleCsv: (scope) => {
         // Resolve the WBS-parent column client-side from the full list (a parent's code/name by id).
         const byId = new Map(activities.map((a) => [a.id, a]));
@@ -588,7 +594,30 @@ export function useTsldToolbarContext({
           .finally(() => setPdfExporting(false));
       },
       pdfExporting,
-      printDiagram: () => {},
+      // Browser Print (M4, feature-spec §4 CQ-4 — the IMAGE path): reuse the shared off-screen PNG for
+      // the WHOLE diagram, mount it into the print-only `PrintSurface` (the print stylesheet hides the
+      // app-shell root), open the browser print dialog, then tear the surface down on `afterprint` /
+      // fallback timeout. Gated on the flag (defensive — flag-off the `print` id is its placeholder stub,
+      // so this is never called) and re-entry-guarded via `printing` (the build is async). A build failure
+      // surfaces a user-safe message and never throws; `printing` always resets in `finally`. The live
+      // canvas is never touched — only its viewport is READ by `buildDiagramImage`.
+      printDiagram: () => {
+        if (!EXPORT_PRINT_ENABLED || printing) return;
+        const built = buildDiagramImage('whole');
+        if (!built) return;
+        setPrinting(true);
+        void built.promise
+          .then(({ blob }) => {
+            printDiagramImage({
+              blob,
+              title: plan.name,
+              subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)}`,
+            });
+            announce(`Printing ${plan.name}.`);
+          })
+          .catch(() => announce('Couldn’t prepare the diagram to print. Please try again.'))
+          .finally(() => setPrinting(false));
+      },
       filterActive: exportMatch.filterActive,
       matchingCount: exportMatch.matchingCount,
     };
@@ -668,5 +697,6 @@ export function useTsldToolbarContext({
     exportMatch,
     dependencies,
     pdfExporting,
+    printing,
   ]);
 }

@@ -246,7 +246,10 @@ export interface TsldToolbarContext {
   /** True while a PDF export is in flight (the first use lazy-loads jsPDF). Drives the PDF menu items'
    * loading state and guards against a double-click / concurrent export (M3). False when the flag is off. */
   pdfExporting: boolean;
-  /** Print the whole diagram via the browser print dialog (M4 — no-op stub until then). */
+  /** Print the whole diagram via the browser print dialog (M4, CQ-4 — the image path): reuse the M2
+   * off-screen PNG, mount it into the print-only `PrintSurface` (a print stylesheet hides the app-shell),
+   * `window.print()`, then tear the surface down on `afterprint`/timeout. Off-screen paint only — the
+   * live canvas is never touched. A no-op when the flag is off. */
   printDiagram: () => void;
   /** True when a Stage-A filter or Stage-B isolate lens is currently narrowing the set — gates the
    * conditional **Matching activities only (N)** CSV item (CQ-3). False (item hidden) with no lens

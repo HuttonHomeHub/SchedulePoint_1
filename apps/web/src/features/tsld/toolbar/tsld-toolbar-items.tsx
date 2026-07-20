@@ -1792,10 +1792,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           render: (ctx, api) => <ExportMenuControl ctx={ctx} api={api} />,
         }
       : placeholderItem(exportShape),
-    // Print… — the real browser-print button lands at M4; for M0/M1 it stays the "Coming soon"
-    // placeholder even with the flag on (its `printDiagram` command is a no-op stub). `printShape` is
-    // extracted so M4 can spread it into the real item without drift, exactly like `exportShape`.
-    placeholderItem(printShape),
+    // Print… (export & print, `docs/specs/export-print/` §Milestone 4, CQ-4 — the image path) — the real
+    // browser-print action. Flag-on it prints the WHOLE diagram: `ctx.printDiagram()` reuses the M2
+    // off-screen PNG, mounts it into the print-only `PrintSurface` (a print stylesheet hides the app-shell
+    // `#root`), and opens the browser print dialog. A plain action button (no menu); gated on a computed
+    // diagram (disabled-with-reason "Add an activity first", shade-don't-hide), matching Export. Flag-off
+    // it's the byte-for-byte `placeholderItem()` "Coming soon" stub. `printShape` is spread into both so
+    // the two branches can't drift, exactly like `exportShape`.
+    EXPORT_PRINT_ENABLED
+      ? {
+          ...printShape,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
+          onActivate: (ctx) => ctx.printDiagram(),
+        }
+      : placeholderItem(printShape),
     placeholderItem({
       id: 'share',
       group: 'object',

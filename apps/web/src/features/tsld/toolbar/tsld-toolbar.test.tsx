@@ -274,7 +274,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
     // The rest are inline "Coming soon" icon buttons whose tooltip names them.
-    for (const name of ['Export…', 'Share…', 'Colour by…']) {
+    for (const name of ['Export…', 'Print…', 'Share…', 'Colour by…']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);

@@ -19,6 +19,7 @@ const spies = {
   exportScheduleCsv: vi.fn(),
   exportDiagramPng: vi.fn(),
   exportDiagramPdf: vi.fn(),
+  printDiagram: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -26,6 +27,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     exportScheduleCsv: spies.exportScheduleCsv,
     exportDiagramPng: spies.exportDiagramPng,
     exportDiagramPdf: spies.exportDiagramPdf,
+    printDiagram: spies.printDiagram,
     ...over,
   });
 }
@@ -154,10 +156,25 @@ describe('TSLD toolbar — export & print (flag on)', () => {
     expect(screen.queryByRole('menuitem', { name: 'Schedule (CSV)' })).toBeNull();
   });
 
-  it('keeps Print a "Coming soon" placeholder even with the flag on (the real button lands at M4)', () => {
+  it('renders the real Print… action (not the "Coming soon" placeholder) with the flag on', () => {
     renderRows(ctx());
     const print = screen.getByRole('button', { name: 'Print…' });
+    expect(print).not.toHaveAttribute('aria-disabled', 'true');
+    expect(print).not.toHaveAttribute('title', 'Print… — Coming soon');
+  });
+
+  it('calls printDiagram when the Print… action is activated', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: 'Print…' }));
+    expect(spies.printDiagram).toHaveBeenCalledTimes(1);
+  });
+
+  it('shades the Print… action with its reason on an empty/uncomputed canvas (shade-don’t-hide)', () => {
+    renderRows(ctx({ hasDiagram: false }));
+    const print = screen.getByRole('button', { name: 'Print…' });
     expect(print).toHaveAttribute('aria-disabled', 'true');
-    expect(print).toHaveAttribute('title', 'Print… — Coming soon');
+    expect(print).toHaveAttribute('title', 'Print… — Add an activity first');
+    fireEvent.click(print);
+    expect(spies.printDiagram).not.toHaveBeenCalled();
   });
 });
