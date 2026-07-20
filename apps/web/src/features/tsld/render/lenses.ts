@@ -380,6 +380,42 @@ export function buildBaselineGhosts(
 /** Narrowing helper for `TsldPanel` — `ActivitySummary` satisfies both matcher and colour shapes. */
 export type LensActivity = ActivitySummary;
 
+// ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
+
+/**
+ * The minimal activity shape the over-allocation highlight reads — the two **engine-owned** levelling
+ * flags (ADR-0041, a subset of {@link ActivitySummary}). The highlight NEVER re-derives over-allocation
+ * client-side; it only reads these flags the levelling pass already computed and shipped.
+ */
+export interface OverAllocatable {
+  id: string;
+  /** True when serialising pushed the activity past a resource's availability window (ADR-0041 §6). */
+  levelingWindowExceeded: boolean;
+  /** True when the activity's own single-activity demand exceeds the resource capacity (ADR-0041 §2). */
+  selfOverAllocated: boolean;
+}
+
+/**
+ * Whether the engine flagged this activity as over-allocated — its levelling window was exceeded OR it
+ * self-over-allocates. Reads engine-owned flags only (ADR-0041); pure, allocation-free.
+ */
+export function isOverAllocated(activity: OverAllocatable): boolean {
+  return activity.levelingWindowExceeded || activity.selfOverAllocated;
+}
+
+/**
+ * The set of ids the over-allocation highlight flags — the activities carrying either engine-owned
+ * levelling over-allocation flag ({@link isOverAllocated}). Returns `undefined` when **none** are
+ * flagged, so `TsldPanel` contributes no `flaggedIds` scene field and the highlight is a no-op ⇒
+ * byte-for-byte today's paint (the mode-off / no-over-allocation parity gate). Pure; the paint path
+ * then does a single `Set.has` per bar (no per-frame allocation, ADR-0026 draw budget).
+ */
+export function overAllocatedIds(activities: readonly OverAllocatable[]): Set<string> | undefined {
+  const set = new Set<string>();
+  for (const activity of activities) if (isOverAllocated(activity)) set.add(activity.id);
+  return set.size > 0 ? set : undefined;
+}
+
 // ── Colour-by legend ────────────────────────────────────────────────────────────────────
 
 /** One entry in the on-canvas Legend's Colour-by key — a text label paired with its band colour. */

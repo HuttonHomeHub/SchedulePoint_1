@@ -154,6 +154,12 @@ export interface TsldCanvasProps {
   barInk?: ReadonlyMap<string, string> | undefined;
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay). */
   baselineGhosts?: readonly GhostBar[] | undefined;
+  // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
+  /** Ids of engine-flagged over-allocated activities (`levelingWindowExceeded || selfOverAllocated`,
+   * ADR-0041), marked on the canvas with a distinct mini-histogram badge (never colour-only). Absent ⇒
+   * the highlight is off / nothing is over-allocated ⇒ byte-for-byte today's paint. `TsldPanel` derives
+   * it (memoised). */
+  flaggedIds?: ReadonlySet<string> | undefined;
   // ── Resource strip (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`) ──────────────────
   // Both default-absent ⇒ byte-for-byte today's `measure()` + paint (the parity gate): no band is
   // reserved and the rAF loop does no strip work when the strip is inactive.
@@ -342,6 +348,7 @@ export function TsldCanvas({
   barFill,
   barInk,
   baselineGhosts,
+  flaggedIds,
   resourceStripActive = false,
   resourceStrip = null,
   controlRef,
@@ -408,6 +415,7 @@ export function TsldCanvas({
     barFill,
     barInk,
     baselineGhosts,
+    flaggedIds,
   });
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
@@ -448,6 +456,7 @@ export function TsldCanvas({
       barFill,
       barInk,
       baselineGhosts,
+      flaggedIds,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
@@ -464,6 +473,7 @@ export function TsldCanvas({
     barFill,
     barInk,
     baselineGhosts,
+    flaggedIds,
   ]);
 
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing

@@ -15,10 +15,14 @@ vi.mock('@/config/env', async (importOriginal) => ({
   CANVAS_RESOURCE_VIEW_ENABLED: true,
 }));
 
-const spies = { toggleResourceView: vi.fn() };
+const spies = { toggleResourceView: vi.fn(), toggleOverAllocation: vi.fn() };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return makeTsldToolbarContext({ toggleResourceView: spies.toggleResourceView, ...over });
+  return makeTsldToolbarContext({
+    toggleResourceView: spies.toggleResourceView,
+    toggleOverAllocation: spies.toggleOverAllocation,
+    ...over,
+  });
 }
 
 function renderRows(context: TsldToolbarContext) {
@@ -71,5 +75,45 @@ describe('TSLD toolbar — resource-view lens (flag on)', () => {
     expect(item).toHaveAttribute('title', expect.stringContaining('Add an activity first'));
     fireEvent.click(item);
     expect(spies.toggleResourceView).not.toHaveBeenCalled();
+  });
+});
+
+describe('TSLD toolbar — over-allocation highlight (flag on, Stage E M2)', () => {
+  it('is a real toggle (a second lens item, not a "Coming soon" placeholder) with a pressed state', () => {
+    renderRows(ctx({ overAllocationHighlight: false, hasOverAllocation: true }));
+    const item = screen.getByRole('button', { name: 'Flag over-allocated' });
+    expect(item).not.toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAttribute('aria-pressed', 'false');
+    expect(item).not.toHaveAttribute('title', 'Flag over-allocated — Coming soon');
+  });
+
+  it('reflects the highlight mode as pressed', () => {
+    renderRows(ctx({ overAllocationHighlight: true, hasOverAllocation: true }));
+    expect(screen.getByRole('button', { name: 'Flag over-allocated' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('toggles the highlight on activation', () => {
+    renderRows(ctx({ overAllocationHighlight: false, hasOverAllocation: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Flag over-allocated' }));
+    expect(spies.toggleOverAllocation).toHaveBeenCalledOnce();
+  });
+
+  it('shades — not hides — with the empty-state reason when nothing is over-allocated', () => {
+    renderRows(ctx({ hasOverAllocation: false }));
+    const item = screen.getByRole('button', { name: 'Flag over-allocated' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAttribute('title', expect.stringContaining('No over-allocation to show'));
+    fireEvent.click(item);
+    expect(spies.toggleOverAllocation).not.toHaveBeenCalled();
+  });
+
+  it('shades with the shared lens reason on an empty/uncomputed canvas (diagram gate wins first)', () => {
+    renderRows(ctx({ hasDiagram: false, hasOverAllocation: false }));
+    const item = screen.getByRole('button', { name: 'Flag over-allocated' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAttribute('title', expect.stringContaining('Add an activity first'));
   });
 });

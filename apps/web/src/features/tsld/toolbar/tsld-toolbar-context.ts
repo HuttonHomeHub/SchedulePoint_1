@@ -133,6 +133,20 @@ export interface TsldToolbarContext {
   /** Toggle the resource strip on/off — reveals/hides the `ResourceStripPanel` + the canvas strip band
    * (view-only, never pen-gated; navigating/reading resource load never mutates the plan). */
   toggleResourceView: () => void;
+  /** Whether the on-canvas **over-allocation highlight** mode is on (Stage E M2 — drives the
+   * `over-allocation` item's pressed state). Its own mode, independent of {@link resourceViewOpen}.
+   * Populated on every build; nothing reads it while the flag is off (the id resolves to its
+   * `placeholderItem()` stub), so it is inert by default. */
+  overAllocationHighlight: boolean;
+  /** Toggle the over-allocation highlight on/off — flags bars carrying the engine-owned levelling
+   * over-allocation flags (`levelingWindowExceeded || selfOverAllocated`, ADR-0041). View-only, never
+   * pen-gated (reading over-allocation never mutates the plan). */
+  toggleOverAllocation: () => void;
+  /** True when ≥ 1 activity in the plan is over-allocated (engine-flagged). Gates the `over-allocation`
+   * item: disabled-with-reason "No over-allocation to show" otherwise (a plan that never levelled, or a
+   * levelled plan with no over-allocation, has none — mirrors Next-conflict's empty state, shade-don't-
+   * hide). Zero-cost / false while the flag is off. */
+  hasOverAllocation: boolean;
 
   /** Whether the on-canvas floating Legend panel is open (drives the Legend toggle's pressed state).
    * The legend lives on the canvas now (ADR-0031 amendment), so the toolbar item is a show/hide

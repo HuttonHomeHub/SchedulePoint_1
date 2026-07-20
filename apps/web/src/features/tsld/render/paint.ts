@@ -132,6 +132,12 @@ export interface TsldScene {
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay).
    * Absent ⇒ the overlay is off / no active baseline ⇒ no ghost layer (parity). */
   baselineGhosts?: readonly GhostBar[] | undefined;
+  // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
+  /** Ids of activities the engine flagged as over-allocated (`levelingWindowExceeded ||
+   * selfOverAllocated`, ADR-0041), marked on the canvas with a distinct **mini-histogram badge** — a
+   * shape cue, never colour-only (WCAG 1.4.1). A per-bar `Set.has` in the existing single pass, so it
+   * adds no repaint. Absent ⇒ the highlight is off / nothing is over-allocated ⇒ byte-for-byte parity. */
+  flaggedIds?: ReadonlySet<string> | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -290,6 +296,45 @@ function drawOverlapBadge(
   };
   square(leftX + off, topY + off); // back square (down-right)
   square(leftX, topY); // front square (up-left)
+}
+
+/** Bar width / gap / tallest-bar height (px) of the over-allocation mini-histogram badge. */
+const OVERALLOC_BAR_W = 2;
+const OVERALLOC_BAR_GAP = 1;
+const OVERALLOC_BADGE_H = 7;
+/** The three ascending mini-bar heights (a rising histogram = "over-allocated resource"). */
+const OVERALLOC_BAR_HEIGHTS: readonly number[] = [3, 5, OVERALLOC_BADGE_H];
+
+/**
+ * A small **rising mini-histogram** (three ascending bars) at a flagged bar's top-right corner, marking
+ * an engine-flagged resource over-allocation (`levelingWindowExceeded || selfOverAllocated`, ADR-0041).
+ * A **shape** cue in the destructive hue — a histogram, distinct from the constraint pin (down triangle),
+ * the conflict badge (up triangle) and the lane-overlap stacked squares — so over-allocation never relies
+ * on colour alone (WCAG 1.4.1); each mini-bar carries a foreground outline so it clears the 3:1
+ * non-text-contrast bar on any ground (WCAG 1.4.11). The parallel listbox spells it out for AT, and the
+ * count is announced. Right-anchored to the bar's end and lifted just above its top; a milestone (whose
+ * bounding box still has width) is marked at its box's right edge.
+ */
+function drawOverAllocationBadge(
+  ctx: Ctx2D,
+  rightX: number,
+  barTop: number,
+  palette: TsldPalette,
+): void {
+  const w = OVERALLOC_BAR_W;
+  const gap = OVERALLOC_BAR_GAP;
+  const totalW = OVERALLOC_BAR_HEIGHTS.length * w + (OVERALLOC_BAR_HEIGHTS.length - 1) * gap;
+  const baseY = barTop - 2; // sit just above the bar's top edge
+  let x = Math.round(rightX - totalW); // right-anchored to the bar's end
+  for (const h of OVERALLOC_BAR_HEIGHTS) {
+    const y = baseY - h;
+    ctx.fillStyle = palette.critical;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = palette.outline;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    x += w + gap;
+  }
 }
 
 /**
@@ -515,6 +560,14 @@ export function paintScene(
       // a milestone / a very narrow bar) so the two shape cues stack instead of colliding.
       const lift = activity.constraint ? CONSTRAINT_PIN_H + 1 : 0;
       drawOverlapBadge(ctx, rect.x + rect.w / 2, rect.y, palette, lift);
+    }
+    // Over-allocation highlight (Stage E M2): the engine flagged this activity's resource loading
+    // (levelling window exceeded / self-over-allocated, ADR-0041). A mini-histogram badge at the bar's
+    // top-right — a distinct shape cue, drawn only for the flagged + visible activities, so it stays a
+    // set-membership check in this single pass (no extra repaint, ADR-0026). Absent `flaggedIds` ⇒ this
+    // is a no-op ⇒ byte-for-byte parity.
+    if (scene.flaggedIds?.has(id)) {
+      drawOverAllocationBadge(ctx, rect.x + rect.w, rect.y, palette);
     }
   }
 

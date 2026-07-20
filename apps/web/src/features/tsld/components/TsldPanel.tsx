@@ -11,6 +11,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  CANVAS_RESOURCE_VIEW_ENABLED,
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
@@ -29,6 +30,7 @@ import {
   buildColourMap,
   isFilterActive,
   matchesActivityFilter,
+  overAllocatedIds,
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
@@ -213,6 +215,11 @@ export interface TsldPanelProps {
    * pre-projected bucket day-offsets + whole-series max). Forwarded to `TsldCanvas`, which paints ONLY
    * the strip on a change. `null`/absent ⇒ the band draws just its axis rule. */
   resourceStrip?: ResourceStripSnapshot | null;
+  /** Whether the **over-allocation highlight** mode is on (Stage E M2, behind `VITE_CANVAS_RESOURCE_VIEW`)
+   * — flags bars carrying the engine-owned levelling over-allocation flags (`levelingWindowExceeded ||
+   * selfOverAllocated`, ADR-0041) with a non-colour-only badge + a parallel listbox mark + a count
+   * announcement. Absent/false ⇒ no `flaggedIds` scene field ⇒ byte-for-byte today's canvas + a11y tree. */
+  overAllocationHighlight?: boolean;
 }
 
 interface PendingCreate {
@@ -263,6 +270,7 @@ export function TsldPanel({
   varianceRows,
   resourceStripActive = false,
   resourceStrip = null,
+  overAllocationHighlight = false,
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -473,6 +481,16 @@ export function TsldPanel({
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
   }, [baselineOverlay, varianceRows, activities]);
+  // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ──────────
+  // The ids of the engine-flagged over-allocated activities (`levelingWindowExceeded ||
+  // selfOverAllocated`, ADR-0041) — marked on the canvas with a badge + in the parallel listbox, and
+  // announced. Read ENGINE-OWNED flags only (never re-derive over-allocation client-side). Absent when
+  // the mode is off, the flag is off, or nothing is over-allocated (`overAllocatedIds` returns
+  // undefined on an empty set) — so no `flaggedIds` scene field ⇒ byte-for-byte today's paint.
+  const flaggedIds = useMemo<Set<string> | undefined>(() => {
+    if (!CANVAS_RESOURCE_VIEW_ENABLED || !overAllocationHighlight) return undefined;
+    return overAllocatedIds(activities);
+  }, [overAllocationHighlight, activities]);
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
   // filter clears (active → inactive), announce a neutral empty message so the polite live region drops
@@ -517,6 +535,26 @@ export function TsldPanel({
       } logic path for ${name}.`,
     );
   }, [isolateChain, selectedId, navState.isolateMode, activities, announce]);
+  // Announce the over-allocation count for AT (WCAG 4.1.3 / 1.4.1) — the canvas badges + listbox marking
+  // are otherwise shape/emphasis-only. Fires when the highlight turns on or the flagged set changes;
+  // clears on exit. Changes only on those (not per keystroke), so no debounce is needed. Inert when the
+  // flag/mode is off (the effect early-returns), keeping the a11y tree byte-for-byte then.
+  const overAllocWasActiveRef = useRef(false);
+  useEffect(() => {
+    if (!CANVAS_RESOURCE_VIEW_ENABLED || !overAllocationHighlight) {
+      if (overAllocWasActiveRef.current) announce('');
+      overAllocWasActiveRef.current = false;
+      return;
+    }
+    overAllocWasActiveRef.current = true;
+    const count = flaggedIds?.size ?? 0;
+    const total = activities.length;
+    announce(
+      count === 0
+        ? 'No activities are over-allocated.'
+        : `${count} of ${total} ${count === 1 ? 'activity is' : 'activities are'} over-allocated.`,
+    );
+  }, [overAllocationHighlight, flaggedIds, activities.length, announce]);
   // Apply a Next-conflict selection command from the toolbar (canvas nav): select the requested activity
   // so the canvas rings it (the toolbar centres it first, so the reveal-on-select pan is a no-op). De-
   // duped by the signal's `nonce` so repeated jumps to the same id still fire. Inert when the flag is off.
@@ -1142,6 +1180,7 @@ export function TsldPanel({
               barFill={barFill}
               barInk={barInk}
               baselineGhosts={baselineGhosts}
+              flaggedIds={flaggedIds}
               resourceStripActive={resourceStripActive}
               resourceStrip={resourceStrip}
               controlRef={canvasControlRef}
@@ -1215,6 +1254,11 @@ export function TsldPanel({
                       : filteredOut
                         ? ' (filtered out)'
                         : '';
+                // Over-allocation (Stage E M2) is an ADDITIVE highlight, not a dim — so it marks the
+                // option independently of the dim marker above (a bar can be over-allocated AND dimmed),
+                // mirroring the canvas badge that draws over the dim (WCAG 1.4.1 — the flag isn't
+                // colour/emphasis-only). Absent `flaggedIds` ⇒ empty ⇒ byte-for-byte today's option text.
+                const overAllocated = flaggedIds?.has(a.id) ?? false;
                 return (
                   <li
                     key={a.id}
@@ -1224,6 +1268,7 @@ export function TsldPanel({
                   >
                     {optionDescriptions.get(a.id)}
                     {marker}
+                    {overAllocated ? ' (over-allocated)' : ''}
                   </li>
                 );
               })}

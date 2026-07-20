@@ -41,6 +41,7 @@ import {
   StickyNote,
   TriangleAlert,
   Undo2,
+  Users,
   Waypoints,
 } from 'lucide-react';
 import { useRef } from 'react';
@@ -389,6 +390,11 @@ const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
 /** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
 const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
+
+/** Disabled reason for the over-allocation highlight when nothing is over-allocated (Stage E M2) — a
+ * plan that never levelled, or a levelled plan with no over-allocation, has none. Mirrors
+ * Next-conflict's "No conflicts to review" empty state (ADR-0031 shade-don't-hide). */
+const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
 
 /**
  * The **zoom-preset dropdown** — a single compact menu-button replacing the five segmented
@@ -1235,6 +1241,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Resource view',
     icon: <BarChart3 className="size-4" />,
   };
+  // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) shared shape — the id/group/row/
+  // tier/order/label/icon carried in BOTH its real (flag-on) toggle and its `placeholderItem()`
+  // (flag-off) stub, declared once and spread into both branches so they can't drift (mirrors the
+  // resource-view / lens / canvas-nav shared-shape pattern). A SECOND, independent Look-row lens-group
+  // item (not a split-button on resource-view): the highlight is its own mode, and — like Next-conflict
+  // — it carries its own `isEnabled`/`disabledReason` empty state cleanly. Sits right after resource-view.
+  const overAllocationShape = {
+    id: 'over-allocation',
+    group: 'lens' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 6,
+    label: 'Flag over-allocated',
+    icon: <Users className="size-4" />,
+  };
   // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/tier/order/label/icon each of the
   // three ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens
@@ -1491,6 +1512,26 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.toggleResourceView(),
         }
       : placeholderItem(resourceViewShape),
+    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) — flag-on a view-only toggle that
+    // flags every bar carrying the engine-owned levelling over-allocation flags (ADR-0041), reusing the
+    // Stage-A/B `TsldScene` seam (spec `docs/specs/canvas-resource-view/`); flag-off the "Coming soon"
+    // placeholder, byte-for-byte. Disabled-with-reason when the canvas is empty/uncomputed OR nothing is
+    // over-allocated (shade-don't-hide, mirroring Next-conflict's empty state). View-only, never
+    // pen-gated. The shared shape is spread into both branches so they can't drift (C1/quick-wins pattern).
+    CANVAS_RESOURCE_VIEW_ENABLED
+      ? {
+          ...overAllocationShape,
+          isActive: (ctx) => ctx.overAllocationHighlight,
+          isEnabled: (ctx) => ctx.hasDiagram && ctx.hasOverAllocation,
+          disabledReason: (ctx) =>
+            !ctx.hasDiagram
+              ? LENS_NO_DIAGRAM_REASON
+              : ctx.hasOverAllocation
+                ? undefined
+                : OVER_ALLOCATION_EMPTY_REASON,
+          onActivate: (ctx) => ctx.toggleOverAllocation(),
+        }
+      : placeholderItem(overAllocationShape),
 
     // --- 3 · Find / focus (Row 1 · Look) ------------------------------------------------------
     // Search / filter field — leads the Find cluster as a real (disabled) input, so the affordance

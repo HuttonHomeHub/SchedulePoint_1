@@ -107,6 +107,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // byte-for-byte today's behaviour by default.
   const [resourceViewOpen, setResourceViewOpen] = useState(false);
   const toggleResourceView = useCallback(() => setResourceViewOpen((open) => !open), []);
+  // The on-canvas **over-allocation highlight** mode (Stage E M2, spec `docs/specs/canvas-resource-view/`,
+  // behind `VITE_CANVAS_RESOURCE_VIEW`): an ephemeral, session-local flag toggled from the
+  // `over-allocation` toolbar item that flags bars carrying the engine-owned levelling over-allocation
+  // flags (ADR-0041) — its own mode, independent of whether the demand strip is open. Inert when nothing
+  // reads it (flag off / the ADR-0030 fallback), so it is byte-for-byte today's behaviour by default.
+  const [overAllocationHighlight, setOverAllocationHighlight] = useState(false);
+  const toggleOverAllocation = useCallback(() => setOverAllocationHighlight((on) => !on), []);
   const [logicActivity, setLogicActivityState] = useState<ActivitySummary | undefined>(undefined);
   // Whether the Logic panel, when open, should reveal + focus its Notes section (toolbar quick-wins
   // U4/A4): only the toolbar **Add note** path sets it, so a canvas "Open logic" / table open lands on
@@ -873,6 +880,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // unless `VITE_CANVAS_RESOURCE_VIEW` is on (the item is its placeholder otherwise).
     resourceViewOpen,
     toggleResourceView,
+    // Over-allocation highlight (Stage E M2): the ephemeral mode flag + toggle the `over-allocation`
+    // toolbar item drives; TsldPanel flags the over-allocated bars when on. Inert unless
+    // `VITE_CANVAS_RESOURCE_VIEW` is on (the item is its placeholder otherwise).
+    overAllocationHighlight,
+    toggleOverAllocation,
     logicActivity,
     setLogicActivity,
     // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the

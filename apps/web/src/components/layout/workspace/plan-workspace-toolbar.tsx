@@ -269,6 +269,9 @@ export function ToolbarPlanWorkspace({
       // snapshot the ResourceStripPanel below publishes. Inactive ⇒ no band, byte-for-byte today's.
       resourceStripActive={resourceViewActive}
       resourceStrip={stripSnapshot}
+      // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
+      // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
+      overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
     />
   );
 
