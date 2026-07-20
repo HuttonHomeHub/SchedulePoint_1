@@ -34,6 +34,7 @@ import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection } from '@/features/schedule';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
+import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
 import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildColourLegend } from '@/features/tsld/render/lenses';
@@ -344,6 +345,15 @@ export function ToolbarPlanWorkspace({
           />
         </div>
       </div>
+
+      {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
+          toolbar commands only announce (sr-only), so this is the sighted-user error surface. Renders
+          nothing until an export/print fails; `null` when the flag is off. */}
+      {ctx.exportError ? (
+        <div className="px-4 pt-2">
+          <EditConflictBanner message={ctx.exportError} onDismiss={ctx.dismissExportError} />
+        </div>
+      ) : null}
 
       {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
           has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}

@@ -529,3 +529,31 @@ export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_L
  * conflict are view-only (every role); Snap is an authoring aid (pen + Visual mode).
  */
 export const CANVAS_NAV_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_NAV);
+
+/**
+ * TSLD export & print (spec `docs/specs/export-print/`, Stage C1). When on, it turns the two shaded
+ * Do-row toolbar placeholders (`export`, `print`) into real client-side deliverables over
+ * already-shipped data + the shipped canvas renderer — no new API/schema/`@repo/types`/CPM-engine
+ * change (the recalc parity gate is untouched):
+ *
+ * - **Export ▾** — an APG menu-button, grouped Schedule / Diagram: **Schedule (CSV)** (the activity
+ *   table as an Excel-safe, injection-safe, UTF-8-BOM CSV; relabelled **All activities (CSV)** with a
+ *   conditional **Matching activities only (N)** item when a Stage-A filter / Stage-B isolate lens is
+ *   narrowing the set), plus **Diagram — whole plan / current view** as both **PNG** (off-screen
+ *   `paintScene` in a light print palette) and **PDF** (lazy `import('jspdf')`, absent from the initial
+ *   bundle). Each output carries a distinct filename and announces "Preparing…" then the outcome; a
+ *   failure raises a visible dismissable banner.
+ * - **Print…** — a browser-print of the whole diagram via the image path (print-only container +
+ *   `@media print` stylesheet).
+ *
+ * **ON by default** (2026-07-20, product sign-off) now that the four outputs are wired and the six
+ * specialist reviews (security / devops / performance / accessibility / ux / component) are green (every
+ * blocking finding folded: per-extent filenames, visible error surface, in-flight announcement, honest
+ * column-superset doc, whitespace-aware CSV injection guard, Schedule/Diagram menu sections). Each of the
+ * two ids resolves to its real behaviour when on, and to its existing `placeholderItem()` "Coming soon"
+ * stub when off — the `export`/`print` shapes are spread into both branches so they can't drift — so
+ * `VITE_EXPORT_PRINT=false` restores the toolbar, canvas paint and a11y tree byte-for-byte (emergency
+ * rollback / opt-out); no export module or jsPDF chunk loads. `share` (ADR-0012 guest link) + XER/MSP
+ * interchange are C2, out of scope; app-handled `Ctrl/Cmd+P` is a documented deferred fast-follow.
+ */
+export const EXPORT_PRINT_ENABLED = flagDefaultOn(import.meta.env.VITE_EXPORT_PRINT);

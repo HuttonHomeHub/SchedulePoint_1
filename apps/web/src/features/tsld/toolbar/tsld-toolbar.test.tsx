@@ -24,6 +24,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // Pin canvas nav OFF here too: isolate / next-conflict / snap stay "Coming soon" placeholders. The
   // real flag-on nav controls are covered in tsld-toolbar-canvas-nav.test.tsx.
   CANVAS_NAV_ENABLED: false,
+  // Pin export & print OFF here too (this is the flag-off registry suite): `export`/`print` stay their
+  // "Coming soon" placeholders. The real flag-on Export menu is covered in tsld-toolbar-export.test.tsx.
+  EXPORT_PRINT_ENABLED: false,
 }));
 
 const spies = {
@@ -271,7 +274,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
     // The rest are inline "Coming soon" icon buttons whose tooltip names them.
-    for (const name of ['Export…', 'Share…', 'Colour by…']) {
+    for (const name of ['Export…', 'Print…', 'Share…', 'Colour by…']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);

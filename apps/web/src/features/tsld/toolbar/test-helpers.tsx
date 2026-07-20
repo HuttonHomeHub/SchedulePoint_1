@@ -100,6 +100,16 @@ export function makeTsldToolbarContext(
     goToNextConflict: vi.fn(),
     snapToGrid: false,
     toggleSnapToGrid: vi.fn(),
+    // Export & print
+    exportScheduleCsv: vi.fn(),
+    exportDiagramPng: vi.fn(),
+    exportDiagramPdf: vi.fn(),
+    pdfExporting: false,
+    printDiagram: vi.fn(),
+    filterActive: false,
+    matchingCount: 0,
+    exportError: null,
+    dismissExportError: vi.fn(),
     ...overrides,
   };
 }

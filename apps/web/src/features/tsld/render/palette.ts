@@ -44,6 +44,68 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
 }
 
 /**
+ * A light-forced painter palette for the **export & print** deliverables (spec
+ * `docs/specs/export-print/`, behind `VITE_EXPORT_PRINT`). Extends {@link TsldPalette} (so it drops
+ * straight into `paintScene`) with the three surface colours the off-screen export composites around
+ * the diagram — the paper `ground`, the title `ink`, and the muted subtitle `mutedInk`.
+ */
+export interface PrintPalette extends TsldPalette {
+  /** The white paper ground the export lays behind the diagram (token `--color-background`, light). */
+  ground: string;
+  /** Title-band foreground ink (token `--color-foreground`, light) — dark, legible on the paper. */
+  ink: string;
+  /** Muted subtitle / generated-at ink (token `--color-muted-foreground`, light). */
+  mutedInk: string;
+}
+
+/**
+ * Resolve a **LIGHT-forced** print palette from the SAME design tokens (ADR-0006) `resolveTsldPalette`
+ * reads — so an exported / printed diagram is legible on white paper regardless of the user's current
+ * light/dark/system theme (reports and paper want light). No hard-coded colours: the app applies dark
+ * via a `.dark` class on the documentElement, so the light token values (the `:root` defaults) are read
+ * by momentarily clearing that class — **synchronously**, so no paint happens between clear and restore
+ * (no flash) — then restoring it. Falls back to sensible LIGHT values when the DOM/tokens are
+ * unavailable (jsdom in unit tests), which is what makes the palette light there too.
+ */
+export function resolvePrintPalette(root: Element = document.documentElement): PrintPalette {
+  const hadDark = root.classList.contains('dark');
+  if (hadDark) root.classList.remove('dark');
+  try {
+    const styles = getComputedStyle(root);
+    const token = (name: string, fallback: string): string => {
+      const value = styles.getPropertyValue(name).trim();
+      return value || fallback;
+    };
+    return {
+      // Surface colours the export composites around the diagram (light fallbacks: white paper, near-
+      // black ink, mid-grey muted) — token-derived so a themed token override still flows through.
+      ground: token('--color-background', '#ffffff'),
+      ink: token('--color-foreground', '#1a1a1a'),
+      mutedInk: token('--color-muted-foreground', '#6b7280'),
+      // The painter fields, mirroring `resolveTsldPalette` but with LIGHT fallbacks (grid a light grey,
+      // ink near-black) so the diagram reads on white even when the tokens can't be read.
+      gridLine: token('--color-border', '#e5e7eb'),
+      edge: token('--color-muted-foreground', '#6b7280'),
+      bar: token('--color-primary', '#2f62c4'),
+      critical: token('--color-destructive', '#c2331f'),
+      nearCritical: token('--color-warning', '#b58900'),
+      outline: token('--color-foreground', '#1a1a1a'),
+      selection: token('--color-ring', '#3b6fbf'),
+      nonWorking: token('--color-muted', '#f0f0f0'),
+      today: token('--color-destructive', '#c2331f'),
+      conflict: token('--color-warning', '#b58900'),
+      laneOverlap: token('--color-warning', '#b58900'),
+      labelInside: token('--color-primary-foreground', '#ffffff'),
+      labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
+      labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
+      labelBeside: token('--color-foreground', '#1a1a1a'),
+    };
+  } finally {
+    if (hadDark) root.classList.add('dark');
+  }
+}
+
+/**
  * Resolve the Colour-by **lens** palette (spec `docs/specs/canvas-lenses/`, behind
  * `VITE_CANVAS_LENSES`) from the same semantic design tokens (ADR-0006), so the recoloured bars stay
  * theme-aware without hardcoding colour. `critical`/`nearCritical`/`bar` mirror {@link resolveTsldPalette}

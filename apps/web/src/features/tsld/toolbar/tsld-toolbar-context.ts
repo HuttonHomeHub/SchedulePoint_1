@@ -1,6 +1,8 @@
 import type { ActivitySummary, ActivityType, DependencyType, SchedulingMode } from '@repo/types';
 import type { ReactNode } from 'react';
 
+import type { ExportScope } from '../export/export-csv';
+import type { ExportExtent } from '../export/export-image';
 import type { ColourMode, FilterAttr } from '../render/lenses';
 import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
@@ -223,4 +225,43 @@ export interface TsldToolbarContext {
   /** Toggle *Snap to grid* on/off (pen-gated + Visual mode; rounds a dropped `visualStart` to the
    * nearest working day before the existing PATCH). */
   toggleSnapToGrid: () => void;
+
+  // --- Export & print (VITE_EXPORT_PRINT, spec `docs/specs/export-print/`) -------------------
+  // Client-side deliverables over already-shipped data + the shipped canvas renderer — no API/schema/
+  // engine change. Populated on every build but derived cheaply when the flag is off (nothing reads
+  // them then: the `export`/`print` ids resolve to their `placeholderItem()` stubs), so they are inert.
+  /** Serialise the activity table to an Excel-safe, injection-safe CSV and download it (scope `'all'`
+   * = every activity; `'matching'` = the lens-narrowed subset, CQ-3), announcing the download (M1). */
+  exportScheduleCsv: (scope: ExportScope) => void;
+  /** Render the diagram to a PNG off-screen and download it (M2). `extent` picks the framing (CQ-1):
+   * `'whole'` re-frames the full activity extent at the current zoom (raster-capped, scale-to-fit);
+   * `'view'` crops to the live viewport. Off-screen paint only — the live canvas is never touched. */
+  exportDiagramPng: (extent: ExportExtent) => void;
+  /** Render the diagram to a single-page landscape PDF and download it (M3). `extent` picks the framing
+   * (CQ-1, mirroring {@link exportDiagramPng}): `'whole'` re-frames the full activity extent at the
+   * current zoom (raster-capped, scale-to-fit); `'view'` crops to the live viewport. Reuses the M2
+   * off-screen PNG, then embeds it via the lazily-imported jsPDF (`export/pdf.ts`, `import('jspdf')`), so
+   * the live canvas is never touched and the library stays out of the initial bundle. */
+  exportDiagramPdf: (extent: ExportExtent) => void;
+  /** True while a PDF export is in flight (the first use lazy-loads jsPDF). Drives the PDF menu items'
+   * loading state and guards against a double-click / concurrent export (M3). False when the flag is off. */
+  pdfExporting: boolean;
+  /** Print the whole diagram via the browser print dialog (M4, CQ-4 — the image path): reuse the M2
+   * off-screen PNG, mount it into the print-only `PrintSurface` (a print stylesheet hides the app-shell),
+   * `window.print()`, then tear the surface down on `afterprint`/timeout. Off-screen paint only — the
+   * live canvas is never touched. A no-op when the flag is off. */
+  printDiagram: () => void;
+  /** True when a Stage-A filter or Stage-B isolate lens is currently narrowing the set — gates the
+   * conditional **Matching activities only (N)** CSV item (CQ-3). False (item hidden) with no lens
+   * active or when `VITE_EXPORT_PRINT` is off. */
+  filterActive: boolean;
+  /** How many activities match the active lens — the **N** in "Matching activities only (N)". */
+  matchingCount: number;
+  /** A user-safe VISIBLE error from a failed export/print (a PDF-library load failure, a `toBlob`
+   * failure, …), or `null` when there is none. The `announce()` live-region message is sr-only, so this
+   * is the sighted-user surface — the workspace renders it as a dismissable `role="alert"` banner beside
+   * the toolbar (UX review B2). Always `null` when `VITE_EXPORT_PRINT` is off. */
+  exportError: string | null;
+  /** Dismiss the {@link exportError} banner (clears it back to `null`). */
+  dismissExportError: () => void;
 }

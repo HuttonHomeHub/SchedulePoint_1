@@ -9,15 +9,20 @@ import {
   ChevronDown,
   DollarSign,
   Eraser,
+  Crop,
   FileDown,
+  FileSpreadsheet,
+  FileText,
   Filter,
   Gauge,
   Grid3x3,
+  ImageDown,
   Info,
   Keyboard,
   Layers,
   Layers2,
   ListChecks,
+  Loader2,
   LocateFixed,
   Maximize2,
   MessageSquare,
@@ -58,6 +63,7 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   EARNED_VALUE_ENABLED,
+  EXPORT_PRINT_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULING_MODES_ENABLED,
@@ -620,6 +626,110 @@ function ColourByControl({
   );
 }
 
+/** Shared disabled reason for Export / Print on an empty/uncomputed canvas (spec `docs/specs/export-print/`). */
+const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
+
+/**
+ * The **Export ▾ menu-button** (export & print, `docs/specs/export-print/`, flag-on) — an APG
+ * menu-button (mirroring {@link ColourByControl}) listing the plan's client-side deliverables. M1 ships
+ * **Schedule (CSV)** plus a conditional **Matching activities only (N)** item shown only while a filter /
+ * isolate lens narrows the set (CQ-3); M2 adds the two **Diagram (PNG)** extents (whole plan / current
+ * view, CQ-1); M3 adds the two matching **Diagram (PDF)** extents (lazy jsPDF, first-use loading state).
+ * Shaded
+ * (disabled-with-reason "Add an activity first") on an empty/uncomputed canvas, matching the zoom
+ * cluster's stable shape (ADR-0031 shade-don't-hide). One focusable roving stop (spreads `itemProps`);
+ * each pick downloads + announces via the context command.
+ */
+function ExportMenuControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const disabled = api.disabled;
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        title={disabled ? (api.disabledReason ?? 'Export…') : 'Export…'}
+        onClick={() => {
+          if (!disabled) toggle();
+        }}
+        className={cn(toolbarControlVariants({ active: open, disabled }))}
+      >
+        <FileDown aria-hidden="true" className="size-4" />
+        <span className="truncate">Export</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu open={open} onClose={close} anchor={anchor} label="Export" restoreFocusRef={triggerRef}>
+        {/* Grouped into Schedule / Diagram sections (ux S2), mirroring the Add split-button's sections. */}
+        <MenuSection>Schedule</MenuSection>
+        <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>
+          <FileSpreadsheet aria-hidden="true" className="size-4" />
+          {/* When the conditional filtered item is present, name the default one "All activities" so the
+              all-vs-matching distinction reads from the label, not the position (ux S4). */}
+          {ctx.filterActive ? 'All activities (CSV)' : 'Schedule (CSV)'}
+        </MenuItem>
+        {/* Conditional filtered export (CQ-3): only when a filter / isolate lens is narrowing the set,
+            so the item never confuses when nothing is filtered. Disabled-with-reason (shade-don't-hide)
+            when nothing matches, so it can't download a header-only CSV (ux S3). */}
+        {ctx.filterActive ? (
+          <MenuItem
+            disabled={ctx.matchingCount === 0}
+            onSelect={() => ctx.exportScheduleCsv('matching')}
+          >
+            <Filter aria-hidden="true" className="size-4" />
+            <span>Matching activities only ({ctx.matchingCount})</span>
+            {ctx.matchingCount === 0 ? (
+              <span className="text-muted-foreground ml-auto text-xs">No matching activities</span>
+            ) : null}
+          </MenuItem>
+        ) : null}
+        <div role="separator" className="bg-border my-1 h-px" />
+        <MenuSection>Diagram</MenuSection>
+        {/* Diagram PNG (M2, CQ-1: offer BOTH extents). The whole-plan render re-frames an off-screen
+            canvas to the full activity extent (raster-capped, scale-to-fit); the current-view render
+            crops to the live viewport. Both paint off-screen with the light print palette + legend. */}
+        <MenuItem onSelect={() => ctx.exportDiagramPng('whole')}>
+          <ImageDown aria-hidden="true" className="size-4" />
+          Diagram — whole plan (PNG)
+        </MenuItem>
+        <MenuItem onSelect={() => ctx.exportDiagramPng('view')}>
+          <Crop aria-hidden="true" className="size-4" />
+          Diagram — current view (PNG)
+        </MenuItem>
+        {/* Diagram PDF (M3, CQ-1: mirror the two PNG extents). Reuses the M2 off-screen PNG, then embeds
+            it on a landscape page via the LAZILY-imported jsPDF (first-use fetch, code-split). Both items
+            show a loading state and are disabled while a PDF is in flight (`pdfExporting`), which also
+            guards against a double-click; a load failure surfaces a user-safe error, PNG/CSV unaffected. */}
+        <MenuItem disabled={ctx.pdfExporting} onSelect={() => ctx.exportDiagramPdf('whole')}>
+          {ctx.pdfExporting ? (
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          ) : (
+            <FileText aria-hidden="true" className="size-4" />
+          )}
+          Diagram — whole plan (PDF)
+        </MenuItem>
+        <MenuItem disabled={ctx.pdfExporting} onSelect={() => ctx.exportDiagramPdf('view')}>
+          {ctx.pdfExporting ? (
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          ) : (
+            <FileText aria-hidden="true" className="size-4" />
+          )}
+          Diagram — current view (PDF)
+        </MenuItem>
+      </Menu>
+    </>
+  );
+}
+
 /** The isolate chain modes the picker offers, in menu order (CQ-1). Full = the whole transitive chain;
  * Driving = only the binding driving edges. Short labels for the compact button, long names in the menu. */
 const ISOLATE_MODE_LABELS: Record<LogicPathMode, string> = {
@@ -954,13 +1064,13 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *
  * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
- * "Coming soon" stubs (resource-view, export/print/share, plus Hammock / Level-of-effort in the Add menu)
- * that make the toolbar read as fully designed and are switched on later by swapping the stub for a real
- * command (`docs/TOOLBAR_ROADMAP.md`).
+ * "Coming soon" stubs (resource-view, share, plus Hammock / Level-of-effort in the Add menu) that make
+ * the toolbar read as fully designed and are switched on later by swapping the stub for a real command
+ * (`docs/TOOLBAR_ROADMAP.md`).
  * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
  * clear-visual-placement under `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
- * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV` —
- * each a placeholder only when its owning flag is off.)
+ * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV`;
+ * export and print under `VITE_EXPORT_PRINT` — each a placeholder only when its owning flag is off.)
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom
@@ -1095,6 +1205,29 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     order: 5,
     label: 'Snap to grid',
     icon: <Grid3x3 className="size-4" />,
+  };
+  // Export & print (VITE_EXPORT_PRINT) shared item shapes — the id/group/row/tier/order/label/icon each
+  // of the two ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
+  // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
+  // canvas-nav shared-shape pattern). Both ride the Row 2 · Do deliverables cluster (no pen — they read,
+  // never author). `share` stays a plain `placeholderItem()` (C2).
+  const exportShape = {
+    id: 'export',
+    group: 'object' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 7,
+    label: 'Export…',
+    icon: <FileDown className="size-4" />,
+  };
+  const printShape = {
+    id: 'print',
+    group: 'object' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 8,
+    label: 'Print…',
+    icon: <Printer className="size-4" />,
   };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -1660,24 +1793,33 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.openProgress(),
         }
       : placeholderItem(updateProgressShape),
-    placeholderItem({
-      id: 'export',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 7,
-      label: 'Export…',
-      icon: <FileDown className="size-4" />,
-    }),
-    placeholderItem({
-      id: 'print',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 8,
-      label: 'Print…',
-      icon: <Printer className="size-4" />,
-    }),
+    // Export ▾ (export & print, `docs/specs/export-print/`) — a menu-button of client-side deliverables
+    // (Schedule CSV now; Diagram PNG/PDF at M2/M3). Flag-on it's the real `ExportMenuControl`, gated on a
+    // computed diagram (disabled-with-reason otherwise, shade-don't-hide); flag-off it's the byte-for-byte
+    // `placeholderItem()` "Coming soon" stub. `exportShape` is spread into both so they can't drift.
+    EXPORT_PRINT_ENABLED
+      ? {
+          ...exportShape,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
+          render: (ctx, api) => <ExportMenuControl ctx={ctx} api={api} />,
+        }
+      : placeholderItem(exportShape),
+    // Print… (export & print, `docs/specs/export-print/` §Milestone 4, CQ-4 — the image path) — the real
+    // browser-print action. Flag-on it prints the WHOLE diagram: `ctx.printDiagram()` reuses the M2
+    // off-screen PNG, mounts it into the print-only `PrintSurface` (a print stylesheet hides the app-shell
+    // `#root`), and opens the browser print dialog. A plain action button (no menu); gated on a computed
+    // diagram (disabled-with-reason "Add an activity first", shade-don't-hide), matching Export. Flag-off
+    // it's the byte-for-byte `placeholderItem()` "Coming soon" stub. `printShape` is spread into both so
+    // the two branches can't drift, exactly like `exportShape`.
+    EXPORT_PRINT_ENABLED
+      ? {
+          ...printShape,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
+          onActivate: (ctx) => ctx.printDiagram(),
+        }
+      : placeholderItem(printShape),
     placeholderItem({
       id: 'share',
       group: 'object',

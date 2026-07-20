@@ -1,0 +1,76 @@
+/*
+ * Print-only diagram surface (spec `docs/specs/export-print/` §Milestone 4, feature-spec §4 CQ-4 —
+ * the IMAGE path, not a CSS print of the live canvas DOM).
+ *
+ * The container is `display:none` on screen, so the live app is visually unchanged; it is revealed
+ * ONLY in `@media print`, where the live application (React mounts the app-shell into `#root`) and any
+ * body-level portal nodes (open menus/dialogs) are hidden, so the browser print dialog shows only the
+ * injected whole-diagram image + its title.
+ *
+ * The printed page is deliberately forced LIGHT (white paper, dark ink) — reports and paper want light
+ * regardless of the app's light/dark/system theme. This mirrors `resolvePrintPalette()` (which bakes the
+ * diagram image itself onto white from the light design tokens); the small chrome colours below are the
+ * documented print-forcing exception to the "no hard-coded colours" rule, not one-off UI styling.
+ *
+ * The hex constants below are PINNED to `resolvePrintPalette()`'s own light fallbacks so the two can't
+ * drift (component review S6): `ground` #ffffff, `ink` #1a1a1a (light `--color-foreground`), `mutedInk`
+ * #6b7280 (light `--color-muted-foreground`). A `@media print` stylesheet can't read a runtime JS value,
+ * so these are the static equivalents of the same light tokens the exported image is baked from.
+ */
+
+.tsld-print-root {
+  display: none;
+}
+
+@media print {
+  /* Hide the live application (`#root`) and every other body-level node (portalled menus/dialogs), so
+     only the injected print container is sent to the printer. */
+  #root,
+  body > *:not(.tsld-print-container) {
+    display: none !important;
+  }
+
+  .tsld-print-container,
+  .tsld-print-root {
+    display: block !important;
+  }
+
+  .tsld-print-root {
+    margin: 0;
+    padding: 16px;
+    background: #ffffff;
+    color: #1a1a1a; /* = resolvePrintPalette().ink fallback (light --color-foreground) */
+    color-scheme: light;
+    font-family:
+      'Inter',
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      Roboto,
+      Helvetica,
+      Arial,
+      sans-serif;
+  }
+
+  .tsld-print-title {
+    margin: 0 0 2px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .tsld-print-subtitle {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #6b7280; /* = resolvePrintPalette().mutedInk fallback (light --color-muted-foreground) */
+    line-height: 1.2;
+  }
+
+  /* The whole-diagram raster fits the printable width, aspect preserved. */
+  .tsld-print-image {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+}

@@ -63,6 +63,10 @@ export interface TsldCanvasHandle {
    * centred sibling of {@link goToDate}, used by *Next conflict* to bring a flagged bar to the middle
    * (canvas nav, `docs/specs/canvas-nav/`). Same pure view transform; no fetch/persisted state. */
   centerOnDate: (iso: string) => void;
+  /** Read (never mutate) the current viewport transform + measured surface size — used by the
+   * **Diagram — current view (PNG)** export (spec `docs/specs/export-print/`) to crop the off-screen
+   * image to the live bounds. A pure read off the rAF-owned refs; it never repaints the live canvas. */
+  getViewport: () => { view: Viewport; size: Size };
 }
 
 /** Left inset (px) the "Go to date" jump leaves before the target day, so it isn't flush to the edge. */
@@ -459,6 +463,9 @@ export function TsldCanvas({
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
       },
+      // A pure read of the live viewport (transform + measured size) for the current-view PNG export.
+      // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.
+      getViewport: () => ({ view: { ...viewRef.current }, size: { ...sizeRef.current } }),
     }),
     // Stable — reads live state through refs.
     [],

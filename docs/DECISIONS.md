@@ -915,3 +915,23 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   it — the analysis recomputes the schedule live via the shared engine-input builder, so it can never
   drift from a recalculate (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing
   schedule + driving edges).
+- **TSLD export & print (Stage C1, `VITE_EXPORT_PRINT`, on by default 2026-07-20).** The `export`/`print`
+  toolbar placeholders became four **client-side** deliverables — no API/schema/`@repo/types`/CPM-engine
+  change, so the recalc parity gate is structurally untouched (spec `docs/specs/export-print/`). Key
+  decisions: (a) the **CSV** projects a deliberate **superset** of the responsive activities-table columns
+  (a planner/QS export, not table parity), Excel-safe with an OWASP **formula-injection guard** (a leading
+  `= + - @` / TAB / CR — or one after only leading whitespace — is apostrophe-prefixed before RFC-4180
+  quoting) and a UTF-8 BOM; all-rows by default with a conditional **Matching activities only (N)** item
+  when a Stage-A/B lens narrows the set. (b) The **image** exports reuse the shipped `paintScene` against a
+  freshly-created **off-screen** canvas (the live `TsldCanvas` is only read via `getViewport()`, never
+  repainted) in a **light print palette** (`resolvePrintPalette`, token-derived); **offer both extents** —
+  whole-plan and current-view — each with a distinct filename, bounded to an 8192 px/side raster cap +
+  scale-to-fit. (c) **PDF** via **lazy `import('jspdf')`** (jspdf@3.0.4, MIT) so it is absent from the
+  initial bundle and fetched only on first PDF export (measured: the ~235 KB-gzip jsPDF graph sits in
+  separate chunks unreachable from the entry). (d) **Print** uses the **image path** (a print-only
+  container + `@media print` stylesheet hiding `#root`), never a CSS print of the live one-viewport canvas
+  bitmap. Rejected/deferred: a hand-rolled PDF writer (maintenance/security), app-handled `Ctrl/Cmd+P`
+  interception (a documented fast-follow — hijacking the browser print shortcut is a footgun), and
+  XER/MSP interchange + the `share` External-Guest link (Stage **C2**). No standalone ADR (client
+  render/serialisation on ADR-0026/0031). Follow-ups noted: a CI bundle-budget gate now that the first
+  heavy lazy dep landed, and npm-level SBOM for the SPA image (both pre-existing, tracked as tech debt).

@@ -122,6 +122,14 @@ keep `main` releasable.
   announcing each with a visible "Conflict i of n · reason" chip), and **Snap to grid** (a Visual-mode,
   pen-gated toggle rounding a dropped `visualStart` to the nearest working day). No API/schema/engine
   change (spec `docs/specs/canvas-nav/`). Stage B of the toolbar-placeholder burn-down.
+- **Export & print (web).** The `export`/`print` toolbar placeholders wired to four client-side
+  deliverables and **on by default** (`VITE_EXPORT_PRINT`): **Schedule CSV** (Excel-safe,
+  formula-injection-guarded, UTF-8 BOM; all-rows with a conditional "Matching activities only (N)" item
+  under an active lens), **Diagram PNG** and **Diagram PDF** (whole-plan / current-view extents, an
+  off-screen `paintScene` in a light print palette; the PDF via lazy `import('jspdf')`, absent from the
+  initial bundle), and **Browser Print** (the whole diagram via a print-only container + `@media print`
+  stylesheet). No API/schema/engine change (spec `docs/specs/export-print/`). `share` (External Guest
+  link) and XER/MSP interchange are deferred to Stage C2. Stage C1 of the toolbar-placeholder burn-down.
 
 ## Next
 
