@@ -32,6 +32,12 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        // A wide desktop viewport so the whole Row 1 · Look toolbar — including the tier-2 lens buttons
+        // this journey drives directly (Resource view + Flag over-allocated) — stays inline as real
+        // toggle buttons rather than demoting into the responsive `⋯` overflow menu (where they'd be
+        // menuitems without the `aria-pressed`/`aria-disabled`/`title` semantics this suite asserts).
+        // The below-`md` overflow behaviour is unit-covered (`Toolbar.test.tsx`).
+        viewport: { width: 1920, height: 1080 },
         ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
           ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
           : {}),

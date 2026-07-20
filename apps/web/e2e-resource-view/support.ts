@@ -111,8 +111,11 @@ export async function assignResource(
   const dialog = page.getByRole('dialog', { name: 'Resources' });
   await expect(dialog).toBeVisible();
   // The assign form's resource picker lists each unassigned library resource as "<name> (<kind>)"; a
-  // freshly created resource defaults to Labour.
-  await dialog.getByLabel('Resource').selectOption({ label: `${resourceName} (Labour)` });
+  // freshly created resource defaults to Labour. Exact match: the dialog's "Driving resource" checkbox
+  // also carries "Resource" in its label, which a substring match would ambiguously also select.
+  await dialog
+    .getByLabel('Resource', { exact: true })
+    .selectOption({ label: `${resourceName} (Labour)` });
   await dialog.getByLabel('Budgeted units').fill(String(budgetedUnits));
   await dialog.getByRole('button', { name: 'Assign resource' }).click();
   await expect(dialog.locator('li').filter({ hasText: resourceName })).toBeVisible();
