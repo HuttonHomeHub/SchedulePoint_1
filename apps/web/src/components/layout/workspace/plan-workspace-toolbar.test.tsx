@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +12,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * reachable inline on Row 2. The canvas + heavy children are stubbed (jsdom has no Canvas 2D).
  */
 
-const h = vi.hoisted(() => ({ role: 'PLANNER' }));
+const h = vi.hoisted<{
+  role: string;
+  // The plan's data date, configurable per-test so the resource-strip `plannedStart === null` guard
+  // (Stage E, ADR-0049) can be exercised (B7). Default: a diagrammable plan.
+  plannedStart: string | null;
+  // The last props the (stubbed) TsldPanel received, so the strip forwarding can be asserted (B7).
+  tsldProps: { current: Record<string, unknown> | null };
+}>(() => ({
+  role: 'PLANNER',
+  plannedStart: '2026-01-01',
+  tsldProps: { current: null },
+}));
 
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -22,7 +33,32 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // authoring flag off so the plain Add toggle + inert empty canvas are the subject. Authoring is
   // covered by the tsld-toolbar-authoring / TsldPanel.authoring suites + the flag-on e2e journey.
   CANVAS_AUTHORING_ENABLED: false,
+  // Stage E (ADR-0049): force the (dark-by-default) resource-view flag on so the `resource-view` toggle
+  // is real + the `ResourceStripPanel` can mount when toggled (B7). The build stays dark — this is a
+  // test-only mock, and `env.test.ts` still asserts the derived constant is false at the build default.
+  CANVAS_RESOURCE_VIEW_ENABLED: true,
 }));
+
+// Stub the DOM strip chrome so it doesn't fetch: on mount it publishes a snapshot into the canvas (via
+// `onSnapshot`) and clears it on unmount — enough to prove the workspace forwards `resourceStrip` (B7).
+vi.mock('./resource-strip-panel', async () => {
+  const { useEffect } = await import('react');
+  const SNAPSHOT = {
+    series: { resourceId: 'r1', values: [1], total: 1 },
+    dayOffsets: [{ start: 0, end: 7 }],
+    dataDate: '2026-01-01',
+    max: 1,
+  };
+  return {
+    ResourceStripPanel: ({ onSnapshot }: { onSnapshot: (s: unknown) => void }) => {
+      useEffect(() => {
+        onSnapshot(SNAPSHOT);
+        return () => onSnapshot(null);
+      }, [onSnapshot]);
+      return <div data-testid="resource-strip-panel" />;
+    },
+  };
+});
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
@@ -52,7 +88,7 @@ vi.mock('@/features/plans', async (importOriginal) => ({
       projectId: 'proj1',
       name: 'Tower',
       status: 'ACTIVE',
-      plannedStart: '2026-01-01',
+      plannedStart: h.plannedStart,
       description: null,
     }),
   PlanCalendarPicker: () => <div data-testid="calendar-picker" />,
@@ -94,9 +130,13 @@ vi.mock('@/features/dependencies', () => ({
   DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 
-// The TSLD panel needs Canvas 2D; stub it so the layout renders in jsdom.
+// The TSLD panel needs Canvas 2D; stub it so the layout renders in jsdom. Record its props so the
+// strip forwarding (`resourceStripActive`/`resourceStrip`) can be asserted (B7).
 vi.mock('@/features/tsld', () => ({
-  TsldPanel: () => <div data-testid="tsld-panel" />,
+  TsldPanel: (props: Record<string, unknown>) => {
+    h.tsldProps.current = props;
+    return <div data-testid="tsld-panel" />;
+  },
   barDateSourceFor: () => 'early',
 }));
 
@@ -128,6 +168,8 @@ function renderScreen() {
 
 beforeEach(() => {
   h.role = 'PLANNER';
+  h.plannedStart = '2026-01-01';
+  h.tsldProps.current = null;
 });
 
 describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
@@ -177,6 +219,37 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(panel).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Hide legend' }));
     expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
+  });
+
+  it('mounts the resource strip + forwards it to the canvas when Resource view is toggled on (B7)', async () => {
+    renderScreen();
+    // Off by default: no strip panel, and the canvas is not reserving the band.
+    expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();
+    expect(h.tsldProps.current?.resourceStripActive).toBe(false);
+
+    // Toggling the Row-1 Resource view control reveals the strip chrome AND flags the canvas active.
+    fireEvent.click(screen.getByRole('button', { name: 'Resource view' }));
+    expect(screen.getByTestId('resource-strip-panel')).toBeInTheDocument();
+    expect(h.tsldProps.current?.resourceStripActive).toBe(true);
+    // The strip chrome publishes a snapshot that the workspace forwards into the canvas.
+    await waitFor(() => expect(h.tsldProps.current?.resourceStrip).not.toBeNull());
+
+    // Toggling off unmounts the chrome and clears the canvas flag (byte-for-byte the plain canvas).
+    fireEvent.click(screen.getByRole('button', { name: 'Resource view' }));
+    expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();
+    expect(h.tsldProps.current?.resourceStripActive).toBe(false);
+  });
+
+  it('keeps the resource strip unmounted while the plan has no data date (plannedStart null guard, B7)', () => {
+    h.plannedStart = null;
+    renderScreen();
+    // With no timeline origin the resource-view control is shaded (no diagram), so the strip can never
+    // mount — the `resourceViewActive` guard requires a non-null `plannedStart` (ADR-0049).
+    const control = screen.getByRole('button', { name: 'Resource view' });
+    expect(control).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(control);
+    expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();
+    expect(h.tsldProps.current?.resourceStripActive).toBe(false);
   });
 
   it('offers a header edit-pencil to writers (folded from the toolbar), hidden for viewers', () => {

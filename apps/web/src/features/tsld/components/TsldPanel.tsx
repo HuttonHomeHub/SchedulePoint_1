@@ -209,11 +209,17 @@ export interface TsldPanelProps {
   varianceRows?: readonly BaselineVarianceRow[] | undefined;
   /** Whether the canvas-axis-aligned resource strip is active (Stage E, ADR-0049, behind
    * `VITE_CANVAS_RESOURCE_VIEW`) — reserves the strip band at the canvas bottom and paints the demand
-   * bars. Absent/false ⇒ no band, byte-for-byte today's canvas. Forwarded straight to `TsldCanvas`. */
+   * bars. Absent/false ⇒ no band, byte-for-byte today's canvas. Forwarded straight to `TsldCanvas`.
+   *
+   * NB this lens intentionally takes a SEPARATE boolean + data prop ({@link resourceStrip}), unlike the
+   * sibling `flaggedIds` / `baselineGhosts` lenses that derive a single optional field: the band's
+   * height must be reserved (`active`) during the loading state — before any snapshot exists (`data` is
+   * still `null`) — so the two can't collapse into one. Don't "fix" the inconsistency. */
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
    * pre-projected bucket day-offsets + whole-series max). Forwarded to `TsldCanvas`, which paints ONLY
-   * the strip on a change. `null`/absent ⇒ the band draws just its axis rule. */
+   * the strip on a change. `null`/absent ⇒ the band (if {@link resourceStripActive}) draws just its
+   * axis rule — the loading/empty state where the band is reserved but there's nothing to plot yet. */
   resourceStrip?: ResourceStripSnapshot | null;
   /** Whether the **over-allocation highlight** mode is on (Stage E M2, behind `VITE_CANVAS_RESOURCE_VIEW`)
    * — flags bars carrying the engine-owned levelling over-allocation flags (`levelingWindowExceeded ||
@@ -491,6 +497,14 @@ export function TsldPanel({
     if (!CANVAS_RESOURCE_VIEW_ENABLED || !overAllocationHighlight) return undefined;
     return overAllocatedIds(activities);
   }, [overAllocationHighlight, activities]);
+  // A **value-stable** signature of the flagged set (sorted ids), so the announce effect below fires only
+  // on a real change — not on every unrelated refetch that hands `activities` a fresh array reference with
+  // the SAME over-allocated ids (which would otherwise re-speak the identical announcement, N4). Empty ⇒
+  // `''` (activity ids never contain a comma, so the split-count below is exact).
+  const flaggedSignature = useMemo(
+    () => (flaggedIds ? [...flaggedIds].sort().join(',') : ''),
+    [flaggedIds],
+  );
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
   // filter clears (active → inactive), announce a neutral empty message so the polite live region drops
@@ -547,14 +561,20 @@ export function TsldPanel({
       return;
     }
     overAllocWasActiveRef.current = true;
-    const count = flaggedIds?.size ?? 0;
+    // Derive the count from the stable signature (not `flaggedIds.size`), so the object ref stays out of
+    // the deps and the effect keys purely on value-stable inputs (N4).
+    const count = flaggedSignature === '' ? 0 : flaggedSignature.split(',').length;
     const total = activities.length;
+    // The NOUN follows `total`, the VERB follows `count` (N1) — so count=1/total=2 reads
+    // "1 of 2 activities is over-allocated." rather than the ungrammatical "…activity is…".
     announce(
       count === 0
         ? 'No activities are over-allocated.'
-        : `${count} of ${total} ${count === 1 ? 'activity is' : 'activities are'} over-allocated.`,
+        : `${count} of ${total} ${total === 1 ? 'activity' : 'activities'} ${
+            count === 1 ? 'is' : 'are'
+          } over-allocated.`,
     );
-  }, [overAllocationHighlight, flaggedIds, activities.length, announce]);
+  }, [overAllocationHighlight, flaggedSignature, activities.length, announce]);
   // Apply a Next-conflict selection command from the toolbar (canvas nav): select the requested activity
   // so the canvas rings it (the toolbar centres it first, so the reveal-on-select pan is a no-op). De-
   // duped by the signal's `nonce` so repeated jumps to the same id still fire. Inert when the flag is off.

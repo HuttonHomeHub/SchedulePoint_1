@@ -2,6 +2,7 @@ import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   BarChart3,
+  ChartColumnIncreasing,
   CalendarDays,
   CalendarRange,
   CalendarSearch,
@@ -41,7 +42,6 @@ import {
   StickyNote,
   TriangleAlert,
   Undo2,
-  Users,
   Waypoints,
 } from 'lucide-react';
 import { useRef } from 'react';
@@ -1254,7 +1254,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     tier: 2 as const,
     order: 6,
     label: 'Flag over-allocated',
-    icon: <Users className="size-4" />,
+    // A rising-bars icon mirroring the on-canvas over-allocation badge glyph — a "resource climbing past
+    // capacity" metaphor, distinct from resource-view's `BarChart3` and next-conflict's `TriangleAlert`
+    // (component/icon review N5).
+    icon: <ChartColumnIncreasing className="size-4" />,
   };
   // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/tier/order/label/icon each of the
   // three ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
@@ -1522,11 +1525,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       ? {
           ...overAllocationShape,
           isActive: (ctx) => ctx.overAllocationHighlight,
-          isEnabled: (ctx) => ctx.hasDiagram && ctx.hasOverAllocation,
+          // Enabled whenever there's something to flag OR the highlight is already ON — an active
+          // toggle must always be clickable-to-off, so a recalc that clears all over-allocation while
+          // the mode is on can never leave it aria-pressed AND aria-disabled (a stuck-on dead-end, UX
+          // review B5). The disabled-with-reason empty state is kept only for the OFF→ON activation case.
+          isEnabled: (ctx) =>
+            ctx.hasDiagram && (ctx.hasOverAllocation || ctx.overAllocationHighlight),
           disabledReason: (ctx) =>
             !ctx.hasDiagram
               ? LENS_NO_DIAGRAM_REASON
-              : ctx.hasOverAllocation
+              : ctx.hasOverAllocation || ctx.overAllocationHighlight
                 ? undefined
                 : OVER_ALLOCATION_EMPTY_REASON,
           onActivate: (ctx) => ctx.toggleOverAllocation(),

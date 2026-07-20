@@ -901,14 +901,15 @@ describe('paintScene — over-allocation highlight', () => {
     expect(flagged.strokeRect.mock.calls.length).toBe(base.strokeRect.mock.calls.length + 3);
   });
 
-  it('marks the badge in the destructive hue (non-colour-only shape carries a foreground outline)', () => {
+  it('marks the badge in the warning hue (non-colour-only shape carries a foreground outline)', () => {
     const { log } = ((): { log: string[] } => {
       const r = recordingCtx();
       paintScene(r.ctx, { ...flagScene, flaggedIds: new Set(['a']) }, VIEW, SIZE, PALETTE);
       return r;
     })();
-    // The mini-bars fill in the destructive hue; each carries the foreground outline stroke (WCAG 1.4.11).
-    expect(log).toContain(`fillStyle=${PALETTE.critical}`);
+    // The mini-bars fill in the WARNING hue (not the critical red — N2), each carrying the foreground
+    // outline stroke (WCAG 1.4.11). PALETTE.conflict differs from PALETTE.critical, so this pins the hue.
+    expect(log).toContain(`fillStyle=${PALETTE.conflict}`);
     expect(log).toContain(`strokeStyle=${PALETTE.outline}`);
   });
 

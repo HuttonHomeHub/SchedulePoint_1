@@ -1,5 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { render, screen, within } from '@testing-library/react';
+import { useEffect, type ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Stage E M2 (over-allocation highlight) ON; editing/authoring OFF to keep the read surface simple.
@@ -16,6 +17,8 @@ vi.mock('../../../config/env', async (importOriginal) => {
 // Capture live-region announcements.
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
+
+import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
 import { TsldPanel } from './TsldPanel';
 
@@ -126,9 +129,10 @@ describe('TsldPanel — over-allocation highlight (Stage E M2, flag on)', () => 
     expect(announceSpy).toHaveBeenCalledWith('2 of 3 activities are over-allocated.');
   });
 
-  it('uses the singular form when exactly one activity is over-allocated', () => {
+  it('uses the singular VERB (with the plural noun after the total) when exactly one is over-allocated', () => {
+    // N1 grammar: the noun follows `total` (2 ⇒ "activities"), the verb follows `count` (1 ⇒ "is").
     renderPanel({ activities: [A1, A2], overAllocationHighlight: true });
-    expect(announceSpy).toHaveBeenCalledWith('1 of 2 activity is over-allocated.');
+    expect(announceSpy).toHaveBeenCalledWith('1 of 2 activities is over-allocated.');
   });
 
   it('does NOT mark or announce when the highlight mode is off (parity)', () => {
@@ -144,5 +148,58 @@ describe('TsldPanel — over-allocation highlight (Stage E M2, flag on)', () => 
     });
     expect(announceSpy).toHaveBeenCalledWith('No activities are over-allocated.');
     expect(optionText('Excavate')).not.toContain('(over-allocated)');
+  });
+
+  it('clears the stale announcement when the highlight is turned back off (N7b)', () => {
+    const { rerender } = render(
+      <TsldPanel
+        activities={[A1, A2, A3]}
+        dependencies={[]}
+        dataDate="2026-01-01"
+        overAllocationHighlight
+      />,
+    );
+    expect(announceSpy).toHaveBeenCalledWith('2 of 3 activities are over-allocated.');
+    announceSpy.mockClear();
+    // On → off: the polite live region is cleared (empty announce) so the count doesn't linger, and the
+    // listbox drops the marker.
+    rerender(
+      <TsldPanel
+        activities={[A1, A2, A3]}
+        dependencies={[]}
+        dataDate="2026-01-01"
+        overAllocationHighlight={false}
+      />,
+    );
+    expect(announceSpy).toHaveBeenCalledWith('');
+    expect(optionText('Survey')).not.toContain('(over-allocated)');
+  });
+
+  it('marks an over-allocated option that is ALSO dimmed by a filter — both fragments coexist (N7c)', () => {
+    // Over-allocation is an additive highlight, not a dim, so its `(over-allocated)` mark must sit
+    // ALONGSIDE a filter's `(filtered out)` mark rather than one silently winning (WCAG 1.4.1). Drive the
+    // shared canvas UI state so a filter dims the non-matching rows while the highlight flags A1.
+    function Harness(): ReactElement {
+      const ui = useTsldCanvasUiState();
+      useEffect(() => {
+        // Filter to "Pour" so Survey (A1) is a non-match ⇒ dimmed, while A1 is also over-allocated.
+        ui.setFilterQuery('Pour');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+      return (
+        <TsldPanel
+          activities={[A1, A2, A3]}
+          dependencies={[]}
+          dataDate="2026-01-01"
+          canvasUi={ui}
+          overAllocationHighlight
+        />
+      );
+    }
+    render(<Harness />);
+    // Survey carries BOTH the filter dim marker and the over-allocation marker.
+    const survey = optionText('Survey');
+    expect(survey).toContain('(filtered out)');
+    expect(survey).toContain('(over-allocated)');
   });
 });

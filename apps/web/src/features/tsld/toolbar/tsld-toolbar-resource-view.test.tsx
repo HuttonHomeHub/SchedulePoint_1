@@ -116,4 +116,15 @@ describe('TSLD toolbar — over-allocation highlight (flag on, Stage E M2)', () 
     expect(item).toHaveAttribute('aria-disabled', 'true');
     expect(item).toHaveAttribute('title', expect.stringContaining('Add an activity first'));
   });
+
+  it('stays enabled (clickable-to-off) when active but a recalc cleared all over-allocation (B5)', () => {
+    // The mode is ON but nothing is currently over-allocated — the button must NOT be a stuck-on
+    // dead-end (aria-pressed=true AND aria-disabled=true). It stays enabled so a click toggles it off.
+    renderRows(ctx({ overAllocationHighlight: true, hasOverAllocation: false }));
+    const item = screen.getByRole('button', { name: 'Flag over-allocated' });
+    expect(item).toHaveAttribute('aria-pressed', 'true');
+    expect(item).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(spies.toggleOverAllocation).toHaveBeenCalledOnce();
+  });
 });

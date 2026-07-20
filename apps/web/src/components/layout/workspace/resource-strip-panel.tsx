@@ -10,11 +10,16 @@ import {
   useResourceHistogram,
   useResources,
 } from '@/features/resources';
+import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
 import {
   projectBucketDays,
   seriesMax,
   type ResourceStripSnapshot,
 } from '@/features/tsld/render/resource-strip';
+
+/** Gap (px) between the DOM chrome panel's bottom edge and the reserved canvas strip band, so the
+ * always-visible controls sit clear ABOVE the demand-bar band rather than covering it (UX review B4). */
+const STRIP_PANEL_BOTTOM_GAP = 8;
 
 /**
  * The DOM **chrome** host for the Stage-E canvas resource strip (ADR-0049 §4/§5, behind
@@ -110,7 +115,14 @@ export function ResourceStripPanel({
       // focus target for the reveal without adding a Tab stop.
       aria-label="Resource loading"
       tabIndex={-1}
-      className="bg-card/95 border-border pointer-events-auto absolute inset-x-2 bottom-2 z-10 max-h-[60%] overflow-auto rounded-md border p-3 shadow-md backdrop-blur outline-none"
+      // Pinned above the reserved strip band (not to the same bottom edge), so the always-visible chrome
+      // never occludes the canvas demand bars + max-tick the band exists to show (UX review B4). The
+      // accessible data `<table>` lives inside a COLLAPSED-by-default `<details>` below, so the default
+      // chrome is a compact control row; only a user-initiated expand overlays the diagram (like the
+      // other floating panels). Focus is moved here programmatically on reveal, so a plain `focus:ring`
+      // (not `focus-visible:`) gives a reliably-visible ring (WCAG 2.4.7, a11y review B6).
+      style={{ bottom: RESOURCE_STRIP_HEIGHT + STRIP_PANEL_BOTTOM_GAP }}
+      className="bg-card/95 border-border focus:ring-ring pointer-events-auto absolute inset-x-2 z-10 max-h-[50%] overflow-auto rounded-md border p-3 shadow-md backdrop-blur outline-none focus:ring-2 focus:ring-offset-2"
     >
       <div className="flex flex-wrap items-end gap-3">
         {series.length > 0 ? (

@@ -120,6 +120,23 @@ describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
     expect(paintScene).toHaveBeenCalled();
   });
 
+  it('forwards the over-allocation flagged set into paintScene when the highlight is on (N7a)', async () => {
+    const flaggedIds = new Set(['a1']);
+    render(<TsldCanvas {...baseProps()} flaggedIds={flaggedIds} />);
+    // The over-allocation highlight rides the SAME scene the painter draws — assert the flagged set
+    // reaches `paintScene` (the badge is a per-bar `Set.has` in the existing pass, ADR-0049 M2).
+    await waitFor(() =>
+      expect(paintScene).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ flaggedIds }),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      ),
+    );
+  });
+
   it('repaints ONLY the strip on a data change — a strip-only change does NOT repaint the scene', async () => {
     const props = baseProps();
     const { rerender } = render(

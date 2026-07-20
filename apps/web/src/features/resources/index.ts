@@ -27,7 +27,7 @@ export {
   ResourceLoadingTable,
   GRANULARITY_LABELS,
   formatUnits,
-} from './components/resource-loading-table';
+} from './components/ResourceLoadingTable';
 export {
   RESOURCE_KIND_LABELS,
   RESOURCE_CURVE_LABELS,

@@ -308,12 +308,14 @@ const OVERALLOC_BAR_HEIGHTS: readonly number[] = [3, 5, OVERALLOC_BADGE_H];
 /**
  * A small **rising mini-histogram** (three ascending bars) at a flagged bar's top-right corner, marking
  * an engine-flagged resource over-allocation (`levelingWindowExceeded || selfOverAllocated`, ADR-0041).
- * A **shape** cue in the destructive hue — a histogram, distinct from the constraint pin (down triangle),
+ * A **shape** cue in the warning hue — a histogram, distinct from the constraint pin (down triangle),
  * the conflict badge (up triangle) and the lane-overlap stacked squares — so over-allocation never relies
- * on colour alone (WCAG 1.4.1); each mini-bar carries a foreground outline so it clears the 3:1
- * non-text-contrast bar on any ground (WCAG 1.4.11). The parallel listbox spells it out for AT, and the
- * count is announced. Right-anchored to the bar's end and lifted just above its top; a milestone (whose
- * bounding box still has width) is marked at its box's right edge.
+ * on colour alone (WCAG 1.4.1). It deliberately uses the WARNING hue (shared with the conflict/overlap
+ * badges), NOT the destructive red, so it doesn't collide with the critical-path fill semantics
+ * (a11y review N2). Each mini-bar carries a foreground outline so it clears the 3:1 non-text-contrast
+ * bar on any ground (WCAG 1.4.11). The parallel listbox spells it out for AT, and the count is announced.
+ * Right-anchored to the bar's end and lifted just above its top; a milestone (whose bounding box still has
+ * width) is marked at its box's right edge.
  */
 function drawOverAllocationBadge(
   ctx: Ctx2D,
@@ -328,7 +330,7 @@ function drawOverAllocationBadge(
   let x = Math.round(rightX - totalW); // right-anchored to the bar's end
   for (const h of OVERALLOC_BAR_HEIGHTS) {
     const y = baseY - h;
-    ctx.fillStyle = palette.critical;
+    ctx.fillStyle = palette.conflict;
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = palette.outline;
     ctx.lineWidth = 1;
