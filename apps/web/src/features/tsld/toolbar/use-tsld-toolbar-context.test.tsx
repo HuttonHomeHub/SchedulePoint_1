@@ -153,4 +153,32 @@ describe('useTsldToolbarContext — quick-wins glue', () => {
     expect(build(false).current.lateOverlayActive).toBe(false);
     expect(build(true).current.lateOverlayActive).toBe(true);
   });
+
+  it('computes NO conflicts while VITE_CANVAS_NAV is off, even with a flagged activity + cursor (P-sug1)', () => {
+    // This suite leaves CANVAS_NAV at its default (off): `orderedConflicts` must not run, so the whole
+    // conflict surface degrades to zero/null regardless of the flags/cursor in state.
+    const model = makeModel();
+    model.activities.data = [{ ...SELECTED, constraintViolated: true, earlyStart: '2026-01-01' }];
+    const canvasUi = makeCanvasUi();
+    (canvasUi as { navState: unknown }).navState = {
+      isolateActive: false,
+      isolateMode: 'full',
+      conflictCursorId: 'a1',
+      snapToGrid: false,
+      selectSignal: null,
+    };
+    const { result } = renderHook(() =>
+      useTsldToolbarContext({
+        model,
+        plan: PLAN,
+        canvasUi,
+        openDialog: vi.fn(),
+        legend: { open: false, toggle: vi.fn() },
+        revealComments: vi.fn(),
+      }),
+    );
+    expect(result.current.conflictCount).toBe(0);
+    expect(result.current.hasConflicts).toBe(false);
+    expect(result.current.currentConflict).toBeNull();
+  });
 });

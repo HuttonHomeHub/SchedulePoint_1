@@ -209,6 +209,12 @@ export interface TsldToolbarContext {
   conflictCount: number;
   /** True when the plan has ≥ 1 flagged activity (`conflictCount > 0`). */
   hasConflicts: boolean;
+  /** The current-conflict readout the **visible** Next-conflict status chip renders (U2) — the 1-based
+   * position, the total, the name, and every matched reason of the last-visited conflict. `null` until
+   * the user starts cycling (no cursor), while isolating, when there are no conflicts, or flag-off — so
+   * the chip only appears while a conflict is actually being reviewed. It is the visible half of the
+   * polite "<i> of <n>: <name> — <reasons>" announcement `goToNextConflict` still speaks. */
+  currentConflict: { index: number; total: number; name: string; reasons: string[] } | null;
   /** Advance to the next flagged activity (wrapping): centre + select it and announce "<i> of <n>:
    * <name> — <reasons>". A no-op when there are no conflicts. View-only (every role). */
   goToNextConflict: () => void;

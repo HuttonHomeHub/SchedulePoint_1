@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { orderedConflicts, nextConflictIndex } from '../render/conflicts';
+import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
 
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
@@ -12,10 +12,18 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import {
+  CANVAS_AUTHORING_ENABLED,
+  CANVAS_NAV_ENABLED,
+  SCHEDULING_MODES_ENABLED,
+} from '@/config/env';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
+
+/** A stable empty conflict list, so the flag-off path (P-sug1) hands a byte-stable reference to the
+ * memos below (`orderedConflicts` is never even called when the flag is off — "flag-off ⇒ zero cost"). */
+const EMPTY_CONFLICTS: readonly ConflictHit[] = [];
 
 /** The pinned Tier-1 Project-finish chip (product-owner decision #1) — the number planners glance
  * at most, kept inline even though the rest of the summary moves into `Summary▾`. Loading shows a
@@ -176,7 +184,30 @@ export function useTsldToolbarContext({
   // activities only so it never rebuilds per render. `goToNextConflict` reads it to advance the cursor,
   // centre + select the hit, and announce; `conflictCount`/`hasConflicts` gate the toolbar item. Nothing
   // reads any of this while the flag is off (the id resolves to its placeholder stub), so it is inert.
-  const orderedConflictHits = useMemo(() => orderedConflicts(activities), [activities]);
+  // Gated on the flag (P-sug1): flag-off ⇒ the stable empty list, so `orderedConflicts` never runs and
+  // `hasConflicts`/`conflictCount`/`currentConflict` all degrade to zero/null — matching the flag's
+  // "flag-off ⇒ zero cost" contract (`orderedConflicts` is only exercised when the feature is on).
+  const orderedConflictHits = useMemo(
+    () => (CANVAS_NAV_ENABLED ? orderedConflicts(activities) : EMPTY_CONFLICTS),
+    [activities],
+  );
+  // The current-conflict readout the visible Next-conflict status chip renders (U2), derived from the
+  // cursor + the ordered set. Null (chip hidden) until the user starts cycling (no cursor), while
+  // isolating, when the cursor's activity is no longer flagged, when there are none, or flag-off (the
+  // ordered set is then empty). Kept in step with the polite announcement `goToNextConflict` speaks.
+  const currentConflict = useMemo<TsldToolbarContext['currentConflict']>(() => {
+    if (navState.isolateActive || navState.conflictCursorId === null) return null;
+    const index = orderedConflictHits.findIndex((h) => h.id === navState.conflictCursorId);
+    if (index === -1) return null;
+    const hit = orderedConflictHits[index];
+    if (!hit) return null;
+    return {
+      index: index + 1,
+      total: orderedConflictHits.length,
+      name: hit.name,
+      reasons: hit.reasons,
+    };
+  }, [navState.isolateActive, navState.conflictCursorId, orderedConflictHits]);
   const goToNextConflict = useMemo(
     () => (): void => {
       if (orderedConflictHits.length === 0) return;
@@ -361,6 +392,7 @@ export function useTsldToolbarContext({
       setIsolateMode,
       conflictCount: orderedConflictHits.length,
       hasConflicts: orderedConflictHits.length > 0,
+      currentConflict,
       goToNextConflict,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
@@ -430,6 +462,7 @@ export function useTsldToolbarContext({
       setIsolateMode,
       toggleSnapToGrid,
       orderedConflictHits.length,
+      currentConflict,
       goToNextConflict,
     ],
   );

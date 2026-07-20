@@ -10,6 +10,27 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-20 — TSLD canvas nav (Stage B review): Isolate split-button + visible conflict chip
+
+**Decision.** Folding the Stage-B specialist-review findings for the canvas-nav slice (spec
+`docs/specs/canvas-nav/`, `VITE_CANVAS_NAV`, still default-off pending M4) settled two interaction
+choices worth recording:
+
+- **Isolate is a toggle-with-mode split button, not a plain menu-button.** The main button carries
+  `aria-pressed` and directly **starts/exits** isolation (off → the current/last mode; pressed → exit);
+  a separate chevron opens the Full / Driving / Stop menu (ArrowDown/Up on the main button is the
+  keyboard equivalent). This deviates deliberately from the sibling menu-buttons (Colour-by omits
+  `aria-pressed`) so a pressed button exits rather than re-opening the menu — the comment on
+  `IsolateControl` pins the intent so a later refactor doesn't "align" it away.
+- **Next-conflict surfaces a VISIBLE `role="status"` chip** ("Conflict 2 of 5 · constraint conflict")
+  beside the button, since 4 of the 5 flag types have no on-canvas badge; the polite full announcement is
+  kept. The chip is a **presentational** registry item (never a roving stop, self-hides unless a conflict
+  is being cycled), and Next-conflict has **no** Visual-mode gate — its flags occur in Early mode too.
+
+**Why.** Addresses the ux/a11y review (dead-end pressed toggle; reason invisible to sighted planners)
+without a new architectural boundary. **Consequences.** Frontend-only; the CPM engine + recalc parity
+gate are untouched, and flag-off stays byte-for-byte today's toolbar/canvas/a11y tree.
+
 ### 2026-07-19 — TSLD canvas insight lenses: client render state, not an ADR
 
 **Decision.** The three canvas insight lenses (Filter/Colour-by/Baseline overlay, spec

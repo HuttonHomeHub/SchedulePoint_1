@@ -33,7 +33,7 @@ import {
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
 import { resolveLensPalette } from '../render/palette';
-import { daysBetween, isMilestone, type Point } from '../render/render-model';
+import { addCalendarDays, daysBetween, isMilestone, type Point } from '../render/render-model';
 import { snapToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
@@ -56,6 +56,7 @@ import { TsldViewControls } from './TsldViewControls';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
 /** Fixed screen anchor for the keyboard (`n`) create popover — a stable top-left corner, since a
@@ -293,6 +294,10 @@ export function TsldPanel({
   // Where the floating selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
+  // Set just before a Next-conflict cycle focuses the listbox programmatically, so the listbox's
+  // `onFocus` default-select (pick the first row when nothing is selected) doesn't clobber the conflict
+  // selection we set in the same tick (the closure's `selectedId` is still stale then). Consumed once.
+  const conflictFocusPendingRef = useRef(false);
   // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -449,8 +454,16 @@ export function TsldPanel({
     const signal = navState.selectSignal;
     if (!signal || signal.nonce === selectSignalSeenRef.current) return;
     selectSignalSeenRef.current = signal.nonce;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- external one-shot signal → selection sync
-    if (activities.some((a) => a.id === signal.id)) setSelectedId(signal.id);
+    if (activities.some((a) => a.id === signal.id)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- external one-shot signal → selection sync
+      setSelectedId(signal.id);
+      // Move DOM focus into the parallel listbox so `aria-activedescendant` is actually conveyed and an
+      // SR user who pressed the toolbar's Next-conflict button LANDS on the conflict (a11y-rec-1) — not
+      // just hears the announcement. Guarded to this conflict-cycle path so ordinary canvas selection
+      // never steals focus; the guard also stops the listbox's `onFocus` from re-selecting row 0.
+      conflictFocusPendingRef.current = true;
+      listboxRef.current?.focus();
+    }
   }, [navState.selectSignal, activities]);
 
   const isCalculated = activities.some((a) => a.earlyStart !== null);
@@ -767,10 +780,26 @@ export function TsldPanel({
           if (outcome.applied) {
             const timeChanged = intent.startDay !== undefined;
             const laneChanged = intent.laneIndex !== undefined;
+            // When Snap actually ROUNDED the dropped day to a working day (`snappedStartDay` differs
+            // from the raw drop), name the resulting working day so the snap is legible to AT (a11y-rec-2)
+            // — otherwise the generic "dates will update" wording. The snapped day is a working-day
+            // offset from the data date; the existing `addCalendarDays` + formatter turn it into a date.
+            const snappedDay =
+              intent.startDay !== undefined &&
+              snappedStartDay !== undefined &&
+              snappedStartDay !== intent.startDay
+                ? snappedStartDay
+                : null;
+            const snappedDate =
+              snappedDay !== null && dataDate
+                ? formatCalendarDate(addCalendarDays(dataDate, snappedDay))
+                : null;
             announce(
-              laneChanged
-                ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
-                : `Moved “${activity.name}”; dates will update.`,
+              snappedDate
+                ? `Moved and snapped “${activity.name}” to ${snappedDate}${laneChanged ? ` in lane ${laneIndex + 1}` : ''}.`
+                : laneChanged
+                  ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
+                  : `Moved “${activity.name}”; dates will update.`,
             );
           }
         })
@@ -1002,6 +1031,12 @@ export function TsldPanel({
               aria-activedescendant={selectedId ? optionId(selectedId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {
+                // A Next-conflict cycle focused us programmatically and already set the selection — skip
+                // the default row-0 select so it isn't clobbered (a11y-rec-1). Consume the one-shot flag.
+                if (conflictFocusPendingRef.current) {
+                  conflictFocusPendingRef.current = false;
+                  return;
+                }
                 if (!selectedId && activities[0]) select(activities[0].id);
               }}
             >
@@ -1010,15 +1045,18 @@ export function TsldPanel({
                 // colour/emphasis alone (WCAG 1.4.1). Isolate (canvas nav) and the insight-lens filter
                 // (`docs/specs/canvas-lenses/`) each carry their own wording; a marked option stays fully
                 // selectable/navigable (dim-not-hide) — so NO `aria-disabled`, which would wrongly signal
-                // an inoperable option (a11y review). Isolate takes precedence when both dim a row (its
-                // announcement is the active context).
+                // an inoperable option (a11y review). When a row is dimmed by BOTH, name both causes (a
+                // single-cause suffix would hide the other), rather than letting isolate silently win.
                 const offPath = isolateDimmed?.has(a.id) ?? false;
                 const filteredOut = filterDimmedIds?.has(a.id) ?? false;
-                const marker = offPath
-                  ? ' (off the logic path)'
-                  : filteredOut
-                    ? ' (filtered out)'
-                    : '';
+                const marker =
+                  offPath && filteredOut
+                    ? ' (filtered out, off the logic path)'
+                    : offPath
+                      ? ' (off the logic path)'
+                      : filteredOut
+                        ? ' (filtered out)'
+                        : '';
                 return (
                   <li
                     key={a.id}

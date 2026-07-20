@@ -55,21 +55,59 @@ function renderRows(context: TsldToolbarContext) {
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar — canvas nav (flag on)', () => {
-  // ── Isolate logic path ──────────────────────────────────────────────────────────────────
-  it('enables Isolate with a selection + a computed diagram, and opens its mode menu', () => {
+  // ── Isolate logic path (U1 — split button: main toggles, chevron opens the menu) ──────────
+  it('starts isolation when the unpressed main button is clicked (not just open a menu)', () => {
+    renderRows(ctx({ selectedActivity: SELECTED, isolateActive: false }));
+    const main = screen.getByRole('button', { name: 'Isolate logic path' });
+    expect(main).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(main);
+    // The primary affordance STARTS isolation (in the current/last mode) — it doesn't open a menu.
+    expect(spies.toggleIsolate).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('exits isolation when the pressed main button is clicked (toggle-off, U1)', () => {
+    renderRows(ctx({ selectedActivity: SELECTED, isolateActive: true, isolateMode: 'driving' }));
+    const main = screen.getByRole('button', { name: 'Isolate logic path: Driving path' });
+    expect(main).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(main);
+    // Clicking the PRESSED button exits — it no longer re-opens the mode menu.
+    expect(spies.toggleIsolate).toHaveBeenCalledOnce();
+    expect(spies.setIsolateMode).not.toHaveBeenCalled();
+  });
+
+  it('opens the mode menu from the chevron (arm-vs-pick), picking Driving path', () => {
     renderRows(ctx({ selectedActivity: SELECTED }));
-    const trigger = screen.getByRole('button', { name: 'Isolate logic path' });
-    expect(trigger).not.toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(trigger);
+    const chevron = screen.getByRole('button', { name: 'Isolate logic path options' });
+    fireEvent.click(chevron);
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Driving path only' }));
     expect(spies.setIsolateMode).toHaveBeenCalledWith('driving');
+    // Picking a mode is a distinct gesture from the main-button toggle.
+    expect(spies.toggleIsolate).not.toHaveBeenCalled();
+  });
+
+  it('opens the mode menu from the main button via ArrowDown (keyboard parity)', () => {
+    renderRows(ctx({ selectedActivity: SELECTED }));
+    const main = screen.getByRole('button', { name: 'Isolate logic path' });
+    fireEvent.keyDown(main, { key: 'ArrowDown' });
+    expect(screen.getByRole('menu', { name: 'Isolate logic path' })).toBeInTheDocument();
+    expect(spies.toggleIsolate).not.toHaveBeenCalled();
+  });
+
+  it('offers "Stop isolating" in the menu while active', () => {
+    renderRows(ctx({ selectedActivity: SELECTED, isolateActive: true, isolateMode: 'driving' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate logic path options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Stop isolating' }));
+    expect(spies.toggleIsolate).toHaveBeenCalledOnce();
   });
 
   it('shades Isolate with "Select an activity first" when nothing is selected', () => {
     renderRows(ctx({ selectedActivity: undefined }));
-    const trigger = screen.getByRole('button', { name: 'Isolate logic path' });
-    expect(trigger).toHaveAttribute('aria-disabled', 'true');
-    expect(trigger).toHaveAttribute('title', 'Select an activity first');
+    const main = screen.getByRole('button', { name: 'Isolate logic path' });
+    expect(main).toHaveAttribute('aria-disabled', 'true');
+    expect(main).toHaveAttribute('title', 'Select an activity first');
+    fireEvent.click(main);
+    expect(spies.toggleIsolate).not.toHaveBeenCalled();
   });
 
   it('shades Isolate with "Add an activity first" on an empty canvas (diagram gate wins)', () => {
@@ -80,14 +118,42 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
     );
   });
 
-  it('reflects the active isolate state (pressed) and its mode in the accessible name', () => {
-    renderRows(ctx({ selectedActivity: SELECTED, isolateActive: true, isolateMode: 'driving' }));
-    const trigger = screen.getByRole('button', { name: 'Isolate logic path: Driving path' });
-    expect(trigger).toHaveAttribute('aria-pressed', 'true');
-    // Active ⇒ the menu offers "Stop isolating".
-    fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Stop isolating' }));
-    expect(spies.toggleIsolate).toHaveBeenCalledOnce();
+  // ── Next-conflict visible status chip (U2) ────────────────────────────────────────────────
+  it('renders the visible "Conflict i of n · reason" status chip while cycling', () => {
+    renderRows(
+      ctx({
+        currentConflict: { index: 2, total: 5, name: 'Excavate', reasons: ['constraint conflict'] },
+      }),
+    );
+    // The chip is the VISIBLE readout only (aria-hidden); the spoken channel is the shared announcer,
+    // so it's queried by its title/text, not by an ARIA role.
+    const chip = screen.getByTitle('Conflict 2 of 5: constraint conflict');
+    expect(chip).toHaveTextContent('Conflict 2 of 5');
+    expect(chip).toHaveTextContent('constraint conflict');
+    expect(chip).toHaveAttribute('aria-hidden', 'true');
+    // Presentational — never a roving-tabindex stop / focusable control.
+    expect(chip.tagName).not.toBe('BUTTON');
+    expect(chip).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('lists every matched reason in the chip title but truncates to the first inline', () => {
+    renderRows(
+      ctx({
+        currentConflict: {
+          index: 1,
+          total: 1,
+          name: 'Pour',
+          reasons: ['constraint conflict', 'negative total float'],
+        },
+      }),
+    );
+    const chip = screen.getByTitle('Conflict 1 of 1: constraint conflict, negative total float');
+    expect(chip).toHaveTextContent('Conflict 1 of 1');
+  });
+
+  it('hides the status chip when no conflict is being cycled (currentConflict null)', () => {
+    renderRows(ctx({ currentConflict: null }));
+    expect(screen.queryByTitle(/^Conflict \d+ of \d+:/)).not.toBeInTheDocument();
   });
 
   // ── Next conflict ───────────────────────────────────────────────────────────────────────

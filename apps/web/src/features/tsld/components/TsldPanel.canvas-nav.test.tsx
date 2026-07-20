@@ -183,9 +183,45 @@ describe('TsldPanel — Isolate logic path (canvas nav, flag on)', () => {
     renderAndSelectFirst({ mode: 'driving', filterQuery: 'Survey' });
     // a1: on-chain AND matches the filter → unmarked.
     expect(optionText('Survey')).not.toMatch(/filtered out|off the logic path/);
-    // a2: on the driving chain but filtered out → "(filtered out)".
+    // a2: on the driving chain but filtered out → single-cause "(filtered out)".
     expect(optionText('Excavate')).toContain('(filtered out)');
-    // a3: off the driving chain → "(off the logic path)" (isolate wording wins when both would dim).
-    expect(optionText('Pour')).toContain('(off the logic path)');
+    expect(optionText('Excavate')).not.toContain('off the logic path');
+    // a3: off the driving chain AND filtered out → BOTH causes named (U-suggestion), not just isolate.
+    expect(optionText('Pour')).toContain('(filtered out, off the logic path)');
+  });
+});
+
+/** A harness that owns the shared canvas UI state and fires the Next-conflict **select signal** (the
+ * one-shot `requestSelectActivity` the toolbar's `goToNextConflict` calls) via a button. */
+function ConflictSelectHarness(): React.ReactElement {
+  const canvasUi: TsldCanvasUiState = useTsldCanvasUiState();
+  return (
+    <>
+      <button type="button" onClick={() => canvasUi.requestSelectActivity('a2')}>
+        fire
+      </button>
+      <TsldPanel
+        activities={[A1, A2, A3]}
+        dependencies={DEPS}
+        dataDate="2026-01-01"
+        canvasUi={canvasUi}
+      />
+    </>
+  );
+}
+
+describe('TsldPanel — Next-conflict select signal (canvas nav, a11y-rec-1)', () => {
+  it('moves DOM focus into the parallel listbox and lands on the requested conflict', () => {
+    render(<ConflictSelectHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'fire' }));
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+    // Focus lands in the listbox so `aria-activedescendant` is actually conveyed (not left on the toolbar).
+    expect(listbox).toHaveFocus();
+    // The requested conflict (a2) is selected — the programmatic focus did NOT clobber it with row 0.
+    expect(listbox.getAttribute('aria-activedescendant')).toMatch(/-opt-a2$/);
+    const selected = within(listbox)
+      .getAllByRole('option')
+      .find((o) => o.getAttribute('aria-selected') === 'true');
+    expect(selected?.textContent).toContain('Excavate');
   });
 });

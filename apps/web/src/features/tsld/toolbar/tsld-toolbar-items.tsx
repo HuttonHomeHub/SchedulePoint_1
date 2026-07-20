@@ -38,6 +38,7 @@ import {
   Undo2,
   Waypoints,
 } from 'lucide-react';
+import { useRef } from 'react';
 
 import { FILTER_ATTRS, type ColourMode } from '../render/lenses';
 import type { LogicPathMode } from '../render/logic-path';
@@ -628,15 +629,21 @@ const ISOLATE_MODE_LABELS: Record<LogicPathMode, string> = {
 
 const ISOLATE_NO_SELECTION_REASON = 'Select an activity first';
 
+const ISOLATE_OPTIONS_LABEL = 'Isolate logic path options';
+
 /**
- * The **Isolate logic path** control (canvas nav, `docs/specs/canvas-nav/`, flag-on) — a single APG
- * menu-button (mirroring {@link AddActivityControl} / {@link ColourByControl}) that dims everything not
- * on the selected activity's logic chain. The trigger reflects the active state (`aria-pressed`) and
- * arms/labels the current chain mode; opening the menu picks Full logic path / Driving path only (a pick
- * arms isolate on, mirroring the Add split-button) or stops isolating. View-only (never pen-gated);
- * shaded with a reason when nothing is selected / no diagram. One focusable roving stop (spreads
- * `itemProps`). The dim + its a11y listbox marking + the live-region announcement carry the state for
- * SR users (WCAG 1.4.1 — never colour/dim alone).
+ * The **Isolate logic path** control (canvas nav, `docs/specs/canvas-nav/`, flag-on) — a **split
+ * button** (mirroring {@link AddActivityControl}'s arm-vs-pick model): the **main** button starts /
+ * exits isolation directly, and a separate **chevron** opens the mode menu (Full logic path / Driving
+ * path only / Stop isolating). This is a deliberate TOGGLE-with-mode control — the main button carries
+ * `aria-pressed` (unlike {@link ColourByControl}, which omits it, a11y-rec-3), so clicking the pressed
+ * button EXITS isolate (`toggleIsolate`) rather than re-opening the menu (U1); when off it activates
+ * isolate in the current/last mode. Keep this split + `aria-pressed`; don't "align" it to the plain
+ * menu-buttons. The main button is the single roving stop (spreads `itemProps`); the chevron is a
+ * pointer affordance (`tabIndex -1`) with a keyboard equivalent (ArrowDown/Up on the main button opens
+ * the menu, the standard split-button keystroke). View-only (never pen-gated); shaded with a reason
+ * when nothing is selected / no diagram. The dim + its a11y listbox marking + the live-region
+ * announcement carry the state for SR users (WCAG 1.4.1 — never colour/dim alone).
  */
 function IsolateControl({
   ctx,
@@ -646,37 +653,66 @@ function IsolateControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const mainButtonRef = useRef<HTMLButtonElement>(null);
   const disabled = api.disabled;
   const modeLabel = ISOLATE_MODE_LABELS[ctx.isolateMode];
   return (
     <>
-      <button
-        {...api.itemProps}
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-pressed={ctx.isolateActive}
-        aria-disabled={disabled || undefined}
-        aria-label={ctx.isolateActive ? `Isolate logic path: ${modeLabel}` : 'Isolate logic path'}
-        title={disabled ? (api.disabledReason ?? 'Isolate logic path') : 'Isolate logic path'}
-        onClick={() => {
-          if (!disabled) toggle();
-        }}
-        className={cn(toolbarControlVariants({ active: ctx.isolateActive || open, disabled }))}
-      >
-        <Route aria-hidden="true" className="size-4" />
-        <span className="truncate">
-          {ctx.isolateActive ? `Isolating · ${modeLabel}` : 'Isolate'}
-        </span>
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
-      </button>
+      <span className="inline-flex items-center">
+        <button
+          {...api.itemProps}
+          ref={mainButtonRef}
+          type="button"
+          aria-pressed={ctx.isolateActive}
+          aria-disabled={disabled || undefined}
+          aria-label={ctx.isolateActive ? `Isolate logic path: ${modeLabel}` : 'Isolate logic path'}
+          title={disabled ? (api.disabledReason ?? 'Isolate logic path') : 'Isolate logic path'}
+          onClick={() => {
+            // Primary affordance TOGGLES isolate (off → start in the current/last mode; on → exit),
+            // so a pressed button exits rather than re-opening the menu (U1).
+            if (!disabled) ctx.toggleIsolate();
+          }}
+          onKeyDown={(event) => {
+            // Split-button keyboard equivalent: ArrowDown/Up (from the main button) opens the mode menu,
+            // so keyboard users reach Full / Driving / Stop without a pointer on the chevron.
+            if (!disabled && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+              event.preventDefault();
+              toggle();
+            }
+          }}
+          className={cn(
+            toolbarControlVariants({ active: ctx.isolateActive, disabled }),
+            'rounded-r-none pr-1',
+          )}
+        >
+          <Route aria-hidden="true" className="size-4" />
+          <span className="truncate">
+            {ctx.isolateActive ? `Isolating · ${modeLabel}` : 'Isolate'}
+          </span>
+        </button>
+        <button
+          ref={triggerRef}
+          type="button"
+          tabIndex={-1}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-disabled={disabled || undefined}
+          aria-label={ISOLATE_OPTIONS_LABEL}
+          title={ISOLATE_OPTIONS_LABEL}
+          onClick={() => {
+            if (!disabled) toggle();
+          }}
+          className={cn(toolbarControlVariants({ active: open, disabled }), 'rounded-l-none px-1')}
+        >
+          <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        </button>
+      </span>
       <Menu
         open={open}
         onClose={close}
         anchor={anchor}
         label="Isolate logic path"
-        restoreFocusRef={triggerRef}
+        restoreFocusRef={mainButtonRef}
       >
         <MenuSection>Show the logic path</MenuSection>
         <MenuItem
@@ -713,6 +749,49 @@ function IsolateControl({
         ) : null}
       </Menu>
     </>
+  );
+}
+
+/**
+ * The **Next-conflict status chip** (canvas nav, U2) — a compact, VISIBLE `role="status"` read-out
+ * pinned beside the Next-conflict button that names the conflict being reviewed ("Conflict 2 of 5 ·
+ * constraint conflict"), so a sighted planner gets the reason on screen (4 of the 5 flag types have no
+ * on-canvas badge), not only in the polite announcement. Presentational (spreads `itemProps`, never a
+ * roving-tabindex stop, mirrors the Project-finish chip); it renders nothing — and the registry item
+ * hides — unless a conflict is being cycled (`ctx.currentConflict != null`, i.e. not while isolating /
+ * before the first press / with no conflicts / flag-off). The reason truncates at narrow widths; the
+ * full reason list is in the `title`. `goToNextConflict` keeps speaking the full polite announcement,
+ * so this doubles as its visible half rather than replacing it.
+ */
+function CurrentConflictStatus({
+  ctx,
+  itemProps,
+}: {
+  ctx: TsldToolbarContext;
+  itemProps: ToolbarItemRenderApi['itemProps'];
+}): React.ReactElement | null {
+  const current = ctx.currentConflict;
+  if (!current) return null;
+  const reason = current.reasons[0] ?? 'conflict';
+  return (
+    <span
+      {...itemProps}
+      // Purely the VISIBLE readout for sighted users (U2). The spoken channel is the shared polite
+      // announcer that `goToNextConflict` already writes to — so this chip is `aria-hidden` to avoid a
+      // second, duplicate live-region announcing the same "Conflict i of n" text.
+      aria-hidden="true"
+      title={`Conflict ${current.index} of ${current.total}: ${current.reasons.join(', ')}`}
+      className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[14rem] gap-1')}
+    >
+      <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="shrink-0 whitespace-nowrap">
+        Conflict {current.index} of {current.total}
+      </span>
+      <span aria-hidden="true" className="shrink-0">
+        ·
+      </span>
+      <span className="truncate">{reason}</span>
+    </span>
   );
 }
 
@@ -1279,6 +1358,22 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.goToNextConflict(),
         }
       : placeholderItem(nextConflictShape),
+    // Next-conflict VISIBLE status chip (U2) — a presentational `role="status"` read-out pinned next to
+    // the Next-conflict button while a conflict is being cycled, so the reason is on screen and not only
+    // announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which
+    // is never the case when the flag is off (the ordered set is empty then) — so it is inert + adds no
+    // DOM flag-off, keeping the byte-for-byte parity. Presentational ⇒ never a roving-tabindex stop.
+    {
+      id: 'next-conflict-status',
+      group: 'find',
+      row: 'look',
+      tier: 2,
+      order: 3,
+      label: 'Current conflict',
+      presentational: true,
+      isVisible: (ctx) => ctx.currentConflict != null,
+      render: (ctx, api) => <CurrentConflictStatus ctx={ctx} itemProps={api.itemProps} />,
+    },
 
     // --- 4 · Tools / author (Row 2 · Do — pen-gated authoring cluster) ------------------------
     // The whole authoring cluster shades as one set when the pen isn't held (ADR-0028 + the ADR-0031

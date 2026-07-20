@@ -96,6 +96,7 @@ export function makeTsldToolbarContext(
     setIsolateMode: vi.fn(),
     conflictCount: 0,
     hasConflicts: false,
+    currentConflict: null,
     goToNextConflict: vi.fn(),
     snapToGrid: false,
     toggleSnapToGrid: vi.fn(),
