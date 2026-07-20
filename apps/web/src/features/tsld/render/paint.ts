@@ -25,6 +25,7 @@ import {
   type Size,
   type Viewport,
 } from './render-model';
+import { bucketBarsFromDays, type ResourceStripSnapshot } from './resource-strip';
 import { calendarBoundaries } from './time-scale';
 
 /**
@@ -131,6 +132,12 @@ export interface TsldScene {
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay).
    * Absent ⇒ the overlay is off / no active baseline ⇒ no ghost layer (parity). */
   baselineGhosts?: readonly GhostBar[] | undefined;
+  // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
+  /** Ids of activities the engine flagged as over-allocated (`levelingWindowExceeded ||
+   * selfOverAllocated`, ADR-0041), marked on the canvas with a distinct **mini-histogram badge** — a
+   * shape cue, never colour-only (WCAG 1.4.1). A per-bar `Set.has` in the existing single pass, so it
+   * adds no repaint. Absent ⇒ the highlight is off / nothing is over-allocated ⇒ byte-for-byte parity. */
+  flaggedIds?: ReadonlySet<string> | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -289,6 +296,47 @@ function drawOverlapBadge(
   };
   square(leftX + off, topY + off); // back square (down-right)
   square(leftX, topY); // front square (up-left)
+}
+
+/** Bar width / gap / tallest-bar height (px) of the over-allocation mini-histogram badge. */
+const OVERALLOC_BAR_W = 2;
+const OVERALLOC_BAR_GAP = 1;
+const OVERALLOC_BADGE_H = 7;
+/** The three ascending mini-bar heights (a rising histogram = "over-allocated resource"). */
+const OVERALLOC_BAR_HEIGHTS: readonly number[] = [3, 5, OVERALLOC_BADGE_H];
+
+/**
+ * A small **rising mini-histogram** (three ascending bars) at a flagged bar's top-right corner, marking
+ * an engine-flagged resource over-allocation (`levelingWindowExceeded || selfOverAllocated`, ADR-0041).
+ * A **shape** cue in the warning hue — a histogram, distinct from the constraint pin (down triangle),
+ * the conflict badge (up triangle) and the lane-overlap stacked squares — so over-allocation never relies
+ * on colour alone (WCAG 1.4.1). It deliberately uses the WARNING hue (shared with the conflict/overlap
+ * badges), NOT the destructive red, so it doesn't collide with the critical-path fill semantics
+ * (a11y review N2). Each mini-bar carries a foreground outline so it clears the 3:1 non-text-contrast
+ * bar on any ground (WCAG 1.4.11). The parallel listbox spells it out for AT, and the count is announced.
+ * Right-anchored to the bar's end and lifted just above its top; a milestone (whose bounding box still has
+ * width) is marked at its box's right edge.
+ */
+function drawOverAllocationBadge(
+  ctx: Ctx2D,
+  rightX: number,
+  barTop: number,
+  palette: TsldPalette,
+): void {
+  const w = OVERALLOC_BAR_W;
+  const gap = OVERALLOC_BAR_GAP;
+  const totalW = OVERALLOC_BAR_HEIGHTS.length * w + (OVERALLOC_BAR_HEIGHTS.length - 1) * gap;
+  const baseY = barTop - 2; // sit just above the bar's top edge
+  let x = Math.round(rightX - totalW); // right-anchored to the bar's end
+  for (const h of OVERALLOC_BAR_HEIGHTS) {
+    const y = baseY - h;
+    ctx.fillStyle = palette.conflict;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = palette.outline;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    x += w + gap;
+  }
 }
 
 /**
@@ -515,6 +563,14 @@ export function paintScene(
       const lift = activity.constraint ? CONSTRAINT_PIN_H + 1 : 0;
       drawOverlapBadge(ctx, rect.x + rect.w / 2, rect.y, palette, lift);
     }
+    // Over-allocation highlight (Stage E M2): the engine flagged this activity's resource loading
+    // (levelling window exceeded / self-over-allocated, ADR-0041). A mini-histogram badge at the bar's
+    // top-right — a distinct shape cue, drawn only for the flagged + visible activities, so it stays a
+    // set-membership check in this single pass (no extra repaint, ADR-0026). Absent `flaggedIds` ⇒ this
+    // is a no-op ⇒ byte-for-byte parity.
+    if (scene.flaggedIds?.has(id)) {
+      drawOverAllocationBadge(ctx, rect.x + rect.w, rect.y, palette);
+    }
   }
 
   // Layer 3.5: the TODAY marker — a dashed vertical in the destructive hue, above the bars and
@@ -722,6 +778,73 @@ export function paintInteractionLayer(
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+  }
+}
+
+/**
+ * The resource-strip layer's palette (Stage E, ADR-0049) — resolved concrete colours (Canvas 2D
+ * `fillStyle` can't take a `var()`), re-resolved on the shared theme bump by `TsldCanvas` like the main
+ * painter. `bar` is the demand-bar fill, `axis` the thin baseline/top rule, `tick` the max-tick label ink.
+ */
+export interface ResourceStripPalette {
+  bar: string;
+  axis: string;
+  tick: string;
+}
+
+/** Format a demand value (`DECIMAL(18,4)` units) for the max-tick label — ≤ 4 dp, trailing zeros dropped. */
+function formatStripUnits(value: number): string {
+  return Number(value.toFixed(4)).toString();
+}
+
+/**
+ * Paint the **resource strip** (Stage E, ADR-0049) — the third Canvas 2D layer, on its own
+ * `aria-hidden` sibling `<canvas>` band at the bottom of the `TsldCanvas` container. It draws the
+ * selected resource's per-bucket demand bars from the {@link ResourceStripSnapshot} the DOM host
+ * published, using the SAME `viewRef` (via {@link bucketBarsFromDays}) as the scene and ruler, so the
+ * bars sit under the diagram's day/week/month columns and pan/zoom with the canvas with zero desync.
+ * `band.width`/`band.height` are the strip canvas's CSS-px size; the backing store is `× dpr`. A `null`
+ * snapshot (or an empty series / non-positive max) draws just the axis rule — the DOM band then shows
+ * the empty/loading state. The painter uses only rectangles + an optional label, staying within the
+ * ADR-0026 draw budget (O(visible buckets)).
+ */
+export function paintResourceStrip(
+  ctx: Ctx2D,
+  snapshot: ResourceStripSnapshot | null,
+  view: Viewport,
+  band: Size,
+  palette: ResourceStripPalette,
+  dpr = 1,
+): void {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, band.width, band.height);
+
+  // A thin top rule (the strip's "zero" reference / separation from the diagram), never colour-only —
+  // it is a structural divider, not an encoded value.
+  ctx.fillStyle = palette.axis;
+  ctx.fillRect(0, 0, band.width, 1);
+
+  if (!snapshot || snapshot.max <= 0 || snapshot.series.values.length === 0) return;
+
+  const bars = bucketBarsFromDays(snapshot.series.values, snapshot.dayOffsets, view, band, {
+    height: band.height,
+    max: snapshot.max,
+  });
+  ctx.fillStyle = palette.bar;
+  for (const bar of bars) {
+    // Bars grow up from the band's baseline; the top pad keeps a full-height bar clear of the rule/tick.
+    ctx.fillRect(bar.x, band.height - bar.h, bar.w, bar.h);
+  }
+
+  // A single labelled max tick at the top-left (ADR-0026 D1 style), so the vertical scale is legible;
+  // exact per-bucket values live in the parallel table. Guarded so the no-op test 2D context (which
+  // omits text APIs) never throws — it runs only against a real context.
+  if (typeof ctx.fillText === 'function') {
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = palette.tick;
+    ctx.fillText(formatStripUnits(snapshot.max), LABEL_PAD_PX, 2);
   }
 }
 

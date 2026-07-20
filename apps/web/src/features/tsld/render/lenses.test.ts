@@ -10,14 +10,17 @@ import {
   colourKeyFor,
   floatBucketKey,
   isFilterActive,
+  isOverAllocated,
   matchesActivityFilter,
   NEUTRAL_COLOUR_KEY,
+  overAllocatedIds,
   WBS_LEGEND_CAP,
   type ColourableActivity,
   type FilterAttr,
   type LegendActivity,
   type LensPalette,
   type MatchableActivity,
+  type OverAllocatable,
 } from './lenses';
 
 // ── Filter matcher ─────────────────────────────────────────────────────────────────────
@@ -477,6 +480,61 @@ describe('buildColourLegend', () => {
   });
 });
 
-// Type-only guard: `ActivitySummary` satisfies the matcher/colour/legend shapes.
-const _typecheck: MatchableActivity & ColourableActivity & LegendActivity = {} as ActivitySummary;
+// ── Over-allocation highlight (Stage E M2) ───────────────────────────────────────────────
+
+function overAllocatable(over: Partial<OverAllocatable> = {}): OverAllocatable {
+  return { id: 'a', levelingWindowExceeded: false, selfOverAllocated: false, ...over };
+}
+
+describe('isOverAllocated', () => {
+  it('is true when the levelling window was exceeded', () => {
+    expect(isOverAllocated(overAllocatable({ levelingWindowExceeded: true }))).toBe(true);
+  });
+
+  it('is true when the activity self-over-allocates', () => {
+    expect(isOverAllocated(overAllocatable({ selfOverAllocated: true }))).toBe(true);
+  });
+
+  it('is true when both engine flags are set', () => {
+    expect(
+      isOverAllocated(overAllocatable({ levelingWindowExceeded: true, selfOverAllocated: true })),
+    ).toBe(true);
+  });
+
+  it('is false when neither engine flag is set (never over-allocated)', () => {
+    expect(isOverAllocated(overAllocatable())).toBe(false);
+  });
+});
+
+describe('overAllocatedIds', () => {
+  it('collects only the ids carrying an engine over-allocation flag', () => {
+    const set = overAllocatedIds([
+      overAllocatable({ id: 'a', levelingWindowExceeded: true }),
+      overAllocatable({ id: 'b' }),
+      overAllocatable({ id: 'c', selfOverAllocated: true }),
+      overAllocatable({ id: 'd' }),
+    ]);
+    expect(set).toEqual(new Set(['a', 'c']));
+  });
+
+  it('returns undefined when NONE are over-allocated (no scene contribution ⇒ paint parity)', () => {
+    expect(
+      overAllocatedIds([overAllocatable({ id: 'a' }), overAllocatable({ id: 'b' })]),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined for an empty activity list', () => {
+    expect(overAllocatedIds([])).toBeUndefined();
+  });
+
+  it('reads engine-owned flags only — never re-derives from other fields', () => {
+    // A plan that never levelled carries both flags false everywhere ⇒ no highlight.
+    const neverLevelled = Array.from({ length: 5 }, (_, i) => overAllocatable({ id: `x${i}` }));
+    expect(overAllocatedIds(neverLevelled)).toBeUndefined();
+  });
+});
+
+// Type-only guard: `ActivitySummary` satisfies the matcher/colour/legend/over-allocation shapes.
+const _typecheck: MatchableActivity & ColourableActivity & LegendActivity & OverAllocatable =
+  {} as ActivitySummary;
 void _typecheck;

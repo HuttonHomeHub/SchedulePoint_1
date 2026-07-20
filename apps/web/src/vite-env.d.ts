@@ -59,4 +59,6 @@ interface ImportMetaEnv {
   readonly VITE_EXPORT_PRINT?: string;
   /** On-canvas advanced activity types — the single "Level of Effort (hammock)" Add-menu item that arms a canvas endpoint-pick tool (pick start driver → finish driver → LOE + SS/FF edges as one undoable action), over the already-shipped LOE engine/API (Stage D, docs/specs/canvas-activity-types/). "true"/"1" enables it; off by default during build (flips on after reviews, Task 4). */
   readonly VITE_CANVAS_ACTIVITY_TYPES?: string;
+  /** TSLD canvas-axis-aligned resource strip — turns the `resource-view` toolbar placeholder into a demand strip pinned to the TSLD time axis (a Canvas 2D sibling layer painted by the `TsldCanvas` loop from the shared viewport), over the already-shipped resource-histogram read-model (Stage E, ADR-0049, docs/specs/canvas-resource-view/). Gated on VITE_RESOURCE_CURVES. "true"/"1" enables it; off by default during build (flips on after reviews, Task 6). */
+  readonly VITE_CANVAS_RESOURCE_VIEW?: string;
 }

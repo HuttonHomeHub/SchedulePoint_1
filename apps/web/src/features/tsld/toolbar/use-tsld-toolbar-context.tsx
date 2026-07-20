@@ -9,7 +9,7 @@ import { exportDiagramToPdf } from '../export/pdf';
 import { printDiagramImage } from '../export/PrintSurface';
 import { renderExportImage } from '../export/render-export-image';
 import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
-import { isFilterActive, matchesActivityFilter } from '../render/lenses';
+import { isFilterActive, isOverAllocated, matchesActivityFilter } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
 import { resolvePrintPalette } from '../render/palette';
 import { daysBetween } from '../render/render-model';
@@ -29,6 +29,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
@@ -269,6 +270,17 @@ export function useTsldToolbarContext({
     ],
   );
 
+  // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2): whether the plan has ≥ 1
+  // engine-flagged over-allocated activity (ADR-0041 `levelingWindowExceeded || selfOverAllocated`),
+  // read straight off the already-loaded activities — no new fetch, no client re-derivation of
+  // over-allocation. Gates the `over-allocation` toolbar item's disabled-with-reason (a plan that
+  // never levelled, or a levelled plan with none, has zero — mirroring Next-conflict's empty state).
+  // Gated on the flag so flag-off ⇒ `.some(...)` never runs and it degrades to false (zero cost).
+  const hasOverAllocation = useMemo(
+    () => CANVAS_RESOURCE_VIEW_ENABLED && activities.some(isOverAllocated),
+    [activities],
+  );
+
   // Insight lenses (VITE_CANVAS_LENSES): the Baseline-overlay gate reads the SAME variance query the
   // activities table + the ghost builder consume (route-composed in the model) — no new fetch. An
   // active baseline exists iff the summary carries a `baselineId`; loading/error feed the toolbar item's
@@ -478,6 +490,17 @@ export function useTsldToolbarContext({
       openEarnedValue: () => openDialog('earned-value'),
       openResourceHistogram: () => openDialog('resource-histogram'),
       editPlan,
+
+      // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) — the ephemeral open flag + toggle from
+      // the model. Inert while the flag is off (the `resource-view` id resolves to its placeholder stub).
+      resourceViewOpen: model.resourceViewOpen,
+      toggleResourceView: model.toggleResourceView,
+      // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) — the ephemeral mode flag +
+      // toggle from the model, plus the plan's over-allocation presence gate. Inert while the flag is
+      // off (the `over-allocation` id resolves to its placeholder stub).
+      overAllocationHighlight: model.overAllocationHighlight,
+      toggleOverAllocation: model.toggleOverAllocation,
+      hasOverAllocation,
 
       // Help
       openShortcuts: () => setShowHelp(true),
@@ -701,6 +724,15 @@ export function useTsldToolbarContext({
     openDialog,
     legendOpen,
     toggleLegend,
+    // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW) — re-identify only when the open flag flips (the
+    // toggle is a stable model callback).
+    model.resourceViewOpen,
+    model.toggleResourceView,
+    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW) — re-identify when the mode flips or the
+    // plan's over-allocation presence changes (the toggle is a stable model callback).
+    model.overAllocationHighlight,
+    model.toggleOverAllocation,
+    hasOverAllocation,
     summaryContent,
     projectFinishContent,
     hasDiagram,

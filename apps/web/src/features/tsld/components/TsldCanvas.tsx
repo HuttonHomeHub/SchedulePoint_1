@@ -15,14 +15,16 @@ import type { GhostBar } from '../render/lenses';
 import { linkLegality } from '../render/link-legality';
 import {
   paintInteractionLayer,
+  paintResourceStrip,
   paintScene,
   type InteractionOverlay,
   type LinkOverlay,
+  type ResourceStripPalette,
   type TsldPalette,
   type TsldScene,
   type TsldViewToggles,
 } from '../render/paint';
-import { resolveTsldPalette } from '../render/palette';
+import { resolveResourceStripPalette, resolveTsldPalette } from '../render/palette';
 import {
   activityRect,
   classifyHit,
@@ -45,6 +47,7 @@ import {
   type Viewport,
   type ZoomLevel,
 } from '../render/render-model';
+import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
 import { useThemeVersion } from '../render/use-theme-version';
 import type { SelectionAnchor } from '../toolbar/selection-actions';
@@ -77,6 +80,12 @@ const GOTO_LEFT_INSET = 12;
  * below it, so a canvas-relative y maps to a container y by adding this (used to place the create
  * popover, which is positioned against the outer container). */
 export const RULER_HEIGHT = 40;
+
+/** Height (px) of the resource-strip band pinned to the **bottom** of the canvas container (Stage E,
+ * ADR-0049). Mirrors {@link RULER_HEIGHT}'s top reservation: when the strip is active, `measure()`
+ * subtracts this from the scene canvas's drawable height, exactly as `RULER_HEIGHT` is subtracted from
+ * the top; when inactive it reserves nothing, so the scene is byte-for-byte today's (the parity gate). */
+export const RESOURCE_STRIP_HEIGHT = 72;
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
@@ -145,6 +154,24 @@ export interface TsldCanvasProps {
   barInk?: ReadonlyMap<string, string> | undefined;
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay). */
   baselineGhosts?: readonly GhostBar[] | undefined;
+  // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
+  /** Ids of engine-flagged over-allocated activities (`levelingWindowExceeded || selfOverAllocated`,
+   * ADR-0041), marked on the canvas with a distinct mini-histogram badge (never colour-only). Absent ⇒
+   * the highlight is off / nothing is over-allocated ⇒ byte-for-byte today's paint. `TsldPanel` derives
+   * it (memoised). */
+  flaggedIds?: ReadonlySet<string> | undefined;
+  // ── Resource strip (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`) ──────────────────
+  // Both default-absent ⇒ byte-for-byte today's `measure()` + paint (the parity gate): no band is
+  // reserved and the rAF loop does no strip work when the strip is inactive.
+  /** When true, reserve the {@link RESOURCE_STRIP_HEIGHT} band at the container bottom and paint the
+   * demand strip there each frame. When false/absent the band reserves nothing and no strip layer
+   * mounts, so the scene is byte-for-byte today's. */
+  resourceStripActive?: boolean;
+  /** The immutable strip snapshot the DOM `ResourceStripPanel` publishes (selected series + pre-projected
+   * bucket day-offsets + whole-series max). Writing it repaints ONLY the strip (a `stripDirtyRef` flag),
+   * never the main scene. `null` ⇒ the band draws just its axis rule (the DOM shows the empty/loading
+   * state). Ignored unless {@link resourceStripActive}. */
+  resourceStrip?: ResourceStripSnapshot | null;
   /** Imperative handle so the toolbar can command zoom presets / steps (ADR-0026 D3 seam). */
   controlRef?: React.Ref<TsldCanvasHandle>;
   /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
@@ -321,6 +348,9 @@ export function TsldCanvas({
   barFill,
   barInk,
   baselineGhosts,
+  flaggedIds,
+  resourceStripActive = false,
+  resourceStrip = null,
   controlRef,
   onZoomStopChange,
   selectionAnchorRef,
@@ -332,9 +362,18 @@ export function TsldCanvas({
   const themeVersion = useThemeVersion();
   const paletteRef = useRef<TsldPalette | null>(null);
   paletteRef.current ??= resolveTsldPalette();
+  // The resource-strip layer (Stage E, ADR-0049): its own re-resolved palette (Canvas 2D can't take a
+  // `var()`), the sibling band `<canvas>`, the published data snapshot (a ref — no per-frame React),
+  // and a **separate** dirty flag set by DATA changes (picker/bucket/refetch/theme) so a strip-only
+  // change never repaints the main scene. All inert when the strip is inactive (the parity gate).
+  const stripPaletteRef = useRef<ResourceStripPalette | null>(null);
+  stripPaletteRef.current ??= resolveResourceStripPalette();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const interactionCanvasRef = useRef<HTMLCanvasElement>(null);
+  const stripCanvasRef = useRef<HTMLCanvasElement>(null);
+  const stripRef = useRef<ResourceStripSnapshot | null>(resourceStrip);
+  const stripDirtyRef = useRef(true);
   const viewRef = useRef<Viewport>(DEFAULT_VIEWPORT);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
   const dirtyRef = useRef(true);
@@ -376,6 +415,7 @@ export function TsldCanvas({
     barFill,
     barInk,
     baselineGhosts,
+    flaggedIds,
   });
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
@@ -416,6 +456,7 @@ export function TsldCanvas({
       barFill,
       barInk,
       baselineGhosts,
+      flaggedIds,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
@@ -432,6 +473,7 @@ export function TsldCanvas({
     barFill,
     barInk,
     baselineGhosts,
+    flaggedIds,
   ]);
 
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
@@ -530,6 +572,15 @@ export function TsldCanvas({
     interactionDirtyRef.current = true;
   }, [pending]);
 
+  // Publish the resource-strip snapshot to the loop (Stage E, ADR-0049). Writing it marks ONLY the
+  // strip dirty (`stripDirtyRef`) — never `dirtyRef` — so a picker/bucket/refetch change repaints the
+  // strip band WITHOUT repainting the main scene (the two-dirty-flag decoupling). Inert when the strip
+  // is inactive (nothing reads `stripRef` then), so this never affects the scene paint (parity).
+  useEffect(() => {
+    stripRef.current = resourceStrip;
+    stripDirtyRef.current = true;
+  }, [resourceStrip]);
+
   // Switching tools drops any in-progress gesture ghost — most importantly an unfinished link pick
   // (M5), so leaving the Link tool mid-pick never leaves a dangling highlight ring.
   useEffect(() => {
@@ -570,10 +621,14 @@ export function TsldCanvas({
 
     const measure = (): void => {
       const rect = container.getBoundingClientRect();
-      // The canvas sits below the ruler band, so its drawable height is the container minus the ruler.
+      // The canvas sits below the ruler band, so its drawable height is the container minus the ruler —
+      // and, when the resource strip is active (Stage E, ADR-0049), minus the strip band at the bottom,
+      // exactly as the ruler is subtracted from the top. Inactive ⇒ `stripBand` is 0, so the height
+      // expression is byte-for-byte today's `rect.height - RULER_HEIGHT` (the parity gate).
+      const stripBand = resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0;
       const size = {
         width: Math.max(1, rect.width),
-        height: Math.max(1, rect.height - RULER_HEIGHT),
+        height: Math.max(1, rect.height - RULER_HEIGHT - stripBand),
       };
       if (size.width !== sizeRef.current.width || size.height !== sizeRef.current.height) {
         sizeRef.current = size;
@@ -584,6 +639,16 @@ export function TsldCanvas({
           c.height = Math.round(size.height * dpr);
           c.style.width = `${size.width}px`;
           c.style.height = `${size.height}px`;
+        }
+        // The strip band mirrors the scene canvas's DPR/backing-store sizing but keeps its FIXED band
+        // height (only its width follows the container). Only when the band is mounted (active).
+        const strip = stripCanvasRef.current;
+        if (strip) {
+          strip.width = Math.round(size.width * dpr);
+          strip.height = Math.round(RESOURCE_STRIP_HEIGHT * dpr);
+          strip.style.width = `${size.width}px`;
+          strip.style.height = `${RESOURCE_STRIP_HEIGHT}px`;
+          stripDirtyRef.current = true;
         }
         // Preserve the current viewport (pan + pxPerDay) across a surface resize — only the
         // backing store grows/shrinks and we repaint. Re-fitting here made the diagram "jump"
@@ -673,6 +738,25 @@ export function TsldCanvas({
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
+      }
+      // Layer 3 — the resource strip (Stage E, ADR-0049). Painted from the SAME `viewRef` snapshot the
+      // scene just used, so the demand bars stay pixel-aligned under the diagram columns at every frame.
+      // Repaint when the viewport moved (`movedThisFrame`, shared with the scene — the strip re-aligns
+      // for free) OR the data changed (`stripDirtyRef`). Only when the band is active — otherwise the
+      // loop does no strip work at all (byte-for-byte today's paint).
+      if (resourceStripActive) {
+        const sctx = stripCanvasRef.current?.getContext('2d');
+        if (sctx && (movedThisFrame || stripDirtyRef.current)) {
+          paintResourceStrip(
+            sctx,
+            stripRef.current,
+            viewRef.current,
+            { width: size.width, height: RESOURCE_STRIP_HEIGHT },
+            stripPaletteRef.current!,
+            dpr,
+          );
+          stripDirtyRef.current = false;
+        }
       }
       // Publish the selected activity's live viewport anchor for the floating selection bar (ADR-0031):
       // the selected bar's top edge + horizontal centre in viewport px, or null when it has no drawn
@@ -779,14 +863,21 @@ export function TsldCanvas({
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
     };
-  }, [editing, selectionAnchorRef]);
+    // `resourceStripActive` re-inits the loop when the strip toggles (like `editing`) so `measure()`
+    // re-reserves the band height and re-sizes the strip canvas; a stable `false` (inactive/flag-off)
+    // never changes, so the loop init is byte-for-byte today's (the parity gate).
+  }, [editing, selectionAnchorRef, resourceStripActive]);
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
   useEffect(() => {
     paletteRef.current = resolveTsldPalette();
+    // Re-resolve the strip palette on the SAME theme bump so the demand bars track light/dark like the
+    // main painter (Canvas 2D `fillStyle` can't take a `var()`); mark the strip dirty so it repaints.
+    stripPaletteRef.current = resolveResourceStripPalette();
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
+    stripDirtyRef.current = true;
   }, [themeVersion]);
 
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -966,6 +1057,19 @@ export function TsldCanvas({
           aria-hidden="true"
           style={{ top: RULER_HEIGHT }}
           className="pointer-events-none absolute inset-x-0"
+        />
+      ) : null}
+      {/* Layer 3 — the resource-strip band (Stage E, ADR-0049): an aria-hidden, pointer-transparent
+          sibling canvas pinned to the container bottom (the a11y equivalent is the reused `<table>` in
+          the DOM `ResourceStripPanel`). Rendered only when active, so the scene is byte-for-byte today's
+          when the strip is off. `measure()` reserves its height so it never overlaps the scene canvas. */}
+      {resourceStripActive ? (
+        <canvas
+          ref={stripCanvasRef}
+          aria-hidden="true"
+          data-testid="tsld-resource-strip"
+          style={{ height: RESOURCE_STRIP_HEIGHT }}
+          className="pointer-events-none absolute inset-x-0 bottom-0 block"
         />
       ) : null}
     </div>

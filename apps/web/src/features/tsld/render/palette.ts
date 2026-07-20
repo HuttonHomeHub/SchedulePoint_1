@@ -1,5 +1,5 @@
 import type { LensPalette } from './lenses';
-import type { TsldPalette } from './paint';
+import type { ResourceStripPalette, TsldPalette } from './paint';
 
 /**
  * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006),
@@ -103,6 +103,30 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
   } finally {
     if (hadDark) root.classList.add('dark');
   }
+}
+
+/**
+ * Resolve the **resource-strip** palette (Stage E, ADR-0049) from the same semantic design tokens
+ * (ADR-0006) the painter reads, so the demand strip is theme-aware (light/dark) without hardcoding
+ * colour. `bar` uses the primary hue (mirroring the shipped modal histogram's `bg-primary/70` bars),
+ * `axis` the border token (the thin baseline rule), `tick` the muted-foreground (the max-tick label).
+ * `TsldCanvas` calls this again on a `useThemeVersion` bump to repaint the strip in the new theme
+ * (Canvas 2D `fillStyle` can't take a `var()`). Falls back to sensible values when the DOM/tokens are
+ * unavailable (jsdom in unit tests).
+ */
+export function resolveResourceStripPalette(
+  root: Element = document.documentElement,
+): ResourceStripPalette {
+  const styles = getComputedStyle(root);
+  const token = (name: string, fallback: string): string => {
+    const value = styles.getPropertyValue(name).trim();
+    return value || fallback;
+  };
+  return {
+    bar: token('--color-primary', '#3b6fbf'),
+    axis: token('--color-border', '#2a2f3a'),
+    tick: token('--color-muted-foreground', '#7a8090'),
+  };
 }
 
 /**

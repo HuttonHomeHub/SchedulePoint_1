@@ -649,6 +649,7 @@ describe('paintScene — insight lenses', () => {
         barFill: undefined,
         barInk: undefined,
         baselineGhosts: undefined,
+        flaggedIds: undefined,
       },
       VIEW,
       SIZE,
@@ -860,5 +861,87 @@ describe('paintScene — insight lenses', () => {
     // The bar paints the override fill and its inside label paints the paired override ink.
     expect(log).toContain('fillStyle=#fill');
     expect(log).toContain('fillStyle=#ink');
+  });
+});
+
+// ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
+describe('paintScene — over-allocation highlight', () => {
+  const flagScene: TsldScene = {
+    activities: [
+      task({ id: 'a' }),
+      task({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-08' }),
+    ],
+    edges: [],
+    dataDate: DATA_DATE,
+  };
+
+  it('is byte-for-byte identical whether `flaggedIds` is absent or explicitly undefined (parity)', () => {
+    const a = recordingCtx();
+    paintScene(a.ctx, flagScene, VIEW, SIZE, PALETTE);
+    const b = recordingCtx();
+    paintScene(b.ctx, { ...flagScene, flaggedIds: undefined }, VIEW, SIZE, PALETTE);
+    expect(b.log).toEqual(a.log);
+  });
+
+  it('is byte-for-byte identical to no-field when the flagged set is empty (mode-off parity)', () => {
+    const a = recordingCtx();
+    paintScene(a.ctx, flagScene, VIEW, SIZE, PALETTE);
+    const b = recordingCtx();
+    paintScene(b.ctx, { ...flagScene, flaggedIds: new Set() }, VIEW, SIZE, PALETTE);
+    expect(b.log).toEqual(a.log);
+  });
+
+  it('draws the mini-histogram badge (extra fillRects + outline strokeRects) for a flagged bar', () => {
+    const base = mockCtx();
+    paintScene(base, flagScene, VIEW, SIZE, PALETTE);
+    const flagged = mockCtx();
+    paintScene(flagged, { ...flagScene, flaggedIds: new Set(['a']) }, VIEW, SIZE, PALETTE);
+    // One flagged bar ⇒ three ascending mini-bars, each a fillRect + a foreground-outline strokeRect.
+    expect(flagged.fillRect.mock.calls.length).toBe(base.fillRect.mock.calls.length + 3);
+    expect(flagged.strokeRect.mock.calls.length).toBe(base.strokeRect.mock.calls.length + 3);
+  });
+
+  it('marks the badge in the warning hue (non-colour-only shape carries a foreground outline)', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(r.ctx, { ...flagScene, flaggedIds: new Set(['a']) }, VIEW, SIZE, PALETTE);
+      return r;
+    })();
+    // The mini-bars fill in the WARNING hue (not the critical red — N2), each carrying the foreground
+    // outline stroke (WCAG 1.4.11). PALETTE.conflict differs from PALETTE.critical, so this pins the hue.
+    expect(log).toContain(`fillStyle=${PALETTE.conflict}`);
+    expect(log).toContain(`strokeStyle=${PALETTE.outline}`);
+  });
+
+  it('only badges the flagged ids, not every bar (set-membership per bar)', () => {
+    const one = mockCtx();
+    paintScene(one, { ...flagScene, flaggedIds: new Set(['a']) }, VIEW, SIZE, PALETTE);
+    const both = mockCtx();
+    paintScene(both, { ...flagScene, flaggedIds: new Set(['a', 'b']) }, VIEW, SIZE, PALETTE);
+    // Flagging the second bar adds exactly one more badge (three more mini-bars).
+    expect(both.fillRect.mock.calls.length).toBe(one.fillRect.mock.calls.length + 3);
+  });
+
+  it('does not badge a culled (off-screen) flagged bar', () => {
+    const offScreen = task({ id: 'z', earlyStart: '2035-01-01', earlyFinish: '2035-01-05' });
+    const base = mockCtx();
+    paintScene(
+      base,
+      { activities: [offScreen], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const flagged = mockCtx();
+    paintScene(
+      flagged,
+      { activities: [offScreen], edges: [], dataDate: DATA_DATE, flaggedIds: new Set(['z']) },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The bar is culled, so no badge is drawn — the flagged paint equals the base paint.
+    expect(flagged.fillRect.mock.calls.length).toBe(base.fillRect.mock.calls.length);
+    expect(flagged.strokeRect.mock.calls.length).toBe(base.strokeRect.mock.calls.length);
   });
 });

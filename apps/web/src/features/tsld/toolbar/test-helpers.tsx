@@ -61,6 +61,13 @@ export function makeTsldToolbarContext(
     openEarnedValue: vi.fn(),
     openResourceHistogram: vi.fn(),
     editPlan: vi.fn(),
+    // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049)
+    resourceViewOpen: false,
+    toggleResourceView: vi.fn(),
+    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2)
+    overAllocationHighlight: false,
+    toggleOverAllocation: vi.fn(),
+    hasOverAllocation: true,
     // Help
     openShortcuts: vi.fn(),
     legendOpen: false,

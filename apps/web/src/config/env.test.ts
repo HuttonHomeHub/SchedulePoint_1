@@ -4,10 +4,12 @@ import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
   flagDefaultOff,
+  flagDefaultOn,
 } from './env';
 
 describe('flagDefaultOff', () => {
@@ -72,6 +74,38 @@ describe('EXPORT_PRINT_ENABLED', () => {
     // export module or jsPDF chunk, and leaves the toolbar/canvas/a11y tree byte-for-byte — the
     // rollback path / parity gate.
     expect(EXPORT_PRINT_ENABLED).toBe(true);
+  });
+});
+
+describe('CANVAS_RESOURCE_VIEW_ENABLED', () => {
+  // The gate is `flagDefaultOn(VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED` (ADR-0049; on by
+  // default 2026-07-20 after the five reviews went green): the flag AND the resource-histogram data
+  // source. Exercise the composition's truth table (flag off/on × curves off/on) against the same
+  // `flagDefaultOn` reader the constant now uses.
+  const gate = (flag: string | undefined, curves: boolean): boolean =>
+    flagDefaultOn(flag) && curves;
+
+  it('is true when the flag is on/absent (default-on) AND the curves data source is on', () => {
+    expect(gate(undefined, true)).toBe(true);
+    expect(gate('true', true)).toBe(true);
+    expect(gate('1', true)).toBe(true);
+  });
+
+  it('is false ONLY when explicitly disabled — the rollback path — regardless of the data source', () => {
+    expect(gate('false', true)).toBe(false);
+    expect(gate('0', true)).toBe(false);
+  });
+
+  it('is false when the flag is on but the curves data source is off (nothing to strip)', () => {
+    expect(gate(undefined, false)).toBe(false);
+    expect(gate('true', false)).toBe(false);
+  });
+
+  it('is ON at the build default (delivered & enabled; no VITE_CANVAS_RESOURCE_VIEW set, curves on)', () => {
+    // On by default now that the resource strip + over-allocation highlight reviews are green (Stage E).
+    // Setting VITE_CANVAS_RESOURCE_VIEW=false ships the resource-view/over-allocation ids as their
+    // "Coming soon" placeholders and the canvas paints byte-for-byte today's — the rollback / parity path.
+    expect(CANVAS_RESOURCE_VIEW_ENABLED).toBe(true);
   });
 });
 

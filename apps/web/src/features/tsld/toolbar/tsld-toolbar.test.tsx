@@ -31,6 +31,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // section stays today's disabled Level-of-effort + Hammock "Soon" placeholders (the flag-on single
   // "Level of Effort (hammock)" item is covered in tsld-toolbar-activity-types.test.tsx).
   CANVAS_ACTIVITY_TYPES_ENABLED: false,
+  // Pin the canvas resource-view lens (Stage E, ADR-0049) OFF here too: `resource-view` AND the M2
+  // `over-allocation` highlight stay their "Coming soon" placeholders (the flag-on toggles are covered
+  // in tsld-toolbar-resource-view.test.tsx).
+  CANVAS_RESOURCE_VIEW_ENABLED: false,
 }));
 
 const spies = {
@@ -282,6 +286,17 @@ describe('TSLD toolbar registry (two-row)', () => {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);
+    }
+  });
+
+  it('shows the resource-view lens + over-allocation highlight as "Coming soon" placeholders when VITE_CANVAS_RESOURCE_VIEW is off', () => {
+    // CANVAS_RESOURCE_VIEW_ENABLED is pinned off (top of file) — both ids must resolve to their
+    // byte-for-byte placeholder stubs (the flag-off parity gate).
+    renderRows(ctx());
+    for (const name of ['Resource view', 'Flag over-allocated']) {
+      const btn = screen.getByRole('button', { name });
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 

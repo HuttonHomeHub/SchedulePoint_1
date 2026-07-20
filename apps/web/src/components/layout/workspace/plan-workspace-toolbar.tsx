@@ -5,6 +5,7 @@ import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-botto
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
+import { ResourceStripPanel } from './resource-strip-panel';
 import {
   CANVAS_MIN_HEIGHT,
   PANEL_MAX_HEIGHT,
@@ -24,6 +25,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_RESOURCE_VIEW_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
@@ -40,6 +42,7 @@ import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
 import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildColourLegend } from '@/features/tsld/render/lenses';
 import { lensLegendVarPalette } from '@/features/tsld/render/palette';
+import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
@@ -76,6 +79,18 @@ export function ToolbarPlanWorkspace({
   // The on-canvas floating Legend panel (ADR-0031 amendment): open state + drag position persist here,
   // toggled from the toolbar's Legend control and rendered over the canvas below.
   const legend = useLegendPanelPrefs();
+  // Resource-view lens (Stage E, ADR-0049, VITE_CANVAS_RESOURCE_VIEW): the DOM `ResourceStripPanel`
+  // publishes its strip snapshot here; the workspace forwards it (and the active flag) to the canvas,
+  // which paints the demand bars on its sibling strip layer. `resourceViewActive` reserves the band +
+  // mounts the panel — only when the lens is open, the flag is on, and the plan is diagrammable (has a
+  // data date). Flag-off ⇒ always inactive ⇒ byte-for-byte today's canvas + no panel.
+  const [stripSnapshot, setStripSnapshot] = useState<ResourceStripSnapshot | null>(null);
+  const onStripSnapshot = useCallback(
+    (snapshot: ResourceStripSnapshot | null) => setStripSnapshot(snapshot),
+    [],
+  );
+  const resourceViewActive =
+    CANVAS_RESOURCE_VIEW_ENABLED && model.resourceViewOpen && plan.plannedStart !== null;
   // The **Comments** button's reveal target (toolbar quick-wins F2): a ref on the plan-notes heading +
   // a stable, guarded callback that scrolls it into view and moves focus to it. A no-op when the
   // section isn't mounted (the responsive single-pane toggle / `VITE_NOTES` off), so it never throws.
@@ -250,8 +265,30 @@ export function ToolbarPlanWorkspace({
       // Baseline overlay lens (VITE_CANVAS_LENSES): reuse the shipped variance rows (route-composed for
       // the activities table) — no new fetch. Absent when the flag is off ⇒ no ghost layer.
       {...(CANVAS_LENSES_ENABLED ? { varianceRows: model.variance.data?.rows } : {})}
+      // Resource-view strip (Stage E, ADR-0049): reserve the band + paint the demand bars from the
+      // snapshot the ResourceStripPanel below publishes. Inactive ⇒ no band, byte-for-byte today's.
+      resourceStripActive={resourceViewActive}
+      resourceStrip={stripSnapshot}
+      // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
+      // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
+      overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
     />
   );
+
+  // The DOM chrome for the resource strip (picker + reused bucket Select + reused accessible table),
+  // overlaid on whichever canvas region is active (its container is `relative`), like the Legend panel.
+  // Mounts only when the lens is active; on reveal it moves focus into itself (mirrors the activities
+  // panel). It publishes the strip snapshot into the canvas via `onStripSnapshot`.
+  const resourceStripPanel =
+    resourceViewActive && plan.plannedStart ? (
+      <ResourceStripPanel
+        orgSlug={model.orgSlug}
+        planId={model.planId}
+        dataDate={plan.plannedStart}
+        onSnapshot={onStripSnapshot}
+        focusOnMount
+      />
+    ) : null;
 
   // The floating Legend panel is overlaid on whichever canvas region is active (its container is
   // `relative`); it renders null when closed, so dropping it in both layout branches is cheap. Under
@@ -407,6 +444,7 @@ export function ToolbarPlanWorkspace({
             <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
               {canvas}
               {legendPanel}
+              {resourceStripPanel}
             </div>
 
             {collapsed ? (
@@ -444,6 +482,8 @@ export function ToolbarPlanWorkspace({
             >
               {canvas}
               {legendPanel}
+              {/* Below `md` the strip rides the Diagram pane (no third pane) — Q3 / ADR-0049. */}
+              {resourceStripPanel}
             </div>
             <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
               <ActivityBottomPanel model={model} />

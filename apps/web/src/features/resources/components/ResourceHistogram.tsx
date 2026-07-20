@@ -1,23 +1,11 @@
-import { HISTOGRAM_GRANULARITIES, type HistogramGranularity } from '@repo/types';
+import type { HistogramGranularity } from '@repo/types';
 import { useId, useState } from 'react';
 
 import { useResourceHistogram, useResources } from '../api/use-resources';
 
+import { BucketSizeSelect, ResourceLoadingTable, formatUnits } from './ResourceLoadingTable';
+
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-
-/** Human labels for the histogram granularities. */
-const GRANULARITY_LABELS: Record<HistogramGranularity, string> = {
-  DAY: 'Day',
-  WEEK: 'Week',
-  MONTH: 'Month',
-};
-
-/** Trim a `number` to at most 4 dp for display (units are `DECIMAL(18,4)`), dropping trailing zeros. */
-function formatUnits(value: number): string {
-  return Number(value.toFixed(4)).toString();
-}
 
 /**
  * The plan's **resource loading histogram** read view (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — a
@@ -57,21 +45,7 @@ export function ResourceHistogram({
         <h3 id={tableCaptionId} className="text-sm font-semibold">
           Resource loading histogram
         </h3>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={granularityId}>Bucket size</Label>
-          <Select
-            id={granularityId}
-            value={granularity}
-            onChange={(event) => setGranularity(event.target.value as HistogramGranularity)}
-            className="w-32"
-          >
-            {HISTOGRAM_GRANULARITIES.map((g) => (
-              <option key={g} value={g}>
-                {GRANULARITY_LABELS[g]}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <BucketSizeSelect id={granularityId} value={granularity} onChange={setGranularity} />
       </div>
 
       {histogram.isPending ? (
@@ -122,60 +96,14 @@ export function ResourceHistogram({
             ))}
           </div>
 
-          {/* Keyboard-navigable data-table equivalent (WCAG 2.2 AA) — the chart's accessible alternative. */}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="text-muted-foreground mb-2 text-left text-sm">
-                Curve-shaped units per {GRANULARITY_LABELS[granularity].toLowerCase()} bucket, by
-                resource. Each resource’s row sums to its total budgeted units.
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col" className="border-border border-b p-2 font-semibold">
-                    Bucket start
-                  </th>
-                  {series.map((s) => (
-                    <th
-                      key={s.resourceId}
-                      scope="col"
-                      className="border-border border-b p-2 text-right font-semibold"
-                    >
-                      {resourceName(s.resourceId)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {buckets.map((bucket, i) => (
-                  <tr key={bucket.start}>
-                    <th scope="row" className="border-border border-b p-2 font-normal">
-                      {bucket.start}
-                    </th>
-                    {series.map((s) => (
-                      <td
-                        key={s.resourceId}
-                        className="border-border border-b p-2 text-right tabular-nums"
-                      >
-                        {formatUnits(s.values[i] ?? 0)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row" className="p-2 font-semibold">
-                    Total
-                  </th>
-                  {series.map((s) => (
-                    <td key={s.resourceId} className="p-2 text-right font-semibold tabular-nums">
-                      {formatUnits(s.total)}
-                    </td>
-                  ))}
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          {/* Keyboard-navigable data-table equivalent (WCAG 2.2 AA) — the chart's accessible
+              alternative, the SAME shared `<table>` the Stage-E canvas resource strip renders. */}
+          <ResourceLoadingTable
+            buckets={buckets}
+            series={series}
+            granularity={granularity}
+            resourceName={resourceName}
+          />
         </div>
       )}
     </section>
