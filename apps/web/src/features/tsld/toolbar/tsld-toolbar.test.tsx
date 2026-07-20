@@ -27,6 +27,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // Pin export & print OFF here too (this is the flag-off registry suite): `export`/`print` stay their
   // "Coming soon" placeholders. The real flag-on Export menu is covered in tsld-toolbar-export.test.tsx.
   EXPORT_PRINT_ENABLED: false,
+  // Pin the on-canvas advanced activity types (Stage D) OFF here too: the Add menu's "Span between"
+  // section stays today's disabled Level-of-effort + Hammock "Soon" placeholders (the flag-on single
+  // "Level of Effort (hammock)" item is covered in tsld-toolbar-activity-types.test.tsx).
+  CANVAS_ACTIVITY_TYPES_ENABLED: false,
 }));
 
 const spies = {

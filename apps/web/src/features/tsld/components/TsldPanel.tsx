@@ -120,6 +120,16 @@ export interface TsldLinkInput {
 
 export type TsldLinkOutcome = TsldEditOutcome;
 
+/** A committed LOE endpoint-pick (Stage D) — the two driver activities the span hangs off. The route
+ * composes a `LEVEL_OF_EFFORT` activity plus an SS (start → LOE) and FF (LOE → finish) edge as one
+ * undoable action; no `HAMMOCK` is ever created (the LOE is the span-derived hammock). */
+export interface TsldLoeSpanInput {
+  startDriverId: string;
+  finishDriverId: string;
+}
+
+export type TsldLoeSpanOutcome = TsldEditOutcome;
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
@@ -137,6 +147,11 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
+   * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
+   * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
+   * LOE tool-mode (armed from the flag-gated Add-menu item) enables the on-canvas endpoint-pick. */
+  onLoeSpan?: (input: TsldLoeSpanInput) => Promise<TsldLoeSpanOutcome>;
   /** Route-composed auto-arrange handler (M4 4.3): persists the packed lanes via the batch
    * positions endpoint (all-or-nothing, no recalc). Resolves with a conflict message when a stale
    * version refused the whole batch; rejects on real error. Its presence shows the toolbar action. */
@@ -223,6 +238,7 @@ export function TsldPanel({
   onCreate,
   onReposition,
   onLink,
+  onLoeSpan,
   onAutoArrange,
   onOpenLogic,
   onEditActivity,
@@ -301,6 +317,23 @@ export function TsldPanel({
   // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
+  // The LOE endpoint-pick tool's picked **start driver** (Stage D, `docs/specs/canvas-activity-types/`)
+  // — the parallel a11y state shared by the keyboard flow (listbox Enter) and the pointer flow (synced
+  // via `handleLoeStep`). Null when no start is picked. Cleared when the tool disarms (mode leaves
+  // `'loe'`) so a re-arm always starts fresh. Inert when the flag/tool is off (mode is never `'loe'`).
+  const [loeStartId, setLoeStartId] = useState<string | null>(null);
+  // Arm/disarm side effects: announce the first prompt when the LOE tool is armed (its canvas is
+  // aria-hidden, so the prompt must be spoken), and drop any half-finished pick when it disarms. Runs
+  // only on a `mode` transition. Inert while the flag is off — `mode` is never `'loe'` then.
+  useEffect(() => {
+    if (mode === 'loe') announce('Level of effort: pick the start driver, then the finish driver.');
+    // Sync the local pick state to the externally-controlled tool `mode` (driven by the toolbar's
+    // Add-menu + the canvas Escape): leaving the LOE tool drops any half-finished pick, so a re-arm
+    // never inherits a stale start driver. The endorsed "subscribe to an external system, setState in
+    // response" effect case (mirrors the Next-conflict select-signal sync above).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external tool-mode → pick-state sync
+    else setLoeStartId(null);
+  }, [mode, announce]);
 
   const renderActivities = useMemo(
     () => toRenderActivities(activities, barDateSource),
@@ -561,6 +594,30 @@ export function TsldPanel({
 
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
+    // LOE endpoint-pick keyboard path (Stage D) — the parallel-DOM equivalent of the pointer two-pick,
+    // so the tool is fully keyboard-operable (WCAG 2.1.1). In the LOE tool, Enter picks the FOCUSED
+    // activity: first as the start driver (prompt for the finish), then — on a DIFFERENT activity — it
+    // commits the span. Re-picking the same activity is rejected + re-prompted (spec §Edge cases).
+    // Escape (the canvas window listener) disarms the whole tool. Takes precedence over the Enter →
+    // open-logic path below while the tool is armed.
+    if (editingEnabled && mode === 'loe' && onLoeSpan && event.key === 'Enter') {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current) return;
+      if (loeStartId === null) {
+        setLoeStartId(current.id);
+        announce(
+          `Picked “${current.name}” as the level-of-effort start driver. Now pick the finish driver.`,
+        );
+        return;
+      }
+      if (current.id === loeStartId) {
+        announce('That’s the start driver — pick a different activity as the finish driver.');
+        return;
+      }
+      runLoeSpan(loeStartId, current.id);
+      return;
+    }
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
     // creating links, so link-draw introduces no pointer-only capability (WCAG 2.1.1).
     if (event.key === 'Enter' && onOpenLogic) {
@@ -726,6 +783,49 @@ export function TsldPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoArrangeSignal]);
 
+  // Compose the LOE span from the two picked drivers (Stage D) — shared by the pointer commit (a
+  // `loeSpan` intent) and the keyboard commit (the second listbox Enter). Clears the pick, then hands
+  // off to the route's `onLoeSpan` (which owns the create + SS/FF + one-undo + rollback + recalc);
+  // announces only when the span actually landed, mirroring the link path's outcome handling.
+  const runLoeSpan = (startDriverId: string, finishDriverId: string): void => {
+    if (!onLoeSpan) return;
+    clearConflict();
+    setLoeStartId(null);
+    const start = activities.find((a) => a.id === startDriverId);
+    const finish = activities.find((a) => a.id === finishDriverId);
+    void onLoeSpan({ startDriverId, finishDriverId })
+      .then((outcome) => {
+        if (outcome.conflict) showConflict(outcome.conflict);
+        if (outcome.applied) {
+          announce(
+            `Added a level-of-effort span from “${start?.name ?? 'activity'}” to “${finish?.name ?? 'activity'}”.`,
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        showConflict(err instanceof Error ? err.message : 'Couldn’t add the level-of-effort span.');
+      });
+  };
+
+  // The LOE tool's per-pick feedback from the canvas (Stage D) — announce the prompt + keep the
+  // parallel `loeStartId` in step with the pointer pick, so the keyboard and pointer flows agree.
+  const handleLoeSpanStep = (
+    step: { kind: 'start'; startId: string } | { kind: 'reprompt' } | { kind: 'cancel' },
+  ): void => {
+    if (step.kind === 'start') {
+      setLoeStartId(step.startId);
+      const picked = activities.find((a) => a.id === step.startId);
+      announce(
+        `Picked “${picked?.name ?? 'activity'}” as the level-of-effort start driver. Now pick the finish driver.`,
+      );
+    } else if (step.kind === 'reprompt') {
+      announce('That’s the start driver — pick a different activity as the finish driver.');
+    } else {
+      setLoeStartId(null);
+      announce('Level-of-effort pick cancelled. Pick the start driver.');
+    }
+  };
+
   const onIntent = (intent: EditIntent, anchor: Point): void => {
     // Ignore a new gesture while a create popover or a reposition is already in flight.
     if (pendingCreate || pendingReposition) return;
@@ -849,6 +949,11 @@ export function TsldPanel({
         .catch((err: unknown) => {
           showConflict(err instanceof Error ? err.message : 'Couldn’t create the link.');
         });
+    }
+    if (intent.kind === 'loeSpan') {
+      // The two-click LOE tool committed (Stage D). Compose the span via the shared helper — the route
+      // owns the create + SS/FF edges + one-undo + rollback + recalc (`model.createLoeSpan`).
+      runLoeSpan(intent.startDriverId, intent.finishDriverId);
     }
   };
 
@@ -978,6 +1083,7 @@ export function TsldPanel({
               canReposition={onReposition !== undefined}
               canLink={onLink !== undefined}
               onIntent={onIntent}
+              onLoeSpanStep={handleLoeSpanStep}
               onExitAddMode={() => setMode('select')}
               view={viewToggles}
               isWorkingDay={workingDayPredicate}

@@ -70,6 +70,14 @@ export interface TsldToolbarContext {
   linkType: DependencyType;
   /** Pick the dependency kind the Link tool creates. */
   setLinkType: (type: DependencyType) => void;
+  /** True when the current edit mode is the two-click **Level of Effort (hammock)** endpoint-pick tool
+   * (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`) — drives the Add-menu item's checked state. Mutually
+   * exclusive with add/link (a single {@link import('../interaction/gesture-machine').EditMode}). */
+  isLoeSpanning: boolean;
+  /** Arm / disarm the LOE endpoint-pick tool (pen-gated). Only reachable when
+   * `VITE_CANVAS_ACTIVITY_TYPES` is on (the Add-menu item is flag-gated); a toggle like the Add/Link
+   * tools, and leaving it (Escape / re-select) returns to Select. */
+  toggleLoeSpanMode: () => void;
   /** Whether the auto-arrange-lanes action is offered (editing + an `onAutoArrange` handler). */
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */

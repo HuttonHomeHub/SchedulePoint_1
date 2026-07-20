@@ -40,6 +40,8 @@ export function makeTsldToolbarContext(
     toggleLinkMode: vi.fn(),
     linkType: 'FS',
     setLinkType: vi.fn(),
+    isLoeSpanning: false,
+    toggleLoeSpanMode: vi.fn(),
     canAutoArrange: false,
     requestAutoArrange: vi.fn(),
     canUndo: false,

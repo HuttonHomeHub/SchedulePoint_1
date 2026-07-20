@@ -6,6 +6,7 @@ export {
   repositionCommand,
   updateCommand,
   createActivityCommand,
+  createLoeSpanCommand,
   deleteActivityCommand,
   dependencyAddCommand,
   dependencyRemoveCommand,

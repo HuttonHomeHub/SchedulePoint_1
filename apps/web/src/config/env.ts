@@ -557,3 +557,22 @@ export const CANVAS_NAV_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_NAV)
  * interchange are C2, out of scope; app-handled `Ctrl/Cmd+P` is a documented deferred fast-follow.
  */
 export const EXPORT_PRINT_ENABLED = flagDefaultOn(import.meta.env.VITE_EXPORT_PRINT);
+
+/**
+ * On-canvas advanced activity types — the **Level of Effort (hammock)** endpoint-pick tool (Stage D,
+ * spec `docs/specs/canvas-activity-types/`). **OFF by default during build** — it flips on after the
+ * specialist reviews (a11y / ux / component / perf) are green (Task 4), mirroring the Stage A/B/C1
+ * canvas flags ({@link CANVAS_LENSES_ENABLED} / {@link CANVAS_NAV_ENABLED} / {@link EXPORT_PRINT_ENABLED}).
+ * When on, the canvas Add split-button's two disabled "Soon" placeholders (Level of effort + Hammock)
+ * collapse into ONE live **Level of Effort (hammock)** menu item that arms a canvas endpoint-pick
+ * tool-mode: pick a start driver, then a finish driver, and SchedulePoint composes a `LEVEL_OF_EFFORT`
+ * activity plus its SS (start → LOE) and FF (LOE → finish) edges as one undoable action, then recalcs
+ * and redraws. Frontend-only over the already-shipped LOE engine/API (M5-epic, ADR-0035 §21) — no new
+ * API/schema/`@repo/types`/CPM-engine change (the recalc parity gate is untouched); a raw `HAMMOCK`
+ * create is never wired (the engine has no distinct Hammock — the LOE **is** the span-derived hammock).
+ * Set `VITE_CANVAS_ACTIVITY_TYPES=true` to enable it in an environment. Flag-off ⇒ the Add menu keeps
+ * today's disabled "Soon" placeholders byte-for-byte and the LOE tool-mode is unreachable.
+ */
+export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_CANVAS_ACTIVITY_TYPES,
+);

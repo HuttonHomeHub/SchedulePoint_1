@@ -59,6 +59,7 @@ import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import {
+  CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -231,20 +232,34 @@ function AddActivityControl({
           </MenuItem>
         ) : null}
         {/* Span-between kinds (ADR-0032) are derived from two endpoints, not point-and-draw — so they
-            live here as a distinct section, previewed disabled ("Soon") until the endpoint-pick flow
-            is built (docs/TOOLBAR_ROADMAP.md). */}
+            live here as a distinct section. Flag-on (`VITE_CANVAS_ACTIVITY_TYPES`, Stage D) this is ONE
+            live **Level of Effort (hammock)** item that arms the endpoint-pick tool — the LOE is the
+            span-derived hammock, so there is no separate Hammock item and no raw `HAMMOCK` create (Q1).
+            Flag-off it stays today's two disabled "Soon" placeholders, byte-for-byte. */}
         <div role="separator" className="bg-border my-1 h-px" />
         <MenuSection>Span between activities</MenuSection>
-        <MenuItem disabled onSelect={() => {}}>
-          <Waypoints aria-hidden="true" className="size-4" />
-          Hammock
-          <SoonTag />
-        </MenuItem>
-        <MenuItem disabled onSelect={() => {}}>
-          <Rows3 aria-hidden="true" className="size-4" />
-          Level of effort
-          <SoonTag />
-        </MenuItem>
+        {CANVAS_ACTIVITY_TYPES_ENABLED ? (
+          <MenuItem selected={ctx.isLoeSpanning} onSelect={() => ctx.toggleLoeSpanMode()}>
+            <Check
+              aria-hidden="true"
+              className={cn('size-4', ctx.isLoeSpanning ? 'opacity-100' : 'opacity-0')}
+            />
+            Level of Effort (hammock)
+          </MenuItem>
+        ) : (
+          <>
+            <MenuItem disabled onSelect={() => {}}>
+              <Waypoints aria-hidden="true" className="size-4" />
+              Hammock
+              <SoonTag />
+            </MenuItem>
+            <MenuItem disabled onSelect={() => {}}>
+              <Rows3 aria-hidden="true" className="size-4" />
+              Level of effort
+              <SoonTag />
+            </MenuItem>
+          </>
+        )}
       </Menu>
     </>
   );

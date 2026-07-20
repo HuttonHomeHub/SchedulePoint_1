@@ -5,6 +5,7 @@ import {
   activityDefinitionInput,
   autoArrangeCommand,
   createActivityCommand,
+  createLoeSpanCommand,
   deleteActivityCommand,
   dependencyAddCommand,
   dependencyLinkOf,
@@ -433,6 +434,75 @@ describe('dependency add / remove commands', () => {
     await command.redo(); // remove again
     expect(deleteDependency).toHaveBeenCalledExactlyOnceWith('edge-10');
     expect(command.label).toBe('Remove link');
+  });
+});
+
+describe('createLoeSpanCommand', () => {
+  const placedInput = {
+    name: 'Level of effort',
+    type: 'LEVEL_OF_EFFORT' as const,
+    durationDays: 0,
+    laneIndex: 2,
+  };
+
+  it('undo deletes the LOE (cascading its edges); redo re-composes LOE + SS + FF', async () => {
+    const loe = activity({ id: 'loe-1', name: 'Level of effort', type: 'LEVEL_OF_EFFORT' });
+    const createPlaced = vi.fn(() => Promise.resolve(activity({ id: 'loe-2' })));
+    const createDependency: CreateDependencyFn = vi.fn(() => Promise.resolve(dependency({})));
+    const deleteActivity = vi.fn(() => Promise.resolve());
+    const command = createLoeSpanCommand({
+      loe,
+      placedInput,
+      planId: 'pl1',
+      startDriverId: 'start',
+      finishDriverId: 'finish',
+      createPlaced,
+      createDependency,
+      deleteActivity,
+    });
+
+    // Undo just deletes the LOE — the SS + FF edges cascade with it (no separate edge deletes).
+    await command.undo();
+    expect(deleteActivity).toHaveBeenCalledExactlyOnceWith('loe-1');
+
+    // Redo re-composes the WHOLE span: a fresh LOE, then its SS (start → LOE) and FF (LOE → finish).
+    await command.redo();
+    expect(createPlaced).toHaveBeenCalledExactlyOnceWith(placedInput);
+    expect(createDependency).toHaveBeenCalledTimes(2);
+    expect(createDependency).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ predecessorId: 'start', successorId: 'loe-2', type: 'SS' }),
+    );
+    expect(createDependency).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ predecessorId: 'loe-2', successorId: 'finish', type: 'FF' }),
+    );
+
+    // A second undo deletes the RE-composed LOE id (loe-2), not the stale original — the toggle tracks it.
+    await command.undo();
+    expect(deleteActivity).toHaveBeenLastCalledWith('loe-2');
+    expect(command.label).toBe('Add level-of-effort span “Level of effort”');
+  });
+
+  it('is idempotent per direction (no double-delete / double-compose)', async () => {
+    const createPlaced = vi.fn(() => Promise.resolve(activity({ id: 'x' })));
+    const createDependency: CreateDependencyFn = vi.fn(() => Promise.resolve(dependency({})));
+    const deleteActivity = vi.fn(() => Promise.resolve());
+    const command = createLoeSpanCommand({
+      loe: activity({ id: 'loe-1' }),
+      placedInput,
+      planId: 'pl1',
+      startDriverId: 'start',
+      finishDriverId: 'finish',
+      createPlaced,
+      createDependency,
+      deleteActivity,
+    });
+    await command.redo(); // already present — no-op
+    expect(createPlaced).not.toHaveBeenCalled();
+    await command.undo(); // delete
+    await command.undo(); // already absent — no-op
+    expect(deleteActivity).toHaveBeenCalledTimes(1);
   });
 });
 

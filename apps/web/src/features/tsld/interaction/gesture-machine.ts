@@ -25,9 +25,13 @@ import {
 /**
  * The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition;
  * `add-activity` draws bars; `link` is the two-click dependency tool (ADR-0032 M5): click a
- * predecessor, then a successor — replacing the flag-off edge-drag rubber-band.
+ * predecessor, then a successor — replacing the flag-off edge-drag rubber-band. `loe` is the
+ * two-click **Level of Effort (hammock)** endpoint-pick tool (Stage D,
+ * `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`): click a start driver,
+ * then a finish driver — the shell composes a `LEVEL_OF_EFFORT` span (SS + FF) from the pair. A single
+ * `EditMode` value makes the four tools **mutually exclusive** — arming one leaves any other.
  */
-export type EditMode = 'select' | 'add-activity' | 'link';
+export type EditMode = 'select' | 'add-activity' | 'link' | 'loe';
 
 /**
  * The minimum pointer travel (CSS px) that turns a body press into a real reposition rather
@@ -132,6 +136,14 @@ export type EditIntent =
       successorId: string;
       /** Chosen by the held modifiers at release (see {@link modifiersToLinkType}). */
       type: DependencyType;
+    }
+  | {
+      /** The two-click LOE endpoint-pick tool's commit (Stage D): the picked start driver + finish
+       * driver. The shell composes a `LEVEL_OF_EFFORT` activity plus an SS (start → LOE) and an FF
+       * (LOE → finish) edge from the pair — this intent never carries a `HAMMOCK`. */
+      kind: 'loeSpan';
+      startDriverId: string;
+      finishDriverId: string;
     };
 
 /** The live gesture. `idle` means the machine owns nothing — the canvas pans/selects (M1). */
@@ -175,6 +187,13 @@ export type GestureState =
        * click on another activity commits the link. Persists between clicks (it isn't a drag). */
       kind: 'linkPicking';
       predecessorId: string;
+    }
+  | {
+      /** The two-click LOE tool (Stage D) after the first pick: a start driver is picked and the next
+       * click on a *different* activity commits the span. Persists between clicks (it isn't a drag),
+       * mirroring {@link linkPicking}. */
+      kind: 'loePicking';
+      startId: string;
     };
 
 export const IDLE: GestureState = { kind: 'idle' };
@@ -185,6 +204,14 @@ export interface Reduction {
   intent?: EditIntent;
   /** Set when a body press ended without moving — the shell should select this activity. */
   select?: string;
+  /**
+   * LOE endpoint-pick feedback (Stage D) — the parallel-DOM a11y channel the shell announces + syncs.
+   * Set on the first pick (`{ kind: 'start', startId }` → "now pick the finish driver"), a same-activity
+   * re-pick (`{ kind: 'reprompt' }` → "that's the start driver; pick a different one", tool stays
+   * armed), or a cancelling empty click (`{ kind: 'cancel' }` → pick dropped, tool stays armed). The
+   * *committed* span rides {@link Reduction.intent} as a `loeSpan` intent, like a link.
+   */
+  loe?: { kind: 'start'; startId: string } | { kind: 'reprompt' } | { kind: 'cancel' };
 }
 
 /**
@@ -337,6 +364,28 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
       return { state: IDLE };
     }
     case 'click': {
+      // The two-click LOE endpoint-pick tool (Stage D). Mirrors the `link` tool's click model but
+      // composes a span, not a link. First body click picks the start driver (arm + prompt for the
+      // finish); the second body click on a *different* activity commits a `loeSpan` intent. Picking
+      // the SAME activity again is rejected — the tool stays armed and re-prompts (spec §Edge cases);
+      // a click on empty space cancels the pick (tool stays armed). Non-loe clicks fall through below.
+      if (ctx.mode === 'loe') {
+        const bodyId = event.hit.kind === 'body' ? event.hit.id : undefined;
+        if (state.kind === 'loePicking') {
+          if (!bodyId) return { state: IDLE, loe: { kind: 'cancel' } };
+          if (bodyId === state.startId) return { state, loe: { kind: 'reprompt' } };
+          return {
+            state: IDLE,
+            intent: { kind: 'loeSpan', startDriverId: state.startId, finishDriverId: bodyId },
+          };
+        }
+        return bodyId
+          ? {
+              state: { kind: 'loePicking', startId: bodyId },
+              loe: { kind: 'start', startId: bodyId },
+            }
+          : { state };
+      }
       // The two-click `link` tool (M5). Only meaningful in link mode; any other mode ignores it
       // (the canvas routes non-link clicks to selection, unchanged). First body click picks the
       // predecessor; the second body click on a *different* activity commits the link with the

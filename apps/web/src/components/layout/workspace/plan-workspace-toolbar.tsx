@@ -22,6 +22,7 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
@@ -234,6 +235,10 @@ export function ToolbarPlanWorkspace({
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       onLink={model.onTsldLink}
+      // LOE endpoint-pick span (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`). Gated on the flag so flag-off is
+      // byte-for-byte today's canvas — the LOE tool-mode is then unreachable (the Add-menu item is also
+      // flag-gated), so the prop is simply absent.
+      {...(CANVAS_ACTIVITY_TYPES_ENABLED ? { onLoeSpan: model.createLoeSpan } : {})}
       onAutoArrange={model.onTsldAutoArrange}
       onOpenLogic={model.setLogicActivity}
       onEditActivity={model.onEditActivity}

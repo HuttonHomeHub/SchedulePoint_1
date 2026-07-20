@@ -433,6 +433,11 @@ export function useTsldToolbarContext({
       toggleLinkMode: () => setMode((m) => (m === 'link' ? 'select' : 'link')),
       linkType,
       setLinkType,
+      // Two-click LOE endpoint-pick tool (Stage D, ADR-0035 §21): a mode toggle mutually exclusive with
+      // add/link (a single EditMode). Reachable only when `VITE_CANVAS_ACTIVITY_TYPES` is on (the
+      // Add-menu item is flag-gated) and pen-gated as part of the authoring cluster.
+      isLoeSpanning: mode === 'loe',
+      toggleLoeSpanMode: () => setMode((m) => (m === 'loe' ? 'select' : 'loe')),
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 
