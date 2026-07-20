@@ -51,6 +51,15 @@ publish` — that is npm-only and no-ops on our private packages, so it never ta
   an **SBOM** and **build provenance**.
 - Images are **immutable**: the same artifact is promoted across environments;
   we never rebuild per environment.
+- **Shared workspace packages must be pre-built in each image (ADR-0019).** Because
+  the shared packages ship compiled `dist` and the `development` export condition
+  only applies to the dev server, every image's build stage compiles the workspace
+  packages its app depends on **before** building the app itself, and its `deps`
+  stage copies each package's `package.json`:
+  - `apps/api/Dockerfile` → `@repo/types`, `@repo/interchange`
+  - `apps/web/Dockerfile` → `@repo/types`, `@repo/interchange`
+    When a new shared package is added to an app's dependencies, update that app's
+    Dockerfile in the same change, or the image build fails to resolve it.
 - To run the published images locally, use
   [`docker-compose.release.yml`](../docker-compose.release.yml) (see its header for
   the `docker login` and `IMAGE_TAG` steps). The API container applies pending

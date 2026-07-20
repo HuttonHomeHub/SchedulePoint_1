@@ -95,6 +95,7 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 | 403  | Authenticated but not authorised                           |
 | 404  | Resource not found                                         |
 | 409  | Conflict (e.g. duplicate, optimistic-lock version clash)   |
+| 413  | Payload too large — upload exceeds the boundary cap        |
 | 422  | Validation failed                                          |
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
 | 429  | Rate limited                                               |
@@ -234,6 +235,42 @@ indistinguishable **404**. Edit/delete are additionally constrained to the note'
 enough; anyone else is **403** (Org-Admin moderation of others' notes is out of
 v1). The response carries `authorId`, the server-resolved `authorName` (or null),
 and `edited` (true once the body has been revised).
+
+### Schedule interchange (ADR-0050)
+
+**Import** a foreign schedule file (a P6 **XER** for M1; MS Project MSPDI later) into a chosen project as a
+**new plan**, best-effort and transparently. The parsing/mapping/validation is the pure, engine-free
+`@repo/interchange` package; the API module is thin (upload, authz, org-scope). The flow is **two-phase**:
+a stateless **dry-run** parses the file and returns an **interchange report** (detected format/version,
+mapped counts, and the approximation / repair / drop findings — the runtime instance of ADR-0050's mapping
+contract) **without writing anything**, then a separate **commit** creates the plan. Import needs
+**`interchange:import`** (**Planner + Org Admin**, a hierarchy-write capability, deliberately not
+Contributor); the authoritative org-scope check is on the **target project** (anti-IDOR). Uploads are
+multipart with a **byte cap enforced at the boundary** (→ 413 before the file is fully buffered).
+
+| Method | Path                                        | Notes                                                                                                                                                                                     |
+| ------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. 422 unrecognised/malformed/no file · 413 oversize. `interchange:import`.                          |
+| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413. |
+
+The dry-run is **read-only** (returns `200`, not `201` — no resource is created). A parseable file returns
+its report **even when it needed repairs** (dangling edge dropped, duplicate `(pred,succ,type)`
+de-duplicated, cycle broken, duplicate code suffixed, units coerced — each named in `report.repairs` /
+`report.approximations`, never silent). A structurally-impossible file (not XER / malformed / no project)
+is a user-safe **422** (`details.reason = UNPARSEABLE_FILE`); a missing `file` is **422**
+(`NO_FILE`). Anti-IDOR is uniform: a foreign or other-org project (or a caller who is not a member of the
+org) is an indistinguishable **404**; a malformed project id is **400**.
+
+The **commit** endpoint is the second phase: it re-accepts the same multipart upload (stateless — `importXer`
+is pure + deterministic, so the graph committed equals the one reviewed) and, in **one transaction**, creates
+the plan with its calendars, activities and dependencies via the existing repositories (the same
+transaction-composition each domain service uses), then **recalculates** the new plan (ADR-0022; the CPM engine
+is only invoked). It returns **`201 { data: { planId, report } }`**. **Atomicity:** any failure — an
+unparseable file (422 before any write), a persistence rejection (duplicate plan/calendar name, duplicate/cyclic
+dependency — the whole transaction rolls back), or a recalculation failure (compensated) — leaves **nothing
+created**. Same authz (`interchange:import`), org-scope (anti-IDOR) and byte cap (→ 413) as the dry-run.
+Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays);
+activities are laid out on a deterministic lane per source order.
 
 ## Pagination, filtering, sorting
 

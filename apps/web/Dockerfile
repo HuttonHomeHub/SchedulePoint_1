@@ -18,6 +18,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/config/package.json packages/config/
 COPY packages/types/package.json packages/types/
+COPY packages/interchange/package.json packages/interchange/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @repo/web...
 
@@ -27,9 +28,11 @@ COPY . .
 # VITE_* build args are baked into the static bundle at build time.
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
-# Build @repo/types first so the production Vite build resolves its compiled
-# output (the `development` export condition only applies to the dev server).
+# Build the shared workspace packages first so the production Vite build resolves
+# their compiled output (the `development` export condition only applies to the dev
+# server). @repo/web consumes both @repo/types and @repo/interchange (its Zod schemas).
 RUN pnpm --filter @repo/types build \
+    && pnpm --filter @repo/interchange build \
     && pnpm --filter @repo/web build
 
 # --- Runtime: static files served by nginx -----------------------------------

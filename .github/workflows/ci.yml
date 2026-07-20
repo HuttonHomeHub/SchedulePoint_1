@@ -118,7 +118,7 @@ jobs:
       # this job runs those steps directly, so it must build the shared package
       # first — otherwise the web e2e web server crashes with MODULE_NOT_FOUND.
       - name: Build shared packages
-        run: pnpm --filter @repo/types build
+        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build
 
       - name: Generate Prisma client
         run: pnpm --filter @repo/api prisma:generate
@@ -211,6 +211,15 @@ jobs:
       - name: Web end-to-end tests (canvas resource view flag on)
         run: pnpm --filter @repo/web test:e2e:resource-view
 
+      # Flag-ON schedule interchange (XER import) journey (playwright.interchange.config.ts) serving
+      # the app with VITE_SCHEDULE_INTERCHANGE on (layered on the canvas authoring/toolbar/workspace/
+      # editing/pen flags), so the whole import loop — "Import from file…", the dry-run review dialog
+      # + report table, and Confirm import committing and opening the new plan — is exercised end to
+      # end (Stage C2 M1, ADR-0050). Runs last, after the prior runs tear down their servers, reusing
+      # the ports.
+      - name: Web end-to-end tests (schedule interchange flag on)
+        run: pnpm --filter @repo/web test:e2e:interchange
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -227,6 +236,7 @@ jobs:
             apps/web/playwright-report-undo/
             apps/web/playwright-report-loe/
             apps/web/playwright-report-resource-view/
+            apps/web/playwright-report-interchange/
           if-no-files-found: ignore
           retention-days: 7
 

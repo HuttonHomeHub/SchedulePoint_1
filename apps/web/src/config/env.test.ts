@@ -6,6 +6,7 @@ import {
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
+  SCHEDULE_INTERCHANGE_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
   flagDefaultOff,
@@ -106,6 +107,16 @@ describe('CANVAS_RESOURCE_VIEW_ENABLED', () => {
     // Setting VITE_CANVAS_RESOURCE_VIEW=false ships the resource-view/over-allocation ids as their
     // "Coming soon" placeholders and the canvas paints byte-for-byte today's — the rollback / parity path.
     expect(CANVAS_RESOURCE_VIEW_ENABLED).toBe(true);
+  });
+});
+
+describe('SCHEDULE_INTERCHANGE_ENABLED', () => {
+  it('is on by default (delivered & enabled, 2026-07-20; no VITE_SCHEDULE_INTERCHANGE set)', () => {
+    // The schedule-interchange (P6 XER import) web review UI is on by default now that its five
+    // specialist reviews (security / backend-performance / a11y / api / devops) are green (ADR-0050,
+    // Stage C2 M1). Setting VITE_SCHEDULE_INTERCHANGE=false renders the plan-create surface byte-for-byte
+    // today's — no "Import from file…" entry, no dialog, the review code unreached — the rollback path.
+    expect(SCHEDULE_INTERCHANGE_ENABLED).toBe(true);
   });
 });
 

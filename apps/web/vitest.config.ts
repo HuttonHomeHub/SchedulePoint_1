@@ -11,7 +11,7 @@ export default mergeConfig(
       // The shared types package is aliased to its compiled `dist` (see
       // vite.config.ts, ADR-0019). Externalise it so Node loads that plain JS
       // directly instead of Vitest's Oxc transformer trying to process it.
-      server: { deps: { external: [/packages[\\/]types/] } },
+      server: { deps: { external: [/packages[\\/]types/, /packages[\\/]interchange/] } },
       globals: true,
       // No app tests exist yet (foundation stage); don't fail the suite.
       passWithNoTests: true,

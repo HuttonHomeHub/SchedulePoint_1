@@ -61,3 +61,13 @@ export function canManageLogic(role: OrganizationRole | undefined): boolean {
 export function canCalculateSchedule(role: OrganizationRole | undefined): boolean {
   return canManageHierarchy(role);
 }
+
+/**
+ * Whether a role may import a schedule file as a new plan (mirrors the API's
+ * `interchange:import` — Planner + Org Admin, the same hierarchy-write roles; ADR-0050).
+ * A named helper so the "Import from file…" gate reads intentfully and can diverge later
+ * without touching call sites. UX only — the API still enforces the permission + org scope.
+ */
+export function canImportSchedule(role: OrganizationRole | undefined): boolean {
+  return canManageHierarchy(role);
+}

@@ -21,6 +21,7 @@ import { CalendarsModule } from './modules/calendars/calendars.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { CrossPlanDependenciesModule } from './modules/cross-plan-dependencies/cross-plan-dependencies.module';
 import { DependenciesModule } from './modules/dependencies/dependencies.module';
+import { InterchangeModule } from './modules/interchange/interchange.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MeModule } from './modules/me/me.module';
 import { MembersModule } from './modules/members/members.module';
@@ -115,6 +116,7 @@ function isPrettyLoggingAvailable(): boolean {
     BaselinesModule,
     PlanLockModule,
     RecycleBinModule,
+    InterchangeModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.

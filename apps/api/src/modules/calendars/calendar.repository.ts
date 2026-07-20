@@ -50,6 +50,27 @@ export interface CreateCalendarExceptionInput {
   updatedBy: string;
 }
 
+/**
+ * One imported calendar (+ its whole-day exceptions) for the batched import write. Ids are
+ * CLIENT-ASSIGNED (the `@default(uuid(7))` is bypassed) so the caller can resolve key→id references
+ * before any DB write (interchange commit, ADR-0050 B3). Shifts derive from the mask and windows from
+ * `isWorking`, exactly as the single `create`/`createException`.
+ */
+export interface ImportCalendarBatchInput {
+  id: string;
+  organizationId: string;
+  name: string;
+  workingWeekdays: number;
+  createdBy: string;
+  updatedBy: string;
+  exceptions: readonly {
+    id: string;
+    date: Date;
+    isWorking: boolean;
+    label: string | null;
+  }[];
+}
+
 /** A calendar with its weekly shift rows embedded (weekday/start-ordered) — the list read shape. */
 export type CalendarWithShifts = Calendar & { shifts: CalendarShift[] };
 /** A dated exception with its replacement windows embedded (start-ordered). */
@@ -108,6 +129,67 @@ export class CalendarRepository {
       },
       include: { shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] } },
     });
+  }
+
+  /**
+   * Batch-insert many calendars — each with its full-day shift rows and whole-day exceptions/windows —
+   * in ONE `createMany` per table, inside the caller's transaction (interchange commit, ADR-0050 B3).
+   * Ids are client-assigned so the caller resolves key→id references up front. Insert order is
+   * FK-safe (calendars → shifts → exceptions → windows). Materialises the same mask→full-day-shift and
+   * `isWorking`→full-day-window mapping as the single `create`/`createException`, so the public
+   * weekday-mask / whole-day-exception contract is identical — just one batched write instead of a
+   * per-row loop (which risked Prisma's interactive-transaction timeout at the import ceiling).
+   */
+  async createManyForImport(
+    calendars: readonly ImportCalendarBatchInput[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (calendars.length === 0) return;
+    const calendarRows: Prisma.CalendarCreateManyInput[] = [];
+    const shiftRows: Prisma.CalendarShiftCreateManyInput[] = [];
+    const exceptionRows: Prisma.CalendarExceptionCreateManyInput[] = [];
+    const windowRows: Prisma.CalendarExceptionWindowCreateManyInput[] = [];
+
+    for (const calendar of calendars) {
+      calendarRows.push({
+        id: calendar.id,
+        organizationId: calendar.organizationId,
+        name: calendar.name,
+        description: null,
+        createdBy: calendar.createdBy,
+        updatedBy: calendar.updatedBy,
+      });
+      for (const shift of fullDayShiftsFromMask(calendar.workingWeekdays)) {
+        shiftRows.push({ calendarId: calendar.id, ...shift });
+      }
+      for (const exception of calendar.exceptions) {
+        exceptionRows.push({
+          id: exception.id,
+          organizationId: calendar.organizationId,
+          calendarId: calendar.id,
+          // A single-day inclusive range (ADR-0036 §2) — start == end, as the single createException.
+          startDate: exception.date,
+          endDate: exception.date,
+          label: exception.label,
+          createdBy: calendar.createdBy,
+          updatedBy: calendar.updatedBy,
+        });
+        if (exception.isWorking) {
+          windowRows.push({
+            calendarExceptionId: exception.id,
+            startMinute: 0,
+            endMinute: MINUTES_PER_DAY,
+          });
+        }
+      }
+    }
+
+    await db.calendar.createMany({ data: calendarRows });
+    if (shiftRows.length > 0) await db.calendarShift.createMany({ data: shiftRows });
+    if (exceptionRows.length > 0) await db.calendarException.createMany({ data: exceptionRows });
+    if (windowRows.length > 0) {
+      await db.calendarExceptionWindow.createMany({ data: windowRows });
+    }
   }
 
   /** An active calendar scoped to its organisation (anti-IDOR). */

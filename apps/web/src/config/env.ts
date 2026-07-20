@@ -605,3 +605,27 @@ export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
  */
 export const CANVAS_RESOURCE_VIEW_ENABLED =
   flagDefaultOn(import.meta.env.VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED;
+
+/**
+ * Schedule interchange — the web review UI for importing a foreign schedule file (Stage C2, M1;
+ * ADR-0050, spec `docs/specs/schedule-interchange/`). **ON by default** (2026-07-20, product sign-off)
+ * now that the five specialist reviews (security / backend-performance / a11y / api / devops) are green
+ * and every blocking finding is folded (the graph-size DoS ceiling, the batched-commit timeout, the
+ * Dockerfile image break, the a11y error/announce gaps, the 413 code), and the flag-on Playwright
+ * journey — which caught and fixed the pen-enforcement recalc 423 — passes in CI. When on, the project
+ * plan-create surface gains an **Import from file…** entry (gated additionally on the caller holding
+ * `interchange:import` — Planner + Org Admin) that opens a dry-run **review dialog**: pick a `.xer`, the
+ * app POSTs it to the dry-run endpoint and renders the returned `InterchangeReport` (mapped
+ * activity/relationship/calendar counts + the approximation / repair / drop findings as accessible
+ * lists, downloadable), then **Confirm import** commits it — creating the plan server-side (calendars +
+ * activities + dependencies, recalculated) and opening the new plan on the TSLD canvas.
+ *
+ * Everything behind it — the pure `@repo/interchange` parse/map/validate pipeline and the thin
+ * `interchange` API module's dry-run + commit endpoints — is always live (RBAC-gated, Tasks 1.2–1.5);
+ * this flag only governs whether the web UI exposes the entry + dialog. `VITE_SCHEDULE_INTERCHANGE=false`
+ * (or the caller lacking `interchange:import`) ⇒ the plan-create surface is byte-for-byte today's — no
+ * entry point, no dialog, and the review code is never reached (emergency rollback / opt-out).
+ */
+export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
+  import.meta.env.VITE_SCHEDULE_INTERCHANGE,
+);

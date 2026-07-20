@@ -12,7 +12,7 @@ export default defineConfig({
   // below) so the dev server serves an esbuild-bundled chunk instead of routing
   // its file through Vite's Oxc transform — which otherwise walks up to that
   // package's tsconfig, whose `extends` a workspace preset Oxc can't resolve.
-  optimizeDeps: { include: ['@repo/types'] },
+  optimizeDeps: { include: ['@repo/types', '@repo/interchange'] },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -22,6 +22,13 @@ export default defineConfig({
       // so runtime value imports (e.g. the `WorkingWeekdays` helper) load from
       // `dist` — run `pnpm --filter @repo/types build` first.
       '@repo/types': fileURLToPath(new URL('../../packages/types/dist/index.js', import.meta.url)),
+      // Same build-contract consumption for the schedule-interchange package (ADR-0050):
+      // the web review dialog imports the shared `InterchangeReport` type + its Zod schema
+      // (spec §2) as compiled output — its source likewise can't be Oxc-transformed — so
+      // load from `dist` (run `pnpm --filter @repo/interchange build` first).
+      '@repo/interchange': fileURLToPath(
+        new URL('../../packages/interchange/dist/index.js', import.meta.url),
+      ),
     },
   },
   server: {
