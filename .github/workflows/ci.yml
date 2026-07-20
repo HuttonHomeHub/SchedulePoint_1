@@ -202,6 +202,15 @@ jobs:
       - name: Web end-to-end tests (on-canvas activity types flag on)
         run: pnpm --filter @repo/web test:e2e:loe
 
+      # Flag-ON canvas resource view journey (playwright.resource-view.config.ts) serving the app with
+      # VITE_CANVAS_RESOURCE_VIEW on (plus VITE_RESOURCES + VITE_RESOURCE_CURVES for the data source,
+      # layered on the canvas authoring/toolbar/workspace/editing/pen flags), so the axis-aligned demand
+      # strip — reveal, resource/bucket pickers, the accessible data table, and the on-bar
+      # over-allocation highlight — is exercised end to end (Stage E). Runs last, after the prior runs
+      # tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (canvas resource view flag on)
+        run: pnpm --filter @repo/web test:e2e:resource-view
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -217,6 +226,7 @@ jobs:
             apps/web/playwright-report-notes/
             apps/web/playwright-report-undo/
             apps/web/playwright-report-loe/
+            apps/web/playwright-report-resource-view/
           if-no-files-found: ignore
           retention-days: 7
 
