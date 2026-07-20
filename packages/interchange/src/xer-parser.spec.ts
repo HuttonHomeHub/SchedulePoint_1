@@ -379,3 +379,50 @@ describe('parseXer — encoding', () => {
     expect(doc.tables.get('TASK')?.rows[0]?.task_name).toBe('Café');
   });
 });
+
+describe('parseXer — prototype-pollution hardening', () => {
+  // A `%F` field list is attacker-controlled; a crafted column named `__proto__` (or `constructor` /
+  // `prototype`) must never reach `Object.prototype` through the keyed row write (remote property
+  // injection). The forbidden column is silently dropped and the prototype is left untouched.
+  it('drops a `__proto__` column instead of polluting the prototype', () => {
+    const doc = expectDocument(
+      parseXer(
+        xer(
+          ERMHDR,
+          t('%T', 'TASK'),
+          t('%F', 'task_id', '__proto__', 'task_name'),
+          t('%R', '2001', 'polluted', 'Mobilise'),
+          '%E',
+        ),
+      ),
+    );
+
+    const row = doc.tables.get('TASK')?.rows[0];
+    expect(row?.task_id).toBe('2001');
+    expect(row?.task_name).toBe('Mobilise');
+    // The malicious key was dropped, not written…
+    expect(Object.prototype.hasOwnProperty.call(row, '__proto__')).toBe(false);
+    // …and no object anywhere gained a polluted `polluted` property.
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect((row as unknown as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it('drops `constructor` / `prototype` columns too', () => {
+    const doc = expectDocument(
+      parseXer(
+        xer(
+          ERMHDR,
+          t('%T', 'TASK'),
+          t('%F', 'task_id', 'constructor', 'prototype'),
+          t('%R', '2001', 'x', 'y'),
+          '%E',
+        ),
+      ),
+    );
+
+    const row = doc.tables.get('TASK')?.rows[0];
+    expect(row?.task_id).toBe('2001');
+    expect(Object.prototype.hasOwnProperty.call(row, 'constructor')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(row, 'prototype')).toBe(false);
+  });
+});
