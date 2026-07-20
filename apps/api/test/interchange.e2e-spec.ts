@@ -80,6 +80,14 @@ describe.skipIf(!hasDatabase)('Interchange dry-run API (e2e)', () => {
   });
 
   async function resetDatabase(): Promise<void> {
+    // FK-safe order: children before parents. The commit endpoint (Task 1.5) creates
+    // plans/activities/dependencies/calendars, so these must be cleared before projects.
+    await prisma.activityDependency.deleteMany();
+    await prisma.activity.deleteMany();
+    await prisma.planLock.deleteMany();
+    await prisma.plan.deleteMany();
+    await prisma.calendarException.deleteMany();
+    await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
