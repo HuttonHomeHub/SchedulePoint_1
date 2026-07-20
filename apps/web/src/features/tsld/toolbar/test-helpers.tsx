@@ -104,6 +104,7 @@ export function makeTsldToolbarContext(
     exportScheduleCsv: vi.fn(),
     exportDiagramPng: vi.fn(),
     exportDiagramPdf: vi.fn(),
+    pdfExporting: false,
     printDiagram: vi.fn(),
     filterActive: false,
     matchingCount: 0,

@@ -12,6 +12,7 @@ import {
   Crop,
   FileDown,
   FileSpreadsheet,
+  FileText,
   Filter,
   Gauge,
   Grid3x3,
@@ -21,6 +22,7 @@ import {
   Layers,
   Layers2,
   ListChecks,
+  Loader2,
   LocateFixed,
   Maximize2,
   MessageSquare,
@@ -632,7 +634,8 @@ const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
  * menu-button (mirroring {@link ColourByControl}) listing the plan's client-side deliverables. M1 ships
  * **Schedule (CSV)** plus a conditional **Matching activities only (N)** item shown only while a filter /
  * isolate lens narrows the set (CQ-3); M2 adds the two **Diagram (PNG)** extents (whole plan / current
- * view, CQ-1); M3 adds **(PDF)**. Shaded
+ * view, CQ-1); M3 adds the two matching **Diagram (PDF)** extents (lazy jsPDF, first-use loading state).
+ * Shaded
  * (disabled-with-reason "Add an activity first") on an empty/uncomputed canvas, matching the zoom
  * cluster's stable shape (ADR-0031 shade-don't-hide). One focusable roving stop (spreads `itemProps`);
  * each pick downloads + announces via the context command.
@@ -688,6 +691,26 @@ function ExportMenuControl({
         <MenuItem onSelect={() => ctx.exportDiagramPng('view')}>
           <Crop aria-hidden="true" className="size-4" />
           Diagram — current view (PNG)
+        </MenuItem>
+        {/* Diagram PDF (M3, CQ-1: mirror the two PNG extents). Reuses the M2 off-screen PNG, then embeds
+            it on a landscape page via the LAZILY-imported jsPDF (first-use fetch, code-split). Both items
+            show a loading state and are disabled while a PDF is in flight (`pdfExporting`), which also
+            guards against a double-click; a load failure surfaces a user-safe error, PNG/CSV unaffected. */}
+        <MenuItem disabled={ctx.pdfExporting} onSelect={() => ctx.exportDiagramPdf('whole')}>
+          {ctx.pdfExporting ? (
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          ) : (
+            <FileText aria-hidden="true" className="size-4" />
+          )}
+          Diagram — whole plan (PDF)
+        </MenuItem>
+        <MenuItem disabled={ctx.pdfExporting} onSelect={() => ctx.exportDiagramPdf('view')}>
+          {ctx.pdfExporting ? (
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          ) : (
+            <FileText aria-hidden="true" className="size-4" />
+          )}
+          Diagram — current view (PDF)
         </MenuItem>
       </Menu>
     </>

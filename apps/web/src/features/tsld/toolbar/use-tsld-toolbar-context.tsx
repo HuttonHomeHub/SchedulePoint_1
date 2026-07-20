@@ -1,10 +1,11 @@
 import type { ActivitySummary } from '@repo/types';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { downloadBlob } from '../export/download';
 import { buildScheduleCsv } from '../export/export-csv';
 import { buildExportViewport, EXPORT_TOP_BAND, type ExportExtent } from '../export/export-image';
 import { buildExportFilename } from '../export/filename';
+import { exportDiagramToPdf } from '../export/pdf';
 import { renderExportImage } from '../export/render-export-image';
 import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
 import { isFilterActive, matchesActivityFilter } from '../render/lenses';
@@ -102,6 +103,10 @@ export function useTsldToolbarContext({
   const announce = useAnnounce();
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setPlanMode = useSetPlanSchedulingMode(orgSlug);
+  // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
+  // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
+  // client state; nothing persists.
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   // Stabilise the activities reference (a `?? []` is a fresh array each render) so the memos keyed on it
   // (the conflict ordering + `goToNextConflict`) don't rebuild every render.
@@ -310,8 +315,57 @@ export function useTsldToolbarContext({
   // drag, the 15s pen poll) doesn't hand `<Toolbar>` a fresh context and churn its resolve →
   // partition → measure → ResizeObserver cycle (perf review, ADR-0031). Behaviour is unchanged —
   // only identity is stabilised.
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    // Shared off-screen Diagram-image build (M2/M3): frame an OFF-SCREEN canvas to the requested extent
+    // (whole / current view), paint it with the shipped `paintScene` + the light print palette, and
+    // resolve the PNG blob. Both PNG (download) and PDF (embed via lazy jsPDF) reuse this exact path, so
+    // the render logic isn't duplicated (DRY) and the live canvas is never touched (we only READ its
+    // viewport). Returns `null` when there's nothing to frame yet (no data date / no live viewport);
+    // `hasDiagram` gates the menu, so that's a defensive guard. `imageWidth`/`imageHeight` are the raster
+    // pixel dims (aspect ratio) the PDF page-fit needs.
+    const buildDiagramImage = (
+      extent: ExportExtent,
+    ): {
+      promise: Promise<{ blob: Blob; scaledToFit: boolean }>;
+      imageWidth: number;
+      imageHeight: number;
+    } | null => {
+      const dataDate = plan.plannedStart;
+      const live = canvasControlRef.current?.getViewport();
+      if (dataDate === null || !live) return null;
+      const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
+      const renderActivities = toRenderActivities(activities, source);
+      const scene = {
+        activities: renderActivities,
+        edges: toRenderEdges(dependencies),
+        dataDate,
+        view: viewToggles,
+        todayOffset: daysBetween(dataDate, todayIso),
+      };
+      const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {
+        extent,
+        liveViewport: live,
+        dpr: globalThis.devicePixelRatio || 1,
+        topBand: EXPORT_TOP_BAND,
+      });
+      const promise = renderExportImage({
+        scene,
+        viewport,
+        size,
+        dpr,
+        topBand: EXPORT_TOP_BAND,
+        palette: resolvePrintPalette(),
+        scaledToFit,
+        meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },
+      }).then((blob) => ({ blob, scaledToFit }));
+      return {
+        promise,
+        imageWidth: Math.max(1, Math.round(size.width * dpr)),
+        imageHeight: Math.max(1, Math.round(size.height * dpr)),
+      };
+    };
+
+    return {
       // Frame — the canvas is commanded imperatively via the shared control handle.
       zoomPreset,
       setZoomPreset: (level) => canvasControlRef.current?.zoomToPreset(level),
@@ -486,135 +540,133 @@ export function useTsldToolbarContext({
         const count = scope === 'matching' ? exportMatch.matchingCount : activities.length;
         announce(`Downloaded ${filename} (${count} ${count === 1 ? 'activity' : 'activities'}).`);
       },
-      // Diagram (PNG) export (M2): frame an OFF-SCREEN canvas to the requested extent (whole / current
-      // view), paint it with the shipped `paintScene` + the light print palette, then download + announce.
-      // The live canvas is never touched (we only READ its viewport via the control handle). `hasDiagram`
-      // gates the menu, so `plannedStart` is non-null here; guard defensively anyway.
+      // Diagram (PNG) export (M2): build the off-screen image for the requested extent (whole / current
+      // view) via the shared helper, then download + announce. The live canvas is never touched.
+      // `hasDiagram` gates the menu, so `buildDiagramImage` is non-null here; guard defensively anyway.
       exportDiagramPng: (extent: ExportExtent) => {
-        const dataDate = plan.plannedStart;
-        const live = canvasControlRef.current?.getViewport();
-        if (dataDate === null || !live) return;
-        const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
-        const renderActivities = toRenderActivities(activities, source);
-        const scene = {
-          activities: renderActivities,
-          edges: toRenderEdges(dependencies),
-          dataDate,
-          view: viewToggles,
-          todayOffset: daysBetween(dataDate, todayIso),
-        };
-        const { viewport, size, dpr, scaledToFit } = buildExportViewport(
-          renderActivities,
-          dataDate,
-          {
-            extent,
-            liveViewport: live,
-            dpr: globalThis.devicePixelRatio || 1,
-            topBand: EXPORT_TOP_BAND,
-          },
-        );
+        const built = buildDiagramImage(extent);
+        if (!built) return;
         const filename = buildExportFilename({
           planName: plan.name,
           kind: 'diagram',
           ext: 'png',
           date: todayIso,
         });
-        void renderExportImage({
-          scene,
-          viewport,
-          size,
-          dpr,
-          topBand: EXPORT_TOP_BAND,
-          palette: resolvePrintPalette(),
-          scaledToFit,
-          meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },
-        })
-          .then((blob) => {
+        void built.promise
+          .then(({ blob, scaledToFit }) => {
             downloadBlob(blob, filename);
             announce(`Downloaded ${filename}${scaledToFit ? ' (scaled to fit)' : ''}.`);
           })
           .catch(() => announce('Couldn’t create the diagram image. Please try again.'));
       },
-      exportDiagramPdf: () => {},
+      // Diagram (PDF) export (M3): reuse the M2 off-screen PNG, then embed it on a single landscape page
+      // via the LAZILY-imported jsPDF (`export/pdf.ts`, `import('jspdf')` — code-split, first-use fetch).
+      // `pdfExporting` shows the items' loading state and guards a double-click. A jsPDF load/import
+      // failure (offline) or an image failure surfaces a user-safe error and leaves CSV/PNG unaffected
+      // (US-3); either way `pdfExporting` is reset in `finally`.
+      exportDiagramPdf: (extent: ExportExtent) => {
+        if (pdfExporting) return;
+        const built = buildDiagramImage(extent);
+        if (!built) return;
+        const filename = buildExportFilename({
+          planName: plan.name,
+          kind: 'diagram',
+          ext: 'pdf',
+          date: todayIso,
+        });
+        setPdfExporting(true);
+        void built.promise
+          .then(({ blob }) =>
+            exportDiagramToPdf(blob, {
+              filename,
+              imageWidth: built.imageWidth,
+              imageHeight: built.imageHeight,
+            }),
+          )
+          .then(() => announce(`Downloaded ${filename}.`))
+          .catch(() => announce('Couldn’t load the PDF exporter — try PNG.'))
+          .finally(() => setPdfExporting(false));
+      },
+      pdfExporting,
       printDiagram: () => {},
       filterActive: exportMatch.filterActive,
       matchingCount: exportMatch.matchingCount,
-    }),
-    [
-      zoomPreset,
-      canvasControlRef,
-      requestFit,
-      plan.plannedStart,
-      plan.schedulingMode,
-      plan.version,
-      setPlanMode,
-      planId,
-      viewToggles,
-      toggleView,
-      mode,
-      setMode,
-      createType,
-      setCreateType,
-      linkType,
-      setLinkType,
-      requestAutoArrange,
-      model.undoRedo,
-      setShowHelp,
-      canRecalc,
-      canEditSchedule,
-      editPlan,
-      recalc,
-      model.autoRecalc,
-      announce,
-      openDialog,
-      legendOpen,
-      toggleLegend,
-      summaryContent,
-      projectFinishContent,
-      hasDiagram,
-      // Toolbar quick-wins — re-identify the context only when the selection / resolved row / a
-      // capability actually changes (the callbacks are stable). `todayIso` is value-stable (a fresh
-      // string of the same value each render), so it never churns the memo.
-      todayIso,
-      selectedActivityId,
-      selectedActivity,
-      revealComments,
-      canProgress,
-      canWriteNotes,
-      setProgressActivityId,
-      revealActivityNotes,
-      lateOverlayActive,
-      clearVisualPlacement,
-      // Insight lenses — re-identify only when the lens view state / variance status changes (setters
-      // are stable). `lensState` is one memoised object off `useTsldCanvasUiState`, so it churns only
-      // on a real lens change.
-      lensState,
-      setFilterQuery,
-      toggleFilterAttr,
-      setColourMode,
-      toggleBaselineOverlay,
-      hasActiveBaseline,
-      varianceLoading,
-      varianceError,
-      // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
-      // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
-      navState.isolateActive,
-      navState.isolateMode,
-      navState.snapToGrid,
-      toggleIsolate,
-      setIsolateMode,
-      toggleSnapToGrid,
-      orderedConflictHits.length,
-      currentConflict,
-      goToNextConflict,
-      // Export & print — re-identify only when the exported set / its match state / the plan name change
-      // (the callbacks close over these). `todayIso` + `announce` + `viewToggles` + `plan.schedulingMode`
-      // + `lateOverlayActive` + `canvasControlRef` are already listed above; the PNG command also reads
-      // the loaded dependency edges.
-      activities,
-      plan.name,
-      exportMatch,
-      dependencies,
-    ],
-  );
+    };
+  }, [
+    zoomPreset,
+    canvasControlRef,
+    requestFit,
+    plan.plannedStart,
+    plan.schedulingMode,
+    plan.version,
+    setPlanMode,
+    planId,
+    viewToggles,
+    toggleView,
+    mode,
+    setMode,
+    createType,
+    setCreateType,
+    linkType,
+    setLinkType,
+    requestAutoArrange,
+    model.undoRedo,
+    setShowHelp,
+    canRecalc,
+    canEditSchedule,
+    editPlan,
+    recalc,
+    model.autoRecalc,
+    announce,
+    openDialog,
+    legendOpen,
+    toggleLegend,
+    summaryContent,
+    projectFinishContent,
+    hasDiagram,
+    // Toolbar quick-wins — re-identify the context only when the selection / resolved row / a
+    // capability actually changes (the callbacks are stable). `todayIso` is value-stable (a fresh
+    // string of the same value each render), so it never churns the memo.
+    todayIso,
+    selectedActivityId,
+    selectedActivity,
+    revealComments,
+    canProgress,
+    canWriteNotes,
+    setProgressActivityId,
+    revealActivityNotes,
+    lateOverlayActive,
+    clearVisualPlacement,
+    // Insight lenses — re-identify only when the lens view state / variance status changes (setters
+    // are stable). `lensState` is one memoised object off `useTsldCanvasUiState`, so it churns only
+    // on a real lens change.
+    lensState,
+    setFilterQuery,
+    toggleFilterAttr,
+    setColourMode,
+    toggleBaselineOverlay,
+    hasActiveBaseline,
+    varianceLoading,
+    varianceError,
+    // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
+    // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
+    navState.isolateActive,
+    navState.isolateMode,
+    navState.snapToGrid,
+    toggleIsolate,
+    setIsolateMode,
+    toggleSnapToGrid,
+    orderedConflictHits.length,
+    currentConflict,
+    goToNextConflict,
+    // Export & print — re-identify only when the exported set / its match state / the plan name change
+    // (the callbacks close over these). `todayIso` + `announce` + `viewToggles` + `plan.schedulingMode`
+    // + `lateOverlayActive` + `canvasControlRef` are already listed above; the PNG command also reads
+    // the loaded dependency edges.
+    activities,
+    plan.name,
+    exportMatch,
+    dependencies,
+    pdfExporting,
+  ]);
 }

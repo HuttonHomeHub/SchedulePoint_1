@@ -237,8 +237,15 @@ export interface TsldToolbarContext {
    * `'whole'` re-frames the full activity extent at the current zoom (raster-capped, scale-to-fit);
    * `'view'` crops to the live viewport. Off-screen paint only — the live canvas is never touched. */
   exportDiagramPng: (extent: ExportExtent) => void;
-  /** Render the whole diagram to a single-page PDF and download it (M3 — no-op stub until then). */
-  exportDiagramPdf: () => void;
+  /** Render the diagram to a single-page landscape PDF and download it (M3). `extent` picks the framing
+   * (CQ-1, mirroring {@link exportDiagramPng}): `'whole'` re-frames the full activity extent at the
+   * current zoom (raster-capped, scale-to-fit); `'view'` crops to the live viewport. Reuses the M2
+   * off-screen PNG, then embeds it via the lazily-imported jsPDF (`export/pdf.ts`, `import('jspdf')`), so
+   * the live canvas is never touched and the library stays out of the initial bundle. */
+  exportDiagramPdf: (extent: ExportExtent) => void;
+  /** True while a PDF export is in flight (the first use lazy-loads jsPDF). Drives the PDF menu items'
+   * loading state and guards against a double-click / concurrent export (M3). False when the flag is off. */
+  pdfExporting: boolean;
   /** Print the whole diagram via the browser print dialog (M4 — no-op stub until then). */
   printDiagram: () => void;
   /** True when a Stage-A filter or Stage-B isolate lens is currently narrowing the set — gates the

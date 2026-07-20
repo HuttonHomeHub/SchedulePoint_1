@@ -18,12 +18,14 @@ vi.mock('@/config/env', async (importOriginal) => ({
 const spies = {
   exportScheduleCsv: vi.fn(),
   exportDiagramPng: vi.fn(),
+  exportDiagramPdf: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     exportScheduleCsv: spies.exportScheduleCsv,
     exportDiagramPng: spies.exportDiagramPng,
+    exportDiagramPdf: spies.exportDiagramPdf,
     ...over,
   });
 }
@@ -99,6 +101,47 @@ describe('TSLD toolbar — export & print (flag on)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Export/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram — current view (PNG)' }));
     expect(spies.exportDiagramPng).toHaveBeenCalledWith('view');
+  });
+
+  it('offers BOTH Diagram PDF extents (whole plan / current view) in the menu', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    expect(
+      screen.getByRole('menuitem', { name: 'Diagram — whole plan (PDF)' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Diagram — current view (PDF)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('exports the whole plan PDF (extent "whole") from the whole-plan PDF item', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram — whole plan (PDF)' }));
+    expect(spies.exportDiagramPdf).toHaveBeenCalledWith('whole');
+  });
+
+  it('exports the current view PDF (extent "view") from the current-view PDF item', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram — current view (PDF)' }));
+    expect(spies.exportDiagramPdf).toHaveBeenCalledWith('view');
+  });
+
+  it('shows a loading state and blocks the PDF items while a PDF export is in flight (pdfExporting)', () => {
+    renderRows(ctx({ pdfExporting: true }));
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    const whole = screen.getByRole('menuitem', { name: 'Diagram — whole plan (PDF)' });
+    const view = screen.getByRole('menuitem', { name: 'Diagram — current view (PDF)' });
+    expect(whole).toHaveAttribute('aria-disabled', 'true');
+    expect(view).toHaveAttribute('aria-disabled', 'true');
+    // Disabled ⇒ picking is a no-op (guards the double-click), so the command never re-fires.
+    fireEvent.click(whole);
+    fireEvent.click(view);
+    expect(spies.exportDiagramPdf).not.toHaveBeenCalled();
+    // CSV / PNG stay operable while a PDF is loading.
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Schedule (CSV)' }));
+    expect(spies.exportScheduleCsv).toHaveBeenCalledWith('all');
   });
 
   it('shades the Export control with its reason on an empty/uncomputed canvas (shade-don’t-hide)', () => {
