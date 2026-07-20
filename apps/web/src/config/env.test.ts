@@ -64,10 +64,12 @@ describe('CANVAS_NAV_ENABLED', () => {
 });
 
 describe('EXPORT_PRINT_ENABLED', () => {
-  it('is OFF during build (dark, no VITE_EXPORT_PRINT set) — it flips on at M5', () => {
-    // Export & print ships DARK behind `flagDefaultOff` while its specialist reviews run; it flips to
-    // `flagDefaultOn` at the M5 enablement milestone. Until then `export`/`print` resolve to their
-    // "Coming soon" placeholders (byte-for-byte today's toolbar) — the dark-by-default guard.
-    expect(EXPORT_PRINT_ENABLED).toBe(false);
+  it('is on by default (delivered & enabled, 2026-07-20; no VITE_EXPORT_PRINT set)', () => {
+    // Export & print (CSV + PNG/PDF + browser Print) is on by default now that its six specialist
+    // reviews (security / devops / performance / a11y / ux / component) are green (M5). Setting
+    // VITE_EXPORT_PRINT=false resolves `export`/`print` to their "Coming soon" placeholders, loads no
+    // export module or jsPDF chunk, and leaves the toolbar/canvas/a11y tree byte-for-byte — the
+    // rollback path / parity gate.
+    expect(EXPORT_PRINT_ENABLED).toBe(true);
   });
 });
