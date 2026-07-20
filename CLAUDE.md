@@ -74,6 +74,7 @@ Blank App/
 │   └── api/          # NestJS REST API (@repo/api)
 ├── packages/
 │   ├── config/       # Shared ESLint + tsconfig presets (@repo/config)
+│   ├── interchange/  # Pure schedule-interchange model/parsers (@repo/interchange, ADR-0050)
 │   └── types/        # Shared cross-boundary types/DTOs (@repo/types)
 ├── docs/             # Architecture, guides, ADRs, roadmap, decisions
 ├── scripts/          # Repo automation (bootstrap, etc.)
@@ -143,7 +144,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
   by commitlint (git hook + expected in PR titles).
 - Format: `type(scope): subject` — e.g. `feat(api): add a recurring job scheduler`.
 - Allowed types: `feat, fix, docs, style, refactor, perf, test, build, ci, chore,
-revert`. Scopes: `web, api, config, types, db, ci, docs, deps, release, repo`.
+revert`. Scopes: `web, api, config, types, interchange, db, ci, docs, deps, release, repo`.
 - Breaking changes: append `!` (`feat(api)!: …`) and a `BREAKING CHANGE:` footer.
 - Subject: imperative mood, lower-case, no trailing period, ≤ 100 chars.
 
@@ -456,6 +457,19 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   endpoint reusing soft-delete/`deleteBatchId` (no schema change). Progress edits out of scope
   (non-pen-gated). No schema/API for M1–M3; behind `VITE_UNDO_REDO` (default off). A server-persisted
   undo log and full-plan snapshots were rejected for v1. Builds on ADR-0022/0028/0031/0032/0033.
+- **ADR-0050** _(Accepted; interchange M1 — behind `VITE_SCHEDULE_INTERCHANGE`)_ — Schedule interchange:
+  canonical model + import pipeline: a **format-agnostic canonical model** + per-format parsers (XER now,
+  MSPDI at M3) + a mapper to a SchedulePoint import-DTO graph + an ADR-0035-aligned **validate/repair/
+  report** step + a two-phase **dry-run→commit** pipeline, housed in a **pure `@repo/interchange` package**
+  (ADR-0019 build contract) consumed by a thin persisting `interchange` module that reuses existing domain
+  services. **Import-first** (XER→MSPDI); **`.mpp` excluded** (proprietary binary, no permissive reader);
+  **export deferred**; import target is **always a new plan**. A **living mapping-contract table** documents
+  every approximation/drop (best-effort fidelity is reported, never silent); the per-import
+  `InterchangeReport` is its runtime instance. M1 imports the core network (project/activity/relationship/
+  calendar); WBS/constraints/progress/resources are M2. The **CPM engine + recalc parity golden suite are
+  untouched**. Builds on ADR-0034/0035 (conformance + reject/repair/report), ADR-0021 (DAG), ADR-0022/0023/
+  0036 (recalc/dates/calendars), ADR-0038/0039/0040 (WBS/resources, M2), ADR-0009 (BullMQ), ADR-0012/0016
+  (RBAC + tenancy — `interchange:import`).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
