@@ -108,6 +108,11 @@ export function useTsldToolbarContext({
   // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
   // client state; nothing persists.
   const [pdfExporting, setPdfExporting] = useState(false);
+  // Export/print failure surface (UX review B2): the sr-only `announce` alone leaves sighted users with
+  // a vanished spinner and no message, so a failed export/print ALSO sets this visible-error string. The
+  // workspace renders it as a dismissable `role="alert"` banner beside the toolbar (mirroring the app's
+  // `EditConflictBanner` inline-error pattern); `null` = no error. Session-local; nothing persists.
+  const [exportError, setExportError] = useState<string | null>(null);
   // Browser Print (M4): true while the whole-diagram image is being produced for print (the build is
   // async). Guards re-entry (a second Print click before the image resolves is a no-op) — mirroring
   // `pdfExporting`. Session-local client state; nothing persists and it is never surfaced on the context
@@ -555,15 +560,25 @@ export function useTsldToolbarContext({
         const filename = buildExportFilename({
           planName: plan.name,
           kind: 'diagram',
+          // Thread the extent (whole / view) into the name so the two PNG downloads differ (UX B1).
+          variant: extent === 'whole' ? 'whole' : 'view',
           ext: 'png',
           date: todayIso,
         });
+        // Announce synchronously on pick (B3): the off-screen paint is async, so without this the user
+        // gets total silence between the pick and completion/failure.
+        setExportError(null);
+        announce('Preparing the image export…');
         void built.promise
           .then(({ blob, scaledToFit }) => {
             downloadBlob(blob, filename);
             announce(`Downloaded ${filename}${scaledToFit ? ' (scaled to fit)' : ''}.`);
           })
-          .catch(() => announce('Couldn’t create the diagram image. Please try again.'));
+          .catch(() => {
+            const message = 'Couldn’t create the diagram image. Please try again.';
+            announce(message);
+            setExportError(message);
+          });
       },
       // Diagram (PDF) export (M3): reuse the M2 off-screen PNG, then embed it on a single landscape page
       // via the LAZILY-imported jsPDF (`export/pdf.ts`, `import('jspdf')` — code-split, first-use fetch).
@@ -577,10 +592,16 @@ export function useTsldToolbarContext({
         const filename = buildExportFilename({
           planName: plan.name,
           kind: 'diagram',
+          // Thread the extent (whole / view) into the name so the two PDF downloads differ (UX B1).
+          variant: extent === 'whole' ? 'whole' : 'view',
           ext: 'pdf',
           date: todayIso,
         });
         setPdfExporting(true);
+        // Because the menu closes as `pdfExporting` flips true, the item spinner never paints — so
+        // announce synchronously on pick (B3) to break the silence between the pick and completion.
+        setExportError(null);
+        announce('Preparing the PDF export…');
         void built.promise
           .then(({ blob }) =>
             exportDiagramToPdf(blob, {
@@ -590,7 +611,11 @@ export function useTsldToolbarContext({
             }),
           )
           .then(() => announce(`Downloaded ${filename}.`))
-          .catch(() => announce('Couldn’t load the PDF exporter — try PNG.'))
+          .catch(() => {
+            const message = 'Couldn’t load the PDF exporter — try PNG.';
+            announce(message);
+            setExportError(message);
+          })
           .finally(() => setPdfExporting(false));
       },
       pdfExporting,
@@ -606,6 +631,10 @@ export function useTsldToolbarContext({
         const built = buildDiagramImage('whole');
         if (!built) return;
         setPrinting(true);
+        // Announce synchronously on pick (B3): the whole-diagram image build is async, so this breaks
+        // the silence before the print dialog opens (or the build fails).
+        setExportError(null);
+        announce('Preparing the diagram to print…');
         void built.promise
           .then(({ blob }) => {
             printDiagramImage({
@@ -615,11 +644,19 @@ export function useTsldToolbarContext({
             });
             announce(`Printing ${plan.name}.`);
           })
-          .catch(() => announce('Couldn’t prepare the diagram to print. Please try again.'))
+          .catch(() => {
+            const message = 'Couldn’t prepare the diagram to print. Please try again.';
+            announce(message);
+            setExportError(message);
+          })
           .finally(() => setPrinting(false));
       },
       filterActive: exportMatch.filterActive,
       matchingCount: exportMatch.matchingCount,
+      // The visible export/print error + its dismiss (B2); the workspace renders it as a `role="alert"`
+      // banner beside the toolbar. Null ⇒ no banner.
+      exportError,
+      dismissExportError: () => setExportError(null),
     };
   }, [
     zoomPreset,
@@ -698,5 +735,6 @@ export function useTsldToolbarContext({
     dependencies,
     pdfExporting,
     printing,
+    exportError,
   ]);
 }

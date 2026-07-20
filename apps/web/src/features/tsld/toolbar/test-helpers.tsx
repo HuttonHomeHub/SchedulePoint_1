@@ -108,6 +108,8 @@ export function makeTsldToolbarContext(
     printDiagram: vi.fn(),
     filterActive: false,
     matchingCount: 0,
+    exportError: null,
+    dismissExportError: vi.fn(),
     ...overrides,
   };
 }

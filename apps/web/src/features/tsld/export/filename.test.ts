@@ -69,4 +69,59 @@ describe('buildExportFilename', () => {
     const name = buildExportFilename({ planName: 'Plan', kind: 'schedule', ext: 'pdf' });
     expect(name).toMatch(/^plan-schedule-\d{4}-\d{2}-\d{2}\.pdf$/);
   });
+
+  it('inserts an extent variant between kind and date so the two extents do NOT collide (B1)', () => {
+    const whole = buildExportFilename({
+      planName: 'North Tower',
+      kind: 'diagram',
+      variant: 'whole',
+      ext: 'png',
+      date: '2026-07-20',
+    });
+    const view = buildExportFilename({
+      planName: 'North Tower',
+      kind: 'diagram',
+      variant: 'view',
+      ext: 'png',
+      date: '2026-07-20',
+    });
+    expect(whole).toBe('north-tower-diagram-whole-2026-07-20.png');
+    expect(view).toBe('north-tower-diagram-view-2026-07-20.png');
+    expect(whole).not.toBe(view);
+  });
+
+  it('does the same for the two PDF extents (distinct names)', () => {
+    const whole = buildExportFilename({
+      planName: 'North Tower',
+      kind: 'diagram',
+      variant: 'whole',
+      ext: 'pdf',
+      date: '2026-07-20',
+    });
+    const view = buildExportFilename({
+      planName: 'North Tower',
+      kind: 'diagram',
+      variant: 'view',
+      ext: 'pdf',
+      date: '2026-07-20',
+    });
+    expect(whole).toBe('north-tower-diagram-whole-2026-07-20.pdf');
+    expect(view).toBe('north-tower-diagram-view-2026-07-20.pdf');
+    expect(whole).not.toBe(view);
+  });
+
+  it('slugifies the variant and omits it entirely when absent/blank', () => {
+    expect(
+      buildExportFilename({ planName: 'Plan', kind: 'diagram', ext: 'png', date: '2026-07-20' }),
+    ).toBe('plan-diagram-2026-07-20.png');
+    expect(
+      buildExportFilename({
+        planName: 'Plan',
+        kind: 'diagram',
+        variant: '',
+        ext: 'png',
+        date: '2026-07-20',
+      }),
+    ).toBe('plan-diagram-2026-07-20.png');
+  });
 });

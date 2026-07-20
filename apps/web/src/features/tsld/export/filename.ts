@@ -46,23 +46,31 @@ export function slugify(input: string): string {
 }
 
 /**
- * Build an export filename: `{plan-slug}-{kind}-{YYYY-MM-DD}.{ext}` (e.g.
- * `north-tower-schedule-2026-07-20.csv`). The `date` is supplied by the caller (the toolbar passes its
- * local `todayIso`) so the function is pure and deterministic; when omitted it falls back to today's
- * local calendar day, computed at call time (never at module scope).
+ * Build an export filename: `{plan-slug}-{kind}[-{variant}]-{YYYY-MM-DD}.{ext}` (e.g.
+ * `north-tower-schedule-2026-07-20.csv`, or with a variant `north-tower-diagram-whole-2026-07-20.png`).
+ * The optional `variant` distinguishes two exports of the same `kind` that would otherwise collide — the
+ * diagram PNG/PDF ship in two extents (`whole` plan vs current `view`), so without it the two downloads
+ * would share one name and silently overwrite (UX review B1). The `date` is supplied by the caller (the
+ * toolbar passes its local `todayIso`) so the function is pure and deterministic; when omitted it falls
+ * back to today's local calendar day, computed at call time (never at module scope).
  */
 export function buildExportFilename({
   planName,
   kind,
+  variant,
   ext,
   date,
 }: {
   planName: string;
   kind: ExportKind;
+  /** An extent/discriminator token inserted between `kind` and `date` (e.g. `whole` / `view`), so two
+   * exports of the same kind produce distinct filenames. Slugified; omitted when absent/blank. */
+  variant?: string;
   ext: ExportExtension;
   date?: string;
 }): string {
-  return `${slugify(planName)}-${kind}-${date ?? localTodayIso()}.${ext}`;
+  const variantSlug = variant ? `-${slugify(variant)}` : '';
+  return `${slugify(planName)}-${kind}${variantSlug}-${date ?? localTodayIso()}.${ext}`;
 }
 
 /** Today's LOCAL calendar day as `YYYY-MM-DD` (not UTC), for the `buildExportFilename` date fallback.

@@ -168,9 +168,33 @@ describe('useTsldToolbarContext — Diagram-PDF export (M3)', () => {
     });
     expect(exportDiagramToPdf).toHaveBeenCalledTimes(1);
     const [, meta] = exportDiagramToPdf.mock.calls[0] as unknown as [Blob, { filename: string }];
-    expect(meta.filename).toBe('north-tower-diagram-2026-07-20.pdf');
-    expect(announce).toHaveBeenCalledWith('Downloaded north-tower-diagram-2026-07-20.pdf.');
+    // The extent (whole / view) is threaded into the filename so the two exports don't collide (B1).
+    expect(meta.filename).toBe('north-tower-diagram-whole-2026-07-20.pdf');
+    expect(announce).toHaveBeenCalledWith('Downloaded north-tower-diagram-whole-2026-07-20.pdf.');
     expect(result.current.pdfExporting).toBe(false);
+  });
+
+  it('names the "view" extent distinctly from the "whole" extent (B1 — no collision)', async () => {
+    const { result } = build();
+    await act(async () => {
+      result.current.exportDiagramPdf('view');
+      await Promise.resolve();
+    });
+    const [, meta] = exportDiagramToPdf.mock.calls[0] as unknown as [Blob, { filename: string }];
+    expect(meta.filename).toBe('north-tower-diagram-view-2026-07-20.pdf');
+  });
+
+  it('announces "Preparing…" synchronously on pick, before the export completes (B3)', () => {
+    // A PDF shim that never resolves ⇒ the "Downloaded…" announce can't have fired yet.
+    exportDiagramToPdf.mockImplementation(() => new Promise<void>(() => {}));
+    const { result } = build();
+    act(() => {
+      result.current.exportDiagramPdf('whole');
+    });
+    expect(announce).toHaveBeenCalledWith('Preparing the PDF export…');
+    expect(announce).not.toHaveBeenCalledWith(
+      'Downloaded north-tower-diagram-whole-2026-07-20.pdf.',
+    );
   });
 
   it('surfaces a user-safe error (no throw) when the PDF export fails, and resets pdfExporting', async () => {
@@ -181,7 +205,23 @@ describe('useTsldToolbarContext — Diagram-PDF export (M3)', () => {
       await Promise.resolve();
     });
     expect(announce).toHaveBeenCalledWith('Couldn’t load the PDF exporter — try PNG.');
+    // The failure ALSO sets the VISIBLE error surface, not only the sr-only announce (B2).
+    expect(result.current.exportError).toBe('Couldn’t load the PDF exporter — try PNG.');
     expect(result.current.pdfExporting).toBe(false);
+  });
+
+  it('clears the visible export error via dismissExportError (B2)', async () => {
+    exportDiagramToPdf.mockImplementation(() => Promise.reject(new Error('offline')));
+    const { result } = build();
+    await act(async () => {
+      result.current.exportDiagramPdf('view');
+      await Promise.resolve();
+    });
+    expect(result.current.exportError).not.toBeNull();
+    act(() => {
+      result.current.dismissExportError();
+    });
+    expect(result.current.exportError).toBeNull();
   });
 
   it('sets pdfExporting while in flight and guards a concurrent/double export', async () => {

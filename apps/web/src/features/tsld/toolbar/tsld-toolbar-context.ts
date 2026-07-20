@@ -257,4 +257,11 @@ export interface TsldToolbarContext {
   filterActive: boolean;
   /** How many activities match the active lens — the **N** in "Matching activities only (N)". */
   matchingCount: number;
+  /** A user-safe VISIBLE error from a failed export/print (a PDF-library load failure, a `toBlob`
+   * failure, …), or `null` when there is none. The `announce()` live-region message is sr-only, so this
+   * is the sighted-user surface — the workspace renders it as a dismissable `role="alert"` banner beside
+   * the toolbar (UX review B2). Always `null` when `VITE_EXPORT_PRINT` is off. */
+  exportError: string | null;
+  /** Dismiss the {@link exportError} banner (clears it back to `null`). */
+  dismissExportError: () => void;
 }

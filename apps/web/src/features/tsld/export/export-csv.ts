@@ -61,10 +61,14 @@ function moneyCell(minorUnits: number | null): string {
 }
 
 /**
- * The Schedule CSV columns, in the activities-table column order (sourced against `ActivitiesTable.tsx`
- * so the two can't silently drift — component-review checkpoint). Each cell is a pure projection of a
- * shipped `ActivitySummary` field. Only the WBS-parent column reads the {@link CsvCellContext}; the rest
- * take one argument (fewer-param functions assign cleanly to the two-param `cell` type).
+ * The Schedule CSV columns. This is a deliberate **planner/QS-oriented superset** of the responsive
+ * `ActivitiesTable.tsx` column set — NOT sourced from it and NOT kept in parity: the table folds or
+ * omits columns for on-screen density, whereas the CSV adds the fields a spreadsheet consumer wants
+ * regardless (Status, Free float, the Constraint type/date split, the WBS parent, and Budgeted/Actual
+ * expense). Treat the two column sets as independent by design — do not "re-sync" the CSV to the table.
+ * Each cell is a pure projection of a shipped `ActivitySummary` field. Only the WBS-parent column reads
+ * the {@link CsvCellContext}; the rest take one argument (fewer-param functions assign cleanly to the
+ * two-param `cell` type).
  */
 export const SCHEDULE_COLUMNS: readonly ScheduleColumn[] = [
   { header: 'Code', cell: (a) => a.code ?? '' },
@@ -99,17 +103,23 @@ const CSV_QUOTE_TRIGGER = /["\n\r,]/;
  * before evaluating, re-exposing a following formula char. */
 const CSV_INJECTION_PREFIXES = new Set(['=', '+', '-', '@', '\t', '\r']);
 
+/** A cell whose first NON-whitespace character is a formula trigger (`= + - @`). Excel/Sheets trim
+ * leading spaces before evaluating, so `" =1+1"` is still a live formula — the bare first-char check
+ * (`CSV_INJECTION_PREFIXES`) would miss it (§2 Validation "trim"). We DETECT the leading-whitespace case
+ * (and prefix), but never rewrite the value's whitespace, so no stored data is altered (security S1). */
+const CSV_LEADING_FORMULA = /^\s*[=+\-@]/;
+
 /**
  * Turn a raw cell string into a CSV field: **first** neutralise a formula-injection prefix (a leading
- * `= + - @`, TAB or CR gets a single apostrophe), **then** apply RFC-4180 quoting (wrap in double quotes
- * and double any embedded quote when the value contains a quote, comma, CR or LF). Order matters — the
- * apostrophe is added inside the eventual quotes, so `=SUM(A1)` → `'=SUM(A1)` → (no comma/quote) stays
- * unquoted `'=SUM(A1)`, while `a,b` → `"a,b"`.
+ * `= + - @`, TAB or CR — or a `= + - @` after only leading whitespace — gets a single apostrophe),
+ * **then** apply RFC-4180 quoting (wrap in double quotes and double any embedded quote when the value
+ * contains a quote, comma, CR or LF). Order matters — the apostrophe is added inside the eventual quotes,
+ * so `=SUM(A1)` → `'=SUM(A1)` → (no comma/quote) stays unquoted `'=SUM(A1)`, while `a,b` → `"a,b"`.
  */
 export function csvCell(value: string): string {
   let cell = value;
   const first = cell.charAt(0);
-  if (first !== '' && CSV_INJECTION_PREFIXES.has(first)) {
+  if ((first !== '' && CSV_INJECTION_PREFIXES.has(first)) || CSV_LEADING_FORMULA.test(cell)) {
     cell = `'${cell}`;
   }
   if (CSV_QUOTE_TRIGGER.test(cell)) {

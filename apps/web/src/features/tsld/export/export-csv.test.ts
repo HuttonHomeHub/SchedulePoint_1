@@ -74,6 +74,13 @@ describe('csvCell — formula-injection guard', () => {
     expect(csvCell('a=b')).toBe('a=b');
     expect(csvCell('name -x')).toBe('name -x');
   });
+
+  it('neutralises a formula trigger that follows only leading whitespace (S1 — Excel trims first)', () => {
+    // " =1+1" is a live formula in Excel/Sheets (leading spaces are trimmed before evaluation), so it is
+    // prefixed. The value's own whitespace is preserved — only the apostrophe is prepended, no trim.
+    expect(csvCell(' =1+1')).toBe("' =1+1");
+    expect(csvCell('  @SUM')).toBe("'  @SUM");
+  });
 });
 
 describe('buildScheduleCsv', () => {

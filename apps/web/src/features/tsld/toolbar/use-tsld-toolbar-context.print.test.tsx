@@ -182,10 +182,12 @@ describe('useTsldToolbarContext — Browser Print (M4)', () => {
     expect(arg.title).toBe('North Tower');
     // The subtitle carries the plan's data date (formatted), not today's date.
     expect(arg.subtitle).toBe('As of 01 Jan 2026');
+    // "Preparing…" is announced synchronously on pick (B3), before the "Printing…" completion message.
+    expect(announce).toHaveBeenCalledWith('Preparing the diagram to print…');
     expect(announce).toHaveBeenCalledWith('Printing North Tower.');
   });
 
-  it('surfaces a user-safe error (no throw) when the image build fails', async () => {
+  it('surfaces a user-safe VISIBLE error (no throw) when the image build fails', async () => {
     const { renderExportImage } = await import('../export/render-export-image');
     vi.mocked(renderExportImage).mockRejectedValueOnce(new Error('no 2d context'));
     const { result } = build();
@@ -195,6 +197,10 @@ describe('useTsldToolbarContext — Browser Print (M4)', () => {
     });
     expect(printDiagramImage).not.toHaveBeenCalled();
     expect(announce).toHaveBeenCalledWith(
+      'Couldn’t prepare the diagram to print. Please try again.',
+    );
+    // The failure ALSO sets the visible error surface, not only the sr-only announce (B2).
+    expect(result.current.exportError).toBe(
       'Couldn’t prepare the diagram to print. Please try again.',
     );
   });

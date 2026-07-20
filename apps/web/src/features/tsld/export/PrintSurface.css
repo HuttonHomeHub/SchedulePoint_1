@@ -11,6 +11,11 @@
  * regardless of the app's light/dark/system theme. This mirrors `resolvePrintPalette()` (which bakes the
  * diagram image itself onto white from the light design tokens); the small chrome colours below are the
  * documented print-forcing exception to the "no hard-coded colours" rule, not one-off UI styling.
+ *
+ * The hex constants below are PINNED to `resolvePrintPalette()`'s own light fallbacks so the two can't
+ * drift (component review S6): `ground` #ffffff, `ink` #1a1a1a (light `--color-foreground`), `mutedInk`
+ * #6b7280 (light `--color-muted-foreground`). A `@media print` stylesheet can't read a runtime JS value,
+ * so these are the static equivalents of the same light tokens the exported image is baked from.
  */
 
 .tsld-print-root {
@@ -34,7 +39,7 @@
     margin: 0;
     padding: 16px;
     background: #ffffff;
-    color: #111111;
+    color: #1a1a1a; /* = resolvePrintPalette().ink fallback (light --color-foreground) */
     color-scheme: light;
     font-family:
       'Inter',
@@ -58,7 +63,7 @@
   .tsld-print-subtitle {
     margin: 0 0 12px;
     font-size: 12px;
-    color: #555555;
+    color: #6b7280; /* = resolvePrintPalette().mutedInk fallback (light --color-muted-foreground) */
     line-height: 1.2;
   }
 

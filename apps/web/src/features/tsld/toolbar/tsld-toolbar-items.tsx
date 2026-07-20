@@ -669,18 +669,31 @@ function ExportMenuControl({
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu open={open} onClose={close} anchor={anchor} label="Export" restoreFocusRef={triggerRef}>
+        {/* Grouped into Schedule / Diagram sections (ux S2), mirroring the Add split-button's sections. */}
+        <MenuSection>Schedule</MenuSection>
         <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>
           <FileSpreadsheet aria-hidden="true" className="size-4" />
-          Schedule (CSV)
+          {/* When the conditional filtered item is present, name the default one "All activities" so the
+              all-vs-matching distinction reads from the label, not the position (ux S4). */}
+          {ctx.filterActive ? 'All activities (CSV)' : 'Schedule (CSV)'}
         </MenuItem>
         {/* Conditional filtered export (CQ-3): only when a filter / isolate lens is narrowing the set,
-            so the item never confuses when nothing is filtered. */}
+            so the item never confuses when nothing is filtered. Disabled-with-reason (shade-don't-hide)
+            when nothing matches, so it can't download a header-only CSV (ux S3). */}
         {ctx.filterActive ? (
-          <MenuItem onSelect={() => ctx.exportScheduleCsv('matching')}>
+          <MenuItem
+            disabled={ctx.matchingCount === 0}
+            onSelect={() => ctx.exportScheduleCsv('matching')}
+          >
             <Filter aria-hidden="true" className="size-4" />
-            Matching activities only ({ctx.matchingCount})
+            <span>Matching activities only ({ctx.matchingCount})</span>
+            {ctx.matchingCount === 0 ? (
+              <span className="text-muted-foreground ml-auto text-xs">No matching activities</span>
+            ) : null}
           </MenuItem>
         ) : null}
+        <div role="separator" className="bg-border my-1 h-px" />
+        <MenuSection>Diagram</MenuSection>
         {/* Diagram PNG (M2, CQ-1: offer BOTH extents). The whole-plan render re-frames an off-screen
             canvas to the full activity extent (raster-capped, scale-to-fit); the current-view render
             crops to the live viewport. Both paint off-screen with the light print palette + legend. */}
