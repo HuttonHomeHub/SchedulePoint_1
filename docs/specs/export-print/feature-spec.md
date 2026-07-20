@@ -113,34 +113,30 @@ placeholders/roadmap for C2.
 
 ### Open questions
 
-**CRITICAL (answers change scope/design) — defaults stated, please confirm:**
+**CRITICAL (answers change scope/design) — RESOLVED at approval (2026-07-20, product sign-off):**
 
-- **CQ-1 — PNG/PDF extent: whole-diagram vs current viewport.** _Default:_ **whole-diagram** — re-frame an
-  off-screen canvas to the full activity extent at the current zoom's `pxPerDay` (reusing
-  `fitToContent`-style bounds), so nothing off-screen is lost, **bounded to a max raster dimension**
-  (default 8192 px per side, DPR capped at 2) with a **scale-to-fit fallback** when the extent exceeds the
-  cap (title band notes "scaled to fit"). A secondary **"Current view"** menu option (crop to the live
-  viewport) is a cheap fast-follow, not v1. Confirm whole-diagram default.
-- **CQ-2 — PDF: add jsPDF vs a hand-rolled PNG-in-PDF.** _Default:_ **add jsPDF**, **dynamically imported
-  (code-split, lazy)** so it is **absent from the initial bundle** and only fetched on first PDF export,
-  embedding the already-produced PNG on a single landscape page. Rationale: a correct, portable PDF writer
-  by hand (xref tables, image XObjects, DEFLATE) is real, security-sensitive code we'd own forever; jsPDF
-  is a mature, ~50 KB-gzipped (lazy) dependency. **Needs devops-reviewer + performance-reviewer sign-off on
-  the bundle/licence** (MIT). Alternative (hand-rolled minimal PDF embedding a JPEG) is rejected for v1 on
-  maintenance/risk grounds but noted. Confirm jsPDF-lazy, or direct the hand-rolled path.
-- **CQ-3 — CSV: respect the active filter/isolate lens, or always all rows.** _Default:_ **export ALL rows
-  of the plan by default** (the whole schedule is what a spreadsheet consumer expects), and — **when a
-  Stage-A filter or Stage-B isolate lens is currently narrowing the set** — the Export menu offers a
-  **second CSV item "Matching activities only (N)"**. So both are available; the default is unambiguous
-  (all). PNG/PDF always render the whole diagram (a lens only dims, it never removes geometry — Stage A
-  CQ-2 — so the export shows the dim state as painted). Confirm all-rows default + the conditional
-  filtered item.
-- **CQ-4 — Print: CSS print stylesheet over the live DOM vs the image path.** _Default:_ **the image
-  path** — reuse the whole-diagram PNG (CQ-1), place it in a **print-only container**, and use a minimal
-  **print stylesheet** to hide the app-shell before `window.print()`. Printing the live DOM is rejected:
-  the canvas is a **single viewport-sized bitmap**, so a CSS-only print loses everything off-screen — the
-  exact failure we're fixing. (The print stylesheet still exists, but only to isolate the injected image.)
-  Confirm the image-based print.
+- **CQ-1 — PNG/PDF extent: whole-diagram vs current viewport. → RESOLVED: OFFER BOTH.** M2 ships **two**
+  extent options as menu items: **Whole diagram** (re-frame an off-screen canvas to the full activity
+  extent at the current zoom's `pxPerDay`, reusing `fitToContent`-style bounds, **bounded to a max raster
+  dimension** — 8192 px per side, DPR capped at 2 — with a **scale-to-fit fallback** and a "scaled to fit"
+  title-band note) **and** **Current view** (crop to the live viewport). Both feed the same off-screen
+  `paintScene`; the extent is a parameter of the export-viewport computation, so the second option is not a
+  deferred fast-follow but a first-class M2 deliverable. PDF (M3) offers the same two extents.
+- **CQ-2 — PDF: add jsPDF vs a hand-rolled PNG-in-PDF. → RESOLVED: LAZY jsPDF.** Add **jsPDF** (MIT),
+  **dynamically imported (code-split, lazy)** so it is **absent from the initial bundle** and only fetched
+  on first PDF export, embedding the already-produced PNG on a single landscape page. A hand-rolled PDF
+  writer is rejected on maintenance/security-risk grounds. **Still requires devops-reviewer +
+  performance-reviewer sign-off** on the bundle/licence/SBOM during M5.
+- **CQ-3 — CSV: respect the active filter/isolate lens, or always all rows. → RESOLVED: ALL ROWS +
+  CONDITIONAL "MATCHING ONLY".** CSV **exports ALL rows of the plan by default**, and — **when a Stage-A
+  filter or Stage-B isolate lens is currently narrowing the set** — the Export menu offers a **second CSV
+  item "Matching activities only (N)"**. PNG/PDF always render the whole diagram at the chosen extent (a
+  lens only dims, it never removes geometry — Stage A CQ-2 — so the export shows the dim state as painted).
+- **CQ-4 — Print: CSS print stylesheet over the live DOM vs the image path. → RESOLVED: IMAGE PATH.**
+  Reuse the off-screen image, place it in a **print-only container**, and use a minimal **print
+  stylesheet** to hide the app-shell before `window.print()`. Printing the live DOM is rejected: the canvas
+  is a **single viewport-sized bitmap**, so a CSS-only print loses everything off-screen — the exact
+  failure we're fixing. (The print stylesheet still exists, but only to isolate the injected image.)
 
 **Non-critical (defaults applied, not blocking):**
 
