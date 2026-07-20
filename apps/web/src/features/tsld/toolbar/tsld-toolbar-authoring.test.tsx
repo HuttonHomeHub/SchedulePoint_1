@@ -17,6 +17,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   SCHEDULING_MODES_ENABLED: false,
+  // Pin on-canvas activity types OFF here: this authoring suite asserts the Add menu's disabled
+  // "Span between" (Hammock / Level of effort) placeholders. The flag-on single "Level of Effort
+  // (hammock)" live item is covered by tsld-toolbar-activity-types.test.tsx.
+  CANVAS_ACTIVITY_TYPES_ENABLED: false,
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {

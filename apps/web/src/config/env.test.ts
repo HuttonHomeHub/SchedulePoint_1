@@ -76,11 +76,11 @@ describe('EXPORT_PRINT_ENABLED', () => {
 });
 
 describe('CANVAS_ACTIVITY_TYPES_ENABLED', () => {
-  it('is OFF by default during build — dark until the specialist reviews are green (Task 4)', () => {
-    // On-canvas advanced activity types (Stage D) ships dark: no VITE_CANVAS_ACTIVITY_TYPES is set in
-    // the test env, so the flag is off and the Add menu keeps today's disabled "Soon" placeholders
-    // byte-for-byte, with the LOE endpoint-pick tool unreachable. It flips on (VITE_CANVAS_ACTIVITY_TYPES
-    // default, or the operator opt-in "true"/"1") after the reviews land — Task 4, done separately.
-    expect(CANVAS_ACTIVITY_TYPES_ENABLED).toBe(false);
+  it('is on by default (delivered & enabled, 2026-07-20; no VITE_CANVAS_ACTIVITY_TYPES set)', () => {
+    // On-canvas advanced activity types (Stage D) is on by default now that its five specialist reviews
+    // (a11y / ux / component / perf / test) are green (Task 4). Setting VITE_CANVAS_ACTIVITY_TYPES=false
+    // keeps the Add menu's disabled "Soon" placeholders byte-for-byte and leaves the LOE endpoint-pick
+    // tool unreachable — the rollback path / parity gate.
+    expect(CANVAS_ACTIVITY_TYPES_ENABLED).toBe(true);
   });
 });

@@ -130,6 +130,14 @@ keep `main` releasable.
   initial bundle), and **Browser Print** (the whole diagram via a print-only container + `@media print`
   stylesheet). No API/schema/engine change (spec `docs/specs/export-print/`). `share` (External Guest
   link) and XER/MSP interchange are deferred to Stage C2. Stage C1 of the toolbar-placeholder burn-down.
+- **On-canvas activity types (web).** The canvas Add split-button's Level-of-effort/Hammock "Coming
+  soon" placeholders collapse into one live **Level of Effort (hammock)** item and **on by default**
+  (`VITE_CANVAS_ACTIVITY_TYPES`): it arms a two-click endpoint-pick tool (a sibling of the Link tool) —
+  pick a start driver, then a finish driver — and SchedulePoint composes a `LEVEL_OF_EFFORT` activity
+  plus its SS/FF driver edges as one undoable action, then recalcs and redraws. Frontend-only over the
+  already-shipped LOE engine (a raw `HAMMOCK` is never created — the LOE **is** the span-derived
+  hammock); no API/schema/engine change (spec `docs/specs/canvas-activity-types/`). Stage D of the
+  toolbar-placeholder burn-down.
 
 ## Next
 
