@@ -8,6 +8,7 @@ import {
   type EditIntent,
   type EditMode,
   type GestureState,
+  type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
 import type { GhostBar } from '../render/lenses';
@@ -114,9 +115,13 @@ export interface TsldCanvasProps {
   /** LOE endpoint-pick step feedback (Stage D) — the parallel-DOM a11y channel `TsldPanel` announces +
    * syncs: the first pick (`start`), a rejected same-activity re-pick (`reprompt`), or a cancelling
    * empty click (`cancel`). The committed span arrives via {@link onIntent} as a `loeSpan` intent. */
-  onLoeSpanStep?: (
-    step: { kind: 'start'; startId: string } | { kind: 'reprompt' } | { kind: 'cancel' },
-  ) => void;
+  onLoeSpanStep?: (step: LoeSpanStep) => void;
+  /** The LOE tool's picked **start driver** id, controlled by `TsldPanel` (Stage D) — the single source
+   * of truth for the pick, mirroring the inbound {@link selectedId} pattern. A keyboard-side pick (the
+   * listbox Enter) sets this; the canvas seeds its internal gesture from it so the NEXT pointer click
+   * resolves as the SECOND pick against the keyboard-picked start (not a restarted first pick). Null ⇒
+   * no start picked; the canvas keeps its gesture idle. Only meaningful in `loe` mode. */
+  loePickStartId?: string | null;
   /** Called when Esc is pressed while idle in add-activity mode (revert to Select). */
   onExitAddMode?: () => void;
   /** The active edit ghost drawn on the interaction layer — a dropped create awaiting its name,
@@ -306,6 +311,7 @@ export function TsldCanvas({
   canLink = false,
   onIntent,
   onLoeSpanStep,
+  loePickStartId = null,
   onExitAddMode,
   pending = null,
   view,
@@ -533,6 +539,27 @@ export function TsldCanvas({
       interactionDirtyRef.current = true;
     }
   }, [mode]);
+
+  // Single-source the LOE tool's picked start across modalities (Stage D, B3): the pick lives in
+  // `TsldPanel`'s controlled `loePickStartId`; SEED the internal gesture from it so a keyboard-side
+  // pick makes the next pointer click resolve as the SECOND pick (not a silent restart that discards
+  // the keyboard pick). Runs AFTER the mode-reset effect above, so on arming (`mode → 'loe'`, pick
+  // null) it leaves the gesture idle. The pointer→state direction feeds back here harmlessly — the
+  // gesture already matches, so this is a no-op. Only touches the gesture in `loe` mode.
+  useEffect(() => {
+    if (mode !== 'loe') return;
+    if (loePickStartId) {
+      const g = gestureRef.current;
+      if (g.kind !== 'loePicking' || g.startId !== loePickStartId) {
+        gestureRef.current = { kind: 'loePicking', startId: loePickStartId };
+        interactionDirtyRef.current = true;
+      }
+    } else if (gestureRef.current.kind === 'loePicking') {
+      // The pick was cleared (Escape / cancel / commit) — drop the stale ring.
+      gestureRef.current = IDLE;
+      interactionDirtyRef.current = true;
+    }
+  }, [loePickStartId, mode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

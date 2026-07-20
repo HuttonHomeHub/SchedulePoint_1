@@ -63,9 +63,38 @@ describe('TSLD toolbar — on-canvas advanced activity types (flag on)', () => {
 
   it('reflects the armed state as checked (aria-checked)', () => {
     renderDoRow(ctx({ isLoeSpanning: true }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    // Armed, the trigger label is the mid-pick prompt (B4), not "Add" — open via that name.
+    fireEvent.click(screen.getByRole('button', { name: 'Pick start driver' }));
     expect(
       screen.getByRole('menuitemradio', { name: /Level of Effort \(hammock\)/ }),
     ).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('reflects the armed LOE tool + mid-pick step on the Add trigger label (B4)', () => {
+    // Before the first pick the trigger prompts for the start driver (mirroring LinkControl's
+    // `Linking · FS`); once a start is picked it flips to the finish driver.
+    const rows = splitByRow(buildTsldToolbarItems());
+    const doToolbar = (context: TsldToolbarContext) => (
+      <Toolbar items={rows.do} context={context} label="Build and manage" authoringEnabled />
+    );
+    const { rerender } = render(doToolbar(ctx({ isLoeSpanning: true, loeStartPicked: false })));
+    expect(screen.getByRole('button', { name: 'Pick start driver' })).toBeInTheDocument();
+
+    rerender(doToolbar(ctx({ isLoeSpanning: true, loeStartPicked: true })));
+    expect(screen.getByRole('button', { name: 'Pick finish driver' })).toBeInTheDocument();
+  });
+
+  it('shades the LOE item with a reason and stays inert below two activities (B5)', () => {
+    const context = ctx({ loeSpanActivityCount: 1 });
+    renderDoRow(context);
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    const loe = screen.getByRole('menuitemradio', { name: /Level of Effort \(hammock\)/ });
+    expect(loe).toHaveAttribute('aria-disabled', 'true');
+    expect(loe).toHaveTextContent('Add activities to span between them');
+
+    // A disabled item never arms the tool.
+    fireEvent.click(loe);
+    expect(context.toggleLoeSpanMode).not.toHaveBeenCalled();
   });
 });

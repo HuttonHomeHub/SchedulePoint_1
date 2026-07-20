@@ -14,7 +14,7 @@ import {
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
-import type { EditIntent } from '../interaction/gesture-machine';
+import type { EditIntent, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
   announceChainStep,
@@ -285,6 +285,8 @@ export function TsldPanel({
     canvasControlRef,
     createType,
     linkType,
+    loeStartId,
+    setLoeStartId,
     lensState,
     navState,
   } = canvasUi ?? ownCanvasUi;
@@ -318,22 +320,53 @@ export function TsldPanel({
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
   // The LOE endpoint-pick tool's picked **start driver** (Stage D, `docs/specs/canvas-activity-types/`)
-  // — the parallel a11y state shared by the keyboard flow (listbox Enter) and the pointer flow (synced
-  // via `handleLoeStep`). Null when no start is picked. Cleared when the tool disarms (mode leaves
-  // `'loe'`) so a re-arm always starts fresh. Inert when the flag/tool is off (mode is never `'loe'`).
-  const [loeStartId, setLoeStartId] = useState<string | null>(null);
+  // now lives in the shared canvas UI state (destructured above) so it is the ONE source of truth read
+  // by the keyboard flow (listbox Enter), the pointer flow (seeded into the canvas via `loePickStartId`),
+  // and the toolbar's Add-trigger label. Null when no start is picked; cleared when the tool disarms.
+  // Whether the LOE tool's disarm was triggered by a SUCCESSFUL commit (B1) rather than an Escape /
+  // abandon — so the disarm effect below announces "cancelled/closed" only on a genuine cancel, never
+  // after the success announcement (spec B2 sequencing). Set by `runLoeSpan` just before it disarms.
+  const loeCommitDisarmRef = useRef(false);
+  // Mirror the live picked-start id so the mode effect can read it at disarm time WITHOUT listing
+  // `loeStartId` as a dep (which would re-announce the arm prompt on every pick).
+  const loeStartIdRef = useRef(loeStartId);
+  useEffect(() => {
+    loeStartIdRef.current = loeStartId;
+  }, [loeStartId]);
+  // True while the LOE tool is armed, so the disarm branch only reacts to a real transition FROM `'loe'`
+  // (never the initial mount, where `mode` starts `'select'`).
+  const loeArmedRef = useRef(false);
   // Arm/disarm side effects: announce the first prompt when the LOE tool is armed (its canvas is
-  // aria-hidden, so the prompt must be spoken), and drop any half-finished pick when it disarms. Runs
+  // aria-hidden, so the prompt must be spoken), and — on disarm — drop any half-finished pick and
+  // announce the disarm (WCAG 4.1.3), UNLESS a successful commit already announced its success. Runs
   // only on a `mode` transition. Inert while the flag is off — `mode` is never `'loe'` then.
   useEffect(() => {
-    if (mode === 'loe') announce('Level of effort: pick the start driver, then the finish driver.');
-    // Sync the local pick state to the externally-controlled tool `mode` (driven by the toolbar's
-    // Add-menu + the canvas Escape): leaving the LOE tool drops any half-finished pick, so a re-arm
-    // never inherits a stale start driver. The endorsed "subscribe to an external system, setState in
-    // response" effect case (mirrors the Next-conflict select-signal sync above).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- external tool-mode → pick-state sync
-    else setLoeStartId(null);
-  }, [mode, announce]);
+    if (mode === 'loe') {
+      loeArmedRef.current = true;
+      announce('Level of effort (hammock): pick the start driver, then the finish driver.');
+      return;
+    }
+    // Only react to a genuine disarm (a transition FROM `'loe'`), not the mount / other-mode renders.
+    if (!loeArmedRef.current) return;
+    loeArmedRef.current = false;
+    const hadStart = loeStartIdRef.current !== null;
+    // Leaving the LOE tool drops any half-finished pick, so a re-arm never inherits a stale start driver.
+    // The endorsed "subscribe to an external system (the toolbar-owned tool `mode`), setState in
+    // response" effect case (mirrors the Next-conflict select-signal sync above). `setLoeStartId` is the
+    // shared canvas-UI setter (a prop, not local state), so no set-state-in-effect suppression is needed.
+    setLoeStartId(null);
+    // A successful commit already announced "Added a level-of-effort span…"; don't also say "cancelled".
+    if (loeCommitDisarmRef.current) {
+      loeCommitDisarmRef.current = false;
+      return;
+    }
+    // Otherwise this is an Escape / menu-toggle / re-select disarm — announce it so the aria-hidden
+    // canvas's silent tool change isn't invisible to AT (B2). "Cancelled" when a start was pending, else
+    // "closed"; keep the "(hammock)" anchor a planner may have searched for (S2).
+    announce(
+      hadStart ? 'Level of effort (hammock) cancelled.' : 'Level of effort (hammock) tool closed.',
+    );
+  }, [mode, announce, setLoeStartId]);
 
   const renderActivities = useMemo(
     () => toRenderActivities(activities, barDateSource),
@@ -800,6 +833,13 @@ export function TsldPanel({
           announce(
             `Added a level-of-effort span from “${start?.name ?? 'activity'}” to “${finish?.name ?? 'activity'}”.`,
           );
+          // Disarm the tool after a successful compose (spec §2/§workflow AC; WCAG 4.1.3 — a sticky
+          // armed state reads as ambiguous to AT after the success announcement). This intentionally
+          // diverges from the Link tool's sticky-after-commit behaviour — the LOE spec wants a disarm.
+          // Flag the disarm as commit-driven so the mode effect doesn't ALSO announce "cancelled" over
+          // the success message (B2 sequencing). A conflict/rollback keeps the tool armed for a retry.
+          loeCommitDisarmRef.current = true;
+          setMode('select');
         }
       })
       .catch((err: unknown) => {
@@ -809,9 +849,7 @@ export function TsldPanel({
 
   // The LOE tool's per-pick feedback from the canvas (Stage D) — announce the prompt + keep the
   // parallel `loeStartId` in step with the pointer pick, so the keyboard and pointer flows agree.
-  const handleLoeSpanStep = (
-    step: { kind: 'start'; startId: string } | { kind: 'reprompt' } | { kind: 'cancel' },
-  ): void => {
+  const handleLoeSpanStep = (step: LoeSpanStep): void => {
     if (step.kind === 'start') {
       setLoeStartId(step.startId);
       const picked = activities.find((a) => a.id === step.startId);
@@ -1084,6 +1122,7 @@ export function TsldPanel({
               canLink={onLink !== undefined}
               onIntent={onIntent}
               onLoeSpanStep={handleLoeSpanStep}
+              loePickStartId={loeStartId}
               onExitAddMode={() => setMode('select')}
               view={viewToggles}
               isWorkingDay={workingDayPredicate}

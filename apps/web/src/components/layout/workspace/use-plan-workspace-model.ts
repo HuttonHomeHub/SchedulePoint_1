@@ -765,25 +765,30 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       }
       throw err;
     }
-    // Steps 2 & 3 — the SS + FF edges. On ANY failure, roll back the LOE (delete cascades any partial
-    // edge), refetch, and clear redo — so no orphan LOE with 0/1 edge is ever left behind.
+    // Steps 2 & 3 — the SS + FF edges. Both depend only on the new LOE id (not on each other), so they
+    // fire concurrently (`Promise.all`) to save a round-trip. On ANY failure, roll back the LOE (delete
+    // cascades any partial edge), refetch, and clear redo — so no orphan LOE with 0/1 edge is ever left
+    // behind; `Promise.all` rejects on the first failure but both POSTs have already been dispatched, so
+    // the rollback still cleans up a landed edge.
     try {
-      await createDependency.mutateAsync({
-        planId,
-        predecessorId: startDriverId,
-        successorId: loe.id,
-        type: 'SS',
-        lagDays: 0,
-        lagCalendar: 'PROJECT_DEFAULT',
-      });
-      await createDependency.mutateAsync({
-        planId,
-        predecessorId: loe.id,
-        successorId: finishDriverId,
-        type: 'FF',
-        lagDays: 0,
-        lagCalendar: 'PROJECT_DEFAULT',
-      });
+      await Promise.all([
+        createDependency.mutateAsync({
+          planId,
+          predecessorId: startDriverId,
+          successorId: loe.id,
+          type: 'SS',
+          lagDays: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+        }),
+        createDependency.mutateAsync({
+          planId,
+          predecessorId: loe.id,
+          successorId: finishDriverId,
+          type: 'FF',
+          lagDays: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+        }),
+      ]);
     } catch (err) {
       // Best-effort rollback — a failed delete (e.g. the pen was also lost) still leaves the server to
       // reconcile on refetch; never surface the rollback's own error over the original cause.
@@ -817,7 +822,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       );
     }
     // Fire the coalesced auto-recalc so the LOE redraws at its engine-derived span (ADR-0032). A recalc
-    // failure is non-fatal — the span persisted; the dates land on the next recalc.
+    // failure is non-fatal — the span persisted; the dates land on the next recalc. This is unconditional
+    // because `createLoeSpan` is only reachable when the LOE tool is armed (the Add split-button, hence
+    // CANVAS_AUTHORING_ENABLED); `autoRecalc.enabled` is likewise gated on it, so `notifyRecalc` is a
+    // no-op otherwise — do NOT "fix" it by flag-guarding here.
     notifyRecalc();
     return { applied: true, conflict: null };
   };

@@ -198,20 +198,24 @@ export type GestureState =
 
 export const IDLE: GestureState = { kind: 'idle' };
 
+/**
+ * The LOE endpoint-pick tool's per-pick feedback (Stage D) — the parallel-DOM a11y channel the shell
+ * announces + syncs. `start` is the first pick ("now pick the finish driver"); `reprompt` is a rejected
+ * same-activity re-pick (the tool stays armed); `cancel` is a pick dropped by an empty click (the tool
+ * stays armed). The *committed* span rides {@link Reduction.intent} as a `loeSpan` intent, like a link.
+ * One exported shape shared by {@link Reduction.loe}, `TsldCanvas`'s `onLoeSpanStep`, and `TsldPanel`.
+ */
+export type LoeSpanStep =
+  { kind: 'start'; startId: string } | { kind: 'reprompt' } | { kind: 'cancel' };
+
 export interface Reduction {
   state: GestureState;
   /** Emitted only on a committing `pointerUp`; the shell forwards it to `onIntent`. */
   intent?: EditIntent;
   /** Set when a body press ended without moving — the shell should select this activity. */
   select?: string;
-  /**
-   * LOE endpoint-pick feedback (Stage D) — the parallel-DOM a11y channel the shell announces + syncs.
-   * Set on the first pick (`{ kind: 'start', startId }` → "now pick the finish driver"), a same-activity
-   * re-pick (`{ kind: 'reprompt' }` → "that's the start driver; pick a different one", tool stays
-   * armed), or a cancelling empty click (`{ kind: 'cancel' }` → pick dropped, tool stays armed). The
-   * *committed* span rides {@link Reduction.intent} as a `loeSpan` intent, like a link.
-   */
-  loe?: { kind: 'start'; startId: string } | { kind: 'reprompt' } | { kind: 'cancel' };
+  /** LOE endpoint-pick feedback (Stage D) — see {@link LoeSpanStep}. */
+  loe?: LoeSpanStep;
 }
 
 /**

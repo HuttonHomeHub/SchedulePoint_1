@@ -503,7 +503,9 @@ export function createLoeSpanCommand(params: {
     remove: params.deleteActivity,
   });
   return {
-    label: params.label ?? `Add level-of-effort span “${params.loe.name}”`,
+    // The quoted name was always the generic default ("Level of effort"), so it added nothing — drop it
+    // and read plainly "Add level-of-effort span" (S3).
+    label: params.label ?? 'Add level-of-effort span',
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
   };

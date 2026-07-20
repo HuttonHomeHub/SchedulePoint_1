@@ -147,6 +147,9 @@ function GoToDateControl({
  * the app (e.g. under localisation). */
 const ADD_ACTIVITY_TYPES = ['TASK', 'START_MILESTONE', 'FINISH_MILESTONE'] as const;
 const ADD_DISABLED_REASON = 'Start editing to add activities';
+/** The LOE span hangs off two existing driver activities; with fewer than two present the Add-menu's
+ * Level-of-Effort item shades with this reason (Stage D spec §Edge cases). */
+const LOE_TOO_FEW_REASON = 'Add activities to span between them';
 
 /** A small "coming soon" tag for menu rows that preview a not-yet-built activity kind. */
 function SoonTag(): React.ReactElement {
@@ -185,6 +188,19 @@ function AddActivityControl({
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
   const activeLabel = ACTIVITY_TYPE_LABELS[ctx.createType];
+  // Reflect an armed LOE tool on the trigger (B4): fold it into the pressed state AND swap the label to
+  // a mid-pick prompt ("Pick start driver" → "Pick finish driver" once a start is picked), mirroring
+  // LinkControl's `Linking · FS` reflection. Add/LOE are mutually exclusive (a single EditMode).
+  const triggerLabel = ctx.isAddingActivity
+    ? `Adding ${activeLabel}`
+    : ctx.isLoeSpanning
+      ? ctx.loeStartPicked
+        ? 'Pick finish driver'
+        : 'Pick start driver'
+      : 'Add';
+  // Flag-off (`CANVAS_ACTIVITY_TYPES` dark) the LOE tool is unreachable, so `isLoeSpanning` is never true
+  // and the label/active reflection collapses to today's plain "Add", byte-for-byte.
+  const loeTooFew = ctx.loeSpanActivityCount < 2;
   return (
     <>
       <button
@@ -198,10 +214,15 @@ function AddActivityControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ active: ctx.isAddingActivity || open, disabled }))}
+        className={cn(
+          toolbarControlVariants({
+            active: ctx.isAddingActivity || ctx.isLoeSpanning || open,
+            disabled,
+          }),
+        )}
       >
         <Plus aria-hidden="true" className="size-4" />
-        <span className="truncate">{ctx.isAddingActivity ? `Adding ${activeLabel}` : 'Add'}</span>
+        <span className="truncate">{triggerLabel}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
@@ -239,12 +260,22 @@ function AddActivityControl({
         <div role="separator" className="bg-border my-1 h-px" />
         <MenuSection>Span between activities</MenuSection>
         {CANVAS_ACTIVITY_TYPES_ENABLED ? (
-          <MenuItem selected={ctx.isLoeSpanning} onSelect={() => ctx.toggleLoeSpanMode()}>
+          // Disabled-with-reason (shade-don't-hide) below two activities — the span needs two drivers to
+          // hang off (B5) — mirroring the Export menu's "No matching activities" pattern. Stays a
+          // `menuitemradio` (the `selected` prop) so the armed state still announces via `aria-checked`.
+          <MenuItem
+            selected={ctx.isLoeSpanning}
+            disabled={loeTooFew}
+            onSelect={() => ctx.toggleLoeSpanMode()}
+          >
             <Check
               aria-hidden="true"
               className={cn('size-4', ctx.isLoeSpanning ? 'opacity-100' : 'opacity-0')}
             />
             Level of Effort (hammock)
+            {loeTooFew ? (
+              <span className="text-muted-foreground ml-auto text-xs">{LOE_TOO_FEW_REASON}</span>
+            ) : null}
           </MenuItem>
         ) : (
           <>

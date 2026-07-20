@@ -200,6 +200,7 @@ export function useTsldToolbarContext({
     setCreateType,
     linkType,
     setLinkType,
+    loeStartId,
     lensState,
     setFilterQuery,
     toggleFilterAttr,
@@ -438,6 +439,13 @@ export function useTsldToolbarContext({
       // Add-menu item is flag-gated) and pen-gated as part of the authoring cluster.
       isLoeSpanning: mode === 'loe',
       toggleLoeSpanMode: () => setMode((m) => (m === 'loe' ? 'select' : 'loe')),
+      // The Add trigger reflects the LOE tool's mid-pick step (B4): once a start driver is picked the
+      // label flips to "Pick finish driver". Sourced from the shared `loeStartId` (the single source of
+      // truth), so the pointer AND keyboard picks both drive it.
+      loeStartPicked: loeStartId !== null,
+      // The LOE span needs two existing activities to hang off; the Add-menu item shades with a reason
+      // below `< 2` (B5). Reads the stabilised activities list already memoised for the conflict cluster.
+      loeSpanActivityCount: activities.length,
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 
@@ -680,6 +688,7 @@ export function useTsldToolbarContext({
     setCreateType,
     linkType,
     setLinkType,
+    loeStartId,
     requestAutoArrange,
     model.undoRedo,
     setShowHelp,

@@ -78,6 +78,14 @@ export interface TsldToolbarContext {
    * `VITE_CANVAS_ACTIVITY_TYPES` is on (the Add-menu item is flag-gated); a toggle like the Add/Link
    * tools, and leaving it (Escape / re-select) returns to Select. */
   toggleLoeSpanMode: () => void;
+  /** Whether the LOE tool has already picked its **start driver** (Stage D) — drives the Add trigger's
+   * armed label ("Pick finish driver" once true, else "Pick start driver"), mirroring `LinkControl`'s
+   * `Linking · FS` reflection. Sourced from the shared `loeStartId`; false when no start is picked or the
+   * tool is off. */
+  loeStartPicked: boolean;
+  /** How many activities the plan has — the LOE span needs **two** existing activities to hang off, so
+   * the Add-menu's Level-of-Effort item shades with a reason when this is `< 2` (spec §Edge cases). */
+  loeSpanActivityCount: number;
   /** Whether the auto-arrange-lanes action is offered (editing + an `onAutoArrange` handler). */
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */

@@ -481,7 +481,7 @@ describe('createLoeSpanCommand', () => {
     // A second undo deletes the RE-composed LOE id (loe-2), not the stale original — the toggle tracks it.
     await command.undo();
     expect(deleteActivity).toHaveBeenLastCalledWith('loe-2');
-    expect(command.label).toBe('Add level-of-effort span “Level of effort”');
+    expect(command.label).toBe('Add level-of-effort span');
   });
 
   it('is idempotent per direction (no double-delete / double-compose)', async () => {
