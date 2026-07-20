@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 
 import { FILTER_ATTRS, type ColourMode } from '../render/lenses';
+import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
@@ -54,6 +55,7 @@ import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_NAV_ENABLED,
   EARNED_VALUE_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
@@ -617,6 +619,103 @@ function ColourByControl({
   );
 }
 
+/** The isolate chain modes the picker offers, in menu order (CQ-1). Full = the whole transitive chain;
+ * Driving = only the binding driving edges. Short labels for the compact button, long names in the menu. */
+const ISOLATE_MODE_LABELS: Record<LogicPathMode, string> = {
+  full: 'Full path',
+  driving: 'Driving path',
+};
+
+const ISOLATE_NO_SELECTION_REASON = 'Select an activity first';
+
+/**
+ * The **Isolate logic path** control (canvas nav, `docs/specs/canvas-nav/`, flag-on) — a single APG
+ * menu-button (mirroring {@link AddActivityControl} / {@link ColourByControl}) that dims everything not
+ * on the selected activity's logic chain. The trigger reflects the active state (`aria-pressed`) and
+ * arms/labels the current chain mode; opening the menu picks Full logic path / Driving path only (a pick
+ * arms isolate on, mirroring the Add split-button) or stops isolating. View-only (never pen-gated);
+ * shaded with a reason when nothing is selected / no diagram. One focusable roving stop (spreads
+ * `itemProps`). The dim + its a11y listbox marking + the live-region announcement carry the state for
+ * SR users (WCAG 1.4.1 — never colour/dim alone).
+ */
+function IsolateControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const disabled = api.disabled;
+  const modeLabel = ISOLATE_MODE_LABELS[ctx.isolateMode];
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-pressed={ctx.isolateActive}
+        aria-disabled={disabled || undefined}
+        aria-label={ctx.isolateActive ? `Isolate logic path: ${modeLabel}` : 'Isolate logic path'}
+        title={disabled ? (api.disabledReason ?? 'Isolate logic path') : 'Isolate logic path'}
+        onClick={() => {
+          if (!disabled) toggle();
+        }}
+        className={cn(toolbarControlVariants({ active: ctx.isolateActive || open, disabled }))}
+      >
+        <Route aria-hidden="true" className="size-4" />
+        <span className="truncate">
+          {ctx.isolateActive ? `Isolating · ${modeLabel}` : 'Isolate'}
+        </span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label="Isolate logic path"
+        restoreFocusRef={triggerRef}
+      >
+        <MenuSection>Show the logic path</MenuSection>
+        <MenuItem
+          selected={ctx.isolateActive && ctx.isolateMode === 'full'}
+          onSelect={() => ctx.setIsolateMode('full')}
+        >
+          <Check
+            aria-hidden="true"
+            className={cn(
+              'size-4',
+              ctx.isolateActive && ctx.isolateMode === 'full' ? 'opacity-100' : 'opacity-0',
+            )}
+          />
+          Full logic path
+        </MenuItem>
+        <MenuItem
+          selected={ctx.isolateActive && ctx.isolateMode === 'driving'}
+          onSelect={() => ctx.setIsolateMode('driving')}
+        >
+          <Check
+            aria-hidden="true"
+            className={cn(
+              'size-4',
+              ctx.isolateActive && ctx.isolateMode === 'driving' ? 'opacity-100' : 'opacity-0',
+            )}
+          />
+          Driving path only
+        </MenuItem>
+        {ctx.isolateActive ? (
+          <MenuItem onSelect={() => ctx.toggleIsolate()}>
+            <span aria-hidden="true" className="size-4" />
+            Stop isolating
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </>
+  );
+}
+
 /** The checkbox body of the `View▾` popover — the display toggles, driven off the context. */
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
@@ -781,7 +880,8 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
  * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
  * clear-visual-placement under `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
- * under `VITE_CANVAS_LENSES` — placeholders only when the owning flag is off.)
+ * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV` —
+ * placeholders only when the owning flag is off.)
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom
@@ -884,6 +984,38 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     order: 4,
     label: 'Baseline overlay',
     icon: <Layers2 className="size-4" />,
+  };
+  // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/tier/order/label/icon each of the
+  // three ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
+  // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens
+  // shared-shape pattern). isolate/next-conflict lead the Find cluster (Row 1 · Look, view-only);
+  // snap-to-grid rides the pen-gated authoring cluster (Row 2 · Do).
+  const isolateShape = {
+    id: 'isolate-logic',
+    group: 'find' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 1,
+    label: 'Isolate logic path',
+    icon: <Route className="size-4" />,
+  };
+  const nextConflictShape = {
+    id: 'next-conflict',
+    group: 'find' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 2,
+    label: 'Next conflict',
+    icon: <TriangleAlert className="size-4" />,
+  };
+  const snapToGridShape = {
+    id: 'snap-to-grid',
+    group: 'tools' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 5,
+    label: 'Snap to grid',
+    icon: <Grid3x3 className="size-4" />,
   };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -1112,24 +1244,41 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           render: (ctx, api) => <FilterMenuControl ctx={ctx} api={api} />,
         }
       : placeholderItem(filterShape),
-    placeholderItem({
-      id: 'isolate-logic',
-      group: 'find',
-      row: 'look',
-      tier: 2,
-      order: 1,
-      label: 'Isolate logic path',
-      icon: <Route className="size-4" />,
-    }),
-    placeholderItem({
-      id: 'next-conflict',
-      group: 'find',
-      row: 'look',
-      tier: 2,
-      order: 2,
-      label: 'Next conflict',
-      icon: <TriangleAlert className="size-4" />,
-    }),
+    // Isolate logic path — flag-on a view-only menu-button that dims everything not on the selected
+    // activity's logic chain (full or driving-only, CQ-1), reusing the Stage A dim seam (spec
+    // `docs/specs/canvas-nav/`); flag-off the "Coming soon" placeholder, byte-for-byte. Enabled only with
+    // a selection AND a computed diagram; never pen-gated (navigating never mutates). Pressed when active.
+    CANVAS_NAV_ENABLED
+      ? {
+          ...isolateShape,
+          isActive: (ctx) => ctx.isolateActive,
+          // Diagram gate BEFORE the selection gate (an empty plan can't be traced at all).
+          isEnabled: (ctx) => ctx.hasDiagram && ctx.selectedActivity != null,
+          disabledReason: (ctx) =>
+            !ctx.hasDiagram
+              ? LENS_NO_DIAGRAM_REASON
+              : ctx.selectedActivity == null
+                ? ISOLATE_NO_SELECTION_REASON
+                : undefined,
+          render: (ctx, api) => <IsolateControl ctx={ctx} api={api} />,
+        }
+      : placeholderItem(isolateShape),
+    // Next conflict — flag-on a view-only button that cycles the plan's flagged activities (CQ-2), each
+    // centred + selected + announced (spec `docs/specs/canvas-nav/`); flag-off the "Coming soon"
+    // placeholder, byte-for-byte. Enabled only when there is ≥ 1 conflict; never pen-gated.
+    CANVAS_NAV_ENABLED
+      ? {
+          ...nextConflictShape,
+          isEnabled: (ctx) => ctx.hasConflicts,
+          disabledReason: (ctx) =>
+            !ctx.hasDiagram
+              ? LENS_NO_DIAGRAM_REASON
+              : ctx.hasConflicts
+                ? undefined
+                : 'No conflicts to review',
+          onActivate: (ctx) => ctx.goToNextConflict(),
+        }
+      : placeholderItem(nextConflictShape),
 
     // --- 4 · Tools / author (Row 2 · Do — pen-gated authoring cluster) ------------------------
     // The whole authoring cluster shades as one set when the pen isn't held (ADR-0028 + the ADR-0031
@@ -1208,17 +1357,34 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.openActivityNotes(),
         }
       : placeholderItem(addNoteShape),
-    // Snap-to-grid — a Visual-planning authoring aid (snaps hand-placed bars to working-day gridlines).
-    // Moved into the authoring cluster (was in the Lens group). Inline "Coming soon" icon.
-    placeholderItem({
-      id: 'snap-to-grid',
-      group: 'tools',
-      row: 'do',
-      tier: 2,
-      order: 5,
-      label: 'Snap to grid',
-      icon: <Grid3x3 className="size-4" />,
-    }),
+    // Snap-to-grid — a Visual-planning authoring aid (snaps hand-placed bars to the nearest working day
+    // on drop, spec `docs/specs/canvas-nav/`). Flag-on a pressed-state, pen-gated, Visual-mode toggle
+    // (mirrors Clear-visual-placement's gates: visible in both modes, disabled-with-reason outside
+    // Visual / without the pen / under the Late overlay); flag-off the "Coming soon" placeholder,
+    // byte-for-byte. The toggle only rounds the dropped day before the existing PATCH — the CPM engine +
+    // parity gate are untouched.
+    CANVAS_NAV_ENABLED
+      ? {
+          ...snapToGridShape,
+          penGated: true,
+          isVisible: () => SCHEDULING_MODES_ENABLED,
+          isActive: (ctx) => ctx.snapToGrid,
+          // Enabled only when it's actionable: Visual mode AND the pen/role AND not the read-only Late
+          // overlay. (Snap applies at the next drop; no selection is required.)
+          isEnabled: (ctx) =>
+            ctx.schedulingMode === 'VISUAL' && ctx.canEditSchedule && !ctx.lateOverlayActive,
+          // Precedence ladder mirrors Clear-visual-placement: mode → pen/role → Late overlay.
+          disabledReason: (ctx) =>
+            ctx.schedulingMode !== 'VISUAL'
+              ? 'Only available in Visual mode'
+              : !ctx.canEditSchedule
+                ? 'Start editing to snap placements'
+                : ctx.lateOverlayActive
+                  ? 'Turn off the Late-start overlay to snap placements'
+                  : undefined,
+          onActivate: (ctx) => ctx.toggleSnapToGrid(),
+        }
+      : placeholderItem(snapToGridShape),
     // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
     // falls back to the computed date, toolbar quick-wins F5). Only *meaningful* in Visual mode, but per
     // the registry's shade-don't-hide rule (ADR-0031 + docs/TOOLBAR_ROADMAP.md) it stays VISIBLE in both

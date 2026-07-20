@@ -275,6 +275,17 @@ describe('TSLD toolbar registry (two-row)', () => {
     }
   });
 
+  it('shows the canvas-nav features (isolate / next-conflict / snap) as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
+    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the three
+    // ids must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
+    renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
+    for (const name of ['Isolate logic path', 'Next conflict', 'Snap to grid']) {
+      const btn = screen.getByRole('button', { name });
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
+    }
+  });
+
   it('has no axe violations across both rows', async () => {
     const { container } = renderRows(ctx());
     expect((await axe(container)).violations).toEqual([]);

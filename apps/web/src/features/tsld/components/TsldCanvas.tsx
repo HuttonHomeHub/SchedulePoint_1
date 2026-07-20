@@ -59,6 +59,10 @@ export interface TsldCanvasHandle {
   /** Pan (no zoom) so the given calendar day (`YYYY-MM-DD`) sits at the left edge of the surface —
    * a pure **view** jump (ADR-0033 "Go to date"): no fetch, no persisted state, no schedule change. */
   goToDate: (iso: string) => void;
+  /** Pan (no zoom) so the given calendar day sits at the **horizontal centre** of the surface — the
+   * centred sibling of {@link goToDate}, used by *Next conflict* to bring a flagged bar to the middle
+   * (canvas nav, `docs/specs/canvas-nav/`). Same pure view transform; no fetch/persisted state. */
+  centerOnDate: (iso: string) => void;
 }
 
 /** Left inset (px) the "Go to date" jump leaves before the target day, so it isn't flush to the edge. */
@@ -439,6 +443,18 @@ export function TsldCanvas({
           sceneRef.current.dataDate,
           iso,
           GOTO_LEFT_INSET,
+        );
+        dirtyRef.current = true;
+        interactionDirtyRef.current = true;
+      },
+      centerOnDate: (iso: string) => {
+        // Centred variant of `goToDate` (canvas nav): the target day lands at the surface's horizontal
+        // centre (inset = half the measured width) rather than the left inset. Pure pan, same guarantees.
+        viewRef.current = panToDate(
+          viewRef.current,
+          sceneRef.current.dataDate,
+          iso,
+          sizeRef.current.width / 2,
         );
         dirtyRef.current = true;
         interactionDirtyRef.current = true;

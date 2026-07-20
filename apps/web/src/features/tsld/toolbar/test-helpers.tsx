@@ -89,6 +89,16 @@ export function makeTsldToolbarContext(
     hasActiveBaseline: false,
     varianceLoading: false,
     varianceError: false,
+    // Canvas navigation & authoring aids
+    isolateActive: false,
+    isolateMode: 'full',
+    toggleIsolate: vi.fn(),
+    setIsolateMode: vi.fn(),
+    conflictCount: 0,
+    hasConflicts: false,
+    goToNextConflict: vi.fn(),
+    snapToGrid: false,
+    toggleSnapToGrid: vi.fn(),
     ...overrides,
   };
 }

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_NAV_ENABLED,
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
@@ -30,8 +31,10 @@ import {
   matchesActivityFilter,
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
+import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
 import { resolveLensPalette } from '../render/palette';
 import { daysBetween, isMilestone, type Point } from '../render/render-model';
+import { snapToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
@@ -266,6 +269,7 @@ export function TsldPanel({
     createType,
     linkType,
     lensState,
+    navState,
   } = canvasUi ?? ownCanvasUi;
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
@@ -325,7 +329,7 @@ export function TsldPanel({
   const filterActive = CANVAS_LENSES_ENABLED && isFilterActive(filterQuery, filterAttrs);
   // The ids of the NON-matching activities (dimmed on the canvas + marked in the listbox). Absent when
   // no filter is active, so an empty/cleared filter dims nothing (parity).
-  const dimmedIds = useMemo<Set<string> | undefined>(() => {
+  const filterDimmedIds = useMemo<Set<string> | undefined>(() => {
     if (!filterActive) return undefined;
     const set = new Set<string>();
     for (const a of activities) {
@@ -333,6 +337,33 @@ export function TsldPanel({
     }
     return set;
   }, [filterActive, activities, filterQuery, filterAttrs]);
+  // ── Isolate logic path (canvas nav, `docs/specs/canvas-nav/`, behind `VITE_CANVAS_NAV`) ──────
+  // The selected activity's transitive logic chain (full or driving-only), memoised on the selection +
+  // edges + mode only — never per frame (perf; O(V+E)). Absent unless isolate is active AND something
+  // is selected, so flag-off / no-selection contributes NO dim (byte-for-byte parity).
+  const isolateChain = useMemo<Set<string> | undefined>(() => {
+    if (!CANVAS_NAV_ENABLED || !navState.isolateActive || selectedId === null) return undefined;
+    return computeLogicPath(selectedId, dependencies, { mode: navState.isolateMode });
+  }, [navState.isolateActive, navState.isolateMode, selectedId, dependencies]);
+  // The complement of the chain within the plan — the ids isolate dims. Reuses the Stage A dim seam.
+  const isolateDimmed = useMemo<Set<string> | undefined>(() => {
+    if (!isolateChain) return undefined;
+    return isolateDimmedIds(
+      activities.map((a) => a.id),
+      isolateChain,
+    );
+  }, [isolateChain, activities]);
+  // The scene's dim set is the UNION of the filter dim and the isolate dim (both recede a bar; the two
+  // are independent, dimming composes). Absent when neither is active ⇒ no `dimmedIds` scene field ⇒
+  // byte-for-byte today's paint.
+  const dimmedIds = useMemo<Set<string> | undefined>(() => {
+    if (!filterDimmedIds && !isolateDimmed) return undefined;
+    if (filterDimmedIds && !isolateDimmed) return filterDimmedIds;
+    if (!filterDimmedIds && isolateDimmed) return isolateDimmed;
+    const union = new Set(filterDimmedIds);
+    for (const id of isolateDimmed!) union.add(id);
+    return union;
+  }, [filterDimmedIds, isolateDimmed]);
   // The Colour-by fill + inside-label ink overrides. Criticality (the default) ⇒ `undefined` so the
   // painter's own criticality fills/inks run (byte-for-byte parity); the other modes precompute per-id
   // maps from the token palette. Re-resolved on a theme switch (`themeVersion`) so the recoloured bars
@@ -375,12 +406,52 @@ export function TsldPanel({
     }
     filterWasActiveRef.current = true;
     const total = activities.length;
-    const matched = total - (dimmedIds?.size ?? 0);
+    // Count against the FILTER dim only (not the combined `dimmedIds`, which may also carry the isolate
+    // complement) so "N of M match" reports the search/filter result truthfully.
+    const matched = total - (filterDimmedIds?.size ?? 0);
     const handle = setTimeout(() => {
       announce(matched === 0 ? 'No activities match.' : `${matched} of ${total} activities match.`);
     }, 400);
     return () => clearTimeout(handle);
-  }, [filterActive, activities.length, dimmedIds, announce]);
+  }, [filterActive, activities.length, filterDimmedIds, announce]);
+  // Announce isolate for AT (WCAG 4.1.3 / 1.4.1) — the canvas dimming + listbox marking are otherwise
+  // colour/emphasis-only. Fires on activate, selection change, or mode change; clears on exit. Isolate
+  // changes only on those (not per keystroke), so no debounce is needed. Inert when the flag is off.
+  const isolateWasActiveRef = useRef(false);
+  useEffect(() => {
+    if (!CANVAS_NAV_ENABLED) return;
+    if (!isolateChain || selectedId === null) {
+      if (isolateWasActiveRef.current) announce('');
+      isolateWasActiveRef.current = false;
+      return;
+    }
+    isolateWasActiveRef.current = true;
+    const target = activities.find((a) => a.id === selectedId);
+    const name = target?.name ?? 'the selected activity';
+    const count = isolateChain.size;
+    announce(
+      `Isolating ${count} ${count === 1 ? 'activity' : 'activities'} on the ${
+        navState.isolateMode === 'driving' ? 'driving' : 'full'
+      } logic path for ${name}.`,
+    );
+  }, [isolateChain, selectedId, navState.isolateMode, activities, announce]);
+  // Apply a Next-conflict selection command from the toolbar (canvas nav): select the requested activity
+  // so the canvas rings it (the toolbar centres it first, so the reveal-on-select pan is a no-op). De-
+  // duped by the signal's `nonce` so repeated jumps to the same id still fire. Inert when the flag is off.
+  // Sync the canvas selection from the toolbar's one-shot **select signal** (the external command system
+  // the effect subscribes to, de-duped by `nonce`). Set it WITHOUT announcing — the toolbar already
+  // announced "Conflict i of n", which a description announce would overwrite. This is the effect rule's
+  // endorsed "subscribe to an external system, setState in response" case (like the delete-reconcile
+  // effect below), so the direct setState is intentional.
+  const selectSignalSeenRef = useRef<number | null>(navState.selectSignal?.nonce ?? null);
+  useEffect(() => {
+    if (!CANVAS_NAV_ENABLED) return;
+    const signal = navState.selectSignal;
+    if (!signal || signal.nonce === selectSignalSeenRef.current) return;
+    selectSignalSeenRef.current = signal.nonce;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external one-shot signal → selection sync
+    if (activities.some((a) => a.id === signal.id)) setSelectedId(signal.id);
+  }, [navState.selectSignal, activities]);
 
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
@@ -654,6 +725,20 @@ export function TsldPanel({
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !onReposition) return;
       clearConflict();
+      // Snap to grid (canvas nav, `docs/specs/canvas-nav/`, Visual mode): round the dropped day to the
+      // nearest working day BEFORE the PATCH — only in Visual mode (`barDateSource === 'visual'`), only
+      // when the toggle is on, and only when a day actually changed. Off / flag-off ⇒ the raw dropped
+      // day, byte-for-byte (the PATCH contract, undo record and auto-recalc are all unchanged; this only
+      // adjusts the day value fed into the existing `startDay`). The snapped value drives BOTH the
+      // optimistic ghost and the write so the preview matches what saves.
+      const snappedStartDay =
+        CANVAS_NAV_ENABLED &&
+        navState.snapToGrid &&
+        barDateSource === 'visual' &&
+        intent.startDay !== undefined &&
+        workingDayPredicate
+          ? snapToWorkingDay(intent.startDay, workingDayPredicate)
+          : intent.startDay;
       // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
       // activity's current geometry so the optimistic ghost sits at the resulting day+lane.
       const span =
@@ -662,14 +747,14 @@ export function TsldPanel({
           : 0;
       const currentStartDay =
         activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
-      const startDay = intent.startDay ?? currentStartDay;
+      const startDay = snappedStartDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
       // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
       pointerRepositionBusyRef.current = true;
       void onReposition({
         activityId: intent.activityId,
-        ...(intent.startDay !== undefined ? { startDay: intent.startDay } : {}),
+        ...(snappedStartDay !== undefined ? { startDay: snappedStartDay } : {}),
         ...(intent.laneIndex !== undefined ? { laneIndex: intent.laneIndex } : {}),
       })
         .then((outcome) => {
@@ -921,12 +1006,19 @@ export function TsldPanel({
               }}
             >
               {activities.map((a) => {
-                // Insight-lens filter (`docs/specs/canvas-lenses/`): mirror the canvas dimming in the
-                // parallel listbox so the filter isn't conveyed by colour/emphasis alone (WCAG 1.4.1).
-                // A non-matching option keeps a spoken "(filtered out)" suffix but stays fully
-                // selectable/navigable (dim-not-hide) — so NO `aria-disabled`, which would wrongly
-                // signal an inoperable option (a11y review).
-                const filteredOut = dimmedIds?.has(a.id) ?? false;
+                // Mirror the canvas dimming in the parallel listbox so it isn't conveyed by
+                // colour/emphasis alone (WCAG 1.4.1). Isolate (canvas nav) and the insight-lens filter
+                // (`docs/specs/canvas-lenses/`) each carry their own wording; a marked option stays fully
+                // selectable/navigable (dim-not-hide) — so NO `aria-disabled`, which would wrongly signal
+                // an inoperable option (a11y review). Isolate takes precedence when both dim a row (its
+                // announcement is the active context).
+                const offPath = isolateDimmed?.has(a.id) ?? false;
+                const filteredOut = filterDimmedIds?.has(a.id) ?? false;
+                const marker = offPath
+                  ? ' (off the logic path)'
+                  : filteredOut
+                    ? ' (filtered out)'
+                    : '';
                 return (
                   <li
                     key={a.id}
@@ -935,7 +1027,7 @@ export function TsldPanel({
                     aria-selected={a.id === selectedId}
                   >
                     {optionDescriptions.get(a.id)}
-                    {filteredOut ? ' (filtered out)' : ''}
+                    {marker}
                   </li>
                 );
               })}

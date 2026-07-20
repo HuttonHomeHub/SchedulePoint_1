@@ -503,3 +503,26 @@ export const UNDO_REDO_ENABLED = flagDefaultOn(import.meta.env.VITE_UNDO_REDO);
  * additively.
  */
 export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_LENSES);
+
+/**
+ * TSLD canvas navigation & authoring aids (spec `docs/specs/canvas-nav/`). **OFF by default during
+ * build** — it flips on after the specialist reviews (a11y / ux / component / perf) are green (M4). When
+ * on, it turns three shaded Look/Do-row toolbar placeholders into real client-side commands over
+ * already-shipped engine output + freshly-shipped seams — no new API/schema/`@repo/types`/CPM-engine
+ * change (the recalc parity gate is untouched):
+ *
+ * - **Isolate logic path** — dims every activity NOT on the selected activity's transitive
+ *   predecessor+successor chain (full, or a driving-only sub-chain from `DependencySummary.isDriving`),
+ *   reusing the Stage A `dimmedIds` dim seam (unioned with any active filter dim) + the a11y listbox mark.
+ * - **Next conflict** — cycles the plan's flagged activities (constraintViolated / visualConflict /
+ *   externalDriven / levelingWindowExceeded / negative total float), each centred + selected + announced.
+ * - **Snap to grid** — a Visual-mode, pen-gated session toggle that rounds a dropped `visualStart` to the
+ *   nearest working day (via the existing `isWorkingDay`) before the existing `setVisualStart` PATCH.
+ *
+ * Each of the three ids resolves to its real behaviour when on, and to its existing `placeholderItem()`
+ * "Coming soon" stub when off — and the `TsldScene` carries no new `dimmedIds` contribution and the
+ * Visual drag path is unchanged — so `VITE_CANVAS_NAV=false` restores the toolbar AND the canvas paint
+ * AND the a11y tree byte-for-byte (the parity gate at every step). Isolate/Next-conflict are view-only
+ * (every role); Snap is an authoring aid (pen + Visual mode). Set `VITE_CANVAS_NAV=true` to enable it.
+ */
+export const CANVAS_NAV_ENABLED = flagDefaultOff(import.meta.env.VITE_CANVAS_NAV);

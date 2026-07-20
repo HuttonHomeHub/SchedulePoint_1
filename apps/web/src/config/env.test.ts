@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CANVAS_LENSES_ENABLED,
+  CANVAS_NAV_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
   flagDefaultOff,
@@ -48,5 +49,14 @@ describe('CANVAS_LENSES_ENABLED', () => {
     // VITE_CANVAS_LENSES=false ships the four ids as their disabled/"Coming soon" stubs and the canvas
     // paints byte-for-byte today's — the rollback path.
     expect(CANVAS_LENSES_ENABLED).toBe(true);
+  });
+});
+
+describe('CANVAS_NAV_ENABLED', () => {
+  it('is OFF by default during build (flagDefaultOff; no VITE_CANVAS_NAV set)', () => {
+    // Canvas nav (isolate / next-conflict / snap) ships dark until M4 flips it on after the specialist
+    // reviews are green. Off by default ⇒ the three ids resolve to their "Coming soon" placeholders, no
+    // new dimmedIds, and the Visual drag path is byte-for-byte today's (the parity gate).
+    expect(CANVAS_NAV_ENABLED).toBe(false);
   });
 });

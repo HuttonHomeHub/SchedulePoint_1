@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 
+import { orderedConflicts, nextConflictIndex } from '../render/conflicts';
+
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
@@ -80,7 +82,9 @@ export function useTsldToolbarContext({
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setPlanMode = useSetPlanSchedulingMode(orgSlug);
 
-  const activities = model.activities.data ?? [];
+  // Stabilise the activities reference (a `?? []` is a fresh array each render) so the memos keyed on it
+  // (the conflict ordering + `goToNextConflict`) don't rebuild every render.
+  const activities = useMemo(() => model.activities.data ?? [], [model.activities.data]);
   const hasDiagram =
     activities.length > 0 &&
     activities.some((a) => a.earlyStart !== null) &&
@@ -160,7 +164,45 @@ export function useTsldToolbarContext({
     toggleFilterAttr,
     setColourMode,
     toggleBaselineOverlay,
+    navState,
+    toggleIsolate,
+    setIsolateMode,
+    setConflictCursorId,
+    toggleSnapToGrid,
+    requestSelectActivity,
   } = canvasUi;
+
+  // Canvas nav (VITE_CANVAS_NAV): the plan's flagged activities in stable order (CQ-2), memoised on the
+  // activities only so it never rebuilds per render. `goToNextConflict` reads it to advance the cursor,
+  // centre + select the hit, and announce; `conflictCount`/`hasConflicts` gate the toolbar item. Nothing
+  // reads any of this while the flag is off (the id resolves to its placeholder stub), so it is inert.
+  const orderedConflictHits = useMemo(() => orderedConflicts(activities), [activities]);
+  const goToNextConflict = useMemo(
+    () => (): void => {
+      if (orderedConflictHits.length === 0) return;
+      const index = nextConflictIndex(navState.conflictCursorId, orderedConflictHits);
+      const hit = orderedConflictHits[index];
+      if (!hit) return;
+      setConflictCursorId(hit.id);
+      // Centre the flagged bar (a small centred variant of `goToDate`), then lift the selection to it —
+      // the canvas rings it; the reveal-on-select pan is then a no-op since it is already centred.
+      const activity = activities.find((a) => a.id === hit.id);
+      if (activity?.earlyStart) canvasControlRef.current?.centerOnDate(activity.earlyStart);
+      requestSelectActivity(hit.id);
+      announce(
+        `Conflict ${index + 1} of ${orderedConflictHits.length}: ${hit.name} — ${hit.reasons.join(', ')}.`,
+      );
+    },
+    [
+      orderedConflictHits,
+      navState.conflictCursorId,
+      setConflictCursorId,
+      activities,
+      canvasControlRef,
+      requestSelectActivity,
+      announce,
+    ],
+  );
 
   // Insight lenses (VITE_CANVAS_LENSES): the Baseline-overlay gate reads the SAME variance query the
   // activities table + the ghost builder consume (route-composed in the model) — no new fetch. An
@@ -310,6 +352,18 @@ export function useTsldToolbarContext({
       hasActiveBaseline,
       varianceLoading,
       varianceError,
+
+      // Canvas nav (VITE_CANVAS_NAV) — the isolate/next-conflict/snap view state + commands. Inert while
+      // the flag is off (the three ids resolve to their placeholder stubs).
+      isolateActive: navState.isolateActive,
+      isolateMode: navState.isolateMode,
+      toggleIsolate,
+      setIsolateMode,
+      conflictCount: orderedConflictHits.length,
+      hasConflicts: orderedConflictHits.length > 0,
+      goToNextConflict,
+      snapToGrid: navState.snapToGrid,
+      toggleSnapToGrid,
     }),
     [
       zoomPreset,
@@ -367,6 +421,16 @@ export function useTsldToolbarContext({
       hasActiveBaseline,
       varianceLoading,
       varianceError,
+      // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
+      // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
+      navState.isolateActive,
+      navState.isolateMode,
+      navState.snapToGrid,
+      toggleIsolate,
+      setIsolateMode,
+      toggleSnapToGrid,
+      orderedConflictHits.length,
+      goToNextConflict,
     ],
   );
 }
