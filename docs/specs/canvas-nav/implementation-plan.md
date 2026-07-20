@@ -1,7 +1,7 @@
 # Implementation Plan: TSLD canvas navigation & authoring aids
 
 - **Feature spec:** `docs/specs/canvas-nav/feature-spec.md`
-- **Status:** Draft (awaiting approval)
+- **Status:** Approved (2026-07-19). Decisions: **CQ-1** Isolate ships a **full/driving toggle** (both modes in v1, from `isDriving`); **CQ-2** Next-conflict cycles the **5-flag set** (constraintViolated, visualConflict, externalDriven, levelingWindowExceeded, negative total-float; ordered earlyStart→lane→id); **CQ-3** Snap is **session-local, nearest-working-day**. Single flip at M4.
 - **Owner:** TBD
 
 ## Breakdown
