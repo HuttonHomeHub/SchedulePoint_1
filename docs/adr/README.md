@@ -61,3 +61,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0043](0043-inter-project-external-dates.md)                    | Inter-project external dates (M1)              | Accepted |
 | [0044](0044-resource-curves-accrual-steps.md)                   | Resource curves, cost accrual & weighted steps | Accepted |
 | [0045](0045-live-cross-plan-programme-scheduling.md)            | Live cross-plan / programme scheduling (M2)    | Accepted |
+| [0049](0049-canvas-axis-aligned-resource-strip.md)              | Canvas-axis-aligned resource strip             | Proposed |

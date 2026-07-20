@@ -5,7 +5,7 @@
 - **Date:** 2026-07-20
 - **Tracking issue / epic:** _TBD_ — Canvas toolbar/workspace programme, Stage E
 - **Roadmap link:** TSLD toolbar roadmap (`docs/TOOLBAR_ROADMAP.md`) — `resource-view` lens item
-- **Related ADR(s):** ADR-0031 (toolbar item registry / lens group), ADR-0030 (resizable-panel primitive), ADR-0026 (canvas draw budget), ADR-0039/0041/0044 (resource model, levelling, loading curves) — **no new ADR required** (see §4)
+- **Related ADR(s):** **ADR-0049** (canvas-axis-aligned resource strip — the render layer + coordinate seam, amends ADR-0026), ADR-0031 (toolbar item registry / lens group), ADR-0030 (resizable-panel primitive), ADR-0026 (canvas coordinate/viewport model + draw budget), ADR-0039/0041/0044 (resource model, levelling, loading curves)
 
 ---
 
@@ -456,8 +456,146 @@ primitive, add an on-bar highlight over shipped levelling flags; new dark flag
 
 ---
 
+## 4.6 Design pass — the canvas-axis-aligned resource strip (ui-architect, 2026-07-20)
+
+Following the Q1 resolution (**build the axis-aligned strip, not the modal**), this pass fixes
+the render layer, the coordinate seam, and the layout. The significant render-layer choice is
+recorded as **ADR-0049** (amends ADR-0026). M1's shape below supersedes the earlier "dock the
+shipped modal" M1 in the implementation plan.
+
+### Recommendation in one line
+
+Draw the strip's demand bars on a **Canvas 2D sibling layer painted by the existing
+`TsldCanvas` render loop from the same `viewRef`** — the third layer in the ADR-0026 stack
+(scene · interaction overlay · **resource strip**) — with all strip _chrome_ (resource picker,
+bucket `Select`, the reused accessible `<table>`) in a DOM host. This guarantees frame-perfect
+alignment by construction and reuses the cull / dirty-flag / theme-re-resolve machinery.
+
+### Q1 — Render layer: Canvas sibling layer (recommended) vs viewport-synced DOM/SVG
+
+**Canvas sibling layer.** The whole product ask is that the bars co-move with the diagram at
+every pan/zoom frame. `TsldCanvas` already runs one `rAF` loop over one authoritative
+`viewRef: Viewport` and repaints dirty frames; the date-ruler and hit-testing already read the
+same `screenXOfDay(day) = originX + day·pxPerDay` mapping so they can never disagree. Painting
+the strip in that same loop from that same `viewRef` inherits frame-perfect alignment with
+**zero desync surface**, stays within the ADR-0026 draw budget (O(visible buckets), far below
+the 2,000-activity envelope), and reuses culling + the theme re-resolve. The a11y gap a canvas
+opens is already solved by the shipped `ResourceHistogram` pattern (aria-hidden chart + real
+`<table>`), which we reuse. A viewport-synced **DOM/SVG** strip was rejected: to stay aligned
+during pan it needs its own rAF reading a shared viewport ref (a one-frame desync risk against
+the very canvas it must track), a container `scaleX` distorts bar borders and over-allocation
+badges, and its "native a11y" upside is illusory (positioned `<div>` bars tell a screen reader
+nothing — we'd render the parallel table regardless). See ADR-0049 for the full weighing.
+
+### Q2 — The exact coordinate-sharing seam
+
+The strip **shares** the viewport; it must never own one.
+
+- **Reserve height, share the x-axis.** A dedicated `aria-hidden` sibling `<canvas>` is pinned
+  as a fixed-height band at the **bottom of the `TsldCanvas` container**. When active,
+  `measure()` subtracts the strip band height from the _scene_ canvas's drawable height exactly
+  as `RULER_HEIGHT` is already subtracted from the top; when inactive it reserves nothing, so
+  the scene stays byte-for-byte today's (parity gate).
+- **Two dirty flags, decoupled (ADR-0026 model).** Add `stripDirtyRef` (set by _data_ changes:
+  selected resource, granularity, series refetch, theme re-resolve) alongside the existing
+  `dirtyRef` (set by _viewport_ changes: pan/zoom/resize). The strip repaints when **either**
+  is set. A viewport move already sets `dirtyRef` (the scene repaints that frame anyway), so the
+  strip **re-aligns for free** on the same frame; a granularity/resource switch sets only
+  `stripDirtyRef`, repainting the strip **without** repainting the main scene — the same
+  separation the interaction overlay already uses (`interactionDirtyRef`). **No main-scene
+  repaint is triggered by strip-only changes.**
+- **Data in through a ref (no per-frame React).** The DOM host `ResourceStripPanel` owns the
+  `useResourceHistogram` / `useResources` queries and publishes an immutable `stripRef` snapshot
+  — the selected series `values`, the bucket axis pre-projected to day offsets
+  (`daysBetween(dataDate, bucket.start|end)`), and the resolved strip palette — into
+  `TsldCanvas`; writing the ref sets `stripDirtyRef`. This mirrors the existing `pendingRef` /
+  `selectionAnchorRef` seams (ADR-0026 D3). Bucket `i` draws at
+  `x1 = screenXOfDay(dayOffset(start_i))` … `x2 = screenXOfDay(dayOffset(end_i))`, so a WEEK
+  bucket spans exactly 7 day-columns and a MONTH bucket ~30 — alignment is definitional. The
+  strip culls buckets whose `[x1, x2)` falls outside the surface, like the scene.
+- **Note on granularity vs zoom.** Bucket granularity (Day/Week/Month) is a _separate_ control
+  from canvas zoom: the planner can read Month buckets while zoomed to day columns; the month
+  bar simply spans its ~30 columns. This is honest and desired, not a bug.
+
+### Q3 — Vertical layout / height contention (resolved)
+
+**The strip is not a second workspace bottom dock.** It is a fixed-height band at the bottom of
+the **canvas region itself** (inside `TsldPanel`/`TsldCanvas`), above the activities bottom
+dock. It therefore rides the canvas's own height budget and shares the canvas x-axis — which is
+exactly what "axis-aligned" requires — and the activities dock keeps its existing
+`CANVAS_MIN_HEIGHT` clamp untouched. This dissolves the feature-analyst's "two bottom docks
+contend for height" risk: the two never compete, because the strip lives _within_ the canvas
+pane, not beside the activity pane. The strip band has a small fixed default height with an
+optional in-canvas resize (its own clamp, independent of the activities `PanelResizer`).
+**Below `md`** the workspace is already a single-pane Diagram/Activities toggle; the strip rides
+the **Diagram** pane (it is part of the canvas surface), so no third pane is introduced.
+
+### Q4 — Resource selection
+
+The read-model is per-resource; a thin strip shows **one** resource at a time. The
+`ResourceStripPanel` header carries a **resource picker** (a `Select`/combobox populated from
+`useResources`, reusing the modal's `nameById` name resolution) and the reused **bucket-size
+`Select`**. Default selection: the first (or most-loaded) series. States reuse the modal's exact
+copy — loading ("Loading histogram…"), error ("Couldn't load the resource histogram." + Try
+again), and empty ("No resource loading to show yet — assign resources with budgeted units and
+recalculate the schedule."). When nothing is selectable, the canvas strip layer draws nothing
+and the DOM band shows the empty state. (A small multi-resource stack is a possible fast-follow;
+v1 is single-resource to fit the band.)
+
+### Q5 — Accessibility
+
+The strip canvas is `aria-hidden`; the `ResourceStripPanel` renders the shipped
+`ResourceHistogram`'s real, keyboard-navigable `<table>` (scope-ed headers + caption) as the
+accessible equivalent, inside a `<section aria-label="Resource loading">` (a landmark name
+distinct from "Activities panel"). The parallel table is reachable by keyboard (default: shown
+in the band, or one disclosure control away if the band is height-constrained — the
+accessibility-reviewer confirms whether it must be always-rendered vs disclosure-gated). The
+strip palette re-resolves from design tokens on the shared `useThemeVersion` bump (Canvas 2D
+`fillStyle` can't take a `var()`), like the main painter, so it is theme-aware. M2/M3
+over-allocation cues are never colour-only (pattern/glyph + table marking + announced count).
+
+### Q6 — Vertical scale
+
+Bar height auto-fits the selected resource's **whole-series** peak (`max` over _all_ buckets,
+not just the visible ones) so bars **do not rescale while panning** (a viewport-derived scale
+would be disorienting). A single labelled max tick sits at the top of the band; exact per-bucket
+values live in the parallel table. **No capacity** is available yet (the read-model is
+demand-only), so a capacity reference line is **deferred to M3** (needs an API touch, Q4).
+
+### Data + coordinate flow
+
+```mermaid
+flowchart TB
+  subgraph DOM["ResourceStripPanel (DOM host, aria-labelled section)"]
+    PICK["Resource picker (useResources)"]
+    BKT["Bucket-size Select (reused)"]
+    TBL["Accessible &lt;table&gt; (reused from ResourceHistogram)"]
+    HQ["useResourceHistogram →\nGET …/schedule/resource-histogram (demand-only)"]
+    SNAP["publish stripRef snapshot\n(series values + bucket day-offsets + palette)\n→ sets stripDirtyRef"]
+  end
+  subgraph CANVAS["TsldCanvas — one rAF loop (ADR-0026)"]
+    VIEW["viewRef: Viewport\n(pxPerDay, originX, originY)"]
+    SX["screenXOfDay(day) = originX + day·pxPerDay\n(shared by scene, ruler, hit-test, strip)"]
+    L1["Layer 1 · scene canvas (dirtyRef)"]
+    L2["Layer 2 · interaction overlay (interactionDirtyRef)"]
+    L3["Layer 3 · resource strip canvas (aria-hidden)\nrepaint when dirtyRef OR stripDirtyRef"]
+  end
+
+  HQ --> SNAP --> L3
+  PICK --> SNAP
+  BKT --> SNAP
+  HQ --> TBL
+  VIEW --> SX --> L1
+  SX --> L3
+  VIEW -. "pan/zoom sets dirtyRef\n→ strip re-aligns same frame" .-> L3
+```
+
+---
+
 ## 5. Links
 
+- Render-layer decision: `docs/adr/0049-canvas-axis-aligned-resource-strip.md` (amends ADR-0026)
+- Design pass (this doc): §4.6 — the canvas-axis-aligned strip, render layer + coordinate seam
 - Implementation plan: `docs/specs/canvas-resource-view/implementation-plan.md`
 - Toolbar roadmap entry: `docs/TOOLBAR_ROADMAP.md` (`resource-view`)
 - Reused component: `apps/web/src/features/resources/components/ResourceHistogram.tsx`
