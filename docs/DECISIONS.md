@@ -955,3 +955,23 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
     a controlled `TsldCanvas.loePickStartId` prop) so it survives a pointer-picked finish (WCAG 4.1.3). A
     distinct engine Hammock (a behaviourally-different span) remains an optional future sub-stage (plan
     M-D3), not built. No standalone ADR (client interaction on ADR-0031/0032/0048).
+- **Canvas resource view + over-allocation highlight (Stage E, `VITE_CANVAS_RESOURCE_VIEW`, on by default
+  2026-07-20; ADR-0049).** The `resource-view` "Coming soon" placeholder becomes a real Look-row lens that
+  toggles a **canvas-axis-aligned demand strip** — a Canvas 2D **sibling layer** (the third ADR-0026 layer:
+  scene · interaction · strip) painted by the existing `TsldCanvas` rAF loop from the SAME `viewRef`, so
+  bucketed resource-loading bars sit under the diagram's day/week/month columns and pan/zoom with zero
+  desync. The band is reserved via `measure()` only when active (`stripBand = active ? RESOURCE_STRIP_HEIGHT
+: 0`), with dual dirty flags (`dirtyRef` viewport + `stripDirtyRef` data) and a whole-series
+  viewport-independent y-scale; strip _chrome_ (resource picker + reused bucket-size `Select` + reused
+  accessible `<table>`) is DOM in a `ResourceStripPanel` docked above the band, strip _bars_ are canvas. A
+  sibling `over-allocation` lens rings over-allocated bars with a rising-histogram **shape** badge (warning
+  hue, distinct from the constraint pin / conflict / lane-overlap cues; + listbox marker + polite count
+  announcement), derived purely from the shipped levelling flags (`levelingWindowExceeded`/
+  `selfOverAllocated`) as a default-absent `TsldScene.flaggedIds`. **Frontend-only** over the already-shipped
+  resource-histogram read-model (`useResourceHistogram`) — no API/schema/`@repo/types`/CPM-engine change, so
+  the recalc parity gate is structurally trivial; flag-off (or curves-off) ⇒ both ids are their placeholders
+  and the canvas reserves no band and paints byte-for-byte today's. Gated on `RESOURCE_CURVES_ENABLED` (the
+  data source). Review-hardened before flip: the shared `ResourceLoadingTable`/`BucketSizeSelect` extraction
+  is now consumed by both the strip and the modal `ResourceHistogram` (no duplication), the chrome no longer
+  occludes the band, the over-allocation toggle can't stick on (enabled while active), the strip section has a
+  visible focus ring, and integration/hook e2e coverage lands. See ADR-0049.

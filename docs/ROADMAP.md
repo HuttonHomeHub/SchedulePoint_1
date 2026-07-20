@@ -138,6 +138,14 @@ keep `main` releasable.
   already-shipped LOE engine (a raw `HAMMOCK` is never created — the LOE **is** the span-derived
   hammock); no API/schema/engine change (spec `docs/specs/canvas-activity-types/`). Stage D of the
   toolbar-placeholder burn-down.
+- **Canvas resource view (web).** The `resource-view` toolbar placeholder wired to a
+  **canvas-axis-aligned demand strip** and **on by default** (`VITE_CANVAS_RESOURCE_VIEW`): a Canvas 2D
+  sibling layer painted by the TsldCanvas rAF loop from the same viewport (bucketed resource-loading bars
+  stay under the diagram's day/week/month columns under pan/zoom, ADR-0049), with a DOM strip panel
+  (resource picker + bucket-size select + accessible table) reading the shipped histogram read-model. A
+  sibling **Flag over-allocated** lens rings over-allocated bars with a shape badge (+ listbox marker +
+  count announcement) from the shipped levelling flags. Frontend-only; no API/schema/engine change (spec
+  `docs/specs/canvas-resource-view/`). Stage E of the toolbar-placeholder burn-down.
 
 ## Next
 
