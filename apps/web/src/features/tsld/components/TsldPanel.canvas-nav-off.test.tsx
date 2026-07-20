@@ -3,12 +3,17 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-// CANVAS_NAV is LEFT AT ITS DEFAULT (off) — this suite pins only the surrounding flags — so even with
-// isolate "armed" in the shared state, the panel must contribute NO dim / listbox marking (the flag-off
-// paint-parity gate). Editing / authoring off to keep the read surface simple.
+// CANVAS_NAV is PINNED OFF here — so even with isolate "armed" in the shared state, the panel must
+// contribute NO dim / listbox marking (the flag-off paint-parity gate). Editing / authoring off to keep
+// the read surface simple.
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: false, CANVAS_AUTHORING_ENABLED: false };
+  return {
+    ...actual,
+    TSLD_EDITING_ENABLED: false,
+    CANVAS_AUTHORING_ENABLED: false,
+    CANVAS_NAV_ENABLED: false,
+  };
 });
 
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';

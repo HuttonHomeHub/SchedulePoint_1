@@ -21,6 +21,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // stays the disabled stub and filter/colour-by/baseline-overlay stay "Coming soon" placeholders. The
   // real flag-on lens controls are covered in tsld-toolbar-lenses.test.tsx.
   CANVAS_LENSES_ENABLED: false,
+  // Pin canvas nav OFF here too: isolate / next-conflict / snap stay "Coming soon" placeholders. The
+  // real flag-on nav controls are covered in tsld-toolbar-canvas-nav.test.tsx.
+  CANVAS_NAV_ENABLED: false,
 }));
 
 const spies = {

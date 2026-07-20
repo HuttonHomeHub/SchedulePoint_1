@@ -23,6 +23,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   SCHEDULING_MODES_ENABLED: true,
+  // Pin canvas nav OFF here: this suite proves the flag-off conflict gate (P-sug1) — `orderedConflicts`
+  // must not run, so the conflict surface degrades to zero/null. The flag-on conflict derivation is
+  // covered in use-tsld-toolbar-context-canvas-nav.test.tsx.
+  CANVAS_NAV_ENABLED: false,
 }));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),

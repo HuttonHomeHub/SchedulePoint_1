@@ -114,6 +114,14 @@ keep `main` releasable.
   culled within the ADR-0026 draw budget; no API/schema/engine change (spec `docs/specs/canvas-lenses/`).
   Driving-resource colouring is a deferred fast-follow (needs `VITE_RESOURCES`). Stage A of the
   toolbar-placeholder burn-down.
+- **Canvas navigation & authoring aids (web).** Three more toolbar placeholders wired to already-shipped
+  engine output as pure client-side commands and **on by default** (`VITE_CANVAS_NAV`): **Isolate logic
+  path** (a split button dimming everything off the selected activity's transitive predecessor+successor
+  chain — full, or driving-only — reusing the Stage A dim seam), **Next conflict** (cycles the plan's
+  flagged activities — constraint/visual/external/levelling/negative-float — centring, selecting and
+  announcing each with a visible "Conflict i of n · reason" chip), and **Snap to grid** (a Visual-mode,
+  pen-gated toggle rounding a dropped `visualStart` to the nearest working day). No API/schema/engine
+  change (spec `docs/specs/canvas-nav/`). Stage B of the toolbar-placeholder burn-down.
 
 ## Next
 
