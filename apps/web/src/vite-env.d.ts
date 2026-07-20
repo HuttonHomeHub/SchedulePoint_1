@@ -55,4 +55,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_LENSES?: string;
   /** TSLD canvas navigation & authoring aids — Isolate logic path (dim off-chain), Next conflict (cycle flagged activities), Snap to grid (round Visual drops to a working day), wiring three toolbar placeholders to shipped data (docs/specs/canvas-nav/). "true"/"1" enables it; off by default during build (flips on at M4). */
   readonly VITE_CANVAS_NAV?: string;
+  /** TSLD export & print — turns the `export`/`print` toolbar placeholders into real client-side deliverables: Schedule (CSV), Diagram (PNG/PDF), Browser Print, off already-shipped data + the canvas renderer (docs/specs/export-print/). "true"/"1" enables it; off by default during build (flips on at M5). */
+  readonly VITE_EXPORT_PRINT?: string;
 }

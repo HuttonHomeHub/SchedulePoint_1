@@ -1,6 +1,7 @@
 import type { ActivitySummary, ActivityType, DependencyType, SchedulingMode } from '@repo/types';
 import type { ReactNode } from 'react';
 
+import type { ExportScope } from '../export/export-csv';
 import type { ColourMode, FilterAttr } from '../render/lenses';
 import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
@@ -223,4 +224,24 @@ export interface TsldToolbarContext {
   /** Toggle *Snap to grid* on/off (pen-gated + Visual mode; rounds a dropped `visualStart` to the
    * nearest working day before the existing PATCH). */
   toggleSnapToGrid: () => void;
+
+  // --- Export & print (VITE_EXPORT_PRINT, spec `docs/specs/export-print/`) -------------------
+  // Client-side deliverables over already-shipped data + the shipped canvas renderer — no API/schema/
+  // engine change. Populated on every build but derived cheaply when the flag is off (nothing reads
+  // them then: the `export`/`print` ids resolve to their `placeholderItem()` stubs), so they are inert.
+  /** Serialise the activity table to an Excel-safe, injection-safe CSV and download it (scope `'all'`
+   * = every activity; `'matching'` = the lens-narrowed subset, CQ-3), announcing the download (M1). */
+  exportScheduleCsv: (scope: ExportScope) => void;
+  /** Render the whole diagram to a PNG off-screen and download it (M2 — no-op stub until then). */
+  exportDiagramPng: () => void;
+  /** Render the whole diagram to a single-page PDF and download it (M3 — no-op stub until then). */
+  exportDiagramPdf: () => void;
+  /** Print the whole diagram via the browser print dialog (M4 — no-op stub until then). */
+  printDiagram: () => void;
+  /** True when a Stage-A filter or Stage-B isolate lens is currently narrowing the set — gates the
+   * conditional **Matching activities only (N)** CSV item (CQ-3). False (item hidden) with no lens
+   * active or when `VITE_EXPORT_PRINT` is off. */
+  filterActive: boolean;
+  /** How many activities match the active lens — the **N** in "Matching activities only (N)". */
+  matchingCount: number;
 }

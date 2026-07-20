@@ -24,6 +24,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // Pin canvas nav OFF here too: isolate / next-conflict / snap stay "Coming soon" placeholders. The
   // real flag-on nav controls are covered in tsld-toolbar-canvas-nav.test.tsx.
   CANVAS_NAV_ENABLED: false,
+  // Pin export & print OFF here too (this is the flag-off registry suite): `export`/`print` stay their
+  // "Coming soon" placeholders. The real flag-on Export menu is covered in tsld-toolbar-export.test.tsx.
+  EXPORT_PRINT_ENABLED: false,
 }));
 
 const spies = {

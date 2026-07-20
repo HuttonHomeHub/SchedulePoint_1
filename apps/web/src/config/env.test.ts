@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  EXPORT_PRINT_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
   flagDefaultOff,
@@ -59,5 +60,14 @@ describe('CANVAS_NAV_ENABLED', () => {
     // resolves the three ids to their "Coming soon" placeholders, adds no new dimmedIds, and leaves the
     // Visual drag path byte-for-byte today's — the rollback path / parity gate.
     expect(CANVAS_NAV_ENABLED).toBe(true);
+  });
+});
+
+describe('EXPORT_PRINT_ENABLED', () => {
+  it('is OFF during build (dark, no VITE_EXPORT_PRINT set) — it flips on at M5', () => {
+    // Export & print ships DARK behind `flagDefaultOff` while its specialist reviews run; it flips to
+    // `flagDefaultOn` at the M5 enablement milestone. Until then `export`/`print` resolve to their
+    // "Coming soon" placeholders (byte-for-byte today's toolbar) — the dark-by-default guard.
+    expect(EXPORT_PRINT_ENABLED).toBe(false);
   });
 });

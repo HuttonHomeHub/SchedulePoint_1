@@ -1,6 +1,12 @@
+import type { ActivitySummary } from '@repo/types';
 import { useMemo } from 'react';
 
+import { downloadBlob } from '../export/download';
+import { buildScheduleCsv } from '../export/export-csv';
+import { buildExportFilename } from '../export/filename';
 import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
+import { isFilterActive, matchesActivityFilter } from '../render/lenses';
+import { computeLogicPath } from '../render/logic-path';
 
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
@@ -14,7 +20,9 @@ import type {
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
@@ -243,6 +251,52 @@ export function useTsldToolbarContext({
   const varianceLoading = model.variance.isPending;
   const varianceError = model.variance.isError;
 
+  // Export & print (VITE_EXPORT_PRINT): the lens-narrowed "matching" set the conditional CSV item
+  // exports (CQ-3). Gated on the flag so flag-off adds nothing — mirroring how canvas-nav gated
+  // `orderedConflicts`: off ⇒ no lens predicate runs and `filterActive`/`matchingCount` degrade to
+  // false/0 (the flag's "flag-off ⇒ zero cost" + byte-for-byte contract). On ⇒ a bar matches when it
+  // passes BOTH the Stage-A filter (search + attributes) AND, if isolate is active with a selection, the
+  // Stage-B logic chain — the same predicates the canvas dims by (`render/lenses` + `render/logic-path`).
+  const exportMatch = useMemo<{
+    filterActive: boolean;
+    matchingCount: number;
+    isMatching: ((activity: ActivitySummary) => boolean) | undefined;
+  }>(() => {
+    if (!EXPORT_PRINT_ENABLED)
+      return { filterActive: false, matchingCount: 0, isMatching: undefined };
+    const filterOn =
+      CANVAS_LENSES_ENABLED && isFilterActive(lensState.filterQuery, lensState.filterAttrs);
+    const isolateChain =
+      CANVAS_NAV_ENABLED && navState.isolateActive && selectedActivityId !== null
+        ? computeLogicPath(selectedActivityId, model.dependencies.data ?? [], {
+            mode: navState.isolateMode,
+          })
+        : undefined;
+    if (!filterOn && !isolateChain) {
+      return { filterActive: false, matchingCount: activities.length, isMatching: undefined };
+    }
+    const isMatching = (activity: ActivitySummary): boolean => {
+      if (
+        filterOn &&
+        !matchesActivityFilter(activity, lensState.filterQuery, lensState.filterAttrs)
+      ) {
+        return false;
+      }
+      if (isolateChain && !isolateChain.has(activity.id)) return false;
+      return true;
+    };
+    const matchingCount = activities.reduce((n, a) => (isMatching(a) ? n + 1 : n), 0);
+    return { filterActive: true, matchingCount, isMatching };
+  }, [
+    activities,
+    lensState.filterQuery,
+    lensState.filterAttrs,
+    navState.isolateActive,
+    navState.isolateMode,
+    selectedActivityId,
+    model.dependencies,
+  ]);
+
   // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
   // drag, the 15s pen poll) doesn't hand `<Toolbar>` a fresh context and churn its resolve →
   // partition → measure → ResizeObserver cycle (perf review, ADR-0031). Behaviour is unchanged —
@@ -396,6 +450,38 @@ export function useTsldToolbarContext({
       goToNextConflict,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
+
+      // Export & print (VITE_EXPORT_PRINT) — client deliverables over already-fetched data. Inert while
+      // the flag is off (the `export`/`print` ids resolve to their placeholder stubs, so none of these
+      // are ever called). CSV lands at M1; PNG/PDF/Print are no-op stubs filled by M2–M4.
+      exportScheduleCsv: (scope) => {
+        // Resolve the WBS-parent column client-side from the full list (a parent's code/name by id).
+        const byId = new Map(activities.map((a) => [a.id, a]));
+        const resolveWbsParent = (parentId: string | null): string => {
+          if (parentId === null) return '';
+          const parent = byId.get(parentId);
+          return parent ? (parent.code ?? parent.name) : '';
+        };
+        const csv = buildScheduleCsv(activities, {
+          scope,
+          resolveWbsParent,
+          isMatching: exportMatch.isMatching,
+        });
+        const filename = buildExportFilename({
+          planName: plan.name,
+          kind: 'schedule',
+          ext: 'csv',
+          date: todayIso,
+        });
+        downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), filename);
+        const count = scope === 'matching' ? exportMatch.matchingCount : activities.length;
+        announce(`Downloaded ${filename} (${count} ${count === 1 ? 'activity' : 'activities'}).`);
+      },
+      exportDiagramPng: () => {},
+      exportDiagramPdf: () => {},
+      printDiagram: () => {},
+      filterActive: exportMatch.filterActive,
+      matchingCount: exportMatch.matchingCount,
     }),
     [
       zoomPreset,
@@ -464,6 +550,11 @@ export function useTsldToolbarContext({
       orderedConflictHits.length,
       currentConflict,
       goToNextConflict,
+      // Export & print — re-identify only when the exported set / its match state / the plan name change
+      // (the callbacks close over these). `todayIso` + `announce` are already listed above.
+      activities,
+      plan.name,
+      exportMatch,
     ],
   );
 }

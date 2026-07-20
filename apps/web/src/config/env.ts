@@ -529,3 +529,24 @@ export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_L
  * conflict are view-only (every role); Snap is an authoring aid (pen + Visual mode).
  */
 export const CANVAS_NAV_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_NAV);
+
+/**
+ * TSLD export & print (spec `docs/specs/export-print/`, Stage C1). **OFF by default during build** —
+ * it will flip on after the specialist reviews (security / devops / performance / a11y / ux /
+ * component) are green (M5). When on, it turns the two shaded Do-row toolbar placeholders (`export`,
+ * `print`) into real client-side deliverables over already-shipped data + the shipped canvas renderer
+ * — no new API/schema/`@repo/types`/CPM-engine change (the recalc parity gate is untouched):
+ *
+ * - **Export ▾** — an APG menu-button offering **Schedule (CSV)** (the activity table as an Excel-safe,
+ *   injection-safe, UTF-8-BOM CSV) and — when a Stage-A filter / Stage-B isolate lens is currently
+ *   narrowing the set — a conditional **Matching activities only (N)** item; later milestones add
+ *   **Diagram (PNG)** (M2) and **Diagram (PDF)** (M3) off-screen renders.
+ * - **Print…** — a browser-print of the whole diagram via the image path (M4).
+ *
+ * Each of the two ids resolves to its real behaviour when on, and to its existing `placeholderItem()`
+ * "Coming soon" stub when off — the `export`/`print` shapes are spread into both branches so they can't
+ * drift — so `VITE_EXPORT_PRINT=false` restores the toolbar, canvas paint and a11y tree byte-for-byte
+ * (the flag-off parity gate). `share` (ADR-0012 guest link) + XER/MSP interchange are C2, out of scope.
+ * Set `VITE_EXPORT_PRINT=true` to enable it in an environment (dev/e2e) before the M5 flip.
+ */
+export const EXPORT_PRINT_ENABLED = flagDefaultOff(import.meta.env.VITE_EXPORT_PRINT);

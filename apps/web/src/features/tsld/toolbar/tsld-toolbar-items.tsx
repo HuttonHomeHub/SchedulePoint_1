@@ -10,6 +10,7 @@ import {
   DollarSign,
   Eraser,
   FileDown,
+  FileSpreadsheet,
   Filter,
   Gauge,
   Grid3x3,
@@ -58,6 +59,7 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   EARNED_VALUE_ENABLED,
+  EXPORT_PRINT_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULING_MODES_ENABLED,
@@ -620,6 +622,64 @@ function ColourByControl({
   );
 }
 
+/** Shared disabled reason for Export / Print on an empty/uncomputed canvas (spec `docs/specs/export-print/`). */
+const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
+
+/**
+ * The **Export ▾ menu-button** (export & print, `docs/specs/export-print/`, flag-on) — an APG
+ * menu-button (mirroring {@link ColourByControl}) listing the plan's client-side deliverables. M1 ships
+ * **Schedule (CSV)** plus a conditional **Matching activities only (N)** item shown only while a filter /
+ * isolate lens narrows the set (CQ-3); M2/M3 add **Diagram (PNG)** / **(PDF)**. Shaded
+ * (disabled-with-reason "Add an activity first") on an empty/uncomputed canvas, matching the zoom
+ * cluster's stable shape (ADR-0031 shade-don't-hide). One focusable roving stop (spreads `itemProps`);
+ * each pick downloads + announces via the context command.
+ */
+function ExportMenuControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const disabled = api.disabled;
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        title={disabled ? (api.disabledReason ?? 'Export…') : 'Export…'}
+        onClick={() => {
+          if (!disabled) toggle();
+        }}
+        className={cn(toolbarControlVariants({ active: open, disabled }))}
+      >
+        <FileDown aria-hidden="true" className="size-4" />
+        <span className="truncate">Export</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu open={open} onClose={close} anchor={anchor} label="Export" restoreFocusRef={triggerRef}>
+        <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>
+          <FileSpreadsheet aria-hidden="true" className="size-4" />
+          Schedule (CSV)
+        </MenuItem>
+        {/* Conditional filtered export (CQ-3): only when a filter / isolate lens is narrowing the set,
+            so the item never confuses when nothing is filtered. */}
+        {ctx.filterActive ? (
+          <MenuItem onSelect={() => ctx.exportScheduleCsv('matching')}>
+            <Filter aria-hidden="true" className="size-4" />
+            Matching activities only ({ctx.matchingCount})
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </>
+  );
+}
+
 /** The isolate chain modes the picker offers, in menu order (CQ-1). Full = the whole transitive chain;
  * Driving = only the binding driving edges. Short labels for the compact button, long names in the menu. */
 const ISOLATE_MODE_LABELS: Record<LogicPathMode, string> = {
@@ -1095,6 +1155,29 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     order: 5,
     label: 'Snap to grid',
     icon: <Grid3x3 className="size-4" />,
+  };
+  // Export & print (VITE_EXPORT_PRINT) shared item shapes — the id/group/row/tier/order/label/icon each
+  // of the two ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
+  // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
+  // canvas-nav shared-shape pattern). Both ride the Row 2 · Do deliverables cluster (no pen — they read,
+  // never author). `share` stays a plain `placeholderItem()` (C2).
+  const exportShape = {
+    id: 'export',
+    group: 'object' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 7,
+    label: 'Export…',
+    icon: <FileDown className="size-4" />,
+  };
+  const printShape = {
+    id: 'print',
+    group: 'object' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 8,
+    label: 'Print…',
+    icon: <Printer className="size-4" />,
   };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -1660,24 +1743,22 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.openProgress(),
         }
       : placeholderItem(updateProgressShape),
-    placeholderItem({
-      id: 'export',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 7,
-      label: 'Export…',
-      icon: <FileDown className="size-4" />,
-    }),
-    placeholderItem({
-      id: 'print',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 8,
-      label: 'Print…',
-      icon: <Printer className="size-4" />,
-    }),
+    // Export ▾ (export & print, `docs/specs/export-print/`) — a menu-button of client-side deliverables
+    // (Schedule CSV now; Diagram PNG/PDF at M2/M3). Flag-on it's the real `ExportMenuControl`, gated on a
+    // computed diagram (disabled-with-reason otherwise, shade-don't-hide); flag-off it's the byte-for-byte
+    // `placeholderItem()` "Coming soon" stub. `exportShape` is spread into both so they can't drift.
+    EXPORT_PRINT_ENABLED
+      ? {
+          ...exportShape,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
+          render: (ctx, api) => <ExportMenuControl ctx={ctx} api={api} />,
+        }
+      : placeholderItem(exportShape),
+    // Print… — the real browser-print button lands at M4; for M0/M1 it stays the "Coming soon"
+    // placeholder even with the flag on (its `printDiagram` command is a no-op stub). `printShape` is
+    // extracted so M4 can spread it into the real item without drift, exactly like `exportShape`.
+    placeholderItem(printShape),
     placeholderItem({
       id: 'share',
       group: 'object',
