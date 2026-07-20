@@ -23,6 +23,12 @@ export { ResourceFormDialog } from './components/ResourceFormDialog';
 export { ActivityResourcesDialog } from './components/ActivityResourcesDialog';
 export { ResourceHistogram } from './components/ResourceHistogram';
 export {
+  BucketSizeSelect,
+  ResourceLoadingTable,
+  GRANULARITY_LABELS,
+  formatUnits,
+} from './components/resource-loading-table';
+export {
   RESOURCE_KIND_LABELS,
   RESOURCE_CURVE_LABELS,
   resourceFormSchema,

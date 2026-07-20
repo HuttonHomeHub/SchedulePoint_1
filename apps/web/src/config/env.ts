@@ -580,3 +580,26 @@ export const EXPORT_PRINT_ENABLED = flagDefaultOn(import.meta.env.VITE_EXPORT_PR
 export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_ACTIVITY_TYPES,
 );
+
+/**
+ * TSLD canvas-axis-aligned resource strip (spec `docs/specs/canvas-resource-view/`, Stage E;
+ * ADR-0049 — the render-layer decision, amends ADR-0026). **OFF by default during build** — it will
+ * flip on after the specialist reviews (component / ux / accessibility / performance / test) are green
+ * (Task 6), mirroring the Stage A–D dark-then-flip ritual. When on, it turns the `resource-view` Look-row
+ * toolbar placeholder into a real lens that toggles a **demand strip pinned to the TSLD time axis** — a
+ * Canvas 2D **sibling layer** (the third ADR-0026 layer: scene · interaction · strip) painted by the
+ * existing `TsldCanvas` rAF loop from the SAME `viewRef`, so the per-bucket demand bars sit under the
+ * diagram's day/week/month columns and pan/zoom with the canvas with zero desync. Strip _chrome_ (the
+ * resource picker, the reused bucket-size `Select`, the reused accessible `<table>`) is DOM in a
+ * `ResourceStripPanel`; strip _bars_ are canvas. It reads the already-shipped **demand read-model**
+ * (`useResourceHistogram` / `GET …/schedule/resource-histogram`) — frontend-only, no
+ * API/schema/`@repo/types`/CPM-engine change (the recalc parity gate is untouched).
+ *
+ * **Gated on `RESOURCE_CURVES_ENABLED`** (the histogram data source): with the resource surface off there
+ * is no data to strip, so `resource-view` stays its "Coming soon" placeholder. Flag-off (or curves-off) ⇒
+ * the `resource-view` item is its placeholder AND `TsldCanvas` reserves no strip band and paints
+ * byte-for-byte today's (the parity gate). Set `VITE_CANVAS_RESOURCE_VIEW=true` to enable it in an
+ * environment (Task 6 flips the default).
+ */
+export const CANVAS_RESOURCE_VIEW_ENABLED =
+  flagDefaultOff(import.meta.env.VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED;

@@ -31,6 +31,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // section stays today's disabled Level-of-effort + Hammock "Soon" placeholders (the flag-on single
   // "Level of Effort (hammock)" item is covered in tsld-toolbar-activity-types.test.tsx).
   CANVAS_ACTIVITY_TYPES_ENABLED: false,
+  // Pin the canvas resource-view lens (Stage E, ADR-0049) OFF here too: `resource-view` stays its
+  // "Coming soon" placeholder (the flag-on toggle is covered in tsld-toolbar-resource-view.test.tsx).
+  CANVAS_RESOURCE_VIEW_ENABLED: false,
 }));
 
 const spies = {

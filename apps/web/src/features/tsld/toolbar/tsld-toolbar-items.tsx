@@ -63,6 +63,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  CANVAS_RESOURCE_VIEW_ENABLED,
   EARNED_VALUE_ENABLED,
   EXPORT_PRINT_ENABLED,
   NOTES_ENABLED,
@@ -1221,6 +1222,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Baseline overlay',
     icon: <Layers2 className="size-4" />,
   };
+  // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) shared shape — the id/group/row/tier/order/
+  // label/icon carried in BOTH its real (flag-on) toggle and its `placeholderItem()` (flag-off) stub,
+  // declared once and spread into both branches so they can't drift (mirrors the lens / canvas-nav
+  // shared-shape pattern). Sits on Row 1 · Look in the Lens group, gated on a computed diagram.
+  const resourceViewShape = {
+    id: 'resource-view',
+    group: 'lens' as const,
+    row: 'look' as const,
+    tier: 2 as const,
+    order: 5,
+    label: 'Resource view',
+    icon: <BarChart3 className="size-4" />,
+  };
   // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/tier/order/label/icon each of the
   // three ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens
@@ -1462,15 +1476,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.toggleBaselineOverlay(),
         }
       : placeholderItem(baselineOverlayShape),
-    placeholderItem({
-      id: 'resource-view',
-      group: 'lens',
-      row: 'look',
-      tier: 2,
-      order: 5,
-      label: 'Resource view',
-      icon: <BarChart3 className="size-4" />,
-    }),
+    // Resource view — flag-on (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) a pressed-state toggle that reveals
+    // the canvas-axis-aligned resource strip (a demand strip pinned to the TSLD time axis + the reused
+    // accessible table); flag-off the "Coming soon" placeholder, byte-for-byte. Shaded (disabled-with-
+    // reason) on an empty/uncomputed canvas, like the other lenses — there's no timeline to strip yet.
+    // View-only (every role), never pen-gated. The shared shape is spread into both branches so they
+    // can't drift (mirrors the C1/quick-wins pattern).
+    CANVAS_RESOURCE_VIEW_ENABLED
+      ? {
+          ...resourceViewShape,
+          isActive: (ctx) => ctx.resourceViewOpen,
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+          onActivate: (ctx) => ctx.toggleResourceView(),
+        }
+      : placeholderItem(resourceViewShape),
 
     // --- 3 · Find / focus (Row 1 · Look) ------------------------------------------------------
     // Search / filter field — leads the Find cluster as a real (disabled) input, so the affordance

@@ -4,6 +4,7 @@ import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
@@ -72,6 +73,36 @@ describe('EXPORT_PRINT_ENABLED', () => {
     // export module or jsPDF chunk, and leaves the toolbar/canvas/a11y tree byte-for-byte — the
     // rollback path / parity gate.
     expect(EXPORT_PRINT_ENABLED).toBe(true);
+  });
+});
+
+describe('CANVAS_RESOURCE_VIEW_ENABLED', () => {
+  // The gate is `flagDefaultOff(VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED` (ADR-0049, Task 1):
+  // the new dark flag AND the resource-histogram data source. Exercise the composition's truth table
+  // (flag off/on × curves off/on) against the same `flagDefaultOff` reader the constant uses.
+  const gate = (flag: string | undefined, curves: boolean): boolean =>
+    flagDefaultOff(flag) && curves;
+
+  it('is true ONLY when the flag is explicitly on AND the curves data source is on', () => {
+    expect(gate('true', true)).toBe(true);
+    expect(gate('1', true)).toBe(true);
+  });
+
+  it('is false when the flag is off (dark by default) regardless of the data source', () => {
+    expect(gate(undefined, true)).toBe(false);
+    expect(gate(undefined, false)).toBe(false);
+    expect(gate('false', true)).toBe(false);
+  });
+
+  it('is false when the flag is on but the curves data source is off (nothing to strip)', () => {
+    expect(gate('true', false)).toBe(false);
+    expect(gate('1', false)).toBe(false);
+  });
+
+  it('is OFF at the build default (dark until Task 6 flips it, gated on the data source)', () => {
+    // No VITE_CANVAS_RESOURCE_VIEW set in the test env ⇒ the derived constant is false even though
+    // RESOURCE_CURVES is on by default — the parity gate (placeholder + byte-for-byte canvas).
+    expect(CANVAS_RESOURCE_VIEW_ENABLED).toBe(false);
   });
 });
 

@@ -25,6 +25,7 @@ import {
   type Size,
   type Viewport,
 } from './render-model';
+import { bucketBarsFromDays, type ResourceStripSnapshot } from './resource-strip';
 import { calendarBoundaries } from './time-scale';
 
 /**
@@ -722,6 +723,73 @@ export function paintInteractionLayer(
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+  }
+}
+
+/**
+ * The resource-strip layer's palette (Stage E, ADR-0049) — resolved concrete colours (Canvas 2D
+ * `fillStyle` can't take a `var()`), re-resolved on the shared theme bump by `TsldCanvas` like the main
+ * painter. `bar` is the demand-bar fill, `axis` the thin baseline/top rule, `tick` the max-tick label ink.
+ */
+export interface ResourceStripPalette {
+  bar: string;
+  axis: string;
+  tick: string;
+}
+
+/** Format a demand value (`DECIMAL(18,4)` units) for the max-tick label — ≤ 4 dp, trailing zeros dropped. */
+function formatStripUnits(value: number): string {
+  return Number(value.toFixed(4)).toString();
+}
+
+/**
+ * Paint the **resource strip** (Stage E, ADR-0049) — the third Canvas 2D layer, on its own
+ * `aria-hidden` sibling `<canvas>` band at the bottom of the `TsldCanvas` container. It draws the
+ * selected resource's per-bucket demand bars from the {@link ResourceStripSnapshot} the DOM host
+ * published, using the SAME `viewRef` (via {@link bucketBarsFromDays}) as the scene and ruler, so the
+ * bars sit under the diagram's day/week/month columns and pan/zoom with the canvas with zero desync.
+ * `band.width`/`band.height` are the strip canvas's CSS-px size; the backing store is `× dpr`. A `null`
+ * snapshot (or an empty series / non-positive max) draws just the axis rule — the DOM band then shows
+ * the empty/loading state. The painter uses only rectangles + an optional label, staying within the
+ * ADR-0026 draw budget (O(visible buckets)).
+ */
+export function paintResourceStrip(
+  ctx: Ctx2D,
+  snapshot: ResourceStripSnapshot | null,
+  view: Viewport,
+  band: Size,
+  palette: ResourceStripPalette,
+  dpr = 1,
+): void {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, band.width, band.height);
+
+  // A thin top rule (the strip's "zero" reference / separation from the diagram), never colour-only —
+  // it is a structural divider, not an encoded value.
+  ctx.fillStyle = palette.axis;
+  ctx.fillRect(0, 0, band.width, 1);
+
+  if (!snapshot || snapshot.max <= 0 || snapshot.series.values.length === 0) return;
+
+  const bars = bucketBarsFromDays(snapshot.series.values, snapshot.dayOffsets, view, band, {
+    height: band.height,
+    max: snapshot.max,
+  });
+  ctx.fillStyle = palette.bar;
+  for (const bar of bars) {
+    // Bars grow up from the band's baseline; the top pad keeps a full-height bar clear of the rule/tick.
+    ctx.fillRect(bar.x, band.height - bar.h, bar.w, bar.h);
+  }
+
+  // A single labelled max tick at the top-left (ADR-0026 D1 style), so the vertical scale is legible;
+  // exact per-bucket values live in the parallel table. Guarded so the no-op test 2D context (which
+  // omits text APIs) never throws — it runs only against a real context.
+  if (typeof ctx.fillText === 'function') {
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = palette.tick;
+    ctx.fillText(formatStripUnits(snapshot.max), LABEL_PAD_PX, 2);
   }
 }
 

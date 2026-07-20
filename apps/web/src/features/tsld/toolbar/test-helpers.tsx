@@ -61,6 +61,9 @@ export function makeTsldToolbarContext(
     openEarnedValue: vi.fn(),
     openResourceHistogram: vi.fn(),
     editPlan: vi.fn(),
+    // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049)
+    resourceViewOpen: false,
+    toggleResourceView: vi.fn(),
     // Help
     openShortcuts: vi.fn(),
     legendOpen: false,

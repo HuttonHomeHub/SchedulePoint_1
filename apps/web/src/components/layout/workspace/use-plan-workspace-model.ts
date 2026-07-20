@@ -101,6 +101,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canCalculate: canCalculateSchedule(role),
   });
   const [editing, setEditing] = useState(false);
+  // The canvas-axis-aligned **resource-view** lens (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`):
+  // an ephemeral, session-local open flag toggled from the `resource-view` toolbar item, exactly like the
+  // other Look-row lenses. Inert when nothing reads it (flag off / the ADR-0030 fallback), so it is
+  // byte-for-byte today's behaviour by default.
+  const [resourceViewOpen, setResourceViewOpen] = useState(false);
+  const toggleResourceView = useCallback(() => setResourceViewOpen((open) => !open), []);
   const [logicActivity, setLogicActivityState] = useState<ActivitySummary | undefined>(undefined);
   // Whether the Logic panel, when open, should reveal + focus its Notes section (toolbar quick-wins
   // U4/A4): only the toolbar **Add note** path sets it, so a canvas "Open logic" / table open lands on
@@ -862,6 +868,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Local UI state
     editing,
     setEditing,
+    // Resource-view lens (Stage E, ADR-0049): the ephemeral open flag + toggle the `resource-view`
+    // toolbar item drives; the workspace mounts the `ResourceStripPanel` + strip band when open. Inert
+    // unless `VITE_CANVAS_RESOURCE_VIEW` is on (the item is its placeholder otherwise).
+    resourceViewOpen,
+    toggleResourceView,
     logicActivity,
     setLogicActivity,
     // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the

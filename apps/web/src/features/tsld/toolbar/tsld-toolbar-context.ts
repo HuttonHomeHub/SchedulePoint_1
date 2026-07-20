@@ -125,6 +125,15 @@ export interface TsldToolbarContext {
 
   // --- Help (group 7) -----------------------------------------------------------------------
   openShortcuts: () => void;
+  // --- Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, group 2 · Row 1 · Look — ADR-0049) ----------
+  /** Whether the canvas-axis-aligned resource strip is revealed (drives the `resource-view` item's
+   * pressed state). Populated on every build; nothing reads it while the flag is off (the id resolves to
+   * its `placeholderItem()` stub), so it is inert by default. */
+  resourceViewOpen: boolean;
+  /** Toggle the resource strip on/off — reveals/hides the `ResourceStripPanel` + the canvas strip band
+   * (view-only, never pen-gated; navigating/reading resource load never mutates the plan). */
+  toggleResourceView: () => void;
+
   /** Whether the on-canvas floating Legend panel is open (drives the Legend toggle's pressed state).
    * The legend lives on the canvas now (ADR-0031 amendment), so the toolbar item is a show/hide
    * toggle rather than a popover that renders the key itself. */

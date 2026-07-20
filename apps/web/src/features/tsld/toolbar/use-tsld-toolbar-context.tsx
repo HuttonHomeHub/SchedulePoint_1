@@ -479,6 +479,11 @@ export function useTsldToolbarContext({
       openResourceHistogram: () => openDialog('resource-histogram'),
       editPlan,
 
+      // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) — the ephemeral open flag + toggle from
+      // the model. Inert while the flag is off (the `resource-view` id resolves to its placeholder stub).
+      resourceViewOpen: model.resourceViewOpen,
+      toggleResourceView: model.toggleResourceView,
+
       // Help
       openShortcuts: () => setShowHelp(true),
       // The legend lives on the canvas now (ADR-0031 amendment) — this toggles the floating panel.
@@ -701,6 +706,10 @@ export function useTsldToolbarContext({
     openDialog,
     legendOpen,
     toggleLegend,
+    // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW) — re-identify only when the open flag flips (the
+    // toggle is a stable model callback).
+    model.resourceViewOpen,
+    model.toggleResourceView,
     summaryContent,
     projectFinishContent,
     hasDiagram,

@@ -34,6 +34,7 @@ import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
 import { resolveLensPalette } from '../render/palette';
 import { addCalendarDays, daysBetween, isMilestone, type Point } from '../render/render-model';
+import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { snapToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
@@ -204,6 +205,14 @@ export interface TsldPanelProps {
    * variance data (already route-composed for the activities table) so no new fetch is added; the
    * ghost geometry joins these captured dates to the live lanes. Absent/empty ⇒ no ghost layer. */
   varianceRows?: readonly BaselineVarianceRow[] | undefined;
+  /** Whether the canvas-axis-aligned resource strip is active (Stage E, ADR-0049, behind
+   * `VITE_CANVAS_RESOURCE_VIEW`) — reserves the strip band at the canvas bottom and paints the demand
+   * bars. Absent/false ⇒ no band, byte-for-byte today's canvas. Forwarded straight to `TsldCanvas`. */
+  resourceStripActive?: boolean;
+  /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
+   * pre-projected bucket day-offsets + whole-series max). Forwarded to `TsldCanvas`, which paints ONLY
+   * the strip on a change. `null`/absent ⇒ the band draws just its axis rule. */
+  resourceStrip?: ResourceStripSnapshot | null;
 }
 
 interface PendingCreate {
@@ -252,6 +261,8 @@ export function TsldPanel({
   canvasUi,
   barDateSource = 'early',
   varianceRows,
+  resourceStripActive = false,
+  resourceStrip = null,
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -1131,6 +1142,8 @@ export function TsldPanel({
               barFill={barFill}
               barInk={barInk}
               baselineGhosts={baselineGhosts}
+              resourceStripActive={resourceStripActive}
+              resourceStrip={resourceStrip}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
               {...(selectionActionsWired ? { selectionAnchorRef } : {})}
