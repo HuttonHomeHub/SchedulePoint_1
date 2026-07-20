@@ -90,4 +90,24 @@ describe('useTsldCanvasUiState', () => {
     act(() => result.current.requestSelectActivity('a2'));
     expect(result.current.navState.selectSignal).toEqual({ id: 'a2', nonce: 2 });
   });
+
+  it('the edit mode is single-valued, so the LOE / Link / Add tools are mutually exclusive', () => {
+    // A single `mode` enum backs all four tools (Stage D): arming one always leaves any other, so the
+    // toolbar-context's `isLoeSpanning` / `isLinking` / `isAddingActivity` (all `mode === …`) can never
+    // be true together — the mutual-exclusion invariant the Add-menu + endpoint-pick rely on.
+    const { result } = renderHook(() => useTsldCanvasUiState());
+    expect(result.current.mode).toBe('select'); // default
+
+    act(() => result.current.setMode('link'));
+    expect(result.current.mode).toBe('link');
+
+    act(() => result.current.setMode('loe'));
+    expect(result.current.mode).toBe('loe'); // arming LOE left link mode
+
+    act(() => result.current.setMode('add-activity'));
+    expect(result.current.mode).toBe('add-activity'); // arming Add left LOE mode
+
+    act(() => result.current.setMode('select'));
+    expect(result.current.mode).toBe('select');
+  });
 });

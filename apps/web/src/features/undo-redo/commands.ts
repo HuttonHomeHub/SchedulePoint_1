@@ -453,6 +453,64 @@ export function dependencyRemoveCommand(params: {
   };
 }
 
+/**
+ * Reverse a canvas **Level of Effort span** create (Stage D, `docs/specs/canvas-activity-types/`) — the
+ * composite `createActivity(LEVEL_OF_EFFORT) → SS(start → LOE) → FF(LOE → finish)` as ONE reversible
+ * step (ADR-0048): **undo** deletes the LOE, which cascades its SS + FF edges (a leaf LOE carries no
+ * subtree), so no orphan edge survives; **redo** re-composes the whole span from the captured inputs (a
+ * NEW LOE id — the conservative M2 rule, {@link existenceToggle}). Only the compose is reversed here;
+ * the follow-up recalc is never recorded (recompute-don't-restore). No `HAMMOCK` is ever created — the
+ * LOE is the span-derived hammock (Stage D Q1).
+ */
+export function createLoeSpanCommand(params: {
+  /** The just-created LOE row (its id starts the toggle in the PRESENT state). */
+  loe: ActivitySummary;
+  /** The placement input that re-creates the LOE on redo (name / type / duration / lane). */
+  placedInput: PlacedActivityInput;
+  planId: string;
+  startDriverId: string;
+  finishDriverId: string;
+  createPlaced: CreatePlacedActivityFn;
+  createDependency: CreateDependencyFn;
+  deleteActivity: DeleteActivityFn;
+  label?: string;
+}): Command {
+  const { planId, startDriverId, finishDriverId, createPlaced, createDependency } = params;
+  const toggle = existenceToggle({
+    startId: params.loe.id,
+    // Redo re-composes the whole span: re-create the LOE, then its SS + FF edges (a fresh LOE id).
+    create: async (): Promise<string> => {
+      const loe = await createPlaced(params.placedInput);
+      await createDependency({
+        planId,
+        predecessorId: startDriverId,
+        successorId: loe.id,
+        type: 'SS',
+        lagDays: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+      });
+      await createDependency({
+        planId,
+        predecessorId: loe.id,
+        successorId: finishDriverId,
+        type: 'FF',
+        lagDays: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+      });
+      return loe.id;
+    },
+    // Undo deletes the LOE — the cascade removes its SS + FF edges with it.
+    remove: params.deleteActivity,
+  });
+  return {
+    // The quoted name was always the generic default ("Level of effort"), so it added nothing — drop it
+    // and read plainly "Add level-of-effort span" (S3).
+    label: params.label ?? 'Add level-of-effort span',
+    undo: toggle.ensureAbsent,
+    redo: toggle.ensurePresent,
+  };
+}
+
 /** `useSetActivityVisualStart().mutateAsync` — a Visual-mode placement PATCH (ADR-0033). */
 export type SetVisualStartFn = (input: {
   activityId: string;

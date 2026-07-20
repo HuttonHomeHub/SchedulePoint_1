@@ -176,6 +176,72 @@ describe('gesture-machine: two-click link tool (M5)', () => {
   });
 });
 
+describe('gesture-machine: two-click LOE endpoint-pick tool (Stage D)', () => {
+  const body = (id: string): { kind: 'body'; id: string } => ({ kind: 'body', id });
+
+  it('ignores clicks outside loe mode (mutual exclusion with select/link/add)', () => {
+    // A body click in any non-loe mode never starts an LOE pick.
+    expect(reduce(IDLE, { type: 'click', hit: body('a') }, ctx('select')).state).toEqual(IDLE);
+    expect(reduce(IDLE, { type: 'click', hit: body('a') }, ctx('add-activity')).state).toEqual(
+      IDLE,
+    );
+    // In link mode a body click starts a LINK pick, never a loePicking state.
+    expect(reduce(IDLE, { type: 'click', hit: body('a') }, ctx('link')).state).toEqual({
+      kind: 'linkPicking',
+      predecessorId: 'a',
+    });
+  });
+
+  it('first body click picks the start driver and prompts for the finish', () => {
+    const r = reduce(IDLE, { type: 'click', hit: body('a') }, ctx('loe'));
+    expect(r.state).toEqual({ kind: 'loePicking', startId: 'a' });
+    expect(r.intent).toBeUndefined();
+    expect(r.loe).toEqual({ kind: 'start', startId: 'a' });
+  });
+
+  it('a click on empty space with no pick does nothing', () => {
+    const r = reduce(IDLE, { type: 'click', hit: { kind: 'empty' } }, ctx('loe'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+    expect(r.loe).toBeUndefined();
+  });
+
+  it('second body click commits a loeSpan intent (start → finish)', () => {
+    const picked: GestureState = { kind: 'loePicking', startId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('b') }, ctx('loe'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toEqual({ kind: 'loeSpan', startDriverId: 'a', finishDriverId: 'b' });
+  });
+
+  it('rejects picking the SAME activity twice — stays armed and re-prompts (no self-span)', () => {
+    const picked: GestureState = { kind: 'loePicking', startId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('a') }, ctx('loe'));
+    // The pick is retained (not cancelled) and no span is committed.
+    expect(r.state).toEqual(picked);
+    expect(r.intent).toBeUndefined();
+    expect(r.loe).toEqual({ kind: 'reprompt' });
+  });
+
+  it('clicking empty space cancels an in-progress pick (tool stays armed)', () => {
+    const picked: GestureState = { kind: 'loePicking', startId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: { kind: 'empty' } }, ctx('loe'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+    expect(r.loe).toEqual({ kind: 'cancel' });
+  });
+
+  it('escape clears a pick', () => {
+    const picked: GestureState = { kind: 'loePicking', startId: 'a' };
+    expect(reduce(picked, { type: 'escape' }, ctx('loe')).state).toEqual(IDLE);
+  });
+
+  it('a loe-mode click never routes through the link path (no link intent)', () => {
+    const picked: GestureState = { kind: 'loePicking', startId: 'a' };
+    const r = reduce(picked, { type: 'click', hit: body('b') }, { ...ctx('loe'), linkType: 'SS' });
+    expect(r.intent?.kind).toBe('loeSpan');
+  });
+});
+
 describe('gesture-machine: reposition-in-time', () => {
   const body = { id: 'a', startDay: 2, endDay: 5, laneIndex: 1 };
   const grab = (): GestureState =>

@@ -48,6 +48,16 @@ export interface TsldCanvasUiState {
   linkType: DependencyType;
   setLinkType: React.Dispatch<React.SetStateAction<DependencyType>>;
   /**
+   * The **Level of Effort (hammock)** endpoint-pick tool's picked **start driver** id (Stage D,
+   * `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`) — the SINGLE source of
+   * truth for "the picked start", shared by the pointer pick (canvas → `onLoeSpanStep`), the keyboard
+   * pick (`TsldPanel`'s listbox Enter), and the toolbar's Add-trigger label. Null when no start is
+   * picked; cleared when the tool disarms (`mode` leaves `'loe'`). Inert while the flag/tool is off
+   * (`mode` is never `'loe'` then), so it stays null and nothing reads it.
+   */
+  loeStartId: string | null;
+  setLoeStartId: React.Dispatch<React.SetStateAction<string | null>>;
+  /**
    * The **insight-lens** view state (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) —
    * the client filter query + attribute toggles, the Colour-by mode, and the Baseline-overlay switch.
    * Pure CLIENT VIEW STATE, exactly like {@link viewToggles}: never server state, never persisted; it
@@ -127,6 +137,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   const [showHelp, setShowHelp] = useState(false);
   const [createType, setCreateType] = useState<ActivityType>('TASK');
   const [linkType, setLinkType] = useState<DependencyType>('FS');
+  const [loeStartId, setLoeStartId] = useState<string | null>(null);
   const [lensState, setLensState] = useState<LensState>(DEFAULT_LENS_STATE);
   const [navState, setNavState] = useState<NavState>(DEFAULT_NAV_STATE);
   const canvasControlRef = useRef<TsldCanvasHandle>(null);
@@ -208,6 +219,8 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setCreateType,
       linkType,
       setLinkType,
+      loeStartId,
+      setLoeStartId,
       lensState,
       setFilterQuery,
       toggleFilterAttr,
@@ -232,6 +245,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       showHelp,
       createType,
       linkType,
+      loeStartId,
       lensState,
       setFilterQuery,
       toggleFilterAttr,

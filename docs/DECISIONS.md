@@ -935,3 +935,23 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   XER/MSP interchange + the `share` External-Guest link (Stage **C2**). No standalone ADR (client
   render/serialisation on ADR-0026/0031). Follow-ups noted: a CI bundle-budget gate now that the first
   heavy lazy dep landed, and npm-level SBOM for the SPA image (both pre-existing, tracked as tech debt).
+- **On-canvas Level of Effort / Hammock (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`, on by default 2026-07-20).**
+  The canvas Add split-button's Level-of-effort + Hammock "Coming soon" placeholders collapse into ONE
+  live **Level of Effort (hammock)** item that arms a two-click endpoint-pick tool-mode (a mutually-
+  exclusive sibling of the ADR-0032 Link tool: a new `'loe'` `EditMode`, a `loePicking` gesture state, a
+  `loeSpan` intent). Picking a start driver then a finish driver runs `createLoeSpan`, which composes a
+  `LEVEL_OF_EFFORT` activity (0-day) + SS (start→LOE) + FF (LOE→finish) edges as **one undoable command**
+  (ADR-0048; undo deletes the LOE, whose edges cascade server-side), rolls back the orphan LOE + refetches
+  - clears redo on any sub-mutation failure, then fires the coalesced auto-recalc (ADR-0032). **Frontend-
+    only** over the already-shipped LOE engine (M5-epic, ADR-0035 §21) — no API/schema/`@repo/types`/CPM-
+    engine change, so the recalc parity gate is structurally trivial. Key decisions: **(Q1)** Hammock is NOT
+    a distinct engine type — SchedulePoint's LOE already computes the span-derived hammock (SS-pred start →
+    FF-succ finish) and `WBS_SUMMARY` covers the rollup variant, so a raw `HAMMOCK` create is **never wired**
+    (the enum would mis-schedule as a TASK); the `'Hammock'` label map stays only for display-honesty of an
+    imported activity. **(Q2)** a **single** "Level of Effort (hammock)" item (the P6 vocabulary kept for
+    discoverability) rather than two labels. Review-hardened before flip: the armed Add trigger shows "Pick
+    start driver" → "Pick finish driver", the item shades below two activities, the tool disarms + announces
+    on commit/cancel, and a keyboard-picked start is single-sourced (`useTsldCanvasUiState.loeStartId` +
+    a controlled `TsldCanvas.loePickStartId` prop) so it survives a pointer-picked finish (WCAG 4.1.3). A
+    distinct engine Hammock (a behaviourally-different span) remains an optional future sub-stage (plan
+    M-D3), not built. No standalone ADR (client interaction on ADR-0031/0032/0048).

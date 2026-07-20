@@ -59,6 +59,7 @@ import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import {
+  CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -146,6 +147,9 @@ function GoToDateControl({
  * the app (e.g. under localisation). */
 const ADD_ACTIVITY_TYPES = ['TASK', 'START_MILESTONE', 'FINISH_MILESTONE'] as const;
 const ADD_DISABLED_REASON = 'Start editing to add activities';
+/** The LOE span hangs off two existing driver activities; with fewer than two present the Add-menu's
+ * Level-of-Effort item shades with this reason (Stage D spec §Edge cases). */
+const LOE_TOO_FEW_REASON = 'Add activities to span between them';
 
 /** A small "coming soon" tag for menu rows that preview a not-yet-built activity kind. */
 function SoonTag(): React.ReactElement {
@@ -184,6 +188,19 @@ function AddActivityControl({
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
   const activeLabel = ACTIVITY_TYPE_LABELS[ctx.createType];
+  // Reflect an armed LOE tool on the trigger (B4): fold it into the pressed state AND swap the label to
+  // a mid-pick prompt ("Pick start driver" → "Pick finish driver" once a start is picked), mirroring
+  // LinkControl's `Linking · FS` reflection. Add/LOE are mutually exclusive (a single EditMode).
+  const triggerLabel = ctx.isAddingActivity
+    ? `Adding ${activeLabel}`
+    : ctx.isLoeSpanning
+      ? ctx.loeStartPicked
+        ? 'Pick finish driver'
+        : 'Pick start driver'
+      : 'Add';
+  // Flag-off (`CANVAS_ACTIVITY_TYPES` dark) the LOE tool is unreachable, so `isLoeSpanning` is never true
+  // and the label/active reflection collapses to today's plain "Add", byte-for-byte.
+  const loeTooFew = ctx.loeSpanActivityCount < 2;
   return (
     <>
       <button
@@ -197,10 +214,15 @@ function AddActivityControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ active: ctx.isAddingActivity || open, disabled }))}
+        className={cn(
+          toolbarControlVariants({
+            active: ctx.isAddingActivity || ctx.isLoeSpanning || open,
+            disabled,
+          }),
+        )}
       >
         <Plus aria-hidden="true" className="size-4" />
-        <span className="truncate">{ctx.isAddingActivity ? `Adding ${activeLabel}` : 'Add'}</span>
+        <span className="truncate">{triggerLabel}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
@@ -231,20 +253,44 @@ function AddActivityControl({
           </MenuItem>
         ) : null}
         {/* Span-between kinds (ADR-0032) are derived from two endpoints, not point-and-draw — so they
-            live here as a distinct section, previewed disabled ("Soon") until the endpoint-pick flow
-            is built (docs/TOOLBAR_ROADMAP.md). */}
+            live here as a distinct section. Flag-on (`VITE_CANVAS_ACTIVITY_TYPES`, Stage D) this is ONE
+            live **Level of Effort (hammock)** item that arms the endpoint-pick tool — the LOE is the
+            span-derived hammock, so there is no separate Hammock item and no raw `HAMMOCK` create (Q1).
+            Flag-off it stays today's two disabled "Soon" placeholders, byte-for-byte. */}
         <div role="separator" className="bg-border my-1 h-px" />
         <MenuSection>Span between activities</MenuSection>
-        <MenuItem disabled onSelect={() => {}}>
-          <Waypoints aria-hidden="true" className="size-4" />
-          Hammock
-          <SoonTag />
-        </MenuItem>
-        <MenuItem disabled onSelect={() => {}}>
-          <Rows3 aria-hidden="true" className="size-4" />
-          Level of effort
-          <SoonTag />
-        </MenuItem>
+        {CANVAS_ACTIVITY_TYPES_ENABLED ? (
+          // Disabled-with-reason (shade-don't-hide) below two activities — the span needs two drivers to
+          // hang off (B5) — mirroring the Export menu's "No matching activities" pattern. Stays a
+          // `menuitemradio` (the `selected` prop) so the armed state still announces via `aria-checked`.
+          <MenuItem
+            selected={ctx.isLoeSpanning}
+            disabled={loeTooFew}
+            onSelect={() => ctx.toggleLoeSpanMode()}
+          >
+            <Check
+              aria-hidden="true"
+              className={cn('size-4', ctx.isLoeSpanning ? 'opacity-100' : 'opacity-0')}
+            />
+            Level of Effort (hammock)
+            {loeTooFew ? (
+              <span className="text-muted-foreground ml-auto text-xs">{LOE_TOO_FEW_REASON}</span>
+            ) : null}
+          </MenuItem>
+        ) : (
+          <>
+            <MenuItem disabled onSelect={() => {}}>
+              <Waypoints aria-hidden="true" className="size-4" />
+              Hammock
+              <SoonTag />
+            </MenuItem>
+            <MenuItem disabled onSelect={() => {}}>
+              <Rows3 aria-hidden="true" className="size-4" />
+              Level of effort
+              <SoonTag />
+            </MenuItem>
+          </>
+        )}
       </Menu>
     </>
   );
@@ -1064,13 +1110,14 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *
  * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
- * "Coming soon" stubs (resource-view, share, plus Hammock / Level-of-effort in the Add menu) that make
- * the toolbar read as fully designed and are switched on later by swapping the stub for a real command
- * (`docs/TOOLBAR_ROADMAP.md`).
+ * "Coming soon" stubs (resource-view, share) that make the toolbar read as fully designed and are
+ * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
  * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
  * clear-visual-placement under `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
  * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV`;
- * export and print under `VITE_EXPORT_PRINT` — each a placeholder only when its owning flag is off.)
+ * export and print under `VITE_EXPORT_PRINT`; the Add menu's Level-of-effort/Hammock placeholders
+ * collapse to one live Level-of-Effort item under `VITE_CANVAS_ACTIVITY_TYPES` — each a placeholder
+ * only when its owning flag is off.)
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom

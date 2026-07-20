@@ -557,3 +557,26 @@ export const CANVAS_NAV_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_NAV)
  * interchange are C2, out of scope; app-handled `Ctrl/Cmd+P` is a documented deferred fast-follow.
  */
 export const EXPORT_PRINT_ENABLED = flagDefaultOn(import.meta.env.VITE_EXPORT_PRINT);
+
+/**
+ * On-canvas advanced activity types — the **Level of Effort (hammock)** endpoint-pick tool (Stage D,
+ * spec `docs/specs/canvas-activity-types/`). When on, the canvas Add split-button's two disabled "Soon"
+ * placeholders (Level of effort + Hammock) collapse into ONE live **Level of Effort (hammock)** menu
+ * item that arms a canvas endpoint-pick tool-mode: pick a start driver, then a finish driver, and
+ * SchedulePoint composes a `LEVEL_OF_EFFORT` activity plus its SS (start → LOE) and FF (LOE → finish)
+ * edges as one undoable action, then recalcs and redraws. The armed trigger shows "Pick start driver" →
+ * "Pick finish driver", the item shades below two activities, the tool disarms and announces on
+ * commit/cancel, and a keyboard-picked start survives a pointer-picked finish (single-sourced pick).
+ * Frontend-only over the already-shipped LOE engine/API (M5-epic, ADR-0035 §21) — no new
+ * API/schema/`@repo/types`/CPM-engine change (the recalc parity gate is untouched); a raw `HAMMOCK`
+ * create is never wired (the engine has no distinct Hammock — the LOE **is** the span-derived hammock).
+ *
+ * **ON by default** (2026-07-20, product sign-off) now that the five specialist reviews (accessibility /
+ * ux / component / performance / test) are green (Task 4; every blocking finding folded: disarm-on-
+ * commit, Escape announcement, cross-modality pick, armed-trigger state, <2-activities gate). Flag-off ⇒
+ * the Add menu keeps today's disabled "Soon" placeholders byte-for-byte and the LOE tool-mode is
+ * unreachable (`VITE_CANVAS_ACTIVITY_TYPES=false` = emergency rollback / opt-out).
+ */
+export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
+  import.meta.env.VITE_CANVAS_ACTIVITY_TYPES,
+);

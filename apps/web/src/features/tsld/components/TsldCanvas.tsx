@@ -8,6 +8,7 @@ import {
   type EditIntent,
   type EditMode,
   type GestureState,
+  type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
 import type { GhostBar } from '../render/lenses';
@@ -111,6 +112,16 @@ export interface TsldCanvasProps {
   canLink?: boolean;
   /** Called with a committed edit + the (container-clamped) anchor point for its popover. */
   onIntent?: (intent: EditIntent, anchor: Point) => void;
+  /** LOE endpoint-pick step feedback (Stage D) — the parallel-DOM a11y channel `TsldPanel` announces +
+   * syncs: the first pick (`start`), a rejected same-activity re-pick (`reprompt`), or a cancelling
+   * empty click (`cancel`). The committed span arrives via {@link onIntent} as a `loeSpan` intent. */
+  onLoeSpanStep?: (step: LoeSpanStep) => void;
+  /** The LOE tool's picked **start driver** id, controlled by `TsldPanel` (Stage D) — the single source
+   * of truth for the pick, mirroring the inbound {@link selectedId} pattern. A keyboard-side pick (the
+   * listbox Enter) sets this; the canvas seeds its internal gesture from it so the NEXT pointer click
+   * resolves as the SECOND pick against the keyboard-picked start (not a restarted first pick). Null ⇒
+   * no start picked; the canvas keeps its gesture idle. Only meaningful in `loe` mode. */
+  loePickStartId?: string | null;
   /** Called when Esc is pressed while idle in add-activity mode (revert to Select). */
   onExitAddMode?: () => void;
   /** The active edit ghost drawn on the interaction layer — a dropped create awaiting its name,
@@ -208,16 +219,23 @@ function liveLink(
   };
 }
 
-/** The picked-predecessor rect while the two-click `link` tool waits for the second click (M5), or
- * null when not mid-pick — drawn as a highlight ring so the "now click the successor" step reads. */
+/** The picked-first-endpoint rect while a two-click tool waits for the second click — the `link` tool's
+ * predecessor (M5) or the LOE tool's start driver (Stage D) — or null when not mid-pick. Drawn as a
+ * highlight ring so the "now pick the second endpoint" step reads on the canvas. */
 function linkPickRect(
   state: GestureState,
   view: Viewport,
   activities: readonly RenderActivity[],
   dataDate: string,
 ): Rect | null {
-  if (state.kind !== 'linkPicking') return null;
-  const source = activities.find((a) => a.id === state.predecessorId);
+  const pickedId =
+    state.kind === 'linkPicking'
+      ? state.predecessorId
+      : state.kind === 'loePicking'
+        ? state.startId
+        : null;
+  if (pickedId === null) return null;
+  const source = activities.find((a) => a.id === pickedId);
   return (source && activityRect(source, view, dataDate)) || null;
 }
 
@@ -292,6 +310,8 @@ export function TsldCanvas({
   canReposition = false,
   canLink = false,
   onIntent,
+  onLoeSpanStep,
+  loePickStartId = null,
   onExitAddMode,
   pending = null,
   view,
@@ -520,6 +540,27 @@ export function TsldCanvas({
     }
   }, [mode]);
 
+  // Single-source the LOE tool's picked start across modalities (Stage D, B3): the pick lives in
+  // `TsldPanel`'s controlled `loePickStartId`; SEED the internal gesture from it so a keyboard-side
+  // pick makes the next pointer click resolve as the SECOND pick (not a silent restart that discards
+  // the keyboard pick). Runs AFTER the mode-reset effect above, so on arming (`mode → 'loe'`, pick
+  // null) it leaves the gesture idle. The pointer→state direction feeds back here harmlessly — the
+  // gesture already matches, so this is a no-op. Only touches the gesture in `loe` mode.
+  useEffect(() => {
+    if (mode !== 'loe') return;
+    if (loePickStartId) {
+      const g = gestureRef.current;
+      if (g.kind !== 'loePicking' || g.startId !== loePickStartId) {
+        gestureRef.current = { kind: 'loePicking', startId: loePickStartId };
+        interactionDirtyRef.current = true;
+      }
+    } else if (gestureRef.current.kind === 'loePicking') {
+      // The pick was cleared (Escape / cancel / commit) — drop the stale ring.
+      gestureRef.current = IDLE;
+      interactionDirtyRef.current = true;
+    }
+  }, [loePickStartId, mode]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -718,10 +759,14 @@ export function TsldCanvas({
         interactionDirtyRef.current = true;
       } else if (
         editing &&
-        (modeRef.current === 'add-activity' || modeRef.current === 'link') &&
+        (modeRef.current === 'add-activity' ||
+          modeRef.current === 'link' ||
+          modeRef.current === 'loe') &&
         !pendingRef.current
       ) {
-        // With no pick/ghost pending, Escape leaves the authoring tool back to Select.
+        // With no pick/ghost pending, Escape leaves the authoring tool back to Select. For the LOE tool
+        // this fires even mid-pick (its `loePicking` isn't caught above), so Escape both cancels the
+        // pick and disarms the tool (Stage D spec: "Escape cancels and disarms").
         exitAddModeRef.current?.();
       }
     };
@@ -787,7 +832,7 @@ export function TsldCanvas({
         aria-hidden="true"
         style={{ top: RULER_HEIGHT }}
         className={`absolute inset-x-0 block touch-none ${
-          editing && (mode === 'add-activity' || mode === 'link')
+          editing && (mode === 'add-activity' || mode === 'link' || mode === 'loe')
             ? 'cursor-crosshair'
             : 'cursor-grab active:cursor-grabbing'
         }`}
@@ -797,10 +842,10 @@ export function TsldCanvas({
           if (pending) return;
           drag.current = { x: e.clientX, y: e.clientY, moved: false };
           canvasRef.current?.setPointerCapture?.(e.pointerId);
-          // The Link tool (M5) is click-driven (handled on pointer-up), not a drag gesture — so a
-          // press must NOT run the gesture reducer here, else it would clear an in-progress pick
-          // before the second click's release lands. Panning still works via `drag` below.
-          if (editing && mode !== 'link') {
+          // The Link tool (M5) AND the LOE tool (Stage D) are click-driven (handled on pointer-up), not
+          // drag gestures — so a press must NOT run the gesture reducer here, else it would clear an
+          // in-progress pick before the second click's release lands. Panning still works via `drag`.
+          if (editing && mode !== 'link' && mode !== 'loe') {
             const p = localPoint(e);
             const rawHit = classifyAt(p);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
@@ -889,11 +934,12 @@ export function TsldCanvas({
           drag.current = null;
           if (wasDrag) return;
           const p = localPoint(e);
-          // Link tool (M5): a click picks a predecessor, then a successor — the gesture machine
-          // holds the pick between clicks. Panning still works (a drag returns above); only a
-          // stationary click reaches here. Non-link modes keep the plain M1 select-on-click.
-          if (editing && mode === 'link') {
-            const { state, intent } = reduce(
+          // Link tool (M5) / LOE tool (Stage D): a click picks the first endpoint, then the second —
+          // the gesture machine holds the pick between clicks. Panning still works (a drag returns
+          // above); only a stationary click reaches here. Other modes keep the plain M1 select-on-click.
+          // A `link`/`loeSpan` commit rides `intent`; the LOE tool's per-pick prompts ride `loe`.
+          if (editing && (mode === 'link' || mode === 'loe')) {
+            const { state, intent, loe } = reduce(
               gestureRef.current,
               { type: 'click', hit: classifyAt(p) },
               machineCtx(),
@@ -901,6 +947,7 @@ export function TsldCanvas({
             gestureRef.current = state;
             interactionDirtyRef.current = true;
             if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
+            if (loe) onLoeSpanStep?.(loe);
             return;
           }
           onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   EXPORT_PRINT_ENABLED,
@@ -71,5 +72,15 @@ describe('EXPORT_PRINT_ENABLED', () => {
     // export module or jsPDF chunk, and leaves the toolbar/canvas/a11y tree byte-for-byte — the
     // rollback path / parity gate.
     expect(EXPORT_PRINT_ENABLED).toBe(true);
+  });
+});
+
+describe('CANVAS_ACTIVITY_TYPES_ENABLED', () => {
+  it('is on by default (delivered & enabled, 2026-07-20; no VITE_CANVAS_ACTIVITY_TYPES set)', () => {
+    // On-canvas advanced activity types (Stage D) is on by default now that its five specialist reviews
+    // (a11y / ux / component / perf / test) are green (Task 4). Setting VITE_CANVAS_ACTIVITY_TYPES=false
+    // keeps the Add menu's disabled "Soon" placeholders byte-for-byte and leaves the LOE endpoint-pick
+    // tool unreachable — the rollback path / parity gate.
+    expect(CANVAS_ACTIVITY_TYPES_ENABLED).toBe(true);
   });
 });

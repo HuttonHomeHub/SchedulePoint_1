@@ -57,4 +57,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_NAV?: string;
   /** TSLD export & print — turns the `export`/`print` toolbar placeholders into real client-side deliverables: Schedule (CSV), Diagram (PNG/PDF), Browser Print, off already-shipped data + the canvas renderer (docs/specs/export-print/). "true"/"1" enables it; off by default during build (flips on at M5). */
   readonly VITE_EXPORT_PRINT?: string;
+  /** On-canvas advanced activity types — the single "Level of Effort (hammock)" Add-menu item that arms a canvas endpoint-pick tool (pick start driver → finish driver → LOE + SS/FF edges as one undoable action), over the already-shipped LOE engine/API (Stage D, docs/specs/canvas-activity-types/). "true"/"1" enables it; off by default during build (flips on after reviews, Task 4). */
+  readonly VITE_CANVAS_ACTIVITY_TYPES?: string;
 }

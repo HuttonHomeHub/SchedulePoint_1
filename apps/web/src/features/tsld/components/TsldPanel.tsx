@@ -14,7 +14,7 @@ import {
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
-import type { EditIntent } from '../interaction/gesture-machine';
+import type { EditIntent, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
   announceChainStep,
@@ -120,6 +120,16 @@ export interface TsldLinkInput {
 
 export type TsldLinkOutcome = TsldEditOutcome;
 
+/** A committed LOE endpoint-pick (Stage D) — the two driver activities the span hangs off. The route
+ * composes a `LEVEL_OF_EFFORT` activity plus an SS (start → LOE) and FF (LOE → finish) edge as one
+ * undoable action; no `HAMMOCK` is ever created (the LOE is the span-derived hammock). */
+export interface TsldLoeSpanInput {
+  startDriverId: string;
+  finishDriverId: string;
+}
+
+export type TsldLoeSpanOutcome = TsldEditOutcome;
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
@@ -137,6 +147,11 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
+   * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
+   * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
+   * LOE tool-mode (armed from the flag-gated Add-menu item) enables the on-canvas endpoint-pick. */
+  onLoeSpan?: (input: TsldLoeSpanInput) => Promise<TsldLoeSpanOutcome>;
   /** Route-composed auto-arrange handler (M4 4.3): persists the packed lanes via the batch
    * positions endpoint (all-or-nothing, no recalc). Resolves with a conflict message when a stale
    * version refused the whole batch; rejects on real error. Its presence shows the toolbar action. */
@@ -223,6 +238,7 @@ export function TsldPanel({
   onCreate,
   onReposition,
   onLink,
+  onLoeSpan,
   onAutoArrange,
   onOpenLogic,
   onEditActivity,
@@ -269,6 +285,8 @@ export function TsldPanel({
     canvasControlRef,
     createType,
     linkType,
+    loeStartId,
+    setLoeStartId,
     lensState,
     navState,
   } = canvasUi ?? ownCanvasUi;
@@ -301,6 +319,54 @@ export function TsldPanel({
   // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
+  // The LOE endpoint-pick tool's picked **start driver** (Stage D, `docs/specs/canvas-activity-types/`)
+  // now lives in the shared canvas UI state (destructured above) so it is the ONE source of truth read
+  // by the keyboard flow (listbox Enter), the pointer flow (seeded into the canvas via `loePickStartId`),
+  // and the toolbar's Add-trigger label. Null when no start is picked; cleared when the tool disarms.
+  // Whether the LOE tool's disarm was triggered by a SUCCESSFUL commit (B1) rather than an Escape /
+  // abandon — so the disarm effect below announces "cancelled/closed" only on a genuine cancel, never
+  // after the success announcement (spec B2 sequencing). Set by `runLoeSpan` just before it disarms.
+  const loeCommitDisarmRef = useRef(false);
+  // Mirror the live picked-start id so the mode effect can read it at disarm time WITHOUT listing
+  // `loeStartId` as a dep (which would re-announce the arm prompt on every pick).
+  const loeStartIdRef = useRef(loeStartId);
+  useEffect(() => {
+    loeStartIdRef.current = loeStartId;
+  }, [loeStartId]);
+  // True while the LOE tool is armed, so the disarm branch only reacts to a real transition FROM `'loe'`
+  // (never the initial mount, where `mode` starts `'select'`).
+  const loeArmedRef = useRef(false);
+  // Arm/disarm side effects: announce the first prompt when the LOE tool is armed (its canvas is
+  // aria-hidden, so the prompt must be spoken), and — on disarm — drop any half-finished pick and
+  // announce the disarm (WCAG 4.1.3), UNLESS a successful commit already announced its success. Runs
+  // only on a `mode` transition. Inert while the flag is off — `mode` is never `'loe'` then.
+  useEffect(() => {
+    if (mode === 'loe') {
+      loeArmedRef.current = true;
+      announce('Level of effort (hammock): pick the start driver, then the finish driver.');
+      return;
+    }
+    // Only react to a genuine disarm (a transition FROM `'loe'`), not the mount / other-mode renders.
+    if (!loeArmedRef.current) return;
+    loeArmedRef.current = false;
+    const hadStart = loeStartIdRef.current !== null;
+    // Leaving the LOE tool drops any half-finished pick, so a re-arm never inherits a stale start driver.
+    // The endorsed "subscribe to an external system (the toolbar-owned tool `mode`), setState in
+    // response" effect case (mirrors the Next-conflict select-signal sync above). `setLoeStartId` is the
+    // shared canvas-UI setter (a prop, not local state), so no set-state-in-effect suppression is needed.
+    setLoeStartId(null);
+    // A successful commit already announced "Added a level-of-effort span…"; don't also say "cancelled".
+    if (loeCommitDisarmRef.current) {
+      loeCommitDisarmRef.current = false;
+      return;
+    }
+    // Otherwise this is an Escape / menu-toggle / re-select disarm — announce it so the aria-hidden
+    // canvas's silent tool change isn't invisible to AT (B2). "Cancelled" when a start was pending, else
+    // "closed"; keep the "(hammock)" anchor a planner may have searched for (S2).
+    announce(
+      hadStart ? 'Level of effort (hammock) cancelled.' : 'Level of effort (hammock) tool closed.',
+    );
+  }, [mode, announce, setLoeStartId]);
 
   const renderActivities = useMemo(
     () => toRenderActivities(activities, barDateSource),
@@ -561,6 +627,30 @@ export function TsldPanel({
 
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
+    // LOE endpoint-pick keyboard path (Stage D) — the parallel-DOM equivalent of the pointer two-pick,
+    // so the tool is fully keyboard-operable (WCAG 2.1.1). In the LOE tool, Enter picks the FOCUSED
+    // activity: first as the start driver (prompt for the finish), then — on a DIFFERENT activity — it
+    // commits the span. Re-picking the same activity is rejected + re-prompted (spec §Edge cases).
+    // Escape (the canvas window listener) disarms the whole tool. Takes precedence over the Enter →
+    // open-logic path below while the tool is armed.
+    if (editingEnabled && mode === 'loe' && onLoeSpan && event.key === 'Enter') {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current) return;
+      if (loeStartId === null) {
+        setLoeStartId(current.id);
+        announce(
+          `Picked “${current.name}” as the level-of-effort start driver. Now pick the finish driver.`,
+        );
+        return;
+      }
+      if (current.id === loeStartId) {
+        announce('That’s the start driver — pick a different activity as the finish driver.');
+        return;
+      }
+      runLoeSpan(loeStartId, current.id);
+      return;
+    }
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
     // creating links, so link-draw introduces no pointer-only capability (WCAG 2.1.1).
     if (event.key === 'Enter' && onOpenLogic) {
@@ -726,6 +816,54 @@ export function TsldPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoArrangeSignal]);
 
+  // Compose the LOE span from the two picked drivers (Stage D) — shared by the pointer commit (a
+  // `loeSpan` intent) and the keyboard commit (the second listbox Enter). Clears the pick, then hands
+  // off to the route's `onLoeSpan` (which owns the create + SS/FF + one-undo + rollback + recalc);
+  // announces only when the span actually landed, mirroring the link path's outcome handling.
+  const runLoeSpan = (startDriverId: string, finishDriverId: string): void => {
+    if (!onLoeSpan) return;
+    clearConflict();
+    setLoeStartId(null);
+    const start = activities.find((a) => a.id === startDriverId);
+    const finish = activities.find((a) => a.id === finishDriverId);
+    void onLoeSpan({ startDriverId, finishDriverId })
+      .then((outcome) => {
+        if (outcome.conflict) showConflict(outcome.conflict);
+        if (outcome.applied) {
+          announce(
+            `Added a level-of-effort span from “${start?.name ?? 'activity'}” to “${finish?.name ?? 'activity'}”.`,
+          );
+          // Disarm the tool after a successful compose (spec §2/§workflow AC; WCAG 4.1.3 — a sticky
+          // armed state reads as ambiguous to AT after the success announcement). This intentionally
+          // diverges from the Link tool's sticky-after-commit behaviour — the LOE spec wants a disarm.
+          // Flag the disarm as commit-driven so the mode effect doesn't ALSO announce "cancelled" over
+          // the success message (B2 sequencing). A conflict/rollback keeps the tool armed for a retry.
+          loeCommitDisarmRef.current = true;
+          setMode('select');
+        }
+      })
+      .catch((err: unknown) => {
+        showConflict(err instanceof Error ? err.message : 'Couldn’t add the level-of-effort span.');
+      });
+  };
+
+  // The LOE tool's per-pick feedback from the canvas (Stage D) — announce the prompt + keep the
+  // parallel `loeStartId` in step with the pointer pick, so the keyboard and pointer flows agree.
+  const handleLoeSpanStep = (step: LoeSpanStep): void => {
+    if (step.kind === 'start') {
+      setLoeStartId(step.startId);
+      const picked = activities.find((a) => a.id === step.startId);
+      announce(
+        `Picked “${picked?.name ?? 'activity'}” as the level-of-effort start driver. Now pick the finish driver.`,
+      );
+    } else if (step.kind === 'reprompt') {
+      announce('That’s the start driver — pick a different activity as the finish driver.');
+    } else {
+      setLoeStartId(null);
+      announce('Level-of-effort pick cancelled. Pick the start driver.');
+    }
+  };
+
   const onIntent = (intent: EditIntent, anchor: Point): void => {
     // Ignore a new gesture while a create popover or a reposition is already in flight.
     if (pendingCreate || pendingReposition) return;
@@ -849,6 +987,11 @@ export function TsldPanel({
         .catch((err: unknown) => {
           showConflict(err instanceof Error ? err.message : 'Couldn’t create the link.');
         });
+    }
+    if (intent.kind === 'loeSpan') {
+      // The two-click LOE tool committed (Stage D). Compose the span via the shared helper — the route
+      // owns the create + SS/FF edges + one-undo + rollback + recalc (`model.createLoeSpan`).
+      runLoeSpan(intent.startDriverId, intent.finishDriverId);
     }
   };
 
@@ -978,6 +1121,8 @@ export function TsldPanel({
               canReposition={onReposition !== undefined}
               canLink={onLink !== undefined}
               onIntent={onIntent}
+              onLoeSpanStep={handleLoeSpanStep}
+              loePickStartId={loeStartId}
               onExitAddMode={() => setMode('select')}
               view={viewToggles}
               isWorkingDay={workingDayPredicate}

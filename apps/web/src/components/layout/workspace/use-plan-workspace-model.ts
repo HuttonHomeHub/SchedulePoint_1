@@ -39,6 +39,8 @@ import {
   type TsldCreateOutcome,
   type TsldLinkInput,
   type TsldLinkOutcome,
+  type TsldLoeSpanInput,
+  type TsldLoeSpanOutcome,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
   type TsldEditOutcome,
@@ -46,6 +48,7 @@ import {
 import {
   autoArrangeCommand,
   createActivityCommand,
+  createLoeSpanCommand,
   deleteActivityCommand,
   dependencyAddCommand,
   dependencyRemoveCommand,
@@ -720,6 +723,113 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce],
   );
 
+  // Compose a **Level of Effort span** from two driver activities (Stage D, spec
+  // `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`) — the canvas endpoint-pick
+  // tool's commit. It reuses the *shipped* LOE type + API (M5-epic, ADR-0035 §21): create a
+  // `LEVEL_OF_EFFORT` activity (duration is engine-derived, so `durationDays: 0`) → SS (start → LOE) →
+  // FF (LOE → finish), recorded as ONE undoable `createLoeSpanCommand` (undo deletes the LOE, cascading
+  // its edges; redo re-composes). It is NON-ATOMIC across three POSTs, so on ANY sub-mutation failure it
+  // ROLLS BACK the just-created LOE (delete → cascade removes any partial edge) so no orphan survives,
+  // refetches the server truth, and clears the now-untrustworthy redo branch (ADR-0048's conflict
+  // contract) — mirroring `onTsldLink`'s non-destructive 409/422 + 423 handling. The engine already
+  // produces-and-flags a no-span LOE (N12 `loeNoSpan`), so the no-span case just succeeds. No `HAMMOCK`
+  // is ever created — the LOE is the span-derived hammock (Stage D Q1). Only the existing activity +
+  // dependency creates run, so the CPM engine and its recalc parity gate are untouched.
+  const createLoeSpan = async ({
+    startDriverId,
+    finishDriverId,
+  }: TsldLoeSpanInput): Promise<TsldLoeSpanOutcome> => {
+    // Defensive: the tool pre-checks the same-activity case (an LOE can't be its own driver), so this
+    // is a no-op guard, never a request.
+    if (startDriverId === finishDriverId) return { applied: false, conflict: null };
+    const rows = activitiesRef.current ?? [];
+    // Place the LOE in its start driver's lane so it appears beside the span it derives from (layout
+    // only; the engine owns its dates). Fall back to lane 0 if the driver isn't loaded.
+    const laneIndex = rows.find((a) => a.id === startDriverId)?.laneIndex ?? 0;
+    const placedInput = {
+      name: 'Level of effort',
+      type: 'LEVEL_OF_EFFORT' as const,
+      durationDays: 0,
+      laneIndex,
+    };
+    // Step 1 — create the LOE. A failure here leaves nothing to roll back.
+    let loe: ActivitySummary;
+    try {
+      loe = await createPlacedActivity.mutateAsync(placedInput);
+    } catch (err) {
+      if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
+      if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
+        onTsldRefresh();
+        if (UNDO_REDO_ENABLED) editHistory.clearRedo();
+        return { applied: false, conflict: err.error.message };
+      }
+      throw err;
+    }
+    // Steps 2 & 3 — the SS + FF edges. Both depend only on the new LOE id (not on each other), so they
+    // fire concurrently (`Promise.all`) to save a round-trip. On ANY failure, roll back the LOE (delete
+    // cascades any partial edge), refetch, and clear redo — so no orphan LOE with 0/1 edge is ever left
+    // behind; `Promise.all` rejects on the first failure but both POSTs have already been dispatched, so
+    // the rollback still cleans up a landed edge.
+    try {
+      await Promise.all([
+        createDependency.mutateAsync({
+          planId,
+          predecessorId: startDriverId,
+          successorId: loe.id,
+          type: 'SS',
+          lagDays: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+        }),
+        createDependency.mutateAsync({
+          planId,
+          predecessorId: loe.id,
+          successorId: finishDriverId,
+          type: 'FF',
+          lagDays: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+        }),
+      ]);
+    } catch (err) {
+      // Best-effort rollback — a failed delete (e.g. the pen was also lost) still leaves the server to
+      // reconcile on refetch; never surface the rollback's own error over the original cause.
+      try {
+        await deleteActivity.mutateAsync(loe.id);
+      } catch {
+        /* swallow: the refetch below re-syncs the client to server truth */
+      }
+      onTsldRefresh();
+      if (UNDO_REDO_ENABLED) editHistory.clearRedo();
+      if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
+      if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
+        return { applied: false, conflict: err.error.message };
+      }
+      throw err;
+    }
+    // Record the whole compose as ONE reversible step (ADR-0048) — undo deletes the LOE (cascading its
+    // edges); redo re-composes. The single user edit, NOT the follow-up recalc. Guarded on the flag.
+    if (UNDO_REDO_ENABLED) {
+      editHistory.record(
+        createLoeSpanCommand({
+          loe,
+          placedInput,
+          planId,
+          startDriverId,
+          finishDriverId,
+          createPlaced: createPlacedActivity.mutateAsync,
+          createDependency: createDependency.mutateAsync,
+          deleteActivity: deleteActivity.mutateAsync,
+        }),
+      );
+    }
+    // Fire the coalesced auto-recalc so the LOE redraws at its engine-derived span (ADR-0032). A recalc
+    // failure is non-fatal — the span persisted; the dates land on the next recalc. This is unconditional
+    // because `createLoeSpan` is only reachable when the LOE tool is armed (the Add split-button, hence
+    // CANVAS_AUTHORING_ENABLED); `autoRecalc.enabled` is likewise gated on it, so `notifyRecalc` is a
+    // no-op otherwise — do NOT "fix" it by flag-guarding here.
+    notifyRecalc();
+    return { applied: true, conflict: null };
+  };
+
   return {
     orgSlug,
     planId,
@@ -797,6 +907,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     onTsldLink,
     onTsldAutoArrange,
     onTsldRefresh,
+    // Compose a Level of Effort span from two driver activities (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`)
+    // — reuses the shipped LOE type/API; one undoable action with rollback-on-partial-failure.
+    createLoeSpan,
   };
 }
 

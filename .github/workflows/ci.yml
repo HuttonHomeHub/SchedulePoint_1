@@ -194,6 +194,14 @@ jobs:
       - name: Web end-to-end tests (undo/redo flag on)
         run: pnpm --filter @repo/web test:e2e:undo
 
+      # Flag-ON on-canvas activity types journey (playwright.loe.config.ts) serving the app with
+      # VITE_CANVAS_ACTIVITY_TYPES on (layered on the canvas authoring/toolbar/workspace/editing/pen
+      # flags, with the pen enforced), so the Level-of-Effort endpoint-pick tool — the Add-menu item,
+      # the two-click keyboard pick, and the announcements — is exercised end to end (Stage D). Runs
+      # last, after the prior runs tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (on-canvas activity types flag on)
+        run: pnpm --filter @repo/web test:e2e:loe
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -208,6 +216,7 @@ jobs:
             apps/web/playwright-report-programme/
             apps/web/playwright-report-notes/
             apps/web/playwright-report-undo/
+            apps/web/playwright-report-loe/
           if-no-files-found: ignore
           retention-days: 7
 
