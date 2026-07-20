@@ -2,6 +2,7 @@ import type { ActivitySummary, ActivityType, DependencyType, SchedulingMode } fr
 import type { ReactNode } from 'react';
 
 import type { ColourMode, FilterAttr } from '../render/lenses';
+import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
@@ -189,4 +190,37 @@ export interface TsldToolbarContext {
   varianceLoading: boolean;
   /** True when the baseline-variance query errored (overlay disabled, reason "Baseline unavailable"). */
   varianceError: boolean;
+
+  // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
+  // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain), Next
+  // conflict (cycle flagged activities), Snap to grid (round Visual drops to a working day). Populated on
+  // every build from `canvasUi.navState` + the activities; nothing reads them while the flag is off (the
+  // three ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
+  /** Whether the *Isolate logic path* emphasis is active (drives the toggle's pressed state). */
+  isolateActive: boolean;
+  /** The isolate chain mode — the full transitive chain, or the driving-only sub-chain (CQ-1). */
+  isolateMode: LogicPathMode;
+  /** Toggle the isolate emphasis on/off (view-only; requires a selection + a computed diagram). */
+  toggleIsolate: () => void;
+  /** Pick the isolate chain mode AND arm isolate on (a picked mode always means "isolate now"). */
+  setIsolateMode: (mode: LogicPathMode) => void;
+  /** How many activities carry a *Next conflict* flag (drives the item's enabled state + "N" in the
+   * announcement). Zero ⇒ the item shades with "No conflicts to review". */
+  conflictCount: number;
+  /** True when the plan has ≥ 1 flagged activity (`conflictCount > 0`). */
+  hasConflicts: boolean;
+  /** The current-conflict readout the **visible** Next-conflict status chip renders (U2) — the 1-based
+   * position, the total, the name, and every matched reason of the last-visited conflict. `null` until
+   * the user starts cycling (no cursor), while isolating, when there are no conflicts, or flag-off — so
+   * the chip only appears while a conflict is actually being reviewed. It is the visible half of the
+   * polite "<i> of <n>: <name> — <reasons>" announcement `goToNextConflict` still speaks. */
+  currentConflict: { index: number; total: number; name: string; reasons: string[] } | null;
+  /** Advance to the next flagged activity (wrapping): centre + select it and announce "<i> of <n>:
+   * <name> — <reasons>". A no-op when there are no conflicts. View-only (every role). */
+  goToNextConflict: () => void;
+  /** Whether *Snap to grid* is on (drives the toggle's pressed state). Session-local (CQ-3). */
+  snapToGrid: boolean;
+  /** Toggle *Snap to grid* on/off (pen-gated + Visual mode; rounds a dropped `visualStart` to the
+   * nearest working day before the existing PATCH). */
+  toggleSnapToGrid: () => void;
 }

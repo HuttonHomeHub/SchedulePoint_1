@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 
+import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
+
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
@@ -10,10 +12,18 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import {
+  CANVAS_AUTHORING_ENABLED,
+  CANVAS_NAV_ENABLED,
+  SCHEDULING_MODES_ENABLED,
+} from '@/config/env';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
+
+/** A stable empty conflict list, so the flag-off path (P-sug1) hands a byte-stable reference to the
+ * memos below (`orderedConflicts` is never even called when the flag is off — "flag-off ⇒ zero cost"). */
+const EMPTY_CONFLICTS: readonly ConflictHit[] = [];
 
 /** The pinned Tier-1 Project-finish chip (product-owner decision #1) — the number planners glance
  * at most, kept inline even though the rest of the summary moves into `Summary▾`. Loading shows a
@@ -80,7 +90,9 @@ export function useTsldToolbarContext({
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setPlanMode = useSetPlanSchedulingMode(orgSlug);
 
-  const activities = model.activities.data ?? [];
+  // Stabilise the activities reference (a `?? []` is a fresh array each render) so the memos keyed on it
+  // (the conflict ordering + `goToNextConflict`) don't rebuild every render.
+  const activities = useMemo(() => model.activities.data ?? [], [model.activities.data]);
   const hasDiagram =
     activities.length > 0 &&
     activities.some((a) => a.earlyStart !== null) &&
@@ -160,7 +172,68 @@ export function useTsldToolbarContext({
     toggleFilterAttr,
     setColourMode,
     toggleBaselineOverlay,
+    navState,
+    toggleIsolate,
+    setIsolateMode,
+    setConflictCursorId,
+    toggleSnapToGrid,
+    requestSelectActivity,
   } = canvasUi;
+
+  // Canvas nav (VITE_CANVAS_NAV): the plan's flagged activities in stable order (CQ-2), memoised on the
+  // activities only so it never rebuilds per render. `goToNextConflict` reads it to advance the cursor,
+  // centre + select the hit, and announce; `conflictCount`/`hasConflicts` gate the toolbar item. Nothing
+  // reads any of this while the flag is off (the id resolves to its placeholder stub), so it is inert.
+  // Gated on the flag (P-sug1): flag-off ⇒ the stable empty list, so `orderedConflicts` never runs and
+  // `hasConflicts`/`conflictCount`/`currentConflict` all degrade to zero/null — matching the flag's
+  // "flag-off ⇒ zero cost" contract (`orderedConflicts` is only exercised when the feature is on).
+  const orderedConflictHits = useMemo(
+    () => (CANVAS_NAV_ENABLED ? orderedConflicts(activities) : EMPTY_CONFLICTS),
+    [activities],
+  );
+  // The current-conflict readout the visible Next-conflict status chip renders (U2), derived from the
+  // cursor + the ordered set. Null (chip hidden) until the user starts cycling (no cursor), while
+  // isolating, when the cursor's activity is no longer flagged, when there are none, or flag-off (the
+  // ordered set is then empty). Kept in step with the polite announcement `goToNextConflict` speaks.
+  const currentConflict = useMemo<TsldToolbarContext['currentConflict']>(() => {
+    if (navState.isolateActive || navState.conflictCursorId === null) return null;
+    const index = orderedConflictHits.findIndex((h) => h.id === navState.conflictCursorId);
+    if (index === -1) return null;
+    const hit = orderedConflictHits[index];
+    if (!hit) return null;
+    return {
+      index: index + 1,
+      total: orderedConflictHits.length,
+      name: hit.name,
+      reasons: hit.reasons,
+    };
+  }, [navState.isolateActive, navState.conflictCursorId, orderedConflictHits]);
+  const goToNextConflict = useMemo(
+    () => (): void => {
+      if (orderedConflictHits.length === 0) return;
+      const index = nextConflictIndex(navState.conflictCursorId, orderedConflictHits);
+      const hit = orderedConflictHits[index];
+      if (!hit) return;
+      setConflictCursorId(hit.id);
+      // Centre the flagged bar (a small centred variant of `goToDate`), then lift the selection to it —
+      // the canvas rings it; the reveal-on-select pan is then a no-op since it is already centred.
+      const activity = activities.find((a) => a.id === hit.id);
+      if (activity?.earlyStart) canvasControlRef.current?.centerOnDate(activity.earlyStart);
+      requestSelectActivity(hit.id);
+      announce(
+        `Conflict ${index + 1} of ${orderedConflictHits.length}: ${hit.name} — ${hit.reasons.join(', ')}.`,
+      );
+    },
+    [
+      orderedConflictHits,
+      navState.conflictCursorId,
+      setConflictCursorId,
+      activities,
+      canvasControlRef,
+      requestSelectActivity,
+      announce,
+    ],
+  );
 
   // Insight lenses (VITE_CANVAS_LENSES): the Baseline-overlay gate reads the SAME variance query the
   // activities table + the ghost builder consume (route-composed in the model) — no new fetch. An
@@ -310,6 +383,19 @@ export function useTsldToolbarContext({
       hasActiveBaseline,
       varianceLoading,
       varianceError,
+
+      // Canvas nav (VITE_CANVAS_NAV) — the isolate/next-conflict/snap view state + commands. Inert while
+      // the flag is off (the three ids resolve to their placeholder stubs).
+      isolateActive: navState.isolateActive,
+      isolateMode: navState.isolateMode,
+      toggleIsolate,
+      setIsolateMode,
+      conflictCount: orderedConflictHits.length,
+      hasConflicts: orderedConflictHits.length > 0,
+      currentConflict,
+      goToNextConflict,
+      snapToGrid: navState.snapToGrid,
+      toggleSnapToGrid,
     }),
     [
       zoomPreset,
@@ -367,6 +453,17 @@ export function useTsldToolbarContext({
       hasActiveBaseline,
       varianceLoading,
       varianceError,
+      // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
+      // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
+      navState.isolateActive,
+      navState.isolateMode,
+      navState.snapToGrid,
+      toggleIsolate,
+      setIsolateMode,
+      toggleSnapToGrid,
+      orderedConflictHits.length,
+      currentConflict,
+      goToNextConflict,
     ],
   );
 }

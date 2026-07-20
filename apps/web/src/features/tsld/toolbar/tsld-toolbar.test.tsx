@@ -21,6 +21,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // stays the disabled stub and filter/colour-by/baseline-overlay stay "Coming soon" placeholders. The
   // real flag-on lens controls are covered in tsld-toolbar-lenses.test.tsx.
   CANVAS_LENSES_ENABLED: false,
+  // Pin canvas nav OFF here too: isolate / next-conflict / snap stay "Coming soon" placeholders. The
+  // real flag-on nav controls are covered in tsld-toolbar-canvas-nav.test.tsx.
+  CANVAS_NAV_ENABLED: false,
 }));
 
 const spies = {
@@ -272,6 +275,17 @@ describe('TSLD toolbar registry (two-row)', () => {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);
+    }
+  });
+
+  it('shows the canvas-nav features (isolate / next-conflict / snap) as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
+    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the three
+    // ids must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
+    renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
+    for (const name of ['Isolate logic path', 'Next conflict', 'Snap to grid']) {
+      const btn = screen.getByRole('button', { name });
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 

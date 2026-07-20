@@ -23,6 +23,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   SCHEDULING_MODES_ENABLED: true,
+  // Pin canvas nav OFF here: this suite proves the flag-off conflict gate (P-sug1) — `orderedConflicts`
+  // must not run, so the conflict surface degrades to zero/null. The flag-on conflict derivation is
+  // covered in use-tsld-toolbar-context-canvas-nav.test.tsx.
+  CANVAS_NAV_ENABLED: false,
 }));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
@@ -97,6 +101,18 @@ function makeCanvasUi(lateOverlay = false): TsldCanvasUiState {
     toggleFilterAttr: vi.fn(),
     setColourMode: vi.fn(),
     toggleBaselineOverlay: vi.fn(),
+    navState: {
+      isolateActive: false,
+      isolateMode: 'full',
+      conflictCursorId: null,
+      snapToGrid: false,
+      selectSignal: null,
+    },
+    toggleIsolate: vi.fn(),
+    setIsolateMode: vi.fn(),
+    setConflictCursorId: vi.fn(),
+    toggleSnapToGrid: vi.fn(),
+    requestSelectActivity: vi.fn(),
   } as unknown as TsldCanvasUiState;
 }
 
@@ -140,5 +156,33 @@ describe('useTsldToolbarContext — quick-wins glue', () => {
   it('lateOverlayActive tracks the Late-start overlay view toggle (A1)', () => {
     expect(build(false).current.lateOverlayActive).toBe(false);
     expect(build(true).current.lateOverlayActive).toBe(true);
+  });
+
+  it('computes NO conflicts while VITE_CANVAS_NAV is off, even with a flagged activity + cursor (P-sug1)', () => {
+    // This suite leaves CANVAS_NAV at its default (off): `orderedConflicts` must not run, so the whole
+    // conflict surface degrades to zero/null regardless of the flags/cursor in state.
+    const model = makeModel();
+    model.activities.data = [{ ...SELECTED, constraintViolated: true, earlyStart: '2026-01-01' }];
+    const canvasUi = makeCanvasUi();
+    (canvasUi as { navState: unknown }).navState = {
+      isolateActive: false,
+      isolateMode: 'full',
+      conflictCursorId: 'a1',
+      snapToGrid: false,
+      selectSignal: null,
+    };
+    const { result } = renderHook(() =>
+      useTsldToolbarContext({
+        model,
+        plan: PLAN,
+        canvasUi,
+        openDialog: vi.fn(),
+        legend: { open: false, toggle: vi.fn() },
+        revealComments: vi.fn(),
+      }),
+    );
+    expect(result.current.conflictCount).toBe(0);
+    expect(result.current.hasConflicts).toBe(false);
+    expect(result.current.currentConflict).toBeNull();
   });
 });

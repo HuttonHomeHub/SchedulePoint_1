@@ -52,4 +52,42 @@ describe('useTsldCanvasUiState', () => {
     act(() => result.current.toggleBaselineOverlay());
     expect(result.current.lensState.baselineOverlay).toBe(true);
   });
+
+  it('drives the canvas nav view state (isolate / conflict cursor / snap / select signal)', () => {
+    const { result } = renderHook(() => useTsldCanvasUiState());
+    // Defaults are the "no nav active" identity.
+    expect(result.current.navState).toEqual({
+      isolateActive: false,
+      isolateMode: 'full',
+      conflictCursorId: null,
+      snapToGrid: false,
+      selectSignal: null,
+    });
+
+    // Toggling isolate flips only `isolateActive`.
+    act(() => result.current.toggleIsolate());
+    expect(result.current.navState.isolateActive).toBe(true);
+    act(() => result.current.toggleIsolate());
+    expect(result.current.navState.isolateActive).toBe(false);
+
+    // Picking a mode ARMS isolate on (a pick always means "isolate now"), mirroring setCreateType.
+    act(() => result.current.setIsolateMode('driving'));
+    expect(result.current.navState.isolateMode).toBe('driving');
+    expect(result.current.navState.isolateActive).toBe(true);
+
+    // The conflict cursor is remembered verbatim.
+    act(() => result.current.setConflictCursorId('a1'));
+    expect(result.current.navState.conflictCursorId).toBe('a1');
+
+    // Snap is a session toggle.
+    act(() => result.current.toggleSnapToGrid());
+    expect(result.current.navState.snapToGrid).toBe(true);
+
+    // Each select request bumps a monotonic nonce so a repeat jump to the same id still fires.
+    act(() => result.current.requestSelectActivity('a2'));
+    const first = result.current.navState.selectSignal;
+    expect(first).toEqual({ id: 'a2', nonce: 1 });
+    act(() => result.current.requestSelectActivity('a2'));
+    expect(result.current.navState.selectSignal).toEqual({ id: 'a2', nonce: 2 });
+  });
 });

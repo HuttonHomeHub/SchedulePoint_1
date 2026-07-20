@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { TsldCanvasHandle } from '../components/TsldCanvas';
 import type { EditMode } from '../interaction/gesture-machine';
 import type { ColourMode, FilterAttr } from '../render/lenses';
+import type { LogicPathMode } from '../render/logic-path';
 import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
@@ -58,6 +59,38 @@ export interface TsldCanvasUiState {
   toggleFilterAttr: (attr: FilterAttr) => void;
   setColourMode: (mode: ColourMode) => void;
   toggleBaselineOverlay: () => void;
+  /**
+   * The **canvas navigation & authoring** view state (spec `docs/specs/canvas-nav/`, behind
+   * `VITE_CANVAS_NAV`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor, the
+   * *Snap to grid* toggle, and a one-shot **select signal** the toolbar uses to drive the canvas
+   * selection (for Next-conflict). Pure CLIENT VIEW STATE, exactly like {@link lensState}: never server
+   * state, never persisted. Defaults (isolate off, no cursor, snap off, no signal) produce no dim, no
+   * snap and no selection command ⇒ byte-for-byte parity.
+   */
+  navState: NavState;
+  /** Toggle the Isolate-logic-path emphasis on/off (session-local). */
+  toggleIsolate: () => void;
+  /** Set the isolate chain mode AND arm isolate on (a picked mode always means "isolate now"), mirroring
+   * the Add split-button's `setCreateType`. */
+  setIsolateMode: (mode: LogicPathMode) => void;
+  /** Remember the last-visited conflict id (the *Next conflict* cursor). */
+  setConflictCursorId: (id: string | null) => void;
+  /** Toggle *Snap to grid* on/off (session-local, CQ-3). */
+  toggleSnapToGrid: () => void;
+  /** Ask the canvas (via `TsldPanel`) to select an activity — the *Next conflict* selection lift. A
+   * monotonic `nonce` makes each request distinct so repeated jumps to the same id still fire. */
+  requestSelectActivity: (id: string) => void;
+}
+
+/** The canvas nav/authoring view-state shape (see {@link TsldCanvasUiState.navState}). */
+export interface NavState {
+  isolateActive: boolean;
+  isolateMode: LogicPathMode;
+  conflictCursorId: string | null;
+  snapToGrid: boolean;
+  /** The pending selection command from the toolbar (Next-conflict), or null. `TsldPanel` applies it and
+   * de-dupes by `nonce`. */
+  selectSignal: { id: string; nonce: number } | null;
 }
 
 /** The lens view-state shape (see {@link TsldCanvasUiState.lensState}). */
@@ -76,6 +109,15 @@ const DEFAULT_LENS_STATE: LensState = {
   baselineOverlay: false,
 };
 
+/** The nav defaults — the "no nav active" identity (isolate off, no cursor, snap off, no signal). */
+const DEFAULT_NAV_STATE: NavState = {
+  isolateActive: false,
+  isolateMode: 'full',
+  conflictCursorId: null,
+  snapToGrid: false,
+  selectSignal: null,
+};
+
 export function useTsldCanvasUiState(): TsldCanvasUiState {
   const [mode, setMode] = useState<EditMode>('select');
   const [viewToggles, setViewToggles] = useState<TsldViewToggles>(DEFAULT_VIEW_TOGGLES);
@@ -86,6 +128,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   const [createType, setCreateType] = useState<ActivityType>('TASK');
   const [linkType, setLinkType] = useState<DependencyType>('FS');
   const [lensState, setLensState] = useState<LensState>(DEFAULT_LENS_STATE);
+  const [navState, setNavState] = useState<NavState>(DEFAULT_NAV_STATE);
   const canvasControlRef = useRef<TsldCanvasHandle>(null);
 
   const toggleView = useCallback(
@@ -116,6 +159,32 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
     (): void => setLensState((s) => ({ ...s, baselineOverlay: !s.baselineOverlay })),
     [],
   );
+  const toggleIsolate = useCallback(
+    (): void => setNavState((s) => ({ ...s, isolateActive: !s.isolateActive })),
+    [],
+  );
+  const setIsolateMode = useCallback(
+    // Picking a mode arms isolate on (a pick always means "isolate now"), mirroring `setCreateType`.
+    (isolateMode: LogicPathMode): void =>
+      setNavState((s) => ({ ...s, isolateMode, isolateActive: true })),
+    [],
+  );
+  const setConflictCursorId = useCallback(
+    (conflictCursorId: string | null): void => setNavState((s) => ({ ...s, conflictCursorId })),
+    [],
+  );
+  const toggleSnapToGrid = useCallback(
+    (): void => setNavState((s) => ({ ...s, snapToGrid: !s.snapToGrid })),
+    [],
+  );
+  const requestSelectActivity = useCallback(
+    (id: string): void =>
+      setNavState((s) => ({
+        ...s,
+        selectSignal: { id, nonce: (s.selectSignal?.nonce ?? 0) + 1 },
+      })),
+    [],
+  );
 
   // Memoised on its own values (setters/ref are stable), so the object's identity only changes when
   // the canvas view-state actually changes — an unrelated parent re-render (e.g. an activity-panel
@@ -144,6 +213,12 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       toggleFilterAttr,
       setColourMode,
       toggleBaselineOverlay,
+      navState,
+      toggleIsolate,
+      setIsolateMode,
+      setConflictCursorId,
+      toggleSnapToGrid,
+      requestSelectActivity,
     }),
     [
       mode,
@@ -162,6 +237,12 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       toggleFilterAttr,
       setColourMode,
       toggleBaselineOverlay,
+      navState,
+      toggleIsolate,
+      setIsolateMode,
+      setConflictCursorId,
+      toggleSnapToGrid,
+      requestSelectActivity,
     ],
   );
 }
