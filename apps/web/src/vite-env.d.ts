@@ -61,4 +61,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_ACTIVITY_TYPES?: string;
   /** TSLD canvas-axis-aligned resource strip — turns the `resource-view` toolbar placeholder into a demand strip pinned to the TSLD time axis (a Canvas 2D sibling layer painted by the `TsldCanvas` loop from the shared viewport), over the already-shipped resource-histogram read-model (Stage E, ADR-0049, docs/specs/canvas-resource-view/). Gated on VITE_RESOURCE_CURVES. "true"/"1" enables it; off by default during build (flips on after reviews, Task 6). */
   readonly VITE_CANVAS_RESOURCE_VIEW?: string;
+  /** Schedule interchange web review UI — the project plan-create "Import from file…" entry + the dry-run review dialog (report table + approximation/repair/drop lists + download) + commit → open-plan, over the already-shipped `@repo/interchange` pipeline + the `interchange` dry-run/commit endpoints (Stage C2 M1, ADR-0050, docs/specs/schedule-interchange/). Additionally gated on the caller holding `interchange:import`. "true"/"1" enables it; off by default during build (flips on after the M1 specialist reviews). */
+  readonly VITE_SCHEDULE_INTERCHANGE?: string;
 }

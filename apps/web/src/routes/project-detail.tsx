@@ -2,10 +2,12 @@ import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Spinner } from '@/components/ui/spinner';
+import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { useClient } from '@/features/clients';
+import { ImportScheduleButton } from '@/features/interchange';
 import { CreatePlanButton, PlansTable } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import { canImportSchedule, canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
 /**
  * A project's plans screen (`/orgs/$orgSlug/projects/$projectId`): the project's
@@ -16,7 +18,9 @@ export function ProjectDetailScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const projectId = 'projectId' in params ? params.projectId : '';
-  const canWrite = canManageHierarchy(useOrgRole(orgSlug));
+  const role = useOrgRole(orgSlug);
+  const canWrite = canManageHierarchy(role);
+  const canImport = canImportSchedule(role);
   const project = useProject(orgSlug, projectId);
   // The parent client (for the breadcrumb trail); resolved once the project loads.
   const client = useClient(orgSlug, project.data?.clientId ?? '');
@@ -73,7 +77,21 @@ export function ProjectDetailScreen(): React.ReactElement {
             <p className="text-muted-foreground mt-1 text-sm">{project.data.description}</p>
           ) : null}
         </div>
-        {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
+        {/* Flag OFF ⇒ render exactly the prior surface (byte-for-byte, no wrapper). Flag ON ⇒ the
+            "Import from file…" entry sits beside "New plan" (the entry self-gates on interchange:import). */}
+        {SCHEDULE_INTERCHANGE_ENABLED ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <ImportScheduleButton
+              orgSlug={orgSlug}
+              projectId={projectId}
+              projectName={project.data.name}
+              canImport={canImport}
+            />
+            {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
+          </div>
+        ) : canWrite ? (
+          <CreatePlanButton orgSlug={orgSlug} projectId={projectId} />
+        ) : null}
       </div>
       <h2 className="mt-6 text-lg font-medium">Plans</h2>
       <div className="mt-3">

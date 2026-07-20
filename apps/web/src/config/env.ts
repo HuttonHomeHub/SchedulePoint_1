@@ -605,3 +605,26 @@ export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
  */
 export const CANVAS_RESOURCE_VIEW_ENABLED =
   flagDefaultOn(import.meta.env.VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED;
+
+/**
+ * Schedule interchange — the flagged web review UI for importing a foreign schedule file (Stage C2,
+ * M1; ADR-0050, spec `docs/specs/schedule-interchange/`). **OFF by default (dark during build)** — it
+ * flips on only after the specialist reviews (a11y / ux / component / security) are green (the M1
+ * review-gate step). When on, the project plan-create surface gains an **Import from file…** entry
+ * (gated additionally on the caller holding `interchange:import` — Planner + Org Admin) that opens a
+ * dry-run **review dialog**: pick a `.xer`, the app POSTs it to the dry-run endpoint and renders the
+ * returned `InterchangeReport` (mapped activity/relationship/calendar counts + the approximation /
+ * repair / drop findings as accessible lists, downloadable), then **Confirm import** commits it —
+ * creating the plan server-side (calendars + activities + dependencies, recalculated) and opening the
+ * new plan on the TSLD canvas.
+ *
+ * Everything behind it — the pure `@repo/interchange` parse/map/validate pipeline and the thin
+ * `interchange` API module's dry-run + commit endpoints — is already live (Tasks 1.2–1.5); this flag
+ * only governs whether the web UI exposes the entry + dialog. Flag OFF (or the caller lacking
+ * `interchange:import`) ⇒ the plan-create surface is byte-for-byte today's — no entry point, no
+ * dialog, and the `@repo/interchange` review code is never reached. Set `VITE_SCHEDULE_INTERCHANGE=true`
+ * to enable it in an environment.
+ */
+export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_SCHEDULE_INTERCHANGE,
+);
