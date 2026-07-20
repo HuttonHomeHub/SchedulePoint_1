@@ -9,11 +9,13 @@ import {
   ChevronDown,
   DollarSign,
   Eraser,
+  Crop,
   FileDown,
   FileSpreadsheet,
   Filter,
   Gauge,
   Grid3x3,
+  ImageDown,
   Info,
   Keyboard,
   Layers,
@@ -629,7 +631,8 @@ const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
  * The **Export ▾ menu-button** (export & print, `docs/specs/export-print/`, flag-on) — an APG
  * menu-button (mirroring {@link ColourByControl}) listing the plan's client-side deliverables. M1 ships
  * **Schedule (CSV)** plus a conditional **Matching activities only (N)** item shown only while a filter /
- * isolate lens narrows the set (CQ-3); M2/M3 add **Diagram (PNG)** / **(PDF)**. Shaded
+ * isolate lens narrows the set (CQ-3); M2 adds the two **Diagram (PNG)** extents (whole plan / current
+ * view, CQ-1); M3 adds **(PDF)**. Shaded
  * (disabled-with-reason "Add an activity first") on an empty/uncomputed canvas, matching the zoom
  * cluster's stable shape (ADR-0031 shade-don't-hide). One focusable roving stop (spreads `itemProps`);
  * each pick downloads + announces via the context command.
@@ -675,6 +678,17 @@ function ExportMenuControl({
             Matching activities only ({ctx.matchingCount})
           </MenuItem>
         ) : null}
+        {/* Diagram PNG (M2, CQ-1: offer BOTH extents). The whole-plan render re-frames an off-screen
+            canvas to the full activity extent (raster-capped, scale-to-fit); the current-view render
+            crops to the live viewport. Both paint off-screen with the light print palette + legend. */}
+        <MenuItem onSelect={() => ctx.exportDiagramPng('whole')}>
+          <ImageDown aria-hidden="true" className="size-4" />
+          Diagram — whole plan (PNG)
+        </MenuItem>
+        <MenuItem onSelect={() => ctx.exportDiagramPng('view')}>
+          <Crop aria-hidden="true" className="size-4" />
+          Diagram — current view (PNG)
+        </MenuItem>
       </Menu>
     </>
   );

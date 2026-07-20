@@ -3,10 +3,15 @@ import { useMemo } from 'react';
 
 import { downloadBlob } from '../export/download';
 import { buildScheduleCsv } from '../export/export-csv';
+import { buildExportViewport, EXPORT_TOP_BAND, type ExportExtent } from '../export/export-image';
 import { buildExportFilename } from '../export/filename';
+import { renderExportImage } from '../export/render-export-image';
 import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
 import { isFilterActive, matchesActivityFilter } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
+import { resolvePrintPalette } from '../render/palette';
+import { daysBetween } from '../render/render-model';
+import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../render/to-render-model';
 
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
@@ -101,6 +106,10 @@ export function useTsldToolbarContext({
   // Stabilise the activities reference (a `?? []` is a fresh array each render) so the memos keyed on it
   // (the conflict ordering + `goToNextConflict`) don't rebuild every render.
   const activities = useMemo(() => model.activities.data ?? [], [model.activities.data]);
+  // Stabilise the dependency edges too (a `?? []` is a fresh array each render), so the export-image
+  // command + the memo keyed on it don't rebuild every render. Optional-chained so a partial model
+  // (some hook tests omit `dependencies`) doesn't throw.
+  const dependencies = useMemo(() => model.dependencies?.data ?? [], [model.dependencies?.data]);
   const hasDiagram =
     activities.length > 0 &&
     activities.some((a) => a.earlyStart !== null) &&
@@ -477,7 +486,55 @@ export function useTsldToolbarContext({
         const count = scope === 'matching' ? exportMatch.matchingCount : activities.length;
         announce(`Downloaded ${filename} (${count} ${count === 1 ? 'activity' : 'activities'}).`);
       },
-      exportDiagramPng: () => {},
+      // Diagram (PNG) export (M2): frame an OFF-SCREEN canvas to the requested extent (whole / current
+      // view), paint it with the shipped `paintScene` + the light print palette, then download + announce.
+      // The live canvas is never touched (we only READ its viewport via the control handle). `hasDiagram`
+      // gates the menu, so `plannedStart` is non-null here; guard defensively anyway.
+      exportDiagramPng: (extent: ExportExtent) => {
+        const dataDate = plan.plannedStart;
+        const live = canvasControlRef.current?.getViewport();
+        if (dataDate === null || !live) return;
+        const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
+        const renderActivities = toRenderActivities(activities, source);
+        const scene = {
+          activities: renderActivities,
+          edges: toRenderEdges(dependencies),
+          dataDate,
+          view: viewToggles,
+          todayOffset: daysBetween(dataDate, todayIso),
+        };
+        const { viewport, size, dpr, scaledToFit } = buildExportViewport(
+          renderActivities,
+          dataDate,
+          {
+            extent,
+            liveViewport: live,
+            dpr: globalThis.devicePixelRatio || 1,
+            topBand: EXPORT_TOP_BAND,
+          },
+        );
+        const filename = buildExportFilename({
+          planName: plan.name,
+          kind: 'diagram',
+          ext: 'png',
+          date: todayIso,
+        });
+        void renderExportImage({
+          scene,
+          viewport,
+          size,
+          dpr,
+          topBand: EXPORT_TOP_BAND,
+          palette: resolvePrintPalette(),
+          scaledToFit,
+          meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },
+        })
+          .then((blob) => {
+            downloadBlob(blob, filename);
+            announce(`Downloaded ${filename}${scaledToFit ? ' (scaled to fit)' : ''}.`);
+          })
+          .catch(() => announce('Couldn’t create the diagram image. Please try again.'));
+      },
       exportDiagramPdf: () => {},
       printDiagram: () => {},
       filterActive: exportMatch.filterActive,
@@ -551,10 +608,13 @@ export function useTsldToolbarContext({
       currentConflict,
       goToNextConflict,
       // Export & print — re-identify only when the exported set / its match state / the plan name change
-      // (the callbacks close over these). `todayIso` + `announce` are already listed above.
+      // (the callbacks close over these). `todayIso` + `announce` + `viewToggles` + `plan.schedulingMode`
+      // + `lateOverlayActive` + `canvasControlRef` are already listed above; the PNG command also reads
+      // the loaded dependency edges.
       activities,
       plan.name,
       exportMatch,
+      dependencies,
     ],
   );
 }

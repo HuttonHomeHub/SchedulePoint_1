@@ -2,6 +2,7 @@ import type { ActivitySummary, ActivityType, DependencyType, SchedulingMode } fr
 import type { ReactNode } from 'react';
 
 import type { ExportScope } from '../export/export-csv';
+import type { ExportExtent } from '../export/export-image';
 import type { ColourMode, FilterAttr } from '../render/lenses';
 import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
@@ -232,8 +233,10 @@ export interface TsldToolbarContext {
   /** Serialise the activity table to an Excel-safe, injection-safe CSV and download it (scope `'all'`
    * = every activity; `'matching'` = the lens-narrowed subset, CQ-3), announcing the download (M1). */
   exportScheduleCsv: (scope: ExportScope) => void;
-  /** Render the whole diagram to a PNG off-screen and download it (M2 — no-op stub until then). */
-  exportDiagramPng: () => void;
+  /** Render the diagram to a PNG off-screen and download it (M2). `extent` picks the framing (CQ-1):
+   * `'whole'` re-frames the full activity extent at the current zoom (raster-capped, scale-to-fit);
+   * `'view'` crops to the live viewport. Off-screen paint only — the live canvas is never touched. */
+  exportDiagramPng: (extent: ExportExtent) => void;
   /** Render the whole diagram to a single-page PDF and download it (M3 — no-op stub until then). */
   exportDiagramPdf: () => void;
   /** Print the whole diagram via the browser print dialog (M4 — no-op stub until then). */

@@ -17,11 +17,13 @@ vi.mock('@/config/env', async (importOriginal) => ({
 
 const spies = {
   exportScheduleCsv: vi.fn(),
+  exportDiagramPng: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     exportScheduleCsv: spies.exportScheduleCsv,
+    exportDiagramPng: spies.exportDiagramPng,
     ...over,
   });
 }
@@ -72,6 +74,31 @@ describe('TSLD toolbar — export & print (flag on)', () => {
     const matching = screen.getByRole('menuitem', { name: 'Matching activities only (3)' });
     fireEvent.click(matching);
     expect(spies.exportScheduleCsv).toHaveBeenCalledWith('matching');
+  });
+
+  it('offers BOTH Diagram PNG extents (whole plan / current view) in the menu', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    expect(
+      screen.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Diagram — current view (PNG)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('exports the whole plan PNG (extent "whole") from the whole-plan item', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }));
+    expect(spies.exportDiagramPng).toHaveBeenCalledWith('whole');
+  });
+
+  it('exports the current view PNG (extent "view") from the current-view item', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram — current view (PNG)' }));
+    expect(spies.exportDiagramPng).toHaveBeenCalledWith('view');
   });
 
   it('shades the Export control with its reason on an empty/uncomputed canvas (shade-don’t-hide)', () => {
