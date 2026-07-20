@@ -77,15 +77,15 @@ export type XerAdaptResult =
 // ---------------------------------------------------------------------------------------------------------
 
 /** A trimmed, non-empty field value, or `undefined` (empty strings collapse to `undefined`). */
-function field(row: Readonly<Record<string, string>>, name: string): string | undefined {
-  const value = row[name];
+function field(row: ReadonlyMap<string, string>, name: string): string | undefined {
+  const value = row.get(name);
   if (value === undefined) return undefined;
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;
 }
 
 /** A finite numeric field value, or `undefined`. */
-function numField(row: Readonly<Record<string, string>>, name: string): number | undefined {
+function numField(row: ReadonlyMap<string, string>, name: string): number | undefined {
   const raw = field(row, name);
   if (raw === undefined) return undefined;
   const n = Number(raw);
@@ -93,17 +93,14 @@ function numField(row: Readonly<Record<string, string>>, name: string): number |
 }
 
 /** The `YYYY-MM-DD` prefix of an XER datetime (`"2026-01-05 08:00"` → `"2026-01-05"`), or `undefined`. */
-function isoDateField(row: Readonly<Record<string, string>>, name: string): string | undefined {
+function isoDateField(row: ReadonlyMap<string, string>, name: string): string | undefined {
   const raw = field(row, name);
   if (raw === undefined) return undefined;
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
   return m === null ? undefined : `${m[1]}-${m[2]}-${m[3]}`;
 }
 
-function rowsOf(
-  document: XerDocument,
-  name: string,
-): ReadonlyArray<Readonly<Record<string, string>>> {
+function rowsOf(document: XerDocument, name: string): ReadonlyArray<ReadonlyMap<string, string>> {
   return document.tables.get(name)?.rows ?? [];
 }
 
@@ -185,7 +182,7 @@ export function adaptXerToCanonical(
     if (field(row, 'default_flag') === 'Y') defaultFlaggedCalendarId ??= clndrId;
 
     const name = field(row, 'clndr_name') ?? `Calendar ${clndrId}`;
-    const parsed = parseClndrData(row['clndr_data'], clndrId);
+    const parsed = parseClndrData(row.get('clndr_data'), clndrId);
     findings.push(...parsed.findings);
 
     if (parsed.hasWorkingTime) {

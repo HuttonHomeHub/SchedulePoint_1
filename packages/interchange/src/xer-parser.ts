@@ -90,8 +90,13 @@ export interface XerHeader {
 export interface XerTable {
   readonly name: string;
   readonly fields: readonly string[];
-  /** Each row keyed by field name; values are the raw strings (positionally aligned to `fields`). */
-  readonly rows: ReadonlyArray<Readonly<Record<string, string>>>;
+  /**
+   * Each row keyed by field name; values are the raw strings (positionally aligned to `fields`). A `%F`
+   * field list is attacker-controlled, so rows are a `Map` — not a plain object — precisely so an
+   * arbitrary file-supplied column name (including `__proto__`/`constructor`) can never be written as a
+   * dynamic object property (remote property injection / prototype pollution). Read via `row.get(name)`.
+   */
+  readonly rows: ReadonlyArray<ReadonlyMap<string, string>>;
 }
 
 /**
@@ -121,25 +126,6 @@ export interface XerParseOptions {
 
 const ERMHDR_TOKEN = 'ERMHDR';
 const UTF8_BOM: readonly [number, number, number] = [0xef, 0xbb, 0xbf];
-
-/**
- * Field names that must never be used as dynamic object keys when building row records. A `%F` field
- * list is attacker-controlled, so a crafted XER could declare a column literally named `__proto__`,
- * `constructor` or `prototype` and pollute `Object.prototype` via the keyed write (remote property
- * injection / prototype pollution). None is a legitimate P6 schema column, so a matching field is
- * simply dropped from the row (and, defensively, rows are built on a null-prototype object). This is
- * the sanitising guard on the property name before every file-driven keyed write below.
- */
-const FORBIDDEN_FIELD_NAMES: ReadonlySet<string> = new Set([
-  '__proto__',
-  'constructor',
-  'prototype',
-]);
-
-/** True when a file-supplied field name is unsafe to use as a dynamic object key (see above). */
-function isForbiddenFieldName(name: string): boolean {
-  return FORBIDDEN_FIELD_NAMES.has(name);
-}
 
 /**
  * Recognised encoding labels (lower-cased) that may appear in `ERMHDR`, mapped to the encoding we decode
@@ -304,9 +290,9 @@ export function parseXer(input: Uint8Array | string, options?: XerParseOptions):
   const lines = toLines(decoded.text);
 
   const tables = new Map<string, XerTable>();
-  let currentTable: { name: string; fields: string[]; rows: Array<Record<string, string>> } | null =
+  let currentTable: { name: string; fields: string[]; rows: Array<Map<string, string>> } | null =
     null;
-  let currentRow: Record<string, string> | null = null;
+  let currentRow: Map<string, string> | null = null;
   let lastFieldName: string | null = null;
   let totalRows = 0;
   let sawEnd = false;
@@ -390,12 +376,13 @@ export function parseXer(input: Uint8Array | string, options?: XerParseOptions):
           lineNo,
         );
       }
-      const row: Record<string, string> = Object.create(null) as Record<string, string>;
+      // Rows are a Map, not a plain object: a `%F` field name is attacker-controlled, and a Map key can
+      // never be written as an object property, so an arbitrary column name (e.g. `__proto__`) is inert.
+      const row = new Map<string, string>();
       for (let f = 0; f < currentTable.fields.length; f += 1) {
         const fieldName = currentTable.fields[f];
-        // Guard the file-controlled field name against prototype-polluting keys before the keyed write.
-        if (fieldName === undefined || isForbiddenFieldName(fieldName)) continue;
-        row[fieldName] = values[f] ?? '';
+        if (fieldName === undefined) continue;
+        row.set(fieldName, values[f] ?? '');
       }
       currentTable.rows.push(row);
       currentRow = row;
@@ -415,10 +402,7 @@ export function parseXer(input: Uint8Array | string, options?: XerParseOptions):
     // A line with no record token is an embedded newline in the previous row's last field (XER has no
     // quoting for multi-line memo fields); reattach it. Anywhere else it is garbage/corruption.
     if (currentRow !== null && lastFieldName !== null) {
-      // Same prototype-pollution guard as the row build: the target key is file-controlled.
-      if (!isForbiddenFieldName(lastFieldName)) {
-        currentRow[lastFieldName] = `${currentRow[lastFieldName] ?? ''}\n${raw}`;
-      }
+      currentRow.set(lastFieldName, `${currentRow.get(lastFieldName) ?? ''}\n${raw}`);
       continue;
     }
     return err('MALFORMED_STRUCTURE', 'Unexpected content outside any record.', lineNo);

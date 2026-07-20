@@ -68,6 +68,11 @@ function expectDocument(result: XerParseResult): Extract<XerParseResult, { ok: t
   return result.document;
 }
 
+/** Materialise a parsed row (a `Map`, so untrusted column names can't be object keys) for assertions. */
+function rowObject(row: ReadonlyMap<string, string> | undefined): Record<string, string> {
+  return Object.fromEntries(row ?? new Map<string, string>());
+}
+
 // --- CP1252 / UTF-8 byte encoders (for the encoding fixtures) ----------------------------------------
 
 const CP1252_HIGH: Readonly<Record<string, number>> = {
@@ -145,7 +150,7 @@ describe('parseXer — valid documents', () => {
       'target_drtn_hr_cnt',
     ]);
     expect(task?.rows).toHaveLength(2);
-    expect(task?.rows[0]).toEqual({
+    expect(rowObject(task?.rows[0])).toEqual({
       task_id: '2001',
       task_code: 'A1000',
       task_name: 'Mobilise',
@@ -154,8 +159,8 @@ describe('parseXer — valid documents', () => {
     });
 
     const pred = doc.tables.get('TASKPRED');
-    expect(pred?.rows[0]?.pred_type).toBe('PR_FS');
-    expect(pred?.rows[0]?.lag_hr_cnt).toBe('0');
+    expect(pred?.rows[0]?.get('pred_type')).toBe('PR_FS');
+    expect(pred?.rows[0]?.get('lag_hr_cnt')).toBe('0');
   });
 
   it('parses unknown/future tables generically (not hard-coded to the core four)', () => {
@@ -174,7 +179,7 @@ describe('parseXer — valid documents', () => {
       ),
     );
     expect(doc.tables.has('PROJWBS')).toBe(true);
-    expect(doc.tables.get('UDFVALUE')?.rows[0]?.udf_text).toBe('custom');
+    expect(doc.tables.get('UDFVALUE')?.rows[0]?.get('udf_text')).toBe('custom');
   });
 
   it('accepts a header-only file (no tables) and a trailing newline after %E', () => {
@@ -188,7 +193,7 @@ describe('parseXer — valid documents', () => {
         xer(ERMHDR, t('%T', 'TASK'), t('%F', 'task_id', 'task_code'), t('%R', '2001', ''), '%E'),
       ),
     );
-    expect(doc.tables.get('TASK')?.rows[0]).toEqual({ task_id: '2001', task_code: '' });
+    expect(rowObject(doc.tables.get('TASK')?.rows[0])).toEqual({ task_id: '2001', task_code: '' });
   });
 
   it('pads a short row (fewer values than fields) with empty strings', () => {
@@ -203,7 +208,7 @@ describe('parseXer — valid documents', () => {
         ),
       ),
     );
-    expect(doc.tables.get('TASK')?.rows[0]).toEqual({
+    expect(rowObject(doc.tables.get('TASK')?.rows[0])).toEqual({
       task_id: '2001',
       task_code: '',
       task_name: '',
@@ -222,7 +227,7 @@ describe('parseXer — valid documents', () => {
         ),
       ),
     );
-    expect(doc.tables.get('TASK')?.rows[0]?.task_name).toBe('Say "hi" now');
+    expect(doc.tables.get('TASK')?.rows[0]?.get('task_name')).toBe('Say "hi" now');
   });
 
   it('reattaches an embedded newline in a field as a continuation line', () => {
@@ -238,7 +243,7 @@ describe('parseXer — valid documents', () => {
         ),
       ),
     );
-    expect(doc.tables.get('TASK')?.rows[0]?.notes).toBe('First line\nSecond line');
+    expect(doc.tables.get('TASK')?.rows[0]?.get('notes')).toBe('First line\nSecond line');
   });
 
   it('handles CRLF line endings', () => {
@@ -347,7 +352,7 @@ describe('parseXer — encoding', () => {
     );
     const doc = expectDocument(parseXer(encodeCp1252(source)));
     expect(doc.header.encoding).toBe('CP1252');
-    expect(doc.tables.get('TASK')?.rows[0]?.task_name).toBe('Café £2m ’24');
+    expect(doc.tables.get('TASK')?.rows[0]?.get('task_name')).toBe('Café £2m ’24');
   });
 
   it('honours a UTF-8 BOM (decodes multi-byte characters as UTF-8)', () => {
@@ -360,7 +365,7 @@ describe('parseXer — encoding', () => {
     );
     const doc = expectDocument(parseXer(encodeUtf8WithBom(source)));
     expect(doc.header.encoding).toBe('UTF-8');
-    expect(doc.tables.get('TASK')?.rows[0]?.task_name).toBe('Café résumé');
+    expect(doc.tables.get('TASK')?.rows[0]?.get('task_name')).toBe('Café résumé');
   });
 
   it('honours a UTF-8 ERMHDR hint over the CP1252 default for byte input', () => {
@@ -376,15 +381,15 @@ describe('parseXer — encoding', () => {
     const bytes = new TextEncoder().encode(source);
     const doc = expectDocument(parseXer(bytes));
     expect(doc.header.encoding).toBe('UTF-8');
-    expect(doc.tables.get('TASK')?.rows[0]?.task_name).toBe('Café');
+    expect(doc.tables.get('TASK')?.rows[0]?.get('task_name')).toBe('Café');
   });
 });
 
 describe('parseXer — prototype-pollution hardening', () => {
-  // A `%F` field list is attacker-controlled; a crafted column named `__proto__` (or `constructor` /
-  // `prototype`) must never reach `Object.prototype` through the keyed row write (remote property
-  // injection). The forbidden column is silently dropped and the prototype is left untouched.
-  it('drops a `__proto__` column instead of polluting the prototype', () => {
+  // A `%F` field list is attacker-controlled. Rows are a `Map`, not a plain object, so a crafted column
+  // named `__proto__` (or `constructor` / `prototype`) is stored as an ordinary, inert Map entry and can
+  // never reach `Object.prototype` through a keyed object write (remote property injection).
+  it('stores a `__proto__` column as an inert Map entry, not a prototype write', () => {
     const doc = expectDocument(
       parseXer(
         xer(
@@ -398,16 +403,16 @@ describe('parseXer — prototype-pollution hardening', () => {
     );
 
     const row = doc.tables.get('TASK')?.rows[0];
-    expect(row?.task_id).toBe('2001');
-    expect(row?.task_name).toBe('Mobilise');
-    // The malicious key was dropped, not written…
-    expect(Object.prototype.hasOwnProperty.call(row, '__proto__')).toBe(false);
-    // …and no object anywhere gained a polluted `polluted` property.
+    expect(row?.get('task_id')).toBe('2001');
+    expect(row?.get('task_name')).toBe('Mobilise');
+    // The value lives on the Map as a normal entry — never on any object's prototype…
+    expect(row?.get('__proto__')).toBe('polluted');
+    expect(Object.getPrototypeOf(row?.get('task_id'))).toBe(String.prototype);
+    // …and nothing, anywhere, gained a polluted `polluted` property.
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect((row as unknown as Record<string, unknown>).polluted).toBeUndefined();
   });
 
-  it('drops `constructor` / `prototype` columns too', () => {
+  it('stores `constructor` / `prototype` columns as inert Map entries too', () => {
     const doc = expectDocument(
       parseXer(
         xer(
@@ -421,8 +426,10 @@ describe('parseXer — prototype-pollution hardening', () => {
     );
 
     const row = doc.tables.get('TASK')?.rows[0];
-    expect(row?.task_id).toBe('2001');
-    expect(Object.prototype.hasOwnProperty.call(row, 'constructor')).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(row, 'prototype')).toBe(false);
+    expect(row?.get('task_id')).toBe('2001');
+    expect(row?.get('constructor')).toBe('x');
+    expect(row?.get('prototype')).toBe('y');
+    // A fresh object's constructor is untouched by the import.
+    expect({}.constructor).toBe(Object);
   });
 });
