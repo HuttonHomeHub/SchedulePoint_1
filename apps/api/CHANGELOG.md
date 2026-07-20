@@ -1,5 +1,36 @@
 # @repo/api
 
+## 0.19.0
+
+### Minor Changes
+
+- [#121](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/121) [`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the schedule-interchange **commit** endpoint (ADR-0050, Stage C2, Task 1.5).
+  `POST …/organizations/:orgSlug/projects/:projectId/interchange/commit` re-accepts the multipart upload,
+  re-parses it with the pure `@repo/interchange` pipeline (deterministic — the graph equals the reviewed
+  dry-run), and in **one transaction** creates the plan with its calendars, activities and dependencies via
+  the existing repositories (the same transaction-composition the domain services use), then **recalculates**
+  the new plan (ADR-0022 — the CPM engine is only invoked, never modified) and returns
+  `201 { data: { planId, report } }`. Same `interchange:import` permission, target-project org-scope
+  (anti-IDOR) and 16 MiB byte cap as the dry-run. **Atomicity:** an unparseable file (422 before any write),
+  a persistence rejection (duplicate plan/calendar name, duplicate/cyclic dependency — the whole transaction
+  rolls back), or a recalculation failure (compensated) leaves **nothing created**. Calendars are imported to
+  the M1 weekday-mask contract (intraday shifts approximated to worked weekdays); activities take a
+  deterministic lane per source order.
+
+- [#121](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/121) [`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the `interchange` NestJS module and the stateless schedule-interchange **dry-run** endpoint
+  (ADR-0050, Stage C2, Task 1.4). `POST …/organizations/:orgSlug/projects/:projectId/interchange/dry-run`
+  accepts a multipart file upload, enforces the new **`interchange:import`** permission (Planner + Org
+  Admin) plus an org-scope check on the target project (anti-IDOR), caps the upload size at the HTTP
+  boundary (16 MiB → 413), and runs the pure `@repo/interchange` pipeline to return the pre-commit
+  `InterchangeReport` (mapped counts + approximation/repair/drop findings) — **without persisting anything**.
+  An unrecognised/malformed file is a user-safe 422. The transactional commit endpoint (create the plan +
+  recalculate) lands in a follow-up task.
+
+### Patch Changes
+
+- Updated dependencies [[`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb), [`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb), [`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb)]:
+  - @repo/interchange@0.1.0
+
 ## 0.18.0
 
 ### Minor Changes

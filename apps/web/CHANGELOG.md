@@ -1,5 +1,27 @@
 # @repo/web
 
+## 0.39.0
+
+### Minor Changes
+
+- [#121](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/121) [`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the schedule-import **review UI** (ADR-0050, Stage C2 M1), **on by default** (`VITE_SCHEDULE_INTERCHANGE`).
+  Gated on the `interchange:import` permission (Planner + Org Admin), a project's plan-create
+  surface gains an **Import from file…** entry that opens a two-phase review dialog: pick a Primavera P6
+  `.xer` → the app **dry-runs** it (parse-only, no write) and renders the returned report (mapped
+  counts + approximation / repair / drop findings, downloadable) → **Confirm import** commits it (creates
+  the plan server-side, recalculates) and opens the new plan on the TSLD canvas. Client-side size guard,
+  friendly mapping of the server's 422 reject / 413 oversize / network failures, and a fixed
+  display-only target project. **Accessibility (WCAG 2.2 AA):** the file-input error is linked to the
+  control (`aria-invalid` + conditional `aria-describedby`), the resolved dry-run report and the
+  committed import are announced via the shared polite live region (4.1.3), the commit phase shows a
+  `role="status"` spinner, and the mapped-counts list carries an accessible group name. Flag-off leaves
+  the plan-create surface byte-for-byte unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb), [`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb), [`58c9c85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58c9c85a5dcbcb2ab2474efafe6cc1bdbb7afedb)]:
+  - @repo/interchange@0.1.0
+
 ## 0.38.0
 
 ### Minor Changes
