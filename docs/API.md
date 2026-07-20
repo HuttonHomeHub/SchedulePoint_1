@@ -247,9 +247,10 @@ contract) **without writing anything**, then a separate **commit** creates the p
 Contributor); the authoritative org-scope check is on the **target project** (anti-IDOR). Uploads are
 multipart with a **byte cap enforced at the boundary** (→ 413 before the file is fully buffered).
 
-| Method | Path                                        | Notes                                                                                                                                                            |
-| ------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. 422 unrecognised/malformed/no file · 413 oversize. `interchange:import`. |
+| Method | Path                                        | Notes                                                                                                                                                                                     |
+| ------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. 422 unrecognised/malformed/no file · 413 oversize. `interchange:import`.                          |
+| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413. |
 
 The dry-run is **read-only** (returns `200`, not `201` — no resource is created). A parseable file returns
 its report **even when it needed repairs** (dangling edge dropped, duplicate `(pred,succ,type)`
@@ -257,8 +258,18 @@ de-duplicated, cycle broken, duplicate code suffixed, units coerced — each nam
 `report.approximations`, never silent). A structurally-impossible file (not XER / malformed / no project)
 is a user-safe **422** (`details.reason = UNPARSEABLE_FILE`); a missing `file` is **422**
 (`NO_FILE`). Anti-IDOR is uniform: a foreign or other-org project (or a caller who is not a member of the
-org) is an indistinguishable **404**; a malformed project id is **400**. The commit endpoint (create plan +
-calendars + activities + dependencies via existing services, then recalculate) is a separate task.
+org) is an indistinguishable **404**; a malformed project id is **400**.
+
+The **commit** endpoint is the second phase: it re-accepts the same multipart upload (stateless — `importXer`
+is pure + deterministic, so the graph committed equals the one reviewed) and, in **one transaction**, creates
+the plan with its calendars, activities and dependencies via the existing repositories (the same
+transaction-composition each domain service uses), then **recalculates** the new plan (ADR-0022; the CPM engine
+is only invoked). It returns **`201 { data: { planId, report } }`**. **Atomicity:** any failure — an
+unparseable file (422 before any write), a persistence rejection (duplicate plan/calendar name, duplicate/cyclic
+dependency — the whole transaction rolls back), or a recalculation failure (compensated) — leaves **nothing
+created**. Same authz (`interchange:import`), org-scope (anti-IDOR) and byte cap (→ 413) as the dry-run.
+Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays);
+activities are laid out on a deterministic lane per source order.
 
 ## Pagination, filtering, sorting
 

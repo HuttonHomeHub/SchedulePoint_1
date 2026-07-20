@@ -62,7 +62,7 @@ function principalWith(permissions: Permission[]): Principal {
 describe('InterchangeService.dryRun', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let projects: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
-  let logger: Pick<PinoLogger, 'info' | 'warn'>;
+  let logger: Pick<PinoLogger, 'info' | 'warn' | 'error'>;
   let service: InterchangeService;
   const planner = principalWith(['interchange:import']);
 
@@ -71,10 +71,20 @@ describe('InterchangeService.dryRun', () => {
       resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
     };
     projects = { findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }) };
-    logger = { info: vi.fn(), warn: vi.fn() };
+    logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    // The commit-path collaborators are unused by these dry-run tests (dry-run never persists), so they
+    // are supplied as inert stand-ins (typed `never`, assignable to any param); the commit orchestration
+    // is exercised end-to-end in the e2e suite.
+    const unused: never = undefined as never;
     service = new InterchangeService(
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
       logger as unknown as PinoLogger,
     );
   });
