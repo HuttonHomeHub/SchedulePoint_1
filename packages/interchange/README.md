@@ -10,19 +10,24 @@ consumes this package's compiled build (ADR-0019) and reuses existing domain ser
 
 ```text
 src/
-  canonical.ts   # the FORMAT-AGNOSTIC canonical model (project/activity/relationship/calendar)
-                 #   + Zod schemas — M1 network scope only (WBS/constraints/progress/resources = M2)
-  report.ts      # the InterchangeReport (detected format/version, mapped counts, approximations,
-                 #   repairs, drops) — the runtime instance of the ADR-0050 mapping contract
-  index.ts       # barrel
+  canonical.ts    # the FORMAT-AGNOSTIC canonical model (project/activity/relationship/calendar)
+                  #   + Zod schemas — M1 network scope only (WBS/constraints/progress/resources = M2)
+  report.ts       # the InterchangeReport (detected format/version, mapped counts, approximations,
+                  #   repairs, drops) — the runtime instance of the ADR-0050 mapping contract
+  xer-parser.ts   # the PURE XER tokeniser + format detector: ERMHDR signature/version + encoding hint,
+                  #   %T/%F/%R/%E table blocks → { header, tables }, CP1252/UTF-8 decode, byte/row/field
+                  #   caps, typed user-safe errors (Task 1.2). Raw rows only — no domain mapping.
+  index.ts        # barrel
 ```
 
-Still to land in M1 (kept out of this skeleton — Tasks 1.2/1.3):
+Still to land in M1 (Task 1.3):
 
-- an **XER parser** (`ERMHDR` signature/version, `%T/%F/%R` table blocks, CP1252 decode) → canonical,
 - a **mapper** canonical → SchedulePoint import-DTO graph, and
 - the **validate / repair / report** step (ADR-0035: dangling edge, duplicate `(pred,succ,type)`,
   cycle-break, duplicate code, unit coercion) that emits the `InterchangeReport`.
+
+The XER parser is intentionally **format-specific, not canonical**: it surfaces raw typed rows
+(`tables.get('TASK')?.rows`); the mapper (Task 1.3) is the only place those rows become the canonical model.
 
 MSPDI (`.xml`, via `fast-xml-parser`) is M3; export and `.mpp` are explicit, out-of-v1 follow-ons.
 

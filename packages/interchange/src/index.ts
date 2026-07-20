@@ -8,8 +8,9 @@
  * (ADR-0019) and reuses existing domain services. Nothing here touches the CPM engine or its recalc
  * parity golden suite.
  *
- * M1 ships the canonical model + report types only; the XER parser (Task 1.2) and the mapper +
- * validate/repair/report implementation (Task 1.3) are exported from here as they land.
+ * M1 ships the canonical model + report types and the XER parser/detector (Task 1.2); the mapper +
+ * validate/repair/report implementation (Task 1.3) is exported from here as it lands.
  */
 export * from './canonical.js';
 export * from './report.js';
+export * from './xer-parser.js';
