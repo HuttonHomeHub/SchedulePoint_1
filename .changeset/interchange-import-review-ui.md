@@ -2,8 +2,8 @@
 '@repo/web': minor
 ---
 
-Add the flagged schedule-import **review UI** (ADR-0050, Stage C2 M1). Behind the dark
-`VITE_SCHEDULE_INTERCHANGE` flag (and the `interchange:import` permission), a project's plan-create
+Add the schedule-import **review UI** (ADR-0050, Stage C2 M1), **on by default** (`VITE_SCHEDULE_INTERCHANGE`).
+Gated on the `interchange:import` permission (Planner + Org Admin), a project's plan-create
 surface gains an **Import from file…** entry that opens a two-phase review dialog: pick a Primavera P6
 `.xer` → the app **dry-runs** it (parse-only, no write) and renders the returned report (mapped
 counts + approximation / repair / drop findings, downloadable) → **Confirm import** commits it (creates

@@ -146,6 +146,14 @@ keep `main` releasable.
   sibling **Flag over-allocated** lens rings over-allocated bars with a shape badge (+ listbox marker +
   count announcement) from the shipped levelling flags. Frontend-only; no API/schema/engine change (spec
   `docs/specs/canvas-resource-view/`). Stage E of the toolbar-placeholder burn-down.
+- **Schedule interchange — P6 XER import (full-stack).** Planners import an existing Primavera P6 `.xer`
+  into a new plan and **on by default** (`VITE_SCHEDULE_INTERCHANGE`): a pure `@repo/interchange` package
+  parses → maps → validates/repairs/reports the foreign schedule (nothing dropped silently, ADR-0035
+  contract), and a thin `interchange` API module runs a **dry-run** (honest pre-commit report) then
+  **commit** (create the plan + recalculate) behind `interchange:import` + org-scope + a size ceiling. The
+  CPM engine is untouched. Import-only, import-first (`.mpp` excluded); M2 adds WBS/constraints/progress/
+  resources, M3 adds MS Project MSPDI, M4 (optional) export (spec `docs/specs/schedule-interchange/`,
+  ADR-0050). Stage C2 M1 of the toolbar-placeholder burn-down; the External-Guest share link is Stage F.
 
 ## Next
 

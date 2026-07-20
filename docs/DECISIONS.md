@@ -975,3 +975,23 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   is now consumed by both the strip and the modal `ResourceHistogram` (no duplication), the chrome no longer
   occludes the band, the over-allocation toggle can't stick on (enabled while active), the strip section has a
   visible focus ring, and integration/hook e2e coverage lands. See ADR-0049.
+- **Schedule interchange — Primavera P6 XER import (Stage C2 M1, `VITE_SCHEDULE_INTERCHANGE`, on by default
+  2026-07-20; ADR-0050).** Planners import an existing P6 `.xer` into a new SchedulePoint plan, lowering the
+  switching cost (PROJECT_BRIEF §8/§17). A **pure, engine-free `@repo/interchange` package** (mirroring the
+  `engine-conformance` split) does detect → parse (`%T/%F/%R/%E`, CP1252) → a **format-agnostic canonical
+  model** → map to a SchedulePoint import graph → **validate/repair/report** per the ADR-0035 reject/repair/
+  report contract (drop dangling edges, de-dup `(pred,succ,type)`, deterministic cycle-break to guarantee
+  acyclicity per ADR-0021, disambiguate duplicate codes, coerce hours→working-minutes, and **report every**
+  unmapped type / dropped M2 table (PROJWBS/RSRC/TASKRSRC) / non-expressible calendar detail — nothing is
+  dropped silently). A thin NestJS `interchange` module exposes a **two-phase** flow — `dry-run` (parse →
+  `InterchangeReport`, no write) then `commit` (create the plan via the existing repositories in one batched
+  `createMany` transaction, recalculate, return `{ planId, report }`) — behind an `interchange:import`
+  permission (Planner + Org Admin) + target-project org-scope (anti-IDOR) + a 16 MiB boundary cap and an
+  explicit graph-size ceiling (the DoS backstop). The commit acquires the edit-lock on the new plan for the
+  importer so the pen-gated recalc (ADR-0028) succeeds under enforcement, then releases it. Key decisions
+  (CQ-1..5): **import only** (the External-Guest share link is a separate future Stage F), **import-first**
+  (export deferred), **XER + MSPDI (M3); `.mpp` excluded** (no permissive TS reader), always a **new plan**
+  (no merge), and a **pure TS package** (not a Python worker). The **CPM engine and its recalc golden suite
+  are untouched** (commit reuses services + calls the unchanged recalculate). Flag-off ⇒ the plan-create
+  surface is byte-for-byte today's (no entry, no dialog). See ADR-0050; M2 adds WBS/constraints/progress/
+  resources mapping, M3 adds MSPDI, M4 (optional) export.

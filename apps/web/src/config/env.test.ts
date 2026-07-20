@@ -111,13 +111,12 @@ describe('CANVAS_RESOURCE_VIEW_ENABLED', () => {
 });
 
 describe('SCHEDULE_INTERCHANGE_ENABLED', () => {
-  it('is OFF at the build default — dark during build (no VITE_SCHEDULE_INTERCHANGE set)', () => {
-    // The schedule-interchange web review UI ships dark (ADR-0050, Stage C2 M1): it flips on only after
-    // its specialist reviews (a11y / ux / component / security) are green (the M1 review-gate step).
-    // With the flag unset, `flagDefaultOff(undefined)` is false, so the plan-create surface renders no
-    // "Import from file…" entry and the @repo/interchange review code is never reached — the parity gate.
-    // Setting VITE_SCHEDULE_INTERCHANGE=true is the deliberate enablement.
-    expect(SCHEDULE_INTERCHANGE_ENABLED).toBe(false);
+  it('is on by default (delivered & enabled, 2026-07-20; no VITE_SCHEDULE_INTERCHANGE set)', () => {
+    // The schedule-interchange (P6 XER import) web review UI is on by default now that its five
+    // specialist reviews (security / backend-performance / a11y / api / devops) are green (ADR-0050,
+    // Stage C2 M1). Setting VITE_SCHEDULE_INTERCHANGE=false renders the plan-create surface byte-for-byte
+    // today's — no "Import from file…" entry, no dialog, the review code unreached — the rollback path.
+    expect(SCHEDULE_INTERCHANGE_ENABLED).toBe(true);
   });
 });
 
