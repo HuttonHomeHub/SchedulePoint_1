@@ -7,7 +7,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 
-import { RESOURCES_ENABLED } from '@/config/env';
+import { GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
@@ -24,6 +24,7 @@ import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
 import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
 import { ResourcesScreen } from '@/routes/resources';
+import { ShareGuestScreen } from '@/routes/share';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
 
@@ -179,6 +180,19 @@ const recentlyDeletedRoute = createRoute({
   component: RecentlyDeletedScreen,
 });
 
+/**
+ * PUBLIC External-Guest read-only plan view (ADR-0051 F-M4). A **sibling of `_authed`** — no session
+ * guard, no `beforeLoad`, no app-shell chrome: an outsider with a share token reads exactly one plan.
+ * The token rides in the URL fragment (`/share#sp_share_…`), read client-side (never a search param).
+ * Registered ONLY behind `VITE_GUEST_SHARE_LINKS` (like the resources route), so with the flag off the
+ * route tree is byte-identical — there is no `/share` route at all (the surface stays fully dark).
+ */
+const shareGuestRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/share',
+  component: ShareGuestScreen,
+});
+
 /** Public invitation-accept route (keyed by the token in the URL). */
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -192,6 +206,9 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
   acceptInviteRoute,
+  // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
+  // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
+  ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
   authedRoute.addChildren([
     indexRoute,
     onboardingRoute,

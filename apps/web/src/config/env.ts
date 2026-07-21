@@ -629,3 +629,30 @@ export const CANVAS_RESOURCE_VIEW_ENABLED =
 export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
   import.meta.env.VITE_SCHEDULE_INTERCHANGE,
 );
+
+/**
+ * External-Guest per-plan share links — the flagged web surface (Stage F / F-M4; ADR-0051, spec
+ * `docs/specs/external-guest-share-link/`). **OFF by default during build** — an in-progress dark
+ * surface that flips on only after its specialist reviews (component / ux / a11y / performance /
+ * security) and the Playwright journey are green. It layers on the already-shipped backend: the F-M2
+ * management endpoints (`POST/GET/DELETE …/plans/:planId/shares`) and the F-M3 session-less guest reads
+ * (`GET /api/v1/share/plan|activities|dependencies`, `Authorization: Bearer sp_share_…`). When on, the
+ * web UI exposes BOTH halves of the feature:
+ *
+ * - **Member Share dialog** — the TSLD toolbar's `share` item (a plain `placeholderItem()` "Coming
+ *   soon" stub while off) becomes a real command opening a `ShareLinksDialog`: it lists a plan's links
+ *   (label, created, expiry, active/revoked, last-accessed), creates one via a RHF + Zod form (optional
+ *   label + optional expiry) showing the one-time guest URL with a Copy button, and revokes per row. The
+ *   whole affordance is gated on the caller holding `plan:share` (Planner + Org Admin, `canSharePlan`).
+ * - **Public guest view** — the `/share` route (a sibling of `_authed`, NO session guard, NO app-shell
+ *   chrome) reads the token from `location.hash`, calls the F-M3 endpoints with a Bearer header and NO
+ *   cookies, and renders the plan read-only (slim header + the read-only TSLD canvas). Any 404 is a
+ *   uniform "This share link is no longer available." (no existence oracle); the route is `noindex`.
+ *
+ * Everything behind it — the management + guest-read API — is always live (RBAC-gated / token-guarded);
+ * this flag only governs whether the web UI exposes the dialog + registers the `/share` route.
+ * `VITE_GUEST_SHARE_LINKS=false` ⇒ the toolbar `share` item is its byte-for-byte `placeholderItem()`
+ * stub, no `/share` route is registered, and none of the share code is reached (emergency rollback /
+ * opt-out). Set `VITE_GUEST_SHARE_LINKS=true` to enable it in an environment.
+ */
+export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOff(import.meta.env.VITE_GUEST_SHARE_LINKS);

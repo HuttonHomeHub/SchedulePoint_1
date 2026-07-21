@@ -73,6 +73,18 @@ export function canImportSchedule(role: OrganizationRole | undefined): boolean {
 }
 
 /**
+ * Whether a role may create/list/revoke External-Guest share links for a plan (mirrors the API's
+ * `plan:share` — Planner + Org Admin, the same hierarchy-write roles; ADR-0051). Sharing a plan
+ * externally is a governance act (it mints a bearer credential), so it is the narrower Planner-and-up
+ * grant, not the broad "any member" of {@link canExportSchedule}. A named helper so the Share affordance
+ * gate reads intentfully and can diverge later. UX only — the API still enforces the permission + org
+ * scope (anti-IDOR), and the guest READ path is a separate, token-guarded surface.
+ */
+export function canSharePlan(role: OrganizationRole | undefined): boolean {
+  return canManageHierarchy(role);
+}
+
+/**
  * Whether a role may export a plan as a foreign schedule file (mirrors the API's
  * `interchange:export` — **every member**, Viewer upward; ADR-0050 M4). Export is a read-egress of the
  * same schedule data a member already sees on-screen, so — unlike {@link canImportSchedule} (Planner +

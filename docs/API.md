@@ -286,6 +286,16 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
   a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per
   link), fired-and-forgotten so it never blocks or fails a read.
 
+#### Web surface (F-M4, flagged)
+
+The web surface for both halves ships behind `VITE_GUEST_SHARE_LINKS` (default off; ADR-0051
+F-M4): a member **Share links** dialog on the TSLD toolbar (`share` item) that calls the F-M2
+management endpoints above — list / create (showing the one-time guest URL with a Copy button) /
+revoke, gated on `plan:share` — and a **public `/share` route** (a sibling of the authenticated
+shell, no session, no chrome) that reads the token from the URL **fragment**, calls the F-M3 guest
+endpoints with the Bearer header (no cookies), and renders the plan read-only. No new API — the flag
+only governs whether the web UI exposes the already-shipped endpoints.
+
 ### Schedule interchange (ADR-0050)
 
 **Import** a foreign schedule file (a P6 **XER** for M1; MS Project MSPDI later) into a chosen project as a

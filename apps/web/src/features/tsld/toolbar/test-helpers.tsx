@@ -60,6 +60,8 @@ export function makeTsldToolbarContext(
     openCalendar: vi.fn(),
     openEarnedValue: vi.fn(),
     openResourceHistogram: vi.fn(),
+    canShare: true,
+    openShare: vi.fn(),
     editPlan: vi.fn(),
     // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049)
     resourceViewOpen: false,

@@ -9,6 +9,7 @@ export {
   canCalculateSchedule,
   canImportSchedule,
   canExportSchedule,
+  canSharePlan,
   canWriteNotes,
 } from '@/lib/rbac';
 
