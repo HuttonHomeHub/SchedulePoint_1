@@ -31,6 +31,12 @@ export interface CascadeCounts {
    * (no double-count); a single-activity delete sweeps that activity subtree's notes by `activity_id`.
    */
   notes: number;
+  /**
+   * Share links swept under the deleted plans (Stage F, ADR-0051). A `plan_share` carries its plan's
+   * `plan_id` directly, so a plan/project/client delete sweeps its links in one pass by `plan_id` (the
+   * Note precedent). Plan-scoped only — a single-activity delete never touches share links.
+   */
+  planShares: number;
 }
 
 export interface CascadeDeleteResult {
@@ -85,6 +91,7 @@ export class HierarchyLifecycleService {
       baselines: 0,
       steps: 0,
       notes: 0,
+      planShares: 0,
     };
 
     // Soft-delete the active baselines (and their snapshot rows) under a set of plans
@@ -198,6 +205,22 @@ export class HierarchyLifecycleService {
       ).count;
     };
 
+    // Soft-delete the active share links under a set of plans (Stage F, ADR-0051), in the same batch.
+    // A link is plan-scoped (its `plan_id` is the ONE plan it grants), so this single sweep by `plan_id`
+    // stamps every live link of every deleted plan — the Note-under-plans precedent. Plan-scoped only:
+    // there is no per-activity variant (a share link never hangs off an activity). A deleted plan's
+    // links therefore stop resolving (the guard re-checks the live plan too), and a plan restore brings
+    // exactly this batch's links back.
+    const deletePlanSharesUnderPlans = async (planIds: string[]): Promise<number> => {
+      if (planIds.length === 0) return 0;
+      return (
+        await tx.planShare.updateMany({
+          where: { planId: { in: planIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
     // Resolve an activity's active `parent_id` subtree (the row itself + every
     // active descendant), breadth-first. Only a WBS_SUMMARY can be a parent
     // (service-enforced), so a leaf activity resolves to just itself in one hop.
@@ -248,6 +271,7 @@ export class HierarchyLifecycleService {
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.steps = await deleteStepsUnderPlans(planIds);
       counts.notes = await deleteNotesUnderPlans(planIds);
+      counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       if (planIds.length > 0) {
         counts.plans = (
@@ -268,6 +292,7 @@ export class HierarchyLifecycleService {
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.steps = await deleteStepsUnderPlans(planIds);
       counts.notes = await deleteNotesUnderPlans(planIds);
+      counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
@@ -280,6 +305,7 @@ export class HierarchyLifecycleService {
       counts.dependencies = await deleteLinksUnderPlans([id]);
       counts.steps = await deleteStepsUnderPlans([id]);
       counts.notes = await deleteNotesUnderPlans([id]);
+      counts.planShares = await deletePlanSharesUnderPlans([id]);
       counts.activities = await deleteActivitiesUnderPlans([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
@@ -338,6 +364,7 @@ export class HierarchyLifecycleService {
       baselines: 0,
       steps: 0,
       notes: 0,
+      planShares: 0,
     };
 
     try {
@@ -378,6 +405,14 @@ export class HierarchyLifecycleService {
         // note deleted individually (its own fresh batch) carries a different id and never resurrects here.
         counts.notes = (
           await tx.note.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
+        // Restore the batch's share links (Stage F, ADR-0051). A link has exactly ONE parent (its plan)
+        // and was swept in the SAME batch as it — like a note/step, unlike a dependency — so no endpoint
+        // guard is needed: restoring the batch reactivates each link with its plan, and the top-down
+        // `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A link deleted
+        // individually carries its own batch id and never resurrects here.
+        counts.planShares = (
+          await tx.planShare.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
         // Restore the batch's links AFTER their activities, and only where BOTH
         // endpoints are now active — a link whose other end was deleted separately
