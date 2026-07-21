@@ -470,6 +470,20 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   untouched**. Builds on ADR-0034/0035 (conformance + reject/repair/report), ADR-0021 (DAG), ADR-0022/0023/
   0036 (recalc/dates/calendars), ADR-0038/0039/0040 (WBS/resources, M2), ADR-0009 (BullMQ), ADR-0012/0016
   (RBAC + tenancy — `interchange:import`).
+- **ADR-0051** _(Accepted; guest-share M1 — behind `VITE_GUEST_SHARE_LINKS`)_ — External-Guest per-plan
+  share links: the brief's long-deferred fifth role (ADR-0016 "modelled separately"), modelled as a
+  **revocable, hashed, per-plan `PlanShare` grant** dereferenced by a **session-less bearer token** and
+  enforced by a **parallel `GuestPrincipal` + `ShareTokenGuard`** that is **structurally distinct** from the
+  member `Principal` (guest→member method flow is a compile error — deny-by-default by construction). Token
+  minted 256-bit / stored SHA-256 (invitation-token precedent, extracted to `common/tokens/`), presented in
+  the URL **fragment** as `Authorization: Bearer` (never in referrer/server logs); **uniform-404** resolve
+  (no existence oracle); revocable + optionally-expiring; plan soft-delete **cascades** to `plan_shares`.
+  Fixed read-only **`SCHEDULE_READ`** scope (header/calendar/activities+progress/logic/summary) — **no**
+  cost/EV/notes/resources/baselines; new **`plan:share`** permission (Planner + Org Admin only); the app's
+  **first unauthenticated data-read endpoint** + **first rate-limiter** (`@nestjs/throttler` on
+  `/api/v1/share/*`). **Read-only, write-free — the CPM engine, pen model (ADR-0028) and recalc parity gate
+  are untouched.** Sliced F-M1 (schema+token+guard, dark) → F-M2 (management API) → F-M3 (guest reads +
+  rate-limit) → F-M4 (flagged web). Builds on ADR-0003/0012/0016; cascade precedent ADR-0046.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
