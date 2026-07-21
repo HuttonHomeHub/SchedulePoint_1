@@ -10,6 +10,7 @@ import {
   NotFoundError,
 } from '../../common/errors/domain-errors';
 import type { MailService } from '../../common/mail/mail.service';
+import { hashToken } from '../../common/tokens/token';
 import type { AppConfigService } from '../../config/app-config.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrgMemberRepository } from '../organizations/org-member.repository';
@@ -17,7 +18,6 @@ import type { OrganizationsService } from '../organizations/organizations.servic
 
 import type { InvitationRepository, InvitationWithOrg } from './invitation.repository';
 import { InvitationsService } from './invitations.service';
-import { hashInvitationToken } from './token';
 
 const ORG_ID = 'org-1';
 const USER_ID = 'user-1';
@@ -158,7 +158,7 @@ describe('InvitationsService', () => {
 
     it('accepts a valid invitation for the matching user', async () => {
       invitations.findActiveByTokenHash.mockResolvedValue(
-        invitation({ tokenHash: hashInvitationToken(token) }),
+        invitation({ tokenHash: hashToken(token) }),
       );
       prisma.user.findUnique.mockResolvedValue({ id: USER_ID, email: 'invitee@example.com' });
       members.findActiveByOrgAndUser.mockResolvedValue(null);
