@@ -1,5 +1,17 @@
 # @repo/api
 
+## 0.26.0
+
+### Minor Changes
+
+- [#138](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/138) [`7889f5c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7889f5cde753754511a9b4aa6712d55fb1f715c7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: show the running API + web version in the app shell
+
+  Adds a public `GET /api/v1/version` endpoint (unauthenticated, like `/health`) returning
+  `{ data: { version } }` — the API's own package version, read once at startup. The web app bakes its
+  own version at build time and renders a subtle `web x.y.z · api x.y.z` line in the Project Explorer
+  rail footer (muted, non-interactive, screen-reader labelled), fetching the API version via a cached
+  query. Makes the deployed versions visible in-product for support/debugging.
+
 ## 0.25.0
 
 ### Minor Changes

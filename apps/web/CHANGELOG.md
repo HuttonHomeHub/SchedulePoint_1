@@ -1,5 +1,25 @@
 # @repo/web
 
+## 0.43.0
+
+### Minor Changes
+
+- [#138](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/138) [`7889f5c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7889f5cde753754511a9b4aa6712d55fb1f715c7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: show the running API + web version in the app shell
+
+  Adds a public `GET /api/v1/version` endpoint (unauthenticated, like `/health`) returning
+  `{ data: { version } }` — the API's own package version, read once at startup. The web app bakes its
+  own version at build time and renders a subtle `web x.y.z · api x.y.z` line in the Project Explorer
+  rail footer (muted, non-interactive, screen-reader labelled), fetching the API version via a cached
+  query. Makes the deployed versions visible in-product for support/debugging.
+
+- [#138](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/138) [`7889f5c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7889f5cde753754511a9b4aa6712d55fb1f715c7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): flip live cross-plan / programme scheduling on by default (ADR-0045)
+
+  `VITE_PROGRAMME_SCHEDULING` — the last dark web flag — is now **on by default** (set `=false` to
+  roll back). The programme surface (cross-plan dependency links, "Recalculate programme" over the
+  plan-level DAG, and the stale-schedule banner) is exposed in the web UI, layered on the already-live
+  API (its component/ux/a11y quality gates and the flag-on Playwright journey are green). This closes
+  the last remaining feature flag; every shipped web feature is now on by default.
+
 ## 0.42.0
 
 ### Minor Changes
