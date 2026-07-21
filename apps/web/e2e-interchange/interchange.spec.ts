@@ -134,9 +134,16 @@ test('a planner exports a plan to .xer, then re-imports the downloaded file (rou
   ]);
   expect(download.suggestedFilename()).toMatch(/\.xer$/);
 
-  // Re-import: feed the downloaded file back through Import-from-file. Navigate back to the project's
-  // plan-create surface (the import entry lives there), then commit the round-tripped file → a new plan.
-  await page.goBack();
+  // Re-import: feed the downloaded file back through Import-from-file. Import always creates a NEW plan
+  // named from the file (here "Sample"), and a plan name is unique per project — so re-importing into the
+  // SAME project would collide on `uq_plans_project_name`. Create a SECOND project under the existing
+  // client (reusing it — `openNewProject` isn't idempotent) and re-import the round-tripped file there.
+  await page.getByRole('link', { name: 'Clients', exact: true }).click();
+  await page.getByRole('link', { name: 'Northgate' }).click();
+  await page.getByRole('button', { name: 'New project' }).click();
+  await page.getByRole('dialog').getByLabel('Name').fill('Riverside Two');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
+  await page.getByRole('link', { name: 'Riverside Two' }).click();
   await expect(page.getByRole('button', { name: 'Import from file…' })).toBeVisible();
   await page.getByRole('button', { name: 'Import from file…' }).click();
   const roundTripDialog = page.getByRole('dialog', { name: 'Import schedule from file' });
