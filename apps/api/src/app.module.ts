@@ -33,6 +33,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
+import { ShareModule } from './modules/share/share.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /** Whether the optional `pino-pretty` dev logger transport can be loaded. */
@@ -117,6 +118,7 @@ function isPrettyLoggingAvailable(): boolean {
     PlanLockModule,
     RecycleBinModule,
     InterchangeModule,
+    ShareModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.
