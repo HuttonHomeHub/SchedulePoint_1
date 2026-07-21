@@ -259,10 +259,16 @@ function countTagMarkers(text: string): number {
   return count;
 }
 
-/** Cheaply extract `<SaveVersion>…</SaveVersion>` from the head of the file without a full parse. */
+/**
+ * Cheaply extract `<SaveVersion>…</SaveVersion>` from the head of the file without a full parse. The
+ * capture is `[^<]*` (linear, unambiguous — it cannot match the following `<` delimiter) and trimming
+ * happens in JS; an overlapping `\s*…[^<]+?…\s*` form is a polynomial-backtracking ReDoS on untrusted
+ * input (CodeQL js/polynomial-redos) and is deliberately avoided.
+ */
 function saveVersionFromText(text: string): string | null {
-  const match = /<SaveVersion>\s*([^<]+?)\s*<\/SaveVersion>/.exec(text);
-  return match?.[1] !== undefined && match[1] !== '' ? match[1] : null;
+  const match = /<SaveVersion>([^<]*)<\/SaveVersion>/.exec(text);
+  const value = match?.[1]?.trim();
+  return value !== undefined && value !== '' ? value : null;
 }
 
 /** Shared decode + signature gate for detect/parse. */

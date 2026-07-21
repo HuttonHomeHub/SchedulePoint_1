@@ -70,6 +70,28 @@ describe('detectMspdi', () => {
     if (result.ok) expect(result.header.version).toBe('14');
   });
 
+  it('trims whitespace around the SaveVersion value', () => {
+    const padded = MINIMAL.replace(
+      '<SaveVersion>14</SaveVersion>',
+      '<SaveVersion>  14 </SaveVersion>',
+    );
+    const result = detectMspdi(padded);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.header.version).toBe('14');
+  });
+
+  it('extracts SaveVersion in linear time (no ReDoS on a malformed head)', () => {
+    // A `<SaveVersion>` opener followed by many spaces and no closer must not backtrack polynomially.
+    const hostile = MINIMAL.replace(
+      '<SaveVersion>14</SaveVersion>',
+      `<SaveVersion>${' '.repeat(100_000)}`,
+    );
+    const result = detectMspdi(hostile);
+    // We only assert it completes (the regex is ReDoS-safe); the malformed opener yields no version.
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.header.version).toBeNull();
+  });
+
   it('rejects an empty / whitespace-only file', () => {
     expect(expectFailure(detectMspdi('')).code).toBe('EMPTY_FILE');
     expect(expectFailure(detectMspdi('   \n\t \n')).code).toBe('EMPTY_FILE');
