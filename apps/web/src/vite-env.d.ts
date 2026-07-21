@@ -1,5 +1,11 @@
 /// <reference types="vite/client" />
 
+/**
+ * The web app's own package version, baked in at build time by Vite's `define`
+ * (see `vite.config.ts`). Read it through `APP_VERSION` in `config/env.ts`.
+ */
+declare const __APP_VERSION__: string;
+
 interface ImportMetaEnv {
   /** On-canvas TSLD structural editing (M2). "true"/"1" enables it; off by default. */
   readonly VITE_TSLD_EDITING?: string;

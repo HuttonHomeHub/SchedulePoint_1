@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { HierarchyTree, useNavigatorCrud, type UseExpansionState } from '@/features/navigator';
+import { AppVersionLine } from '@/features/system';
 
 /**
  * The **Project Explorer** rail — the persistent home of the Client → Project → Plan
@@ -86,6 +87,10 @@ export function NavigatorRail({
         ) : (
           <p className="text-muted-foreground p-4 text-sm">Select an organisation to browse.</p>
         )}
+      </div>
+      {/* A quiet footer with both service versions — subtle build metadata, not a nav item. */}
+      <div className="border-sidebar-border shrink-0 border-t px-4 py-2">
+        <AppVersionLine />
       </div>
     </nav>
   );

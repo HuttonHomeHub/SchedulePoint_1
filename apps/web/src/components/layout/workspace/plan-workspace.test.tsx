@@ -23,6 +23,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // This suite asserts the ADR-0030 layout; the toolbar flag now defaults ON (ADR-0031), so pin it
   // off here (the toolbar layout has its own suite, plan-workspace-toolbar.test.tsx).
   CANVAS_TOOLBAR_ENABLED: false,
+  // The programme section (now default-on) mounts its own summary/recalc queries; pin it off here —
+  // it has its own suite (ProgrammeScheduleSection).
+  PROGRAMME_SCHEDULING_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({

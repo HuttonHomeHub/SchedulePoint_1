@@ -43,6 +43,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // These seams assert the flag-off reposition→inline-recalc path; authoring (now default-on) routes
   // recalc through the coalescer instead, so pin it off here (the coalescer has its own unit tests).
   CANVAS_AUTHORING_ENABLED: false,
+  // The programme section (now default-on) mounts its own summary/recalc queries; pin it off here —
+  // it has its own suite (ProgrammeScheduleSection).
+  PROGRAMME_SCHEDULING_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({

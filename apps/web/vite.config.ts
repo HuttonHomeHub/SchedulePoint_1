@@ -1,12 +1,21 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+// The web app's own version, read from its manifest and baked into the bundle at build
+// time as `__APP_VERSION__` (see `src/vite-env.d.ts` / `config/env.ts`). A compile-time
+// constant needs no runtime env var and can never drift from the published package.
+const { version: appVersion } = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+) as { version: string };
+
 // Vite configuration for the Blank App web client.
 // Tailwind CSS v4 is wired in via its first-party Vite plugin (no PostCSS config needed).
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [react(), tailwindcss()],
   // Pre-bundle the shared types package (consumed as compiled JS via the alias
   // below) so the dev server serves an esbuild-bundled chunk instead of routing

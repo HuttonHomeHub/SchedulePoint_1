@@ -22,6 +22,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   SCHEDULING_MODES_ENABLED: false,
   NOTES_ENABLED: true,
   TOOLBAR_QUICK_WINS_ENABLED: true,
+  // This suite asserts the Comments-reveal path; the programme section (now default-on) mounts its
+  // own summary/recalc queries, so pin it off here — it has its own suite (ProgrammeScheduleSection).
+  PROGRAMME_SCHEDULING_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({

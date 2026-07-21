@@ -37,6 +37,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // is real + the `ResourceStripPanel` can mount when toggled (B7). The build stays dark — this is a
   // test-only mock, and `env.test.ts` still asserts the derived constant is false at the build default.
   CANVAS_RESOURCE_VIEW_ENABLED: true,
+  // This suite asserts the ADR-0031 toolbar *layout*. The programme section (now default-on) mounts
+  // its own summary/recalc queries into the same region; pin it off here so the layout is the subject
+  // — it has its own suite (ProgrammeScheduleSection).
+  PROGRAMME_SCHEDULING_ENABLED: false,
 }));
 
 // Stub the DOM strip chrome so it doesn't fetch: on mount it publishes a snapshot into the canvas (via
