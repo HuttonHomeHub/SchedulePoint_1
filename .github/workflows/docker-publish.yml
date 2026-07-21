@@ -8,11 +8,31 @@ on:
     # because `type=semver` can't parse the prefix and the matrix can't tell which
     # app the tag is for — use `workflow_dispatch` for a one-off manual publish.
     tags: ['v*.*.*']
+  # A one-off manual publish (e.g. to recover a release whose automatic publish
+  # was skipped by a transient failure). These inputs share the NAMES of the
+  # workflow_call inputs below, so the same "Resolve app release" + metadata logic
+  # drives both paths — a dispatch that passes a per-app version produces the same
+  # `:<version>` + `:latest` tags the Release call would, rather than only `:sha`.
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Image tag to publish (defaults to git sha)'
+      api_version:
+        description: 'Version tag for the api image (e.g. 0.22.0). Empty ⇒ sha-only.'
         required: false
+        type: string
+      web_version:
+        description: 'Version tag for the web image (e.g. 0.41.0). Empty ⇒ sha-only.'
+        required: false
+        type: string
+      publish_api:
+        description: 'Build + push the api image.'
+        required: false
+        default: true
+        type: boolean
+      publish_web:
+        description: 'Build + push the web image.'
+        required: false
+        default: true
+        type: boolean
   # Called by the Release workflow when a version lands, so publishing is fully
   # automatic. The default GITHUB_TOKEN cannot make a tag push trigger a separate
   # workflow, so Release invokes this reusable workflow directly instead. Each app
@@ -21,7 +41,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: 'Fallback version for both images (manual dispatch only).'
+        description: 'Fallback version applied to both images when a per-app version is absent.'
         required: false
         type: string
       api_version:
