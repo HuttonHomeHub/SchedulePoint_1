@@ -22,7 +22,7 @@ describe('toImportError', () => {
       }),
     );
     expect(result.kind).toBe('unparseable');
-    expect(result.message).toMatch(/Primavera XER/);
+    expect(result.message).toMatch(/Primavera P6/);
   });
 
   it('maps a 422 NO_FILE to a "choose a file" message', () => {

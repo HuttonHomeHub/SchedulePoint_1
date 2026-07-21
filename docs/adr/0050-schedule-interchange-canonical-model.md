@@ -222,8 +222,26 @@ Hardening (M2 review fold): resource/assignment graph ceilings
 (`MAX_RESOURCES`/`MAX_ASSIGNMENTS`) alongside the M1 activity/dependency caps; the
 enum lookup tables are `Object.hasOwn`-guarded against `__proto__`/`toString`-class
 keys; and a defensive `importGraphSchema.safeParse` runs before persistence. The CPM
-engine + recalc parity gate remain untouched. **M3** (MSPDI) and **M4** (export)
-follow.
+engine + recalc parity gate remain untouched.
+
+## M3 status — Microsoft Project MSPDI (`.xml`) import (shipped)
+
+M3 adds a **second parser + adapter** for MS Project's MSPDI XML that feeds the _same_
+canonical model — proving the ADR's core claim that a new format is a parser, not a
+second pipeline. The `@repo/interchange` package gains `mspdi-parser` / `mspdi-calendar`
+/ `mspdi-adapter` / `importMspdi`, plus a format-agnostic **`importSchedule`** entry
+point that detects XER vs MSPDI from the bytes and routes to the matching orchestrator;
+both produce the identical import graph + report, so the `interchange` module and web
+dialog stay format-blind (the endpoints call `importSchedule`; the dialog accepts
+`.xer` **or** `.xml`). MSPDI is parsed with **`fast-xml-parser`** configured for
+untrusted input — `processEntities: false` (no entity expansion → no billion-laughs /
+XXE), external entities inert — behind an input **byte cap + node-count cap**
+(`DEFAULT_MSPDI_PARSE_CAPS`) and the shared graph-size ceilings. **`.mpp`** (proprietary
+binary) is rejected with a message pointing the user to export MSPDI XML. The full
+mapping is reused: tasks (incl. `<Summary>`→WBS + outline parentage, milestones, `PT`
+durations, constraint types 0–7, progress), `<PredecessorLink>` (link types 0–3, lag),
+calendars, resources and assignments. The CPM engine + recalc parity gate remain
+untouched. **M4** (best-effort export) follows.
 
 ## References
 

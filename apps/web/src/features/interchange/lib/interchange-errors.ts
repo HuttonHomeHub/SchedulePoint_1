@@ -57,7 +57,8 @@ export function toImportError(error: unknown): ImportError {
       if (reason === 'UNPARSEABLE_FILE') {
         return {
           kind: 'unparseable',
-          message: "This doesn't look like a Primavera XER file. Check the file and try again.",
+          message:
+            "This doesn't look like a Primavera P6 (.xer) or Microsoft Project (.xml) schedule file. Check the file and try again.",
         };
       }
       // A parseable-but-invalid case the server described itself — trust its message.

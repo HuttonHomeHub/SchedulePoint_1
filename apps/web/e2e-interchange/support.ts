@@ -72,3 +72,32 @@ export function validXerFile(): { name: string; mimeType: string; buffer: Buffer
     buffer: Buffer.from(validXer(), 'utf8'),
   };
 }
+
+/**
+ * A minimal valid MSPDI (`.xml`): one project, two tasks and one FS predecessor link, no calendar — the
+ * MS Project twin of {@link validXer} (same `{ activities: 2, relationships: 1, calendars: 0 }` counts),
+ * so the same review→commit journey proves the `.xml` path routes through `importSchedule` identically.
+ */
+export function validMspdi(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Project xmlns="http://schemas.microsoft.com/project">',
+    '<Name>Sample MSP</Name>',
+    '<CurrentDate>2026-01-05T00:00:00</CurrentDate>',
+    '<Tasks>',
+    '<Task><UID>1</UID><ID>1</ID><Name>Mobilise</Name><Duration>PT40H0M0S</Duration></Task>',
+    '<Task><UID>2</UID><ID>2</ID><Name>Design</Name><Duration>PT80H0M0S</Duration>',
+    '<PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type></PredecessorLink></Task>',
+    '</Tasks>',
+    '</Project>',
+  ].join('\n');
+}
+
+/** The `.xml` MSPDI fixture as bytes, ready for `Locator.setInputFiles`. */
+export function validMspdiFile(): { name: string; mimeType: string; buffer: Buffer } {
+  return {
+    name: 'schedule.xml',
+    mimeType: 'application/xml',
+    buffer: Buffer.from(validMspdi(), 'utf8'),
+  };
+}
