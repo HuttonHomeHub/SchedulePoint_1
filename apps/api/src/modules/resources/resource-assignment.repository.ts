@@ -107,6 +107,23 @@ export class ResourceAssignmentRepository {
     return db.resourceAssignment.findFirst({ where: this.active({ id, organizationId }) });
   }
 
+  /**
+   * ALL active assignments of a plan (joined through their active activities), org-scoped (anti-IDOR) —
+   * the schedule-interchange EXPORT read (ADR-0050 M4a). Filters on the assignment's own `planId`-bearing
+   * activity via a relation `where`, excluding a soft-deleted activity or assignment. One batched query,
+   * deterministic id order; export references its endpoints (activity, resource) by id.
+   */
+  findManyActiveByPlan(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ResourceAssignment[]> {
+    return db.resourceAssignment.findMany({
+      where: this.active({ organizationId, activity: { planId, deletedAt: null } }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   /** All active assignments of an activity (creation-ordered) — the list read shape. */
   findManyActiveByActivity(
     activityId: string,

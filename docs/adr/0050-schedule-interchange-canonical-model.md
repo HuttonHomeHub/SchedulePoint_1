@@ -118,17 +118,17 @@ This table is a **living contract** — the honest, versioned statement of what 
 and does not come across. It grows as the domain grows (each milestone adds rows /
 resolves an "M2" note); the per-import `InterchangeReport` is its runtime instance.
 
-| P6 XER (table) / MSPDI (element)                                                             | SchedulePoint                                        | Notes / approximations                                                                                           |
-| -------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `PROJECT` / `<Project>`                                                                      | new `Plan` (+ data date → `plannedStart`)            | one plan per source project (multi-project → prompt-or-first-with-report, never silent partial)                  |
-| `TASK` / `<Task>`                                                                            | `Activity` (type, `durationMinutes`, code, name)     | hours/days → working-minutes (ADR-0036); milestone flags → START/FINISH_MILESTONE                                |
-| `TASKPRED` / `<PredecessorLink>`                                                             | `ActivityDependency` (FS/SS/FF/SF, `lagMinutes`)     | lag units → minutes; dup `(pred,succ,type)` de-duped (§13/N04); cycles broken+flagged (ADR-0021)                 |
-| `CALENDAR` / `<Calendar>`                                                                    | `Calendar` (+ `CalendarShift` + `CalendarException`) | weekday work-hours → shifts; holidays/exceptions → exception windows (ADR-0036); non-expressible detail reported |
-| `PROJWBS` / `<Task>` summary rows                                                            | `WBS_SUMMARY` activities + `parentId` tree           | ADR-0038; **M2**                                                                                                 |
-| `TASK.cstr_type/date` (+ `cstr_type2/date2`)                                                 | `constraintType/Date` (+ secondary)                  | ADR-0035 §10; unsupported kinds coerced + reported; **M2**                                                       |
-| progress (`act_start/end`, `remain_drtn`, `phys_complete`)                                   | activity progress (ADR-0035 M2)                      | ranges coerced + reported; **M2**                                                                                |
-| `RSRC` / `<Resource>`, `TASKRSRC` / `<Assignment>`                                           | `Resource` + `ResourceAssignment` (ADR-0039/0040)    | **M2**; MATERIAL never a driver                                                                                  |
-| UDFs, activity-code matrices, cost accounts, roles, expenses, risk, financial periods, steps | —                                                    | **dropped + reported** (out of scope, brief §3/§8 Won't-have)                                                    |
+| P6 XER (table) / MSPDI (element)                                                             | SchedulePoint                                        | Notes / approximations                                                                                               |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `PROJECT` / `<Project>`                                                                      | new `Plan` (+ data date → `plannedStart`)            | one plan per source project (multi-project → prompt-or-first-with-report, never silent partial)                      |
+| `TASK` / `<Task>`                                                                            | `Activity` (type, `durationMinutes`, code, name)     | hours/days → working-minutes (ADR-0036); milestone flags → START/FINISH_MILESTONE                                    |
+| `TASKPRED` / `<PredecessorLink>`                                                             | `ActivityDependency` (FS/SS/FF/SF, `lagMinutes`)     | lag units → minutes; dup `(pred,succ,type)` de-duped (§13/N04); cycles broken+flagged (ADR-0021)                     |
+| `CALENDAR` / `<Calendar>`                                                                    | `Calendar` (+ `CalendarShift` + `CalendarException`) | weekday work-hours → shifts; holidays/exceptions → exception windows (ADR-0036); non-expressible detail reported     |
+| `PROJWBS` / `<Task>` summary rows                                                            | `WBS_SUMMARY` activities + `parentId` tree           | ADR-0038; **M2 import / M4c export** (XER `wbs:<id>` key ⇄ `wbs_id`; MSPDI `<Summary>`+`<OutlineLevel>`)             |
+| `TASK.cstr_type/date` (+ `cstr_type2/date2`)                                                 | `constraintType/Date` (+ secondary)                  | ADR-0035 §10; **M2 import / M4c export** — XER all 8 types + ALAP exact; MSP 1 slot (mandatory + secondary reported) |
+| progress (`act_start/end`, `remain_drtn`, `phys_complete`)                                   | activity progress (ADR-0035 M2)                      | **M2 import / M4c export** — XER exact; MSP has no suspend/resume/expected-finish + one %-complete (reported)        |
+| `RSRC` / `<Resource>`, `TASKRSRC` / `<Assignment>`                                           | `Resource` + `ResourceAssignment` (ADR-0039/0040)    | **M2 import / M4c export**; MATERIAL never a driver; MSP has no driving flag / production rate (reported)            |
+| UDFs, activity-code matrices, cost accounts, roles, expenses, risk, financial periods, steps | —                                                    | **dropped + reported** (out of scope, brief §3/§8 Won't-have)                                                        |
 
 ## Alternatives considered
 
@@ -243,12 +243,111 @@ durations, constraint types 0–7, progress), `<PredecessorLink>` (link types 0�
 calendars, resources and assignments. The CPM engine + recalc parity gate remain
 untouched. **M4** (best-effort export) follows.
 
+## M4 status — best-effort export (planned; reverses the "export deferred" scope)
+
+- **Date:** 2026-07-21
+- **Status of this section:** Accepted for build (product-owner directive to drive interchange to
+  completion). Each sub-milestone (M4a–M4d) Accepts with its own slice, mirroring how M1–M3 shipped.
+
+**Scope reversal, recorded in place (not a rewrite of history).** Decision §7 and the Consequences
+"neutral/deferred" note listed **export** as an out-of-v1, product-gated follow-on. The product owner has
+now directed that export be built. This section **reverses that deferral** and records why and how; the
+original text stands as the historical decision, this section supersedes its "export deferred" clause. The
+motivating forces are unchanged and, if anything, reinforced by the design:
+
+- **The canonical model was chosen _because_ it is bidirectional.** The ADR's central "one mapping
+  contract, N parsers" claim (and the rejection of per-format importers) was explicitly justified by
+  export: _"triples once export arrives"_. Export is the payoff the architecture was designed for — the
+  same `CanonicalModel` read in reverse, per-format **serialisers** instead of parsers, a
+  canonical→domain **importer** replaced by a domain→canonical **exporter**.
+- **Round-trip is the strongest correctness gate the interchange work can have.** Export → re-import →
+  structural equivalence exercises the whole canonical model against itself, catching mapping asymmetries
+  that neither direction's unit fixtures can.
+- **Switching-cost value is now two-way.** Import lowers the cost of _adopting_ SchedulePoint; export
+  removes the _lock-in_ objection ("can I get my schedule back out?") that blocks adoption in the first
+  place. The brief's §8 "XER export / full round-trip = Won't-have _for now_" is exactly the deferred,
+  now-activated milestone this ADR named.
+
+**The reverse pipeline mirrors the import one, stage for stage** (all pure, engine-free, in
+`@repo/interchange`; the CPM engine + recalc parity golden suite are structurally untouched — export is a
+**pure read** and never invokes the engine):
+
+| Import stage (existing)                      | Export stage (M4, this section)                                     |
+| -------------------------------------------- | ------------------------------------------------------------------- |
+| `parseXer` / `parseMspdi` (bytes → tables)   | `serialiseXer` / `serialiseMspdi` (tables → bytes)                  |
+| `adaptXerToCanonical` (tables → canonical)   | `emitXerFromCanonical` (canonical → tables)                         |
+| `mapCanonicalToImportGraph` (canonical → SP) | `mapPlanToCanonical` (SP **export graph** → canonical)              |
+| `validateAndRepair` (SP graph → valid graph) | export-side **fidelity findings** (unrepresentable detail → report) |
+| `importXer` / `importSchedule` orchestrators | `exportXer` / `exportMspdi` / `exportSchedule` orchestrators        |
+| thin module `commit` (writes via services)   | thin module `export` (reads via repositories, streams the file)     |
+
+**The mapping contract becomes bidirectional.** The load-bearing table above is now read both ways: every
+row that says "hours/days → working-minutes" on import also says "working-minutes → source granularity"
+on export, and each **lossy** direction (working-minutes → XER's day/hour units or MSPDI's `PTnHnM`,
+richer SchedulePoint calendars → the source's weekday model, SchedulePoint-only concepts with no source
+field) is a **fidelity finding** in the same `InterchangeReport` model — export is best-effort with **no
+silent loss**, exactly as import is. Round-trip is **structurally equivalent, not byte-identical** where a
+lossy coercion applies (the report names each).
+
+**Authorisation, surface, flag.** A new `interchange:export` permission (Viewer + Contributor + Planner +
+Org Admin, since export is a read — see the spec's permissions section) gates new **plan-scoped** export
+endpoints that stream a `.xer` / `.xml` with the right `Content-Type` + `Content-Disposition`. The web
+surface is the **existing** canvas **Export ▾** menu (from the export/print stage) extended with "Primavera
+P6 (.xer)" / "MS Project (.xml)" items, self-gated on `interchange:export`, behind the **existing**
+`VITE_SCHEDULE_INTERCHANGE` flag (no second entry point, no new flag).
+
+**Sub-milestones** (each a releasable dark slice, mirroring M1–M3): **M4a** XER export of the core network
+(project/activities/relationships/calendars) + the export-side report + the round-trip harness; **M4b**
+MSPDI export reusing the same canonical export graph (proving the serialiser-not-pipeline claim in
+reverse); **M4c** WBS + constraints + progress + resources/assignments parity; **M4d** the web Export-menu
+surface + end-to-end round-trip conformance. Full detail in the spec + plan referenced below.
+
+### M4c status — rich-scope export parity (shipped)
+
+- **Date:** 2026-07-21
+- **Status:** Accepted with this slice. Both emitters (`emitXerFromCanonical`, `emitMspdiFromCanonical`)
+  now serialise the **full plan**, reversing the import adapters field-for-field, so a rich plan
+  round-trips (export → re-import → structural equivalence) — not just its core network. The obsolete M4a/
+  M4b **drop** findings for WBS / constraints / progress / ALAP / resources / assignments are removed; a
+  category reports a finding only when it is **genuinely lossy**, never for data now fully emitted.
+
+Exported dimensions, and where the two formats diverge (each divergence is an **approximation finding**,
+never a silent drop):
+
+- **WBS** — a `PROJWBS` row per `WBS_SUMMARY` (reversing the `wbs:<id>` key convention → bare `wbs_id`;
+  the parent chain → `parent_wbs_id`, project-root = self/absent) and each real activity's `wbs_id`
+  referencing its summary parent (XER); `<Task><Summary>` + `<OutlineLevel>` in pre-order DFS so the
+  adapter's summary-stack inference reconstructs the tree (MSPDI). **Round-trips exactly in both.**
+- **Constraints** — `cstr_type/date` (+ `cstr_type2/date2`) inverting `CSTR_TYPE_TO_CANONICAL`, ALAP →
+  `CS_ALAP`, expected-finish via `reend_date` (XER — **all 8 types + ALAP round-trip exactly**). MSPDI has
+  a **single** `<ConstraintType>` slot (`1 = ALAP, 2…7`): the 6 non-mandatory types + ALAP round-trip; the
+  **2 mandatory** types have no MSP equivalent (dropped + reported); a **secondary** constraint rides
+  `<Deadline>` (only an FNLT finish bound is re-readable) + reported.
+- **Progress** — `status_code`/`complete_pct`/`phys_complete_pct`/`complete_pct_type`/`act_start_date`/
+  `act_end_date`/`suspend_date`/`resume_date`/`reend_date`/`remain_drtn_hr_cnt` (XER — **exact**). MSPDI
+  carries `<PercentComplete>`/`<PhysicalPercentComplete>`/`<ActualStart>`/`<ActualFinish>`/
+  `<RemainingDuration>`; it has **no** suspend/resume/expected-finish and one percent-complete measure
+  (re-read as duration-based) — those are reported.
+- **Resources / assignments** — `RSRC` (inverting `RSRC_TYPE_TO_CANONICAL`) + `TASKRSRC`
+  (`target_qty`/`target_qty_per_hr`/`driving_flag`/`act_reg_qty`) — XER round-trips the **driving flag +
+  production rate exactly**. MSPDI `<Resources>`/`<Assignments>` carry neither a **driving flag** nor a
+  per-assignment **production rate** (both reported); a reserved cost/max-units rate is lossy in both.
+
+The round-trip test harness (`export.fixtures.ts`) gains a rich fixture + a `toComparable` extended over
+the new dimensions, with a `format` argument that normalises MSP's two lossy assignment fields on both
+sides so an MSPDI round trip still asserts full equality for everything MSP can represent. The API e2e
+seeds a rich plan (WBS + constraint + progress + driving assignment) and round-trips it through both
+formats. The CPM engine + recalc parity golden suite are untouched (export is a pure read).
+
 ## References
 
 - Spec + plan: [`docs/specs/schedule-interchange/feature-spec.md`](../specs/schedule-interchange/feature-spec.md)
   (§4 solution design — the source of this ADR's outline + table) and
   [`implementation-plan.md`](../specs/schedule-interchange/implementation-plan.md)
   (M1 Task 1.1 = this ADR + the package skeleton).
+- **M4 export** spec + plan (the reverse pipeline this ADR's M4 section records):
+  [`feature-spec-export.md`](../specs/schedule-interchange/feature-spec-export.md) and
+  [`implementation-plan-export.md`](../specs/schedule-interchange/implementation-plan-export.md).
 - ADR-0019 (shared-package **build contract** — the `@repo/interchange` `dist`/`.d.ts`
   shape), ADR-0034/0035 (engine conformance + the **reject / repair / report**
   contract this pipeline reuses), ADR-0021 (dependency **DAG invariant** — cycles are

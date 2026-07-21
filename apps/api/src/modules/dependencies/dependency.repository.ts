@@ -30,6 +30,15 @@ export interface PlanEdge {
   successorId: string;
 }
 
+/** A plan's active dependency projected to the schedule-interchange EXPORT fields (ADR-0050 M4a). */
+export interface ExportEdge {
+  id: string;
+  predecessorId: string;
+  successorId: string;
+  type: DependencyType;
+  lagMinutes: number;
+}
+
 /**
  * Data-access for dependencies (ADR-0008) — the edges of the schedule network.
  * Centralises the soft-delete filter and always embeds the endpoint summaries so
@@ -143,6 +152,31 @@ export class DependencyRepository {
     return db.activityDependency.findMany({
       where: this.active({ organizationId, planId }),
       select: { predecessorId: true, successorId: true },
+    });
+  }
+
+  /**
+   * ALL of a plan's active dependencies projected to the EXPORT fields (id + endpoints + type + lag),
+   * scoped to the org (anti-IDOR) — the schedule-interchange EXPORT read (ADR-0050 M4a). Unpaginated by
+   * design (the whole network in one pass, bounded by the ADR-0050 relationship ceiling); one batched
+   * query, no endpoint include (export references endpoints by activity id). Deterministic id order for a
+   * stable exported file.
+   */
+  findAllActiveByPlan(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ExportEdge[]> {
+    return db.activityDependency.findMany({
+      where: this.active({ organizationId, planId }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        predecessorId: true,
+        successorId: true,
+        type: true,
+        lagMinutes: true,
+      },
     });
   }
 

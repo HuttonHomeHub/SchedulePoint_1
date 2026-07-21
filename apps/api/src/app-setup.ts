@@ -24,7 +24,15 @@ export function configureHttpApp(app: NestExpressApplication): void {
   const config = app.get(AppConfigService);
 
   app.use(helmet());
-  app.enableCors({ origin: config.corsOrigins, credentials: true });
+  app.enableCors({
+    origin: config.corsOrigins,
+    credentials: true,
+    // Expose the file-download headers so a cross-origin browser fetch can read them. `Content-Disposition`
+    // carries the download filename and `X-Interchange-Report` the interchange report for a file response
+    // (schedule-interchange export, ADR-0050 M4a) — both are non-simple headers a browser hides unless
+    // exposed. Additive: absent for every JSON response.
+    exposedHeaders: ['Content-Disposition', 'X-Interchange-Report'],
+  });
 
   const auth = app.get<AuthInstance>(AUTH_INSTANCE);
   app

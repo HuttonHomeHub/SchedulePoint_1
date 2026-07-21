@@ -8,6 +8,18 @@ export {
   type InterchangeCommitResult,
 } from './api/use-interchange';
 export {
+  fetchPlanExport,
+  parseContentDispositionFilename,
+  parseInterchangeReportHeader,
+  fallbackExportFilename,
+  exportReportFilename,
+  exportErrorMessage,
+  reportFindingCount,
+  EXPORT_FORMAT_LABELS,
+  type InterchangeExportFormat,
+  type PlanExportResult,
+} from './api/use-export-plan';
+export {
   toImportError,
   checkUploadSize,
   MAX_UPLOAD_BYTES,

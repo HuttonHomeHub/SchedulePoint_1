@@ -16,7 +16,7 @@ import { daysBetween } from '../render/render-model';
 import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../render/to-render-model';
 
 import { PlanSummaryPanel } from './plan-summary-panel';
-import type { TsldToolbarContext } from './tsld-toolbar-context';
+import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
@@ -33,6 +33,16 @@ import {
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
+import {
+  EXPORT_FORMAT_LABELS,
+  exportErrorMessage,
+  exportReportFilename,
+  fallbackExportFilename,
+  fetchPlanExport,
+  formatReportText,
+  reportFindingCount,
+  type InterchangeExportFormat,
+} from '@/features/interchange';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -103,6 +113,13 @@ export function useTsldToolbarContext({
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
+  // Schedule interchange export (ADR-0050 M4d): the caller's `interchange:export` PERMISSION — every
+  // member holds it (Viewer upward), so most users see it. Derived in the model (`canExportSchedule`,
+  // role-only) like the other capabilities. This context field is the permission ONLY (mirroring the
+  // NOTES `canWriteNotes` pattern); the `VITE_SCHEDULE_INTERCHANGE` flag gates visibility ONCE at the
+  // menu-item render site (`tsld-toolbar-items.tsx`), so the two gates stay orthogonal. UX only: the API
+  // re-checks the permission + org-scopes the target plan (anti-IDOR).
+  const canInterchangeExport = model.canExportSchedule;
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setPlanMode = useSetPlanSchedulingMode(orgSlug);
   // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
@@ -114,6 +131,16 @@ export function useTsldToolbarContext({
   // workspace renders it as a dismissable `role="alert"` banner beside the toolbar (mirroring the app's
   // `EditConflictBanner` inline-error pattern); `null` = no error. Session-local; nothing persists.
   const [exportError, setExportError] = useState<string | null>(null);
+  // Schedule interchange export (ADR-0050 M4d): true while an export fetch → download is in flight.
+  // Drives the two interchange menu items' loading spinner + disabled state and guards a double-click /
+  // concurrent export (mirrors `pdfExporting`). Session-local; nothing persists.
+  const [interchangeExporting, setInterchangeExporting] = useState(false);
+  // A VISIBLE, opt-in notice after a lossy-but-successful export (UX review B3): the export succeeded but
+  // some data was approximated/dropped, so the fidelity report is offered as a click-to-download button
+  // rather than auto-fired (the browser's multi-download guard can silently block a second download, which
+  // made the old "the report was downloaded too" announcement a lie). The workspace renders it as an INFO
+  // banner beside the toolbar; `null` = no notice (a clean export just announces). Session-local.
+  const [exportNotice, setExportNotice] = useState<ExportNotice | null>(null);
   // Browser Print (M4): true while the whole-diagram image is being produced for print (the build is
   // async). Guards re-entry (a second Print click before the image resolves is a no-op) — mirroring
   // `pdfExporting`. Session-local client state; nothing persists and it is never surfaced on the context
@@ -604,6 +631,7 @@ export function useTsldToolbarContext({
         // Announce synchronously on pick (B3): the off-screen paint is async, so without this the user
         // gets total silence between the pick and completion/failure.
         setExportError(null);
+        setExportNotice(null);
         announce('Preparing the image export…');
         void built.promise
           .then(({ blob, scaledToFit }) => {
@@ -637,6 +665,7 @@ export function useTsldToolbarContext({
         // Because the menu closes as `pdfExporting` flips true, the item spinner never paints — so
         // announce synchronously on pick (B3) to break the silence between the pick and completion.
         setExportError(null);
+        setExportNotice(null);
         announce('Preparing the PDF export…');
         void built.promise
           .then(({ blob }) =>
@@ -670,6 +699,7 @@ export function useTsldToolbarContext({
         // Announce synchronously on pick (B3): the whole-diagram image build is async, so this breaks
         // the silence before the print dialog opens (or the build fails).
         setExportError(null);
+        setExportNotice(null);
         announce('Preparing the diagram to print…');
         void built.promise
           .then(({ blob }) => {
@@ -693,6 +723,63 @@ export function useTsldToolbarContext({
       // banner beside the toolbar. Null ⇒ no banner.
       exportError,
       dismissExportError: () => setExportError(null),
+
+      // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export, ADR-0050 M4d) — a
+      // GET that streams the plan as a foreign schedule file (P6 .xer / MS Project .xml) and rides the
+      // fidelity report on the `X-Interchange-Report` header. Gated by `canInterchangeExport`; inert when
+      // the flag/permission is off (the menu group doesn't render, so this is never called).
+      canInterchangeExport,
+      interchangeExporting,
+      exportNotice,
+      dismissExportNotice: () => setExportNotice(null),
+      exportInterchange: (format: InterchangeExportFormat) => {
+        if (interchangeExporting) return; // double-click / concurrent-export guard (mirrors pdfExporting).
+        const formatLabel = EXPORT_FORMAT_LABELS[format];
+        // A new export starts: clear any prior error + notice, flip the loading flag, and announce
+        // synchronously on pick (parity with the PNG/PDF exports) so the async fetch isn't silent.
+        setExportError(null);
+        setExportNotice(null);
+        setInterchangeExporting(true);
+        announce(`Preparing the ${formatLabel} export…`);
+        void fetchPlanExport({
+          orgSlug,
+          planId,
+          format,
+          fallbackName: fallbackExportFilename(plan.name, format),
+        })
+          .then(({ blob, filename, report }) => {
+            downloadBlob(blob, filename);
+            // Surface the fidelity report unobtrusively without hiding that an export (MSPDI especially)
+            // approximated/dropped out-of-scope data. Clean export ⇒ just a polite confirmation. Lossy
+            // export ⇒ a VISIBLE, opt-in notice with a "Download report" button (NOT a silent second
+            // download — the browser's multi-download guard can block that, making the announcement a lie).
+            const findings = report ? reportFindingCount(report) : 0;
+            if (report && findings > 0) {
+              const itemWord = findings === 1 ? 'item' : 'items';
+              announce(
+                `Downloaded ${filename}. Some data was approximated for ${formatLabel}. ${findings} ${itemWord} changed.`,
+              );
+              setExportNotice({
+                message: `Downloaded ${filename}. Some data was approximated for ${formatLabel}. ${findings} ${itemWord} changed. Download the report for the details.`,
+                downloadReport: () =>
+                  downloadBlob(
+                    new Blob([formatReportText(report, { direction: 'export' })], {
+                      type: 'text/plain;charset=utf-8',
+                    }),
+                    exportReportFilename(filename),
+                  ),
+              });
+            } else {
+              announce(`Downloaded ${filename}.`);
+            }
+          })
+          .catch((error: unknown) => {
+            const message = exportErrorMessage(error);
+            announce(message);
+            setExportError(message);
+          })
+          .finally(() => setInterchangeExporting(false));
+      },
     };
   }, [
     zoomPreset,
@@ -782,5 +869,12 @@ export function useTsldToolbarContext({
     pdfExporting,
     printing,
     exportError,
+    // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE) — re-identify when the permission flips,
+    // the plan/org key changes (the fetch closes over `orgSlug`/`planId`/`plan.name`), the in-flight
+    // flag toggles (drives the items' spinner), or the lossy-export notice appears/clears.
+    canInterchangeExport,
+    interchangeExporting,
+    exportNotice,
+    orgSlug,
   ]);
 }

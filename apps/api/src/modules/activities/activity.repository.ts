@@ -145,6 +145,24 @@ export class ActivityRepository {
   }
 
   /**
+   * ALL of a plan's active activities (full rows, source-ordered), scoped to the org (anti-IDOR) — the
+   * schedule-interchange EXPORT read (ADR-0050 M4a). Unpaginated by design: export assembles the whole
+   * plan network in one pass, and the graph is already bounded by the import/export activity ceiling
+   * (ADR-0050). One batched query; the `(plan_id, created_at, id)` order is deterministic (matching the
+   * recalc load) so the exported file is stable.
+   */
+  findAllActiveByPlan(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Activity[]> {
+    return db.activity.findMany({
+      where: this.active({ organizationId, planId }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
    * Optimistic-locked update: only touches the active row if its version still
    * matches. Returns rows changed — `0` means a version conflict or the row is
    * gone, which the service maps to 409.

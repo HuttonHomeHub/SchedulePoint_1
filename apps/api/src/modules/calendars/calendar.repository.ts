@@ -221,6 +221,32 @@ export class CalendarRepository {
   }
 
   /**
+   * A batch of active calendars (by id set) with their shift rows and active exceptions (each with
+   * windows), scoped to the org (anti-IDOR) — the schedule-interchange EXPORT read (ADR-0050 M4a). One
+   * query per table (calendars joined to their shifts + exceptions + windows), never a query-per-calendar,
+   * mirroring {@link findActiveDetailByIdInOrg} for a set of ids. Soft-deleted calendars (and any id not in
+   * the org) are simply absent from the result, so the caller resolves only the calendars it can read.
+   */
+  findActiveDetailByIdsInOrg(
+    ids: readonly string[],
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<CalendarWithExceptions[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return db.calendar.findMany({
+      where: this.active({ id: { in: [...ids] }, organizationId }),
+      include: {
+        shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] },
+        exceptions: {
+          where: { deletedAt: null },
+          orderBy: [{ startDate: 'asc' }],
+          include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
+        },
+      },
+    });
+  }
+
+  /**
    * An active calendar in an org by name (case-sensitive) — used to resolve the
    * seeded `Standard` calendar that new plans default to (Task C1). Returns null if
    * the org has no active calendar with that name (e.g. it was renamed/deleted).

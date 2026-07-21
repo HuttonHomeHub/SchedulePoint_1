@@ -8,6 +8,8 @@ import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
+import type { InterchangeExportFormat } from '@/features/interchange';
+
 /**
  * The context the TSLD toolbar registry ({@link tsldToolbarItems}) reads and commands (ADR-0031).
  * It is the **seam** between the generic `<Toolbar>` and the plan workspace: the registry never
@@ -303,4 +305,36 @@ export interface TsldToolbarContext {
   exportError: string | null;
   /** Dismiss the {@link exportError} banner (clears it back to `null`). */
   dismissExportError: () => void;
+
+  // --- Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export, ADR-0050 M4d) ----
+  /** Whether the current member holds `interchange:export` (every member does — Viewer upward). Gates
+   * the Export menu's "Interchange" group ALONGSIDE the `VITE_SCHEDULE_INTERCHANGE` flag: both must be
+   * true for the P6/MS Project items to render. False (group hidden) when the flag is off — the
+   * `exportInterchange` command is then never called. */
+  canInterchangeExport: boolean;
+  /** Download the plan serialised to a foreign schedule file (P6 `xer` / MS Project `mspdi`), reading the
+   * fidelity report off the `X-Interchange-Report` header and surfacing it unobtrusively (a polite
+   * announcement +, when the export approximated/dropped anything, a visible opt-in {@link exportNotice}).
+   * A no-op unless the flag + permission gate above is satisfied. */
+  exportInterchange: (format: InterchangeExportFormat) => void;
+  /** True while an interchange export is in flight (fetch → download). Drives the interchange menu items'
+   * loading spinner + disabled state and guards a double-click / concurrent export (mirrors
+   * {@link pdfExporting}). */
+  interchangeExporting: boolean;
+  /** A visible, dismissible INFO notice shown after a lossy export completes: the export succeeded but
+   * some data was approximated/dropped, so the report is offered as an opt-in download rather than
+   * auto-fired (the browser's multi-download guard can silently block a second download). `null` = no
+   * notice (a clean export just announces). The workspace renders it as an info banner beside the
+   * toolbar; {@link dismissExportNotice} clears it. */
+  exportNotice: ExportNotice | null;
+  /** Dismiss the {@link exportNotice} banner (clears it back to `null`). */
+  dismissExportNotice: () => void;
+}
+
+/** A visible, opt-in surface for a lossy-but-successful interchange export (ADR-0050 M4d). */
+export interface ExportNotice {
+  /** The plain-language notice body (the download confirmation + the approximation summary). */
+  message: string;
+  /** Download the fidelity report text for the just-completed export (export-direction copy). */
+  downloadReport: () => void;
 }

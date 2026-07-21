@@ -66,6 +66,9 @@
   --warning-text: oklch(0.48 0.13 80);
   --info: oklch(0.5 0.14 240);
   --info-foreground: oklch(0.985 0 0);
+  /* Readable info for TEXT on page surfaces (mirrors `--warning-text`): the solid `--info` above is a
+     surface tone and isn't legible as coloured text on `background`/`card`; this keeps text ≥ 4.5:1. */
+  --info-text: oklch(0.45 0.14 250);
 
   /* Lines & focus */
   --border: oklch(0.922 0 0);
@@ -129,6 +132,8 @@
   --warning-text: oklch(0.85 0.14 82);
   --info: oklch(0.7 0.13 240);
   --info-foreground: oklch(0.205 0 0);
+  /* Lighter blue so info text stays legible on the dark background/card. */
+  --info-text: oklch(0.82 0.11 245);
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
@@ -178,6 +183,7 @@
   --color-warning-text: var(--warning-text);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-info-text: var(--info-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

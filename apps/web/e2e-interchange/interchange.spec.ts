@@ -90,3 +90,52 @@ test('a planner imports a schedule from a .xml (MSPDI) file and lands on the new
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample MSP', level: 1 })).toBeVisible();
 });
+
+/**
+ * The **web export surface** (ADR-0050 M4d): import a `.xer` to seed a plan with activities, open the
+ * plan's canvas Export ▾ menu, and export it back out as `.xer` — asserting the new "Primavera P6 (XER)"
+ * item triggers a real browser download named from the plan. An axe pass over the open menu keeps it
+ * WCAG 2.2 AA. Seeds via the import-commit path (rather than hand-building a plan) so the export has a
+ * populated network to serialise. The export→re-import round trip itself is proven at the pure-package
+ * and API-e2e layers (see the closing comment). Chromium only (TECH_DEBT #25a).
+ */
+test('a planner exports a plan to .xer from the canvas Export menu', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+
+  // Seed: import the fixture .xer to create a plan (the export needs a populated network to serialise).
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const seedDialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await seedDialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(validXerFile());
+  await expect(seedDialog.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
+  await seedDialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+
+  // Export: open the canvas Export ▾ menu and pick Primavera P6 (XER); assert a download is triggered
+  // and its suggested filename ends `.xer`.
+  await page.getByRole('button', { name: /Export/ }).click();
+
+  // The open Export menu (incl. the new Interchange group) stays WCAG 2.2 AA — mirrors the import
+  // dialog's axe check above.
+  await expect(page.getByRole('menuitem', { name: 'Primavera P6 (XER)' })).toBeVisible();
+  const menuAxe = await new AxeBuilder({ page })
+    .include('[role="menu"]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(menuAxe.violations).toEqual([]);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('menuitem', { name: 'Primavera P6 (XER)' }).click(),
+  ]);
+  // The download is a real browser download named from the plan, with the .xer extension — the M4d
+  // deliverable. The round trip itself (these exported bytes re-import to an equivalent plan) is proven
+  // exhaustively at the pure-package layer (@repo/interchange export round-trip specs) and the API e2e
+  // (apps/api/test/interchange-export.e2e-spec.ts imports → exports → re-imports against a real Postgres),
+  // so this browser journey deliberately stops at the download rather than re-driving a second project
+  // through the UI.
+  expect(download.suggestedFilename()).toMatch(/\.xer$/);
+  expect(download.suggestedFilename()).toMatch(/sample/i);
+});

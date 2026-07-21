@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canManageHierarchy, canWriteNotes } from './rbac';
+import { canExportSchedule, canManageHierarchy, canWriteNotes } from './rbac';
 
 describe('canManageHierarchy', () => {
   it('allows writers (Planner, Org Admin)', () => {
@@ -25,5 +25,15 @@ describe('canWriteNotes', () => {
   it('denies the Viewer (read-only) and the absent role', () => {
     expect(canWriteNotes('VIEWER')).toBe(false);
     expect(canWriteNotes(undefined)).toBe(false);
+  });
+});
+
+describe('canExportSchedule', () => {
+  it('allows any defined member role (export is a read-egress every member holds)', () => {
+    expect(canExportSchedule('VIEWER')).toBe(true);
+  });
+
+  it('denies the absent (signed-out / unknown) role', () => {
+    expect(canExportSchedule(undefined)).toBe(false);
   });
 });

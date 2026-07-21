@@ -121,6 +121,14 @@ export function makeTsldToolbarContext(
     matchingCount: 0,
     exportError: null,
     dismissExportError: vi.fn(),
+    // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export) — off by default so
+    // the "Interchange" Export-menu group doesn't leak into the other suites' assertions; the interchange
+    // suite opts in via `canInterchangeExport: true`.
+    canInterchangeExport: false,
+    exportInterchange: vi.fn(),
+    interchangeExporting: false,
+    exportNotice: null,
+    dismissExportNotice: vi.fn(),
     ...overrides,
   };
 }

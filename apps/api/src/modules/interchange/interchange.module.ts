@@ -10,8 +10,10 @@ import { ProjectsModule } from '../projects/projects.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 
+import { ExportService } from './export.service';
 import { InterchangeController } from './interchange.controller';
 import { InterchangeService } from './interchange.service';
+import { PlanExportController } from './plan-export.controller';
 
 /**
  * Schedule-interchange module (ADR-0050, C2). The thin NestJS surface over the pure, engine-free
@@ -45,7 +47,7 @@ import { InterchangeService } from './interchange.service';
     ScheduleModule,
     PlanLockModule,
   ],
-  controllers: [InterchangeController],
-  providers: [InterchangeService],
+  controllers: [InterchangeController, PlanExportController],
+  providers: [InterchangeService, ExportService],
 })
 export class InterchangeModule {}
