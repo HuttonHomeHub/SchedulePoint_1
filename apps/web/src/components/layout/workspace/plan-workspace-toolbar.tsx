@@ -1,4 +1,4 @@
-import { SquarePen } from 'lucide-react';
+import { SquarePen, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
@@ -19,6 +19,7 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
+import { Sheet } from '@/components/ui/sheet';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
@@ -26,12 +27,13 @@ import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
+  ENTRY_ROUTES_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
-import { ActivityProgressDialog } from '@/features/activities';
+import { isDurationDerivedType } from '@/features/activities';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -95,14 +97,22 @@ export function ToolbarPlanWorkspace({
   // a stable, guarded callback that scrolls it into view and moves focus to it. A no-op when the
   // section isn't mounted (the responsive single-pane toggle / `VITE_NOTES` off), so it never throws.
   const notesHeadingRef = useRef<HTMLHeadingElement>(null);
+  const setNotesOpen = model.setNotesOpen;
   const revealComments = useCallback(() => {
+    // Entry-route win 1 (`VITE_ENTRY_ROUTES`): the Comments button opens the right-side notes drawer
+    // (the `<dialog>.showModal()` inside `Sheet` handles focus trap + Escape). Flag-off keeps the
+    // original behaviour — scroll the inline notes heading into view + focus it.
+    if (ENTRY_ROUTES_ENABLED) {
+      setNotesOpen(true);
+      return;
+    }
     const el = notesHeadingRef.current;
     // No explicit `behavior` — let the app's global `prefers-reduced-motion` CSS `scroll-behavior`
     // opt-out govern it (A3); an explicit `behavior: 'smooth'` would bypass that (mirrors
     // `features/plan-lock/lib/use-pen-lock-view.ts`, which omits `behavior` deliberately).
     el?.scrollIntoView({ block: 'start' });
     el?.focus();
-  }, []);
+  }, [setNotesOpen]);
   const ctx = useTsldToolbarContext({
     model,
     plan,
@@ -258,6 +268,14 @@ export function ToolbarPlanWorkspace({
       onOpenLogic={model.setLogicActivity}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
+      // toolbar item is flag-gated, so flag-off is byte-for-byte. Progress is role-gated via
+      // `canReportProgress`; Steps hides for a duration-derived selection via `isStepsEligible`.
+      onResources={model.onResourcesActivity}
+      onProgress={model.onProgressActivity}
+      onSteps={model.onStepsActivity}
+      canReportProgress={model.canProgress}
+      isStepsEligible={(a) => !isDurationDerivedType(a.type)}
       onSelectionChange={model.onSelectionChange}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
@@ -423,18 +441,56 @@ export function ToolbarPlanWorkspace({
         </div>
       ) : null}
 
-      {/* Notes (ADR-0046, VITE_NOTES) — mounted at the same site as the programme section, under the
-          (visually-hidden) plan `h1`, so the default `h2` heading is correct. */}
+      {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): the always-inline block
+          above the canvas wasted vertical space, so when on it moves into a right-side `Sheet` the
+          Comments toolbar button opens (`model.notesOpen`), reclaiming the room. Flag-off keeps the
+          inline block exactly as-is. The `notesHeadingRef` is wired in both modes (harmless when the
+          drawer path no longer scrolls to it). */}
       {NOTES_ENABLED ? (
-        <div className="px-4 pt-2">
-          <PlanNotesSection
-            orgSlug={model.orgSlug}
-            planId={model.planId}
-            canWrite={model.canWriteNotes}
-            bounded
-            headingRef={notesHeadingRef}
-          />
-        </div>
+        ENTRY_ROUTES_ENABLED ? (
+          <Sheet
+            side="right"
+            title="Plan notes"
+            open={model.notesOpen}
+            onClose={() => model.setNotesOpen(false)}
+          >
+            <div className="bg-card border-border flex h-full flex-col border-l shadow-lg">
+              <div className="border-border flex items-center justify-between gap-2 border-b px-4 py-2">
+                {/* A plain (non-heading) visible title: the `Sheet` already supplies the sr-only
+                    accessible name, and `PlanNotesSection` renders its own "Notes" heading below —
+                    a second visible heading here would duplicate the outline. */}
+                <span className="text-sm font-medium">Plan notes</span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Close plan notes"
+                  onClick={() => model.setNotesOpen(false)}
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                <PlanNotesSection
+                  orgSlug={model.orgSlug}
+                  planId={model.planId}
+                  canWrite={model.canWriteNotes}
+                  bounded
+                  headingRef={notesHeadingRef}
+                />
+              </div>
+            </div>
+          </Sheet>
+        ) : (
+          <div className="px-4 pt-2">
+            <PlanNotesSection
+              orgSlug={model.orgSlug}
+              planId={model.planId}
+              canWrite={model.canWriteNotes}
+              bounded
+              headingRef={notesHeadingRef}
+            />
+          </div>
+        )
       ) : null}
 
       {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
@@ -520,19 +576,9 @@ export function ToolbarPlanWorkspace({
       {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
       <ActivityCrudDialogs model={model} />
 
-      {/* The progress editor the toolbar's **Update progress…** opens (toolbar quick-wins F3), driven by
-          `model.progressActivityId`. Mounted-and-toggled like the crud dialogs; its target re-derives
-          from the live query, so it closes when the row is deleted. Role-gated (Contributor+), not
-          pen-gated (the progress precedent, ADR-0046). */}
-      {model.canProgress ? (
-        <ActivityProgressDialog
-          orgSlug={model.orgSlug}
-          planId={model.planId}
-          open={model.progressActivity !== undefined}
-          onClose={() => model.setProgressActivityId(null)}
-          {...(model.progressActivity ? { activity: model.progressActivity } : {})}
-        />
-      ) : null}
+      {/* The progress editor (toolbar Report-progress + the entry-route selection-bar Report-progress)
+          now lives in the shared `PlanDialogs`, so it's mounted once for whichever canvas layout is
+          active and both entry points open the same dialog. */}
     </div>
   );
 }

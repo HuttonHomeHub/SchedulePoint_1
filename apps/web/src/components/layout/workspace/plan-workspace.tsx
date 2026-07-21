@@ -23,6 +23,7 @@ import {
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
+import { isDurationDerivedType } from '@/features/activities';
 import { PlanNotesSection } from '@/features/notes';
 import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -144,6 +145,14 @@ function Adr0030PlanWorkspace({
       onOpenLogic={model.setLogicActivity}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
+      // toolbar item is flag-gated, so flag-off is byte-for-byte. Their dialogs are mounted in the
+      // shared `PlanDialogs` below, so they work in this ADR-0030 layout too.
+      onResources={model.onResourcesActivity}
+      onProgress={model.onProgressActivity}
+      onSteps={model.onStepsActivity}
+      canReportProgress={model.canProgress}
+      isStepsEligible={(a) => !isDurationDerivedType(a.type)}
       onSelectionChange={model.onSelectionChange}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
@@ -209,12 +218,13 @@ function Adr0030PlanWorkspace({
         </div>
       )}
 
+      {/* Shared dialogs (dependency editor, edit-plan, and the entry-route resources/progress/steps
+          editors) — so the canvas selection bar's Report-progress / Resources / Steps actions work in
+          this ADR-0030 layout too. */}
       <PlanDialogs model={model} plan={plan} />
 
       {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
       <ActivityCrudDialogs model={model} />
-      {/* NB no `ActivityProgressDialog` here: `progressActivityId` is set only from the toolbar surface
-          (`ToolbarPlanWorkspace`), so hosting it in this legacy layout was unreachable dead code. */}
     </div>
   );
 }

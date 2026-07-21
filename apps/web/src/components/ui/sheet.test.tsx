@@ -33,4 +33,26 @@ describe('Sheet', () => {
     fireEvent(screen.getByRole('dialog'), new Event('cancel'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('anchors to the inline-start edge by default (side="left")', () => {
+    render(
+      <Sheet open onClose={vi.fn()} title="Project Explorer">
+        <p>Drawer body</p>
+      </Sheet>,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('left-0');
+    expect(dialog).not.toHaveClass('right-0');
+  });
+
+  it('anchors to the inline-end edge when side="right"', () => {
+    render(
+      <Sheet open onClose={vi.fn()} title="Plan notes" side="right">
+        <p>Drawer body</p>
+      </Sheet>,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('right-0');
+    expect(dialog).not.toHaveClass('left-0');
+  });
 });

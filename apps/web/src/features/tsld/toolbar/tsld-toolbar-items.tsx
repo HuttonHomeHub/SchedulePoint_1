@@ -1200,6 +1200,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     tier: 2 as const,
     order: 4,
     label: 'Add note',
+    // Toolbar-only users have no other route into the dependency/logic panel (entry-route gap #6): a
+    // tooltip clause makes it discoverable without renaming the visible "Add note" affordance. Appended
+    // to the hover `title` only (the accessible name stays "Add note").
+    description: 'Opens the Logic panel (links & notes)',
     icon: <StickyNote className="size-4" />,
   };
   const clearVisualPlacementShape = {
@@ -1217,7 +1221,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     row: 'do' as const,
     tier: 2 as const,
     order: 6,
-    label: 'Update progress…',
+    // "Report progress…" — the verb matches the activities-table row action ("Report progress") and the
+    // dialog title (label convergence, entry-route gap #2). The id stays `update-progress` (a stable
+    // test/telemetry handle).
+    label: 'Report progress…',
     icon: <Gauge className="size-4" />,
   };
   const commentsShape = {

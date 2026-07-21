@@ -59,7 +59,7 @@ describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', (
     for (const name of [
       'Go to today',
       'Comments',
-      'Update progress…',
+      'Report progress…',
       'Add note',
       'Clear visual placement',
     ]) {

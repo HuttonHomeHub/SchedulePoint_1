@@ -15,6 +15,8 @@ export interface ToolbarButtonProps {
   /** The item id — stamped as `data-toolbar-item` so the toolbar can focus it by query (roving). */
   itemId: string;
   label: string;
+  /** Supplementary hover-tooltip clause appended to the `title` (never the accessible name). */
+  description?: string;
   icon?: React.ReactNode;
   /** Show the text label beside the icon (Tier-1 emphasis); icon-only otherwise (label → aria-label). */
   showLabel?: boolean;
@@ -33,6 +35,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     {
       itemId,
       label,
+      description,
       icon,
       showLabel,
       pressed,
@@ -49,14 +52,19 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     // Native hover tooltip. A labelled button already shows its name, so its `title` only needs to
     // explain a disabled state. An **icon-only** button shows nothing, so it always gets a `title`
     // naming it — `<name>` when live, `<name> — <reason>` when disabled (e.g. "Colour by… — coming
-    // soon"), so hovering any icon tells the user what it is even before the feature ships.
-    const title = showLabel
-      ? disabled
+    // soon"), so hovering any icon tells the user what it is even before the feature ships. When the
+    // item carries a {@link description}, it's appended to the live title (never to a disabled-reason
+    // title, which the reason already owns) so a terse command becomes self-explanatory on hover.
+    const liveBase = showLabel ? undefined : label;
+    const withDescription = (base: string | undefined): string | undefined =>
+      description ? (base ? `${base} — ${description}` : description) : base;
+    const title = disabled
+      ? showLabel
         ? disabledReason
-        : undefined
-      : disabled && disabledReason
-        ? `${label} — ${disabledReason}`
-        : label;
+        : disabledReason
+          ? `${label} — ${disabledReason}`
+          : label
+      : withDescription(liveBase);
     return (
       <button
         ref={ref}

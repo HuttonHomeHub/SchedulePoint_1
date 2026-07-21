@@ -107,21 +107,21 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(spies.revealComments).toHaveBeenCalledOnce();
   });
 
-  // --- F3 · Update progress -----------------------------------------------------------------
-  it('Update progress: disabled with "Select an activity first" when nothing is selected', () => {
+  // --- F3 · Report progress -----------------------------------------------------------------
+  it('Report progress: disabled with "Select an activity first" when nothing is selected', () => {
     renderRows(ctx({ selectedActivityId: null }));
-    const btn = screen.getByRole('button', { name: 'Update progress…' });
+    const btn = screen.getByRole('button', { name: 'Report progress…' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Update progress… — Select an activity first');
+    expect(btn).toHaveAttribute('title', 'Report progress… — Select an activity first');
   });
 
-  it('Update progress: enabled with a resolved selection + canProgress; opens the dialog (not pen-gated)', () => {
+  it('Report progress: enabled with a resolved selection + canProgress; opens the dialog (not pen-gated)', () => {
     // authoringEnabled false (no pen) — progress is Contributor+, NOT pen-gated, so it stays enabled.
     renderRows(
       ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canProgress: true }),
       false,
     );
-    const btn = screen.getByRole('button', { name: 'Update progress…' });
+    const btn = screen.getByRole('button', { name: 'Report progress…' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.openProgress).toHaveBeenCalledOnce();
@@ -131,18 +131,18 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     // The id is still held but its row was deleted elsewhere, so `selectedActivity` is undefined — the
     // button must NOT be enabled (a click would be a silent no-op on a missing target).
     renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: undefined, canProgress: true }));
-    const btn = screen.getByRole('button', { name: 'Update progress…' });
+    const btn = screen.getByRole('button', { name: 'Report progress…' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Update progress… — Select an activity first');
+    expect(btn).toHaveAttribute('title', 'Report progress… — Select an activity first');
   });
 
   it('Update progress: disabled with the role reason for a viewer who cannot report progress', () => {
     renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canProgress: false }));
-    const btn = screen.getByRole('button', { name: 'Update progress…' });
+    const btn = screen.getByRole('button', { name: 'Report progress…' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute(
       'title',
-      'Update progress… — You don’t have permission to report progress',
+      'Report progress… — You don’t have permission to report progress',
     );
   });
 
@@ -150,10 +150,10 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     // A permanently-blocked user with no selection is told the role reason, not (misleadingly) to
     // select an activity first.
     renderRows(ctx({ selectedActivityId: null, selectedActivity: undefined, canProgress: false }));
-    const btn = screen.getByRole('button', { name: 'Update progress…' });
+    const btn = screen.getByRole('button', { name: 'Report progress…' });
     expect(btn).toHaveAttribute(
       'title',
-      'Update progress… — You don’t have permission to report progress',
+      'Report progress… — You don’t have permission to report progress',
     );
   });
 
@@ -165,6 +165,9 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     );
     const btn = screen.getByRole('button', { name: 'Add note' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
+    // Logic discoverability (entry-route gap #6): the hover tooltip points a toolbar-only user at the
+    // Logic panel, without changing the accessible name ("Add note").
+    expect(btn).toHaveAttribute('title', 'Add note — Opens the Logic panel (links & notes)');
     fireEvent.click(btn);
     expect(spies.openActivityNotes).toHaveBeenCalledOnce();
   });

@@ -279,6 +279,7 @@ export function Toolbar<Ctx>({
                 ref={(node) => setItemRef(r.item.id, node)}
                 itemId={r.item.id}
                 label={r.item.label}
+                {...(r.item.description ? { description: r.item.description } : {})}
                 icon={r.item.icon}
                 showLabel={r.item.tier === 1}
                 {...(r.item.isActive ? { pressed: r.active } : {})}

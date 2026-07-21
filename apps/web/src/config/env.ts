@@ -446,7 +446,7 @@ export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
  *
  * - **Go to today** — pans the canvas to today's date line (reuses the `goToDate` left-inset view jump).
  * - **Comments** — reveals + focuses the plan-level notes thread (`PlanNotesSection`, `VITE_NOTES`).
- * - **Update progress…** — opens `ActivityProgressDialog` for the selected activity (Contributor+).
+ * - **Report progress…** — opens `ActivityProgressDialog` for the selected activity (Contributor+).
  * - **Add note** — opens the selected activity's Logic panel at its Notes section (`VITE_NOTES`).
  * - **Clear visual placement** — drops the selected bar's hand-placed `visualStart` (Visual mode, pen).
  *
@@ -666,3 +666,23 @@ export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
  * registered, and none of the share code is reached (emergency opt-out).
  */
 export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUEST_SHARE_LINKS);
+
+/**
+ * Entry-route UX improvements (spec — two "entry-route" quick wins). **OFF by default during build** —
+ * it flips on only after its specialist reviews are green. Frontend-only, over already-shipped features
+ * (notes + resource assignments) — no new API/schema/`@repo/types`/CPM-engine change (the recalc parity
+ * gate is untouched). When on, it changes where two shipped affordances are reached from:
+ *
+ * - **Plan notes as a right-side drawer** — the plan Notes thread (`VITE_NOTES`) moves out of the
+ *   always-inline block above the canvas into a right-anchored `Sheet` the toolbar **Comments** button
+ *   opens, reclaiming the vertical space the inline block wasted.
+ * - **Assign resources from the canvas** — the per-activity resource-assignment editor
+ *   (`ActivityResourcesDialog`, `VITE_RESOURCES`), until now reachable only from the activities-table
+ *   row menu, gains a **Resources** action on the canvas floating selection bar.
+ *
+ * Both halves ride existing endpoints/dialogs; the flag only governs where they are surfaced. Set
+ * `VITE_ENTRY_ROUTES=true` to enable it in an environment. Flag-off ⇒ the plan notes stay inline, the
+ * selection bar carries no Resources item, and none of the new code is reached — byte-for-byte the
+ * prior behaviour (emergency rollback / opt-out).
+ */
+export const ENTRY_ROUTES_ENABLED = flagDefaultOff(import.meta.env.VITE_ENTRY_ROUTES);
