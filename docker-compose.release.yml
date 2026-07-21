@@ -114,6 +114,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DOCKER_CONFIG_DIR:-/root/.docker}/config.json:/config.json:ro
     environment:
+      # Pin the Docker API version Watchtower speaks. containrrr/watchtower defaults to the
+      # ancient API 1.25, which a modern Docker Engine rejects ("client version 1.25 is too
+      # old. Minimum supported API version is 1.40"), crash-looping the container. 1.44 is
+      # within every current daemon's supported range (Docker 25+). Raise it if a future
+      # daemon drops 1.44.
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.44}
       # Only touch containers explicitly labelled — never Postgres or Watchtower itself.
       WATCHTOWER_LABEL_ENABLE: 'true'
       # Poll GHCR on this interval (seconds); 300s = every 5 minutes.
