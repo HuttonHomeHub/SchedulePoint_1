@@ -120,6 +120,14 @@ export interface TsldToolbarContext {
   /** Open the resource-loading-histogram dialog (M7 rung 5, ADR-0044 §3). Wired to the shared
    * plan-chrome dialogs; the toolbar item that calls it is gated behind `VITE_RESOURCE_CURVES`. */
   openResourceHistogram: () => void;
+  /** Whether the viewer may create/list/revoke External-Guest share links (`plan:share` — Planner +
+   * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item ALONGSIDE `VITE_GUEST_SHARE_LINKS`
+   * (both must hold). NOT pen-gated — sharing grants read access, it doesn't edit the plan. Populated on
+   * every build; nothing reads it while the flag is off (the `share` id resolves to its placeholder). */
+  canShare: boolean;
+  /** Open the External-Guest **Share links** dialog (ADR-0051 F-M4). Wired to the shared plan-chrome
+   * dialogs; the toolbar item that calls it is gated behind `VITE_GUEST_SHARE_LINKS` + {@link canShare}. */
+  openShare: () => void;
   /** Edit the plan's metadata (writer only); absent for non-writers. Surfaced by the Summary popover's
    * Edit-plan shortcut and the header edit-pencil — the standalone toolbar buttons were removed
    * (ADR-0031 amendment: Plan details folded into Summary). */

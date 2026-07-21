@@ -65,6 +65,7 @@ import {
   canExportSchedule,
   canManageHierarchy,
   canReportProgress,
+  canSharePlan,
   canWriteNotes,
   useOrgRole,
 } from '@/hooks/use-org-role';
@@ -874,6 +875,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // "Interchange" group alongside `VITE_SCHEDULE_INTERCHANGE`. Named to match the `canExportSchedule`
     // rbac fn end-to-end. False for a signed-out / unknown role.
     canExportSchedule: canExportSchedule(role),
+    // External-Guest share links (ADR-0051 F-M4): who may create/list/revoke a plan's share links —
+    // Planner + Org Admin (`plan:share`, a governance act that mints a bearer credential), NOT pen-gated
+    // (it grants read access, it doesn't edit the plan). Gates the toolbar Share affordance alongside
+    // `VITE_GUEST_SHARE_LINKS`. Named to match the `canSharePlan` rbac fn; false for a signed-out role.
+    canShare: canSharePlan(role),
     canManageLogic,
     penReadOnly,
     // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it; inert flag-off.

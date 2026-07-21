@@ -132,6 +132,14 @@ export const scheduleKeys = {
     ] as const,
 };
 
+export const shareKeys = {
+  all: (orgSlug: string) => ['shares', orgSlug] as const,
+  // A plan's External-Guest share links (ADR-0051 F-M4) — a bounded, unpaginated list keyed by the
+  // plan. Create / revoke invalidate the one plan's list.
+  listByPlan: (orgSlug: string, planId: string) =>
+    [...shareKeys.all(orgSlug), 'plan', planId, 'list'] as const,
+};
+
 export const planLockKeys = {
   all: (orgSlug: string) => ['plan-lock', orgSlug] as const,
   // One key per plan — the edit-lock is 1:1 with a plan (ADR-0028). Acquire /

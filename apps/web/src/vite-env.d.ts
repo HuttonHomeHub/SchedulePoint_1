@@ -63,4 +63,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_RESOURCE_VIEW?: string;
   /** Schedule interchange web review UI — the project plan-create "Import from file…" entry + the dry-run review dialog (report table + approximation/repair/drop lists + download) + commit → open-plan, over the already-shipped `@repo/interchange` pipeline + the `interchange` dry-run/commit endpoints (Stage C2 M1, ADR-0050, docs/specs/schedule-interchange/). Additionally gated on the caller holding `interchange:import`. "true"/"1" enables it; off by default during build (flips on after the M1 specialist reviews). */
   readonly VITE_SCHEDULE_INTERCHANGE?: string;
+  /** External-Guest per-plan share links web surface — the member Share dialog (toolbar `share` item: list/create/revoke a plan's guest links + one-time URL, gated on `plan:share`) + the public read-only `/share` guest view (session-less, token in the URL fragment), over the already-shipped F-M2 management + F-M3 guest-read endpoints (Stage F M4, ADR-0051, docs/specs/external-guest-share-link/). "true"/"1" enables it; off by default during build (flips on after the specialist reviews + Playwright journey). */
+  readonly VITE_GUEST_SHARE_LINKS?: string;
 }

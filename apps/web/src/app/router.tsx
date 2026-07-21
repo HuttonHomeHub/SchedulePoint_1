@@ -6,8 +6,10 @@ import {
   createRouter,
   redirect,
 } from '@tanstack/react-router';
+import { Suspense, lazy } from 'react';
 
-import { RESOURCES_ENABLED } from '@/config/env';
+import { Spinner } from '@/components/ui/spinner';
+import { GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
@@ -179,6 +181,39 @@ const recentlyDeletedRoute = createRoute({
   component: RecentlyDeletedScreen,
 });
 
+/**
+ * PUBLIC External-Guest read-only plan view (ADR-0051 F-M4). A **sibling of `_authed`** — no session
+ * guard, no `beforeLoad`, no app-shell chrome: an outsider with a share token reads exactly one plan.
+ * The token rides in the URL fragment (`/share#sp_share_…`), read client-side (never a search param).
+ * Registered ONLY behind `VITE_GUEST_SHARE_LINKS` (like the resources route), so with the flag off the
+ * route tree is byte-identical — there is no `/share` route at all (the surface stays fully dark).
+ */
+/**
+ * Code-split the public guest screen: it pulls in the read-only TSLD canvas, which anonymous guests
+ * should download only when they hit `/share` — never as part of the authenticated app's main bundle.
+ * The dynamic import puts the whole guest surface in its own chunk (kept out of the main entry).
+ */
+const ShareGuestScreen = lazy(() =>
+  import('@/routes/share').then((m) => ({ default: m.ShareGuestScreen })),
+);
+
+const shareGuestRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/share',
+  component: () => (
+    <Suspense
+      // Match the guest view's own loading chrome (a centred spinner) while the chunk loads.
+      fallback={
+        <main className="flex min-h-dvh items-center justify-center p-4" aria-busy="true">
+          <Spinner label="Loading…" />
+        </main>
+      }
+    >
+      <ShareGuestScreen />
+    </Suspense>
+  ),
+});
+
 /** Public invitation-accept route (keyed by the token in the URL). */
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -192,6 +227,9 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
   acceptInviteRoute,
+  // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
+  // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
+  ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
   authedRoute.addChildren([
     indexRoute,
     onboardingRoute,

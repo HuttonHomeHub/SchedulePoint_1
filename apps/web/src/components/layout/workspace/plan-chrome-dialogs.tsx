@@ -4,6 +4,7 @@ import { Dialog } from '@/components/ui/dialog';
 import {
   ADVANCED_CONSTRAINTS_ENABLED,
   EARNED_VALUE_ENABLED,
+  GUEST_SHARE_LINKS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   PROGRESS_INGESTION_ENABLED,
   RESOURCE_CURVES_ENABLED,
@@ -21,11 +22,12 @@ import {
   PlanRecalcModePicker,
 } from '@/features/plans';
 import { ResourceHistogram } from '@/features/resources';
+import { ShareLinksDialog } from '@/features/share';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The lower-frequency plan-chrome surfaces reachable from either layout's overflow. */
 export type PlanChromeDialog =
-  'details' | 'baselines' | 'calendar' | 'earned-value' | 'resource-histogram';
+  'details' | 'baselines' | 'calendar' | 'earned-value' | 'resource-histogram' | 'share';
 
 /**
  * The three **plan-chrome dialogs** — Plan details, Baselines, and the working-day Calendar — shared
@@ -138,6 +140,18 @@ export function PlanChromeDialogs({
         >
           <ResourceHistogram orgSlug={model.orgSlug} planId={model.planId} />
         </Dialog>
+      ) : null}
+
+      {/* External-Guest share links (ADR-0051 F-M4). Unlike the panels above, `ShareLinksDialog` owns its
+          own `Dialog` chrome, so it is rendered directly (not wrapped). Gated behind the flag so it (and
+          the whole share feature) is never pulled into a flag-off build's behaviour. */}
+      {GUEST_SHARE_LINKS_ENABLED ? (
+        <ShareLinksDialog
+          orgSlug={model.orgSlug}
+          planId={model.planId}
+          open={dialog === 'share'}
+          onClose={onClose}
+        />
       ) : null}
     </>
   );

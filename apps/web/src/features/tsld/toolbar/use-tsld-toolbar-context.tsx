@@ -83,7 +83,7 @@ function ProjectFinishChip({
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */
 export type PlanDialogKind =
-  'baselines' | 'calendar' | 'details' | 'earned-value' | 'resource-histogram';
+  'baselines' | 'calendar' | 'details' | 'earned-value' | 'resource-histogram' | 'share';
 
 /**
  * Assemble the {@link TsldToolbarContext} the TSLD registry drives (ADR-0031), from the route model,
@@ -516,6 +516,11 @@ export function useTsldToolbarContext({
       openCalendar: () => openDialog('calendar'),
       openEarnedValue: () => openDialog('earned-value'),
       openResourceHistogram: () => openDialog('resource-histogram'),
+      // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
+      // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
+      // is off (the `share` id resolves to its placeholder, so neither is read).
+      canShare: model.canShare,
+      openShare: () => openDialog('share'),
       editPlan,
 
       // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) — the ephemeral open flag + toggle from
@@ -804,6 +809,8 @@ export function useTsldToolbarContext({
     setShowHelp,
     canRecalc,
     canEditSchedule,
+    // External-Guest share links (ADR-0051 F-M4) — re-identify when the share permission flips.
+    model.canShare,
     editPlan,
     recalc,
     model.autoRecalc,

@@ -69,6 +69,7 @@ import {
   CANVAS_RESOURCE_VIEW_ENABLED,
   EARNED_VALUE_ENABLED,
   EXPORT_PRINT_ENABLED,
+  GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
@@ -1335,7 +1336,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // of the two ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
   // canvas-nav shared-shape pattern). Both ride the Row 2 · Do deliverables cluster (no pen — they read,
-  // never author). `share` stays a plain `placeholderItem()` (C2).
+  // never author).
   const exportShape = {
     id: 'export',
     group: 'object' as const,
@@ -1353,6 +1354,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     order: 8,
     label: 'Print…',
     icon: <Printer className="size-4" />,
+  };
+  // Share (External-Guest per-plan link, VITE_GUEST_SHARE_LINKS; ADR-0051 F-M4) shared item shape — the
+  // id/group/row/tier/order/label/icon carried in BOTH its real (flag-on) item and its
+  // `placeholderItem()` (flag-off) stub, declared once and spread into both branches so they can't drift
+  // (mirrors the export/print/quick-wins shared-shape pattern). Rides the Row 2 · Do deliverables cluster
+  // (no pen — sharing grants read access, it doesn't author the plan).
+  const shareShape = {
+    id: 'share',
+    group: 'object' as const,
+    row: 'do' as const,
+    tier: 2 as const,
+    order: 9,
+    label: 'Share…',
+    icon: <Share2 className="size-4" />,
   };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -1976,15 +1991,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.printDiagram(),
         }
       : placeholderItem(printShape),
-    placeholderItem({
-      id: 'share',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 9,
-      label: 'Share…',
-      icon: <Share2 className="size-4" />,
-    }),
+    // Share… (External-Guest per-plan link, `docs/specs/external-guest-share-link/`; ADR-0051 F-M4) —
+    // flag-on it opens the member `ShareLinksDialog` (create / list / revoke), additionally gated on the
+    // caller holding `plan:share` (`ctx.canShare`, Planner + Org Admin) — a Viewer/Contributor sees it
+    // shaded with a reason (shade-don't-hide). Flag-off it is the byte-for-byte `placeholderItem()`
+    // "Coming soon" stub. `shareShape` is spread into both branches so the two can't drift (mirrors
+    // export/print). Not pen-gated — sharing grants read access, it doesn't author the plan.
+    GUEST_SHARE_LINKS_ENABLED
+      ? {
+          ...shareShape,
+          isEnabled: (ctx) => ctx.canShare,
+          disabledReason: (ctx) =>
+            ctx.canShare ? undefined : 'You don’t have permission to share this plan',
+          onActivate: (ctx) => ctx.openShare(),
+        }
+      : placeholderItem(shareShape),
     // Comments — reveals + focuses the plan-level notes thread (toolbar quick-wins F2). Read action for
     // every role; absent when `VITE_NOTES` is off (there is nothing to reveal). Flag-off it is the
     // "Coming soon" placeholder, byte-for-byte.

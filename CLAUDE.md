@@ -483,12 +483,18 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   **first unauthenticated data-read endpoint** + **first rate-limiter** (`@nestjs/throttler` on
   `/api/v1/share/*`). **Read-only, write-free — the CPM engine, pen model (ADR-0028) and recalc parity gate
   are untouched.** Sliced F-M1 (schema+token+guard, dark) → F-M2 (management API) → **F-M3 (guest reads +
-  rate-limit — landed)** → F-M4 (flagged web). Builds on ADR-0003/0012/0016; cascade precedent ADR-0046.
+  rate-limit — landed)** → **F-M4 (flagged web — landed, behind `VITE_GUEST_SHARE_LINKS`, default off)**.
+  Builds on ADR-0003/0012/0016; cascade precedent ADR-0046.
   **F-M3** ships the session-less `@Public()` `ShareGuestController` behind the `ShareTokenGuard` under
   `/api/v1/share/*` (`GET plan`/`activities`/`dependencies`, cursor-paginated) — token-only scope (plan+org
   from the `GuestPrincipal`, never a request param: anti-IDOR by construction), field-stripped read DTOs,
   `noindex`+`no-referrer` headers, a tighter per-IP `@Throttle` (30/60 s vs the global 100/60 s), and a
   coalesced fire-and-forget `last_accessed_at` touch. Persisted CPM columns only (no engine call).
+  **F-M4** adds the flagged web surface (`VITE_GUEST_SHARE_LINKS`, default off): the member **Share
+  links** dialog on the TSLD toolbar (`share` item — list/create/revoke + one-time URL, gated on
+  `plan:share`) and the public read-only `/share` guest view (a sibling of `_authed`, session-less,
+  token in the URL fragment, `noindex`). Flag-off ⇒ the toolbar keeps its "Coming soon" placeholder and
+  no `/share` route registers (byte-identical).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
