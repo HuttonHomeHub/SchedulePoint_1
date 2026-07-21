@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   containsCycle,
-  importXer,
+  importSchedule,
   type ImportGraph,
   type InterchangeReport,
 } from '@repo/interchange';
@@ -537,14 +537,15 @@ export class InterchangeService {
       throw new ValidationError('No file was uploaded.', { reason: INTERCHANGE_ERROR.NO_FILE });
     }
 
-    const result = importXer({
+    const result = importSchedule({
       content: new Uint8Array(file.buffer),
       filename: file.originalname,
-      caps: { maxBytes: INTERCHANGE_MAX_UPLOAD_BYTES },
+      maxBytes: INTERCHANGE_MAX_UPLOAD_BYTES,
     });
 
     if (!result.ok) {
-      // A structural impossibility (not XER / malformed / no PROJECT). The pure pipeline's code/message
+      // A structural impossibility (not a recognised XER/MSPDI / malformed / no project). The pure
+      // pipeline's code/message
       // are already user-safe (no internals / stack). Surface them as a 422 without leaking the stage.
       this.logger.warn(
         {

@@ -20,7 +20,7 @@ import { Spinner } from '@/components/ui/spinner';
 
 /**
  * The schedule-import **review dialog** (ADR-0050, Stage C2 M1). A two-phase flow over the shared
- * `Dialog` primitive: pick a `.xer` → the app dry-runs it (parse-only, no write) and renders the returned
+ * `Dialog` primitive: pick a `.xer` or `.xml` → the app dry-runs it (parse-only, no write) and renders the returned
  * `InterchangeReport` (mapped counts + approximation / repair / drop lists, downloadable) → **Confirm
  * import** commits it (creates the plan server-side, recalculates) and opens the new plan on the TSLD
  * canvas, announcing the outcome. The target project is fixed from the surface context (display-only).
@@ -126,11 +126,11 @@ function ImportFlow({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="interchange-file">Schedule file (.xer)</Label>
+        <Label htmlFor="interchange-file">Schedule file (.xer or .xml)</Label>
         <input
           id="interchange-file"
           type="file"
-          accept=".xer"
+          accept=".xer,.xml"
           onChange={onPickFile}
           aria-invalid={!!errorMessage}
           // Point the control at the error text only while it shows, so a screen-reader user
@@ -142,7 +142,7 @@ function ImportFlow({
           className="border-input bg-background text-foreground file:bg-secondary file:text-secondary-foreground focus-visible:ring-ring focus-visible:ring-offset-background block w-full rounded-md border text-sm file:mr-3 file:cursor-pointer file:border-0 file:px-3 file:py-2 file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         />
         <p id="interchange-file-hint" className="text-muted-foreground text-xs">
-          Primavera P6 XER files up to {MAX_UPLOAD_LABEL}.
+          Primavera P6 (.xer) or Microsoft Project MSPDI (.xml) files up to {MAX_UPLOAD_LABEL}.
         </p>
       </div>
 

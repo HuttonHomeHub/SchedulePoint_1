@@ -65,7 +65,9 @@ function renderDialog(onClose = vi.fn()) {
 function pickFile(size = 1024): void {
   const file = new File(['<xer>'], 'tower.xer', { type: 'text/plain' });
   Object.defineProperty(file, 'size', { value: size });
-  fireEvent.change(screen.getByLabelText('Schedule file (.xer)'), { target: { files: [file] } });
+  fireEvent.change(screen.getByLabelText('Schedule file (.xer or .xml)'), {
+    target: { files: [file] },
+  });
 }
 
 describe('ImportScheduleDialog', () => {
@@ -76,7 +78,7 @@ describe('ImportScheduleDialog', () => {
 
   it('starts idle: a file picker and a disabled Confirm', () => {
     renderDialog();
-    expect(screen.getByLabelText('Schedule file (.xer)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Schedule file (.xer or .xml)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
   });
 
@@ -160,7 +162,7 @@ describe('ImportScheduleDialog', () => {
     renderDialog();
     pickFile();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Primavera XER/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Primavera P6/);
     expect(screen.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
   });
 
