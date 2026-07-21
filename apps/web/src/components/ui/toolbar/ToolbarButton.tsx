@@ -17,6 +17,8 @@ export interface ToolbarButtonProps {
   label: string;
   /** Supplementary hover-tooltip clause appended to the `title` (never the accessible name). */
   description?: string;
+  /** `aria-haspopup` value for a button that opens a popup surface (e.g. `"dialog"`). */
+  ariaHasPopup?: 'dialog' | 'menu';
   icon?: React.ReactNode;
   /** Show the text label beside the icon (Tier-1 emphasis); icon-only otherwise (label → aria-label). */
   showLabel?: boolean;
@@ -36,6 +38,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       itemId,
       label,
       description,
+      ariaHasPopup,
       icon,
       showLabel,
       pressed,
@@ -49,22 +52,20 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     },
     ref,
   ) {
-    // Native hover tooltip. A labelled button already shows its name, so its `title` only needs to
-    // explain a disabled state. An **icon-only** button shows nothing, so it always gets a `title`
-    // naming it — `<name>` when live, `<name> — <reason>` when disabled (e.g. "Colour by… — coming
-    // soon"), so hovering any icon tells the user what it is even before the feature ships. When the
-    // item carries a {@link description}, it's appended to the live title (never to a disabled-reason
-    // title, which the reason already owns) so a terse command becomes self-explanatory on hover.
-    const liveBase = showLabel ? undefined : label;
-    const withDescription = (base: string | undefined): string | undefined =>
-      description ? (base ? `${base} — ${description}` : description) : base;
+    // Native hover tooltip. A labelled button already shows its name, so with no description its live
+    // `title` is empty (nothing to add); an **icon-only** button shows nothing, so it always gets a
+    // `title` naming it. When the item carries a {@link description}, the live title reads
+    // `<name> — <description>` for BOTH tiers (a Tier-1 button keeps its label as the base — the earlier
+    // bug dropped it), so a terse command is self-explanatory on hover. A disabled title always leads
+    // with the reason (which already owns the tooltip); description isn't appended there.
+    const liveTitle = description ? `${label} — ${description}` : showLabel ? undefined : label;
     const title = disabled
       ? showLabel
         ? disabledReason
         : disabledReason
           ? `${label} — ${disabledReason}`
           : label
-      : withDescription(liveBase);
+      : liveTitle;
     return (
       <button
         ref={ref}
@@ -74,6 +75,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         // aria-disabled (not `disabled`) keeps the control focusable so the reason is reachable.
         aria-disabled={disabled || undefined}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
+        {...(ariaHasPopup ? { 'aria-haspopup': ariaHasPopup } : {})}
         {...(showLabel ? {} : { 'aria-label': label })}
         {...(title ? { title } : {})}
         tabIndex={tabIndex}

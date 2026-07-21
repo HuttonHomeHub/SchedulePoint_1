@@ -668,21 +668,22 @@ export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
 export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUEST_SHARE_LINKS);
 
 /**
- * Entry-route UX improvements (spec — two "entry-route" quick wins). **OFF by default during build** —
- * it flips on only after its specialist reviews are green. Frontend-only, over already-shipped features
- * (notes + resource assignments) — no new API/schema/`@repo/types`/CPM-engine change (the recalc parity
- * gate is untouched). When on, it changes where two shipped affordances are reached from:
+ * Entry-route UX improvements (spec — "entry-route" quick wins). **OFF by default during build** — it
+ * flips on only after its specialist reviews are green. Frontend-only, over already-shipped features
+ * (notes + progress + resource assignments + weighted steps) — no new API/schema/`@repo/types`/CPM-engine
+ * change (the recalc parity gate is untouched). When on, it changes where shipped affordances are reached:
  *
  * - **Plan notes as a right-side drawer** — the plan Notes thread (`VITE_NOTES`) moves out of the
- *   always-inline block above the canvas into a right-anchored `Sheet` the toolbar **Comments** button
- *   opens, reclaiming the vertical space the inline block wasted.
- * - **Assign resources from the canvas** — the per-activity resource-assignment editor
- *   (`ActivityResourcesDialog`, `VITE_RESOURCES`), until now reachable only from the activities-table
- *   row menu, gains a **Resources** action on the canvas floating selection bar.
+ *   always-inline block above the canvas into a right-anchored **non-modal** `Sheet` the toolbar
+ *   **Comments** button opens (the canvas behind stays live), reclaiming the wasted vertical space.
+ * - **Canvas selection-bar actions** — the floating selection bar gains **Report progress** (role-gated,
+ *   Contributor+), **Resources** (additionally gated on `VITE_RESOURCES`, the per-activity assignment
+ *   editor) and **Steps** (additionally gated on `VITE_EARNED_VALUE` + `VITE_ACTIVITY_STEPS`, hidden for a
+ *   duration-derived selection) — each until now reachable only from the activities-table row menu.
  *
- * Both halves ride existing endpoints/dialogs; the flag only governs where they are surfaced. Set
+ * Every half rides existing endpoints/dialogs; the flag only governs where they are surfaced. Set
  * `VITE_ENTRY_ROUTES=true` to enable it in an environment. Flag-off ⇒ the plan notes stay inline, the
- * selection bar carries no Resources item, and none of the new code is reached — byte-for-byte the
- * prior behaviour (emergency rollback / opt-out).
+ * selection bar carries only its base three actions, and none of the new code is reached — byte-for-byte
+ * the prior behaviour (emergency rollback / opt-out).
  */
 export const ENTRY_ROUTES_ENABLED = flagDefaultOff(import.meta.env.VITE_ENTRY_ROUTES);

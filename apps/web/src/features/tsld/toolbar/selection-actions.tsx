@@ -3,7 +3,12 @@ import { useEffect, useRef } from 'react';
 
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
-import { ACTIVITY_STEPS_ENABLED, EARNED_VALUE_ENABLED, ENTRY_ROUTES_ENABLED } from '@/config/env';
+import {
+  ACTIVITY_STEPS_ENABLED,
+  EARNED_VALUE_ENABLED,
+  ENTRY_ROUTES_ENABLED,
+  RESOURCES_ENABLED,
+} from '@/config/env';
 
 /**
  * The context for the **floating selection-actions** bar (ADR-0031, Fork-2 default): the commands
@@ -46,10 +51,16 @@ const PROGRESS_REASON = 'You don’t have permission to report progress';
  * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
  * on the canvas and in the table. The **Progress**, **Resources** and **Steps** items are entry-route
  * additions (`VITE_ENTRY_ROUTES`): each is spread into the array conditionally so flag-off is
- * byte-for-byte the prior three-item bar. Progress is role-gated (Contributor+, `canReportProgress`),
- * Resources is ungated (view-ish; the dialog gates writes), and Steps additionally rides
- * `VITE_EARNED_VALUE` + `VITE_ACTIVITY_STEPS` and hides for a duration-derived selection — matching the
- * table's Steps row action. None of the three is pen-gated (only Edit/Delete are).
+ * byte-for-byte the prior three-item bar. Progress is role-gated (Contributor+, `canReportProgress`);
+ * Resources additionally rides `VITE_RESOURCES` (matching the table's row action) and is otherwise
+ * ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE` +
+ * `VITE_ACTIVITY_STEPS` and hides for a duration-derived selection — matching the table's Steps row
+ * action. None of the three is pen-gated (only Edit/Delete are).
+ *
+ * Every item is deliberately `tier: 1` (visible labels) for discoverability of the newer actions. The
+ * trade-off: under extreme narrow width the primitive demotes trailing items (Edit/Delete) to overflow
+ * before the newer ones — accepted, since this floating bar rarely overflows and surfacing the new
+ * actions is the goal.
  */
 export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
   defineToolbar<SelectionActionContext>([
@@ -78,6 +89,12 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
               ctx.canReportProgress ? undefined : PROGRESS_REASON,
             onActivate: (ctx: SelectionActionContext) => ctx.onProgress(),
           } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
+    // Resources rides BOTH the entry-route flag AND `VITE_RESOURCES` (the resource surface), matching the
+    // activities-table row action's gate + the Steps item's multi-flag precedent.
+    ...(ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED
+      ? [
           {
             id: 'resources',
             group: 'object',

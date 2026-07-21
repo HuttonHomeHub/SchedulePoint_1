@@ -1,4 +1,4 @@
-import { SquarePen, X } from 'lucide-react';
+import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
@@ -19,7 +19,7 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
-import { Sheet } from '@/components/ui/sheet';
+import { Sheet, SheetHeader } from '@/components/ui/sheet';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
@@ -448,33 +448,29 @@ export function ToolbarPlanWorkspace({
           drawer path no longer scrolls to it). */}
       {NOTES_ENABLED ? (
         ENTRY_ROUTES_ENABLED ? (
+          // `modal={false}` keeps the canvas behind the drawer live (win 1 — notes beside a working
+          // canvas), so the sheet does its own focus move/restore + Escape (see {@link Sheet}).
           <Sheet
             side="right"
+            modal={false}
             title="Plan notes"
             open={model.notesOpen}
             onClose={() => model.setNotesOpen(false)}
           >
             <div className="bg-card border-border flex h-full flex-col border-l shadow-lg">
-              <div className="border-border flex items-center justify-between gap-2 border-b px-4 py-2">
-                {/* A plain (non-heading) visible title: the `Sheet` already supplies the sr-only
-                    accessible name, and `PlanNotesSection` renders its own "Notes" heading below —
-                    a second visible heading here would duplicate the outline. */}
-                <span className="text-sm font-medium">Plan notes</span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Close plan notes"
-                  onClick={() => model.setNotesOpen(false)}
-                >
-                  <X aria-hidden="true" className="size-4" />
-                </Button>
-              </div>
+              <SheetHeader
+                title="Plan notes"
+                onClose={() => model.setNotesOpen(false)}
+                closeLabel="Close plan notes"
+              />
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                {/* `bounded={false}`: the `max-h-64` cap is for the inline block; the full-height drawer
+                    scrolls its own region, so multi-paragraph notes + composer read comfortably. */}
                 <PlanNotesSection
                   orgSlug={model.orgSlug}
                   planId={model.planId}
                   canWrite={model.canWriteNotes}
-                  bounded
+                  bounded={false}
                   headingRef={notesHeadingRef}
                 />
               </div>

@@ -127,7 +127,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(spies.openProgress).toHaveBeenCalledOnce();
   });
 
-  it('Update progress: disabled when the selected row is gone (U3 — resolved selection, not the raw id)', () => {
+  it('Report progress: disabled when the selected row is gone (U3 — resolved selection, not the raw id)', () => {
     // The id is still held but its row was deleted elsewhere, so `selectedActivity` is undefined — the
     // button must NOT be enabled (a click would be a silent no-op on a missing target).
     renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: undefined, canProgress: true }));
@@ -136,7 +136,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(btn).toHaveAttribute('title', 'Report progress… — Select an activity first');
   });
 
-  it('Update progress: disabled with the role reason for a viewer who cannot report progress', () => {
+  it('Report progress: disabled with the role reason for a viewer who cannot report progress', () => {
     renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canProgress: false }));
     const btn = screen.getByRole('button', { name: 'Report progress…' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
@@ -146,7 +146,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     );
   });
 
-  it('Update progress: role reason wins over selection for a viewer with nothing selected (U2/A5 precedence)', () => {
+  it('Report progress: role reason wins over selection for a viewer with nothing selected (U2/A5 precedence)', () => {
     // A permanently-blocked user with no selection is told the role reason, not (misleadingly) to
     // select an activity first.
     renderRows(ctx({ selectedActivityId: null, selectedActivity: undefined, canProgress: false }));

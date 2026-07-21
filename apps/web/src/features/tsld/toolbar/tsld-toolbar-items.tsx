@@ -68,6 +68,7 @@ import {
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EARNED_VALUE_ENABLED,
+  ENTRY_ROUTES_ENABLED,
   EXPORT_PRINT_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
@@ -2020,6 +2021,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       ? {
           ...commentsShape,
           isVisible: () => NOTES_ENABLED,
+          // With `VITE_ENTRY_ROUTES` on, Comments opens the notes drawer (a modal-less `<dialog>`), so
+          // advertise it as a dialog opener (one-way — no pressed/expanded). Flag-off it scrolls to the
+          // inline heading (no popup), so no `aria-haspopup`.
+          ...(ENTRY_ROUTES_ENABLED ? { ariaHasPopup: 'dialog' as const } : {}),
           onActivate: (ctx) => ctx.revealComments(),
         }
       : placeholderItem(commentsShape),
