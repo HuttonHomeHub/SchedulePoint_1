@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { exportMspdi } from './export-mspdi.js';
-import { buildExportGraph, toComparable } from './export.fixtures.js';
+import { buildExportGraph, buildRichExportGraph, toComparable } from './export.fixtures.js';
+import type { ImportConstraintType } from './import-graph.js';
 import { importSchedule } from './import-schedule.js';
 import { childElements, detectMspdi, parseMspdi } from './mspdi-parser.js';
 
@@ -202,10 +203,12 @@ describe('exportMspdi', () => {
     expect(exported.report.mapped.activities).toBe(0);
   });
 
-  it('drops and reports out-of-M4b-scope data (constraints + resources) rather than silently omitting it', () => {
+  it('serialises a constraint + resource (no longer drops) so they round-trip (M4c)', () => {
     const original = buildExportGraph({
       activities: buildExportGraph().activities.map((a) =>
-        a.key === 'A1' ? { ...a, constraintType: 'SNET', constraintDate: '2026-02-01' } : a,
+        a.key === 'A1'
+          ? { ...a, constraintType: 'SNET' as const, constraintDate: '2026-02-01' }
+          : a,
       ),
       resources: [
         {
@@ -222,8 +225,100 @@ describe('exportMspdi', () => {
     const exported = exportMspdi({ graph: original });
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
-    expect(exported.report.drops.some((d) => /constraint/.test(d.detail))).toBe(true);
-    expect(exported.report.drops.some((d) => /resource/.test(d.detail))).toBe(true);
+    // Neither category is dropped any more.
+    expect(exported.report.drops).toEqual([]);
+
+    const reimported = importSchedule({ content: exported.bytes });
+    expect(reimported.ok).toBe(true);
+    if (!reimported.ok) return;
+    expect(reimported.graph.activities.find((a) => a.code === 'A1000')?.constraintType).toBe(
+      'SNET',
+    );
+    expect(reimported.graph.resources.map((r) => r.name)).toContain('Crew');
+  });
+
+  // --- M4c: the full-plan (rich-scope) round trip ---------------------------------------------------
+
+  it('round-trips the FULL plan (WBS + constraints + progress + resources), MSP-lossy fields aside', () => {
+    const original = buildRichExportGraph();
+    const exported = exportMspdi({ graph: original });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    // Nothing is a silent drop; MSP-inexpressible detail is surfaced as approximations.
+    expect(exported.report.drops).toEqual([]);
+
+    const reimported = importSchedule({ content: exported.bytes, filename: 'rich.xml' });
+    expect(reimported.ok).toBe(true);
+    if (!reimported.ok) return;
+    // Equal for everything MSP can represent (the driving flag + production rate are normalised away).
+    expect(toComparable(reimported.graph, 'MSPDI')).toEqual(toComparable(original, 'MSPDI'));
+  });
+
+  it('reports the MSP-lossy dimensions of the rich plan as approximations (driving flag + secondary constraint)', () => {
+    const exported = exportMspdi({ graph: buildRichExportGraph() });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    const details = exported.report.approximations.map((a) => a.detail).join('\n');
+    // The secondary FNLT constraint is exported as an MSP deadline …
+    expect(details).toMatch(/deadline/i);
+    // … and the driving-resource flag cannot ride an MSP assignment.
+    expect(details).toMatch(/driving/i);
+    // The primary constraint + progress + WBS are NOT approximated (they round-trip exactly).
+    expect(exported.report.approximations.some((a) => /driving/i.test(a.detail))).toBe(true);
+  });
+
+  it('round-trips the 6 MSP-expressible constraint types; the 2 mandatory ones are lossy-with-a-finding', () => {
+    const expressible: ImportConstraintType[] = ['SNET', 'SNLT', 'FNET', 'FNLT', 'MSO', 'MFO'];
+    for (const type of expressible) {
+      const g = buildExportGraph({
+        activities: buildExportGraph().activities.map((a) =>
+          a.key === 'A1' ? { ...a, constraintType: type, constraintDate: '2026-02-01' } : a,
+        ),
+      });
+      const exported = exportMspdi({ graph: g });
+      expect(exported.ok).toBe(true);
+      if (!exported.ok) return;
+      const reimported = importSchedule({ content: exported.bytes });
+      expect(reimported.ok).toBe(true);
+      if (!reimported.ok) return;
+      expect(reimported.graph.activities.find((a) => a.code === 'A1000')?.constraintType).toBe(
+        type,
+      );
+    }
+
+    // A mandatory constraint has no MSP equivalent → dropped-with-an-approximation, not silently lost.
+    for (const type of ['MANDATORY_START', 'MANDATORY_FINISH'] as const) {
+      const g = buildExportGraph({
+        activities: buildExportGraph().activities.map((a) =>
+          a.key === 'A1' ? { ...a, constraintType: type, constraintDate: '2026-02-01' } : a,
+        ),
+      });
+      const exported = exportMspdi({ graph: g });
+      expect(exported.ok).toBe(true);
+      if (!exported.ok) return;
+      expect(exported.report.approximations.some((a) => /Microsoft Project/i.test(a.detail))).toBe(
+        true,
+      );
+      const reimported = importSchedule({ content: exported.bytes });
+      expect(reimported.ok).toBe(true);
+      if (!reimported.ok) return;
+      expect(
+        reimported.graph.activities.find((a) => a.code === 'A1000')?.constraintType,
+      ).toBeNull();
+    }
+  });
+
+  it('round-trips a WBS parent chain via outline levels', () => {
+    const exported = exportMspdi({ graph: buildRichExportGraph() });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    const reimported = importSchedule({ content: exported.bytes });
+    expect(reimported.ok).toBe(true);
+    if (!reimported.ok) return;
+    const summaries = reimported.graph.activities.filter((a) => a.type === 'WBS_SUMMARY');
+    expect(summaries.map((s) => s.key).sort()).toEqual(['wbs:100', 'wbs:110']);
+    expect(reimported.graph.activities.find((a) => a.key === 'wbs:110')?.parentKey).toBe('wbs:100');
+    expect(reimported.graph.activities.find((a) => a.code === 'A1010')?.parentKey).toBe('wbs:110');
   });
 
   it('rejects a graph past the activity ceiling with a typed limit error', () => {

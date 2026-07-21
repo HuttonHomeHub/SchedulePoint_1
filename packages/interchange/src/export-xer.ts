@@ -13,10 +13,11 @@ import { serialiseXer } from './xer-serialiser.js';
  * read-only `interchange` module reads a plan into the export graph and calls this.
  *
  * Hard rejection ({ ok: false }) is reserved for a graph that is not a consistent SchedulePoint graph
- * (a defensive schema check) or one past the shared graph-size ceiling. Everything the M4a core-network
- * scope cannot yet serialise (WBS / constraints / progress / resources — all M4c) is **dropped and
- * reported**, never a silent omission. Pure + deterministic: no I/O, clock or randomness. The CPM engine
- * and its recalc parity golden suite are untouched (export never invokes the engine).
+ * (a defensive schema check) or one past the shared graph-size ceiling. The emitter serialises the **full
+ * plan** (M4c: core network + WBS + constraints + progress + resources + assignments); only genuinely lossy
+ * cases (a reserved resource rate) are reported as approximations, never a silent omission. Pure +
+ * deterministic: no I/O, clock or randomness. The CPM engine and its recalc parity golden suite are
+ * untouched (export never invokes the engine).
  */
 
 export interface ExportXerInput {
@@ -130,7 +131,13 @@ export function exportXer(input: ExportXerInput): ExportXerResult {
     ...emitted.findings,
   ]);
 
-  const exportedActivities = graph.activities.filter((a) => a.type !== 'WBS_SUMMARY').length;
+  const wbsSummaries = graph.activities.filter((a) => a.type === 'WBS_SUMMARY').length;
+  const exportedActivities = graph.activities.length - wbsSummaries;
+  const constraints = graph.activities.reduce(
+    (n, a) =>
+      n + (a.constraintType !== null ? 1 : 0) + (a.secondaryConstraintType !== null ? 1 : 0),
+    0,
+  );
   const report: InterchangeReport = {
     detectedFormat: 'XER',
     sourceVersion: EXPORT_XER_VERSION,
@@ -139,6 +146,10 @@ export function exportXer(input: ExportXerInput): ExportXerResult {
       activities: exportedActivities,
       relationships: graph.dependencies.length,
       calendars: graph.calendars.length,
+      ...(wbsSummaries > 0 ? { wbsSummaries } : {}),
+      ...(constraints > 0 ? { constraints } : {}),
+      ...(graph.resources.length > 0 ? { resources: graph.resources.length } : {}),
+      ...(graph.assignments.length > 0 ? { assignments: graph.assignments.length } : {}),
     },
     approximations,
     repairs,

@@ -1,9 +1,14 @@
 import type {
   CanonicalActivity,
+  CanonicalAssignment,
   CanonicalCalendar,
+  CanonicalConstraintType,
   CanonicalModel,
+  CanonicalProgress,
   CanonicalRelationship,
   CanonicalRelationshipType,
+  CanonicalResource,
+  CanonicalResourceKind,
   CanonicalShift,
   CanonicalWorkWeek,
 } from './canonical.js';
@@ -11,22 +16,23 @@ import { branch, leaf, type MspdiNode } from './mspdi-serialiser.js';
 import type { ReportFinding } from './report.js';
 
 /**
- * The **canonical → MSPDI element emitter** (ADR-0050 M4b, Task 4b.2) — the inverse of
- * {@link adaptMspdiToCanonical}. It turns a {@link CanonicalModel} into the Microsoft Project
- * `<Project>` / `<Calendars>/<Calendar>` / `<Tasks>/<Task>` / `<PredecessorLink>` element tree (the M4b
- * **core network**), reversing the exact vocabulary the adapter reads: the numeric `<Type>` link enum
- * (`0 = FF, 1 = FS, 2 = SF, 3 = SS` — confirmed from `LINK_TYPE_TO_CANONICAL`), the ISO-8601 `PT#H#M#S`
- * duration convention, the **tenths-of-a-minute** `<LinkLag>` unit, the `<WeekDays>/<WeekDay>` calendar
- * shape (`DayType` 1 = Sunday … 7 = Saturday, `<WorkingTimes>/<WorkingTime>` windows, `<TimePeriod>`
- * exceptions), and MSP's single-milestone model. Emitting these against the real element names the adapter
- * reads is what makes the round trip (export → re-import) close — the same {@link CanonicalModel} the XER
- * emitter serialises produces a valid MSPDI too (ADR-0050: "a format is a serialiser, not a second
- * pipeline").
+ * The **canonical → MSPDI element emitter** (ADR-0050 M4b, Task 4b.2 + M4c) — the inverse of
+ * {@link adaptMspdiToCanonical}. It turns a {@link CanonicalModel} into the Microsoft Project `<Project>`
+ * element tree, reversing the exact vocabulary the adapter reads: the numeric `<Type>` link enum
+ * (`0 = FF, 1 = FS, 2 = SF, 3 = SS`), the `<ConstraintType>` enum (`1 = ALAP, 2 = MSO … 7 = FNLT`), the
+ * ISO-8601 `PT#H#M#S` duration convention, the **tenths-of-a-minute** `<LinkLag>` unit, the
+ * `<WeekDays>/<WeekDay>` calendar shape, MSP's single-milestone model, and — new for M4c — the
+ * **outline-level WBS** (`<Summary>` + `<OutlineLevel>`, reversing the adapter's summary-stack inference),
+ * task constraints/progress, and the `<Resources>` / `<Assignments>` tables.
  *
- * Best-effort + honest (ADR-0035 reject/repair/report, bidirectional): anything the M4b core-network scope
- * does not yet serialise — WBS summaries, constraints, progress, ALAP, resources/assignments (all M4c) — is
- * **dropped and reported**, never silently omitted, reusing the exact same finding shapes as the XER
- * emitter. Pure + deterministic: no I/O, clock or randomness.
+ * Scope (M4c): the core network **plus** WBS summaries + parentage, constraints, progress, and
+ * resources + assignments. Where Microsoft Project cannot represent a SchedulePoint concept exactly it
+ * emits the nearest form and reports an **approximation** (never a silent drop): MSP has a single
+ * constraint slot (a secondary constraint rides `<Deadline>`, only expressible as a Finish-No-Later-Than
+ * bound; a mandatory constraint has no MSP equivalent), no suspend/resume/expected-finish progress, one
+ * percent-complete measure (always duration-based on re-import), and no per-assignment driving flag or
+ * production rate. XER, by contrast, carries all of these exactly (see {@link emitXerFromCanonical}). Pure +
+ * deterministic: no I/O, clock or randomness.
  */
 
 /** The MSPDI `<SaveVersion>` we advertise — a widely-readable recent MS Project schema (2013 = 14.0). */
@@ -38,6 +44,32 @@ const TYPE_TO_LINK_NUMBER: Readonly<Record<CanonicalRelationshipType, string>> =
   FS: '1',
   SF: '2',
   SS: '3',
+};
+
+/**
+ * Canonical `ConstraintType` → MSP `<ConstraintType>` number, the inverse of the adapter's
+ * `CONSTRAINT_TYPE_TO_CANONICAL` (`2 = MSO, 3 = MFO, 4 = SNET, 5 = SNLT, 6 = FNET, 7 = FNLT`). MSP has **no**
+ * mandatory-constraint concept, so `MANDATORY_START` / `MANDATORY_FINISH` are absent here (reported as an
+ * approximation). ALAP is emitted separately as `<ConstraintType>1`.
+ */
+const CONSTRAINT_TYPE_TO_NUMBER: Readonly<Partial<Record<CanonicalConstraintType, string>>> = {
+  MSO: '2',
+  MFO: '3',
+  SNET: '4',
+  SNLT: '5',
+  FNET: '6',
+  FNLT: '7',
+};
+
+/**
+ * Canonical resource kind → MSP `<Resource><Type>` number, the inverse of the adapter's
+ * `RESOURCE_TYPE_TO_CANONICAL` (`0 = Material, 1 = Work/Labour, 2 = Cost→Equipment`). An EQUIPMENT resource
+ * round-trips through MSP's Cost type (the adapter re-reads Cost as EQUIPMENT with its own approximation).
+ */
+const KIND_TO_RESOURCE_NUMBER: Readonly<Record<CanonicalResourceKind, string>> = {
+  MATERIAL: '0',
+  LABOUR: '1',
+  EQUIPMENT: '2',
 };
 
 /**
@@ -60,6 +92,11 @@ function minutesToIsoDuration(minutes: number): string {
   const hours = Math.floor(whole / 60);
   const mins = whole % 60;
   return `PT${hours}H${mins}M0S`;
+}
+
+/** Whole units (of work) → an ISO-8601 `PT#H#M#S` timespan the adapter reads back as `minutes / 60` units. */
+function unitsToIsoWork(units: number): string {
+  return minutesToIsoDuration(Math.round(units * 60));
 }
 
 /** Working-minutes → tenths-of-a-minute `<LinkLag>` (the inverse of the adapter's `linkLag / 10`). Signed. */
@@ -144,7 +181,222 @@ export interface MspdiEmitResult {
   readonly findings: ReportFinding[];
 }
 
-/** Emit the M4b core-network MSPDI `<Project>` tree (Project/Calendars/Tasks/PredecessorLinks) from a model. */
+/** An activity paired with its computed MSP outline level (1-based; a WBS root is level 1). */
+interface OrderedActivity {
+  readonly activity: CanonicalActivity;
+  readonly level: number;
+}
+
+/**
+ * Flatten the WBS forest into the document order + `<OutlineLevel>` MSP expects — the inverse of the
+ * adapter's summary-stack parent inference. A pre-order DFS emits each summary immediately before its
+ * subtree (so a summary's children are contiguous and deeper-levelled), which is exactly what lets the
+ * adapter reconstruct each task's `parentId` from the nearest shallower preceding summary. Any activity
+ * whose `parentId` does not resolve to an in-model activity is treated as a root (defensive; the export
+ * graph is already validated).
+ */
+function orderActivitiesForOutline(activities: readonly CanonicalActivity[]): OrderedActivity[] {
+  const byId = new Map(activities.map((a) => [a.id, a] as const));
+  const childrenOf = new Map<string, CanonicalActivity[]>();
+  const roots: CanonicalActivity[] = [];
+  for (const activity of activities) {
+    const parentId = activity.parentId;
+    if (parentId !== null && byId.has(parentId)) {
+      const list = childrenOf.get(parentId);
+      if (list === undefined) childrenOf.set(parentId, [activity]);
+      else list.push(activity);
+    } else {
+      roots.push(activity);
+    }
+  }
+
+  const ordered: OrderedActivity[] = [];
+  const visit = (activity: CanonicalActivity, level: number): void => {
+    ordered.push({ activity, level });
+    // Only a WBS summary parents a subtree (ADR-0038); guard so a stray child never recurses forever.
+    if (activity.type === 'WBS_SUMMARY') {
+      for (const child of childrenOf.get(activity.id) ?? []) visit(child, level + 1);
+    }
+  };
+  for (const root of roots) visit(root, 1);
+  return ordered;
+}
+
+/**
+ * Emit a task's `<ConstraintType>`/`<ConstraintDate>` + `<Deadline>` children, reversing the adapter's
+ * `mapConstraints`. The primary constraint (or ALAP) fills MSP's single constraint slot; a secondary
+ * constraint is approximated as a `<Deadline>` (a soft Finish-No-Later-Than target — MSP's only second
+ * finish bound). Genuinely inexpressible cases (a mandatory primary, a non-FNLT secondary, ALAP colliding
+ * with a primary constraint) are reported as approximations.
+ */
+function constraintNodes(activity: CanonicalActivity, findings: ReportFinding[]): MspdiNode[] {
+  const nodes: MspdiNode[] = [];
+
+  // --- Primary constraint slot (a constraint, or ALAP) ---
+  let primarySlotUsed = false;
+  if (activity.constraintType !== null) {
+    const number = CONSTRAINT_TYPE_TO_NUMBER[activity.constraintType];
+    if (number === undefined) {
+      findings.push({
+        kind: 'approximation',
+        entity: 'constraint',
+        sourceRef: activity.id,
+        detail: `constraint "${activity.constraintType}" has no Microsoft Project equivalent and was dropped`,
+        reason: 'MSP has no mandatory-constraint type (ADR-0035 §7)',
+      });
+    } else {
+      nodes.push(leaf('ConstraintType', number));
+      if (activity.constraintDate !== null)
+        nodes.push(leaf('ConstraintDate', toMspDateTime(activity.constraintDate)));
+      primarySlotUsed = true;
+    }
+  }
+  if (activity.scheduleAsLateAsPossible) {
+    if (!primarySlotUsed) {
+      nodes.push(leaf('ConstraintType', '1'));
+      primarySlotUsed = true;
+    } else {
+      findings.push({
+        kind: 'approximation',
+        entity: 'constraint',
+        sourceRef: activity.id,
+        detail:
+          'as-late-as-possible could not be exported alongside a primary constraint (MSP has one constraint slot)',
+        reason: 'MSP carries a single constraint per task (ADR-0035 §12)',
+      });
+    }
+  }
+
+  // --- Secondary constraint → a <Deadline> (best-effort) ---
+  if (activity.secondaryConstraintType !== null) {
+    if (activity.secondaryConstraintType === 'FNLT' && activity.secondaryConstraintDate !== null) {
+      nodes.push(leaf('Deadline', toMspDateTime(activity.secondaryConstraintDate)));
+      findings.push({
+        kind: 'approximation',
+        entity: 'constraint',
+        sourceRef: activity.id,
+        detail: `secondary Finish-No-Later-Than constraint exported as an MSP deadline (${activity.secondaryConstraintDate})`,
+        reason:
+          'MSP has one constraint slot; a secondary constraint rides <Deadline> (ADR-0035 §12)',
+      });
+    } else {
+      findings.push({
+        kind: 'approximation',
+        entity: 'constraint',
+        sourceRef: activity.id,
+        detail: `secondary "${activity.secondaryConstraintType}" constraint could not be represented in Microsoft Project and was dropped`,
+        reason: 'MSP can only express a secondary finish bound as a deadline (ADR-0035 §12)',
+      });
+    }
+  }
+
+  return nodes;
+}
+
+/**
+ * Emit a progressed task's MSP progress children, reversing the adapter's `mapProgress`. MSP carries
+ * percent-complete, physical percent-complete, actual start/finish and remaining duration; it has **no**
+ * suspend/resume/expected-finish and **one** percent-complete measure (re-read as duration-based), so those
+ * are reported as approximations rather than silently lost.
+ */
+function progressNodes(
+  activity: CanonicalActivity,
+  progress: CanonicalProgress,
+  findings: ReportFinding[],
+): MspdiNode[] {
+  const nodes: MspdiNode[] = [leaf('PercentComplete', String(progress.percentComplete))];
+  if (progress.physicalPercentComplete !== null)
+    nodes.push(leaf('PhysicalPercentComplete', String(progress.physicalPercentComplete)));
+  if (progress.actualStart !== null)
+    nodes.push(leaf('ActualStart', toMspDateTime(progress.actualStart)));
+  if (progress.actualFinish !== null)
+    nodes.push(leaf('ActualFinish', toMspDateTime(progress.actualFinish)));
+  if (progress.remainingDurationMinutes !== null)
+    nodes.push(leaf('RemainingDuration', minutesToIsoDuration(progress.remainingDurationMinutes)));
+
+  if (progress.percentCompleteType !== 'DURATION') {
+    findings.push({
+      kind: 'approximation',
+      entity: 'progress',
+      sourceRef: activity.id,
+      detail: `percent-complete type "${progress.percentCompleteType}" is re-read as duration-based on import`,
+      reason: 'MSP has a single percent-complete measure (ADR-0042)',
+    });
+  }
+  if (progress.suspendDate !== null || progress.resumeDate !== null) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'progress',
+      sourceRef: activity.id,
+      detail: 'suspend/resume dates were not exported',
+      reason: 'MSP has no suspend/resume progress concept (ADR-0035 §6)',
+    });
+  }
+  if (progress.expectedFinish !== null) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'progress',
+      sourceRef: activity.id,
+      detail: 'expected-finish date was not exported',
+      reason: 'MSP has no expected-finish progress concept (ADR-0035 §6)',
+    });
+  }
+
+  return nodes;
+}
+
+/** A `<Resource>` element from a canonical resource (ADR-0039). */
+function resourceNode(resource: CanonicalResource, findings: ReportFinding[]): MspdiNode {
+  if (resource.costPerUnit !== null || resource.maxUnitsPerHour !== null) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'resource',
+      sourceRef: resource.id,
+      detail: `resource "${resource.name}" cost/max-units rate was not exported`,
+      reason: 'the MSPDI resource mapping carries no rate the importer reads (ADR-0039/0042)',
+    });
+  }
+  const children: MspdiNode[] = [
+    leaf('UID', resource.id),
+    leaf('Name', resource.name),
+    leaf('Type', KIND_TO_RESOURCE_NUMBER[resource.kind]),
+  ];
+  if (resource.code !== null) children.push(leaf('Code', resource.code));
+  if (resource.calendarId !== null) children.push(leaf('CalendarUID', resource.calendarId));
+  return branch('Resource', children);
+}
+
+/** An `<Assignment>` element from a canonical assignment (ADR-0039/0040). */
+function assignmentNode(assignment: CanonicalAssignment, findings: ReportFinding[]): MspdiNode {
+  // MSP has neither a driving flag nor a per-assignment production rate — both are honest approximations.
+  if (assignment.isDriving) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'assignment',
+      sourceRef: assignment.id,
+      detail: 'the driving-resource flag was not exported',
+      reason: 'MSP has no driving-assignment concept (ADR-0039)',
+    });
+  }
+  if (assignment.unitsPerHour !== null) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'assignment',
+      sourceRef: assignment.id,
+      detail: 'the units-per-hour production rate was not exported',
+      reason: 'MSP has no per-assignment production rate (ADR-0040)',
+    });
+  }
+  return branch('Assignment', [
+    leaf('UID', assignment.id),
+    leaf('TaskUID', assignment.activityId),
+    leaf('ResourceUID', assignment.resourceId),
+    leaf('Work', unitsToIsoWork(assignment.budgetedUnits)),
+    leaf('ActualWork', unitsToIsoWork(assignment.actualUnits)),
+  ]);
+}
+
+/** Emit the full-plan MSPDI `<Project>` tree (Project/Calendars/Tasks/Resources/Assignments) from a model. */
 export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
   const findings: ReportFinding[] = [];
 
@@ -159,44 +411,45 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
     else list.push(relationship);
   }
 
-  // --- Tasks ----------------------------------------------------------------------------------------
+  // --- Tasks (WBS summaries + real activities, in outline order) -------------------------------------
   const taskNodes: MspdiNode[] = [];
-  let droppedSummaries = 0;
-  let droppedParents = 0;
-  let droppedConstraints = 0;
-  let droppedProgress = 0;
-  let droppedAlap = 0;
-  for (const activity of model.activities) {
-    if (activity.type === 'WBS_SUMMARY') {
-      droppedSummaries += 1;
-      continue;
-    }
-    if (activity.parentId !== null) droppedParents += 1;
-    if (activity.constraintType !== null || activity.secondaryConstraintType !== null) {
-      droppedConstraints += 1;
-    }
-    if (activity.progress !== null) droppedProgress += 1;
-    if (activity.scheduleAsLateAsPossible) droppedAlap += 1;
-
-    const typedActivity: CanonicalActivity = activity;
-    const isMilestone =
-      typedActivity.type === 'START_MILESTONE' || typedActivity.type === 'FINISH_MILESTONE';
+  for (const { activity, level } of orderActivitiesForOutline(model.activities)) {
+    const isSummary = activity.type === 'WBS_SUMMARY';
+    const isMilestone = activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE';
 
     const children: MspdiNode[] = [
       leaf('UID', activity.id),
       leaf('Name', activity.name),
       // The adapter reads the code from <WBS> (falling back to <ID>); emit it as <WBS>.
       leaf('WBS', activity.code),
+      leaf('OutlineLevel', String(level)),
     ];
+    if (isSummary) children.push(leaf('Summary', '1'));
     if (isMilestone) children.push(leaf('Milestone', '1'));
     children.push(leaf('Duration', minutesToIsoDuration(activity.durationMinutes)));
     if (activity.calendarId !== null) children.push(leaf('CalendarUID', activity.calendarId));
+
+    // Constraints + progress ride the real-activity <Task>s (a summary carries neither).
+    if (!isSummary) {
+      children.push(...constraintNodes(activity, findings));
+      if (activity.progress !== null)
+        children.push(...progressNodes(activity, activity.progress, findings));
+    }
+
     for (const relationship of linksBySuccessor.get(activity.id) ?? []) {
       children.push(predecessorLinkNode(relationship));
     }
 
     taskNodes.push(branch('Task', children));
   }
+
+  // --- Resources + assignments ----------------------------------------------------------------------
+  const resourceNodes: MspdiNode[] = model.resources.map((resource) =>
+    resourceNode(resource, findings),
+  );
+  const assignmentNodes: MspdiNode[] = model.assignments.map((assignment) =>
+    assignmentNode(assignment, findings),
+  );
 
   // --- The <Project> root ---------------------------------------------------------------------------
   const projectChildren: MspdiNode[] = [
@@ -210,73 +463,10 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
   }
   projectChildren.push(branch('Calendars', calendarNodes));
   projectChildren.push(branch('Tasks', taskNodes));
+  if (resourceNodes.length > 0) projectChildren.push(branch('Resources', resourceNodes));
+  if (assignmentNodes.length > 0) projectChildren.push(branch('Assignments', assignmentNodes));
 
   const root = branch('Project', projectChildren);
-
-  // --- Report the out-of-M4b-scope data we could not serialise (M4c completes these) ----------------
-  if (droppedSummaries > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'activity',
-      sourceRef: null,
-      detail: `${droppedSummaries} WBS summary activit(y/ies) were not exported`,
-      reason: 'WBS hierarchy export lands in a later milestone (ADR-0050 M4c)',
-    });
-  }
-  if (droppedParents > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'activity',
-      sourceRef: null,
-      detail: `${droppedParents} activity WBS parent link(s) were not exported`,
-      reason: 'WBS hierarchy export lands in a later milestone (ADR-0050 M4c)',
-    });
-  }
-  if (droppedConstraints > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'constraint',
-      sourceRef: null,
-      detail: `${droppedConstraints} activity constraint(s) were not exported`,
-      reason: 'constraint export lands in a later milestone (ADR-0050 M4c)',
-    });
-  }
-  if (droppedProgress > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'activity',
-      sourceRef: null,
-      detail: `${droppedProgress} activity progress record(s) were not exported`,
-      reason: 'progress export lands in a later milestone (ADR-0050 M4c)',
-    });
-  }
-  if (droppedAlap > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'activity',
-      sourceRef: null,
-      detail: `${droppedAlap} as-late-as-possible flag(s) were not exported`,
-      reason: 'ALAP export lands in a later milestone (ADR-0050 M4c)',
-    });
-  }
-  if (model.resources.length > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'resource',
-      sourceRef: null,
-      detail: `${model.resources.length} resource(s) were not exported`,
-      reason: 'resource export lands in a later milestone (ADR-0050 M4c)',
-    });
-  }
-  if (model.assignments.length > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'assignment',
-      sourceRef: null,
-      detail: `${model.assignments.length} resource assignment(s) were not exported`,
-      reason: 'resource-assignment export lands in a later milestone (ADR-0050 M4c)',
-    });
-  }
 
   return { root, findings };
 }

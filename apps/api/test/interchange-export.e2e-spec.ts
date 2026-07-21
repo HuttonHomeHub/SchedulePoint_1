@@ -68,6 +68,75 @@ function xerWithCalendar(): string {
   ].join('\n');
 }
 
+/**
+ * A **rich** XER exercising the M4c export scope: a nested WBS (W1 → W2), a primary constraint (CS_MSOA =
+ * SNET) on the child task, a progressed task (TK_Active + %complete + actual start + remaining), and a
+ * LABOUR resource with a driving assignment. Committing this seeds a plan carrying every rich dimension so
+ * the export → re-import round trip can prove they survive.
+ */
+function richXer(): string {
+  const rows = [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
+    '%R\tP1\tRich\t2026-01-05 00:00\t2026-01-04 00:00\tC1',
+    '%T\tCALENDAR',
+    '%F\tclndr_id\tclndr_name\tdefault_flag\tday_hr_cnt\tclndr_data',
+    `%R\tC1\tSite 6-Day\tY\t8\t${standardClndrData()}`,
+    '%T\tPROJWBS',
+    '%F\twbs_id\tproj_id\tparent_wbs_id\twbs_short_name\twbs_name',
+    '%R\tW1\tP1\tW1\tENG\tEngineering', // parent == self → a project-root WBS.
+    '%R\tW2\tP1\tW1\tDES\tDesign',
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\twbs_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt\tstatus_code\tcstr_type\tcstr_date\tcomplete_pct\tact_start_date\tremain_drtn_hr_cnt',
+    [
+      '%R',
+      'T1',
+      'P1',
+      'W1',
+      'C1',
+      'A1000',
+      'Mobilise',
+      'TT_Task',
+      '40',
+      'TK_NotStart',
+      'CS_MSOA',
+      '2026-02-01',
+      '',
+      '',
+      '',
+    ].join('\t'),
+    [
+      '%R',
+      'T2',
+      'P1',
+      'W2',
+      'C1',
+      'A1010',
+      'Detailed Design',
+      'TT_Task',
+      '80',
+      'TK_Active',
+      '',
+      '',
+      '40',
+      '2026-01-06 00:00',
+      '24',
+    ].join('\t'),
+    '%T\tTASKPRED',
+    '%F\ttask_pred_id\ttask_id\tpred_task_id\tpred_type\tlag_hr_cnt',
+    '%R\tR1\tT2\tT1\tPR_FS\t0',
+    '%T\tRSRC',
+    '%F\trsrc_id\trsrc_short_name\trsrc_name\trsrc_type\tclndr_id',
+    '%R\tRS1\tCREW\tSite Crew\tRT_Labor\tC1',
+    '%T\tTASKRSRC',
+    '%F\ttaskrsrc_id\ttask_id\trsrc_id\ttarget_qty\ttarget_qty_per_hr\tdriving_flag\tact_reg_qty',
+    ['%R', 'X1', 'T1', 'RS1', '40', '', 'Y', '10'].join('\t'),
+    '%E',
+  ];
+  return rows.join('\n');
+}
+
 describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -158,6 +227,15 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
     const res = await actor.agent
       .post(commitUrl(projectId))
       .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .expect(201);
+    return res.body.data.planId as string;
+  }
+
+  /** Seed a plan carrying every M4c rich dimension by committing {@link richXer}; returns the plan id. */
+  async function seedRichPlan(actor: Actor, projectId: string): Promise<string> {
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(richXer(), 'utf8'), 'rich.xer')
       .expect(201);
     return res.body.data.planId as string;
   }
@@ -256,6 +334,50 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
       expect(reimport.graph.dependencies).toHaveLength(1);
       expect(reimport.graph.dependencies[0]?.type).toBe('FS');
       expect(reimport.graph.calendars).toHaveLength(1);
+    }
+  });
+
+  it('round-trips the rich scope (WBS + constraint + progress + resource assignment) for BOTH formats (M4c)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const planId = await seedRichPlan(actor, projectId);
+
+    for (const format of ['xer', 'mspdi'] as const) {
+      const res = await actor.agent.get(exportUrl(planId, format)).responseType('blob').expect(200);
+
+      const report = JSON.parse(res.headers['x-interchange-report'] as string) as InterchangeReport;
+      // The rich dimensions are reported as mapped, not dropped.
+      expect(report.mapped).toMatchObject({ activities: 2, wbsSummaries: 2, constraints: 1 });
+      expect(report.mapped.resources).toBe(1);
+      expect(report.mapped.assignments).toBe(1);
+      expect(report.drops).toEqual([]);
+
+      const bytes = res.body as Buffer;
+      const reimport = importSchedule({ content: new Uint8Array(bytes), filename: `rt.${format}` });
+      expect(reimport.ok).toBe(true);
+      if (!reimport.ok) continue;
+      const g = reimport.graph;
+
+      // WBS: two summaries, and the child activities are parented into the summary tree.
+      const summaries = g.activities.filter((a) => a.type === 'WBS_SUMMARY');
+      expect(summaries).toHaveLength(2);
+      const summaryKeys = new Set(summaries.map((s) => s.key));
+      const child = g.activities.find((a) => a.code === 'A1000');
+      expect(child?.parentKey).not.toBeNull();
+      expect(summaryKeys.has(child?.parentKey ?? '')).toBe(true);
+
+      // Constraint: the primary SNET survives on A1000.
+      expect(child?.constraintType).toBe('SNET');
+
+      // Progress: A1010 is in progress with its percent-complete.
+      const progressed = g.activities.find((a) => a.code === 'A1010');
+      expect(progressed?.progress?.status).toBe('IN_PROGRESS');
+      expect(progressed?.progress?.percentComplete).toBe(40);
+
+      // Resource + assignment survive; the driving flag is XER-exact (MSP has no driving concept).
+      expect(g.resources.map((r) => r.name)).toContain('Site Crew');
+      expect(g.assignments).toHaveLength(1);
+      if (format === 'xer') expect(g.assignments[0]?.isDriving).toBe(true);
     }
   });
 

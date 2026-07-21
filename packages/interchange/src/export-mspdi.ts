@@ -16,10 +16,12 @@ import type { InterchangeReport, ReportFinding } from './report.js';
  * second pipeline.
  *
  * Hard rejection ({ ok: false }) is reserved for a graph that is not a consistent SchedulePoint graph (a
- * defensive schema check) or one past the shared graph-size ceiling. Everything the M4b core-network scope
- * cannot yet serialise (WBS / constraints / progress / resources — all M4c) is **dropped and reported**,
- * never a silent omission. Pure + deterministic: no I/O, clock or randomness. The CPM engine and its recalc
- * parity golden suite are untouched (export never invokes the engine).
+ * defensive schema check) or one past the shared graph-size ceiling. The emitter serialises the **full
+ * plan** (M4c: core network + WBS + constraints + progress + resources + assignments); where Microsoft
+ * Project cannot represent a SchedulePoint concept exactly (a secondary/mandatory constraint, suspend/resume/
+ * expected-finish progress, a driving flag / production rate) it emits the nearest form and reports an
+ * **approximation**, never a silent omission. Pure + deterministic: no I/O, clock or randomness. The CPM
+ * engine and its recalc parity golden suite are untouched (export never invokes the engine).
  */
 
 export interface ExportMspdiInput {
@@ -120,7 +122,13 @@ export function exportMspdi(input: ExportMspdiInput): ExportMspdiResult {
     ...emitted.findings,
   ]);
 
-  const exportedActivities = graph.activities.filter((a) => a.type !== 'WBS_SUMMARY').length;
+  const wbsSummaries = graph.activities.filter((a) => a.type === 'WBS_SUMMARY').length;
+  const exportedActivities = graph.activities.length - wbsSummaries;
+  const constraints = graph.activities.reduce(
+    (n, a) =>
+      n + (a.constraintType !== null ? 1 : 0) + (a.secondaryConstraintType !== null ? 1 : 0),
+    0,
+  );
   const report: InterchangeReport = {
     detectedFormat: 'MSPDI',
     sourceVersion: EXPORT_MSPDI_VERSION,
@@ -129,6 +137,10 @@ export function exportMspdi(input: ExportMspdiInput): ExportMspdiResult {
       activities: exportedActivities,
       relationships: graph.dependencies.length,
       calendars: graph.calendars.length,
+      ...(wbsSummaries > 0 ? { wbsSummaries } : {}),
+      ...(constraints > 0 ? { constraints } : {}),
+      ...(graph.resources.length > 0 ? { resources: graph.resources.length } : {}),
+      ...(graph.assignments.length > 0 ? { assignments: graph.assignments.length } : {}),
     },
     approximations,
     repairs,
