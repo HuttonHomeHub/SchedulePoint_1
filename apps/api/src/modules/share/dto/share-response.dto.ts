@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import type { PlanShare } from '@prisma/client';
 
 /**
@@ -6,7 +6,8 @@ import type { PlanShare } from '@prisma/client';
  * raw token and its hash are NEVER exposed here; the raw token is returned exactly once,
  * on create, via {@link CreatedShareDto}. `active` is derived server-side (not revoked and
  * not past its expiry) so the client can render live vs dead links without re-deriving the
- * rule.
+ * rule. Date fields are ISO-8601 strings (the note/baseline DTO convention) so the DTO's
+ * declared type matches the wire format and the generated OpenAPI schema is accurate.
  */
 export class ShareResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -15,35 +16,38 @@ export class ShareResponseDto {
   @ApiProperty({ format: 'uuid', description: 'The plan this link grants read access to.' })
   planId!: string;
 
-  @ApiPropertyOptional({ nullable: true, description: 'Optional human label.' })
+  @ApiProperty({ nullable: true, type: String, description: 'Optional human label.' })
   label!: string | null;
 
   @ApiProperty({ description: 'True if the link is not revoked and not past its expiry.' })
   active!: boolean;
 
-  @ApiPropertyOptional({
-    format: 'date-time',
+  @ApiProperty({
     nullable: true,
+    type: String,
+    format: 'date-time',
     description: 'Expiry instant, if any.',
   })
-  expiresAt!: Date | null;
+  expiresAt!: string | null;
 
-  @ApiPropertyOptional({
-    format: 'date-time',
+  @ApiProperty({
     nullable: true,
+    type: String,
+    format: 'date-time',
     description: 'When it was revoked, if it was.',
   })
-  revokedAt!: Date | null;
+  revokedAt!: string | null;
 
-  @ApiPropertyOptional({
-    format: 'date-time',
+  @ApiProperty({
     nullable: true,
+    type: String,
+    format: 'date-time',
     description: 'Best-effort last guest access (coalesced telemetry).',
   })
-  lastAccessedAt!: Date | null;
+  lastAccessedAt!: string | null;
 
-  @ApiProperty({ format: 'date-time' })
-  createdAt!: Date;
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: string;
 
   /** Map a stored row to its metadata view (no token/hash), computing `active` against `now`. */
   static from(share: PlanShare, now: Date = new Date()): ShareResponseDto {
@@ -51,10 +55,10 @@ export class ShareResponseDto {
     dto.id = share.id;
     dto.planId = share.planId;
     dto.label = share.label;
-    dto.expiresAt = share.expiresAt;
-    dto.revokedAt = share.revokedAt;
-    dto.lastAccessedAt = share.lastAccessedAt;
-    dto.createdAt = share.createdAt;
+    dto.expiresAt = share.expiresAt?.toISOString() ?? null;
+    dto.revokedAt = share.revokedAt?.toISOString() ?? null;
+    dto.lastAccessedAt = share.lastAccessedAt?.toISOString() ?? null;
+    dto.createdAt = share.createdAt.toISOString();
     dto.active =
       share.revokedAt === null &&
       (share.expiresAt === null || share.expiresAt.getTime() > now.getTime());

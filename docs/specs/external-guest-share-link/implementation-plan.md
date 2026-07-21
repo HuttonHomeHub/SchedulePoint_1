@@ -196,6 +196,9 @@ programme's established enablement pattern).
   optional expiry) + one-time URL with Copy; RHF + Zod; gated on the caller
   holding `plan:share`.
 - **Complexity:** M · **Dependencies:** F-M2 · **Testing:** unit + a11y.
+- **F-M2 security-review note:** CQ-4 keeps **no forced max TTL** (revocation is the primary control), but
+  the expiry date-picker should still **bound absurd values** (e.g. cap the selectable date a sane span out)
+  so a mis-issued effectively-permanent external bearer credential isn't a one-click mistake.
 
 ##### Task 2 — public `/share` read-only plan view
 

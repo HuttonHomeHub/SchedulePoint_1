@@ -66,6 +66,9 @@ export class ShareController {
   @RequirePermissions('plan:share')
   @ApiOperation({
     summary: "List a plan's share links, newest-first (Planner + Org Admin). No tokens.",
+    description:
+      'A bounded, plan-scoped list — **unpaginated** (a plan has only a handful of share links, and ' +
+      'revocation, not list size, is the control), unlike the cursor-paginated notes/baselines lists.',
   })
   @ApiOkResponse({ type: ShareResponseDto, isArray: true })
   async list(
@@ -74,7 +77,9 @@ export class ShareController {
     @Param('planId', ParseUuidPipe) planId: string,
   ): Promise<ShareResponseDto[]> {
     const shares = await this.service.list(principal, orgSlug, planId);
-    return shares.map((share) => ShareResponseDto.from(share));
+    // One `now` for the whole response so `active` is computed consistently across rows.
+    const now = new Date();
+    return shares.map((share) => ShareResponseDto.from(share, now));
   }
 
   @Delete(':shareId')

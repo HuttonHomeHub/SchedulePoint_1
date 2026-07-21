@@ -13,16 +13,26 @@ export class CreateShareDto {
     maxLength: 200,
     description: 'Optional human label for the management list (e.g. "Client review – Acme").',
   })
+  // Trim, and treat an empty-after-trim label as omitted (→ stored null, not "") so callers
+  // get consistent "no label" semantics rather than an empty string (the note-body precedent).
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  })
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(200)
   label?: string;
 
   @ApiPropertyOptional({
     format: 'date-time',
-    description: 'Optional expiry instant (ISO 8601). Omit for a link that never expires.',
+    description:
+      'Optional expiry instant (ISO 8601). Omit (or null) for a link that never expires.',
   })
+  // Normalise an explicit `null` to "omitted" so a caller meaning "no expiry" doesn't trip the
+  // ISO-8601 check / a misleading SHARE_EXPIRY_IN_PAST (`@IsOptional` already skips `undefined`).
+  @Transform(({ value }: { value: unknown }) => (value === null ? undefined : value))
   @IsOptional()
   @IsISO8601()
   expiresAt?: string;
