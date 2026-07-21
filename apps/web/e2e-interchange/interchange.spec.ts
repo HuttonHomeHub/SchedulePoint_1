@@ -92,16 +92,14 @@ test('a planner imports a schedule from a .xml (MSPDI) file and lands on the new
 });
 
 /**
- * The **round-trip** payoff (ADR-0050 M4d — web export surface): import a `.xer` to seed a plan with
- * activities, open the plan's canvas Export ▾ menu, export it back out as `.xer` (asserting a real
- * browser download whose suggested name ends `.xer`), then **re-import** that exact downloaded file via
- * the same Import-from-file flow and land on a NEW plan — a clean end-to-end interchange loop in a real
- * browser. Seeds via the import-commit path (rather than hand-building a plan) so the export has a
- * populated network to serialise. Chromium only (TECH_DEBT #25a).
+ * The **web export surface** (ADR-0050 M4d): import a `.xer` to seed a plan with activities, open the
+ * plan's canvas Export ▾ menu, and export it back out as `.xer` — asserting the new "Primavera P6 (XER)"
+ * item triggers a real browser download named from the plan. An axe pass over the open menu keeps it
+ * WCAG 2.2 AA. Seeds via the import-commit path (rather than hand-building a plan) so the export has a
+ * populated network to serialise. The export→re-import round trip itself is proven at the pure-package
+ * and API-e2e layers (see the closing comment). Chromium only (TECH_DEBT #25a).
  */
-test('a planner exports a plan to .xer, then re-imports the downloaded file (round trip)', async ({
-  page,
-}) => {
+test('a planner exports a plan to .xer from the canvas Export menu', async ({ page }) => {
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewProject(page);
@@ -132,28 +130,12 @@ test('a planner exports a plan to .xer, then re-imports the downloaded file (rou
     page.waitForEvent('download'),
     page.getByRole('menuitem', { name: 'Primavera P6 (XER)' }).click(),
   ]);
+  // The download is a real browser download named from the plan, with the .xer extension — the M4d
+  // deliverable. The round trip itself (these exported bytes re-import to an equivalent plan) is proven
+  // exhaustively at the pure-package layer (@repo/interchange export round-trip specs) and the API e2e
+  // (apps/api/test/interchange-export.e2e-spec.ts imports → exports → re-imports against a real Postgres),
+  // so this browser journey deliberately stops at the download rather than re-driving a second project
+  // through the UI.
   expect(download.suggestedFilename()).toMatch(/\.xer$/);
-
-  // Re-import: feed the downloaded file back through Import-from-file. Import always creates a NEW plan
-  // named from the file (here "Sample"), and a plan name is unique per project — so re-importing into the
-  // SAME project would collide on `uq_plans_project_name`. Create a SECOND project under the existing
-  // client (reusing it — `openNewProject` isn't idempotent) and re-import the round-tripped file there.
-  await page.getByRole('link', { name: 'Clients', exact: true }).click();
-  await page.getByRole('link', { name: 'Northgate' }).click();
-  await page.getByRole('button', { name: 'New project' }).click();
-  await page.getByRole('dialog').getByLabel('Name').fill('Riverside Two');
-  await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
-  await page.getByRole('link', { name: 'Riverside Two' }).click();
-  await expect(page.getByRole('button', { name: 'Import from file…' })).toBeVisible();
-  await page.getByRole('button', { name: 'Import from file…' }).click();
-  const roundTripDialog = page.getByRole('dialog', { name: 'Import schedule from file' });
-  // Feed the downloaded file straight from its saved path (Playwright accepts a filesystem path).
-  const downloadPath = await download.path();
-  await roundTripDialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(downloadPath);
-  const roundTripConfirm = roundTripDialog.getByRole('button', { name: 'Confirm import' });
-  await expect(roundTripConfirm).toBeEnabled();
-  await roundTripConfirm.click();
-  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
-  // The re-imported plan opens on the canvas-first workspace with the exported plan's name.
-  await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+  expect(download.suggestedFilename()).toMatch(/sample/i);
 });
