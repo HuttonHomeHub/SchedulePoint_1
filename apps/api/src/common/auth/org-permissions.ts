@@ -137,7 +137,16 @@ export type OrgPermission =
   // member** (Viewer upward, CQ-1), NOT just the write roles; its authoritative org-scope check is on the
   // **target plan** (anti-IDOR) in the export service.
   | 'interchange:import'
-  | 'interchange:export';
+  | 'interchange:export'
+  // External-Guest share links (Stage F, ADR-0051). Creating / listing / revoking a per-plan
+  // share link (`plan:share`) is a GOVERNANCE act — it exposes org data OUTSIDE the tenant
+  // boundary to an outsider with no account — so it is granted to **Planner + Org Admin only**,
+  // deliberately NOT Contributor/Viewer (reporting progress or reading the plan is not the same
+  // as authorising external egress). The guest's own READ access is NOT an org permission at
+  // all: a guest holds a revocable `PlanShare` grant, not a membership (the parallel
+  // `GuestPrincipal` + `ShareTokenGuard`, ADR-0051 §3). Authoritative org-scope check is on the
+  // target plan (anti-IDOR) in the share service.
+  | 'plan:share';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -237,6 +246,14 @@ const INTERCHANGE: readonly OrgPermission[] = ['interchange:import'];
  */
 const INTERCHANGE_EXPORT: readonly OrgPermission[] = ['interchange:export'];
 
+/**
+ * Manage a plan's External-Guest share links — create / list / revoke (Stage F, ADR-0051).
+ * Planner + Org Admin ONLY: sharing a plan OUTSIDE the organisation is a governance act,
+ * deliberately above a Contributor/Viewer (reporting/reading ≠ authorising external egress).
+ * The guest's own read access is a separate `PlanShare` grant, never a member permission.
+ */
+const SHARE_MANAGE: readonly OrgPermission[] = ['plan:share'];
+
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
 
@@ -273,6 +290,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...LOCK_COORDINATE,
     ...COST_READ,
     ...INTERCHANGE,
+    ...SHARE_MANAGE,
   ],
   [OrganizationRole.ORG_ADMIN]: [
     ...ADMIN,
@@ -285,6 +303,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...LOCK_OVERRIDE,
     ...COST_READ,
     ...INTERCHANGE,
+    ...SHARE_MANAGE,
   ],
 };
 

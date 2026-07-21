@@ -236,6 +236,27 @@ enough; anyone else is **403** (Org-Admin moderation of others' notes is out of
 v1). The response carries `authorId`, the server-resolved `authorName` (or null),
 and `edited` (true once the body has been revised).
 
+### External-Guest share links (ADR-0051)
+
+Revocable, read-only, per-plan **share links** for someone OUTSIDE the organisation
+(no account, no membership). Managing links is a **governance act** gated on
+`plan:share` (Planner + Org Admin only). The raw `sp_share_…` token is returned
+**once**, on create, inside the guest URL's **fragment** (`…/share#<token>`) — only
+its SHA-256 hash is stored, and no list/read response ever carries a token. F-M2
+ships the management surface; the session-less guest read path (F-M3) is separate.
+
+| Method | Path                              | Notes                                                                                                                                                             |
+| ------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/plans/:planId/shares`          | Create a link · 201 `{ url, share }` (raw token in `url`'s fragment, once) · 422 `SHARE_EXPIRY_IN_PAST`. `plan:share`.                                            |
+| GET    | `…/plans/:planId/shares`          | The plan's links, newest-first — **metadata only, never a token** (id, label, `active`, expiresAt, revokedAt); **unpaginated** (tiny per-plan set). `plan:share`. |
+| DELETE | `…/plans/:planId/shares/:shareId` | Revoke a link (immediate; the next guest request 404s) · 204, **idempotent**. `plan:share`.                                                                       |
+
+Anti-IDOR is uniform: a foreign, other-org, or deleted plan — or a share id that is
+not this plan's — is an indistinguishable **404**. `organization_id` is copied from
+the resolved plan, never from client input. **Non-scheduling**: the CPM engine and
+the pen model (ADR-0028) are untouched, and share writes are deliberately not
+pen-gated.
+
 ### Schedule interchange (ADR-0050)
 
 **Import** a foreign schedule file (a P6 **XER** for M1; MS Project MSPDI later) into a chosen project as a

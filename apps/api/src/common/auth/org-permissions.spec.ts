@@ -155,6 +155,16 @@ describe('permissionsForRole — CPM schedule (read vs calculate)', () => {
       expect(permissionsForRole(role)).toContain('interchange:export');
     }
   });
+
+  it('grants plan:share (manage External-Guest share links) to Planner + Org Admin only (ADR-0051)', () => {
+    // Sharing a plan OUTSIDE the org is a governance act, deliberately above a reporter/reader.
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      expect(permissionsForRole(role)).not.toContain('plan:share');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      expect(permissionsForRole(role)).toContain('plan:share');
+    }
+  });
 });
 
 describe('permissionsForRole — calendar library (read vs write)', () => {
