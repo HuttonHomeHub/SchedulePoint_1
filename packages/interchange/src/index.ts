@@ -27,3 +27,8 @@ export * from './validate.js';
 export * from './import-xer.js';
 export * from './import-mspdi.js';
 export * from './import-schedule.js';
+export * from './export-graph.js';
+export * from './export-mapper.js';
+export * from './xer-serialiser.js';
+export * from './xer-emit.js';
+export * from './export-xer.js';
