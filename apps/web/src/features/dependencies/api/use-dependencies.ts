@@ -7,7 +7,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { dependencyKeys } from '@/lib/query/hierarchy-keys';
 
 export { dependencyKeys };
@@ -15,8 +15,10 @@ export { dependencyKeys };
 export function planDependenciesQueryOptions(orgSlug: string, planId: string) {
   return queryOptions({
     queryKey: dependencyKeys.byPlan(orgSlug, planId),
+    // The canvas draws the whole logic network, so page through EVERY edge rather than the endpoint's
+    // default 20-row page — a truncated list leaves most links undrawn on a large plan.
     queryFn: () =>
-      apiFetch<DependencySummary[]>(`/organizations/${orgSlug}/plans/${planId}/dependencies`),
+      apiFetchAllPages<DependencySummary>(`/organizations/${orgSlug}/plans/${planId}/dependencies`),
   });
 }
 
