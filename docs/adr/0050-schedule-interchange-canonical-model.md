@@ -190,6 +190,41 @@ resolves an "M2" note); the per-import `InterchangeReport` is its runtime instan
   recalculate (ADR-0022); it has no path to the engine or its golden suite. This is
   the structural parity gate.
 
+## M2 status — WBS · constraints · progress · resources (shipped)
+
+M2 extends the import from M1's core network to a **materially-complete P6 import**,
+additively (same canonical model, same dry-run→commit pipeline, same
+`VITE_SCHEDULE_INTERCHANGE` flag — no new endpoint or flip):
+
+- **WBS** — `PROJWBS` rows → `WBS_SUMMARY` activities on a prefixed `wbs:` key space,
+  `TASK.wbs_id` → the activity `parentId` self-FK (ADR-0038). Because the importer
+  persists via `createMany` (bypassing `ActivitiesService.assertValidParent`), the
+  pure `validate` step now enforces the service invariants itself: a parent resolves
+  to an in-graph `WBS_SUMMARY`, the parent tree is acyclic, and a summary is never a
+  dependency endpoint (such edges are dropped + reported).
+- **Constraints** — the full P6 `cstr_type`/`cstr_type2` → SchedulePoint
+  `ConstraintType` map (incl. `CS_ALAP` → the `scheduleAsLateAsPossible` flag and
+  `CS_EXPFIN` → Expected Finish); an unrecognised kind is dropped + reported; type/date
+  pairing is enforced in `validate`.
+- **Progress** — `status_code`, actual dates, remaining duration, physical %,
+  suspend/resume and expected finish, with the domain's own consistency repairs
+  (status derivation, N08/N18, resume ≥ suspend, percent clamps) re-implemented in the
+  pure step so the batched write can never trip a DB CHECK.
+- **Resources** — `RSRC` → resources, `TASKRSRC` → assignments, `TT_Rsrc` →
+  `RESOURCE_DEPENDENT` (ADR-0039/0040). Resources are **org-scoped**, so the commit
+  **resolves-or-creates** — one batched, indexed `findMany` matches an existing active
+  org resource by code (else name) and reuses it, else batch-inserts the new ones —
+  rather than blind-creating (which would collide with the org-unique partial-uniques).
+  `validate` guarantees ≤1 driver/activity, MATERIAL-never-drives, and
+  `(activity,resource)` de-dup before persistence.
+
+Hardening (M2 review fold): resource/assignment graph ceilings
+(`MAX_RESOURCES`/`MAX_ASSIGNMENTS`) alongside the M1 activity/dependency caps; the
+enum lookup tables are `Object.hasOwn`-guarded against `__proto__`/`toString`-class
+keys; and a defensive `importGraphSchema.safeParse` runs before persistence. The CPM
+engine + recalc parity gate remain untouched. **M3** (MSPDI) and **M4** (export)
+follow.
+
 ## References
 
 - Spec + plan: [`docs/specs/schedule-interchange/feature-spec.md`](../specs/schedule-interchange/feature-spec.md)
