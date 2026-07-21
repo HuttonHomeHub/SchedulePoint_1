@@ -2,6 +2,14 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
+// This is the BASE / flag-OFF suite for the selection bar: pin `VITE_ENTRY_ROUTES` off (it now defaults
+// ON) so `selectionActionItems` is built with only the three base actions — the entry-route additions
+// (Progress/Resources/Steps) have their own flag-on suites (selection-actions.entry-routes / .resources-off).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ENTRY_ROUTES_ENABLED: false,
+}));
+
 import { SelectionActionsBar, type SelectionActionContext } from './selection-actions';
 
 const spies = {
@@ -55,9 +63,9 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     expect(within(bar).queryByRole('button', { name: 'Delete activity' })).not.toBeInTheDocument();
   });
 
-  it('registers only the three base actions when VITE_ENTRY_ROUTES is off (default)', () => {
-    // This suite runs with the real (default-off) env, so the entry-route Progress/Resources/Steps
-    // items are absent — the bar stays byte-for-byte the prior three-item set.
+  it('registers only the three base actions when VITE_ENTRY_ROUTES is off', () => {
+    // This suite pins the flag off, so the entry-route Progress/Resources/Steps items are absent —
+    // the bar stays byte-for-byte the prior three-item set.
     render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     for (const name of ['Report progress', 'Resources', 'Steps']) {

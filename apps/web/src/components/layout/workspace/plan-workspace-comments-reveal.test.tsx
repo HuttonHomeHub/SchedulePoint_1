@@ -25,6 +25,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // This suite asserts the Comments-reveal path; the programme section (now default-on) mounts its
   // own summary/recalc queries, so pin it off here — it has its own suite (ProgrammeScheduleSection).
   PROGRAMME_SCHEDULING_ENABLED: false,
+  // Comments-SCROLLS-to-the-inline-notes-heading is the flag-OFF behaviour; entry-route (now default-on)
+  // instead opens the notes drawer. Pin it off here so this suite keeps testing the scroll path — the
+  // drawer-open path has its own suite (plan-workspace-entry-routes.test.tsx).
+  ENTRY_ROUTES_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({

@@ -46,6 +46,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // The programme section (now default-on) mounts its own summary/recalc queries; pin it off here —
   // it has its own suite (ProgrammeScheduleSection).
   PROGRAMME_SCHEDULING_ENABLED: false,
+  // Entry-route (now default-on) makes PlanDialogs mount the resources/steps dialogs; pin it off here
+  // so these pen-gating / reposition seams are the subject (entry-route has its own suites).
+  ENTRY_ROUTES_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
