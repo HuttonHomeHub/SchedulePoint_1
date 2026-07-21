@@ -100,6 +100,18 @@ const RSRC_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalResourceKind>> = 
   RT_Mat: 'MATERIAL',
 };
 
+/**
+ * Look up an enum value by an **attacker-controlled** XER field value without inheriting an
+ * `Object.prototype` member. A plain object literal returns real inherited members for keys like
+ * `__proto__` / `constructor` / `toString` / `valueOf`, so `TABLE[key]` would be truthy (not
+ * `undefined`) for those magic strings — silently bypassing the "unmapped → coerce + report" branch and
+ * leaking a non-enum value downstream. Guarding with `Object.hasOwn` makes every unrecognised source
+ * value (magic or not) miss, so the coerce-and-report contract holds for the whole XER key space.
+ */
+function lookup<T>(table: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 /** Signed working-minute bound (± ~10 years) mirroring the domain `lag_minutes` / duration CHECK range. */
 const MINUTE_BOUND = 5_256_000;
 
@@ -200,7 +212,7 @@ function mapConstraintSlot(
   if (rawType === 'CS_ALAP') return { kind: 'alap' };
   if (rawType === 'CS_EXPFIN')
     return { kind: 'expectedFinish', date: isoDateField(row, dateField) ?? null };
-  const type = CSTR_TYPE_TO_CANONICAL[rawType];
+  const type = lookup(CSTR_TYPE_TO_CANONICAL, rawType);
   if (type === undefined) {
     findings.push({
       kind: 'approximation',
@@ -229,7 +241,7 @@ function mapProgress(
   const status: CanonicalActivityStatus =
     statusCode === undefined
       ? 'NOT_STARTED'
-      : (STATUS_CODE_TO_CANONICAL[statusCode] ?? 'NOT_STARTED');
+      : (lookup(STATUS_CODE_TO_CANONICAL, statusCode) ?? 'NOT_STARTED');
 
   const pct = numField(row, 'complete_pct');
   const percentComplete = pct === undefined ? 0 : Math.round(pct);
@@ -237,7 +249,9 @@ function mapProgress(
   const physicalPercentComplete = phys === undefined ? null : Math.round(phys);
   const pctTypeCode = field(row, 'complete_pct_type');
   const percentCompleteType: CanonicalPercentCompleteType =
-    pctTypeCode === undefined ? 'DURATION' : (PCT_TYPE_TO_CANONICAL[pctTypeCode] ?? 'DURATION');
+    pctTypeCode === undefined
+      ? 'DURATION'
+      : (lookup(PCT_TYPE_TO_CANONICAL, pctTypeCode) ?? 'DURATION');
 
   const actualStart = isoDateField(row, 'act_start_date') ?? null;
   const actualFinish = isoDateField(row, 'act_end_date') ?? null;
@@ -433,7 +447,7 @@ export function adaptXerToCanonical(
 
     // Type mapping (unmapped → TASK + report).
     const rawType = field(row, 'task_type');
-    let type = rawType === undefined ? 'TASK' : TASK_TYPE_TO_CANONICAL[rawType];
+    let type = rawType === undefined ? 'TASK' : lookup(TASK_TYPE_TO_CANONICAL, rawType);
     if (type === undefined) {
       type = 'TASK';
       findings.push({
@@ -562,7 +576,7 @@ export function adaptXerToCanonical(
     }
 
     const rawType = field(row, 'pred_type');
-    let type = rawType === undefined ? undefined : PRED_TYPE_TO_CANONICAL[rawType];
+    let type = rawType === undefined ? undefined : lookup(PRED_TYPE_TO_CANONICAL, rawType);
     if (type === undefined) {
       type = 'FS';
       findings.push({
@@ -610,7 +624,7 @@ export function adaptXerToCanonical(
       continue;
     }
     const rawKind = field(row, 'rsrc_type');
-    let kind = rawKind === undefined ? 'LABOUR' : RSRC_TYPE_TO_CANONICAL[rawKind];
+    let kind = rawKind === undefined ? 'LABOUR' : lookup(RSRC_TYPE_TO_CANONICAL, rawKind);
     if (kind === undefined) {
       kind = 'LABOUR';
       findings.push({

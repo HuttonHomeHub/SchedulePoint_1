@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { importGraphSchema } from './import-graph.js';
-import { importXer, MAX_ACTIVITIES, MAX_DEPENDENCIES } from './import-xer.js';
+import { importXer, MAX_ACTIVITIES, MAX_DEPENDENCIES, MAX_RESOURCES } from './import-xer.js';
 import { interchangeReportSchema, type ReportFinding } from './report.js';
 import { buildXer, standardClndrData, type XerTableSpec } from './xer.fixtures.js';
 
@@ -684,5 +684,64 @@ describe('importXer — M2 rich fixture (WBS + constraints + progress + resource
       resources: 3,
       assignments: 3,
     });
+  });
+});
+
+describe('importXer — M2 ceilings + hostile-key hardening (security fold)', () => {
+  const rsrcFields = ['rsrc_id', 'rsrc_name', 'rsrc_type'];
+
+  /** An XER with `count` distinct labour resources (and the standard two tasks). */
+  function manyResourcesXer(count: number): string {
+    const rows: string[][] = [];
+    for (let i = 1; i <= count; i += 1) rows.push([`RS${i}`, `Resource ${i}`, 'RT_Labor']);
+    return buildXer([PROJECT, CALENDAR, TWO_TASKS, { name: 'RSRC', fields: rsrcFields, rows }]);
+  }
+
+  it('rejects a schedule just over the resource ceiling', () => {
+    const result = importXer({ content: manyResourcesXer(MAX_RESOURCES + 1) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.stage).toBe('limit');
+      expect(result.error.code).toBe('TOO_MANY_RESOURCES');
+    }
+  });
+
+  it('does not resolve a magic-key constraint type to an Object.prototype member', () => {
+    // `cstr_type=__proto__` must MISS the enum table (Object.hasOwn guard), so the constraint is dropped
+    // and reported — never a leaked builtin flowing downstream as a fake ConstraintType.
+    const task: XerTableSpec = {
+      name: 'TASK',
+      fields: [
+        'task_id',
+        'proj_id',
+        'task_code',
+        'task_name',
+        'task_type',
+        'target_drtn_hr_cnt',
+        'cstr_type',
+        'cstr_date',
+      ],
+      rows: [['T1', 'P1', 'A1', 'Task 1', 'TT_Task', '8', '__proto__', '2026-01-05 00:00']],
+    };
+    const result = importXer({ content: buildXer([PROJECT, CALENDAR, task]) });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.graph.activities[0]?.constraintType).toBeNull();
+      const mentioned = [...result.report.approximations, ...result.report.drops].some(
+        (f) => f.entity === 'constraint',
+      );
+      expect(mentioned).toBe(true);
+    }
+  });
+
+  it('coerces a magic-key resource kind to the LABOUR default (never a builtin)', () => {
+    const rsrc: XerTableSpec = {
+      name: 'RSRC',
+      fields: ['rsrc_id', 'rsrc_name', 'rsrc_type'],
+      rows: [['RS1', 'Crew', 'constructor']],
+    };
+    const result = importXer({ content: buildXer([PROJECT, CALENDAR, TWO_TASKS, rsrc]) });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.graph.resources[0]?.kind).toBe('LABOUR');
   });
 });

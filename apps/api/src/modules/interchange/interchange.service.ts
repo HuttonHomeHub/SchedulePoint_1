@@ -386,18 +386,48 @@ export class InterchangeService {
     const resourceIdByKey = new Map<string, string>();
     const createdResourceIds: string[] = [];
     const newResourceRows: Prisma.ResourceCreateManyInput[] = [];
+    // Resolve every import resource against the org library in ONE indexed query, not a per-resource
+    // findFirst — an N+1 inside the commit transaction would serialise a round-trip per resource against
+    // the interactive-transaction budget (the rest of persistGraph is deliberately batched for exactly
+    // this reason). The match maps (by code, by name) are then consulted purely in memory; newly-created
+    // resources are folded into them so two source rows sharing a name/code reuse one row rather than
+    // colliding on the org-unique partial-uniques.
+    const importCodes = graph.resources.map((r) => r.code).filter((c): c is string => c !== null);
+    const importNames = graph.resources.map((r) => r.name);
+    const existingResources =
+      graph.resources.length === 0
+        ? []
+        : await tx.resource.findMany({
+            where: {
+              organizationId,
+              deletedAt: null,
+              OR: [
+                ...(importCodes.length > 0 ? [{ code: { in: importCodes } }] : []),
+                { name: { in: importNames } },
+              ],
+            },
+            select: { id: true, code: true, name: true },
+          });
+    const idByCode = new Map<string, string>();
+    const idByName = new Map<string, string>();
+    for (const r of existingResources) {
+      if (r.code !== null) idByCode.set(r.code, r.id);
+      idByName.set(r.name, r.id);
+    }
     for (const resource of graph.resources) {
-      const existing = await tx.resource.findFirst({
-        where: this.existingResourceMatch(organizationId, resource),
-        select: { id: true },
-      });
-      if (existing) {
-        resourceIdByKey.set(resource.key, existing.id);
+      // Match an existing ACTIVE org resource by `code` (when the import carries one) else by `name`.
+      const existingId =
+        resource.code !== null ? idByCode.get(resource.code) : idByName.get(resource.name);
+      if (existingId !== undefined) {
+        resourceIdByKey.set(resource.key, existingId);
         continue;
       }
       const id = randomUUID();
       resourceIdByKey.set(resource.key, id);
       createdResourceIds.push(id);
+      // Fold the new row into the match maps so a later source row with the same code/name reuses it.
+      if (resource.code !== null) idByCode.set(resource.code, id);
+      idByName.set(resource.name, id);
       newResourceRows.push({
         id,
         organizationId,
@@ -432,23 +462,6 @@ export class InterchangeService {
     await this.assignments.createManyForImport(assignmentRows, tx);
 
     return { planId: plan.id, createdCalendarIds, createdResourceIds };
-  }
-
-  /**
-   * The active-org-resource match for the resolve-or-create step: by `code` when the import resource
-   * carries one (a stable natural handle), otherwise by `name`. Both are the columns the active partial
-   * uniques (uq_resources_org_code / uq_resources_org_name) key on, so a hit means a blind insert would
-   * have collided.
-   */
-  private existingResourceMatch(
-    organizationId: string,
-    resource: ImportGraph['resources'][number],
-  ): Prisma.ResourceWhereInput {
-    return {
-      organizationId,
-      deletedAt: null,
-      ...(resource.code !== null ? { code: resource.code } : { name: resource.name }),
-    };
   }
 
   /**

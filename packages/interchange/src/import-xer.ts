@@ -1,4 +1,4 @@
-import type { ImportGraph } from './import-graph.js';
+import { importGraphSchema, type ImportGraph } from './import-graph.js';
 import { mapCanonicalToImportGraph } from './mapper.js';
 import type { InterchangeReport, ReportFinding } from './report.js';
 import { validateAndRepair } from './validate.js';
@@ -38,6 +38,14 @@ export interface ImportXerInput {
  */
 export const MAX_ACTIVITIES = 5000;
 export const MAX_DEPENDENCIES = 10000;
+/**
+ * Resources/assignments are bounded on the same grounds: a compact RSRC/TASKRSRC-heavy `.xer` can map to
+ * a resource graph orders of magnitude larger than the activity network, and each row becomes a batched
+ * insert (and the assignments a driving-resource lookup) in the same single commit transaction (B3). The
+ * caps are generous headroom over a real programme's resource pool while bounding a hostile file.
+ */
+export const MAX_RESOURCES = 10000;
+export const MAX_ASSIGNMENTS = 20000;
 
 /** A typed, user-safe import rejection. `stage` says where it failed; `code`/`message` never leak internals. */
 export interface ImportError {
@@ -123,9 +131,45 @@ export function importXer(input: ImportXerInput): ImportXerResult {
       },
     };
   }
+  if (mapped.graph.resources.length > MAX_RESOURCES) {
+    return {
+      ok: false,
+      error: {
+        stage: 'limit',
+        code: 'TOO_MANY_RESOURCES',
+        message: `This schedule has ${mapped.graph.resources.length} resources, above the ${MAX_RESOURCES}-resource import limit.`,
+      },
+    };
+  }
+  if (mapped.graph.assignments.length > MAX_ASSIGNMENTS) {
+    return {
+      ok: false,
+      error: {
+        stage: 'limit',
+        code: 'TOO_MANY_ASSIGNMENTS',
+        message: `This schedule has ${mapped.graph.assignments.length} resource assignments, above the ${MAX_ASSIGNMENTS}-assignment import limit.`,
+      },
+    };
+  }
 
   // 4. Validate / repair the graph (dangling, duplicate, cyclic, duplicate codes).
   const validated = validateAndRepair(mapped.graph);
+
+  // 4a. Defence-in-depth: the validated graph must satisfy the strict import-graph schema before it can
+  // reach the persistence layer. The adapter/mapper are the trust boundary for attacker-controlled bytes;
+  // a residual bug there (e.g. an enum coercion that slipped through) is caught HERE as a typed reject
+  // rather than surfacing as an opaque Prisma error at commit. A clean import is unaffected.
+  const graphCheck = importGraphSchema.safeParse(validated.graph);
+  if (!graphCheck.success) {
+    return {
+      ok: false,
+      error: {
+        stage: 'adapt',
+        code: 'INCONSISTENT_GRAPH',
+        message: 'The imported schedule could not be mapped to a consistent SchedulePoint graph.',
+      },
+    };
+  }
 
   // 5. Build the report from the union of every stage's findings + the final mapped counts.
   const { approximations, repairs, drops } = bucketFindings([

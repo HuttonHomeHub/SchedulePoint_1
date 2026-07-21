@@ -128,8 +128,9 @@ export class InterchangeController {
       'Commit: import an uploaded schedule file as a new plan and recalculate it (Planner or Org Admin).',
     description:
       'Re-parses the uploaded file (deterministic — the graph equals the reviewed dry-run) and, in one ' +
-      'transaction, creates the plan (calendars + activities + dependencies) via the existing services, ' +
-      'then recalculates it. Returns 201 with the new plan id and the interchange report. Any failure ' +
+      'transaction, creates the plan — calendars, the WBS tree, activities (with constraints + progress), ' +
+      'dependencies, and resources + assignments — via the existing services, then recalculates it. ' +
+      'Returns 201 with the new plan id and the interchange report. Any failure ' +
       '(parse, a persistence rejection, or recalculation) leaves nothing created. 422 unrecognised/' +
       'malformed/no file · 413 oversize.',
   })
