@@ -63,6 +63,14 @@ const MSP_DAY_TO_KEY: Readonly<Record<number, keyof CanonicalWorkWeek>> = {
 
 /** Cap on how many days a single `<TimePeriod>` exception range is expanded to (a hostile-range bound). */
 const MAX_EXCEPTION_RANGE_DAYS = 750;
+/**
+ * Cap on the **total** dated exceptions a single calendar may accumulate across all its `<WeekDay>`
+ * blocks. `expandDateRange` already bounds one range, but a hostile file can pack many maximal ranges
+ * (or many exception WeekDays) into the upload, amplifying a small payload into millions of exception
+ * objects. This ceiling is enforced *before* the array grows, failing closed (truncate + report) exactly
+ * like the per-range bound, so the read-only dry-run stays memory-bounded regardless of input.
+ */
+const MAX_CALENDAR_EXCEPTIONS = 20_000;
 const MS_PER_DAY = 86_400_000;
 
 /**
@@ -163,6 +171,7 @@ export function parseMspdiCalendar(
   const findings: ReportFinding[] = [];
   let skippedWindows = 0;
   let truncatedRanges = 0;
+  let exceptionsCapped = false;
 
   for (const weekDaysContainer of childElements(calendar, 'WeekDays')) {
     for (const weekDay of childElements(weekDaysContainer, 'WeekDay')) {
@@ -184,8 +193,15 @@ export function parseMspdiCalendar(
         const { dates, truncated } = expandDateRange(from, to);
         if (truncated) truncatedRanges += 1;
         for (const date of dates) {
+          // Fail closed on the total ceiling before growing the array — a hostile file can pack many
+          // maximal ranges, so bound the whole calendar, not just each range.
+          if (exceptions.length >= MAX_CALENDAR_EXCEPTIONS) {
+            exceptionsCapped = true;
+            break;
+          }
           exceptions.push({ date, working: working && shifts.length > 0, shifts });
         }
+        if (exceptionsCapped) break;
         continue;
       }
 
@@ -196,8 +212,18 @@ export function parseMspdiCalendar(
       skippedWindows += skipped;
       if (shifts.length > 0) workWeek[key] = [...workWeek[key], ...shifts];
     }
+    if (exceptionsCapped) break;
   }
 
+  if (exceptionsCapped) {
+    findings.push({
+      kind: 'drop',
+      entity: 'calendar',
+      sourceRef: calendarRef,
+      detail: `calendar exceptions were capped at ${MAX_CALENDAR_EXCEPTIONS}; further dated exceptions were dropped`,
+      reason: 'the calendar exceeds the supported number of dated exceptions (ADR-0050)',
+    });
+  }
   if (skippedWindows > 0) {
     findings.push({
       kind: 'approximation',
