@@ -31,8 +31,19 @@ import {
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
+  SCHEDULE_INTERCHANGE_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
+import {
+  EXPORT_FORMAT_LABELS,
+  exportErrorMessage,
+  exportReportFilename,
+  fallbackExportFilename,
+  fetchPlanExport,
+  formatReportText,
+  reportFindingCount,
+  type InterchangeExportFormat,
+} from '@/features/interchange';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -103,6 +114,12 @@ export function useTsldToolbarContext({
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
+  // Schedule interchange export (ADR-0050 M4d): the Export menu's "Interchange" group is gated on the
+  // `VITE_SCHEDULE_INTERCHANGE` flag (module-level, in the registry) AND the caller's `interchange:export`
+  // permission — every member holds it (Viewer upward), so most users see it. The permission is derived
+  // in the model (`canExport`, role-only) like the other capabilities; the flag AND-gates it here so it
+  // costs nothing off. UX only: the API re-checks the permission + org-scopes the target plan (anti-IDOR).
+  const canInterchangeExport = SCHEDULE_INTERCHANGE_ENABLED && model.canExport;
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setPlanMode = useSetPlanSchedulingMode(orgSlug);
   // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
@@ -693,6 +710,50 @@ export function useTsldToolbarContext({
       // banner beside the toolbar. Null ⇒ no banner.
       exportError,
       dismissExportError: () => setExportError(null),
+
+      // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export, ADR-0050 M4d) — a
+      // GET that streams the plan as a foreign schedule file (P6 .xer / MS Project .xml) and rides the
+      // fidelity report on the `X-Interchange-Report` header. Gated by `canInterchangeExport`; inert when
+      // the flag/permission is off (the menu group doesn't render, so this is never called).
+      canInterchangeExport,
+      exportInterchange: (format: InterchangeExportFormat) => {
+        const formatLabel = EXPORT_FORMAT_LABELS[format];
+        // Announce synchronously on pick (parity with the PNG/PDF exports): the fetch is async, so this
+        // breaks the silence between the click and the download/failure.
+        setExportError(null);
+        announce(`Preparing the ${formatLabel} export…`);
+        void fetchPlanExport({
+          orgSlug,
+          planId,
+          format,
+          fallbackName: fallbackExportFilename(plan.name, format),
+        })
+          .then(({ blob, filename, report }) => {
+            downloadBlob(blob, filename);
+            // Surface the fidelity report unobtrusively: the header is the source of truth, but we must
+            // not hide that an export (MSPDI especially) approximated/dropped out-of-scope data. When
+            // there ARE findings, announce the count AND auto-download the report text (the honest
+            // "what did I lose?" record — the same content the import dialog offers as a download); with
+            // none, just confirm the download.
+            const findings = report ? reportFindingCount(report) : 0;
+            if (report && findings > 0) {
+              downloadBlob(
+                new Blob([formatReportText(report)], { type: 'text/plain;charset=utf-8' }),
+                exportReportFilename(filename),
+              );
+              announce(
+                `Exported ${filename}. Some data was approximated for ${formatLabel} — ${findings} ${findings === 1 ? 'item' : 'items'}; the report was downloaded too.`,
+              );
+            } else {
+              announce(`Exported ${filename}.`);
+            }
+          })
+          .catch((error: unknown) => {
+            const message = exportErrorMessage(error);
+            announce(message);
+            setExportError(message);
+          });
+      },
     };
   }, [
     zoomPreset,
@@ -782,5 +843,9 @@ export function useTsldToolbarContext({
     pdfExporting,
     printing,
     exportError,
+    // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE) — re-identify only when the permission
+    // flips or the plan/org key changes (the fetch closes over `orgSlug`/`planId`/`plan.name`).
+    canInterchangeExport,
+    orgSlug,
   ]);
 }

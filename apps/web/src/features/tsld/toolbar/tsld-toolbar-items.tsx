@@ -11,9 +11,11 @@ import {
   DollarSign,
   Eraser,
   Crop,
+  FileCode,
   FileDown,
   FileSpreadsheet,
   FileText,
+  FileType,
   Filter,
   Gauge,
   Grid3x3,
@@ -69,6 +71,7 @@ import {
   EXPORT_PRINT_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
+  SCHEDULE_INTERCHANGE_ENABLED,
   SCHEDULING_MODES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
@@ -778,6 +781,26 @@ function ExportMenuControl({
           )}
           Diagram — current view (PDF)
         </MenuItem>
+        {/* Interchange export (ADR-0050 M4d) — send the plan to another scheduling tool as a foreign file.
+            The whole group renders only when the `VITE_SCHEDULE_INTERCHANGE` flag AND the caller's
+            `interchange:export` permission (`ctx.canInterchangeExport`, every member) are BOTH true; else
+            the menu is byte-for-byte the Stage-C1 CSV/PNG/PDF set. These are server round-trips (a GET that
+            streams the file), not the client-side off-screen renders above, so they sit in their own
+            section after the Diagram group. */}
+        {SCHEDULE_INTERCHANGE_ENABLED && ctx.canInterchangeExport ? (
+          <>
+            <div role="separator" className="bg-border my-1 h-px" />
+            <MenuSection>Interchange</MenuSection>
+            <MenuItem onSelect={() => ctx.exportInterchange('xer')}>
+              <FileCode aria-hidden="true" className="size-4" />
+              Primavera P6 (.xer)
+            </MenuItem>
+            <MenuItem onSelect={() => ctx.exportInterchange('mspdi')}>
+              <FileType aria-hidden="true" className="size-4" />
+              Microsoft Project (.xml)
+            </MenuItem>
+          </>
+        ) : null}
       </Menu>
     </>
   );

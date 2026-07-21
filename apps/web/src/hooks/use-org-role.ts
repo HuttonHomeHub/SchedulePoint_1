@@ -8,6 +8,7 @@ export {
   canManageLogic,
   canCalculateSchedule,
   canImportSchedule,
+  canExportSchedule,
   canWriteNotes,
 } from '@/lib/rbac';
 

@@ -71,3 +71,14 @@ export function canCalculateSchedule(role: OrganizationRole | undefined): boolea
 export function canImportSchedule(role: OrganizationRole | undefined): boolean {
   return canManageHierarchy(role);
 }
+
+/**
+ * Whether a role may export a plan as a foreign schedule file (mirrors the API's
+ * `interchange:export` — **every member**, Viewer upward; ADR-0050 M4). Export is a read-egress of the
+ * same schedule data a member already sees on-screen, so — unlike {@link canImportSchedule} (Planner +
+ * Org Admin) — any member of the org holds it. A named helper so the export gate reads intentfully and
+ * can diverge later. UX only — the API still enforces the permission + org scope (anti-IDOR).
+ */
+export function canExportSchedule(role: OrganizationRole | undefined): boolean {
+  return role !== undefined;
+}

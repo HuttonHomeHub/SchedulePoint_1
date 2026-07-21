@@ -62,6 +62,7 @@ import {
 } from '@/features/undo-redo';
 import {
   canCalculateSchedule,
+  canExportSchedule,
   canManageHierarchy,
   canReportProgress,
   canWriteNotes,
@@ -868,6 +869,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canEditSchedule,
     canRecalc,
     canProgress,
+    // Schedule interchange export (ADR-0050 M4d) — every member may export (Viewer upward, a read-egress
+    // of on-screen schedule data), so this is role-only (NOT pen-gated). Gates the Export menu's
+    // "Interchange" group alongside `VITE_SCHEDULE_INTERCHANGE`. False for a signed-out / unknown role.
+    canExport: canExportSchedule(role),
     canManageLogic,
     penReadOnly,
     // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it; inert flag-off.

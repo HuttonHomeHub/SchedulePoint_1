@@ -90,3 +90,53 @@ test('a planner imports a schedule from a .xml (MSPDI) file and lands on the new
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample MSP', level: 1 })).toBeVisible();
 });
+
+/**
+ * The **round-trip** payoff (ADR-0050 M4d — web export surface): import a `.xer` to seed a plan with
+ * activities, open the plan's canvas Export ▾ menu, export it back out as `.xer` (asserting a real
+ * browser download whose suggested name ends `.xer`), then **re-import** that exact downloaded file via
+ * the same Import-from-file flow and land on a NEW plan — a clean end-to-end interchange loop in a real
+ * browser. Seeds via the import-commit path (rather than hand-building a plan) so the export has a
+ * populated network to serialise. Chromium only (TECH_DEBT #25a).
+ */
+test('a planner exports a plan to .xer, then re-imports the downloaded file (round trip)', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+
+  // Seed: import the fixture .xer to create a plan (the export needs a populated network to serialise).
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const seedDialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await seedDialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(validXerFile());
+  await expect(seedDialog.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
+  await seedDialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+
+  // Export: open the canvas Export ▾ menu and pick Primavera P6 (.xer); assert a download is triggered
+  // and its suggested filename ends `.xer`.
+  await page.getByRole('button', { name: /Export/ }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('menuitem', { name: 'Primavera P6 (.xer)' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/\.xer$/);
+
+  // Re-import: feed the downloaded file back through Import-from-file. Navigate back to the project's
+  // plan-create surface (the import entry lives there), then commit the round-tripped file → a new plan.
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Import from file…' })).toBeVisible();
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const roundTripDialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  // Feed the downloaded file straight from its saved path (Playwright accepts a filesystem path).
+  const downloadPath = await download.path();
+  await roundTripDialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(downloadPath);
+  const roundTripConfirm = roundTripDialog.getByRole('button', { name: 'Confirm import' });
+  await expect(roundTripConfirm).toBeEnabled();
+  await roundTripConfirm.click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  // The re-imported plan opens on the canvas-first workspace with the exported plan's name.
+  await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+});
