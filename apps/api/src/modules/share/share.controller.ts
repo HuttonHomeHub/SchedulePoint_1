@@ -83,7 +83,8 @@ export class ShareController {
   @ApiOperation({
     summary: 'Revoke a share link (Planner + Org Admin). Immediate and idempotent.',
     description:
-      'The link stops resolving on the next guest request. Revoking a dead/unknown link is a no-op 204.',
+      'The link stops resolving on the next guest request. Re-revoking an already-revoked link is a ' +
+      'no-op 204; an unknown or foreign link is a 404 (anti-IDOR).',
   })
   @ApiNoContentResponse()
   async revoke(
