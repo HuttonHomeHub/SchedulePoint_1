@@ -25,6 +25,7 @@
     "clean": "rimraf dist .turbo coverage *.tsbuildinfo"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.10.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {
