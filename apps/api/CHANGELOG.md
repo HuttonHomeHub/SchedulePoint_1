@@ -1,5 +1,77 @@
 # @repo/api
 
+## 0.22.0
+
+### Minor Changes
+
+- [#127](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/127) [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(interchange): read-only XER schedule export endpoint + `interchange:export` permission (ADR-0050 M4a)
+
+  Adds `GET /api/v1/organizations/:orgSlug/plans/:planId/interchange/export/:format` (M4a: `format = xer`),
+  a thin, read-only NestJS surface over the pure `@repo/interchange` exporter. It resolves the org from the
+  caller's memberships (anti-IDOR), scopes the target plan to that org, reads the plan's core network
+  (activities, dependencies, calendars — plus resources/assignments/constraints/progress, honestly reported as
+  out-of-M4a-scope drops) into an `ExportGraph`, and streams the serialised `.xer` as an attachment. The
+  interchange report rides in an `X-Interchange-Report` response header (compact JSON). No database writes, no
+  migration, and the CPM engine + recalc parity golden suite are untouched.
+
+  Introduces the `interchange:export` permission, granted to **every member** (Viewer upward) — export is a
+  read-egress of on-screen-readable schedule data, unlike the Planner/Org-Admin-only `interchange:import`.
+
+  The global response-envelope interceptor now passes binary `StreamableFile` responses through unwrapped, and
+  CORS exposes `Content-Disposition` + `X-Interchange-Report` so a browser client can read them.
+
+### Patch Changes
+
+- [#127](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/127) [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(interchange): MS Project MSPDI export serialiser + format-agnostic export dispatch (ADR-0050 M4b)
+
+  Proves, in reverse, ADR-0050's claim that "a format is a serialiser, not a second pipeline": the **same**
+  canonical export model the M4a XER path serialises now also serialises to a valid Microsoft Project **MSPDI**
+  `.xml`. Adds to the pure `@repo/interchange` package:
+
+  - `mspdi-emit.ts` — the canonical → MSPDI `<Project>`/`<Calendars>`/`<Tasks>`/`<PredecessorLink>` element
+    emitter (the inverse of the MSPDI adapter): activity type → `<Milestone>`/`<Duration>`, working-minutes →
+    ISO-8601 `PT#H#M#S`, relationship type → link `<Type>` (`0=FF, 1=FS, 2=SF, 3=SS`), minutes lag →
+    tenths-of-a-minute `<LinkLag>`, canonical calendar → `<WeekDays>/<WeekDay>` (`DayType` 1=Sunday…7=Saturday,
+    `<WorkingTimes>`, `<TimePeriod>` exceptions). WBS summaries, constraints, progress, ALAP and
+    resources/assignments are **dropped and reported** (M4c) reusing the XER emitter's finding shapes.
+  - `mspdi-serialiser.ts` — serialises the element tree to UTF-8 XML bytes with the MS Project namespace + an
+    XML declaration. All leaf text is XML-escaped (`& < > "`) so untrusted plan text can never break or inject
+    structure; the output re-parses through the real `fast-xml-parser`-based `parseMspdi`.
+  - `export-mspdi.ts` — the `exportMspdi` orchestrator (validate → limit → map → emit → serialise → report),
+    reusing the shared graph-size ceilings and the format-agnostic `mapExportGraphToCanonical` unchanged.
+  - `export-schedule.ts` — `exportSchedule({ graph, format })` dispatch (`xer` | `mspdi`), the write-direction
+    mirror of `importSchedule`, so the caller stays format-blind.
+
+  The CPM engine and its recalc parity golden suite are untouched (export never invokes the engine).
+
+  The `@repo/api` export endpoint (`GET …/plans/:planId/interchange/export/:format`) now accepts
+  `format = mspdi` (streamed as `application/xml`, `<slug>.xml`) alongside `xer`, via `exportSchedule`. The
+  OpenAPI `format` enum and the 422 unsupported-format message are updated; everything else is identical.
+
+- [#127](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/127) [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(interchange): rich-scope export parity (WBS, constraints, progress, resources) for XER + MSPDI (ADR-0050 M4c)
+
+  Both exporters now serialise the **full plan**, not just its core network. `emitXerFromCanonical` and
+  `emitMspdiFromCanonical` reverse the import adapters field-for-field so a rich plan round-trips (export →
+  re-import → structural equivalence):
+
+  - **WBS** — `PROJWBS` rows + `wbs_id` parentage (XER, reversing the `wbs:<id>` key convention) and
+    `<Summary>` + `<OutlineLevel>` pre-order tasks (MSPDI).
+  - **Constraints** — `cstr_type/date` (+ `cstr_type2/date2`), ALAP and expected-finish (XER — all 8 types
+    exact); MSPDI's single `<ConstraintType>` slot + `<Deadline>` (mandatory types + a secondary constraint
+    reported as approximations).
+  - **Progress** — status/percent/physical/actuals/suspend/resume/expected-finish/remaining (XER — exact);
+    MSPDI progress fields (no suspend/resume/expected-finish, one percent-complete measure — reported).
+  - **Resources + assignments** — `RSRC`/`TASKRSRC` with the driving flag + production rate (XER — exact);
+    MSPDI `<Resources>`/`<Assignments>` (no driving flag / rate — reported).
+
+  The obsolete M4a/M4b **drop** findings for these categories are removed; a category reports a finding only
+  when it is genuinely lossy. The API export path was already reading the rich fields into the export graph,
+  so no service change was needed. The CPM engine and recalc parity golden suite are untouched (export is a
+  pure read).
+
+- Updated dependencies [[`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548), [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548), [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548)]:
+  - @repo/interchange@0.4.0
+
 ## 0.21.0
 
 ### Minor Changes

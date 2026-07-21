@@ -1,5 +1,64 @@
 # @repo/interchange
 
+## 0.4.0
+
+### Minor Changes
+
+- [#127](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/127) [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the pure XER **export** substrate (ADR-0050 M4a) — the engine-free reverse of the import pipeline. A
+  SchedulePoint export graph maps to the shared canonical model, emits the P6 `PROJECT`/`CALENDAR`/`TASK`/
+  `TASKPRED` tables (reversing the `TT_*`/`PR_*` enums, working-minutes→hours, and the `clndr_data`
+  work-pattern blob), and serialises to a re-parseable UTF-8 `.xer` via `exportXer`, alongside a fidelity
+  `InterchangeReport` that names every best-effort drop (WBS/constraints/progress/resources land in M4c). A
+  round-trip harness proves export → re-import structural equivalence for the core network. The CPM engine
+  and the recalc parity golden suite are untouched (export never invokes the engine).
+
+- [#127](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/127) [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(interchange): MS Project MSPDI export serialiser + format-agnostic export dispatch (ADR-0050 M4b)
+
+  Proves, in reverse, ADR-0050's claim that "a format is a serialiser, not a second pipeline": the **same**
+  canonical export model the M4a XER path serialises now also serialises to a valid Microsoft Project **MSPDI**
+  `.xml`. Adds to the pure `@repo/interchange` package:
+
+  - `mspdi-emit.ts` — the canonical → MSPDI `<Project>`/`<Calendars>`/`<Tasks>`/`<PredecessorLink>` element
+    emitter (the inverse of the MSPDI adapter): activity type → `<Milestone>`/`<Duration>`, working-minutes →
+    ISO-8601 `PT#H#M#S`, relationship type → link `<Type>` (`0=FF, 1=FS, 2=SF, 3=SS`), minutes lag →
+    tenths-of-a-minute `<LinkLag>`, canonical calendar → `<WeekDays>/<WeekDay>` (`DayType` 1=Sunday…7=Saturday,
+    `<WorkingTimes>`, `<TimePeriod>` exceptions). WBS summaries, constraints, progress, ALAP and
+    resources/assignments are **dropped and reported** (M4c) reusing the XER emitter's finding shapes.
+  - `mspdi-serialiser.ts` — serialises the element tree to UTF-8 XML bytes with the MS Project namespace + an
+    XML declaration. All leaf text is XML-escaped (`& < > "`) so untrusted plan text can never break or inject
+    structure; the output re-parses through the real `fast-xml-parser`-based `parseMspdi`.
+  - `export-mspdi.ts` — the `exportMspdi` orchestrator (validate → limit → map → emit → serialise → report),
+    reusing the shared graph-size ceilings and the format-agnostic `mapExportGraphToCanonical` unchanged.
+  - `export-schedule.ts` — `exportSchedule({ graph, format })` dispatch (`xer` | `mspdi`), the write-direction
+    mirror of `importSchedule`, so the caller stays format-blind.
+
+  The CPM engine and its recalc parity golden suite are untouched (export never invokes the engine).
+
+  The `@repo/api` export endpoint (`GET …/plans/:planId/interchange/export/:format`) now accepts
+  `format = mspdi` (streamed as `application/xml`, `<slug>.xml`) alongside `xer`, via `exportSchedule`. The
+  OpenAPI `format` enum and the 422 unsupported-format message are updated; everything else is identical.
+
+- [#127](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/127) [`dcfeb5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dcfeb5f6a8f84c0a3201a400c36b0c2bae215548) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(interchange): rich-scope export parity (WBS, constraints, progress, resources) for XER + MSPDI (ADR-0050 M4c)
+
+  Both exporters now serialise the **full plan**, not just its core network. `emitXerFromCanonical` and
+  `emitMspdiFromCanonical` reverse the import adapters field-for-field so a rich plan round-trips (export →
+  re-import → structural equivalence):
+
+  - **WBS** — `PROJWBS` rows + `wbs_id` parentage (XER, reversing the `wbs:<id>` key convention) and
+    `<Summary>` + `<OutlineLevel>` pre-order tasks (MSPDI).
+  - **Constraints** — `cstr_type/date` (+ `cstr_type2/date2`), ALAP and expected-finish (XER — all 8 types
+    exact); MSPDI's single `<ConstraintType>` slot + `<Deadline>` (mandatory types + a secondary constraint
+    reported as approximations).
+  - **Progress** — status/percent/physical/actuals/suspend/resume/expected-finish/remaining (XER — exact);
+    MSPDI progress fields (no suspend/resume/expected-finish, one percent-complete measure — reported).
+  - **Resources + assignments** — `RSRC`/`TASKRSRC` with the driving flag + production rate (XER — exact);
+    MSPDI `<Resources>`/`<Assignments>` (no driving flag / rate — reported).
+
+  The obsolete M4a/M4b **drop** findings for these categories are removed; a category reports a finding only
+  when it is genuinely lossy. The API export path was already reading the rich fields into the export graph,
+  so no service change was needed. The CPM engine and recalc parity golden suite are untouched (export is a
+  pure read).
+
 ## 0.3.0
 
 ### Minor Changes
