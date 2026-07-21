@@ -30,6 +30,8 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { ProjectRepository } from '../projects/project.repository';
+import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
+import { ResourceRepository } from '../resources/resource.repository';
 import { ScheduleService } from '../schedule/schedule.service';
 
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
@@ -73,6 +75,8 @@ export class InterchangeService {
     private readonly calendars: CalendarRepository,
     private readonly activities: ActivityRepository,
     private readonly dependencies: DependencyRepository,
+    private readonly resources: ResourceRepository,
+    private readonly assignments: ResourceAssignmentRepository,
     private readonly schedule: ScheduleService,
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
@@ -139,8 +143,8 @@ export class InterchangeService {
 
     // Phase 1 — persist the whole graph atomically via the existing repositories (each accepts `tx`),
     // mirroring how the domain services compose repository writes inside a single `$transaction`.
-    const { planId, createdCalendarIds } = await this.prisma.$transaction((tx) =>
-      this.persistGraph(tx, principal, project, graph),
+    const { planId, createdCalendarIds, createdResourceIds } = await this.prisma.$transaction(
+      (tx) => this.persistGraph(tx, principal, project, graph),
     );
 
     this.logger.info(
@@ -152,6 +156,8 @@ export class InterchangeService {
         calendars: graph.calendars.length,
         activities: graph.activities.length,
         dependencies: graph.dependencies.length,
+        resources: graph.resources.length,
+        assignments: graph.assignments.length,
       },
       'interchange commit persisted a plan',
     );
@@ -169,7 +175,7 @@ export class InterchangeService {
       await this.schedule.recalculate(principal, orgSlug, planId);
     } catch (error) {
       await this.editLock.release(principal, orgSlug, planId).catch(() => undefined);
-      await this.compensate(planId, createdCalendarIds);
+      await this.compensate(planId, createdCalendarIds, createdResourceIds);
       this.logger.error(
         {
           organizationId: organization.id,
@@ -214,14 +220,20 @@ export class InterchangeService {
    *   re-asserts the DAG invariant (ADR-0021) ONCE up front (replacing the old O(E²) per-row
    *   `wouldCreateCycle` loop), and the DB partial-unique constraint still backstops duplicates.
    *
-   * Returns the new plan id and the created calendar ids (for the phase-2 recalc-failure compensation).
+   * M2 (ADR-0038/0039/0040) extends the same batched shape: activities also carry WBS parentage,
+   * constraint slots and progress; the org-scoped resource library is **resolved-or-created** (existing
+   * active org resources are reused, only new ones inserted); and assignments join activities↔resources
+   * — all still a handful of `createMany`s.
+   *
+   * Returns the new plan id, the created calendar ids, and the **newly-created** resource ids (both id
+   * lists feed the phase-2 recalc-failure compensation; a reused resource is never ours to delete).
    */
   private async persistGraph(
     tx: Prisma.TransactionClient,
     principal: Principal,
     project: { id: string; organizationId: string },
     graph: ImportGraph,
-  ): Promise<{ planId: string; createdCalendarIds: string[] }> {
+  ): Promise<{ planId: string; createdCalendarIds: string[]; createdResourceIds: string[] }> {
     const stamp = { createdBy: principal.userId, updatedBy: principal.userId };
     const organizationId = project.organizationId;
 
@@ -279,23 +291,60 @@ export class InterchangeService {
       tx,
     );
 
-    // 3. Pre-generate activity ids, map source key → id (deterministic lane per source order), batch-insert.
+    // 3. Pre-generate an id for EVERY activity — including WBS_SUMMARY nodes (ADR-0038) — up front so
+    // both the dependency endpoints and the WBS self-FK (`parentKey`) resolve from one map regardless of
+    // source order. All activities land in a SINGLE `createMany`, so the parent self-FK is validated at
+    // statement end: a child row may be inserted before its WBS_SUMMARY parent without a transient FK
+    // violation, so no parent-before-child ordering is required.
     const activityIdByKey = new Map<string, string>();
+    for (const activity of graph.activities) {
+      activityIdByKey.set(activity.key, randomUUID());
+    }
+    // Map source key → id (deterministic lane per source order), batch-insert. The pure pipeline already
+    // guaranteed WBS/constraint/progress consistency (acyclic same-plan tree, paired constraints,
+    // deriveStatus/N08/N18/resume≥suspend), so every field is written verbatim.
     const activityRows: Prisma.ActivityCreateManyInput[] = graph.activities.map(
       (activity, laneIndex) => {
-        const id = randomUUID();
-        activityIdByKey.set(activity.key, id);
+        const progress = activity.progress;
         return {
-          id,
+          id: this.resolveActivityId(activity.key, activityIdByKey),
           organizationId,
           planId: plan.id,
           code: activity.code,
           name: activity.name,
+          // Now incl. WBS_SUMMARY / RESOURCE_DEPENDENT (M2, ADR-0038/0039).
           type: activity.type,
-          // Durations arrive as working-minutes (ADR-0036); a milestone is 0 (already normalised).
+          // Durations arrive as working-minutes (ADR-0036); a milestone/summary is 0 (already normalised).
           durationMinutes: activity.durationMinutes,
           calendarId: this.resolveCalendarId(activity.calendarKey, calendarIdByKey),
+          // WBS parent (ADR-0038): another in-graph activity's id (a WBS_SUMMARY), or null for top-level.
+          parentId:
+            activity.parentKey === null
+              ? null
+              : this.resolveActivityId(activity.parentKey, activityIdByKey),
           laneIndex,
+          // Constraints (ADR-0035 §7–§12): primary + secondary type/date pairs + the ALAP flag.
+          constraintType: activity.constraintType,
+          constraintDate: this.toDateOrNull(activity.constraintDate),
+          secondaryConstraintType: activity.secondaryConstraintType,
+          secondaryConstraintDate: this.toDateOrNull(activity.secondaryConstraintDate),
+          scheduleAsLateAsPossible: activity.scheduleAsLateAsPossible,
+          // Progress (ADR-0035 §6): written verbatim when present; an un-progressed activity keeps the
+          // column defaults (NOT_STARTED / 0 / nulls).
+          ...(progress
+            ? {
+                status: progress.status,
+                percentComplete: progress.percentComplete,
+                percentCompleteType: progress.percentCompleteType,
+                physicalPercentComplete: progress.physicalPercentComplete,
+                actualStart: this.toDateOrNull(progress.actualStart),
+                actualFinish: this.toDateOrNull(progress.actualFinish),
+                remainingDurationMinutes: progress.remainingDurationMinutes,
+                suspendDate: this.toDateOrNull(progress.suspendDate),
+                resumeDate: this.toDateOrNull(progress.resumeDate),
+                expectedFinish: this.toDateOrNull(progress.expectedFinish),
+              }
+            : {}),
           ...stamp,
         };
       },
@@ -327,7 +376,92 @@ export class InterchangeService {
     );
     await this.dependencies.createMany(dependencyRows, tx);
 
-    return { planId: plan.id, createdCalendarIds };
+    // 5. Resources — RESOLVE-OR-CREATE, org-scoped (ADR-0039). Resources are an org-scoped LIBRARY the
+    // target org may already hold: the active partial-uniques (uq_resources_org_name / uq_resources_org_code)
+    // make a blind insert of an already-present resource throw P2002 and abort the whole import. So for
+    // each import resource, reuse an existing ACTIVE org resource matched by `code` (when the import
+    // carries a code) else by `name`; only the genuinely-new ones are batch-inserted. The full
+    // resourceKey → id map (reused + new) resolves the assignments below; only the NEW ids are returned
+    // for compensation (a reused row predates this import and is never ours to delete).
+    const resourceIdByKey = new Map<string, string>();
+    const createdResourceIds: string[] = [];
+    const newResourceRows: Prisma.ResourceCreateManyInput[] = [];
+    // Resolve every import resource against the org library in ONE indexed query, not a per-resource
+    // findFirst — an N+1 inside the commit transaction would serialise a round-trip per resource against
+    // the interactive-transaction budget (the rest of persistGraph is deliberately batched for exactly
+    // this reason). The match maps (by code, by name) are then consulted purely in memory; newly-created
+    // resources are folded into them so two source rows sharing a name/code reuse one row rather than
+    // colliding on the org-unique partial-uniques.
+    const importCodes = graph.resources.map((r) => r.code).filter((c): c is string => c !== null);
+    const importNames = graph.resources.map((r) => r.name);
+    const existingResources =
+      graph.resources.length === 0
+        ? []
+        : await tx.resource.findMany({
+            where: {
+              organizationId,
+              deletedAt: null,
+              OR: [
+                ...(importCodes.length > 0 ? [{ code: { in: importCodes } }] : []),
+                { name: { in: importNames } },
+              ],
+            },
+            select: { id: true, code: true, name: true },
+          });
+    const idByCode = new Map<string, string>();
+    const idByName = new Map<string, string>();
+    for (const r of existingResources) {
+      if (r.code !== null) idByCode.set(r.code, r.id);
+      idByName.set(r.name, r.id);
+    }
+    for (const resource of graph.resources) {
+      // Match an existing ACTIVE org resource by `code` (when the import carries one) else by `name`.
+      const existingId =
+        resource.code !== null ? idByCode.get(resource.code) : idByName.get(resource.name);
+      if (existingId !== undefined) {
+        resourceIdByKey.set(resource.key, existingId);
+        continue;
+      }
+      const id = randomUUID();
+      resourceIdByKey.set(resource.key, id);
+      createdResourceIds.push(id);
+      // Fold the new row into the match maps so a later source row with the same code/name reuses it.
+      if (resource.code !== null) idByCode.set(resource.code, id);
+      idByName.set(resource.name, id);
+      newResourceRows.push({
+        id,
+        organizationId,
+        name: resource.name,
+        code: resource.code,
+        kind: resource.kind,
+        // A resource's own calendar (ADR-0039): resolve its graph key → created calendar id, null if none.
+        calendarId: this.resolveCalendarId(resource.calendarKey, calendarIdByKey),
+        costPerUnit: resource.costPerUnit,
+        maxUnitsPerHour: resource.maxUnitsPerHour,
+        ...stamp,
+      });
+    }
+    await this.resources.createManyForImport(newResourceRows, tx);
+
+    // 6. Assignments (ADR-0039/0040) — resolve activityKey → activity id and resourceKey → resource id,
+    // one batched insert. The pure pipeline already guaranteed ≤1 driver/activity, MATERIAL-never-driving
+    // and (activity, resource) dedupe, so the partial-uniques won't fire; `curveType` defaults to UNIFORM.
+    const assignmentRows: Prisma.ResourceAssignmentCreateManyInput[] = graph.assignments.map(
+      (assignment) => ({
+        id: randomUUID(),
+        organizationId,
+        activityId: this.resolveActivityId(assignment.activityKey, activityIdByKey),
+        resourceId: this.resolveResourceId(assignment.resourceKey, resourceIdByKey),
+        budgetedUnits: assignment.budgetedUnits,
+        unitsPerHour: assignment.unitsPerHour,
+        isDriving: assignment.isDriving,
+        actualUnits: assignment.actualUnits,
+        ...stamp,
+      }),
+    );
+    await this.assignments.createManyForImport(assignmentRows, tx);
+
+    return { planId: plan.id, createdCalendarIds, createdResourceIds };
   }
 
   /**
@@ -336,15 +470,27 @@ export class InterchangeService {
    * returned on success) — in FK-safe order so the "nothing is created on failure" contract holds. This
    * is cleanup of our own brand-new, not-yet-surfaced data, never a user-facing delete.
    */
-  private async compensate(planId: string, calendarIds: string[]): Promise<void> {
+  private async compensate(
+    planId: string,
+    calendarIds: string[],
+    resourceIds: string[],
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      // Children before parents, and the plan before its calendars (plan/activity → calendar is RESTRICT).
+      // Children before parents, resources before their calendars, and the plan before its calendars
+      // (assignment → activity/resource, plan/activity/resource → calendar are all RESTRICT).
+      // Assignments reference both activities and (import-created) resources, so they go first.
+      await tx.resourceAssignment.deleteMany({ where: { activity: { planId } } });
       await tx.activityDependency.deleteMany({ where: { planId } });
       await tx.activity.deleteMany({ where: { planId } });
       // The pen we took for the recalc is released best-effort before this runs; clear any residual
       // lock row too so the plan delete can't FK-fail on plan_lock.
       await tx.planLock.deleteMany({ where: { planId } });
       await tx.plan.deleteMany({ where: { id: planId } });
+      // Only the resources THIS import created (never a reused pre-existing one) — before the calendars
+      // they may reference.
+      if (resourceIds.length > 0) {
+        await tx.resource.deleteMany({ where: { id: { in: resourceIds } } });
+      }
       if (calendarIds.length > 0) {
         await tx.calendarExceptionWindow.deleteMany({
           where: { exception: { calendarId: { in: calendarIds } } },
@@ -416,6 +562,40 @@ export class InterchangeService {
       });
     }
     return { graph: result.graph, report: result.report };
+  }
+
+  /** Parse an optional `YYYY-MM-DD` graph date to a UTC-midnight `Date`; a null stays null. */
+  private toDateOrNull(value: string | null): Date | null {
+    return value === null ? null : parseCalendarDate(value);
+  }
+
+  /**
+   * Resolve an activity import `key` (a dependency endpoint, WBS parent, or the activity's own key) to
+   * its pre-generated id. The pure pipeline guarantees every referenced key resolves; a miss is a
+   * defensive backstop that fails loud so the whole transaction rolls back.
+   */
+  private resolveActivityId(key: string, activityIdByKey: Map<string, string>): string {
+    const id = activityIdByKey.get(key);
+    if (!id) {
+      throw new ValidationError('The imported schedule references an unknown activity.', {
+        reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
+      });
+    }
+    return id;
+  }
+
+  /**
+   * Resolve a resource import `key` (an assignment endpoint) to its reused-or-created id. The pure
+   * pipeline guarantees every assignment's resource resolves; a miss is a defensive backstop.
+   */
+  private resolveResourceId(key: string, resourceIdByKey: Map<string, string>): string {
+    const id = resourceIdByKey.get(key);
+    if (!id) {
+      throw new ValidationError('The imported schedule references an unknown resource.', {
+        reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
+      });
+    }
+    return id;
   }
 
   /** Resolve an optional calendar `key` to its created id; a null key inherits (no calendar). */

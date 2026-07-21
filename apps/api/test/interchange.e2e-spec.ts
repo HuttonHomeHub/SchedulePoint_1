@@ -108,6 +108,114 @@ function xerWithDanglingEdge(): string {
 }
 
 /**
+ * A rich M2 XER (ADR-0038/0039/0040/0035): a 2-level WBS (Engineering → Design), three real tasks under
+ * it, a primary + secondary constraint on one, an in-progress progressed task, a labour + a material
+ * resource on a named calendar, and two assignments on the resource-dependent task (labour driving, the
+ * material non-driving). Exercises the whole M2 persistence path — WBS parentage, constraints, progress,
+ * resolve-or-create resources, and driving assignments.
+ */
+function richXer(): string {
+  // Tab-join rows so empty (undefined) fields are explicit — every row matches its %F column count.
+  const row = (...fields: string[]): string => `%R\t${fields.join('\t')}`;
+  return [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
+    row('P1', 'Rich', '2026-01-05 00:00', '2026-01-04 00:00', 'C1'),
+    '%T\tCALENDAR',
+    '%F\tclndr_id\tclndr_name\tdefault_flag\tday_hr_cnt\tclndr_data',
+    row('C1', 'Site 6-Day', 'Y', '8', standardClndrData()),
+    '%T\tPROJWBS',
+    '%F\twbs_id\tproj_id\tparent_wbs_id\twbs_short_name\twbs_name',
+    row('W1', 'P1', '', 'ENG', 'Engineering'), // root: no parent
+    row('W2', 'P1', 'W1', 'DES', 'Design'), // child of W1
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\twbs_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt\tcstr_type\tcstr_date\tcstr_type2\tcstr_date2\tstatus_code\tcomplete_pct\tact_start_date\tremain_drtn_hr_cnt',
+    // T1 under W1: primary SNET (CS_MSOA) + secondary FNLT (CS_MEOB).
+    row(
+      'T1',
+      'P1',
+      'W1',
+      'C1',
+      'A100',
+      'Foundations',
+      'TT_Task',
+      '40',
+      'CS_MSOA',
+      '2026-02-01 00:00',
+      'CS_MEOB',
+      '2026-03-01 00:00',
+      '',
+      '',
+      '',
+      '',
+    ),
+    // T2 under W1: in-progress (actual start, 50% complete, 20h remaining).
+    row(
+      'T2',
+      'P1',
+      'W1',
+      'C1',
+      'A110',
+      'Excavate',
+      'TT_Task',
+      '40',
+      '',
+      '',
+      '',
+      '',
+      'TK_Active',
+      '50',
+      '2026-01-05 00:00',
+      '20',
+    ),
+    // T3 under W2: resource-dependent (schedules on its driving resource's calendar).
+    row('T3', 'P1', 'W2', 'C1', 'A120', 'Pour', 'TT_Rsrc', '80', '', '', '', '', '', '', '', ''),
+    '%T\tTASKPRED',
+    '%F\ttask_pred_id\ttask_id\tpred_task_id\tpred_type\tlag_hr_cnt',
+    row('R1', 'T2', 'T1', 'PR_FS', '0'),
+    '%T\tRSRC',
+    '%F\trsrc_id\trsrc_name\trsrc_short_name\trsrc_type\tclndr_id',
+    row('RA', 'Site Crew', 'CREW-A', 'RT_Labor', 'C1'), // labour, on the calendar
+    row('RB', 'Ready-Mix', 'MAT-C', 'RT_Mat', ''), // material, no calendar
+    '%T\tTASKRSRC',
+    '%F\ttaskrsrc_id\ttask_id\trsrc_id\ttarget_qty\tdriving_flag',
+    row('X1', 'T3', 'RA', '40', 'Y'), // labour drives T3
+    row('X2', 'T3', 'RB', '10', 'N'), // material, non-driving
+    '%E',
+  ].join('\n');
+}
+
+/**
+ * A calendar-free resource XER for the resource-reuse re-import: one task with a labour (driving) + a
+ * material (non-driving) assignment on two coded resources (CREW-A / MAT-C), no CALENDAR table. Because
+ * the M1 commit always creates NEW calendars (there is no calendar resolve-or-create), a calendar-bearing
+ * file cannot be re-imported into the same org (its calendar name collides); this fixture isolates the
+ * RESOURCE resolve-or-create path so a same-org re-import reuses the two resources by code.
+ */
+function resourceOnlyXer(): string {
+  const row = (...fields: string[]): string => `%R\t${fields.join('\t')}`;
+  return [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date',
+    row('P1', 'Resourced', '2026-01-05 00:00', '2026-01-04 00:00'),
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    row('T1', 'P1', 'A100', 'Build', 'TT_Task', '40'),
+    '%T\tRSRC',
+    '%F\trsrc_id\trsrc_name\trsrc_short_name\trsrc_type',
+    row('RA', 'Site Crew', 'CREW-A', 'RT_Labor'),
+    row('RB', 'Ready-Mix', 'MAT-C', 'RT_Mat'),
+    '%T\tTASKRSRC',
+    '%F\ttaskrsrc_id\ttask_id\trsrc_id\ttarget_qty\tdriving_flag',
+    row('X1', 'T1', 'RA', '40', 'Y'), // labour drives
+    row('X2', 'T1', 'RB', '10', 'N'), // material, non-driving
+    '%E',
+  ].join('\n');
+}
+
+/**
  * A large but well-formed XER for the commit timing test (ADR-0050 B3): `nTasks` activities on a chain
  * (T1→T2→…) plus `nSkip` extra Ti→Ti+2 edges — all unique and acyclic — so the batched commit is
  * exercised near the product ceiling (~2,000 activities, ~2,600 relationships) and proven to persist
@@ -158,10 +266,13 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
   });
 
   async function resetDatabase(): Promise<void> {
-    // FK-safe order: children before parents. The commit endpoint (Task 1.5) creates
-    // plans/activities/dependencies/calendars, so these must be cleared before projects.
+    // FK-safe order: children before parents. The commit endpoint creates plans/activities/dependencies/
+    // calendars (Task 1.5) and, from M2, resources + assignments (ADR-0039) — cleared before projects.
+    // Assignments reference activities AND resources, so they go first.
+    await prisma.resourceAssignment.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();
+    await prisma.resource.deleteMany();
     await prisma.planLock.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();
@@ -491,5 +602,125 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       .expect(404);
 
     expect(await prisma.plan.count({ where: { projectId } })).toBe(0);
+  });
+
+  // ---- M2 rich import (WBS + constraints + progress + resources + assignments) ---------------------
+
+  /** A second project under a fresh client in acme (for the resource-reuse re-import). Returns its id. */
+  async function makeSecondProject(actor: Actor): Promise<string> {
+    const client = await actor.agent
+      .post('/api/v1/organizations/acme/clients')
+      .send({ name: 'Northgate Partners' })
+      .expect(201);
+    const project = await actor.agent
+      .post(`/api/v1/organizations/acme/clients/${client.body.data.id}/projects`)
+      .send({ name: 'Northgate' })
+      .expect(201);
+    return project.body.data.id as string;
+  }
+
+  it('dry-runs then commits a rich M2 XER: WBS, constraints, progress, resources, assignments', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+
+    // Dry-run first: the report surfaces the M2 counts (WBS summaries, constraints, resources, assignments).
+    const dry = await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(richXer(), 'utf8'), 'rich.xer')
+      .expect(200);
+    expect(dry.body.data.mapped).toEqual({
+      activities: 3, // real (non-summary) activities
+      relationships: 1,
+      calendars: 1,
+      wbsSummaries: 2,
+      constraints: 2, // T1's primary + secondary
+      resources: 2,
+      assignments: 2,
+    });
+
+    // Commit persists the whole graph and recalculates.
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(richXer(), 'utf8'), 'rich.xer')
+      .expect(201);
+    const planId = res.body.data.planId as string;
+    expect(res.body.data.report.mapped.wbsSummaries).toBe(2);
+
+    const activities = await prisma.activity.findMany({ where: { planId } });
+
+    // WBS: two WBS_SUMMARY activities, and a real task carries a parentId pointing at a summary.
+    const summaries = activities.filter((a) => a.type === 'WBS_SUMMARY');
+    expect(summaries).toHaveLength(2);
+    const pour = activities.find((a) => a.code === 'A120');
+    expect(pour?.type).toBe('RESOURCE_DEPENDENT');
+    expect(pour?.parentId).not.toBeNull();
+    expect(summaries.some((s) => s.id === pour?.parentId)).toBe(true);
+    // At least one summary actually has children (parentId set on other rows).
+    const summaryIds = new Set(summaries.map((s) => s.id));
+    expect(activities.some((a) => a.parentId !== null && summaryIds.has(a.parentId))).toBe(true);
+
+    // Constraints: the foundations task carries both a primary and a secondary constraint.
+    const foundations = activities.find((a) => a.code === 'A100');
+    expect(foundations?.constraintType).toBe('SNET'); // CS_MSOA → SNET
+    expect(foundations?.secondaryConstraintType).toBe('FNLT'); // CS_MEOB → FNLT
+    expect(foundations?.constraintDate).not.toBeNull();
+    expect(foundations?.secondaryConstraintDate).not.toBeNull();
+
+    // Progress: the excavate task is in progress with an actual start.
+    const excavate = activities.find((a) => a.code === 'A110');
+    expect(excavate?.status).toBe('IN_PROGRESS');
+    expect(excavate?.actualStart).not.toBeNull();
+    expect(excavate?.percentComplete).toBe(50);
+
+    // Resources: both were created org-scoped; assignments join them to the pour task with one driver.
+    expect(await prisma.resource.count({ where: { organizationId: orgId, deletedAt: null } })).toBe(
+      2,
+    );
+    const assignments = await prisma.resourceAssignment.findMany({
+      where: { activity: { planId } },
+    });
+    expect(assignments).toHaveLength(2);
+    expect(assignments.filter((a) => a.isDriving)).toHaveLength(1);
+    const driving = assignments.find((a) => a.isDriving);
+    expect(driving?.activityId).toBe(pour?.id);
+  });
+
+  it('reuses existing org resources on a re-import into the same org (no duplicate, no P2002)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const firstProjectId = await makeProject(actor);
+
+    // First import creates the two resources (matched later by their codes CREW-A / MAT-C).
+    await actor.agent
+      .post(commitUrl(firstProjectId))
+      .attach('file', Buffer.from(resourceOnlyXer(), 'utf8'), 'resourced.xer')
+      .expect(201);
+    expect(await prisma.resource.count({ where: { organizationId: orgId, deletedAt: null } })).toBe(
+      2,
+    );
+
+    // Re-importing the same file into a DIFFERENT project in the SAME org reuses the two resources —
+    // the resolve-or-create step matches them by code, so no new rows and no unique-violation (P2002).
+    const secondProjectId = await makeSecondProject(actor);
+    const res = await actor.agent
+      .post(commitUrl(secondProjectId))
+      .attach('file', Buffer.from(resourceOnlyXer(), 'utf8'), 'resourced.xer')
+      .expect(201);
+
+    // Still exactly two resources — the re-import reused them rather than duplicating.
+    expect(await prisma.resource.count({ where: { organizationId: orgId, deletedAt: null } })).toBe(
+      2,
+    );
+
+    // The second plan's driving assignment points at the SAME (reused) resource row as the first.
+    const secondPlanId = res.body.data.planId as string;
+    const [firstDriving, secondDriving] = await Promise.all([
+      prisma.resourceAssignment.findFirst({
+        where: { activity: { plan: { projectId: firstProjectId } }, isDriving: true },
+      }),
+      prisma.resourceAssignment.findFirst({
+        where: { activity: { planId: secondPlanId }, isDriving: true },
+      }),
+    ]);
+    expect(secondDriving?.resourceId).toBe(firstDriving?.resourceId);
   });
 });

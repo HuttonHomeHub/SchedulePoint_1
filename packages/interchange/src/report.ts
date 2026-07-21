@@ -42,14 +42,24 @@ export const reportFindingSchema = z
 export type ReportFinding = z.infer<typeof reportFindingSchema>;
 
 /**
- * Counts of successfully mapped entities (M1 network scope). Extended additively per milestone
- * (M2 adds e.g. `wbsSummaries`, `constraints`, `resources`), so consumers must treat missing keys as 0.
+ * Counts of successfully mapped entities. The M1 network keys (`activities` counts real activities, i.e.
+ * excluding WBS summaries; `relationships`; `calendars`) are always present. M2 adds `wbsSummaries`,
+ * `constraints`, `resources` and `assignments` — **omitted when zero**, so consumers must treat a missing
+ * key as 0. Extended additively per milestone; the schema stays `.strict()`.
  */
 export const interchangeCountsSchema = z
   .object({
     activities: z.number().int().min(0),
     relationships: z.number().int().min(0),
     calendars: z.number().int().min(0),
+    /** WBS-summary activities (ADR-0038); absent = 0. */
+    wbsSummaries: z.number().int().min(0).optional(),
+    /** Activity constraints (primary + secondary, ADR-0035 §7); absent = 0. */
+    constraints: z.number().int().min(0).optional(),
+    /** Resources in the imported library (ADR-0039); absent = 0. */
+    resources: z.number().int().min(0).optional(),
+    /** Resource assignments (ADR-0039); absent = 0. */
+    assignments: z.number().int().min(0).optional(),
   })
   .strict();
 export type InterchangeCounts = z.infer<typeof interchangeCountsSchema>;

@@ -35,9 +35,14 @@ export class ReportFindingResponseDto {
   reason?: string;
 }
 
-/** Counts of successfully mapped entities (M1 network scope). Extended additively per milestone. */
+/**
+ * Counts of successfully mapped entities. The M1 network keys (`activities` counts real activities,
+ * i.e. excluding WBS summaries; `relationships`; `calendars`) are always present. M2 (ADR-0038/0039/
+ * 0040/0035) adds `wbsSummaries`, `constraints`, `resources` and `assignments` — **omitted when zero**,
+ * mirroring the pure `InterchangeCounts` contract, so a consumer treats a missing key as 0.
+ */
 export class InterchangeCountsResponseDto {
-  @ApiProperty({ description: 'Activities mapped.' })
+  @ApiProperty({ description: 'Activities mapped (real activities, excluding WBS summaries).' })
   activities!: number;
 
   @ApiProperty({ description: 'Relationships (dependencies) mapped.' })
@@ -45,6 +50,24 @@ export class InterchangeCountsResponseDto {
 
   @ApiProperty({ description: 'Calendars mapped.' })
   calendars!: number;
+
+  @ApiProperty({ required: false, description: 'WBS summary activities mapped (M2, ADR-0038).' })
+  wbsSummaries?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Activity constraints mapped — primary + secondary (M2, ADR-0035 §7–§12).',
+  })
+  constraints?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Resources mapped into the org library (M2, ADR-0039).',
+  })
+  resources?: number;
+
+  @ApiProperty({ required: false, description: 'Resource assignments mapped (M2, ADR-0039/0040).' })
+  assignments?: number;
 }
 
 /**
@@ -92,6 +115,17 @@ export class InterchangeReportResponseDto {
         activities: report.mapped.activities,
         relationships: report.mapped.relationships,
         calendars: report.mapped.calendars,
+        // M2 keys are omitted-when-zero in the pure report; carry that exact-optional shape through.
+        ...(report.mapped.wbsSummaries === undefined
+          ? {}
+          : { wbsSummaries: report.mapped.wbsSummaries }),
+        ...(report.mapped.constraints === undefined
+          ? {}
+          : { constraints: report.mapped.constraints }),
+        ...(report.mapped.resources === undefined ? {} : { resources: report.mapped.resources }),
+        ...(report.mapped.assignments === undefined
+          ? {}
+          : { assignments: report.mapped.assignments }),
       },
       approximations: report.approximations.map(toFinding),
       repairs: report.repairs.map(toFinding),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { importGraphSchema } from './import-graph.js';
-import { importXer, MAX_ACTIVITIES, MAX_DEPENDENCIES } from './import-xer.js';
+import { importXer, MAX_ACTIVITIES, MAX_DEPENDENCIES, MAX_RESOURCES } from './import-xer.js';
 import { interchangeReportSchema, type ReportFinding } from './report.js';
 import { buildXer, standardClndrData, type XerTableSpec } from './xer.fixtures.js';
 
@@ -261,18 +261,22 @@ describe('importXer — repair branches (repaired graph AND report entry)', () =
     expect(report.approximations.some((a) => a.detail.includes('TT_LOE'))).toBe(true);
   });
 
-  it('drops an out-of-scope RSRC table and reports it', () => {
+  it('maps an RSRC table to the resource library (M2)', () => {
     const rsrc: XerTableSpec = {
       name: 'RSRC',
-      fields: ['rsrc_id', 'rsrc_name'],
+      fields: ['rsrc_id', 'rsrc_name', 'rsrc_type'],
       rows: [
-        ['RS1', 'Crew A'],
-        ['RS2', 'Crane'],
+        ['RS1', 'Crew A', 'RT_Labor'],
+        ['RS2', 'Crane', 'RT_Equip'],
       ],
     };
-    const { report } = importOk(xerWith(TWO_TASKS, undefined, [rsrc]));
-    const drop = report.drops.find((d) => d.entity === 'RSRC');
-    expect(drop?.detail).toContain('2');
+    const { graph, report } = importOk(xerWith(TWO_TASKS, undefined, [rsrc]));
+    expect(graph.resources.map((r) => ({ key: r.key, name: r.name, kind: r.kind }))).toEqual([
+      { key: 'RS1', name: 'Crew A', kind: 'LABOUR' },
+      { key: 'RS2', name: 'Crane', kind: 'EQUIPMENT' },
+    ]);
+    expect(report.mapped.resources).toBe(2);
+    expect(report.drops.some((d) => d.entity === 'RSRC')).toBe(false);
   });
 });
 
@@ -386,15 +390,17 @@ describe('importXer — nothing is silently dropped', () => {
       fields: [
         'task_id',
         'proj_id',
+        'wbs_id',
         'task_code',
         'task_name',
         'task_type',
         'target_drtn_hr_cnt',
         'cstr_type',
+        'cstr_date',
       ],
       rows: [
-        ['T1', 'P1', 'DUP', 'One', 'TT_Task', '8', 'CS_MSO'], // constraint present (M2 drop)
-        ['T2', 'P1', 'DUP', 'Two', 'TT_WBS', '8', ''], // duplicate code + unmapped type
+        ['T1', 'P1', 'W1', 'DUP', 'One', 'TT_Task', '8', 'CS_MSO', '2026-01-06 00:00'], // real constraint (M2)
+        ['T2', 'P1', 'W1', 'DUP', 'Two', 'TT_LOE', '8', '', ''], // duplicate code + unmapped type
       ],
     };
     const pred = predTable([
@@ -404,24 +410,338 @@ describe('importXer — nothing is silently dropped', () => {
     ]);
     const wbs: XerTableSpec = {
       name: 'PROJWBS',
-      fields: ['wbs_id', 'wbs_name'],
-      rows: [['W1', 'Area 1']],
+      fields: ['wbs_id', 'parent_wbs_id', 'proj_id', 'wbs_name', 'wbs_short_name'],
+      rows: [['W1', '', 'P1', 'Area 1', 'A1']],
     };
     const { graph, report } = importOk(buildXer([PROJECT, CALENDAR, task, pred, wbs]));
 
-    // Post-repair graph: 2 activities (codes disambiguated), 1 edge (dangling + dup dropped), acyclic.
-    expect(graph.activities.map((a) => a.code)).toEqual(['DUP', 'DUP-2']);
+    // Post-repair graph: 1 WBS summary + 2 real activities (codes disambiguated), 1 edge, acyclic.
+    const real = graph.activities.filter((a) => a.type !== 'WBS_SUMMARY');
+    expect(real.map((a) => a.code)).toEqual(['DUP', 'DUP-2']);
+    expect(graph.activities.some((a) => a.type === 'WBS_SUMMARY')).toBe(true);
     expect(graph.dependencies).toHaveLength(1);
-    expect(report.mapped).toEqual({ activities: 2, relationships: 1, calendars: 1 });
+    // Real network mapped; the M2 keys report the constraint + WBS summary now carried, not dropped.
+    expect(report.mapped).toEqual({
+      activities: 2,
+      relationships: 1,
+      calendars: 1,
+      wbsSummaries: 1,
+      constraints: 1,
+    });
+    expect(real.every((a) => a.parentKey === graph.activities[0]?.key)).toBe(true); // both nest under W1
 
     // Each deviation is named somewhere in the report.
     expect(report.repairs.some((r) => r.detail.includes('renamed'))).toBe(true);
     expect(report.repairs.some((r) => r.detail.includes('de-duplicated'))).toBe(true);
     expect(report.repairs.some((r) => r.detail.includes('dangling'))).toBe(true);
-    expect(report.approximations.some((a) => a.detail.includes('TT_WBS'))).toBe(true);
+    expect(report.approximations.some((a) => a.detail.includes('TT_LOE'))).toBe(true);
+    // The primary constraint is carried on the real activity (not dropped).
+    expect(graph.activities.find((a) => a.code === 'DUP')?.constraintType).toBe('MSO');
+  });
+});
+
+describe('importXer — M2 rich fixture (WBS + constraints + progress + resources)', () => {
+  const wbs: XerTableSpec = {
+    name: 'PROJWBS',
+    fields: ['wbs_id', 'parent_wbs_id', 'proj_id', 'wbs_name', 'wbs_short_name', 'seq_num'],
+    rows: [
+      ['W1', '', 'P1', 'Project', 'PRJ', '1'], // root: no parent → null
+      ['W2', 'W1', 'P1', 'Area 1', 'A1', '2'], // child of W1
+    ],
+  };
+
+  const task: XerTableSpec = {
+    name: 'TASK',
+    fields: [
+      'task_id',
+      'proj_id',
+      'wbs_id',
+      'task_code',
+      'task_name',
+      'task_type',
+      'target_drtn_hr_cnt',
+      'cstr_type',
+      'cstr_date',
+      'cstr_type2',
+      'cstr_date2',
+      'status_code',
+      'act_start_date',
+      'act_end_date',
+      'complete_pct',
+      'remain_drtn_hr_cnt',
+    ],
+    rows: [
+      // Primary + secondary constraints (CS_MSOA→SNET, CS_MSOB→SNLT).
+      [
+        'T1',
+        'P1',
+        'W2',
+        'A1000',
+        'Build',
+        'TT_Task',
+        '40',
+        'CS_MSOA',
+        '2026-01-06 00:00',
+        'CS_MSOB',
+        '2026-01-20 00:00',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
+      // ALAP primary + an unrecognised secondary constraint kind (dropped + reported).
+      [
+        'T2',
+        'P1',
+        'W2',
+        'A1010',
+        'Fit',
+        'TT_Task',
+        '24',
+        'CS_ALAP',
+        '',
+        'CS_BOGUS',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
+      // In-progress activity.
+      [
+        'T3',
+        'P1',
+        'W2',
+        'A1020',
+        'Wire',
+        'TT_Task',
+        '16',
+        '',
+        '',
+        '',
+        '',
+        'TK_Active',
+        '2026-01-03 00:00',
+        '',
+        '50',
+        '8',
+      ],
+      // Complete without an actual finish + remaining > 0 → N08 + N18 repairs.
+      [
+        'T4',
+        'P1',
+        'W2',
+        'A1030',
+        'Test',
+        'TT_Task',
+        '8',
+        '',
+        '',
+        '',
+        '',
+        'TK_Complete',
+        '2026-01-04 00:00',
+        '',
+        '100',
+        '8',
+      ],
+      // Resource-dependent activity (drives the assignment repairs below).
+      ['T5', 'P1', 'W2', 'A1040', 'Pour', 'TT_Rsrc', '40', '', '', '', '', '', '', '', '', ''],
+    ],
+  };
+
+  const rsrc: XerTableSpec = {
+    name: 'RSRC',
+    fields: ['rsrc_id', 'rsrc_name', 'rsrc_short_name', 'rsrc_type', 'clndr_id'],
+    rows: [
+      ['RS1', 'Crew', 'CREW', 'RT_Labor', 'C1'], // calendar resolves
+      ['RS2', 'Crane', 'CRANE', 'RT_Equip', ''],
+      ['RS3', 'Concrete', 'CONC', 'RT_Mat', ''],
+    ],
+  };
+
+  const taskRsrc: XerTableSpec = {
+    name: 'TASKRSRC',
+    fields: [
+      'taskrsrc_id',
+      'task_id',
+      'rsrc_id',
+      'target_qty',
+      'target_qty_per_hr',
+      'act_reg_qty',
+      'act_ot_qty',
+      'driving_flag',
+    ],
+    rows: [
+      ['AS1', 'T5', 'RS1', '80', '1', '0', '0', 'Y'], // labour driver (kept)
+      ['AS2', 'T5', 'RS2', '40', '', '0', '0', 'Y'], // second driver → demoted
+      ['AS3', 'T5', 'RS3', '100', '', '0', '0', 'Y'], // MATERIAL driving → demoted
+      ['AS4', 'T5', 'RS1', '10', '', '0', '0', 'N'], // duplicate (T5, RS1) pair → dropped
+    ],
+  };
+
+  const { graph, report } = importOk(buildXer([PROJECT, CALENDAR, wbs, task, rsrc, taskRsrc]));
+
+  const byCode = (code: string) => graph.activities.find((a) => a.code === code);
+
+  it('produces a Zod-valid graph and report', () => {
+    expect(importGraphSchema.safeParse(graph).success).toBe(true);
+    expect(interchangeReportSchema.safeParse(report).success).toBe(true);
+  });
+
+  it('maps the WBS hierarchy to nested WBS_SUMMARY activities', () => {
+    const summaries = graph.activities.filter((a) => a.type === 'WBS_SUMMARY');
+    expect(summaries.map((s) => ({ key: s.key, code: s.code, parent: s.parentKey }))).toEqual([
+      { key: 'wbs:W1', code: 'PRJ', parent: null },
+      { key: 'wbs:W2', code: 'A1', parent: 'wbs:W1' },
+    ]);
+    // Every real activity nests under W2.
+    for (const code of ['A1000', 'A1010', 'A1020', 'A1030', 'A1040']) {
+      expect(byCode(code)?.parentKey).toBe('wbs:W2');
+    }
+  });
+
+  it('maps primary + secondary constraints and the ALAP flag', () => {
+    expect(byCode('A1000')).toMatchObject({
+      constraintType: 'SNET',
+      constraintDate: '2026-01-06',
+      secondaryConstraintType: 'SNLT',
+      secondaryConstraintDate: '2026-01-20',
+      scheduleAsLateAsPossible: false,
+    });
+    expect(byCode('A1010')).toMatchObject({
+      constraintType: null,
+      secondaryConstraintType: null,
+      scheduleAsLateAsPossible: true,
+    });
+    // The unrecognised CS_BOGUS constraint is dropped + reported.
     expect(
-      report.drops.some((d) => d.entity === 'activity' && d.detail.includes('constraint')),
+      report.approximations.some((a) => a.entity === 'constraint' && a.detail.includes('CS_BOGUS')),
     ).toBe(true);
-    expect(report.drops.some((d) => d.entity === 'PROJWBS')).toBe(true);
+  });
+
+  it('maps in-progress progress and repairs a complete activity (N08 + N18)', () => {
+    expect(byCode('A1020')?.progress).toMatchObject({
+      status: 'IN_PROGRESS',
+      percentComplete: 50,
+      remainingDurationMinutes: 480,
+    });
+    // T4 completes without a finish and with remaining > 0 → data-date finish, remaining zeroed.
+    expect(byCode('A1030')?.progress).toMatchObject({
+      status: 'COMPLETE',
+      actualFinish: '2026-01-05', // the data date
+      remainingDurationMinutes: 0,
+    });
+    expect(
+      report.repairs.some((r) => r.entity === 'progress' && r.detail.includes('data date')),
+    ).toBe(true);
+    expect(
+      report.repairs.some((r) => r.entity === 'progress' && r.detail.includes('remaining')),
+    ).toBe(true);
+  });
+
+  it('maps TT_Rsrc to a RESOURCE_DEPENDENT activity with a real duration', () => {
+    expect(byCode('A1040')).toMatchObject({ type: 'RESOURCE_DEPENDENT', durationMinutes: 2400 });
+  });
+
+  it('maps the resource library with the three kinds', () => {
+    expect(graph.resources.map((r) => ({ key: r.key, kind: r.kind, cal: r.calendarKey }))).toEqual([
+      { key: 'RS1', kind: 'LABOUR', cal: 'C1' },
+      { key: 'RS2', kind: 'EQUIPMENT', cal: null },
+      { key: 'RS3', kind: 'MATERIAL', cal: null },
+    ]);
+  });
+
+  it('repairs the assignments (dedupe, MATERIAL demotion, single driver)', () => {
+    // AS4 (duplicate pair) dropped; AS1 stays driving; AS2/AS3 demoted.
+    expect(graph.assignments.map((x) => ({ key: x.key, driving: x.isDriving }))).toEqual([
+      { key: 'AS1', driving: true },
+      { key: 'AS2', driving: false },
+      { key: 'AS3', driving: false },
+    ]);
+    expect(
+      report.repairs.some((r) => r.entity === 'assignment' && r.detail.includes('duplicate')),
+    ).toBe(true);
+    expect(
+      report.repairs.some((r) => r.entity === 'assignment' && r.detail.includes('MATERIAL')),
+    ).toBe(true);
+    expect(
+      report.repairs.some(
+        (r) => r.entity === 'assignment' && r.detail.includes('already has a driver'),
+      ),
+    ).toBe(true);
+  });
+
+  it('reports the M2 counts (summaries excluded from the activity count)', () => {
+    expect(report.mapped).toEqual({
+      activities: 5,
+      relationships: 0,
+      calendars: 1,
+      wbsSummaries: 2,
+      constraints: 2,
+      resources: 3,
+      assignments: 3,
+    });
+  });
+});
+
+describe('importXer — M2 ceilings + hostile-key hardening (security fold)', () => {
+  const rsrcFields = ['rsrc_id', 'rsrc_name', 'rsrc_type'];
+
+  /** An XER with `count` distinct labour resources (and the standard two tasks). */
+  function manyResourcesXer(count: number): string {
+    const rows: string[][] = [];
+    for (let i = 1; i <= count; i += 1) rows.push([`RS${i}`, `Resource ${i}`, 'RT_Labor']);
+    return buildXer([PROJECT, CALENDAR, TWO_TASKS, { name: 'RSRC', fields: rsrcFields, rows }]);
+  }
+
+  it('rejects a schedule just over the resource ceiling', () => {
+    const result = importXer({ content: manyResourcesXer(MAX_RESOURCES + 1) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.stage).toBe('limit');
+      expect(result.error.code).toBe('TOO_MANY_RESOURCES');
+    }
+  });
+
+  it('does not resolve a magic-key constraint type to an Object.prototype member', () => {
+    // `cstr_type=__proto__` must MISS the enum table (Object.hasOwn guard), so the constraint is dropped
+    // and reported — never a leaked builtin flowing downstream as a fake ConstraintType.
+    const task: XerTableSpec = {
+      name: 'TASK',
+      fields: [
+        'task_id',
+        'proj_id',
+        'task_code',
+        'task_name',
+        'task_type',
+        'target_drtn_hr_cnt',
+        'cstr_type',
+        'cstr_date',
+      ],
+      rows: [['T1', 'P1', 'A1', 'Task 1', 'TT_Task', '8', '__proto__', '2026-01-05 00:00']],
+    };
+    const result = importXer({ content: buildXer([PROJECT, CALENDAR, task]) });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.graph.activities[0]?.constraintType).toBeNull();
+      const mentioned = [...result.report.approximations, ...result.report.drops].some(
+        (f) => f.entity === 'constraint',
+      );
+      expect(mentioned).toBe(true);
+    }
+  });
+
+  it('coerces a magic-key resource kind to the LABOUR default (never a builtin)', () => {
+    const rsrc: XerTableSpec = {
+      name: 'RSRC',
+      fields: ['rsrc_id', 'rsrc_name', 'rsrc_type'],
+      rows: [['RS1', 'Crew', 'constructor']],
+    };
+    const result = importXer({ content: buildXer([PROJECT, CALENDAR, TWO_TASKS, rsrc]) });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.graph.resources[0]?.kind).toBe('LABOUR');
   });
 });
