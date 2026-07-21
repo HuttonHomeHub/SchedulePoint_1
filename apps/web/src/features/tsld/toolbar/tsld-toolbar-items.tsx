@@ -68,6 +68,7 @@ import {
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EARNED_VALUE_ENABLED,
+  ENTRY_ROUTES_ENABLED,
   EXPORT_PRINT_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
@@ -1200,6 +1201,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     tier: 2 as const,
     order: 4,
     label: 'Add note',
+    // Toolbar-only users have no other route into the dependency/logic panel (entry-route gap #6): a
+    // tooltip clause makes it discoverable without renaming the visible "Add note" affordance. Appended
+    // to the hover `title` only (the accessible name stays "Add note").
+    description: 'Opens the Logic panel (links & notes)',
     icon: <StickyNote className="size-4" />,
   };
   const clearVisualPlacementShape = {
@@ -1217,7 +1222,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     row: 'do' as const,
     tier: 2 as const,
     order: 6,
-    label: 'Update progress…',
+    // "Report progress…" — the verb matches the activities-table row action ("Report progress") and the
+    // dialog title (label convergence, entry-route gap #2). The id stays `update-progress` (a stable
+    // test/telemetry handle).
+    label: 'Report progress…',
     icon: <Gauge className="size-4" />,
   };
   const commentsShape = {
@@ -2013,6 +2021,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       ? {
           ...commentsShape,
           isVisible: () => NOTES_ENABLED,
+          // With `VITE_ENTRY_ROUTES` on, Comments opens the notes drawer (a modal-less `<dialog>`), so
+          // advertise it as a dialog opener (one-way — no pressed/expanded). Flag-off it scrolls to the
+          // inline heading (no popup), so no `aria-haspopup`.
+          ...(ENTRY_ROUTES_ENABLED ? { ariaHasPopup: 'dialog' as const } : {}),
           onActivate: (ctx) => ctx.revealComments(),
         }
       : placeholderItem(commentsShape),

@@ -171,6 +171,24 @@ export interface TsldPanelProps {
   onEditActivity?: (activity: ActivitySummary) => void;
   /** Delete an activity (host-owned confirm) — the floating selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
+  /** Open the per-activity resource-assignment editor — the floating selection bar's **Resources**
+   * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
+   * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
+   * that surfaces it is itself flag-gated in {@link selectionActionItems}, so flag-off is byte-for-byte. */
+  onResources?: (activity: ActivitySummary) => void;
+  /** Open the progress editor — the selection bar's **Report progress** action (entry-route,
+   * `VITE_ENTRY_ROUTES`). Host-owned dialog. The item is role-gated via {@link canReportProgress}. */
+  onProgress?: (activity: ActivitySummary) => void;
+  /** Open the weighted-steps editor — the selection bar's **Steps** action (entry-route). Host-owned
+   * dialog; the item is gated on the earned-value/steps flags + {@link isStepsEligible}. */
+  onSteps?: (activity: ActivitySummary) => void;
+  /** Whether the viewer may report progress (Contributor upward) — gates the selection bar's Progress
+   * action (role only, not pen-gated), mirroring the toolbar's Update-progress command. Default false. */
+  canReportProgress?: boolean;
+  /** Predicate: may this activity carry weighted steps? False for a duration-derived type
+   * (milestone / LOE / WBS summary) — gates the Steps action, matching the table's `!isDurationDerivedType`.
+   * The host supplies it so this feature stays free of an activities-feature import (ADR-0026 D8). */
+  isStepsEligible?: (activity: ActivitySummary) => boolean;
   /** Report the current canvas selection to the host (toolbar quick-wins F0) — the id of the selected
    * activity, or null when none. Called on every selection transition (select / chain-nav / focus /
    * delete-reconcile) so the main toolbar's selection-aware items can read it. Optional: absent ⇒ no
@@ -265,6 +283,11 @@ export function TsldPanel({
   onOpenLogic,
   onEditActivity,
   onDeleteActivity,
+  onResources,
+  onProgress,
+  onSteps,
+  canReportProgress = false,
+  isStepsEligible,
   onSelectionChange,
   onRefresh,
   calendar = null,
@@ -622,11 +645,33 @@ export function TsldPanel({
     return {
       targetName: activity.name,
       canEditSchedule: canEdit,
+      canReportProgress,
+      // Whether this selection can carry weighted steps (host predicate; false when absent) — matching
+      // the activities-table's `!isDurationDerivedType` gate. Read by the Steps item's `isVisible`.
+      stepsEligible: isStepsEligible ? isStepsEligible(activity) : false,
       onOpenLogic: () => onOpenLogic(activity),
       onEdit: () => onEditActivity(activity),
       onDelete: () => onDeleteActivity(activity),
+      // The entry-route actions (Progress / Resources / Steps). Each is a no-op when the host didn't wire
+      // it (the corresponding toolbar item is itself flag-gated, so it only renders when the flag — and
+      // this handler — are present); building them unconditionally keeps the fields plain + required.
+      onResources: () => onResources?.(activity),
+      onProgress: () => onProgress?.(activity),
+      onSteps: () => onSteps?.(activity),
     };
-  }, [selectedId, activities, canEdit, onOpenLogic, onEditActivity, onDeleteActivity]);
+  }, [
+    selectedId,
+    activities,
+    canEdit,
+    canReportProgress,
+    isStepsEligible,
+    onOpenLogic,
+    onEditActivity,
+    onDeleteActivity,
+    onResources,
+    onProgress,
+    onSteps,
+  ]);
 
   // View controls (read-only or editing) — zoom preset (reflected from the canvas's coarse
   // stop-crossing callback) + layer toggles + the imperative canvas handle — now live in the

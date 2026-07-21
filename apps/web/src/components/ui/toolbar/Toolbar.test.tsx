@@ -69,6 +69,30 @@ describe('Toolbar (APG primitive)', () => {
     expect(within(tb).getByRole('group', { name: 'Author' })).toBeInTheDocument();
   });
 
+  it('a Tier-1 (labelled) button with a description keeps its label in the title', () => {
+    // Regression: the tooltip helper used to drop the label for a Tier-1 item with a description,
+    // showing just the bare description. It must read "<label> — <description>".
+    const items = defineToolbar<Ctx>([
+      {
+        id: 'fit',
+        group: 'frame',
+        tier: 1,
+        order: 0,
+        label: 'Fit',
+        description: 'Fit the diagram to the window',
+        onActivate: () => {},
+      },
+      { id: 'plain', group: 'frame', tier: 1, order: 1, label: 'Plain', onActivate: () => {} },
+    ]);
+    render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
+    expect(screen.getByRole('button', { name: 'Fit' })).toHaveAttribute(
+      'title',
+      'Fit — Fit the diagram to the window',
+    );
+    // A labelled button with no description gets no redundant title (its name is already visible).
+    expect(screen.getByRole('button', { name: 'Plain' })).not.toHaveAttribute('title');
+  });
+
   it('gives exactly one control tabindex 0 (roving), the rest -1', () => {
     render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" />);
     const focusables = screen.getByRole('toolbar').querySelectorAll('[data-toolbar-focusable]');

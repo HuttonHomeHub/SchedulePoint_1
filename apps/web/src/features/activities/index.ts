@@ -29,5 +29,6 @@ export {
   ACTIVITY_STATUS_LABELS,
   CONSTRAINT_TYPE_LABELS,
   isMilestoneType,
+  isDurationDerivedType,
 } from './schemas/activity-schemas';
 export { rollupPhysicalPercent, stepsFormSchema } from './schemas/step-schemas';

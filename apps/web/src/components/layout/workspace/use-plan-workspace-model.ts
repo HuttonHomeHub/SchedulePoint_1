@@ -140,6 +140,29 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null);
   const onEditActivity = useCallback((a: ActivitySummary) => setEditActivityId(a.id), []);
   const onDeleteActivity = useCallback((a: ActivitySummary) => setDeleteActivityId(a.id), []);
+  // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
+  // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
+  // drawer's Close button clears. Inert when nothing reads it (flag off) — the notes stay inline.
+  const [notesOpen, setNotesOpen] = useState(false);
+  // The activity targeted by the canvas selection bar's **Resources** action (entry-route win 2,
+  // `VITE_ENTRY_ROUTES`) — held as an id (mirroring `editActivityId`) so a refetch re-derives the
+  // current row and the dialog closes the moment its target vanishes. Drives the workspace-hosted
+  // `ActivityResourcesDialog` (beside the crud dialogs). Inert when nothing reads it (flag off).
+  const [resourcesActivityId, setResourcesActivityId] = useState<string | null>(null);
+  const onResourcesActivity = useCallback((a: ActivitySummary) => setResourcesActivityId(a.id), []);
+  const setResourcesActivity = useCallback(
+    (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
+    [],
+  );
+  // The activity targeted by the canvas selection bar's **Steps** action (entry-route, `VITE_ENTRY_ROUTES`
+  // + earned-value/steps flags) — held as an id like the crud/resources targets so a refetch re-derives
+  // the current row and the dialog closes when it vanishes. Drives the workspace-hosted `ActivityStepsDialog`.
+  const [stepsActivityId, setStepsActivityId] = useState<string | null>(null);
+  const onStepsActivity = useCallback((a: ActivitySummary) => setStepsActivityId(a.id), []);
+  const setStepsActivity = useCallback(
+    (a: ActivitySummary | undefined) => setStepsActivityId(a?.id ?? null),
+    [],
+  );
   // The canvas selection lifted to the workspace (toolbar quick-wins F0, spec
   // `docs/specs/toolbar-quick-wins/`): the TSLD panel reports its selection here so the main toolbar's
   // selection-aware items (Update progress / Add note / Clear visual placement) can read it — mirroring
@@ -152,6 +175,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // crud dialogs so a 409 retry re-derives the current version; the derived row (below) closes the
   // dialog when its target vanishes.
   const [progressActivityId, setProgressActivityId] = useState<string | null>(null);
+  // The canvas selection bar's **Report progress** action (entry-route, `VITE_ENTRY_ROUTES`) reuses this
+  // same `progressActivityId` state the toolbar's Report-progress drives, so both entry points open the
+  // ONE workspace-hosted `ActivityProgressDialog` (no second dialog). Stable opener like `onEditActivity`.
+  const onProgressActivity = useCallback((a: ActivitySummary) => setProgressActivityId(a.id), []);
 
   const plan = usePlan(orgSlug, planId);
   const project = useProject(orgSlug, plan.data?.projectId ?? '');
@@ -218,6 +245,23 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         ? (activities.data ?? []).find((a) => a.id === progressActivityId)
         : undefined,
     [progressActivityId, activities.data],
+  );
+  // The resolved Resources-dialog target (entry-route win 2), derived from the live query like the
+  // progress/edit targets above — so it carries the current row and becomes undefined the moment its
+  // activity is deleted, closing the dialog with no extra effect.
+  const resourcesActivity = useMemo(
+    () =>
+      resourcesActivityId
+        ? (activities.data ?? []).find((a) => a.id === resourcesActivityId)
+        : undefined,
+    [resourcesActivityId, activities.data],
+  );
+  // The resolved Steps-dialog target (entry-route), derived from the live query like the resources/
+  // progress targets — closes the dialog the moment its activity is deleted.
+  const stepsActivity = useMemo(
+    () =>
+      stepsActivityId ? (activities.data ?? []).find((a) => a.id === stepsActivityId) : undefined,
+    [stepsActivityId, activities.data],
   );
 
   // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
@@ -919,6 +963,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     progressActivityId,
     setProgressActivityId,
     progressActivity,
+    // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag +
+    // setter the toolbar Comments button and the drawer's Close control drive. Inert flag-off.
+    notesOpen,
+    setNotesOpen,
+    // Resources dialog target from the canvas selection bar (entry-route win 2, `VITE_ENTRY_ROUTES`):
+    // the opener + the resolved row + the close setter. `resourcesActivity` re-derives from the live
+    // query, so it closes the dialog when the row is deleted. Inert flag-off.
+    onResourcesActivity,
+    resourcesActivity,
+    setResourcesActivity,
+    // Report-progress opener from the canvas selection bar (entry-route) — reuses `progressActivityId`
+    // so it opens the ONE workspace-hosted `ActivityProgressDialog`. Inert flag-off.
+    onProgressActivity,
+    // Steps dialog target from the canvas selection bar (entry-route + earned-value/steps flags): the
+    // opener + resolved row + close setter, mirroring the resources trio. Inert flag-off.
+    onStepsActivity,
+    stepsActivity,
+    setStepsActivity,
     // Clear a hand-placed `visualStart` (toolbar quick-wins F5) — the null-visualStart PATCH + undo
     // inverse + auto-recalc; only the existing PATCH hook, so the parity gate is untouched.
     clearVisualPlacement,

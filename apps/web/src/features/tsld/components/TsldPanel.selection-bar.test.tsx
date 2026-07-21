@@ -128,7 +128,7 @@ describe('TsldPanel — floating selection-actions bar (mount)', () => {
   it('opens logic from the bar even without edit rights', () => {
     const h = handlers();
     renderWithSelection({ ...h, canEdit: false });
-    fireEvent.click(barButton(selectionBar()!, 'Open logic'));
+    fireEvent.click(barButton(selectionBar()!, 'Logic'));
     expect(h.onOpenLogic).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
   });
 
@@ -136,7 +136,7 @@ describe('TsldPanel — floating selection-actions bar (mount)', () => {
     const h = handlers();
     renderWithSelection({ ...h, canEdit: false });
     const bar = selectionBar()!;
-    for (const label of ['Edit activity', 'Delete activity']) {
+    for (const label of ['Edit', 'Delete']) {
       const btn = barButton(bar, label);
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       fireEvent.click(btn);
@@ -149,8 +149,8 @@ describe('TsldPanel — floating selection-actions bar (mount)', () => {
     const h = handlers();
     renderWithSelection({ ...h, canEdit: true });
     const bar = selectionBar()!;
-    fireEvent.click(barButton(bar, 'Edit activity'));
-    fireEvent.click(barButton(bar, 'Delete activity'));
+    fireEvent.click(barButton(bar, 'Edit'));
+    fireEvent.click(barButton(bar, 'Delete'));
     expect(h.onEditActivity).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
     expect(h.onDeleteActivity).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
   });

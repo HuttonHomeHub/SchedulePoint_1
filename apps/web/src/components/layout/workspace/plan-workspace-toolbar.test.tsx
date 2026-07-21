@@ -41,6 +41,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // its own summary/recalc queries into the same region; pin it off here so the layout is the subject
   // — it has its own suite (ProgrammeScheduleSection).
   PROGRAMME_SCHEDULING_ENABLED: false,
+  // Entry-route (now default-on) turns the inline notes into a drawer and mounts the resources/steps
+  // dialogs in PlanDialogs; pin it off here so the toolbar layout is the subject — the drawer + new
+  // selection-bar items have their own suites (plan-workspace-entry-routes / selection-actions.*).
+  ENTRY_ROUTES_ENABLED: false,
 }));
 
 // Stub the DOM strip chrome so it doesn't fetch: on mount it publishes a snapshot into the canvas (via

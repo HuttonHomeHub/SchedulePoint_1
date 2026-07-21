@@ -92,6 +92,15 @@ export interface ToolbarItem<Ctx> {
   order: number;
   /** Accessible name — always required (icon-only buttons still need it). */
   label: string;
+  /**
+   * Optional supplementary tooltip clause — appended to the native hover `title` (never replaces the
+   * accessible {@link label}). Use it to make a terse command discoverable (e.g. "Add note" →
+   * "…— Opens the Logic panel (links & notes)") without lengthening the visible/announced name.
+   */
+  description?: string;
+  /** `aria-haspopup` for an `onActivate` button that opens a popup surface (e.g. `"dialog"` for a
+   * command that opens a dialog/drawer), matching the popover/menu opener convention. Absent ⇒ omitted. */
+  ariaHasPopup?: 'dialog' | 'menu';
   /** Optional leading icon (decorative; `aria-hidden`). */
   icon?: ReactNode;
   /**

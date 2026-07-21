@@ -24,6 +24,7 @@ import { Menu, MenuItem } from '@/components/ui/menu';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_STEPS_ENABLED,
+  ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
@@ -139,6 +140,20 @@ export function ActivitiesTable({
     () => new Map(calendars.map((c) => [c.id, c.name])),
     [calendars],
   );
+  // Parent WBS-summary lookup for the read-only WBS column (entry-route gap #7, only when
+  // `ADVANCED_ACTIVITY_TYPES_ENABLED`): resolve each activity's `parentId` to the summary's display
+  // string (its code, else its name) from the already-loaded activities — no extra fetch, mirroring the
+  // Calendar column's name resolution.
+  const wbsParentLabelById = useMemo(() => {
+    const byId = new Map((activities.data ?? []).map((a) => [a.id, a] as const));
+    const labels = new Map<string, string>();
+    for (const activity of activities.data ?? []) {
+      if (!activity.parentId) continue;
+      const parent = byId.get(activity.parentId);
+      if (parent) labels.set(activity.id, parent.code ?? parent.name);
+    }
+    return labels;
+  }, [activities.data]);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -332,6 +347,30 @@ export function ActivitiesTable({
                 <span className="text-muted-foreground italic" title={activity.calendarId}>
                   {calendarsLoading ? 'Loading…' : 'Unnamed'}
                 </span>
+              );
+            },
+          } satisfies Column<ActivitySummary>,
+        ]
+      : []),
+    // The activity's parent WBS summary (ADR-0038), read-only, only when the WBS surface is on
+    // (`ADVANCED_ACTIVITY_TYPES_ENABLED`). An em dash means "no parent" (a top-level activity). The
+    // parent's code (else its name) is resolved from the loaded activities by `parentId` — no extra
+    // fetch, mirroring the Calendar column. Conditional spread (not a splice) so its position is stable;
+    // hidden below `lg` like the other definition-detail columns.
+    ...(ADVANCED_ACTIVITY_TYPES_ENABLED
+      ? [
+          {
+            header: 'WBS',
+            headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+            cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+            cell: (activity: ActivitySummary) => {
+              const parentLabel = wbsParentLabelById.get(activity.id);
+              return parentLabel ? (
+                <span className="text-muted-foreground" title={parentLabel}>
+                  {parentLabel}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
               );
             },
           } satisfies Column<ActivitySummary>,

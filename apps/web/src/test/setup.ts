@@ -10,10 +10,16 @@ import { afterEach } from 'vitest';
 if (typeof HTMLDialogElement !== 'undefined') {
   const proto = HTMLDialogElement.prototype as unknown as {
     showModal?: (this: HTMLDialogElement) => void;
+    show?: (this: HTMLDialogElement) => void;
     close?: (this: HTMLDialogElement) => void;
   };
   if (!proto.showModal) {
     proto.showModal = function showModal(this: HTMLDialogElement): void {
+      this.open = true;
+    };
+  }
+  if (!proto.show) {
+    proto.show = function show(this: HTMLDialogElement): void {
       this.open = true;
     };
   }

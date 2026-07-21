@@ -1,7 +1,8 @@
-import { PanelLeftClose, PanelLeftOpen, Plus, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SheetHeader } from '@/components/ui/sheet';
 import { HierarchyTree, useNavigatorCrud, type UseExpansionState } from '@/features/navigator';
 import { AppVersionLine } from '@/features/system';
 
@@ -43,44 +44,50 @@ export function NavigatorRail({
       aria-label="Project Explorer"
       className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-full min-h-0 flex-col border-r"
     >
-      <div className="border-sidebar-border flex h-12 shrink-0 items-center justify-between gap-1 border-b px-4">
-        <span className="text-sm font-semibold tracking-tight">Project Explorer</span>
-        <div className="flex items-center gap-1">
-          {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
-              a "New client" entry point here; hidden for non-writers and flag-off. */}
-          {orgSlug && crud.canWrite ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="New client"
-              onClick={crud.onCreateClient}
-            >
-              <Plus aria-hidden="true" className="size-4" />
-            </Button>
-          ) : null}
-          {onCollapse ? (
-            <Button
-              ref={toggleRef}
-              variant="ghost"
-              size="icon"
-              aria-label="Collapse Project Explorer"
-              onClick={onCollapse}
-            >
-              <PanelLeftClose aria-hidden="true" className="size-4" />
-            </Button>
-          ) : null}
-          {onClose ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Close Project Explorer"
-              onClick={onClose}
-            >
-              <X aria-hidden="true" className="size-4" />
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      {/* Shared drawer header chrome ({@link SheetHeader}) — class overrides keep this rail's exact look
+          (sidebar border, fixed h-12/no padding, semibold title, gap-1, size-`icon` buttons). The
+          rail's extra controls (New client / Collapse) ride the `actions` slot; the Close button is the
+          SheetHeader's own. */}
+      <SheetHeader
+        title="Project Explorer"
+        className="border-sidebar-border h-12 shrink-0 gap-1 px-4 py-0"
+        titleClassName="font-semibold tracking-tight"
+        actionsClassName="gap-1"
+        actions={
+          <>
+            {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
+                a "New client" entry point here; hidden for non-writers and flag-off. */}
+            {orgSlug && crud.canWrite ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="New client"
+                onClick={crud.onCreateClient}
+              >
+                <Plus aria-hidden="true" className="size-4" />
+              </Button>
+            ) : null}
+            {onCollapse ? (
+              <Button
+                ref={toggleRef}
+                variant="ghost"
+                size="icon"
+                aria-label="Collapse Project Explorer"
+                onClick={onCollapse}
+              >
+                <PanelLeftClose aria-hidden="true" className="size-4" />
+              </Button>
+            ) : null}
+          </>
+        }
+        {...(onClose
+          ? {
+              onClose,
+              closeLabel: 'Close Project Explorer',
+              closeButtonSize: 'icon' as const,
+            }
+          : {})}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {orgSlug ? (
           <HierarchyTree orgSlug={orgSlug} expansion={expansion} onNavigate={onNavigate} />

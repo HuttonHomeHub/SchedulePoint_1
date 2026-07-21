@@ -1,8 +1,14 @@
-import { SquarePen, Trash2, Waypoints } from 'lucide-react';
+import { ClipboardCheck, ListChecks, SquarePen, Trash2, Users, Waypoints } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
+import {
+  ACTIVITY_STEPS_ENABLED,
+  EARNED_VALUE_ENABLED,
+  ENTRY_ROUTES_ENABLED,
+  RESOURCES_ENABLED,
+} from '@/config/env';
 
 /**
  * The context for the **floating selection-actions** bar (ADR-0031, Fork-2 default): the commands
@@ -14,14 +20,48 @@ export interface SelectionActionContext {
   targetName: string;
   /** Whether schedule edits are allowed now (role + pen); gates the mutating actions. */
   canEditSchedule: boolean;
+  /** Whether the viewer may report progress (Contributor upward, role only — NOT pen-gated); gates the
+   * `progress` item exactly like the toolbar's Update-progress command (`canProgress`). */
+  canReportProgress: boolean;
+  /** Whether the selected activity can carry weighted steps — false for a duration-derived type
+   * (milestone / LOE / WBS summary), matching the activities-table Steps row action. Gates the `steps`
+   * item's visibility (with `canEditSchedule`), mirroring the table's `!isDurationDerivedType`. */
+  stepsEligible: boolean;
   onOpenLogic: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Open the per-activity resource-assignment editor (entry-route win 2, `VITE_ENTRY_ROUTES`). Wired
+   * regardless of the flag; the `resources` item that calls it is only registered when the flag is on. */
+  onResources: () => void;
+  /** Open the progress editor (`ActivityProgressDialog`) for the selected activity. Wired regardless of
+   * the flag; the `progress` item that calls it is only registered when `VITE_ENTRY_ROUTES` is on. */
+  onProgress: () => void;
+  /** Open the weighted-steps editor (`ActivityStepsDialog`) for the selected activity. Wired regardless
+   * of the flag; the `steps` item is only registered when the flag + `VITE_EARNED_VALUE` +
+   * `VITE_ACTIVITY_STEPS` are all on. */
+  onSteps: () => void;
 }
 
 const PEN_REASON = 'Start editing to change this activity';
+const PROGRESS_REASON = 'You don’t have permission to report progress';
 
-/** The selection object-actions, expressed as toolbar items over {@link SelectionActionContext}. */
+/**
+ * The selection object-actions, expressed as toolbar items over {@link SelectionActionContext}. Order:
+ * Logic → (Progress) → (Resources) → (Steps) → Edit → Delete. Labels use the activities-table's
+ * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
+ * on the canvas and in the table. The **Progress**, **Resources** and **Steps** items are entry-route
+ * additions (`VITE_ENTRY_ROUTES`): each is spread into the array conditionally so flag-off is
+ * byte-for-byte the prior three-item bar. Progress is role-gated (Contributor+, `canReportProgress`);
+ * Resources additionally rides `VITE_RESOURCES` (matching the table's row action) and is otherwise
+ * ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE` +
+ * `VITE_ACTIVITY_STEPS` and hides for a duration-derived selection — matching the table's Steps row
+ * action. None of the three is pen-gated (only Edit/Delete are).
+ *
+ * Every item is deliberately `tier: 1` (visible labels) for discoverability of the newer actions. The
+ * trade-off: under extreme narrow width the primitive demotes trailing items (Edit/Delete) to overflow
+ * before the newer ones — accepted, since this floating bar rarely overflows and surfacing the new
+ * actions is the goal.
+ */
 export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
   defineToolbar<SelectionActionContext>([
     {
@@ -29,16 +69,65 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       group: 'object',
       tier: 1,
       order: 0,
-      label: 'Open logic',
+      label: 'Logic',
       icon: <Waypoints className="size-4" />,
       onActivate: (ctx) => ctx.onOpenLogic(),
     },
+    ...(ENTRY_ROUTES_ENABLED
+      ? [
+          {
+            id: 'progress',
+            group: 'object',
+            tier: 1,
+            order: 1,
+            label: 'Report progress',
+            icon: <ClipboardCheck className="size-4" />,
+            // Role-gated, NOT pen-gated — progress is a Contributor action (the notes/progress
+            // precedent), mirroring the toolbar's Update-progress command's `canProgress` gate.
+            isEnabled: (ctx: SelectionActionContext) => ctx.canReportProgress,
+            disabledReason: (ctx: SelectionActionContext) =>
+              ctx.canReportProgress ? undefined : PROGRESS_REASON,
+            onActivate: (ctx: SelectionActionContext) => ctx.onProgress(),
+          } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
+    // Resources rides BOTH the entry-route flag AND `VITE_RESOURCES` (the resource surface), matching the
+    // activities-table row action's gate + the Steps item's multi-flag precedent.
+    ...(ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED
+      ? [
+          {
+            id: 'resources',
+            group: 'object',
+            tier: 1,
+            order: 2,
+            label: 'Resources',
+            icon: <Users className="size-4" />,
+            onActivate: (ctx: SelectionActionContext) => ctx.onResources(),
+          } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
+    ...(ENTRY_ROUTES_ENABLED && EARNED_VALUE_ENABLED && ACTIVITY_STEPS_ENABLED
+      ? [
+          {
+            id: 'steps',
+            group: 'object',
+            tier: 1,
+            order: 3,
+            label: 'Steps',
+            icon: <ListChecks className="size-4" />,
+            // Writer authoring surface, hidden for a duration-derived selection — matching the table's
+            // `canWrite && !isDurationDerivedType(...)` row-action gate (present-or-absent, not shaded).
+            isVisible: (ctx: SelectionActionContext) => ctx.canEditSchedule && ctx.stepsEligible,
+            onActivate: (ctx: SelectionActionContext) => ctx.onSteps(),
+          } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
     {
       id: 'edit',
       group: 'object',
       tier: 1,
-      order: 1,
-      label: 'Edit activity',
+      order: 4,
+      label: 'Edit',
       icon: <SquarePen className="size-4" />,
       penGated: true,
       disabledReason: () => PEN_REASON,
@@ -48,8 +137,8 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       id: 'delete',
       group: 'object',
       tier: 1,
-      order: 2,
-      label: 'Delete activity',
+      order: 5,
+      label: 'Delete',
       icon: <Trash2 className="size-4" />,
       penGated: true,
       disabledReason: () => PEN_REASON,

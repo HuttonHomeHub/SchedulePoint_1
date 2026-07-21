@@ -5,12 +5,11 @@ import type { ReactNode } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * T2 — the **Comments** reveal through the REAL production path (toolbar quick-wins F2):
- * `ToolbarPlanWorkspace` builds `revealComments` (a ref on the mounted `PlanNotesSection` heading),
- * threads it through `useTsldToolbarContext`, and the registry's Comments item calls it. Rendered via
- * the real `PlanDetailScreen` with the canvas/heavy children stubbed — a broken ref or renamed prop
- * anywhere along that chain would fail this test (unlike a hand-duplicated harness). The notes data
- * layer is stubbed to an empty thread; the heading still mounts and must receive focus on the click.
+ * Entry-route win 1 (`VITE_ENTRY_ROUTES`): with the flag on, the plan Notes thread moves out of the
+ * always-inline block and into a right-side drawer the toolbar **Comments** button opens
+ * (`revealComments` → `model.setNotesOpen(true)`). Exercised through the REAL production path
+ * (`PlanDetailScreen` → `ToolbarPlanWorkspace` → `useTsldToolbarContext` → the Comments registry item)
+ * with the canvas/heavy children stubbed, so a broken ref/prop anywhere along the chain fails here.
  */
 const h = vi.hoisted(() => ({ role: 'PLANNER' }));
 
@@ -22,13 +21,8 @@ vi.mock('@/config/env', async (importOriginal) => ({
   SCHEDULING_MODES_ENABLED: false,
   NOTES_ENABLED: true,
   TOOLBAR_QUICK_WINS_ENABLED: true,
-  // This suite asserts the Comments-reveal path; the programme section (now default-on) mounts its
-  // own summary/recalc queries, so pin it off here — it has its own suite (ProgrammeScheduleSection).
+  ENTRY_ROUTES_ENABLED: true,
   PROGRAMME_SCHEDULING_ENABLED: false,
-  // Comments-SCROLLS-to-the-inline-notes-heading is the flag-OFF behaviour; entry-route (now default-on)
-  // instead opens the notes drawer. Pin it off here so this suite keeps testing the scroll path — the
-  // drawer-open path has its own suite (plan-workspace-entry-routes.test.tsx).
-  ENTRY_ROUTES_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -48,7 +42,7 @@ vi.mock('@/features/plan-lock', async (importOriginal) => ({
   CompactPenStatus: () => null,
 }));
 
-// Keep the notes thread/counts network-free (empty thread); the heading still mounts.
+// Keep the notes thread/counts network-free (empty thread); the heading still mounts in the drawer.
 import type * as ApiClient from '@/lib/api/client';
 vi.mock('@/lib/api/client', async (importActual) => {
   const actual = await importActual<typeof ApiClient>();
@@ -100,11 +94,17 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  isMilestoneType: () => false,
+  isDurationDerivedType: () => false,
   ActivitiesTable: () => <div data-testid="activities-table" />,
   ActivityFormDialog: () => null,
   ActivityProgressDialog: () => null,
+  ActivityStepsDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));
+// `@/features/resources` is left unmocked (the real module loads): the entry-route Resources dialog
+// mounts closed (`model.resourcesActivity` is undefined), so it renders nothing — like the notes/
+// programme sections, it just needs its component definitions available.
 vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
@@ -139,7 +139,6 @@ function renderScreen() {
 }
 
 beforeAll(() => {
-  // jsdom doesn't implement scrollIntoView; the reveal calls it.
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = function scrollIntoView(): void {};
   }
@@ -148,13 +147,19 @@ beforeEach(() => {
   h.role = 'PLANNER';
 });
 
-describe('ToolbarPlanWorkspace — Comments reveal (F2, production path)', () => {
-  it('moves focus to the plan Notes heading when the toolbar Comments button is clicked', () => {
+describe('ToolbarPlanWorkspace — plan notes drawer (entry-route win 1, flag on)', () => {
+  it('does not render the inline plan Notes thread before the drawer is opened', () => {
     renderScreen();
-    // The plan-level Notes section is mounted (the reveal target).
-    const heading = screen.getByRole('heading', { name: 'Notes' });
-    expect(heading).not.toHaveFocus();
+    // With the drawer closed the Sheet renders no children, so the notes thread heading is absent.
+    expect(screen.queryByRole('heading', { name: 'Notes' })).not.toBeInTheDocument();
+  });
+
+  it('opens the right-side Plan notes drawer when the Comments toolbar button is clicked', () => {
+    renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
-    expect(heading).toHaveFocus();
+    const drawer = screen.getByRole('dialog', { name: 'Plan notes' });
+    expect(drawer).toBeInTheDocument();
+    // The plan Notes thread now lives inside the drawer.
+    expect(screen.getByRole('heading', { name: 'Notes' })).toBeInTheDocument();
   });
 });
