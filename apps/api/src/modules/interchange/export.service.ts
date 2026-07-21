@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Activity, Plan } from '@prisma/client';
-import { exportXer, type ExportGraph, type InterchangeReport } from '@repo/interchange';
+import {
+  exportSchedule,
+  type ExportFormat,
+  type ExportGraph,
+  type InterchangeReport,
+} from '@repo/interchange';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -18,7 +23,7 @@ import { INTERCHANGE_EXPORT } from './interchange-permissions';
 
 /** Machine-readable reasons carried in an export {@link ValidationError}'s `details.reason`. */
 export const EXPORT_ERROR = {
-  /** The requested `format` is not one this milestone can export (M4a serialises XER only). */
+  /** The requested `format` is not one this milestone can export (M4b serialises XER + MSPDI). */
   UNSUPPORTED_FORMAT: 'EXPORT_UNSUPPORTED_FORMAT',
   /** The plan is past the shared graph-size ceiling (mirrors the import limit). */
   TOO_LARGE: 'EXPORT_TOO_LARGE',
@@ -27,13 +32,26 @@ export const EXPORT_ERROR = {
   INCONSISTENT_GRAPH: 'EXPORT_INCONSISTENT_GRAPH',
 } as const;
 
-/** The one interchange format M4a can serialise. */
-const XER_FORMAT = 'xer';
+/** The interchange formats M4b can serialise, each with the file extension + MIME its download uses. */
+const SUPPORTED_FORMATS: Readonly<
+  Record<ExportFormat, { extension: string; contentType: string }>
+> = {
+  // P6 XER is tab-delimited text with no registered media type → the safe binary-download default.
+  xer: { extension: 'xer', contentType: 'application/octet-stream' },
+  // MSPDI is XML → the correct, descriptive media type.
+  mspdi: { extension: 'xml', contentType: 'application/xml' },
+};
 
-/** The result of a successful export: the file bytes, a safe download filename, and the honest report. */
+/** Narrow an untrusted `format` string to a supported {@link ExportFormat}, or `undefined`. */
+function toExportFormat(format: string): ExportFormat | undefined {
+  return Object.hasOwn(SUPPORTED_FORMATS, format) ? (format as ExportFormat) : undefined;
+}
+
+/** The result of a successful export: the file bytes, a safe download filename, MIME, and the honest report. */
 export interface ExportResult {
   readonly bytes: Uint8Array;
   readonly filename: string;
+  readonly contentType: string;
   readonly report: InterchangeReport;
 }
 
@@ -65,7 +83,7 @@ export class ExportService {
 
   /**
    * Export a plan as a foreign schedule file. Throws {@link ValidationError} (422 `EXPORT_UNSUPPORTED_FORMAT`)
-   * for a non-XER format, {@link NotFoundError} (404) when the org/plan is not the caller's (anti-IDOR),
+   * for an unsupported format, {@link NotFoundError} (404) when the org/plan is not the caller's (anti-IDOR),
    * {@link ForbiddenError} (403) without the capability, and {@link ValidationError} (422) when the pure
    * exporter rejects the assembled graph (size ceiling / defensive inconsistency backstop).
    */
@@ -75,11 +93,13 @@ export class ExportService {
     planId: string,
     format: string,
   ): Promise<ExportResult> {
-    // Only XER for M4a. Reject an unknown format before any read (a cheap, side-effect-free guard).
-    if (format !== XER_FORMAT) {
-      throw new ValidationError(`Unsupported export format "${format}". Only "xer" is supported.`, {
-        reason: EXPORT_ERROR.UNSUPPORTED_FORMAT,
-      });
+    // XER + MSPDI for M4b. Reject an unknown format before any read (a cheap, side-effect-free guard).
+    const exportFormat = toExportFormat(format);
+    if (exportFormat === undefined) {
+      throw new ValidationError(
+        `Unsupported export format "${format}". Supported formats: "xer", "mspdi".`,
+        { reason: EXPORT_ERROR.UNSUPPORTED_FORMAT },
+      );
     }
 
     // Org scope from the caller's OWN memberships (anti-IDOR: a non-member 404s the org).
@@ -92,7 +112,7 @@ export class ExportService {
 
     const graph = await this.readGraph(organization.id, plan);
 
-    const result = exportXer({ graph });
+    const result = exportSchedule({ graph, format: exportFormat });
     if (!result.ok) {
       // The graph is assembled from trusted domain rows, so a reject is either the shared size ceiling
       // (a real, user-safe "too large") or the defensive schema backstop (should be unreachable).
@@ -113,7 +133,8 @@ export class ExportService {
       });
     }
 
-    const filename = `${slugify(plan.name)}.xer`;
+    const spec = SUPPORTED_FORMATS[exportFormat];
+    const filename = `${slugify(plan.name)}.${spec.extension}`;
     this.logger.info(
       {
         organizationId: organization.id,
@@ -127,7 +148,7 @@ export class ExportService {
       },
       'interchange export produced a file',
     );
-    return { bytes: result.bytes, filename, report: result.report };
+    return { bytes: result.bytes, filename, contentType: spec.contentType, report: result.report };
   }
 
   /**

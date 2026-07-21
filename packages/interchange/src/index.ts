@@ -32,3 +32,7 @@ export * from './export-mapper.js';
 export * from './xer-serialiser.js';
 export * from './xer-emit.js';
 export * from './export-xer.js';
+export * from './mspdi-serialiser.js';
+export * from './mspdi-emit.js';
+export * from './export-mspdi.js';
+export * from './export-schedule.js';

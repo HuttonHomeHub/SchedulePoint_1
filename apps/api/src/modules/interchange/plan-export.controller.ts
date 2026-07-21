@@ -26,11 +26,12 @@ import { ExportService } from './export.service';
  * (404 for non-members) and the target plan from `:planId` within that org (anti-IDOR), and requires
  * `interchange:export` (every member — export reads on-screen-readable schedule data).
  *
- * `GET export/:format` streams the serialised file. For M4a only `format = "xer"` is accepted (any other →
- * 422). The interchange report — what the exporter approximated or dropped (out-of-M4a-scope WBS /
- * constraints / progress / resources) — rides alongside the download in the `X-Interchange-Report` response
- * header as compact JSON (CQ-2: the report is bundled WITH the download, not a blocking pre-confirm), so a
- * single request yields both the bytes and the honest account of what did and did not come across.
+ * `GET export/:format` streams the serialised file. For M4b `format` is `"xer"` (P6) or `"mspdi"` (MS
+ * Project XML); any other value → 422. The interchange report — what the exporter approximated or dropped
+ * (out-of-scope WBS / constraints / progress / resources) — rides alongside the download in the
+ * `X-Interchange-Report` response header as compact JSON (CQ-2: the report is bundled WITH the download, not
+ * a blocking pre-confirm), so a single request yields both the bytes and the honest account of what did and
+ * did not come across.
  */
 @ApiTags('interchange')
 @ApiCookieAuth('schedulepoint.session_token')
@@ -45,19 +46,19 @@ export class PlanExportController {
   @Get('export/:format')
   @RequirePermissions('interchange:export')
   @ApiOperation({
-    summary: 'Export a plan as a foreign schedule file (any member; P6 XER for M4a).',
+    summary: 'Export a plan as a foreign schedule file (any member; P6 XER or MS Project MSPDI).',
     description:
       'Serialises the plan’s core network (activities, dependencies, calendars) to the requested format ' +
       'and streams it as an attachment. Out-of-scope data (WBS summaries, constraints, progress, resources) ' +
       'is reported — not silently omitted — in the `X-Interchange-Report` response header (compact JSON). ' +
-      'M4a supports `xer` only; any other format is a 422.',
+      'M4b supports `xer` (P6) and `mspdi` (MS Project XML); any other format is a 422.',
   })
   @ApiParam({
     name: 'format',
-    enum: ['xer'],
-    description: 'The export format. M4a supports `xer` only.',
+    enum: ['xer', 'mspdi'],
+    description: 'The export format: `xer` (Primavera P6) or `mspdi` (MS Project XML).',
   })
-  @ApiProduces('application/octet-stream')
+  @ApiProduces('application/octet-stream', 'application/xml')
   @ApiOkResponse({
     description:
       'The serialised schedule file (binary), with the interchange report in X-Interchange-Report.',
@@ -74,7 +75,7 @@ export class PlanExportController {
     @Param('format') format: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const { bytes, filename, report } = await this.service.exportPlan(
+    const { bytes, filename, contentType, report } = await this.service.exportPlan(
       principal,
       orgSlug,
       planId,
@@ -88,7 +89,7 @@ export class PlanExportController {
     res.setHeader('X-Interchange-Report', JSON.stringify(report));
 
     return new StreamableFile(Buffer.from(bytes), {
-      type: 'application/octet-stream',
+      type: contentType,
       disposition: `attachment; filename="${filename}"`,
     });
   }

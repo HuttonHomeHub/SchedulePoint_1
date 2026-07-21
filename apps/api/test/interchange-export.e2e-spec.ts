@@ -227,12 +227,44 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
     await actor.agent.get(exportUrl('not-a-uuid')).expect(400);
   });
 
-  it('422s an unsupported export format (mspdi / csv)', async () => {
+  it('exports a plan as MSPDI (.xml, application/xml) and the bytes round-trip', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);
     const planId = await seedPlan(actor, projectId);
 
-    for (const format of ['mspdi', 'csv']) {
+    const res = await actor.agent
+      .get(exportUrl(planId, 'mspdi'))
+      .responseType('blob')
+      .expect(200)
+      .expect('Content-Type', /application\/xml/);
+
+    // Attachment with the slugified plan name + the .xml extension ("Imported" → imported.xml).
+    expect(res.headers['content-disposition']).toMatch(/attachment; filename="imported\.xml"/);
+
+    // The report rides in the header as compact JSON and names the MSPDI format.
+    const report = JSON.parse(res.headers['x-interchange-report'] as string) as InterchangeReport;
+    expect(report.detectedFormat).toBe('MSPDI');
+    expect(report.mapped).toMatchObject({ activities: 2, relationships: 1, calendars: 1 });
+
+    // The strongest correctness gate: re-import the exported MSPDI bytes and recover the network.
+    const bytes = res.body as Buffer;
+    const reimport = importSchedule({ content: new Uint8Array(bytes), filename: 'roundtrip.xml' });
+    expect(reimport.ok).toBe(true);
+    if (reimport.ok) {
+      expect(reimport.report.detectedFormat).toBe('MSPDI');
+      expect(reimport.graph.activities.map((a) => a.code).sort()).toEqual(['A1000', 'A1010']);
+      expect(reimport.graph.dependencies).toHaveLength(1);
+      expect(reimport.graph.dependencies[0]?.type).toBe('FS');
+      expect(reimport.graph.calendars).toHaveLength(1);
+    }
+  });
+
+  it('422s an unsupported export format (csv / json)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const planId = await seedPlan(actor, projectId);
+
+    for (const format of ['csv', 'json']) {
       const res = await actor.agent.get(exportUrl(planId, format)).expect(422);
       expect(res.body.error?.details?.reason).toBe('EXPORT_UNSUPPORTED_FORMAT');
     }
