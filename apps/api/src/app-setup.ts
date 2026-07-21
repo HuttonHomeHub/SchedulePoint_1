@@ -23,6 +23,18 @@ import { AppConfigService } from './config/app-config.service';
 export function configureHttpApp(app: NestExpressApplication): void {
   const config = app.get(AppConfigService);
 
+  // Trust the configured reverse-proxy hops so `req.ip` resolves the real client IP from
+  // `X-Forwarded-For` instead of collapsing every request onto the proxy's address. Nest's
+  // global `ThrottlerGuard` keys its per-IP buckets on `req.ip`; without this, behind a proxy
+  // the per-client rate limit (notably the tighter guest-surface limit, ADR-0051 §6) degrades
+  // into one shared global bucket. Set only when proxies are declared (production); left off in
+  // dev/test where there is no proxy — mirroring the Better Auth `trustedProxies` wiring, which
+  // reads the same `TRUSTED_PROXY_IPS` config.
+  const trustedProxies = config.trustedProxyIps;
+  if (trustedProxies.length > 0) {
+    app.set('trust proxy', trustedProxies);
+  }
+
   app.use(helmet());
   app.enableCors({
     origin: config.corsOrigins,

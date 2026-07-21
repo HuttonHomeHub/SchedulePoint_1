@@ -20,6 +20,9 @@ import { ScheduleService } from './schedule.service';
   imports: [OrganizationsModule, PlansModule, PlanLockModule, CrossPlanDependenciesModule],
   controllers: [ScheduleController],
   providers: [ScheduleService, ScheduleRepository],
-  exports: [ScheduleService],
+  // ScheduleRepository is exported so the External-Guest read path (ADR-0051 F-M3) can read a
+  // plan's persisted schedule summary (`summarise`) without a Principal — a pure persisted-column
+  // read, no engine invocation.
+  exports: [ScheduleService, ScheduleRepository],
 })
 export class ScheduleModule {}

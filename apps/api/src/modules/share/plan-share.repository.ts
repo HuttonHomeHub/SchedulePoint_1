@@ -140,6 +140,34 @@ export class PlanShareRepository {
   }
 
   /**
+   * COALESCED variant of {@link touchLastAccessed} for the session-less guest read path (F-M3,
+   * ADR-0051 §7): stamp `last_accessed_at` at most ONCE per `staleMs` interval per link, so a
+   * bursty guest (or a scraper) cannot turn every read into a write. The `updateMany` is guarded
+   * on `deleted_at IS NULL AND (last_accessed_at IS NULL OR last_accessed_at < now − staleMs)`,
+   * so a second read inside the window matches 0 rows and writes nothing. Like
+   * {@link touchLastAccessed} it does NOT bump `version`/`updated_by` (derived telemetry, not an
+   * edit — the engine-column precedent). Returns rows changed (`1` = stamped this call, `0` =
+   * within the interval / gone). Called fire-and-forget by the guest service, never blocking the
+   * response, so a failed telemetry write can never fail a read.
+   */
+  async touchLastAccessedIfStale(
+    id: string,
+    staleMs: number,
+    now: Date = new Date(),
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const threshold = new Date(now.getTime() - staleMs);
+    const result = await db.planShare.updateMany({
+      where: this.active({
+        id,
+        OR: [{ lastAccessedAt: null }, { lastAccessedAt: { lt: threshold } }],
+      }),
+      data: { lastAccessedAt: now },
+    });
+    return result.count;
+  }
+
+  /**
    * Soft-delete a single link directly (its OWN fresh batch id — the dependency-leaf /
    * note precedent), distinct from the plan-driven cascade batch so a later plan restore
    * never resurrects an individually-deleted link. Guarded on `deleted_at IS NULL` for
