@@ -14,7 +14,7 @@ import {
   type ProgressFormValues,
 } from '../schemas/activity-schemas';
 
-import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 import { majorInputToMinor } from '@/lib/format-money';
 import { activityKeys, assignmentKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
@@ -171,8 +171,12 @@ function updateBody(input: ActivityFormValues & { version: number; laneIndex?: n
 export function activitiesQueryOptions(orgSlug: string, planId: string) {
   return queryOptions({
     queryKey: activityKeys.listByPlan(orgSlug, planId),
+    // The plan workspace (canvas + table + logic) needs the WHOLE plan, not the endpoint's default
+    // 20-row page: a dependency edge only draws when both its endpoint bars are loaded, so a partial
+    // page silently hides activities and their links (a large imported plan showed ~20 of 144 with no
+    // logic drawn). Page through every activity via the shared cursor helper.
     queryFn: () =>
-      apiFetch<ActivitySummary[]>(`/organizations/${orgSlug}/plans/${planId}/activities`),
+      apiFetchAllPages<ActivitySummary>(`/organizations/${orgSlug}/plans/${planId}/activities`),
   });
 }
 
