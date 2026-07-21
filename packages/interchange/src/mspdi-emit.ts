@@ -253,8 +253,9 @@ function constraintNodes(activity: CanonicalActivity, findings: ReportFinding[])
   }
   if (activity.scheduleAsLateAsPossible) {
     if (!primarySlotUsed) {
+      // ALAP is MSP ConstraintType 1. The primary slot is now consumed, but nothing below reads the
+      // flag again (the secondary constraint rides <Deadline>), so we don't re-assign it.
       nodes.push(leaf('ConstraintType', '1'));
-      primarySlotUsed = true;
     } else {
       findings.push({
         kind: 'approximation',
