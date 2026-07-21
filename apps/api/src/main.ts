@@ -39,6 +39,11 @@ async function bootstrap(): Promise<void> {
       .setDescription('SchedulePoint REST API')
       .setVersion('1.0')
       .addCookieAuth('schedulepoint.session_token')
+      // External-Guest share-link bearer token (ADR-0051): `Authorization: Bearer sp_share_…`.
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', description: 'External-Guest share token (sp_share_…).' },
+        'shareToken',
+      )
       .build();
     const document = SwaggerModule.createDocument(app, openapi);
     SwaggerModule.setup('api/docs', app, document);

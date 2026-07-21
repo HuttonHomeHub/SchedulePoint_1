@@ -243,7 +243,7 @@ Revocable, read-only, per-plan **share links** for someone OUTSIDE the organisat
 `plan:share` (Planner + Org Admin only). The raw `sp_share_…` token is returned
 **once**, on create, inside the guest URL's **fragment** (`…/share#<token>`) — only
 its SHA-256 hash is stored, and no list/read response ever carries a token. F-M2
-ships the management surface; the session-less guest read path (F-M3) is separate.
+ships the management surface; F-M3 adds the session-less guest **read** surface below.
 
 | Method | Path                              | Notes                                                                                                                                                             |
 | ------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -256,6 +256,35 @@ not this plan's — is an indistinguishable **404**. `organization_id` is copied
 the resolved plan, never from client input. **Non-scheduling**: the CPM engine and
 the pen model (ADR-0028) are untouched, and share writes are deliberately not
 pen-gated.
+
+#### Guest read surface (F-M3, session-less)
+
+The app's **first unauthenticated data-read** endpoints (ADR-0051 §3–§6). Every route
+is `@Public()` (bypasses the session guard) and instead resolves an
+`Authorization: Bearer sp_share_<token>` header to its **one plan** via the
+`ShareTokenGuard`. There are **no path/query params that select a plan or org** — the
+**token is the entire scope**, so there is nothing to tamper with (anti-IDOR by
+construction). Reads go through the existing org-scoped repositories, scoped **only** by
+the token's `planId` + `organizationId`, and return **field-stripped, read-only** DTOs.
+
+| Method | Path                         | Notes                                                                                                                                                                                                             |
+| ------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts).                  |
+| GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, actual dates, total float, `isCritical`, lane, and progress (`status`, `percentComplete`). |
+| GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days).                                                                                                                   |
+
+- **Uniform 404** — any dead / revoked / expired / soft-deleted-grant / deleted-plan
+  token resolves to the same `404`, never `401/403` (no oracle).
+- **429** — a **tighter per-IP rate limit** (30 requests / 60 s) than the global default
+  (100 / 60 s) applies to `/api/v1/share/*` only; a burst yields `429`.
+- **Headers** — every guest response carries `X-Robots-Tag: noindex, nofollow` and
+  `Referrer-Policy: no-referrer` (§2/§5): not crawlable, not a referrer-leak source.
+- **Never exposed** — cost / Earned-Value / money, resources / assignments, baselines /
+  variance, notes, audit columns (`createdBy`/`updatedBy`/`version`/`deletedAt`/
+  timestamps), any user identity, the plan-lock holder, and the token / tokenHash.
+- **Read-only** — the persisted CPM columns are read (no engine call); the only write is
+  a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per
+  link), fired-and-forgotten so it never blocks or fails a read.
 
 ### Schedule interchange (ADR-0050)
 
