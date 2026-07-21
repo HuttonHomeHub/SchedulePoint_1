@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { onboard, openNewProject, validXerFile } from './support';
+import { onboard, openNewProject, validMspdiFile, validXerFile } from './support';
 
 /**
  * Flag-ON **schedule interchange (XER import)** journey (`VITE_SCHEDULE_INTERCHANGE`, Stage C2 M1,
@@ -39,7 +39,7 @@ test('a planner imports a schedule from a .xer file and lands on the new plan', 
   await expect(confirmButton).toBeDisabled();
 
   // (2) Picking the valid .xer dry-runs it; the report renders the mapped counts and enables Confirm.
-  await dialog.getByLabel('Schedule file (.xer)').setInputFiles(validXerFile());
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(validXerFile());
 
   const mappedCounts = dialog.locator('dl[aria-label="Mapped"]');
   await expect(mappedCounts).toBeVisible();
@@ -63,4 +63,30 @@ test('a planner imports a schedule from a .xer file and lands on the new plan', 
   await confirmButton.click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+});
+
+// The same review→commit loop for a Microsoft Project MSPDI .xml file, proving the format-agnostic
+// importSchedule router (ADR-0050 M3) drives the `.xml` path through the identical UI + pipeline.
+test('a planner imports a schedule from a .xml (MSPDI) file and lands on the new plan', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await expect(dialog).toBeVisible();
+
+  const confirmButton = dialog.getByRole('button', { name: 'Confirm import' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(validMspdiFile());
+
+  const mappedCounts = dialog.locator('dl[aria-label="Mapped"]');
+  await expect(mappedCounts).toBeVisible();
+  await expect(mappedCounts.locator('dd')).toHaveText(['2', '1', '0']);
+  await expect(confirmButton).toBeEnabled();
+
+  await confirmButton.click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: 'Sample MSP', level: 1 })).toBeVisible();
 });
