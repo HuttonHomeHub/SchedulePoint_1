@@ -668,8 +668,9 @@ export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
 export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUEST_SHARE_LINKS);
 
 /**
- * Entry-route UX improvements (spec — "entry-route" quick wins). **OFF by default during build** — it
- * flips on only after its specialist reviews are green. Frontend-only, over already-shipped features
+ * Entry-route UX improvements (spec — "entry-route" quick wins). **ON by default** now that its
+ * accessibility / component / UX reviews are green and folded in (set `VITE_ENTRY_ROUTES=false` to roll
+ * back). Frontend-only, over already-shipped features
  * (notes + progress + resource assignments + weighted steps) — no new API/schema/`@repo/types`/CPM-engine
  * change (the recalc parity gate is untouched). When on, it changes where shipped affordances are reached:
  *
@@ -686,4 +687,4 @@ export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUES
  * selection bar carries only its base three actions, and none of the new code is reached — byte-for-byte
  * the prior behaviour (emergency rollback / opt-out).
  */
-export const ENTRY_ROUTES_ENABLED = flagDefaultOff(import.meta.env.VITE_ENTRY_ROUTES);
+export const ENTRY_ROUTES_ENABLED = flagDefaultOn(import.meta.env.VITE_ENTRY_ROUTES);
