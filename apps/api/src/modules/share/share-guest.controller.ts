@@ -12,10 +12,10 @@ import type { GuestPrincipal } from '../../common/auth/guest-principal';
 import { CurrentGuest } from '../../common/decorators/current-guest.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 import { GuestActivityDto } from './dto/guest-activity.dto';
 import { GuestDependencyDto } from './dto/guest-dependency.dto';
+import { GuestPaginationQueryDto } from './dto/guest-pagination-query.dto';
 import { GuestPlanViewDto } from './dto/guest-plan.dto';
 import { ShareGuestService } from './share-guest.service';
 import { ShareTokenGuard } from './share-token.guard';
@@ -92,7 +92,7 @@ export class ShareGuestController {
   @GuestSecurityHeaders()
   async activities(
     @CurrentGuest() guest: GuestPrincipal,
-    @Query() query: PaginationQueryDto,
+    @Query() query: GuestPaginationQueryDto,
   ): Promise<Paginated<GuestActivityDto>> {
     const { items, meta } = await this.service.listActivities(guest, query);
     return new Paginated(items, meta);
@@ -108,7 +108,7 @@ export class ShareGuestController {
   @GuestSecurityHeaders()
   async dependencies(
     @CurrentGuest() guest: GuestPrincipal,
-    @Query() query: PaginationQueryDto,
+    @Query() query: GuestPaginationQueryDto,
   ): Promise<Paginated<GuestDependencyDto>> {
     const { items, meta } = await this.service.listDependencies(guest, query);
     return new Paginated(items, meta);
