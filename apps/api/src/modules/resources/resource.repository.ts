@@ -71,6 +71,22 @@ export class ResourceRepository {
     });
   }
 
+  /**
+   * Batch-insert many resources in ONE statement, inside the caller's transaction (interchange
+   * commit, ADR-0050 C2). Ids may be client-assigned (the `@default(uuid(7))` is bypassed) so the
+   * caller can resolve `resourceKey` → id before writing the assignments that reference them. All rows
+   * are brand-new, so no optimistic-lock/audit ceremony beyond the create defaults. Mirrors
+   * {@link ActivityRepository.createMany} — avoids a per-row `create` loop that risked Prisma's
+   * interactive-transaction timeout at the import ceiling.
+   */
+  async createManyForImport(
+    rows: readonly Prisma.ResourceCreateManyInput[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await db.resource.createMany({ data: [...rows] });
+  }
+
   /** An active resource scoped to its organisation (anti-IDOR). */
   findActiveByIdInOrg(
     id: string,
