@@ -50,16 +50,26 @@ function sharesPath(orgSlug: string, planId: string): string {
   return `/organizations/${orgSlug}/plans/${planId}/shares`;
 }
 
-export function sharesQueryOptions(orgSlug: string, planId: string) {
+export function sharesQueryOptions(orgSlug: string, planId: string, enabled = true) {
   return queryOptions({
     queryKey: shareKeys.listByPlan(orgSlug, planId),
     queryFn: () => apiFetch<ShareLink[]>(sharesPath(orgSlug, planId)),
+    // Gated so the list only fetches while the Share dialog is open — not on every plan mount.
+    enabled,
   });
 }
 
-/** A plan's share links, newest-first (management surface — never carries a token). */
-export function useShares(orgSlug: string, planId: string): UseQueryResult<ShareLink[]> {
-  return useQuery(sharesQueryOptions(orgSlug, planId));
+/**
+ * A plan's share links, newest-first (management surface — never carries a token). `enabled` gates the
+ * fetch on the dialog being open, so mounting the plan workspace (flag-on) does NOT fire this for every
+ * role on every plan.
+ */
+export function useShares(
+  orgSlug: string,
+  planId: string,
+  enabled = true,
+): UseQueryResult<ShareLink[]> {
+  return useQuery(sharesQueryOptions(orgSlug, planId, enabled));
 }
 
 export function useCreateShare(orgSlug: string, planId: string) {

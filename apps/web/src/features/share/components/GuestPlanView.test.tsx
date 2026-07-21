@@ -93,6 +93,13 @@ describe('GuestPlanView', () => {
     expect(await screen.findByText('This share link is no longer available.')).toBeInTheDocument();
   });
 
+  it('shows a soft rate-limit message on a 429 (distinct from the uniform 404 copy)', async () => {
+    vi.mocked(fetchGuestPlan).mockRejectedValue(new GuestFetchError(429));
+    renderView();
+    expect(await screen.findByText('Too many requests')).toBeInTheDocument();
+    expect(screen.queryByText('This share link is no longer available.')).not.toBeInTheDocument();
+  });
+
   it('renders the read-only plan (header + canvas) when the token resolves', async () => {
     vi.mocked(fetchGuestPlan).mockResolvedValue(PLAN);
     vi.mocked(fetchGuestActivities).mockResolvedValue([activity()]);

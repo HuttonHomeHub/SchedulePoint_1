@@ -24,6 +24,7 @@
     "test:e2e:loe": "playwright test --config playwright.loe.config.ts --pass-with-no-tests",
     "test:e2e:resource-view": "playwright test --config playwright.resource-view.config.ts --pass-with-no-tests",
     "test:e2e:interchange": "playwright test --config playwright.interchange.config.ts --pass-with-no-tests",
+    "test:e2e:share": "playwright test --config playwright.share.config.ts --pass-with-no-tests",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {

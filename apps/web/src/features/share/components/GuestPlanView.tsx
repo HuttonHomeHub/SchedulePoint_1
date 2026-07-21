@@ -15,6 +15,8 @@ import {
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 import { TsldPanel } from '@/features/tsld';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -28,29 +30,86 @@ const STATUS_LABELS: Record<PlanStatus, string> = {
   ARCHIVED: 'Archived',
 };
 
-/** Guest query keys — a flat, org-agnostic namespace keyed by the token (never logged; opaque cache key). */
+/**
+ * A short, non-secret fingerprint of the token for the TanStack Query key (defence-in-depth): the raw
+ * bearer token NEVER enters the cache key, so it can't surface via a future devtools/persisted client.
+ * The real token still flows to the fetchers via closure. `length + last 6 chars` keeps distinct tokens
+ * distinctly keyed without carrying the secret.
+ */
+function tokenFingerprint(token: string): string {
+  return `${token.length}:${token.slice(-6)}`;
+}
+
+/** Guest query keys — a flat namespace keyed by a token FINGERPRINT (never the raw token). */
 const guestKeys = {
-  plan: (token: string) => ['guest-share', token, 'plan'] as const,
-  activities: (token: string) => ['guest-share', token, 'activities'] as const,
-  dependencies: (token: string) => ['guest-share', token, 'dependencies'] as const,
+  plan: (fp: string) => ['guest-share', fp, 'plan'] as const,
+  activities: (fp: string) => ['guest-share', fp, 'activities'] as const,
+  dependencies: (fp: string) => ['guest-share', fp, 'dependencies'] as const,
 };
 
-/** A centred single-message frame — the loading / unavailable / no-token states share this chrome. */
-function CenteredMessage({
+/**
+ * The centred loading frame — a bare {@link Spinner} (its own `role="status"` + "Loading…" label),
+ * mirroring the public invitation-accept precedent (`AcceptInvitationCard`). The one `main` landmark.
+ */
+function GuestLoading(): React.ReactElement {
+  return (
+    <main
+      className="flex min-h-dvh items-center justify-center p-4"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <Spinner label="Loading…" />
+    </main>
+  );
+}
+
+/**
+ * The centred single-message card — the unavailable / rate-limited states share this chrome, reusing the
+ * public-token-screen precedent (`InviteShell` + `Card`). `CardTitle` renders the `<h1>`; `role="alert"`
+ * on the card announces the outcome. The one `main` landmark for the page.
+ */
+function GuestMessageCard({
   title,
   detail,
-  role,
 }: {
   title: string;
   detail?: string;
-  role?: 'status' | 'alert';
 }): React.ReactElement {
   return (
-    <div className="flex min-h-dvh items-center justify-center p-6 text-center">
-      <div className="max-w-md" role={role}>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        {detail ? <p className="text-muted-foreground mt-2 text-sm">{detail}</p> : null}
-      </div>
+    <main className="flex min-h-dvh items-center justify-center p-4">
+      <Card className="w-full max-w-md" role="alert">
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          {detail ? <CardDescription>{detail}</CardDescription> : null}
+        </CardHeader>
+      </Card>
+    </main>
+  );
+}
+
+/**
+ * Map any guest read error to the right frame: a 429 → a soft "try again" (still no existence oracle);
+ * anything else (any 404 for a dead / revoked / expired / deleted-plan token) → the uniform "gone" copy.
+ */
+function errorFrame(error: unknown): React.ReactElement {
+  const status = error instanceof GuestFetchError ? error.status : 0;
+  if (status === 429) {
+    return (
+      <GuestMessageCard
+        title="Too many requests"
+        detail="Please wait a moment and refresh the page."
+      />
+    );
+  }
+  return <GuestMessageCard title={UNAVAILABLE_MESSAGE} />;
+}
+
+/** One labelled figure in the guest header (dl/dt/dd), matching the member `ScheduleSummaryStrip` Stat. */
+function Stat({ label, value }: { label: string; value: React.ReactNode }): React.ReactElement {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd className="text-foreground text-sm font-medium tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -62,26 +121,35 @@ function CenteredMessage({
  * project finish) + the read-only TSLD canvas (`canEdit=false`, no authoring handlers, so no toolbar
  * groups or edit affordances). It is deliberately **not** wrapped in the app-shell — no session, no nav,
  * no member queries. Any 404 (dead / revoked / expired / deleted-plan token) collapses to a single
- * uniform "no longer available" message (no existence oracle); a plan with no activities shows an empty
- * state; the route marks itself `noindex`.
+ * uniform "no longer available" message (no existence oracle); a transient activities/dependencies
+ * failure shows the same uniform state (never the empty state); a plan with no activities shows an empty
+ * state; the route marks itself `noindex`. A share view has no reason to auto-refresh, so the queries
+ * never refetch on window focus and stay fresh forever (`staleTime: Infinity`).
  */
 export function GuestPlanView({ token }: { token: string }): React.ReactElement {
+  const fp = tokenFingerprint(token);
   const planQuery = useQuery({
-    queryKey: guestKeys.plan(token),
+    queryKey: guestKeys.plan(fp),
     queryFn: () => fetchGuestPlan(token),
     retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
   });
   const activitiesQuery = useQuery({
-    queryKey: guestKeys.activities(token),
+    queryKey: guestKeys.activities(fp),
     queryFn: () => fetchGuestActivities(token),
     retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
     // Only walk the activity pages once the token resolved a plan (a dead token 404s the plan first).
     enabled: planQuery.isSuccess,
   });
   const dependenciesQuery = useQuery({
-    queryKey: guestKeys.dependencies(token),
+    queryKey: guestKeys.dependencies(fp),
     queryFn: () => fetchGuestDependencies(token),
     retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
     enabled: planQuery.isSuccess,
   });
 
@@ -102,23 +170,16 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
   const calendar = useMemo(() => toWorkingDayCalendar(plan?.calendar ?? null), [plan?.calendar]);
 
   // A dead token (any 404) → the uniform "gone" copy; a 429 → a soft "try again" (still no oracle).
-  if (planQuery.isError) {
-    const status = planQuery.error instanceof GuestFetchError ? planQuery.error.status : 0;
-    if (status === 429) {
-      return (
-        <CenteredMessage
-          role="alert"
-          title="Too many requests"
-          detail="Please wait a moment and refresh the page."
-        />
-      );
-    }
-    return <CenteredMessage role="alert" title={UNAVAILABLE_MESSAGE} />;
-  }
+  if (planQuery.isError) return errorFrame(planQuery.error);
 
-  if (planQuery.isPending || activitiesQuery.isPending || dependenciesQuery.isPending || !plan) {
-    return <CenteredMessage role="status" title="Loading…" detail="Fetching the shared plan." />;
-  }
+  if (planQuery.isPending || !plan) return <GuestLoading />;
+
+  // The plan resolved but a list request failed (e.g. a transient error): that is NOT "no activities" —
+  // show the SAME uniform unavailable/error state, never the empty state.
+  if (activitiesQuery.isError) return errorFrame(activitiesQuery.error);
+  if (dependenciesQuery.isError) return errorFrame(dependenciesQuery.error);
+
+  if (activitiesQuery.isPending || dependenciesQuery.isPending) return <GuestLoading />;
 
   const projectFinish = plan.summary.projectFinish;
 
@@ -131,15 +192,14 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
           <h1 className="text-base font-semibold">{plan.name}</h1>
           <Badge variant="neutral">{STATUS_LABELS[plan.status]}</Badge>
           <span className="text-muted-foreground text-sm">Read-only shared view</span>
-          <div className="text-muted-foreground ml-auto flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {plan.dataDate ? <span>Data date {formatCalendarDate(plan.dataDate)}</span> : null}
-            {projectFinish ? (
-              <span>
-                <span className="text-foreground font-medium">Finish</span>{' '}
-                {formatCalendarDate(projectFinish)}
-              </span>
+          <dl className="ml-auto flex flex-wrap gap-x-6 gap-y-1">
+            {plan.dataDate ? (
+              <Stat label="Data date" value={formatCalendarDate(plan.dataDate)} />
             ) : null}
-          </div>
+            {projectFinish ? (
+              <Stat label="Project finish" value={formatCalendarDate(projectFinish)} />
+            ) : null}
+          </dl>
         </header>
 
         <main className="flex-1 p-4">
@@ -165,7 +225,7 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
 
 /** Exported for the route to render when the URL fragment carries no token. */
 export function GuestUnavailable(): React.ReactElement {
-  return <CenteredMessage role="alert" title={UNAVAILABLE_MESSAGE} />;
+  return <GuestMessageCard title={UNAVAILABLE_MESSAGE} />;
 }
 
 export { UNAVAILABLE_MESSAGE };

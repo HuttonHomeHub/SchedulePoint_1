@@ -220,6 +220,15 @@ jobs:
       - name: Web end-to-end tests (schedule interchange flag on)
         run: pnpm --filter @repo/web test:e2e:interchange
 
+      # Flag-ON External-Guest share links journey (playwright.share.config.ts) serving the app with
+      # VITE_GUEST_SHARE_LINKS on (layered on the canvas authoring/toolbar/workspace/editing/pen flags),
+      # so the whole share loop — the member Share… toolbar item opening ShareLinksDialog (create/list/
+      # revoke), the one-time guest URL, and the public session-less `/share#<token>` read-only view
+      # across a second, cookie-free browser context (with immediate revocation) — is exercised end to
+      # end (ADR-0051 F-M4). Runs last, after the prior runs tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (guest share links flag on)
+        run: pnpm --filter @repo/web test:e2e:share
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -237,6 +246,7 @@ jobs:
             apps/web/playwright-report-loe/
             apps/web/playwright-report-resource-view/
             apps/web/playwright-report-interchange/
+            apps/web/playwright-report-share/
           if-no-files-found: ignore
           retention-days: 7
 

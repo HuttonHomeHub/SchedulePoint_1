@@ -651,8 +651,12 @@ export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
  *
  * Everything behind it — the management + guest-read API — is always live (RBAC-gated / token-guarded);
  * this flag only governs whether the web UI exposes the dialog + registers the `/share` route.
- * `VITE_GUEST_SHARE_LINKS=false` ⇒ the toolbar `share` item is its byte-for-byte `placeholderItem()`
- * stub, no `/share` route is registered, and none of the share code is reached (emergency rollback /
- * opt-out). Set `VITE_GUEST_SHARE_LINKS=true` to enable it in an environment.
+ *
+ * **ON by default** (2026-07-21) now that every pre-enablement gate is green — the five specialist
+ * reviews (security / accessibility / ux / component / performance, all PASS after the review fold) and
+ * the flag-on Playwright journey (`e2e-share/share.spec.ts`: create → open guest URL → read-only + no
+ * member chrome → revoke → unavailable). Set `VITE_GUEST_SHARE_LINKS=false` for a byte-for-byte rollback:
+ * the toolbar `share` item reverts to its `placeholderItem()` "Coming soon" stub, no `/share` route is
+ * registered, and none of the share code is reached (emergency opt-out).
  */
-export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOff(import.meta.env.VITE_GUEST_SHARE_LINKS);
+export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUEST_SHARE_LINKS);

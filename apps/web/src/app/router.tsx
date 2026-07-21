@@ -6,7 +6,9 @@ import {
   createRouter,
   redirect,
 } from '@tanstack/react-router';
+import { Suspense, lazy } from 'react';
 
+import { Spinner } from '@/components/ui/spinner';
 import { GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
@@ -24,7 +26,6 @@ import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
 import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
 import { ResourcesScreen } from '@/routes/resources';
-import { ShareGuestScreen } from '@/routes/share';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
 
@@ -187,10 +188,30 @@ const recentlyDeletedRoute = createRoute({
  * Registered ONLY behind `VITE_GUEST_SHARE_LINKS` (like the resources route), so with the flag off the
  * route tree is byte-identical — there is no `/share` route at all (the surface stays fully dark).
  */
+/**
+ * Code-split the public guest screen: it pulls in the read-only TSLD canvas, which anonymous guests
+ * should download only when they hit `/share` — never as part of the authenticated app's main bundle.
+ * The dynamic import puts the whole guest surface in its own chunk (kept out of the main entry).
+ */
+const ShareGuestScreen = lazy(() =>
+  import('@/routes/share').then((m) => ({ default: m.ShareGuestScreen })),
+);
+
 const shareGuestRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/share',
-  component: ShareGuestScreen,
+  component: () => (
+    <Suspense
+      // Match the guest view's own loading chrome (a centred spinner) while the chunk loads.
+      fallback={
+        <main className="flex min-h-dvh items-center justify-center p-4" aria-busy="true">
+          <Spinner label="Loading…" />
+        </main>
+      }
+    >
+      <ShareGuestScreen />
+    </Suspense>
+  ),
 });
 
 /** Public invitation-accept route (keyed by the token in the URL). */

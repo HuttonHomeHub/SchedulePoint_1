@@ -117,9 +117,9 @@ export function fetchGuestPlan(token: string): Promise<GuestPlanView> {
   return guestFetch<GuestPlanView>('/plan', token).then((r) => r.data);
 }
 
-/** The pagination page size the guest reads walk with (matches the API's cursor default). */
-const GUEST_PAGE_SIZE = 100;
-/** A defensive cap on pages walked, so a misbehaving cursor can never loop forever (2,000-activity ceiling). */
+/** The pagination page size the guest reads walk with (the API's max for guest reads — a full plan in a few requests). */
+const GUEST_PAGE_SIZE = 500;
+/** A defensive cap on pages walked, so a misbehaving cursor can never loop forever (500 × 100 = 50,000-activity ceiling). */
 const MAX_PAGES = 100;
 
 /** Walk every cursor page of a guest list endpoint into one array (bounded by {@link MAX_PAGES}). */

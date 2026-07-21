@@ -44,9 +44,22 @@ function CreatedLinkPanel({ created }: { created: CreatedShare }): React.ReactEl
   const announce = useAnnounce();
   const [copied, setCopied] = useState(false);
 
+  // Revert the "Copied" label back to "Copy link" after a moment; clear the timer on unmount.
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
   const copy = (): void => {
-    // The URL carries the token in its fragment — copy it, never log it.
-    void navigator.clipboard.writeText(created.url).then(
+    // The URL carries the token in its fragment — copy it, never log it. Guard the Clipboard API being
+    // absent (older / insecure contexts) so we hit the manual-copy path instead of throwing synchronously.
+    const clipboard = navigator.clipboard;
+    if (!clipboard) {
+      announce('Couldn’t copy the link. Select and copy it manually.');
+      return;
+    }
+    void clipboard.writeText(created.url).then(
       () => {
         setCopied(true);
         announce('Share link copied to the clipboard.');
@@ -100,7 +113,7 @@ export function ShareLinksDialog({
   open: boolean;
   onClose: () => void;
 }): React.ReactElement {
-  const shares = useShares(orgSlug, planId);
+  const shares = useShares(orgSlug, planId, open);
   const create = useCreateShare(orgSlug, planId);
   const revoke = useRevokeShare(orgSlug, planId);
   const announce = useAnnounce();
@@ -197,7 +210,9 @@ export function ShareLinksDialog({
       },
     },
     { header: 'Created', cell: (s) => formatTimestamp(s.createdAt) },
-    { header: 'Expires', cell: (s) => (s.expiresAt ? formatCalendarDate(s.expiresAt) : 'Never') },
+    // `expiresAt` is a full ISO-8601 instant (server `.toISOString()`), so it must use the instant
+    // formatter — `formatCalendarDate` expects a bare `YYYY-MM-DD` and would throw on an instant.
+    { header: 'Expires', cell: (s) => (s.expiresAt ? formatTimestamp(s.expiresAt) : 'Never') },
     {
       header: 'Last opened',
       cell: (s) => (s.lastAccessedAt ? formatTimestamp(s.lastAccessedAt) : 'Never'),
@@ -240,7 +255,7 @@ export function ShareLinksDialog({
               {createShareErrorMessage(create.error)}
             </p>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-4">
             <TextField
               label="Label (optional)"
               autoComplete="off"
@@ -265,7 +280,7 @@ export function ShareLinksDialog({
           </div>
         </form>
 
-        {created ? <CreatedLinkPanel created={created} /> : null}
+        {created ? <CreatedLinkPanel key={created.share.id} created={created} /> : null}
 
         <DataTable
           caption="Share links"

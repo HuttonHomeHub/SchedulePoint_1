@@ -8,6 +8,7 @@ import { ShareLinksDialog } from './ShareLinksDialog';
 
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
+import { formatTimestamp } from '@/lib/format-date';
 
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
@@ -81,6 +82,16 @@ describe('ShareLinksDialog', () => {
     expect(await screen.findByText('Owner rep')).toBeInTheDocument();
     // The revoked row is badged (and its actions cell also reads "Revoked").
     expect(screen.getAllByText('Revoked').length).toBeGreaterThan(0);
+  });
+
+  it('renders a link with an expiry instant without crashing (formatTimestamp, not formatCalendarDate)', async () => {
+    // `expiresAt` is a full ISO-8601 instant (server `.toISOString()`); `formatCalendarDate` would throw
+    // `RangeError: Invalid time value` on it, so the Expires cell must use the instant formatter.
+    const expiresAt = '2026-06-15T12:00:00.000Z';
+    mockApi({ list: () => [link({ label: 'Expiring link', expiresAt })] });
+    renderDialog();
+    expect(await screen.findByText('Expiring link')).toBeInTheDocument();
+    expect(screen.getByText(formatTimestamp(expiresAt))).toBeInTheDocument();
   });
 
   it('surfaces a list error state', async () => {
