@@ -29,6 +29,7 @@ function makeTx() {
     baseline: model(),
     baselineActivity: model(),
     note: model(),
+    planShare: model(),
   };
 }
 
@@ -63,6 +64,7 @@ describe('HierarchyLifecycleService', () => {
         baselines: 0,
         steps: 0,
         notes: 0,
+        planShares: 0,
       });
       // Activities deleted are those under the client's active plans.
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -97,6 +99,7 @@ describe('HierarchyLifecycleService', () => {
         baselines: 0,
         steps: 0,
         notes: 0,
+        planShares: 0,
       });
     });
 
@@ -117,6 +120,7 @@ describe('HierarchyLifecycleService', () => {
         baselines: 0,
         steps: 0,
         notes: 0,
+        planShares: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1'] }, deletedAt: null },
@@ -147,6 +151,7 @@ describe('HierarchyLifecycleService', () => {
         baselines: 0,
         steps: 0,
         notes: 0,
+        planShares: 0,
       });
     });
 
@@ -173,6 +178,7 @@ describe('HierarchyLifecycleService', () => {
         baselines: 0,
         steps: 0,
         notes: 0,
+        planShares: 0,
       });
     });
 
@@ -312,6 +318,25 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
+    it("sweeps a plan's share links into the batch by plan_id (Stage F, ADR-0051)", async () => {
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.planShare.updateMany.mockResolvedValue({ count: 3 });
+      const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      expect(result.counts.planShares).toBe(3);
+      expect(tx.planShare.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId, updatedBy: ACTOR }),
+      });
+    });
+
+    it('does NOT sweep share links on a single-activity delete (they are plan-scoped)', async () => {
+      tx.activity.findMany.mockResolvedValue([]); // leaf subtree = { a1 }
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(result.counts.planShares).toBe(0);
+      expect(tx.planShare.updateMany).not.toHaveBeenCalled();
+    });
+
     it('deletes a dependency alone as a leaf (its own batch)', async () => {
       tx.activityDependency.updateMany.mockResolvedValue({ count: 1 });
       const result = await service.cascadeSoftDelete(asTx(), 'dependency', 'd1', ACTOR);
@@ -365,6 +390,7 @@ describe('HierarchyLifecycleService', () => {
         baselines: 0,
         steps: 0,
         notes: 0,
+        planShares: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-9' },
@@ -432,6 +458,22 @@ describe('HierarchyLifecycleService', () => {
       // Notes come back purely by their batch id — no endpoint guard (a note has exactly one parent,
       // swept in the same batch), like a step and unlike a dependency.
       expect(tx.note.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-p' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+    });
+
+    it("restores the batch's share links with their plan (Stage F, ADR-0051)", async () => {
+      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-p', projectId: 'pr1' });
+      tx.project.findFirst.mockResolvedValue({ id: 'pr1' }); // parent project active
+      tx.planShare.updateMany.mockResolvedValue({ count: 2 });
+
+      const counts = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+      expect(counts.planShares).toBe(2);
+      // Links come back purely by their batch id — no endpoint guard (a link has exactly one parent,
+      // swept in the same batch), like a note/step and unlike a dependency.
+      expect(tx.planShare.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-p' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });

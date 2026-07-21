@@ -176,6 +176,11 @@ model Organization {
   // the create transaction, never client input — the Activity/ResourceAssignment
   // pattern; so an org-scope/IDOR check and the cascade batch filter one indexed column.
   notes               Note[]
+  // External-Guest per-plan share links (Stage F, ADR-0051). PlanShare's organization_id
+  // is denormalised from its plan (copied by the service inside the create transaction,
+  // never client input — the PlanLock/Note pattern), purely as the tenant scope tag for
+  // scoped audit reads; the row itself is owned by its plan.
+  planShares          PlanShare[]
 
   @@map("organizations")
 }
@@ -697,6 +702,12 @@ model Plan {
   // and no note is double-counted. FK is RESTRICT; note soft-delete/restore is
   // service-owned (HierarchyLifecycleService, Task 1.4).
   notes             Note[]
+  // External-Guest read-only share links for THIS plan (Stage F, ADR-0051). A plan may
+  // have many independently-revocable links. FK is RESTRICT; the plan-cascade soft-delete
+  // sweeps its live links into the plan's delete_batch_id (HierarchyLifecycleService,
+  // F-M1 Task 4) so a deleted plan's links stop resolving. Read-only / non-scheduling —
+  // the CPM engine never reads it.
+  planShares        PlanShare[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -1683,6 +1694,91 @@ model PlanLock {
   // organization_id FK and any org-scoped audit read of held locks.
   @@index([organizationId])
   @@map("plan_locks")
+}
+
+// ---------------------------------------------------------------------------
+// PlanShare — External-Guest per-plan share links (Stage F, ADR-0051).
+//
+// The grant behind the fifth product role (PROJECT_BRIEF §5): a revocable,
+// optionally-expiring, READ-ONLY link that lets someone OUTSIDE the organisation
+// (a client rep, a subcontractor) view EXACTLY ONE plan — with no Better Auth
+// account and no org membership. A share URL is a bearer credential dereferenced by
+// a session-less token (ADR-0051 §2/§3); the ShareTokenGuard (F-M1 Task 3) resolves
+// it to a GuestPrincipal, never a member Principal.
+//
+// A FULL house-standard org-scoped record (UUID v7 PK, snake_case via @map,
+// timestamptz UTC, NOT NULL by default, soft delete + delete_batch_id, TEXT audit
+// ids, optimistic-locking `version`, scoped indexes). Cross-cutting conventions:
+//
+//   * organization_id is DENORMALISED from the plan (copied by the service inside the
+//     create transaction, NEVER client input — the PlanLock/Note pattern), purely as
+//     the tenant scope tag for scoped audit reads. Invariant:
+//     share.organization_id == plan.organization_id. RESTRICT FK (inert in practice —
+//     plan → org RESTRICT fires first), matching every sibling.
+//   * It PARTICIPATES in the plan soft-delete cascade (ADR-0051 §1/§5). The plan-cascade
+//     (HierarchyLifecycleService, F-M1 Task 4) stamps a plan's live links with the plan's
+//     `delete_batch_id`, so a deleted plan's links stop resolving and a restore brings
+//     exactly that batch back — hence `delete_batch_id` and the RESTRICT plan FK (never a
+//     DB CASCADE; soft-delete is service-owned, and RESTRICT guards an accidental hard
+//     delete from orphaning links). This is why PlanShare's plan FK is RESTRICT while
+//     the ephemeral PlanLock's is CASCADE — a link is a preserved domain record, a lock
+//     is not.
+//   * token_hash stores the SHA-256 HEX of the raw token — the raw value is returned ONCE
+//     on create and NEVER stored (the Invitation.tokenHash precedent), so a database leak
+//     never yields a usable link. UNIQUE across ALL rows (including revoked/soft-deleted)
+//     so a hash resolves to at most one grant and is never reused.
+//   * READ-ONLY / NON-SCHEDULING — a guest never writes, never holds the pen (ADR-0028),
+//     and the CPM engine never reads this table, so the recalc parity gate is untouched.
+//
+// `label` is an optional human handle for the management list ("Client review – Acme").
+// `expires_at` NULL = no expiry; `revoked_at` NULL = live, set = immediately dead;
+// `last_accessed_at` is best-effort COALESCED guest-access telemetry (ADR-0051 §7).
+// Liveness is evaluated server-side against now() by the guard (§5): token_hash matches
+// AND revoked_at IS NULL AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at >
+// now()) AND the referenced plan is itself active. `created_by` = who minted; a revoke
+// stamps `updated_by` + `revoked_at`.
+// ---------------------------------------------------------------------------
+model PlanShare {
+  id             String @id @default(uuid(7)) @db.Uuid
+  // Denormalised tenant scope tag, copied from the plan (never client input). RESTRICT.
+  organizationId String @map("organization_id") @db.Uuid
+  // The ONE plan this link grants (ADR-0051 §1). RESTRICT — soft-delete + cascade is
+  // service-owned (HierarchyLifecycleService), never a DB cascade.
+  planId         String @map("plan_id") @db.Uuid
+  // SHA-256 hex of the raw bearer token; the raw value is never stored. UNIQUE (full,
+  // not partial on deleted_at) so a hash resolves to at most one grant, ever.
+  tokenHash      String @unique @map("token_hash")
+
+  // Optional human label for the management list. Optional TTL / revocation / telemetry —
+  // all instants → timestamptz UTC (not @db.Date).
+  label          String?
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz(3)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  lastAccessedAt DateTime? @map("last_accessed_at") @db.Timestamptz(3)
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  // Better Auth ids are opaque TEXT (NOT UUID) — the created_by/updated_by convention.
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  // Set only on links swept together with their plan (the plan cascade batch, F-M1 Task 4),
+  // so restoring the plan restores exactly that batch — the hierarchy delete_batch_id sibling.
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  // Indexes. `unique(token_hash)` (above) IS the guest lookup. A partial index on
+  // (plan_id) WHERE deleted_at IS NULL backs "list a plan's live links" AND the cascade
+  // filter — raw SQL in the migration (Prisma cannot express a WHERE predicate); partial
+  // (not a full composite backing the FK) because plans soft-delete only, so the plan FK
+  // RESTRICT check never fires (the idx_plans_calendar_id / idx_notes_activity_created
+  // precedent). A partial (delete_batch_id) index backs batch restore. organization_id is
+  // indexed on its own for its FK + org-scoped audit reads.
+  @@index([organizationId])
+  @@map("plan_shares")
 }
 
 // ---------------------------------------------------------------------------

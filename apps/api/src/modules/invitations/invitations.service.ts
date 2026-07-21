@@ -11,6 +11,7 @@ import {
   NotFoundError,
 } from '../../common/errors/domain-errors';
 import { MailService } from '../../common/mail/mail.service';
+import { generateOpaqueToken, hashToken } from '../../common/tokens/token';
 import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgMemberRepository } from '../organizations/org-member.repository';
@@ -18,7 +19,6 @@ import { OrganizationsService } from '../organizations/organizations.service';
 
 import type { CreateInvitationDto } from './dto/create-invitation.dto';
 import { type InvitationWithOrg, InvitationRepository } from './invitation.repository';
-import { generateInvitationToken, hashInvitationToken } from './token';
 
 /** How long an invitation stays valid. */
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,7 +73,7 @@ export class InvitationsService {
       }
     }
 
-    const { token, tokenHash } = generateInvitationToken();
+    const { token, tokenHash } = generateOpaqueToken();
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
 
     let invitation: Invitation;
@@ -152,13 +152,13 @@ export class InvitationsService {
 
   /** Token-gated preview shown before accepting. Throws 404 if the token is unknown. */
   async preview(token: string): Promise<InvitationWithOrg> {
-    const invitation = await this.invitations.findActiveByTokenHash(hashInvitationToken(token));
+    const invitation = await this.invitations.findActiveByTokenHash(hashToken(token));
     if (!invitation) throw new NotFoundError('Invitation not found.');
     return invitation;
   }
 
   async accept(principal: Principal, token: string): Promise<AcceptedInvitationResult> {
-    const invitation = await this.invitations.findActiveByTokenHash(hashInvitationToken(token));
+    const invitation = await this.invitations.findActiveByTokenHash(hashToken(token));
     if (!invitation) throw new NotFoundError('Invitation not found.');
     if (invitation.status !== 'PENDING') throw new GoneError('This invitation is no longer valid.');
     if (invitation.expiresAt.getTime() < Date.now()) {

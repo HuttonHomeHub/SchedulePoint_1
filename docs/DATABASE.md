@@ -245,6 +245,10 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `idx_notes_activity_created`                  | `(activity_id, created_at, id)`        | partial        | the ACTIVITY-notes thread list & newest-first cursor (`WHERE deleted_at IS NULL AND activity_id IS NOT NULL` — excludes PLAN notes + soft-deleted)                                                                         |
 | `idx_notes_plan_activity_counts`              | `(plan_id, activity_id)`               | partial        | the badge note-counts `GROUP BY activity_id` for a plan (`WHERE deleted_at IS NULL AND entity_type='ACTIVITY'`; a grouped scan, no N+1)                                                                                    |
 | `idx_notes_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
+| `plan_shares_token_hash_key`                  | `(token_hash)`                         | full unique    | the guest bearer-token lookup; unique across ALL rows (incl. revoked/soft-deleted) so a hash resolves to at most one grant and is never reused (the `invitations.token_hash` precedent, ADR-0051)                          |
+| `plan_shares_organization_id_idx`             | `(organization_id)`                    | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR / audit loads                                                                                                                                                            |
+| `idx_plan_shares_plan_id`                     | `(plan_id)`                            | partial        | list a plan's LIVE links + the plan-cascade filter (`WHERE deleted_at IS NULL`); partial (not a full composite backing the FK) because plans soft-delete only, so the plan FK RESTRICT check never fires                   |
+| `idx_plan_shares_delete_batch_id`             | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -874,6 +878,59 @@ table create).
   409, and that the denormalised `organization_id`/`plan_id` equal the parent's (the CHECK
   enforces shape, not value equality — a unit-tested service invariant, like every
   denormalised-scope sibling).
+
+### PlanShare: External-Guest per-plan share links (ADR-0051)
+
+The `plan_shares` table (Stage F, ADR-0051) is the grant behind the fifth product role
+(PROJECT_BRIEF §5): a **revocable, optionally-expiring, READ-ONLY** link that lets
+someone **outside** the organisation (a client rep, a subcontractor) view **exactly one
+plan** — with **no Better Auth account and no org membership**. It is a bearer-token
+grant dereferenced by a **session-less** token (the `ShareTokenGuard`, F-M1 Task 3,
+resolves it to a `GuestPrincipal`, never a member `Principal`). It follows every house
+standard (UUID v7 PK, snake_case via `@map`, timestamptz UTC, TEXT audit ids,
+optimistic-locking `version`, soft delete + `delete_batch_id`, scoped indexes) and is
+**non-scheduling** — the CPM engine never reads it and a guest never writes or holds the
+pen (ADR-0028), so the migration is byte-parity (a single additive table create).
+
+- **Denormalised `organization_id`**, service-copied from the plan inside the create
+  transaction (**never** client input — the `PlanLock`/`Note` invariant
+  `share.organization_id == plan.organization_id`), purely as the tenant scope tag for
+  scoped audit reads. `RESTRICT` FK like every sibling (inert — plan → org `RESTRICT`
+  fires first).
+- **`token_hash`** stores the **SHA-256 hex** of the raw bearer token — the raw value is
+  returned **once** on create and **never stored** (the `invitations.token_hash`
+  precedent), so a database leak never yields a usable link. **`UNIQUE` across all rows**
+  (including revoked / soft-deleted), full not partial, so a hash resolves to at most one
+  grant and is never reused.
+- **Participates in the plan soft-delete cascade.** Unlike the ephemeral `PlanLock` (whose
+  plan FK is `CASCADE`), a link is a **preserved domain record**, so its plan FK is
+  `ON DELETE RESTRICT` and it carries a **`delete_batch_id`**. The plan cascade
+  (`HierarchyLifecycleService`, **F-M1 Task 4**, not yet wired) stamps a plan's live links
+  with the plan's batch id via a plain `updateMany WHERE plan_id IN (…) AND deleted_at IS
+NULL`, so a deleted plan's links **stop resolving** (the guard also re-checks the live
+  plan, ADR-0051 §5) and a restore brings exactly that batch back — **no endpoint guard**
+  (a link has exactly one parent; the `activity_steps`/`notes` precedent). `RESTRICT` is
+  defence in depth: we never hard-delete, and it guards against an accidental hard delete
+  orphaning links. A directly-deleted link (a future management action) gets its **own**
+  fresh batch id (the dependency-leaf precedent) so a plan restore never resurrects it.
+- **Liveness** is evaluated server-side against `now()` by the guard (§5): `token_hash`
+  matches **AND** `revoked_at IS NULL` **AND** `deleted_at IS NULL` **AND** (`expires_at
+IS NULL OR expires_at > now()`) **AND** the referenced plan is itself active. Any failure
+  → a **uniform 404** (the guard leaks nothing about a token's existence). `expires_at`
+  NULL = no expiry; `revoked_at` NULL = live, set = immediately dead (no token cache in v1,
+  so revocation latency is one request); `last_accessed_at` is best-effort **coalesced**
+  guest-access telemetry (§7), written without an edit-`version` bump.
+- **Indexes.** The unique `token_hash` **is** the guest lookup. A partial
+  `idx_plan_shares_plan_id` (`WHERE deleted_at IS NULL`) backs the management list + the
+  cascade filter — partial (not a full composite backing the FK) because plans soft-delete
+  only, so the plan FK check never fires (the `idx_plans_calendar_id` reasoning). A partial
+  `idx_plan_shares_delete_batch_id` backs batch restore; `plan_shares_organization_id_idx`
+  backs the org FK + scoped audit reads.
+- **Service-layer obligations the DB can't enforce (F-M2/F-M3):** copying
+  `organization_id` from the resolved plan (the CHECK-free denormalised-scope value
+  equality, unit-tested like every sibling); asserting `plan:share` (Planner/Org-Admin)
+  on create/list/revoke; returning the raw token **once** on create and **never** in the
+  list; and the guest guard's uniform-404 resolution + live-plan re-check.
 
 ## Testing & performance
 
