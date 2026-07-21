@@ -1,5 +1,36 @@
 # @repo/web
 
+## 0.44.0
+
+### Minor Changes
+
+- [#140](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/140) [`bc4522f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bc4522f1b254bd924d1f77a57cc8a4b12b65a7ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: show the running API + web version in the app shell
+
+  Adds a public `GET /api/v1/version` endpoint (unauthenticated, like `/health`) returning
+  `{ data: { version } }` — the API's own package version, read once at startup. The web app bakes its
+  own version at build time and renders a subtle `web x.y.z · api x.y.z` line in the Project Explorer
+  rail footer (muted, non-interactive, screen-reader labelled), fetching the API version via a cached
+  query. Makes the deployed versions visible in-product for support/debugging.
+
+- [#140](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/140) [`bc4522f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bc4522f1b254bd924d1f77a57cc8a4b12b65a7ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): flip live cross-plan / programme scheduling on by default (ADR-0045)
+
+  `VITE_PROGRAMME_SCHEDULING` — the last dark web flag — is now **on by default** (set `=false` to
+  roll back). The programme surface (cross-plan dependency links, "Recalculate programme" over the
+  plan-level DAG, and the stale-schedule banner) is exposed in the web UI, layered on the already-live
+  API (its component/ux/a11y quality gates and the flag-on Playwright journey are green). This closes
+  the last remaining feature flag; every shipped web feature is now on by default.
+
+### Patch Changes
+
+- [#140](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/140) [`bc4522f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bc4522f1b254bd924d1f77a57cc8a4b12b65a7ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): load the whole plan into the workspace instead of the first page
+
+  The canvas, activities table and logic view fetched a single default page (20 rows) from the
+  cursor-paginated activities and dependencies endpoints, so a plan with more than 20 activities showed
+  only the first ~20 and — because a dependency edge only draws when both its endpoint bars are loaded —
+  almost none of its links. Adds an `apiFetchAllPages` helper that follows `meta.nextCursor` to
+  exhaustion (100 rows/page) and points the plan-workspace activity and dependency queries at it, so the
+  full network loads and renders. No API or schema change.
+
 ## 0.43.0
 
 ### Minor Changes
