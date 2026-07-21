@@ -134,14 +134,28 @@ export function importXer(input: ImportXerInput): ImportXerResult {
     ...validated.findings,
   ]);
 
+  // Counts. `activities` counts real (non-summary) activities; the M2 keys are omitted when zero so a
+  // pure M1 network reports exactly the three original keys (consumers treat a missing key as 0).
+  const g = validated.graph;
+  const wbsSummaries = g.activities.filter((a) => a.type === 'WBS_SUMMARY').length;
+  const constraints = g.activities.reduce(
+    (n, a) =>
+      n + (a.constraintType !== null ? 1 : 0) + (a.secondaryConstraintType !== null ? 1 : 0),
+    0,
+  );
+
   const report: InterchangeReport = {
     detectedFormat: adapted.model.source.format,
     sourceVersion: adapted.model.source.version,
     sourceFilename: adapted.model.source.filename,
     mapped: {
-      activities: validated.graph.activities.length,
-      relationships: validated.graph.dependencies.length,
-      calendars: validated.graph.calendars.length,
+      activities: g.activities.length - wbsSummaries,
+      relationships: g.dependencies.length,
+      calendars: g.calendars.length,
+      ...(wbsSummaries > 0 ? { wbsSummaries } : {}),
+      ...(constraints > 0 ? { constraints } : {}),
+      ...(g.resources.length > 0 ? { resources: g.resources.length } : {}),
+      ...(g.assignments.length > 0 ? { assignments: g.assignments.length } : {}),
     },
     approximations,
     repairs,

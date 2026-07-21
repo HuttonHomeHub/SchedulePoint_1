@@ -4,10 +4,15 @@ import type { CanonicalModel } from './canonical.js';
 import {
   importGraphSchema,
   type ImportActivity,
+  type ImportAssignment,
   type ImportDependency,
   type ImportGraph,
+  type ImportProgress,
+  type ImportResource,
+  type ImportResourceKind,
 } from './import-graph.js';
 import { mapCanonicalToImportGraph } from './mapper.js';
+import type { ReportFinding } from './report.js';
 import { validateAndRepair } from './validate.js';
 
 /** A minimal valid activity for hand-built validate fixtures. */
@@ -19,6 +24,13 @@ function activity(key: string, code = key): ImportActivity {
     type: 'TASK',
     durationMinutes: 480,
     calendarKey: null,
+    parentKey: null,
+    constraintType: null,
+    constraintDate: null,
+    secondaryConstraintType: null,
+    secondaryConstraintDate: null,
+    scheduleAsLateAsPossible: false,
+    progress: null,
   };
 }
 
@@ -38,6 +50,78 @@ function graphOf(activities: ImportActivity[], dependencies: ImportDependency[])
     calendars: [],
     activities,
     dependencies,
+    resources: [],
+    assignments: [],
+  };
+}
+
+/** A WBS-summary activity (0 duration, optional parent). */
+function summary(key: string, parentKey: string | null = null, code = key): ImportActivity {
+  return { ...activity(key, code), type: 'WBS_SUMMARY', durationMinutes: 0, parentKey };
+}
+
+/** A minimal resource. */
+function resource(
+  key: string,
+  kind: ImportResourceKind = 'LABOUR',
+  calendarKey: string | null = null,
+): ImportResource {
+  return {
+    key,
+    name: `Resource ${key}`,
+    code: null,
+    kind,
+    calendarKey,
+    costPerUnit: null,
+    maxUnitsPerHour: null,
+  };
+}
+
+/** A minimal assignment. */
+function assign(
+  key: string,
+  activityKey: string,
+  resourceKey: string,
+  isDriving = false,
+): ImportAssignment {
+  return {
+    key,
+    activityKey,
+    resourceKey,
+    budgetedUnits: 0,
+    unitsPerHour: null,
+    isDriving,
+    actualUnits: 0,
+  };
+}
+
+/** Wrap an arbitrary set of graph parts (calendars/resources/assignments default empty). */
+function fullGraph(parts: Partial<ImportGraph>): ImportGraph {
+  return {
+    plan: { name: 'Plan', dataDate: '2026-01-05', defaultCalendarKey: null },
+    calendars: [],
+    activities: [],
+    dependencies: [],
+    resources: [],
+    assignments: [],
+    ...parts,
+  };
+}
+
+/** A default-progress block, overridable per-field. */
+function progress(overrides: Partial<ImportProgress> = {}): ImportProgress {
+  return {
+    status: 'NOT_STARTED',
+    percentComplete: 0,
+    percentCompleteType: 'DURATION',
+    physicalPercentComplete: null,
+    actualStart: null,
+    actualFinish: null,
+    remainingDurationMinutes: null,
+    suspendDate: null,
+    resumeDate: null,
+    expectedFinish: null,
+    ...overrides,
   };
 }
 
@@ -230,6 +314,13 @@ describe('mapCanonicalToImportGraph — hand-built canonical round-trips to a va
         type: 'TASK',
         durationMinutes: 2400,
         calendarId: 'CAL',
+        parentId: null,
+        constraintType: null,
+        constraintDate: null,
+        secondaryConstraintType: null,
+        secondaryConstraintDate: null,
+        scheduleAsLateAsPossible: false,
+        progress: null,
       },
       {
         id: 'B',
@@ -238,9 +329,18 @@ describe('mapCanonicalToImportGraph — hand-built canonical round-trips to a va
         type: 'FINISH_MILESTONE',
         durationMinutes: 0,
         calendarId: null,
+        parentId: null,
+        constraintType: null,
+        constraintDate: null,
+        secondaryConstraintType: null,
+        secondaryConstraintDate: null,
+        scheduleAsLateAsPossible: false,
+        progress: null,
       },
     ],
     relationships: [{ id: 'R', predecessorId: 'A', successorId: 'B', type: 'FS', lagMinutes: 480 }],
+    resources: [],
+    assignments: [],
   };
 
   it('translates calendar windows, keys, and lags into SchedulePoint vocabulary', () => {
@@ -279,5 +379,220 @@ describe('mapCanonicalToImportGraph — hand-built canonical round-trips to a va
     const validated = validateAndRepair(graph);
     expect(validated.findings).toHaveLength(0);
     expect(validated.graph).toEqual(graph);
+  });
+});
+
+const repaired = (findings: ReportFinding[], entity: string, substr: string): boolean =>
+  findings.some((f) => f.kind === 'repair' && f.entity === entity && f.detail.includes(substr));
+
+describe('validateAndRepair — WBS parentage (ADR-0038)', () => {
+  it('nulls a parent that does not resolve to an activity', () => {
+    const a = { ...activity('A'), parentKey: 'GHOST' };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.parentKey).toBeNull();
+    expect(repaired(findings, 'wbs', 'not found')).toBe(true);
+  });
+
+  it('nulls a parent that is not a WBS summary', () => {
+    const child = { ...activity('A'), parentKey: 'B' };
+    const { graph, findings } = validateAndRepair(graphOf([child, activity('B')], []));
+    expect(graph.activities[0]?.parentKey).toBeNull();
+    expect(repaired(findings, 'wbs', 'not a WBS summary')).toBe(true);
+  });
+
+  it('keeps a valid parent pointing at a WBS summary', () => {
+    const child = { ...activity('A'), parentKey: 'S1' };
+    const { graph, findings } = validateAndRepair(graphOf([summary('S1'), child], []));
+    expect(graph.activities.find((x) => x.key === 'A')?.parentKey).toBe('S1');
+    expect(findings.filter((f) => f.entity === 'wbs')).toHaveLength(0);
+  });
+
+  it('breaks a WBS parent cycle deterministically', () => {
+    const s1 = summary('S1', 'S2');
+    const s2 = summary('S2', 'S1');
+    const { graph, findings } = validateAndRepair(graphOf([s1, s2], []));
+    // Largest key (S2) has its parent cleared; S1 keeps S2 → acyclic.
+    expect(graph.activities.find((x) => x.key === 'S2')?.parentKey).toBeNull();
+    expect(graph.activities.find((x) => x.key === 'S1')?.parentKey).toBe('S2');
+    expect(repaired(findings, 'wbs', 'cycle')).toBe(true);
+  });
+
+  it('drops a dependency touching a WBS summary', () => {
+    const { graph, findings } = validateAndRepair(
+      graphOf([summary('S1'), activity('A')], [edge('A', 'S1'), edge('S1', 'A')]),
+    );
+    expect(graph.dependencies).toHaveLength(0);
+    expect(repaired(findings, 'relationship', 'WBS summary')).toBe(true);
+  });
+});
+
+describe('validateAndRepair — constraint pairing (ADR-0035 §7)', () => {
+  it('drops a primary constraint type with no date', () => {
+    const a = { ...activity('A'), constraintType: 'MSO' as const, constraintDate: null };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.constraintType).toBeNull();
+    expect(repaired(findings, 'constraint', 'primary')).toBe(true);
+  });
+
+  it('drops a primary constraint date with no type', () => {
+    const a = { ...activity('A'), constraintType: null, constraintDate: '2026-01-06' };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.constraintDate).toBeNull();
+    expect(repaired(findings, 'constraint', 'primary')).toBe(true);
+  });
+
+  it('drops an orphaned secondary constraint but keeps a valid primary', () => {
+    const a = {
+      ...activity('A'),
+      constraintType: 'SNET' as const,
+      constraintDate: '2026-01-06',
+      secondaryConstraintType: 'FNLT' as const,
+      secondaryConstraintDate: null,
+    };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.constraintType).toBe('SNET');
+    expect(graph.activities[0]?.secondaryConstraintType).toBeNull();
+    expect(repaired(findings, 'constraint', 'secondary')).toBe(true);
+  });
+});
+
+describe('validateAndRepair — progress (ADR-0035 §6)', () => {
+  it('clamps out-of-range percents', () => {
+    const a = {
+      ...activity('A'),
+      progress: progress({ percentComplete: 150, physicalPercentComplete: -5 }),
+    };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.progress?.percentComplete).toBe(100);
+    expect(graph.activities[0]?.progress?.physicalPercentComplete).toBe(0);
+    expect(repaired(findings, 'progress', 'clamped')).toBe(true);
+  });
+
+  it('N08 — completes without an actual finish → sets the finish to the data date', () => {
+    const a = {
+      ...activity('A'),
+      progress: progress({ status: 'COMPLETE', actualStart: '2026-01-02', actualFinish: null }),
+    };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.progress?.actualFinish).toBe('2026-01-05'); // the data date
+    expect(graph.activities[0]?.progress?.status).toBe('COMPLETE');
+    expect(repaired(findings, 'progress', 'data date')).toBe(true);
+  });
+
+  it('N18 — remaining > 0 on a complete activity → zeroed', () => {
+    const a = {
+      ...activity('A'),
+      progress: progress({
+        status: 'COMPLETE',
+        actualFinish: '2026-01-04',
+        remainingDurationMinutes: 480,
+      }),
+    };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.progress?.remainingDurationMinutes).toBe(0);
+    expect(repaired(findings, 'progress', 'remaining')).toBe(true);
+  });
+
+  it('drops a resume date that precedes its suspend date', () => {
+    const a = {
+      ...activity('A'),
+      progress: progress({
+        status: 'IN_PROGRESS',
+        actualStart: '2026-01-02',
+        suspendDate: '2026-01-10',
+        resumeDate: '2026-01-08',
+      }),
+    };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.progress?.resumeDate).toBeNull();
+    expect(repaired(findings, 'progress', 'resume')).toBe(true);
+  });
+
+  it('derives status from actuals (no finding for a pure derivation)', () => {
+    const a = {
+      ...activity('A'),
+      progress: progress({ status: 'NOT_STARTED', percentComplete: 50 }),
+    };
+    const { graph, findings } = validateAndRepair(graphOf([a], []));
+    expect(graph.activities[0]?.progress?.status).toBe('IN_PROGRESS');
+    expect(findings.filter((f) => f.entity === 'progress')).toHaveLength(0);
+  });
+});
+
+describe('validateAndRepair — resources + assignments (ADR-0039/0040)', () => {
+  it('nulls an unresolved resource calendar reference', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [{ key: 'CAL', name: 'Std', shifts: [], exceptions: [] }],
+        resources: [resource('R1', 'LABOUR', 'GHOST')],
+      }),
+    );
+    expect(graph.resources[0]?.calendarKey).toBeNull();
+    expect(repaired(findings, 'resource', 'calendar')).toBe(true);
+  });
+
+  it('keeps a resolvable resource calendar', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [{ key: 'CAL', name: 'Std', shifts: [], exceptions: [] }],
+        resources: [resource('R1', 'LABOUR', 'CAL')],
+      }),
+    );
+    expect(graph.resources[0]?.calendarKey).toBe('CAL');
+    expect(findings.filter((f) => f.entity === 'resource')).toHaveLength(0);
+  });
+
+  it('drops an assignment whose activity or resource does not resolve', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        activities: [activity('A')],
+        resources: [resource('R1')],
+        assignments: [
+          assign('X1', 'A', 'R1'),
+          assign('X2', 'GHOST', 'R1'),
+          assign('X3', 'A', 'NOPE'),
+        ],
+      }),
+    );
+    expect(graph.assignments.map((x) => x.key)).toEqual(['X1']);
+    expect(
+      findings.filter((f) => f.entity === 'assignment' && f.detail.includes('not found')),
+    ).toHaveLength(2);
+  });
+
+  it('de-duplicates a repeated (activity, resource) pair, keeping the first', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        activities: [activity('A')],
+        resources: [resource('R1')],
+        assignments: [assign('X1', 'A', 'R1'), assign('X2', 'A', 'R1')],
+      }),
+    );
+    expect(graph.assignments.map((x) => x.key)).toEqual(['X1']);
+    expect(repaired(findings, 'assignment', 'duplicate')).toBe(true);
+  });
+
+  it('demotes a MATERIAL resource that is marked driving', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        activities: [activity('A')],
+        resources: [resource('R1', 'MATERIAL')],
+        assignments: [assign('X1', 'A', 'R1', true)],
+      }),
+    );
+    expect(graph.assignments[0]?.isDriving).toBe(false);
+    expect(repaired(findings, 'assignment', 'MATERIAL')).toBe(true);
+  });
+
+  it('keeps at most one driver per activity (first wins)', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        activities: [activity('A')],
+        resources: [resource('R1'), resource('R2')],
+        assignments: [assign('X1', 'A', 'R1', true), assign('X2', 'A', 'R2', true)],
+      }),
+    );
+    expect(graph.assignments.map((x) => x.isDriving)).toEqual([true, false]);
+    expect(repaired(findings, 'assignment', 'already has a driver')).toBe(true);
   });
 });

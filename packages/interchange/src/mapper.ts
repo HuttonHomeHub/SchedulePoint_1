@@ -6,11 +6,13 @@ import type {
 } from './canonical.js';
 import type {
   ImportActivity,
+  ImportAssignment,
   ImportCalendar,
   ImportCalendarException,
   ImportCalendarShift,
   ImportDependency,
   ImportGraph,
+  ImportResource,
   ImportWorkWindow,
 } from './import-graph.js';
 import type { ReportFinding } from './report.js';
@@ -20,9 +22,10 @@ import type { ReportFinding } from './report.js';
  * translation from the format-neutral {@link CanonicalModel} to the domain-shaped {@link ImportGraph}:
  * per-day `"HH:MM"` work windows become flat weekday **minute** shift rows (`weekday` 0 = Monday …
  * 6 = Sunday), single-date exceptions become inclusive date ranges with minute windows, and every node
- * keeps its stable source id as its **import key** so dependencies resolve. This step is lossless — it
- * changes shape, not meaning — so it emits no findings today; the array is returned for symmetry and to
- * keep the M2 seam open.
+ * keeps its stable source id as its **import key** so dependencies, WBS parentage and assignments resolve.
+ * M2's WBS `parentId`, constraint slots, progress, resources and assignments pass through unchanged (id →
+ * key). This step is lossless — it changes shape, not meaning — so it emits no findings today; the array
+ * is returned for symmetry (the reject/repair/report work happens in the validate step).
  */
 
 /** Canonical work-week keys in weekday order (0 = Monday … 6 = Sunday). */
@@ -83,6 +86,13 @@ export function mapCanonicalToImportGraph(model: CanonicalModel): MapResult {
     type: activity.type,
     durationMinutes: activity.durationMinutes,
     calendarKey: activity.calendarId,
+    parentKey: activity.parentId,
+    constraintType: activity.constraintType,
+    constraintDate: activity.constraintDate,
+    secondaryConstraintType: activity.secondaryConstraintType,
+    secondaryConstraintDate: activity.secondaryConstraintDate,
+    scheduleAsLateAsPossible: activity.scheduleAsLateAsPossible,
+    progress: activity.progress,
   }));
 
   const dependencies: ImportDependency[] = model.relationships.map((relationship) => ({
@@ -91,6 +101,26 @@ export function mapCanonicalToImportGraph(model: CanonicalModel): MapResult {
     successorKey: relationship.successorId,
     type: relationship.type,
     lagMinutes: relationship.lagMinutes,
+  }));
+
+  const resources: ImportResource[] = model.resources.map((resource) => ({
+    key: resource.id,
+    name: resource.name,
+    code: resource.code,
+    kind: resource.kind,
+    calendarKey: resource.calendarId,
+    costPerUnit: resource.costPerUnit,
+    maxUnitsPerHour: resource.maxUnitsPerHour,
+  }));
+
+  const assignments: ImportAssignment[] = model.assignments.map((assignment) => ({
+    key: assignment.id,
+    activityKey: assignment.activityId,
+    resourceKey: assignment.resourceId,
+    budgetedUnits: assignment.budgetedUnits,
+    unitsPerHour: assignment.unitsPerHour,
+    isDriving: assignment.isDriving,
+    actualUnits: assignment.actualUnits,
   }));
 
   const graph: ImportGraph = {
@@ -102,6 +132,8 @@ export function mapCanonicalToImportGraph(model: CanonicalModel): MapResult {
     calendars,
     activities,
     dependencies,
+    resources,
+    assignments,
   };
 
   return { graph, findings: [] };

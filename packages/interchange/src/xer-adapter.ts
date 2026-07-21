@@ -1,15 +1,22 @@
 import type {
   CanonicalActivity,
+  CanonicalActivityStatus,
   CanonicalActivityType,
+  CanonicalAssignment,
   CanonicalCalendar,
+  CanonicalConstraintType,
   CanonicalModel,
+  CanonicalPercentCompleteType,
+  CanonicalProgress,
   CanonicalProject,
   CanonicalRelationship,
   CanonicalRelationshipType,
+  CanonicalResource,
+  CanonicalResourceKind,
 } from './canonical.js';
 import type { ReportFinding } from './report.js';
 import { fallbackWorkWeek, parseClndrData } from './xer-calendar.js';
-import type { XerDocument, XerTable } from './xer-parser.js';
+import type { XerDocument } from './xer-parser.js';
 
 /**
  * The **XER → canonical adapter** (ADR-0050, Task 1.3 step 1). This is the only place P6's XER
@@ -34,16 +41,16 @@ const TABLE = {
   task: 'TASK',
   taskPred: 'TASKPRED',
   calendar: 'CALENDAR',
-  // Out-of-M1-scope tables reported as drops when present (mapping-contract M2 rows / Won't-have).
+  // M2 tables (WBS / resources / assignments) — now mapped, no longer dropped (ADR-0038/0039/0040).
   projwbs: 'PROJWBS',
   rsrc: 'RSRC',
   taskRsrc: 'TASKRSRC',
 } as const;
 
-/** P6 `task_type` → canonical activity type. Types outside M1's network scope are absent (coerced + reported). */
+/** P6 `task_type` → canonical activity type. Types outside scope (e.g. `TT_LOE`) are absent (coerced + reported). */
 const TASK_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalActivityType>> = {
   TT_Task: 'TASK',
-  TT_Rsrc: 'TASK', // resource-dependent scheduling is M2 (ADR-0039) — treated as a plain task for M1.
+  TT_Rsrc: 'RESOURCE_DEPENDENT', // resource-dependent scheduling (ADR-0039, M2).
   TT_Mile: 'START_MILESTONE',
   TT_FinMile: 'FINISH_MILESTONE',
 };
@@ -54,6 +61,43 @@ const PRED_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalRelationshipType>
   PR_SS: 'SS',
   PR_FF: 'FF',
   PR_SF: 'SF',
+};
+
+/**
+ * P6 `cstr_type` → canonical `ConstraintType` (ADR-0035 §7). `CS_ALAP` and `CS_EXPFIN` are handled
+ * separately (they are not type/date constraints — ALAP sets the activity flag, Expected-Finish routes
+ * to progress); any other value is dropped + reported.
+ */
+const CSTR_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalConstraintType>> = {
+  CS_MSO: 'MSO',
+  CS_MSOA: 'SNET',
+  CS_MSOB: 'SNLT',
+  CS_MEO: 'MFO',
+  CS_MEOA: 'FNET',
+  CS_MEOB: 'FNLT',
+  CS_MANDSTART: 'MANDATORY_START',
+  CS_MANDFIN: 'MANDATORY_FINISH',
+};
+
+/** P6 `status_code` → canonical activity status (a provisional source status; the validate step derives the final). */
+const STATUS_CODE_TO_CANONICAL: Readonly<Record<string, CanonicalActivityStatus>> = {
+  TK_NotStart: 'NOT_STARTED',
+  TK_Active: 'IN_PROGRESS',
+  TK_Complete: 'COMPLETE',
+};
+
+/** P6 `complete_pct_type` → canonical percent-complete type (ADR-0042). Unknown → `DURATION`. */
+const PCT_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalPercentCompleteType>> = {
+  CP_Drtn: 'DURATION',
+  CP_Units: 'UNITS',
+  CP_Phys: 'PHYSICAL',
+};
+
+/** P6 `rsrc_type` → canonical `ResourceKind` (ADR-0039). Unknown → `LABOUR` + reported. */
+const RSRC_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalResourceKind>> = {
+  RT_Labor: 'LABOUR',
+  RT_Equip: 'EQUIPMENT',
+  RT_Mat: 'MATERIAL',
 };
 
 /** Signed working-minute bound (± ~10 years) mirroring the domain `lag_minutes` / duration CHECK range. */
@@ -126,6 +170,110 @@ function hoursToMinutes(
     clamped = true;
   }
   return { minutes, rounded, clamped };
+}
+
+/**
+ * Classify one P6 constraint slot (`cstr_type[2]` + `cstr_date[2]`). A recognised constraint yields a
+ * type + its date (date may be null — the validate step drops an orphan); `CS_ALAP` sets the ALAP flag;
+ * `CS_EXPFIN` routes its date to the Expected-Finish progress field; anything unrecognised is dropped +
+ * reported. An absent slot yields `none`.
+ */
+type ConstraintSlot =
+  | {
+      readonly kind: 'constraint';
+      readonly type: CanonicalConstraintType;
+      readonly date: string | null;
+    }
+  | { readonly kind: 'alap' }
+  | { readonly kind: 'expectedFinish'; readonly date: string | null }
+  | { readonly kind: 'none' };
+
+function mapConstraintSlot(
+  row: ReadonlyMap<string, string>,
+  typeField: string,
+  dateField: string,
+  taskId: string,
+  findings: ReportFinding[],
+): ConstraintSlot {
+  const rawType = field(row, typeField);
+  if (rawType === undefined) return { kind: 'none' };
+  if (rawType === 'CS_ALAP') return { kind: 'alap' };
+  if (rawType === 'CS_EXPFIN')
+    return { kind: 'expectedFinish', date: isoDateField(row, dateField) ?? null };
+  const type = CSTR_TYPE_TO_CANONICAL[rawType];
+  if (type === undefined) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'constraint',
+      sourceRef: taskId,
+      detail: `constraint "${rawType}" is not supported and was dropped`,
+      reason: 'unmapped constraint kind (ADR-0035 §7)',
+    });
+    return { kind: 'none' };
+  }
+  return { kind: 'constraint', type, date: isoDateField(row, dateField) ?? null };
+}
+
+/**
+ * Map a TASK row's progress columns (ADR-0035 §6, ADR-0042) to a {@link CanonicalProgress}, or null when
+ * the activity is un-progressed (a NOT_STARTED activity with no actuals/remaining/expected/physical). The
+ * source `status_code` is provisional — the validate step derives the final status from the actuals.
+ * `expectedFinishFromConstraint` is the date routed here from a `CS_EXPFIN` constraint (used when the row
+ * has no dedicated `reend_date`).
+ */
+function mapProgress(
+  row: ReadonlyMap<string, string>,
+  expectedFinishFromConstraint: string | null,
+): CanonicalProgress | null {
+  const statusCode = field(row, 'status_code');
+  const status: CanonicalActivityStatus =
+    statusCode === undefined
+      ? 'NOT_STARTED'
+      : (STATUS_CODE_TO_CANONICAL[statusCode] ?? 'NOT_STARTED');
+
+  const pct = numField(row, 'complete_pct');
+  const percentComplete = pct === undefined ? 0 : Math.round(pct);
+  const phys = numField(row, 'phys_complete_pct');
+  const physicalPercentComplete = phys === undefined ? null : Math.round(phys);
+  const pctTypeCode = field(row, 'complete_pct_type');
+  const percentCompleteType: CanonicalPercentCompleteType =
+    pctTypeCode === undefined ? 'DURATION' : (PCT_TYPE_TO_CANONICAL[pctTypeCode] ?? 'DURATION');
+
+  const actualStart = isoDateField(row, 'act_start_date') ?? null;
+  const actualFinish = isoDateField(row, 'act_end_date') ?? null;
+  const suspendDate = isoDateField(row, 'suspend_date') ?? null;
+  const resumeDate = isoDateField(row, 'resume_date') ?? null;
+  const expectedFinish = isoDateField(row, 'reend_date') ?? expectedFinishFromConstraint;
+
+  const remainHours = numField(row, 'remain_drtn_hr_cnt');
+  const remainingDurationMinutes =
+    remainHours === undefined ? null : hoursToMinutes(remainHours, false).minutes;
+
+  // A NOT_STARTED activity with no progress signal at all carries no progress (null) — the domain default.
+  const isDefault =
+    status === 'NOT_STARTED' &&
+    percentComplete === 0 &&
+    physicalPercentComplete === null &&
+    actualStart === null &&
+    actualFinish === null &&
+    suspendDate === null &&
+    resumeDate === null &&
+    expectedFinish === null &&
+    remainingDurationMinutes === null;
+  if (isDefault) return null;
+
+  return {
+    status,
+    percentComplete,
+    percentCompleteType,
+    physicalPercentComplete,
+    actualStart,
+    actualFinish,
+    remainingDurationMinutes,
+    suspendDate,
+    resumeDate,
+    expectedFinish,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -233,10 +381,43 @@ export function adaptXerToCanonical(
     defaultCalendarId,
   };
 
+  // --- WBS structure (PROJWBS → WBS_SUMMARY activities, ADR-0038) ------------------------------------
+  // WBS ids and TASK ids are disjoint P6 counters that can numerically collide, so a WBS node's key is
+  // prefixed (`wbs:<wbs_id>`) — only the WBS key space is prefixed. The project-root WBS (parent absent or
+  // self-referential) maps to a null parent.
+  // Skip only WBS nodes explicitly belonging to another project (a row with no proj_id is treated as this
+  // project's, mirroring the TASK loop, so it is never silently dropped).
+  const isThisProjectWbs = (row: ReadonlyMap<string, string>): boolean => {
+    const wbsProj = field(row, 'proj_id');
+    return wbsProj === undefined || wbsProj === projId;
+  };
+  const wbsSummaries: CanonicalActivity[] = [];
+  for (const row of rowsOf(document, TABLE.projwbs)) {
+    if (!isThisProjectWbs(row)) continue;
+    const wbsId = field(row, 'wbs_id');
+    if (wbsId === undefined) continue;
+    const parentWbsId = field(row, 'parent_wbs_id');
+    const parentId =
+      parentWbsId === undefined || parentWbsId === wbsId ? null : `wbs:${parentWbsId}`;
+    wbsSummaries.push({
+      id: `wbs:${wbsId}`,
+      code: field(row, 'wbs_short_name') ?? wbsId,
+      name: field(row, 'wbs_name') ?? field(row, 'wbs_short_name') ?? wbsId,
+      type: 'WBS_SUMMARY',
+      durationMinutes: 0,
+      calendarId: null,
+      parentId,
+      constraintType: null,
+      constraintDate: null,
+      secondaryConstraintType: null,
+      secondaryConstraintDate: null,
+      scheduleAsLateAsPossible: false,
+      progress: null,
+    });
+  }
+
   // --- Activities -----------------------------------------------------------------------------------
-  const activities: CanonicalActivity[] = [];
-  let constraintCount = 0;
-  let progressCount = 0;
+  const taskActivities: CanonicalActivity[] = [];
   for (const row of rowsOf(document, TABLE.task)) {
     const taskId = field(row, 'task_id');
     if (taskId === undefined) {
@@ -259,14 +440,15 @@ export function adaptXerToCanonical(
         kind: 'approximation',
         entity: 'activity',
         sourceRef: taskId,
-        detail: `activity type "${rawType}" is not supported in M1; imported as TASK`,
-        reason: 'out of M1 network scope (ADR-0050)',
+        detail: `activity type "${rawType}" is not supported; imported as TASK`,
+        reason: 'unmapped activity type (ADR-0050)',
       });
     }
 
-    // Duration: XER stores hours (`target_drtn_hr_cnt`); ×60 → working-minutes.
+    // Duration: XER stores hours (`target_drtn_hr_cnt`); ×60 → working-minutes. A milestone is 0; a
+    // TASK / RESOURCE_DEPENDENT carries a real duration.
     let durationMinutes = 0;
-    if (type === 'TASK') {
+    if (type === 'TASK' || type === 'RESOURCE_DEPENDENT') {
       const hours = numField(row, 'target_drtn_hr_cnt') ?? numField(row, 'remain_drtn_hr_cnt') ?? 0;
       const coerced = hoursToMinutes(hours, false);
       durationMinutes = coerced.minutes;
@@ -309,43 +491,56 @@ export function adaptXerToCanonical(
       }
     }
 
-    if (field(row, 'cstr_type') !== undefined) constraintCount += 1;
-    if (
-      field(row, 'act_start_date') !== undefined ||
-      field(row, 'act_end_date') !== undefined ||
-      field(row, 'phys_complete_pct') !== undefined
-    ) {
-      progressCount += 1;
+    // WBS parent: a real activity's `wbs_id` → its summary parent (see the WBS key-prefix note above).
+    const wbsId = field(row, 'wbs_id');
+    const parentId = wbsId === undefined ? null : `wbs:${wbsId}`;
+
+    // Constraints (primary + secondary, ADR-0035 §7–§12) + ALAP + Expected-Finish routing.
+    const primary = mapConstraintSlot(row, 'cstr_type', 'cstr_date', taskId, findings);
+    const secondary = mapConstraintSlot(row, 'cstr_type2', 'cstr_date2', taskId, findings);
+    let constraintType: CanonicalConstraintType | null = null;
+    let constraintDate: string | null = null;
+    let secondaryConstraintType: CanonicalConstraintType | null = null;
+    let secondaryConstraintDate: string | null = null;
+    let scheduleAsLateAsPossible = false;
+    let expectedFinishFromConstraint: string | null = null;
+    if (primary.kind === 'constraint') {
+      constraintType = primary.type;
+      constraintDate = primary.date;
+    } else if (primary.kind === 'alap') {
+      scheduleAsLateAsPossible = true;
+    } else if (primary.kind === 'expectedFinish') {
+      expectedFinishFromConstraint = primary.date;
+    }
+    if (secondary.kind === 'constraint') {
+      secondaryConstraintType = secondary.type;
+      secondaryConstraintDate = secondary.date;
+    } else if (secondary.kind === 'alap') {
+      scheduleAsLateAsPossible = true;
+    } else if (secondary.kind === 'expectedFinish') {
+      expectedFinishFromConstraint ??= secondary.date;
     }
 
-    activities.push({
+    taskActivities.push({
       id: taskId,
       code,
       name: field(row, 'task_name') ?? code,
       type,
       durationMinutes,
       calendarId: resolvedCalendarId,
+      parentId,
+      constraintType,
+      constraintDate,
+      secondaryConstraintType,
+      secondaryConstraintDate,
+      scheduleAsLateAsPossible,
+      progress: mapProgress(row, expectedFinishFromConstraint),
     });
   }
 
-  if (constraintCount > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'activity',
-      sourceRef: null,
-      detail: `${constraintCount} activity constraint(s) were not imported`,
-      reason: 'constraints are out of M1 scope (ADR-0050, M2)',
-    });
-  }
-  if (progressCount > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'activity',
-      sourceRef: null,
-      detail: `progress on ${progressCount} activity(ies) was not imported`,
-      reason: 'progress is out of M1 scope (ADR-0050, M2)',
-    });
-  }
+  // WBS summaries precede real activities (their hierarchy is defined first); duplicate-code repair keeps
+  // the earliest, so a code shared by a summary and an activity resolves deterministically.
+  const activities: CanonicalActivity[] = [...wbsSummaries, ...taskActivities];
 
   // --- Relationships --------------------------------------------------------------------------------
   const relationships: CanonicalRelationship[] = [];
@@ -400,15 +595,80 @@ export function adaptXerToCanonical(
     });
   }
 
-  // --- Out-of-scope tables (M2) reported as drops ---------------------------------------------------
-  reportDroppedTable(document.tables.get(TABLE.projwbs), 'WBS structure', 'ADR-0038, M2', findings);
-  reportDroppedTable(document.tables.get(TABLE.rsrc), 'resources', 'ADR-0039, M2', findings);
-  reportDroppedTable(
-    document.tables.get(TABLE.taskRsrc),
-    'resource assignments',
-    'ADR-0039/0040, M2',
-    findings,
-  );
+  // --- Resources (RSRC → the org resource library, ADR-0039) ----------------------------------------
+  const resources: CanonicalResource[] = [];
+  for (const row of rowsOf(document, TABLE.rsrc)) {
+    const rsrcId = field(row, 'rsrc_id');
+    if (rsrcId === undefined) {
+      findings.push({
+        kind: 'drop',
+        entity: 'resource',
+        sourceRef: null,
+        detail: 'a RSRC row with no rsrc_id was not imported',
+        reason: 'missing stable identifier',
+      });
+      continue;
+    }
+    const rawKind = field(row, 'rsrc_type');
+    let kind = rawKind === undefined ? 'LABOUR' : RSRC_TYPE_TO_CANONICAL[rawKind];
+    if (kind === undefined) {
+      kind = 'LABOUR';
+      findings.push({
+        kind: 'approximation',
+        entity: 'resource',
+        sourceRef: rsrcId,
+        detail: `resource type "${rawKind}" is not supported; imported as LABOUR`,
+        reason: 'unmapped resource kind (ADR-0039)',
+      });
+    }
+    const code = field(row, 'rsrc_short_name') ?? null;
+    // The resource calendar reference is resolved (or nulled + reported) by the validate step.
+    resources.push({
+      id: rsrcId,
+      name: field(row, 'rsrc_name') ?? code ?? rsrcId,
+      code,
+      kind,
+      calendarId: field(row, 'clndr_id') ?? null,
+      costPerUnit: null,
+      maxUnitsPerHour: null,
+    });
+  }
+
+  // --- Resource assignments (TASKRSRC → ResourceAssignment, ADR-0039/0040) ---------------------------
+  const assignments: CanonicalAssignment[] = [];
+  const taskRsrcRows = rowsOf(document, TABLE.taskRsrc);
+  for (let i = 0; i < taskRsrcRows.length; i += 1) {
+    const row = taskRsrcRows[i];
+    if (row === undefined) continue;
+    const taskId = field(row, 'task_id');
+    const rsrcId = field(row, 'rsrc_id');
+    if (taskId === undefined || rsrcId === undefined) {
+      findings.push({
+        kind: 'drop',
+        entity: 'assignment',
+        sourceRef: field(row, 'taskrsrc_id') ?? null,
+        detail: 'a TASKRSRC row with a missing task_id/rsrc_id was not imported',
+        reason: 'malformed assignment (ADR-0039)',
+      });
+      continue;
+    }
+    const budgetedUnits = Math.max(0, numField(row, 'target_qty') ?? 0);
+    const unitsPerHourRaw = numField(row, 'target_qty_per_hr');
+    const unitsPerHour = unitsPerHourRaw === undefined ? null : Math.max(0, unitsPerHourRaw);
+    const actualUnits = Math.max(
+      0,
+      (numField(row, 'act_reg_qty') ?? 0) + (numField(row, 'act_ot_qty') ?? 0),
+    );
+    assignments.push({
+      id: field(row, 'taskrsrc_id') ?? `ASG-${i + 1}`,
+      activityId: taskId,
+      resourceId: rsrcId,
+      budgetedUnits,
+      unitsPerHour,
+      isDriving: field(row, 'driving_flag') === 'Y',
+      actualUnits,
+    });
+  }
 
   const model: CanonicalModel = {
     source: {
@@ -420,24 +680,9 @@ export function adaptXerToCanonical(
     calendars,
     activities,
     relationships,
+    resources,
+    assignments,
   };
 
   return { ok: true, model, findings };
-}
-
-/** Emit a single drop finding for a present-but-out-of-scope table, with its row count. */
-function reportDroppedTable(
-  table: XerTable | undefined,
-  label: string,
-  reason: string,
-  findings: ReportFinding[],
-): void {
-  if (table === undefined || table.rows.length === 0) return;
-  findings.push({
-    kind: 'drop',
-    entity: table.name,
-    sourceRef: null,
-    detail: `${table.rows.length} ${label} row(s) (${table.name}) were not imported`,
-    reason: `out of M1 scope (${reason})`,
-  });
 }
