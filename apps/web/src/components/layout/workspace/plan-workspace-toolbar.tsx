@@ -397,6 +397,20 @@ export function ToolbarPlanWorkspace({
         </div>
       ) : null}
 
+      {/* A lossy-but-successful interchange export (ADR-0050 M4d) surfaces here as a dismissable INFO
+          banner with an opt-in "Download report" button — the export already downloaded; the report is
+          offered on click (not auto-fired, which the browser's multi-download guard can silently block). */}
+      {ctx.exportNotice ? (
+        <div className="px-4 pt-2">
+          <EditConflictBanner
+            message={ctx.exportNotice.message}
+            severity="info"
+            action={{ label: 'Download report', onClick: ctx.exportNotice.downloadReport }}
+            onDismiss={ctx.dismissExportNotice}
+          />
+        </div>
+      ) : null}
+
       {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
           has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}
       {PROGRAMME_SCHEDULING_ENABLED ? (

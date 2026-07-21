@@ -791,13 +791,30 @@ function ExportMenuControl({
           <>
             <div role="separator" className="bg-border my-1 h-px" />
             <MenuSection>Interchange</MenuSection>
-            <MenuItem onSelect={() => ctx.exportInterchange('xer')}>
-              <FileCode aria-hidden="true" className="size-4" />
-              Primavera P6 (.xer)
+            {/* Both items show a loading spinner and are disabled while an export is in flight
+                (`interchangeExporting`), which also guards a double-click / concurrent export — mirroring
+                the Diagram-PDF items above. Uppercase-acronym labels match the sibling CSV/PNG/PDF verbs. */}
+            <MenuItem
+              disabled={ctx.interchangeExporting}
+              onSelect={() => ctx.exportInterchange('xer')}
+            >
+              {ctx.interchangeExporting ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              ) : (
+                <FileCode aria-hidden="true" className="size-4" />
+              )}
+              Primavera P6 (XER)
             </MenuItem>
-            <MenuItem onSelect={() => ctx.exportInterchange('mspdi')}>
-              <FileType aria-hidden="true" className="size-4" />
-              Microsoft Project (.xml)
+            <MenuItem
+              disabled={ctx.interchangeExporting}
+              onSelect={() => ctx.exportInterchange('mspdi')}
+            >
+              {ctx.interchangeExporting ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              ) : (
+                <FileType aria-hidden="true" className="size-4" />
+              )}
+              Microsoft Project (MSPDI)
             </MenuItem>
           </>
         ) : null}

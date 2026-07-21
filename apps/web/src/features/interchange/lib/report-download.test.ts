@@ -43,6 +43,30 @@ describe('formatReportText', () => {
     expect(text).toContain('Dropped (0)');
     expect(text).toContain('None');
   });
+
+  it('defaults to import copy (heading + Source labels)', () => {
+    const text = formatReportText(report());
+    expect(text).toContain('SchedulePoint — schedule import report');
+    expect(text).toContain('Source format:   XER');
+    expect(text).toContain('Source version:  19.12');
+    expect(text).toContain('Source file:     my project.xer');
+  });
+
+  it('uses export copy when direction is "export" (Target labels, no source file)', () => {
+    const text = formatReportText(report({ detectedFormat: 'MSPDI', sourceVersion: null }), {
+      direction: 'export',
+    });
+    expect(text).toContain('SchedulePoint — schedule export report');
+    expect(text).toContain('Target format:   MSPDI');
+    // A missing target version still renders the placeholder dash.
+    expect(text).toContain('Target version:  —');
+    // An export has no source file, so that line is omitted entirely.
+    expect(text).not.toContain('Source file:');
+    expect(text).not.toContain('Source format:');
+    // The finding-list rendering is shared across directions.
+    expect(text).toContain('Approximations (1)');
+    expect(text).toContain('Dropped (0)');
+  });
 });
 
 describe('reportFilename', () => {

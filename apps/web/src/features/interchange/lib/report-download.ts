@@ -1,19 +1,41 @@
 import type { InterchangeReport, ReportFinding } from '@repo/interchange';
 
+/** Whether a report describes an **import** (the default) or an **export**. */
+export type ReportDirection = 'import' | 'export';
+
+export interface FormatReportOptions {
+  /**
+   * Import (default) or export. On an import the header carries the SOURCE format/version/file; on an
+   * export it carries the TARGET format/version and there is no source file (`sourceFilename` is null),
+   * so the heading and the format/version labels switch and the source-file line is omitted.
+   */
+  direction?: ReportDirection;
+}
+
 /**
  * Serialise an {@link InterchangeReport} to a plain-text, human-readable summary suitable for
- * downloading and keeping alongside the imported plan (the "what did I lose?" record, spec §3). Pure and
+ * downloading and keeping alongside the plan (the "what did I lose?" record, spec §3). Pure and
  * DOM-free so it is unit-testable; {@link downloadReport} handles the browser IO. Lists every mapped
  * count and every approximation / repair / drop line (reusing the report's own `detail`/`reason` copy),
- * so nothing that changed is omitted.
+ * so nothing that changed is omitted. `direction` selects import (default) vs export copy — an export's
+ * report header carries the TARGET format/version and no source file (ADR-0050 M4d).
  */
-export function formatReportText(report: InterchangeReport): string {
+export function formatReportText(
+  report: InterchangeReport,
+  options: FormatReportOptions = {},
+): string {
+  const direction = options.direction ?? 'import';
   const lines: string[] = [];
-  lines.push('SchedulePoint — schedule import report');
+  lines.push(`SchedulePoint — schedule ${direction} report`);
   lines.push('');
-  lines.push(`Source format:   ${report.detectedFormat}`);
-  lines.push(`Source version:  ${report.sourceVersion ?? '—'}`);
-  lines.push(`Source file:     ${report.sourceFilename ?? '—'}`);
+  if (direction === 'export') {
+    lines.push(`Target format:   ${report.detectedFormat}`);
+    lines.push(`Target version:  ${report.sourceVersion ?? '—'}`);
+  } else {
+    lines.push(`Source format:   ${report.detectedFormat}`);
+    lines.push(`Source version:  ${report.sourceVersion ?? '—'}`);
+    lines.push(`Source file:     ${report.sourceFilename ?? '—'}`);
+  }
   lines.push('');
   lines.push('Mapped');
   lines.push(`  Activities:     ${report.mapped.activities}`);

@@ -2,12 +2,15 @@ import type { InterchangeReport } from '@repo/interchange';
 import { describe, expect, it } from 'vitest';
 
 import {
+  exportErrorMessage,
   exportReportFilename,
   fallbackExportFilename,
   parseContentDispositionFilename,
   parseInterchangeReportHeader,
   reportFindingCount,
 } from './use-export-plan';
+
+import { ApiFetchError } from '@/lib/api/client';
 
 /**
  * Unit coverage for the **pure** (DOM-free, network-free) parts of the plan export download client
@@ -105,5 +108,44 @@ describe('exportReportFilename', () => {
   it('derives a report-text name from the export filename', () => {
     expect(exportReportFilename('riverside.xer')).toBe('riverside-export-report.txt');
     expect(exportReportFilename('my plan.xml')).toBe('my plan-export-report.txt');
+  });
+});
+
+describe('exportErrorMessage', () => {
+  it('reads a transport failure (status 0) as offline', () => {
+    const message = exportErrorMessage(
+      new ApiFetchError(0, { code: 'NETWORK_ERROR', message: 'Network request failed.' }),
+    );
+    expect(message).toBe("Couldn't reach the server. Check your connection and try again.");
+  });
+
+  it('maps 403 to a permission message', () => {
+    expect(exportErrorMessage(new ApiFetchError(403, { code: 'FORBIDDEN', message: 'nope' }))).toBe(
+      "You don't have permission to export this plan.",
+    );
+  });
+
+  it('maps 404 to a no-longer-available message', () => {
+    expect(exportErrorMessage(new ApiFetchError(404, { code: 'NOT_FOUND', message: 'gone' }))).toBe(
+      'This plan is no longer available.',
+    );
+  });
+
+  it('maps 422 to an unsupported-format message', () => {
+    expect(
+      exportErrorMessage(new ApiFetchError(422, { code: 'UNPROCESSABLE', message: 'bad' })),
+    ).toBe("This plan can't be exported to that format.");
+  });
+
+  it('falls back to the (user-safe) envelope message for any other API status', () => {
+    expect(
+      exportErrorMessage(
+        new ApiFetchError(500, { code: 'SERVER', message: 'Server had a wobble.' }),
+      ),
+    ).toBe('Server had a wobble.');
+  });
+
+  it('returns a generic message for a non-ApiFetchError throw', () => {
+    expect(exportErrorMessage(new Error('boom'))).toBe('Something went wrong. Please try again.');
   });
 });

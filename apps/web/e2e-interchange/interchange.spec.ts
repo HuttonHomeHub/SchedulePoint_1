@@ -115,12 +115,22 @@ test('a planner exports a plan to .xer, then re-imports the downloaded file (rou
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
 
-  // Export: open the canvas Export ▾ menu and pick Primavera P6 (.xer); assert a download is triggered
+  // Export: open the canvas Export ▾ menu and pick Primavera P6 (XER); assert a download is triggered
   // and its suggested filename ends `.xer`.
   await page.getByRole('button', { name: /Export/ }).click();
+
+  // The open Export menu (incl. the new Interchange group) stays WCAG 2.2 AA — mirrors the import
+  // dialog's axe check above.
+  await expect(page.getByRole('menuitem', { name: 'Primavera P6 (XER)' })).toBeVisible();
+  const menuAxe = await new AxeBuilder({ page })
+    .include('[role="menu"]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(menuAxe.violations).toEqual([]);
+
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('menuitem', { name: 'Primavera P6 (.xer)' }).click(),
+    page.getByRole('menuitem', { name: 'Primavera P6 (XER)' }).click(),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.xer$/);
 

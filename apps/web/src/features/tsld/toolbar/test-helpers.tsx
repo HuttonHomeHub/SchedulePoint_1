@@ -126,6 +126,9 @@ export function makeTsldToolbarContext(
     // suite opts in via `canInterchangeExport: true`.
     canInterchangeExport: false,
     exportInterchange: vi.fn(),
+    interchangeExporting: false,
+    exportNotice: null,
+    dismissExportNotice: vi.fn(),
     ...overrides,
   };
 }

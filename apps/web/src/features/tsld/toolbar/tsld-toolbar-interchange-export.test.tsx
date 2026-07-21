@@ -45,21 +45,21 @@ describe('TSLD toolbar — schedule interchange export (flag + permission on)', 
   it('offers the P6 (.xer) and MS Project (.xml) items in the Export menu when both gates pass', () => {
     renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /Export/ }));
-    expect(screen.getByRole('menuitem', { name: 'Primavera P6 (.xer)' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Microsoft Project (.xml)' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Primavera P6 (XER)' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Microsoft Project (MSPDI)' })).toBeInTheDocument();
   });
 
   it('exports the plan as XER from the P6 item', () => {
     renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /Export/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Primavera P6 (.xer)' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Primavera P6 (XER)' }));
     expect(exportInterchange).toHaveBeenCalledWith('xer');
   });
 
   it('exports the plan as MSPDI from the MS Project item', () => {
     renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /Export/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Microsoft Project (.xml)' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Microsoft Project (MSPDI)' }));
     expect(exportInterchange).toHaveBeenCalledWith('mspdi');
   });
 
@@ -79,7 +79,7 @@ describe('TSLD toolbar — schedule interchange export (flag + permission on)', 
     // The CSV item still renders (the Export menu itself is unaffected)…
     expect(screen.getByRole('menuitem', { name: 'Schedule (CSV)' })).toBeInTheDocument();
     // …but the interchange group is gone.
-    expect(screen.queryByRole('menuitem', { name: 'Primavera P6 (.xer)' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: 'Microsoft Project (.xml)' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Primavera P6 (XER)' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Microsoft Project (MSPDI)' })).toBeNull();
   });
 });

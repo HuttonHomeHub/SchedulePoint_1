@@ -313,8 +313,28 @@ export interface TsldToolbarContext {
    * `exportInterchange` command is then never called. */
   canInterchangeExport: boolean;
   /** Download the plan serialised to a foreign schedule file (P6 `xer` / MS Project `mspdi`), reading the
-   * fidelity report off the `X-Interchange-Report` header and surfacing it unobtrusively (announce +, when
-   * the export approximated/dropped anything, a report-text download). A no-op unless the flag +
-   * permission gate above is satisfied. */
+   * fidelity report off the `X-Interchange-Report` header and surfacing it unobtrusively (a polite
+   * announcement +, when the export approximated/dropped anything, a visible opt-in {@link exportNotice}).
+   * A no-op unless the flag + permission gate above is satisfied. */
   exportInterchange: (format: InterchangeExportFormat) => void;
+  /** True while an interchange export is in flight (fetch → download). Drives the interchange menu items'
+   * loading spinner + disabled state and guards a double-click / concurrent export (mirrors
+   * {@link pdfExporting}). */
+  interchangeExporting: boolean;
+  /** A visible, dismissible INFO notice shown after a lossy export completes: the export succeeded but
+   * some data was approximated/dropped, so the report is offered as an opt-in download rather than
+   * auto-fired (the browser's multi-download guard can silently block a second download). `null` = no
+   * notice (a clean export just announces). The workspace renders it as an info banner beside the
+   * toolbar; {@link dismissExportNotice} clears it. */
+  exportNotice: ExportNotice | null;
+  /** Dismiss the {@link exportNotice} banner (clears it back to `null`). */
+  dismissExportNotice: () => void;
+}
+
+/** A visible, opt-in surface for a lossy-but-successful interchange export (ADR-0050 M4d). */
+export interface ExportNotice {
+  /** The plain-language notice body (the download confirmation + the approximation summary). */
+  message: string;
+  /** Download the fidelity report text for the just-completed export (export-direction copy). */
+  downloadReport: () => void;
 }
