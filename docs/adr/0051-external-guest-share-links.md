@@ -175,6 +175,16 @@ path leaks nothing about whether a token ever existed, is expired, or was revoke
 - **Plan soft-delete** cascades `deleted_at` onto its `plan_shares` (§1) and the
   guard also re-checks the live plan, so a deleted (or later restored) plan's
   links behave correctly with no separate bookkeeping.
+- **Accepted residual: a response-shape-uniform 404 is not perfectly timing-uniform.**
+  A dead token (unknown/revoked/expired/soft-deleted grant) is rejected after **one**
+  DB round trip (`findLiveByTokenHash`), whereas a **live** token whose **plan** was
+  soft-deleted costs **two** (the extra `plans.findActiveByIdInOrg` re-check). That
+  latency gap distinguishes "a real token that now points at a deleted plan" from "no
+  such token" — but it is **not a token-discovery oracle**: reaching the two-round-trip
+  path at all requires already holding the actual 256-bit token, at which point guessing
+  is already moot. We **accept** this residual rather than pad latency or always run the
+  plan check; the entropy + rate-limit (§6), not timing-uniformity, are the anti-guessing
+  controls.
 
 ### 6. Abuse resistance for a public endpoint
 

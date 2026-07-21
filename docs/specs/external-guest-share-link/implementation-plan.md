@@ -96,6 +96,9 @@ API (org-scoped, deny-by-default). Guest reads not yet live.
 > on create only, never in list; assert with a test. Wrong role granted → matrix test.
 > **Testing:** Supertest e2e (create returns URL once; list has no token; revoke →
 > row `revoked_at`; Viewer/Contributor → 403; foreign/deleted plan → 404) + service unit.
+> **Must include** (F-M1 security-review follow-up): an explicit assertion that the stored
+> `PlanShare.organizationId` is copied from the **resolved plan**, and that a caller-supplied
+> `organizationId` (if the DTO ever carries one) is ignored — never trusted as scope input.
 > **Agents:** api-reviewer, security-reviewer, test-engineer.
 
 ##### Task 1 — `plan:share` permission
