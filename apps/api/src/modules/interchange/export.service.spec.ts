@@ -164,7 +164,7 @@ describe('ExportService.exportPlan', () => {
     if (reimport.ok) expect(reimport.graph.activities).toHaveLength(0);
   });
 
-  it('reports out-of-M4a-scope data (constraints, progress, resources) as drops — never silently', async () => {
+  it('exports constraints, progress and resources (M4c) rather than dropping them', async () => {
     activities.findAllActiveByPlan.mockResolvedValue([
       activityRow({ constraintType: 'SNET', constraintDate: new Date(Date.UTC(2026, 1, 1)) }),
       activityRow({ id: 'act-2', code: 'A1010', status: 'IN_PROGRESS', percentComplete: 50 }),
@@ -192,17 +192,27 @@ describe('ExportService.exportPlan', () => {
       },
     ]);
 
-    const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    const { bytes, report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    // M4c serialises these categories, so they are NO LONGER reported as drops.
     const dropEntities = report.drops.map((d) => d.entity);
-    expect(dropEntities).toContain('constraint');
-    expect(dropEntities).toContain('activity'); // progress drop
-    expect(dropEntities).toContain('resource');
-    expect(dropEntities).toContain('assignment');
+    expect(dropEntities).not.toContain('constraint');
+    expect(dropEntities).not.toContain('resource');
+    expect(dropEntities).not.toContain('assignment');
+
+    // And they survive a round trip through the exported file.
+    const reimport = importSchedule({ content: bytes, filename: 'rich.xer' });
+    expect(reimport.ok).toBe(true);
+    if (reimport.ok) {
+      expect(reimport.graph.activities.some((a) => a.constraintType === 'SNET')).toBe(true);
+      expect(reimport.graph.resources).toHaveLength(1);
+      expect(reimport.graph.assignments).toHaveLength(1);
+    }
   });
 
   it('422s an unsupported format before any read (EXPORT_UNSUPPORTED_FORMAT)', async () => {
+    // `xer` and `mspdi` are supported (M4a/M4b); `csv` is not an interchange format.
     const error = await service
-      .exportPlan(member, ORG_SLUG, PLAN_ID, 'mspdi')
+      .exportPlan(member, ORG_SLUG, PLAN_ID, 'csv')
       .then(() => null)
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ValidationError);
