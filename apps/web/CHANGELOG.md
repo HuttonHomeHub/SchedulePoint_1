@@ -1,5 +1,23 @@
 # @repo/web
 
+## 0.40.0
+
+### Minor Changes
+
+- [#125](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/125) [`1886e03`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1886e03cf6c79070abc07dd3f211e690193981c4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Wire Microsoft Project MSPDI import through the stack (ADR-0050, Stage C2 M3). A new format-agnostic
+  `importSchedule` entry point in `@repo/interchange` detects the interchange format (Primavera P6 XER vs
+  MS Project MSPDI XML) from the bytes and routes to the matching orchestrator — both produce the same
+  import graph + report, so callers stay format-blind. The interchange commit/dry-run endpoints now call
+  `importSchedule` instead of the XER-specific path, so an uploaded `.xml` MSPDI file imports through the
+  exact same review→commit pipeline as `.xer` (an unrecognised file gets a single user-safe rejection). The
+  web **Import from file…** dialog accepts `.xer` **or** `.xml`, with updated copy and the unparseable-file
+  message naming both formats. On by default under the existing `VITE_SCHEDULE_INTERCHANGE` flag.
+
+### Patch Changes
+
+- Updated dependencies [[`1886e03`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1886e03cf6c79070abc07dd3f211e690193981c4), [`1886e03`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1886e03cf6c79070abc07dd3f211e690193981c4), [`1886e03`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1886e03cf6c79070abc07dd3f211e690193981c4)]:
+  - @repo/interchange@0.3.0
+
 ## 0.39.1
 
 ### Patch Changes

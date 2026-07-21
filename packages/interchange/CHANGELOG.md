@@ -1,5 +1,42 @@
 # @repo/interchange
 
+## 0.3.0
+
+### Minor Changes
+
+- [#125](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/125) [`1886e03`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1886e03cf6c79070abc07dd3f211e690193981c4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add Microsoft Project **MSPDI (`.xml`) import** (ADR-0050, Stage C2 M3 — pure package). A second parser
+
+  - adapter (`mspdi-parser`, `mspdi-calendar`, `mspdi-adapter`, `importMspdi`) feed the **same**
+    format-agnostic canonical model the XER path produces, so the mapper, validate/repair/report, graph-size
+    ceilings and report shape are reused unchanged — MSPDI is a parser, not a second pipeline. Maps the MS
+    Project vocabulary: `<Task>` (incl. `<Summary>`→`WBS_SUMMARY` + outline-level parentage, `<Milestone>`,
+    `PT#H#M#S` durations, `<ConstraintType>` 0–7, `<PercentComplete>`/actuals/remaining), nested
+    `<PredecessorLink>` (link types 0–3, tenths-of-a-minute lag), `<Calendar>` week-days + exceptions,
+    `<Resource>` (types 0–2) and `<Assignment>`. Parsing uses `fast-xml-parser` configured for untrusted
+    input — `processEntities: false` (no entity expansion → no billion-laughs / XXE), external entities
+    inert, plus byte + node-count caps — with typed, user-safe rejections. `.mpp` (proprietary binary) is
+    rejected with a guiding message to export MSPDI XML instead. The CPM engine + recalc parity golden suite
+    are untouched. API routing + web `.xml` acceptance land separately.
+
+- [#125](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/125) [`1886e03`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1886e03cf6c79070abc07dd3f211e690193981c4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Wire Microsoft Project MSPDI import through the stack (ADR-0050, Stage C2 M3). A new format-agnostic
+  `importSchedule` entry point in `@repo/interchange` detects the interchange format (Primavera P6 XER vs
+  MS Project MSPDI XML) from the bytes and routes to the matching orchestrator — both produce the same
+  import graph + report, so callers stay format-blind. The interchange commit/dry-run endpoints now call
+  `importSchedule` instead of the XER-specific path, so an uploaded `.xml` MSPDI file imports through the
+  exact same review→commit pipeline as `.xer` (an unrecognised file gets a single user-safe rejection). The
+  web **Import from file…** dialog accepts `.xer` **or** `.xml`, with updated copy and the unparseable-file
+  message naming both formats. On by default under the existing `VITE_SCHEDULE_INTERCHANGE` flag.
+
+### Patch Changes
+
+- [#125](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/125) [`1886e03`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1886e03cf6c79070abc07dd3f211e690193981c4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Bound the total number of dated exceptions a single MSPDI `<Calendar>` may
+  accumulate (`MAX_CALENDAR_EXCEPTIONS`, enforced during accumulation and failing
+  closed with a reported drop). The existing per-range day bound stopped one
+  hostile `<TimePeriod>`, but a file could pack many maximal ranges to amplify a
+  small upload into millions of exception objects — an unbounded memory
+  amplification reachable from the read-only dry-run. The importer now stays
+  memory-bounded regardless of input.
+
 ## 0.2.0
 
 ### Minor Changes
