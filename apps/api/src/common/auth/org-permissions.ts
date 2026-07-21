@@ -132,8 +132,12 @@ export type OrgPermission =
   // plus its activities, logic and calendars (a hierarchy-write capability), so it follows the same
   // "write" rule as the hierarchy and is deliberately NOT Contributor (reporting progress ≠ standing up
   // a whole plan). The authoritative org-scope check is on the **target project** (anti-IDOR) in the
-  // service. `interchange:export` is reserved for the deferred export milestone (a read-egress code).
-  | 'interchange:import';
+  // service. `interchange:export` (P6 XER for M4a, ADR-0050) is the mirror READ-egress code: exporting a
+  // plan reads the same schedule data every member can already see on-screen, so it is granted to **every
+  // member** (Viewer upward, CQ-1), NOT just the write roles; its authoritative org-scope check is on the
+  // **target plan** (anti-IDOR) in the export service.
+  | 'interchange:import'
+  | 'interchange:export';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -225,6 +229,14 @@ const COST_READ: readonly OrgPermission[] = ['cost:read'];
  */
 const INTERCHANGE: readonly OrgPermission[] = ['interchange:import'];
 
+/**
+ * Export a plan as a foreign schedule file (P6 XER, ADR-0050 M4a) — EVERY member (Viewer upward), like
+ * `HIERARCHY_READ`. Export is a read-egress of the same schedule data a member already sees on-screen
+ * (CQ-1), so it deliberately does NOT ride the write-only `INTERCHANGE` grant; the authoritative org-scope
+ * check is on the target plan (anti-IDOR) in the export service.
+ */
+const INTERCHANGE_EXPORT: readonly OrgPermission[] = ['interchange:export'];
+
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
 
@@ -243,16 +255,18 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
   // Every member can read the org, its roster, and browse the hierarchy.
   // Contributor adds activity-progress updates; Planner adds full hierarchy write;
   // Org Admin adds member/invitation administration on top.
-  [OrganizationRole.VIEWER]: [...MEMBER_BASELINE, ...HIERARCHY_READ],
+  [OrganizationRole.VIEWER]: [...MEMBER_BASELINE, ...HIERARCHY_READ, ...INTERCHANGE_EXPORT],
   [OrganizationRole.CONTRIBUTOR]: [
     ...MEMBER_BASELINE,
     ...HIERARCHY_READ,
+    ...INTERCHANGE_EXPORT,
     ...PROGRESS_WRITE,
     ...NOTE_WRITE,
   ],
   [OrganizationRole.PLANNER]: [
     ...MEMBER_BASELINE,
     ...HIERARCHY_READ,
+    ...INTERCHANGE_EXPORT,
     ...HIERARCHY_WRITE,
     ...PROGRESS_WRITE,
     ...NOTE_WRITE,
@@ -263,6 +277,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
   [OrganizationRole.ORG_ADMIN]: [
     ...ADMIN,
     ...HIERARCHY_READ,
+    ...INTERCHANGE_EXPORT,
     ...HIERARCHY_WRITE,
     ...PROGRESS_WRITE,
     ...NOTE_WRITE,

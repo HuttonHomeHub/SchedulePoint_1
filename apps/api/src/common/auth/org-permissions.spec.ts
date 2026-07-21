@@ -147,6 +147,14 @@ describe('permissionsForRole — CPM schedule (read vs calculate)', () => {
       expect(permissionsForRole(role)).toContain('interchange:import');
     }
   });
+
+  it('grants interchange:export (schedule file export) to EVERY member (Viewer upward, ADR-0050 M4a)', () => {
+    // Export is a read-egress of on-screen-readable schedule data (CQ-1), NOT a write — unlike import it is
+    // granted to all four roles; External Guest holds no membership so it never resolves any org permission.
+    for (const role of Object.values(OrganizationRole)) {
+      expect(permissionsForRole(role)).toContain('interchange:export');
+    }
+  });
 });
 
 describe('permissionsForRole — calendar library (read vs write)', () => {

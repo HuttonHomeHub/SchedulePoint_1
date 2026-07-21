@@ -96,6 +96,23 @@ export class ResourceRepository {
     return db.resource.findFirst({ where: this.active({ id, organizationId }) });
   }
 
+  /**
+   * A batch of active resources (by id set), org-scoped (anti-IDOR) — the schedule-interchange EXPORT
+   * read (ADR-0050 M4a). Resolves the resources referenced by a plan's assignments in ONE query (never a
+   * per-assignment findFirst); a soft-deleted resource (or one outside the org) is simply absent.
+   */
+  findActiveByIdsInOrg(
+    ids: readonly string[],
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Resource[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return db.resource.findMany({
+      where: this.active({ id: { in: [...ids] }, organizationId }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   /** A page of an organisation's active resources (keyset cursor by id, org-scoped list order). */
   findManyActiveByOrg(params: {
     organizationId: string;
