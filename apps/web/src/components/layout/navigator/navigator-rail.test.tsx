@@ -1,18 +1,25 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NavigatorRail, NavigatorRailCollapsed } from './navigator-rail';
 
+// The rail's version footer reads the API version via TanStack Query, so it needs a client
+// in scope (in the app it's always inside the shell's QueryClientProvider).
+function renderRail(ui: React.ReactElement) {
+  return render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+}
+
 describe('NavigatorRail', () => {
   it('renders the Project Explorer landmark, hinting to pick an org when none is active', () => {
-    render(<NavigatorRail />);
+    renderRail(<NavigatorRail />);
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
     expect(screen.getByText(/select an organisation/i)).toBeInTheDocument();
   });
 
   it('shows a collapse control (pinned rail) that fires onCollapse', () => {
     const onCollapse = vi.fn();
-    render(<NavigatorRail onCollapse={onCollapse} />);
+    renderRail(<NavigatorRail onCollapse={onCollapse} />);
     fireEvent.click(screen.getByRole('button', { name: 'Collapse Project Explorer' }));
     expect(onCollapse).toHaveBeenCalledTimes(1);
     expect(
@@ -22,7 +29,7 @@ describe('NavigatorRail', () => {
 
   it('shows a close control (drawer) that fires onClose', () => {
     const onClose = vi.fn();
-    render(<NavigatorRail onClose={onClose} />);
+    renderRail(<NavigatorRail onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close Project Explorer' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });

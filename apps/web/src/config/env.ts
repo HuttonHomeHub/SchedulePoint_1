@@ -19,6 +19,13 @@ export const AUTH_BASE_URL = '/api/auth';
 export const THEME_STORAGE_KEY = 'schedulepoint-theme';
 
 /**
+ * The web client's own build version, baked in at compile time by Vite's `define`
+ * ({@link __APP_VERSION__}, see `vite.config.ts`). Shown next to the API's version in
+ * the app shell; a compile-time constant needs no runtime env var and can't drift.
+ */
+export const APP_VERSION: string = __APP_VERSION__;
+
+/**
  * Reads a boolean `VITE_` flag that defaults **ON**: enabled unless the operator
  * explicitly opts out with `"false"`/`"0"`. Used for shipped features that are on
  * by default but must stay switchable off (rollback / a controlled rollout).
@@ -384,10 +391,9 @@ export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_IN
 
 /**
  * Live cross-plan / programme scheduling web surface (inter-project **Milestone 2**, F8; ADR-0045 /
- * ADR-0035 §30.5–§30.8). **OFF by default** — an in-progress, first user-visible slice of the live
- * cross-plan solve, gated until its quality gates (component / ux / a11y / e2e) are green. When on,
- * the web UI exposes the programme surface, layered on the static M1 inter-project surface
- * ({@link INTER_PROJECT_DATES_ENABLED}):
+ * ADR-0035 §30.5–§30.8). **ON by default** (now its component/ux/a11y/e2e gates are green) — the
+ * first user-visible slice of the live cross-plan solve. When on, the web UI exposes the programme
+ * surface, layered on the static M1 inter-project surface ({@link INTER_PROJECT_DATES_ENABLED}):
  *
  * - **Cross-plan links** — a section in the activity panel (the SUCCESSOR activity's home, ADR-0045
  *   CQ-2) to draw a **live** inter-project link from an upstream activity in ANOTHER plan of the org:
@@ -407,9 +413,9 @@ export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_IN
  * summary's `scheduleStale` field is present only then). Everything behind it — the cross-plan link
  * CRUD, the derivation seam, the programme-recalc orchestration and the staleness read — is already
  * live on the API (F2–F7); the flag only governs whether the web UI exposes it. Set
- * `VITE_PROGRAMME_SCHEDULING=true` to enable it in an environment.
+ * `VITE_PROGRAMME_SCHEDULING=false` for a byte-for-byte rollback.
  */
-export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOff(
+export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOn(
   import.meta.env.VITE_PROGRAMME_SCHEDULING,
 );
 

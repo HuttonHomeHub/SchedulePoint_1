@@ -36,7 +36,9 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await page.getByRole('button', { name: /Summary/ }).click();
   const summary = page.getByRole('dialog', { name: 'Summary' });
   await expect(summary.getByText('Status')).toBeVisible();
-  await expect(summary.getByText('Data date')).toBeVisible();
+  // "Data date" appears twice in the popover by design (PlanSummaryPanel folds the plan-details
+  // facts AND the computed ScheduleSummaryStrip together, ADR-0031) — assert the first is visible.
+  await expect(summary.getByText('Data date').first()).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(summary).toBeHidden();
 

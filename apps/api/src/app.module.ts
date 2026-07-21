@@ -35,6 +35,7 @@ import { ResourcesModule } from './modules/resources/resources.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { ShareModule } from './modules/share/share.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { VersionModule } from './version/version.module';
 
 /** Whether the optional `pino-pretty` dev logger transport can be loaded. */
 function isPrettyLoggingAvailable(): boolean {
@@ -100,6 +101,7 @@ function isPrettyLoggingAvailable(): boolean {
     AuthModule,
     MailModule,
     HealthModule,
+    VersionModule,
     MeModule,
     OrganizationsModule,
     MembersModule,
