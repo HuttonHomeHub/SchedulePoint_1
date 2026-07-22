@@ -27,6 +27,13 @@ export interface PanelResizerProps {
    */
   pointerToSize: (event: React.PointerEvent<HTMLDivElement>) => number;
   keyStep?: number;
+  /**
+   * Invert the arrow-key grow/shrink sense. The default assumes a start-anchored panel (grows as it
+   * extends away from the origin — Right for a `vertical` divider, Up for a `horizontal` one). Set this
+   * for an **end-anchored** panel — e.g. the right-docked notes panel, whose pointer-drag LEFT grows it —
+   * so the keyboard matches the pointer (Left = grow, Right = shrink). Default `false` (start-anchored).
+   */
+  reverseKeys?: boolean;
   /** Surface-specific styling (colour, visibility) merged onto the orientation base classes. */
   className?: string;
 }
@@ -49,6 +56,7 @@ export function PanelResizer({
   onResize,
   pointerToSize,
   keyStep = KEY_STEP,
+  reverseKeys = false,
   className,
 }: PanelResizerProps): React.ReactElement {
   const draggingRef = useRef(false);
@@ -107,10 +115,13 @@ export function PanelResizer({
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      // A vertical divider grows with Right / shrinks with Left; a horizontal one grows with Up
-      // (the panel expands upward) / shrinks with Down. Home/End jump to the bounds either way.
-      const grow = orientation === 'vertical' ? 'ArrowRight' : 'ArrowUp';
-      const shrink = orientation === 'vertical' ? 'ArrowLeft' : 'ArrowDown';
+      // A (start-anchored) vertical divider grows with Right / shrinks with Left; a horizontal one
+      // grows with Up (the panel expands upward) / shrinks with Down. `reverseKeys` swaps the pair for
+      // an end-anchored panel (e.g. the right-docked notes panel). Home/End jump to the bounds either way.
+      const growKey = orientation === 'vertical' ? 'ArrowRight' : 'ArrowUp';
+      const shrinkKey = orientation === 'vertical' ? 'ArrowLeft' : 'ArrowDown';
+      const grow = reverseKeys ? shrinkKey : growKey;
+      const shrink = reverseKeys ? growKey : shrinkKey;
       switch (event.key) {
         case grow:
           onResize(size + keyStep);
@@ -129,7 +140,7 @@ export function PanelResizer({
       }
       event.preventDefault();
     },
-    [orientation, onResize, size, keyStep, min, max],
+    [orientation, onResize, size, keyStep, min, max, reverseKeys],
   );
 
   const vertical = orientation === 'vertical';

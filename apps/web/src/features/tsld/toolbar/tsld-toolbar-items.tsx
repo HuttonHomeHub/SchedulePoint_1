@@ -2021,10 +2021,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       ? {
           ...commentsShape,
           isVisible: () => NOTES_ENABLED,
-          // With `VITE_ENTRY_ROUTES` on, Comments opens the notes drawer (a modal-less `<dialog>`), so
-          // advertise it as a dialog opener (one-way — no pressed/expanded). Flag-off it scrolls to the
-          // inline heading (no popup), so no `aria-haspopup`.
-          ...(ENTRY_ROUTES_ENABLED ? { ariaHasPopup: 'dialog' as const } : {}),
+          // With `VITE_ENTRY_ROUTES` on, Comments is a genuine TOGGLE for the docked notes panel, so it
+          // carries pressed state (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.
+          // Flag-off it's a one-shot scroll action (not a toggle), so no pressed state.
+          ...(ENTRY_ROUTES_ENABLED ? { isActive: (ctx) => ctx.notesOpen } : {}),
           onActivate: (ctx) => ctx.revealComments(),
         }
       : placeholderItem(commentsShape),

@@ -17,8 +17,6 @@ export interface ToolbarButtonProps {
   label: string;
   /** Supplementary hover-tooltip clause appended to the `title` (never the accessible name). */
   description?: string;
-  /** `aria-haspopup` value for a button that opens a popup surface (e.g. `"dialog"`). */
-  ariaHasPopup?: 'dialog' | 'menu';
   icon?: React.ReactNode;
   /** Show the text label beside the icon (Tier-1 emphasis); icon-only otherwise (label → aria-label). */
   showLabel?: boolean;
@@ -38,7 +36,6 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       itemId,
       label,
       description,
-      ariaHasPopup,
       icon,
       showLabel,
       pressed,
@@ -75,7 +72,6 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         // aria-disabled (not `disabled`) keeps the control focusable so the reason is reachable.
         aria-disabled={disabled || undefined}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
-        {...(ariaHasPopup ? { 'aria-haspopup': ariaHasPopup } : {})}
         {...(showLabel ? {} : { 'aria-label': label })}
         {...(title ? { title } : {})}
         tabIndex={tabIndex}

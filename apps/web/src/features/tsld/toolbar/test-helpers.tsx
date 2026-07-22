@@ -83,6 +83,7 @@ export function makeTsldToolbarContext(
     selectedActivityId: null,
     selectedActivity: undefined,
     revealComments: vi.fn(),
+    notesOpen: false,
     canProgress: true,
     openProgress: vi.fn(),
     canWriteNotes: true,
