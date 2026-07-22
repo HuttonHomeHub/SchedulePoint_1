@@ -52,6 +52,20 @@ describe('PanelResizer', () => {
     expect(onResize).not.toHaveBeenCalled();
   });
 
+  it('reverseKeys inverts the vertical grow/shrink sense (end-anchored, e.g. the right notes dock)', () => {
+    const { separator, onResize } = renderResizer({ reverseKeys: true });
+    // Left now GROWS (an end-anchored panel widens as the divider moves left), Right shrinks.
+    fireEvent.keyDown(separator, { key: 'ArrowLeft' });
+    expect(onResize).toHaveBeenLastCalledWith(316);
+    fireEvent.keyDown(separator, { key: 'ArrowRight' });
+    expect(onResize).toHaveBeenLastCalledWith(284);
+    // Home/End still jump to the bounds regardless of the reversed sense.
+    fireEvent.keyDown(separator, { key: 'Home' });
+    expect(onResize).toHaveBeenLastCalledWith(100);
+    fireEvent.keyDown(separator, { key: 'End' });
+    expect(onResize).toHaveBeenLastCalledWith(500);
+  });
+
   it('ignores unrelated keys', () => {
     const { separator, onResize } = renderResizer();
     fireEvent.keyDown(separator, { key: 'a' });

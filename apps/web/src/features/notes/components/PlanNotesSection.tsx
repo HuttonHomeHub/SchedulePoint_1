@@ -20,6 +20,7 @@ export function PlanNotesSection({
   canWrite = false,
   headingLevel = 2,
   bounded = false,
+  chromeless = false,
   headingRef,
 }: {
   orgSlug: string;
@@ -33,10 +34,18 @@ export function PlanNotesSection({
    */
   bounded?: boolean;
   /**
+   * Drop the section's own chrome — its heading, its intro/description paragraph, and the outer card
+   * border/padding/landmark — leaving just the composer + thread. Set when mounted inside the docked
+   * notes panel (entry-route win 1), where the panel's `SheetHeader` "Plan notes" is already the single
+   * header and its `<section>` is the landmark: a second heading + nested card would be redundant chrome
+   * (ux review). Default `false`, so the inline usage is byte-for-byte unchanged.
+   */
+  chromeless?: boolean;
+  /**
    * A ref to the section heading, so the toolbar **Comments** button (toolbar quick-wins F2) can
    * scroll it into view + move focus to it. When set, the heading is made programmatically focusable
    * (`tabIndex={-1}`) without joining the tab order — so keyboard users aren't stranded on reveal
-   * (WCAG 2.4.3). Absent ⇒ unchanged (no ref, no tabindex).
+   * (WCAG 2.4.3). Absent (or `chromeless`, where there is no heading) ⇒ unchanged (no ref, no tabindex).
    */
   headingRef?: Ref<HTMLHeadingElement>;
 }): React.ReactElement {
@@ -45,6 +54,22 @@ export function PlanNotesSection({
   const headingId = useId();
   const target: NoteTarget = { planId, activityId: null };
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
+
+  // Chromeless: a plain, landmark-free wrapper (the host — the docked notes panel — owns the `<section>`
+  // landmark + the single "Plan notes" header), so no nested card / duplicate heading.
+  if (chromeless) {
+    return (
+      <div className="flex flex-col gap-3">
+        {canWrite ? <NoteComposer orgSlug={orgSlug} target={target} /> : null}
+        <NoteThread
+          orgSlug={orgSlug}
+          target={target}
+          currentUserId={currentUserId}
+          bounded={bounded}
+        />
+      </div>
+    );
+  }
 
   return (
     <section

@@ -185,9 +185,12 @@ export interface TsldToolbarContext {
   /** The resolved selected activity (id + live `version`), or undefined when nothing is selected or the
    * row is gone (deleted/stale). The selection-aware `onActivate`s read its id/version. */
   selectedActivity: ActivitySummary | undefined;
-  /** Reveal + focus the plan-level notes thread (the **Comments** button, F2). A guarded no-op when the
-   * `PlanNotesSection` isn't mounted (the responsive single-pane toggle can unmount it). */
+  /** The **Comments** button (F2): flag-on toggles the docked notes panel (entry-route win 1) open/
+   * closed; flag-off scrolls + focuses the inline notes heading (a guarded no-op when it isn't mounted). */
   revealComments: () => void;
+  /** Whether the docked notes panel is open — drives the Comments toggle's pressed state (entry-route
+   * win 1). Always `false` flag-off (Comments is a scroll action there, not a toggle). */
+  notesOpen: boolean;
   /** Whether the viewer may report progress (`canProgress`, Contributor+; NOT pen-gated). Gates the
    * **Update progress…** item (F3). */
   canProgress: boolean;

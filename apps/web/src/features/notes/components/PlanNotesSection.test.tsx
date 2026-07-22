@@ -62,4 +62,16 @@ describe('PlanNotesSection', () => {
     );
     expect(screen.getByRole('heading', { level: 3, name: 'Notes' })).toBeInTheDocument();
   });
+
+  it('chromeless suppresses its heading, description and card landmark (composer + thread only)', async () => {
+    renderSection({ canWrite: true, chromeless: true });
+    // The composer + thread still render…
+    expect(await screen.findByText('No notes yet.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Add a note')).toBeInTheDocument();
+    // …but the section's own chrome is gone: no "Notes" heading, no intro paragraph, no `region` landmark
+    // (the docked panel host owns the single header + landmark).
+    expect(screen.queryByRole('heading', { name: 'Notes' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/a running record of the reasoning/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+  });
 });

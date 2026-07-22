@@ -147,19 +147,60 @@ beforeEach(() => {
   h.role = 'PLANNER';
 });
 
-describe('ToolbarPlanWorkspace — plan notes drawer (entry-route win 1, flag on)', () => {
-  it('does not render the inline plan Notes thread before the drawer is opened', () => {
+describe('ToolbarPlanWorkspace — docked plan-notes panel (entry-route win 1, flag on)', () => {
+  // The dock is a named landmark ("Plan notes panel"). It renders `PlanNotesSection chromeless`, so it
+  // does NOT carry the section's own "Notes" heading — the panel's single header is the SheetHeader.
+  const dock = () => screen.queryByRole('region', { name: 'Plan notes panel' });
+
+  it('does not render the docked notes panel until Comments is clicked', () => {
     renderScreen();
-    // With the drawer closed the Sheet renders no children, so the notes thread heading is absent.
+    expect(dock()).not.toBeInTheDocument();
+    // Chromeless: the dock never adds a second "Notes" heading.
     expect(screen.queryByRole('heading', { name: 'Notes' })).not.toBeInTheDocument();
   });
 
-  it('opens the right-side Plan notes drawer when the Comments toolbar button is clicked', () => {
+  it('is a DOCKED, named landmark (in the layout, not a dialog/overlay) with a single header', () => {
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
-    const drawer = screen.getByRole('dialog', { name: 'Plan notes' });
-    expect(drawer).toBeInTheDocument();
-    // The plan Notes thread now lives inside the drawer.
-    expect(screen.getByRole('heading', { name: 'Notes' })).toBeInTheDocument();
+    // The panel mounts as a `region` landmark…
+    expect(dock()).toBeInTheDocument();
+    // …it is NOT a `<dialog>` overlay — it docks in the layout…
+    expect(screen.queryByRole('dialog', { name: 'Plan notes' })).not.toBeInTheDocument();
+    // …and its only header is the SheetHeader "Plan notes" (no duplicate "Notes" heading from the section).
+    expect(screen.queryByRole('heading', { name: 'Notes' })).not.toBeInTheDocument();
+  });
+
+  it('the Comments button TOGGLES the dock open and closed, reflecting pressed state', () => {
+    renderScreen();
+    const comments = screen.getByRole('button', { name: 'Comments' });
+    expect(comments).toHaveAttribute('aria-pressed', 'false');
+    expect(dock()).not.toBeInTheDocument();
+
+    fireEvent.click(comments);
+    expect(comments).toHaveAttribute('aria-pressed', 'true');
+    expect(dock()).toBeInTheDocument();
+
+    fireEvent.click(comments);
+    expect(comments).toHaveAttribute('aria-pressed', 'false');
+    expect(dock()).not.toBeInTheDocument();
+  });
+
+  it('the dock Close button closes the panel AND returns focus to the Comments toggle', () => {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
+    expect(dock()).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close plan notes' }));
+    expect(dock()).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Comments' })).toHaveFocus();
+  });
+
+  it('Escape inside the dock closes it AND returns focus to the Comments toggle', () => {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
+    const panel = dock()!;
+    expect(panel).toBeInTheDocument();
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(dock()).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Comments' })).toHaveFocus();
   });
 });

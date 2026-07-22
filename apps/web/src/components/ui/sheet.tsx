@@ -5,24 +5,18 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
- * An off-canvas **side sheet** (drawer) built on the native `<dialog>` element. Full height; anchored
- * to the inline-start edge by default (`side="left"`, the navigator rail below `lg`) or to the
- * inline-end edge with `side="right"` (the plan-notes drawer, given a slightly wider cap). Controlled
- * via `open`/`onClose`. The sheet is given an accessible name from `title` (visually hidden — the
- * content supplies its own visible header, e.g. {@link SheetHeader}).
- *
- * `modal` (default `true`) uses `dialog.showModal()`: an inert backdrop, focus trap, Escape-to-close
- * and focus restoration all come for free — the navigator-rail drawer. `modal={false}` uses
- * `dialog.show()` so the page **behind** the sheet stays interactive (the plan-notes drawer beside a
- * live canvas): a non-modal `<dialog>` does none of that focus/Escape work, so this component does it
- * itself — move focus into the drawer on open, close on Escape, and restore focus to the opener on close.
+ * An off-canvas **modal side sheet** (drawer) built on the native `<dialog>` element — focus trapping,
+ * Escape-to-close, and an inert backdrop for free (via `showModal`), matching {@link Dialog}. Full
+ * height; anchored to the inline-start edge by default (`side="left"`, the navigator rail below `lg`) or
+ * to the inline-end edge with `side="right"`. Controlled via `open`/`onClose`. The sheet is given an
+ * accessible name from `title` (visually hidden — the content supplies its own visible header, e.g.
+ * {@link SheetHeader}).
  */
 export function Sheet({
   open,
   onClose,
   title,
   side = 'left',
-  modal = true,
   children,
 }: {
   open: boolean;
@@ -30,43 +24,17 @@ export function Sheet({
   title: string;
   /** Which edge the sheet anchors to — `'left'` (default, inline-start) or `'right'` (inline-end). */
   side?: 'left' | 'right';
-  /** Modal (default, `showModal` — backdrop + native focus trap/Escape) vs non-modal (`show` — the page
-   * behind stays live; this component supplies focus move/restore + Escape itself). */
-  modal?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  // Non-modal only: the element focus was on when the sheet opened, so we can restore it on close (a
-  // modal <dialog> restores this itself; a non-modal one does not).
-  const openerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) {
-      if (modal) {
-        dialog.showModal();
-      } else {
-        // Non-modal: remember the opener, open without the inert backdrop, then move focus into the
-        // drawer (its first focusable — the Close button) since a non-modal <dialog> won't.
-        openerRef.current = (document.activeElement as HTMLElement | null) ?? null;
-        dialog.show();
-        dialog
-          .querySelector<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-          )
-          ?.focus();
-      }
-    }
-    if (!open && dialog.open) {
-      dialog.close();
-      if (!modal) {
-        openerRef.current?.focus();
-        openerRef.current = null;
-      }
-    }
-  }, [open, modal]);
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
 
   return (
     <dialog
@@ -74,26 +42,12 @@ export function Sheet({
       aria-labelledby={titleId}
       onClose={onClose}
       onCancel={onClose}
-      // A non-modal <dialog> does NOT emit `cancel` on Escape, so wire it here; the modal path leaves
-      // Escape to the native `cancel` → `onClose` above.
-      onKeyDown={
-        modal
-          ? undefined
-          : (event) => {
-              if (event.key === 'Escape') {
-                event.stopPropagation();
-                onClose();
-              }
-            }
-      }
       // `!m-0` beats the UA `margin:auto` that would otherwise centre a modal dialog; `fixed inset-y-0`
-      // + the side edge anchors it full-height to the inline-start (default) or inline-end edge. The
-      // right sheet gets a slightly wider cap for multi-paragraph content (notes + composer).
+      // + the side edge anchors it full-height to the inline-start (default) or inline-end edge.
       className={cn(
-        'text-card-foreground fixed inset-y-0 !m-0 h-dvh max-h-dvh max-w-none border-0 bg-transparent p-0',
-        side === 'right' ? 'right-0 w-[min(24rem,90vw)]' : 'left-0 w-[min(20rem,85vw)]',
-        // The inert backdrop only paints for a modal dialog; drop the class in the non-modal case.
-        modal ? 'backdrop:bg-black/50' : null,
+        'text-card-foreground fixed inset-y-0 !m-0 h-dvh max-h-dvh w-[min(20rem,85vw)] max-w-none border-0 bg-transparent p-0',
+        side === 'right' ? 'right-0' : 'left-0',
+        'backdrop:bg-black/50',
       )}
     >
       <h2 id={titleId} className="sr-only">

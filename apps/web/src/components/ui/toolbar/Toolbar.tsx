@@ -280,7 +280,6 @@ export function Toolbar<Ctx>({
                 itemId={r.item.id}
                 label={r.item.label}
                 {...(r.item.description ? { description: r.item.description } : {})}
-                {...(r.item.ariaHasPopup ? { ariaHasPopup: r.item.ariaHasPopup } : {})}
                 icon={r.item.icon}
                 showLabel={r.item.tier === 1}
                 {...(r.item.isActive ? { pressed: r.active } : {})}

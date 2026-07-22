@@ -12,6 +12,12 @@ import {
   PANEL_MIN_OPEN,
   useActivityPanelPrefs,
 } from './use-activity-panel-prefs';
+import {
+  CANVAS_MIN_WIDTH,
+  NOTES_PANEL_MAX_WIDTH,
+  NOTES_PANEL_MIN_WIDTH,
+  useNotesPanelPrefs,
+} from './use-notes-panel-prefs';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
@@ -19,7 +25,7 @@ import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
-import { Sheet, SheetHeader } from '@/components/ui/sheet';
+import { SheetHeader } from '@/components/ui/sheet';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
@@ -99,11 +105,12 @@ export function ToolbarPlanWorkspace({
   const notesHeadingRef = useRef<HTMLHeadingElement>(null);
   const setNotesOpen = model.setNotesOpen;
   const revealComments = useCallback(() => {
-    // Entry-route win 1 (`VITE_ENTRY_ROUTES`): the Comments button opens the right-side notes drawer
-    // (the `<dialog>.showModal()` inside `Sheet` handles focus trap + Escape). Flag-off keeps the
-    // original behaviour — scroll the inline notes heading into view + focus it.
+    // Entry-route win 1 (`VITE_ENTRY_ROUTES`): the Comments button is a genuine TOGGLE for the docked
+    // notes panel (open when closed, close when open) — the panel docks in the layout below and pushes
+    // the canvas, never overlays. Flag-off keeps the original behaviour — scroll the inline notes
+    // heading into view + focus it.
     if (ENTRY_ROUTES_ENABLED) {
-      setNotesOpen(true);
+      setNotesOpen((open) => !open);
       return;
     }
     const el = notesHeadingRef.current;
@@ -181,10 +188,15 @@ export function ToolbarPlanWorkspace({
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(0);
+  const [bodyWidth, setBodyWidth] = useState(0);
   useEffect(() => {
     const el = bodyRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setBodyHeight(el.getBoundingClientRect().height));
+    const ro = new ResizeObserver(() => {
+      const rect = el.getBoundingClientRect();
+      setBodyHeight(rect.height);
+      setBodyWidth(rect.width);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -202,6 +214,38 @@ export function ToolbarPlanWorkspace({
     (next: number) => panel.setSize(Math.min(next, effectiveMax)),
     [panel, effectiveMax],
   );
+
+  // Docked notes panel (entry-route win 1): a right-side sibling of the bottom activity panel — a
+  // resizable, collapsible RIGHT column that participates in the layout (pushes the canvas, never
+  // overlays), toggled by the Comments button (`model.notesOpen`). Width is persisted like the activity
+  // panel's height. The effective max reserves {@link CANVAS_MIN_WIDTH} for the canvas as a best-effort
+  // FLOOR — like the activity panel's height variant, it's clamped only against this body's width, so a
+  // narrow viewport (or another panel/rail open near the breakpoint) can still leave the canvas below it.
+  const notesPanel = useNotesPanelPrefs();
+  const notesDockActive = NOTES_ENABLED && ENTRY_ROUTES_ENABLED && model.notesOpen;
+  const notesEffectiveMax = Math.min(
+    NOTES_PANEL_MAX_WIDTH,
+    Math.max(NOTES_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
+  );
+  const notesWidth = Math.min(notesPanel.size, notesEffectiveMax);
+  // A right-docked panel grows as the pointer moves left: width = the body's right edge − X.
+  const notesPointerToSize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
+    [],
+  );
+  const onNotesResize = useCallback(
+    (next: number) => notesPanel.setSize(Math.min(next, notesEffectiveMax)),
+    [notesPanel, notesEffectiveMax],
+  );
+  // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
+  // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
+  // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
+  // the Comments button itself doesn't go through here (it stays mounted + focused), so no double-move.
+  const closeNotes = useCallback(() => {
+    setNotesOpen(false);
+    rootRef.current?.querySelector<HTMLElement>('[data-toolbar-item="comments"]')?.focus();
+  }, [setNotesOpen]);
 
   // Canvas-first authoring makes the empty canvas an *interactive, drawable* surface, so it must not
   // be shown while the activities/dependencies are still loading — an empty array then reads as a
@@ -335,6 +379,41 @@ export function ToolbarPlanWorkspace({
     />
   );
 
+  // The docked-notes panel content (entry-route win 1) — the shared `SheetHeader` (title + Close, which
+  // toggles the dock shut) over a scrollable, unbounded `PlanNotesSection`. Built once and placed in the
+  // wide right column or the narrow single pane. `headingRef` keeps the flag-off scroll target wired.
+  const notesDockContent = (
+    // A named landmark for the dock (a11y) — "Plan notes panel" so it doesn't collide with the inner
+    // note-thread region. Escape closes it (the non-modal dock has no native cancel) and returns focus
+    // to Comments; scoped here + `stopPropagation` so it doesn't reach the workspace/canvas handlers.
+    // The `onKeyDown` only OBSERVES Escape (it doesn't make the section a widget), so the a11y rule is
+    // disabled deliberately, like the PanelResizer separator's listeners.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    <section
+      aria-label="Plan notes panel"
+      className="flex h-full min-h-0 flex-col"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          closeNotes();
+        }
+      }}
+    >
+      <SheetHeader title="Plan notes" onClose={closeNotes} closeLabel="Close plan notes" />
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        {/* `chromeless`: the SheetHeader "Plan notes" above is the single header + this `<section>` is
+            the landmark, so PlanNotesSection drops its own heading/description/card (ux review). */}
+        <PlanNotesSection
+          orgSlug={model.orgSlug}
+          planId={model.planId}
+          canWrite={model.canWriteNotes}
+          bounded={false}
+          chromeless
+        />
+      </div>
+    </section>
+  );
+
   // Breadcrumb ends at the plan name (the current page) so the whole trail — Clients → client →
   // project → plan — reads on one header line (ADR-0031 two-row amendment). A visually-hidden <h1>
   // keeps the document outline intact even though the visible title is the last (bold) crumb.
@@ -441,52 +520,19 @@ export function ToolbarPlanWorkspace({
         </div>
       ) : null}
 
-      {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): the always-inline block
-          above the canvas wasted vertical space, so when on it moves into a right-side `Sheet` the
-          Comments toolbar button opens (`model.notesOpen`), reclaiming the room. Flag-off keeps the
-          inline block exactly as-is. The `notesHeadingRef` is wired in both modes (harmless when the
-          drawer path no longer scrolls to it). */}
-      {NOTES_ENABLED ? (
-        ENTRY_ROUTES_ENABLED ? (
-          // `modal={false}` keeps the canvas behind the drawer live (win 1 — notes beside a working
-          // canvas), so the sheet does its own focus move/restore + Escape (see {@link Sheet}).
-          <Sheet
-            side="right"
-            modal={false}
-            title="Plan notes"
-            open={model.notesOpen}
-            onClose={() => model.setNotesOpen(false)}
-          >
-            <div className="bg-card border-border flex h-full flex-col border-l shadow-lg">
-              <SheetHeader
-                title="Plan notes"
-                onClose={() => model.setNotesOpen(false)}
-                closeLabel="Close plan notes"
-              />
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-                {/* `bounded={false}`: the `max-h-64` cap is for the inline block; the full-height drawer
-                    scrolls its own region, so multi-paragraph notes + composer read comfortably. */}
-                <PlanNotesSection
-                  orgSlug={model.orgSlug}
-                  planId={model.planId}
-                  canWrite={model.canWriteNotes}
-                  bounded={false}
-                  headingRef={notesHeadingRef}
-                />
-              </div>
-            </div>
-          </Sheet>
-        ) : (
-          <div className="px-4 pt-2">
-            <PlanNotesSection
-              orgSlug={model.orgSlug}
-              planId={model.planId}
-              canWrite={model.canWriteNotes}
-              bounded
-              headingRef={notesHeadingRef}
-            />
-          </div>
-        )
+      {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): when on, the notes live
+          in a docked, resizable RIGHT panel inside the body below (toggled by Comments), so the always-
+          inline block renders ONLY flag-off — byte-for-byte the prior behaviour. */}
+      {NOTES_ENABLED && !ENTRY_ROUTES_ENABLED ? (
+        <div className="px-4 pt-2">
+          <PlanNotesSection
+            orgSlug={model.orgSlug}
+            planId={model.planId}
+            canWrite={model.canWriteNotes}
+            bounded
+            headingRef={notesHeadingRef}
+          />
+        </div>
       ) : null}
 
       {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
@@ -504,39 +550,73 @@ export function ToolbarPlanWorkspace({
 
       <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {isWide ? (
-          <>
-            {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
-                panel (when open) is overlaid via the `relative` container. */}
-            <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
-              {canvas}
-              {legendPanel}
-              {resourceStripPanel}
+          // Wide: a HORIZONTAL split — the canvas+activities vertical stack (left) beside the docked
+          // notes panel (right, when open). Opening notes narrows the canvas; closing restores it.
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
+                  panel (when open) is overlaid via the `relative` container. */}
+              <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
+                {canvas}
+                {legendPanel}
+                {resourceStripPanel}
+              </div>
+
+              {collapsed ? (
+                <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
+              ) : (
+                <>
+                  <PanelResizer
+                    orientation="horizontal"
+                    size={panelHeight}
+                    min={PANEL_MIN_OPEN}
+                    max={effectiveMax}
+                    label="Resize activities panel"
+                    onResize={onResize}
+                    pointerToSize={pointerToSize}
+                    className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                  />
+                  <div style={{ height: panelHeight }} className="shrink-0">
+                    <ActivityBottomPanel
+                      model={model}
+                      onCollapse={collapse}
+                      focusCollapseOnMount={interacted}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
-            {collapsed ? (
-              <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
-            ) : (
+            {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the canvas,
+                never overlays; toggled by Comments. Its vertical splitter sets the width. */}
+            {notesDockActive ? (
               <>
                 <PanelResizer
-                  orientation="horizontal"
-                  size={panelHeight}
-                  min={PANEL_MIN_OPEN}
-                  max={effectiveMax}
-                  label="Resize activities panel"
-                  onResize={onResize}
-                  pointerToSize={pointerToSize}
+                  orientation="vertical"
+                  size={notesWidth}
+                  min={NOTES_PANEL_MIN_WIDTH}
+                  max={notesEffectiveMax}
+                  label="Resize notes panel"
+                  onResize={onNotesResize}
+                  pointerToSize={notesPointerToSize}
+                  // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
+                  // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
+                  reverseKeys
                   className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                 />
-                <div style={{ height: panelHeight }} className="shrink-0">
-                  <ActivityBottomPanel
-                    model={model}
-                    onCollapse={collapse}
-                    focusCollapseOnMount={interacted}
-                  />
+                <div
+                  style={{ width: notesWidth }}
+                  className="border-border bg-card shrink-0 border-l"
+                >
+                  {notesDockContent}
                 </div>
               </>
-            )}
-          </>
+            ) : null}
+          </div>
+        ) : notesDockActive ? (
+          // Narrow: a right dock doesn't fit — notes takes the single pane (the one-pane-at-a-time
+          // narrow philosophy). Closing (the header Close, or the Comments toggle) restores the toggle.
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{notesDockContent}</div>
         ) : (
           <>
             <WorkspaceViewToggle value={pane} onChange={setPane} />

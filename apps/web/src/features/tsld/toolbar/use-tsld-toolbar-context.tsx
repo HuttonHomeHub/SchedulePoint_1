@@ -552,6 +552,8 @@ export function useTsldToolbarContext({
       selectedActivityId,
       selectedActivity,
       revealComments,
+      // Comments toggle pressed state (entry-route win 1) — the docked notes panel's open flag.
+      notesOpen: model.notesOpen,
       canProgress,
       // Update progress (F3): set the workspace-hosted dialog's target to the current selection.
       openProgress: () => setProgressActivityId(selectedActivityId),
@@ -837,6 +839,7 @@ export function useTsldToolbarContext({
     selectedActivityId,
     selectedActivity,
     revealComments,
+    model.notesOpen,
     canProgress,
     canWriteNotes,
     setProgressActivityId,

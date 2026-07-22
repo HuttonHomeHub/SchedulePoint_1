@@ -98,9 +98,6 @@ export interface ToolbarItem<Ctx> {
    * "…— Opens the Logic panel (links & notes)") without lengthening the visible/announced name.
    */
   description?: string;
-  /** `aria-haspopup` for an `onActivate` button that opens a popup surface (e.g. `"dialog"` for a
-   * command that opens a dialog/drawer), matching the popover/menu opener convention. Absent ⇒ omitted. */
-  ariaHasPopup?: 'dialog' | 'menu';
   /** Optional leading icon (decorative; `aria-hidden`). */
   icon?: ReactNode;
   /**
