@@ -19,7 +19,8 @@ import {
  * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 D8).
  *
  * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), **dependency-draw** (2.3),
- * and **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once).
+ * **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once), and
+ * **finish-edge duration resize** (ADR-0052 M2 — the repurposed bar-end handle).
  */
 
 /**
@@ -129,6 +130,18 @@ export type EditIntent =
       laneIndex?: number;
     }
   | {
+      /**
+       * A committed finish-edge duration resize (ADR-0052 M2): `TsldPanel` maps it to a
+       * `PATCH durationDays` (the full-definition round-trip) + recalc. `edge` is carried for the
+       * M3 start-edge extension; M2 only ever emits `'finish'`.
+       */
+      kind: 'resize';
+      activityId: string;
+      edge: 'finish';
+      /** The new whole-day duration under the drop point, clamped ≥ 1. */
+      newDurationDays: number;
+    }
+  | {
       kind: 'link';
       /** The activity the drag started from (its edge handle). */
       predecessorId: string;
@@ -168,6 +181,29 @@ export type GestureState =
       currentStartDay: number;
       /** The lane under the pointer now — `round(dy / LANE_HEIGHT)` from the grab, clamped ≥ 0. */
       currentLaneIndex: number;
+    }
+  | {
+      /**
+       * A finish-edge duration resize in flight (ADR-0052 M2), mirroring {@link GestureState
+       * repositioning}: armed on a `resizeFinish` grab, it tracks the pointer by whole day
+       * columns (the day under the pointer becomes the tentative inclusive finish day) and
+       * commits a `resize` intent on release — or selects the bar if it never really moved.
+       * The start day and lane are fixed; only the duration changes.
+       */
+      kind: 'resizing';
+      activityId: string;
+      /** The screen x grabbed at pointer-down — for the pixel-distance select/resize guard. */
+      grabX: number;
+      /** Whether the pointer travelled past {@link REPOSITION_THRESHOLD_PX} horizontally. */
+      movedPastThreshold: boolean;
+      /** The bar's fixed start day (whole-day offset about the data date). */
+      originStartDay: number;
+      /** The duration at grab time, for the "nothing changed → select" check. */
+      originDurationDays: number;
+      /** The bar's lane, for the ghost geometry (a resize never changes the lane). */
+      laneIndex: number;
+      /** The live tentative duration (whole days, clamped ≥ 1) under the pointer. */
+      currentDurationDays: number;
     }
   | {
       kind: 'linking';
@@ -235,6 +271,33 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const laneIndex = laneRowAt(event.point.y, ctx.view);
         return { state: { kind: 'creating', originDay: day, laneIndex, currentDay: day } };
       }
+      if (event.hit.kind === 'resizeFinish' && event.hit.id && event.body) {
+        // Grab the finish-edge resize handle (ADR-0052 M2). The shell only classifies resize
+        // zones for eligible bars (classifyHit's `resizeHandles` refuses milestones / LOE / WBS
+        // summaries), so reaching here means the duration is a real user input. Without the
+        // grabbed geometry (`body`) there is nothing to resize — fall through to idle.
+        const { id, startDay, endDay } = event.body;
+        const durationDays = endDay - startDay + 1;
+        return {
+          state: {
+            kind: 'resizing',
+            activityId: id,
+            grabX: event.point.x,
+            movedPastThreshold: false,
+            originStartDay: startDay,
+            originDurationDays: durationDays,
+            laneIndex: event.body.laneIndex,
+            currentDurationDays: durationDays,
+          },
+        };
+      }
+      if (event.hit.kind === 'resizeStart') {
+        // The start-edge resize zone is classified now (so the hit vocabulary is complete) but its
+        // gesture lands in M3 (mode-aware move-start-keep-finish, ADR-0052 §3). Until then the
+        // press is inert here — the canvas keeps its M1 fall-through (a stationary click still
+        // selects via `hitTest`, a drag pans).
+        return { state: IDLE };
+      }
       if ((event.hit.kind === 'startHandle' || event.hit.kind === 'finishHandle') && event.hit.id) {
         // Grab an edge handle → start a dependency rubber-band from that activity.
         return {
@@ -298,6 +361,23 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
           return { state };
         return { state: { ...state, currentStartDay, currentLaneIndex, movedPastThreshold } };
       }
+      if (state.kind === 'resizing') {
+        // The day column under the pointer becomes the tentative inclusive finish day — whole-cell
+        // snapping for free, exactly like the reposition ghost. Clamped so the duration never drops
+        // below one day (a zero/negative span would invert the bar). The same pixel threshold as
+        // reposition guards click-jitter at low zoom (a sub-threshold press stays a select).
+        const movedPastThreshold =
+          state.movedPastThreshold ||
+          Math.abs(event.point.x - state.grabX) > REPOSITION_THRESHOLD_PX;
+        const finishDay = dayColumnAt(event.point.x, ctx.view);
+        const currentDurationDays = Math.max(1, finishDay - state.originStartDay + 1);
+        if (
+          currentDurationDays === state.currentDurationDays &&
+          movedPastThreshold === state.movedPastThreshold
+        )
+          return { state };
+        return { state: { ...state, currentDurationDays, movedPastThreshold } };
+      }
       if (state.kind === 'linking') {
         // Track the free end + the hovered drop target (a different activity) + the live type.
         // NB: any other activity is highlighted as a target; a client-side cycle *pre-check*
@@ -346,6 +426,22 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             activityId: state.activityId,
             ...(dayChanged ? { startDay: state.currentStartDay } : {}),
             ...(laneChanged ? { laneIndex: state.currentLaneIndex } : {}),
+          },
+        };
+      }
+      if (state.kind === 'resizing') {
+        // A press that never travelled past the pixel threshold — or that landed back on the
+        // original duration — is a select, not a resize (the same guard as reposition).
+        if (!state.movedPastThreshold || state.currentDurationDays === state.originDurationDays) {
+          return { state: IDLE, select: state.activityId };
+        }
+        return {
+          state: IDLE,
+          intent: {
+            kind: 'resize',
+            activityId: state.activityId,
+            edge: 'finish',
+            newDurationDays: state.currentDurationDays,
           },
         };
       }

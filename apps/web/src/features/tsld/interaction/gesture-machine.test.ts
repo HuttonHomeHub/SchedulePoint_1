@@ -383,6 +383,145 @@ describe('gesture-machine: free-2D drag (M4)', () => {
   });
 });
 
+describe('gesture-machine: finish-edge resize (ADR-0052 M2)', () => {
+  // pxPerDay 10 → day = floor(x/10). Bar a: days 2..5 (duration 4) at lane 1; finish edge at x=60.
+  const body = { id: 'a', startDay: 2, endDay: 5, laneIndex: 1 };
+  const grab = (): GestureState =>
+    reduce(
+      IDLE,
+      {
+        type: 'pointerDown',
+        point: { x: 58, y: 40 },
+        hit: { kind: 'resizeFinish', id: 'a' },
+        body,
+      },
+      ctx('select'),
+    ).state;
+  const move = (state: GestureState, x: number): GestureState =>
+    reduce(state, { type: 'pointerMove', point: { x, y: 40 } }, ctx('select')).state;
+
+  it('starts a resizing state on a resizeFinish grab, seeded from the bar geometry', () => {
+    expect(grab()).toEqual({
+      kind: 'resizing',
+      activityId: 'a',
+      grabX: 58,
+      movedPastThreshold: false,
+      originStartDay: 2,
+      originDurationDays: 4,
+      laneIndex: 1,
+      currentDurationDays: 4,
+    });
+  });
+
+  it('snaps the tentative duration to whole day columns as the pointer moves', () => {
+    // x=85 → day column 8 as the new inclusive finish → duration 8 - 2 + 1 = 7.
+    expect(move(grab(), 85)).toMatchObject({
+      kind: 'resizing',
+      currentDurationDays: 7,
+      movedPastThreshold: true,
+    });
+  });
+
+  it('commits a resize intent with the new duration on release', () => {
+    const up = reduce(move(grab(), 85), { type: 'pointerUp' }, ctx('select'));
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toEqual({
+      kind: 'resize',
+      activityId: 'a',
+      edge: 'finish',
+      newDurationDays: 7,
+    });
+  });
+
+  it('clamps the duration at one day when dragged left past the start', () => {
+    // x=5 → day 0, before the start day (2) → clamped to duration 1, never inverted.
+    const up = reduce(move(grab(), 5), { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toEqual({
+      kind: 'resize',
+      activityId: 'a',
+      edge: 'finish',
+      newDurationDays: 1,
+    });
+  });
+
+  it('selects (no intent) when the press never moved', () => {
+    const up = reduce(grab(), { type: 'pointerUp' }, ctx('select'));
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toBeUndefined();
+    expect(up.select).toBe('a');
+  });
+
+  it('selects (no intent) when a sub-threshold jitter crosses a day at low zoom', () => {
+    // pxPerDay 2: a 3px jitter crosses a day column but stays under the 4px threshold — the same
+    // click-jitter guard as reposition, so it must select, not commit a 1-day duration change.
+    const lowZoom: GestureCtx = {
+      mode: 'select',
+      view: { pxPerDay: 2, originX: 0, originY: 0 },
+      dataDate: '2026-01-01',
+    };
+    const lowBody = { id: 'a', startDay: 0, endDay: 4, laneIndex: 0 };
+    const grabbed = reduce(
+      IDLE,
+      {
+        type: 'pointerDown',
+        point: { x: 9, y: 5 },
+        hit: { kind: 'resizeFinish', id: 'a' },
+        body: lowBody,
+      },
+      lowZoom,
+    ).state;
+    const moved = reduce(grabbed, { type: 'pointerMove', point: { x: 12, y: 5 } }, lowZoom);
+    expect(moved.state).toMatchObject({ kind: 'resizing', movedPastThreshold: false });
+    const up = reduce(moved.state, { type: 'pointerUp' }, lowZoom);
+    expect(up.intent).toBeUndefined();
+    expect(up.select).toBe('a');
+  });
+
+  it('selects (no intent) when the drag lands back on the original duration', () => {
+    // Out past a day boundary (threshold trips), then back onto the origin finish column.
+    const wandered = move(move(grab(), 85), 58);
+    const up = reduce(wandered, { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toBeUndefined();
+    expect(up.select).toBe('a');
+  });
+
+  it('cancels a resize on escape with no intent', () => {
+    const r = reduce(move(grab(), 85), { type: 'escape' }, ctx('select'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('is inert on a resizeFinish grab without the bar geometry (nothing to resize)', () => {
+    const r = reduce(
+      IDLE,
+      { type: 'pointerDown', point: { x: 58, y: 40 }, hit: { kind: 'resizeFinish', id: 'a' } },
+      ctx('select'),
+    );
+    expect(r.state).toEqual(IDLE);
+  });
+
+  it('leaves the start-edge zone inert until M3 (falls through to the M1 select/pan path)', () => {
+    const r = reduce(
+      IDLE,
+      { type: 'pointerDown', point: { x: 21, y: 40 }, hit: { kind: 'resizeStart', id: 'a' }, body },
+      ctx('select'),
+    );
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+
+  it('flag-off parity: startHandle/finishHandle hits still start the linking rubber-band', () => {
+    // Without the resize vocabulary (classifyHit called with no options — the flag-off path), a
+    // bar-end press classifies as start/finishHandle and behaves exactly as before this milestone.
+    const r = reduce(
+      IDLE,
+      { type: 'pointerDown', point: { x: 58, y: 40 }, hit: { kind: 'finishHandle', id: 'a' } },
+      ctx('select'),
+    );
+    expect(r.state).toMatchObject({ kind: 'linking', sourceId: 'a', sourceHandle: 'finishHandle' });
+  });
+});
+
 describe('gesture-machine: dependency-draw', () => {
   it('maps modifiers to a dependency type (plain FS, Shift SS, Alt FF)', () => {
     expect(modifiersToLinkType(undefined)).toBe('FS');

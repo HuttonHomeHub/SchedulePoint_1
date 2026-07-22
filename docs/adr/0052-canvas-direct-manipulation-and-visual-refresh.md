@@ -169,3 +169,11 @@ rendering milestones (M1/M4/M5) apply to read-only roles too.
   `arrowhead`), `render/paint.ts` (`TsldScene.timeTrueLinks`),
   `render/a11y.ts` (`lagPhrase`), `config/env.ts`
   (`CANVAS_DIRECT_MANIPULATION_ENABLED`).
+- M2 implementation (finish-edge duration resize): `render-model.ts`
+  (`resizeStart`/`resizeFinish` zones, `isResizeEligibleType`),
+  `interaction/gesture-machine.ts` (`resizing` state, `resize` intent),
+  `interaction/use-coalesced-duration-nudge.ts` (`Shift+←/→`),
+  `render/paint.ts` (`InteractionOverlay.resize` ghost + label),
+  `components/layout/workspace/use-plan-workspace-model.ts` (`onTsldResize`),
+  `features/undo-redo/commands.ts` (`durationResizeCommand`, key
+  `resize:{activityId}`).

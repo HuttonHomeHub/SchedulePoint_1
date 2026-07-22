@@ -244,6 +244,29 @@ export function relaneCommand(params: {
 }
 
 /**
+ * Reverse a canvas **finish-edge duration resize** (ADR-0052 M2) — the full-definition PATCH whose
+ * only intended change is `durationDays`. The inverse restores the whole pre-edit definition (so
+ * whatever the write touched is reliably reversed); redo re-applies the resized one. Coalesces per
+ * activity (`resize:{id}`) so a drag / held-`Shift+←/→` burst collapses to ONE undo step, exactly
+ * like {@link repositionCommand}'s day-move coalescing.
+ */
+export function durationResizeCommand(params: {
+  update: UpdateActivityFn;
+  before: ActivitySummary;
+  after: ActivitySummary;
+  label?: string;
+}): Command {
+  return definitionSnapshotCommand({
+    // Name the entity ("Resize “Excavate”"), mirroring the toast convention (S1).
+    label: params.label ?? `Resize “${params.before.name}”`,
+    update: params.update,
+    before: params.before,
+    after: params.after,
+    coalesceKey: `resize:${params.before.id}`,
+  });
+}
+
+/**
  * Reverse a **definition edit** from the activity form (rename / duration / constraint / …). Restores
  * the full pre-edit definition on undo and the post-edit definition on redo — the same mechanism as
  * {@link repositionCommand}, differing only in the default label.

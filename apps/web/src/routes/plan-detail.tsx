@@ -306,6 +306,8 @@ function LegacyPlanLayout({
             canEdit={model.canEditSchedule}
             onCreate={model.onTsldCreate}
             onReposition={model.onTsldReposition}
+            // Finish-edge duration resize (ADR-0052 M2); armed only under the flag.
+            onResize={model.onTsldResize}
             onLink={model.onTsldLink}
             onAutoArrange={model.onTsldAutoArrange}
             onOpenLogic={model.setLogicActivity}

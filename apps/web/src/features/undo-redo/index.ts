@@ -2,6 +2,7 @@
 export {
   activityDefinitionInput,
   dependencyLinkOf,
+  durationResizeCommand,
   relaneCommand,
   repositionCommand,
   updateCommand,

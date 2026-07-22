@@ -5,6 +5,8 @@ export {
   type TsldCreateOutcome,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
+  type TsldResizeInput,
+  type TsldResizeOutcome,
   type TsldLinkInput,
   type TsldLinkOutcome,
   type TsldLoeSpanInput,

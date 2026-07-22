@@ -25,6 +25,7 @@ import {
   hitTest,
   laneRowAt,
   isMilestone,
+  isResizeEligibleType,
   LANE_HEIGHT,
   MAX_PX_PER_DAY,
   MIN_PX_PER_DAY,
@@ -501,6 +502,73 @@ describe('classifyHit', () => {
   it('ignores activities without computed dates', () => {
     const acts = [activity({ earlyStart: null, earlyFinish: null })];
     expect(classifyHit(acts, { x: 120, y: 60 }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
+  });
+});
+
+describe('classifyHit — resize handles (ADR-0052 M2)', () => {
+  const RESIZE = { resizeHandles: true } as const;
+
+  it('classifies the end zones as resizeStart / resizeFinish, body between them', () => {
+    const acts = [activity()];
+    expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      kind: 'resizeStart',
+      id: 'a1',
+    });
+    expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      kind: 'resizeFinish',
+      id: 'a1',
+    });
+    // Zones keep their priority over the body, and empty space is untouched.
+    expect(classifyHit(acts, { x: 120, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      kind: 'body',
+      id: 'a1',
+    });
+    expect(classifyHit(acts, { x: 250, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      kind: 'empty',
+    });
+  });
+
+  it('offers NO end zones on a duration-derived bar — the whole rect is body', () => {
+    // Milestones, Level of Effort and WBS summaries have no user-entered duration to resize
+    // (`isResizeEligibleType`), so a bar-end press falls through to reposition/select.
+    for (const type of ['LEVEL_OF_EFFORT', 'WBS_SUMMARY'] as const) {
+      const acts = [activity({ type })];
+      expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+        kind: 'body',
+        id: 'a1',
+      });
+      expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+        kind: 'body',
+        id: 'a1',
+      });
+    }
+    // A milestone's diamond bounding box likewise classifies wholly as body.
+    const milestone = [activity({ type: 'START_MILESTONE', earlyFinish: '2026-01-01' })];
+    const rect = activityRect(milestone[0]!, VIEW, DATA_DATE)!;
+    expect(
+      classifyHit(milestone, { x: rect.x + 1, y: rect.y + rect.h / 2 }, VIEW, DATA_DATE, RESIZE),
+    ).toEqual({ kind: 'body', id: 'a1' });
+  });
+
+  it('flag-off parity: without the option the zones keep their link-draw kinds', () => {
+    const acts = [activity()];
+    expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE)).toEqual({
+      kind: 'startHandle',
+      id: 'a1',
+    });
+    expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE)).toEqual({
+      kind: 'finishHandle',
+      id: 'a1',
+    });
+  });
+
+  it('isResizeEligibleType mirrors the duration-derived rule', () => {
+    expect(isResizeEligibleType('TASK')).toBe(true);
+    expect(isResizeEligibleType('RESOURCE_DEPENDENT')).toBe(true);
+    expect(isResizeEligibleType('START_MILESTONE')).toBe(false);
+    expect(isResizeEligibleType('FINISH_MILESTONE')).toBe(false);
+    expect(isResizeEligibleType('LEVEL_OF_EFFORT')).toBe(false);
+    expect(isResizeEligibleType('WBS_SUMMARY')).toBe(false);
   });
 });
 

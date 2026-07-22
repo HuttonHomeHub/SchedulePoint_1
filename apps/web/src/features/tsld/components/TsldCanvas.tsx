@@ -19,6 +19,7 @@ import {
   paintScene,
   type InteractionOverlay,
   type LinkOverlay,
+  type ResizeOverlay,
   type ResourceStripPalette,
   type TsldPalette,
   type TsldScene,
@@ -116,6 +117,10 @@ export interface TsldCanvasProps {
   /** Whether a body-grab in select mode may start a reposition (i.e. a handler is wired). When
    * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
   canReposition?: boolean;
+  /** Whether a bar-end grab in select mode may start a finish-edge duration resize (i.e. a resize
+   * handler is wired — ADR-0052 M2). Only effective under `VITE_CANVAS_DIRECT_MANIPULATION`; when
+   * false (or flag-off) the bar ends keep their previous behaviour byte-for-byte. */
+  canResize?: boolean;
   /** Whether an edge-handle grab may start a dependency-draw (i.e. a link handler is wired).
    * When false, a handle press falls through to M1 select — no dangling rubber-band. */
   canLink?: boolean;
@@ -217,6 +222,21 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
     );
   }
   return null;
+}
+
+/** The in-flight finish-edge resize ghost + its live duration readout (ADR-0052 M2), or null.
+ * Start + lane are pinned; only the right edge tracks the pointer's (clamped) day column. */
+function liveResize(state: GestureState, view: Viewport): ResizeOverlay | null {
+  if (state.kind !== 'resizing') return null;
+  return {
+    rect: dayCellRect(
+      state.originStartDay,
+      state.originStartDay + state.currentDurationDays - 1,
+      state.laneIndex,
+      view,
+    ),
+    label: `${state.currentDurationDays}d`,
+  };
 }
 
 /** The live dependency rubber-band (anchor → pointer + target highlight), or null when not linking.
@@ -335,6 +355,7 @@ export function TsldCanvas({
   createType,
   linkType,
   canReposition = false,
+  canResize = false,
   canLink = false,
   onIntent,
   onLoeSpanStep,
@@ -401,7 +422,12 @@ export function TsldCanvas({
   // Edge handles are the flag-off edge-drag affordance. Canvas-first authoring (ADR-0032 M5) replaces
   // edge-drag with the two-click `link` tool, so the handles are suppressed there — no dangling
   // rubber-band path when the flag is on. `canLink` still gates whether linking is offered at all.
-  const showEdgeHandles = editing && canLink && !CANVAS_AUTHORING_ENABLED;
+  // Under direct manipulation (ADR-0052 §1) the bar ends are repurposed as RESIZE handles, so the
+  // selected-bar edge marks advertise resize instead (and the painter suppresses them for
+  // resize-ineligible types); flag-off keeps today's expression byte-for-byte.
+  const showEdgeHandles = CANVAS_DIRECT_MANIPULATION_ENABLED
+    ? editing && canResize
+    : editing && canLink && !CANVAS_AUTHORING_ENABLED;
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -739,6 +765,9 @@ export function TsldCanvas({
             sceneRef.current.activities,
             sceneRef.current.dataDate,
           ),
+          // Finish-edge resize ghost + live duration label (ADR-0052 M2). Null except while a
+          // `resizing` gesture is active, so every other frame paints byte-for-byte as before.
+          resize: liveResize(gestureRef.current, viewRef.current),
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
@@ -897,8 +926,18 @@ export function TsldCanvas({
     ...(linkType ? { linkType } : {}),
   });
   const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
-  const classifyAt = (p: Point): HitZone =>
-    classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate);
+  // Whether a bar-end press/hover means "resize" (ADR-0052 M2): flag + editing + Select tool + a
+  // wired handler. Build-time flag first, so flag-off short-circuits to false with zero extra work.
+  const resizeArmed =
+    CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canResize;
+  const classifyAt = (p: Point, resizeZones = false): HitZone =>
+    classifyHit(
+      sceneRef.current.activities,
+      p,
+      viewRef.current,
+      dataDate,
+      resizeZones ? { resizeHandles: true } : undefined,
+    );
 
   return (
     <div ref={containerRef} className="bg-card relative h-full w-full overflow-hidden">
@@ -942,16 +981,23 @@ export function TsldCanvas({
           // in-progress pick before the second click's release lands. Panning still works via `drag`.
           if (editing && mode !== 'link' && mode !== 'loe') {
             const p = localPoint(e);
-            const rawHit = classifyAt(p);
+            const rawHit = classifyAt(p, resizeArmed);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
-            // Downgrade a handle to a body hit when linking isn't wired, so it never starts a
-            // dangling rubber-band — it falls through to reposition (if wired) or M1 select.
+            // Downgrade a handle to a body hit when linking isn't wired — OR when direct
+            // manipulation is on (ADR-0052 §1 gates the legacy edge-drag-link off under the flag;
+            // linking is the two-click tool) — so it never starts a dangling rubber-band and falls
+            // through to reposition (if wired) or M1 select.
             const hit: HitZone =
-              isHandle && !canLink && rawHit.id ? { kind: 'body', id: rawHit.id } : rawHit;
+              isHandle && (!canLink || CANVAS_DIRECT_MANIPULATION_ENABLED) && rawHit.id
+                ? { kind: 'body', id: rawHit.id }
+                : rawHit;
             // A body grab in select mode needs the activity's current geometry to reposition it —
-            // but only when a reposition handler is wired, else it falls through to M1 select.
+            // but only when a reposition handler is wired, else it falls through to M1 select. A
+            // finish-edge resize grab (ADR-0052 M2) needs the same geometry (its start + span).
             const body =
-              canReposition && mode === 'select' && hit.kind === 'body' && hit.id
+              mode === 'select' &&
+              hit.id &&
+              ((canReposition && hit.kind === 'body') || hit.kind === 'resizeFinish')
                 ? bodyGrab(sceneRef.current.activities, hit.id, dataDate)
                 : undefined;
             const { state } = reduce(
@@ -989,7 +1035,18 @@ export function TsldCanvas({
             interactionDirtyRef.current = true;
             return;
           }
-          if (!drag.current) return;
+          if (!drag.current) {
+            // Idle hover (no gesture, no pan): show the ew-resize affordance over an eligible
+            // bar's finish grab-zone (ADR-0052 M2). Inline style wins over the className cursor
+            // and clears back to it ('' → class fallback) off the zone. Flag-off / not armed ⇒
+            // no classify, no style write — byte-for-byte today's hover behaviour.
+            if (resizeArmed) {
+              const hover = classifyAt(localPoint(e), true);
+              const surface = canvasRef.current;
+              if (surface) surface.style.cursor = hover.kind === 'resizeFinish' ? 'ew-resize' : '';
+            }
+            return;
+          }
           const dx = e.clientX - drag.current.x;
           const dy = e.clientY - drag.current.y;
           if (Math.abs(dx) + Math.abs(dy) > CLICK_MOVE_THRESHOLD_PX) drag.current.moved = true;

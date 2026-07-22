@@ -212,6 +212,32 @@ describe('paintScene', () => {
     expect(editing.strokeRect).toHaveBeenCalledTimes(1);
   });
 
+  it('suppresses the edge marks for a resize-ineligible bar under direct manipulation (ADR-0052 M2)', () => {
+    const scene = (type: RenderActivity['type'], timeTrueLinks: boolean): TsldScene => ({
+      activities: [task({ id: 't', type })],
+      edges: [],
+      dataDate: DATA_DATE,
+      selectedId: 't',
+      showEdgeHandles: true,
+      timeTrueLinks,
+    });
+    // Flag on: the marks advertise RESIZE, and an LOE/WBS-summary duration isn't resizable —
+    // no marks (bar fill only). A plain task keeps its two marks.
+    const loe = mockCtx();
+    paintScene(loe, scene('LEVEL_OF_EFFORT', true), VIEW, SIZE, PALETTE);
+    expect(loe.fillRect).toHaveBeenCalledTimes(1);
+    const summary = mockCtx();
+    paintScene(summary, scene('WBS_SUMMARY', true), VIEW, SIZE, PALETTE);
+    expect(summary.fillRect).toHaveBeenCalledTimes(1);
+    const taskCtx = mockCtx();
+    paintScene(taskCtx, scene('TASK', true), VIEW, SIZE, PALETTE);
+    expect(taskCtx.fillRect).toHaveBeenCalledTimes(3);
+    // Flag off: today's link-draw affordance is untouched — an LOE still shows both marks.
+    const legacy = mockCtx();
+    paintScene(legacy, scene('LEVEL_OF_EFFORT', false), VIEW, SIZE, PALETTE);
+    expect(legacy.fillRect).toHaveBeenCalledTimes(3);
+  });
+
   // The pin is a triangle whose tip (the last lineTo) sits on the constrained edge.
   const pinTipX = (ctx: ReturnType<typeof mockCtx>): number => {
     const calls = ctx.lineTo.mock.calls;
@@ -470,6 +496,25 @@ describe('paintInteractionLayer', () => {
     expect(ctx.clearRect).toHaveBeenCalled();
     expect(ctx.fillRect).not.toHaveBeenCalled();
     expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('draws the resize ghost like a live ghost PLUS its duration label (ADR-0052 M2)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { resize: { rect: GHOST, label: '7d' } }, SIZE, PALETTE);
+    // The tentative bar: solid fill + solid outline, matching the reposition/create ghost.
+    expect(ctx.fillRect).toHaveBeenCalledWith(GHOST.x, GHOST.y, GHOST.w, GHOST.h);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    // The live duration readout sits just above the ghost's left edge.
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    const [text, , y] = ctx.fillText.mock.calls[0]! as [string, number, number];
+    expect(text).toBe('7d');
+    expect(y).toBeLessThan(GHOST.y);
+  });
+
+  it('draws no resize ghost (and no label) when the overlay carries none', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { live: GHOST }, SIZE, PALETTE);
+    expect(ctx.fillText).not.toHaveBeenCalled();
   });
 });
 

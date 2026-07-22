@@ -43,15 +43,18 @@ import {
   type TsldLoeSpanOutcome,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
+  type TsldResizeInput,
   type TsldEditOutcome,
 } from '@/features/tsld';
 import {
+  activityDefinitionInput,
   autoArrangeCommand,
   createActivityCommand,
   createLoeSpanCommand,
   deleteActivityCommand,
   dependencyAddCommand,
   dependencyRemoveCommand,
+  durationResizeCommand,
   relaneCommand,
   repositionCommand,
   updateCommand,
@@ -603,6 +606,68 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     }
   };
 
+  // TSLD finish-edge duration resize (ADR-0052 M2, behind `VITE_CANVAS_DIRECT_MANIPULATION`): the
+  // bar-end drag / `Shift+←/→` nudge becomes a `PATCH durationDays` through the SAME single-activity
+  // update the reposition path uses — carried as the FULL definition round-trip
+  // (`activityDefinitionInput`) so durationType / EV / accrual / constraints are resent verbatim,
+  // never silently cleared. Unlike a reposition it does NOT touch the primary constraint or lane.
+  // Optimistic-lock 409 and pen-loss 423 reuse the exact reposition contract; the follow-up recalc
+  // is the coalesced auto-recalc (or the inline recalc when authoring is off).
+  const resizeConflict =
+    'This plan changed since you opened it — your resize wasn’t applied. Refresh to see the latest.';
+  const onTsldResize = async ({
+    activityId,
+    durationDays,
+  }: TsldResizeInput): Promise<TsldEditOutcome> => {
+    const activity = (activities.data ?? []).find((a) => a.id === activityId);
+    if (!activity) return { applied: false, conflict: null };
+    // Defensive no-op: the gesture/nudge only emit a *changed* duration, but a stale caller must
+    // never burn a version bump (and a recalc) on an identical write.
+    if (durationDays === activity.durationDays) return { applied: false, conflict: null };
+    try {
+      const saved = await updateActivity.mutateAsync({
+        activityId,
+        version: activity.version,
+        ...activityDefinitionInput(activity),
+        durationDays,
+      });
+      // Record the resize for undo (ADR-0048) — the single user edit, NOT the follow-up recalc.
+      // The inverse restores the pre-edit definition (its prior duration); a drag/held-key burst
+      // coalesces to one step (`resize:{id}`). Guarded on the flag so behaviour is unchanged off.
+      if (UNDO_REDO_ENABLED) {
+        editHistory.record(
+          durationResizeCommand({
+            update: updateActivity.mutateAsync,
+            before: activity,
+            after: saved,
+          }),
+        );
+      }
+    } catch (err) {
+      if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
+      if (err instanceof ApiFetchError && err.status === 409) {
+        // Stale version — the resize was NOT applied (nothing changed); never re-send.
+        return { applied: false, conflict: resizeConflict };
+      }
+      throw err;
+    }
+    // The resize landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { applied: true, conflict: null };
+    }
+    try {
+      await recalculate.mutateAsync();
+      return { applied: true, conflict: null };
+    } catch {
+      return {
+        applied: true,
+        conflict:
+          'Resized, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
+      };
+    }
+  };
+
   // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
   // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
   // engine rejects — surfaced non-destructively (nothing was created), never retried.
@@ -1001,6 +1066,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,
+    // Finish-edge duration resize (ADR-0052 M2, `VITE_CANVAS_DIRECT_MANIPULATION`) — the
+    // full-definition durationDays PATCH + coalesced recalc + coalesced undo.
+    onTsldResize,
     onTsldLink,
     onTsldAutoArrange,
     onTsldRefresh,

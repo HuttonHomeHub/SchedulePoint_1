@@ -303,6 +303,9 @@ export function ToolbarPlanWorkspace({
       canEdit={model.canEditSchedule && !lateOverlayActive}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
+      // Finish-edge duration resize (ADR-0052 M2). Always passed like onReposition; the canvas
+      // only arms it under `VITE_CANVAS_DIRECT_MANIPULATION`, so flag-off is byte-for-byte.
+      onResize={model.onTsldResize}
       onLink={model.onTsldLink}
       // LOE endpoint-pick span (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`). Gated on the flag so flag-off is
       // byte-for-byte today's canvas — the LOE tool-mode is then unreachable (the Add-menu item is also

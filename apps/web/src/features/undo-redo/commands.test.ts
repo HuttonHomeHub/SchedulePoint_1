@@ -10,6 +10,7 @@ import {
   dependencyAddCommand,
   dependencyLinkOf,
   dependencyRemoveCommand,
+  durationResizeCommand,
   relaneCommand,
   repositionCommand,
   updateCommand,
@@ -192,6 +193,72 @@ describe('repositionCommand', () => {
     expect(
       repositionCommand({ update, before: activity(), after: activity(), label: 'Nudge' }).label,
     ).toBe('Nudge');
+  });
+});
+
+describe('durationResizeCommand (ADR-0052 M2)', () => {
+  it('undo restores the pre-resize duration (full definition), redo re-applies the new one', async () => {
+    const before = activity({
+      durationDays: 5,
+      constraintType: 'SNET',
+      constraintDate: '2026-02-01',
+      version: 4,
+    });
+    const after = activity({
+      durationDays: 9,
+      constraintType: 'SNET',
+      constraintDate: '2026-02-01',
+      version: 5,
+    });
+    const update = fakeUpdate();
+    const command = durationResizeCommand({ update, before, after });
+
+    await command.undo();
+    // The inverse is the FULL definition round-trip — the prior duration AND the untouched
+    // constraint are resent, so nothing the resize carried along is silently cleared.
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activityId: 'a1',
+        version: 5, // starts from the post-edit version
+        durationDays: 5,
+        constraintType: 'SNET',
+        constraintDate: '2026-02-01',
+      }),
+    );
+
+    await command.redo();
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activityId: 'a1',
+        version: 101, // threaded from the undo response (100 + 1)
+        durationDays: 9,
+      }),
+    );
+    expect(command.label).toBe('Resize “Excavate”');
+  });
+
+  it('coalesces per activity: a drag/held-key burst collapses to first-before → last-after', async () => {
+    const update = fakeUpdate();
+    const first = durationResizeCommand({
+      update,
+      before: activity({ durationDays: 5, version: 4 }),
+      after: activity({ durationDays: 6, version: 5 }),
+    });
+    const second = durationResizeCommand({
+      update,
+      before: activity({ durationDays: 6, version: 5 }),
+      after: activity({ durationDays: 8, version: 6 }),
+    });
+    expect(first.coalescing?.key).toBe('resize:a1');
+    expect(second.coalescing?.key).toBe('resize:a1');
+
+    // The history store merges same-key neighbours: merged.undo restores the OLDEST before…
+    const merged = second.coalescing!.merge(first);
+    await merged.undo();
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ durationDays: 5 }));
+    // …and merged.redo re-applies the NEWEST after.
+    await merged.redo();
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ durationDays: 8 }));
   });
 });
 

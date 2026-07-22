@@ -544,8 +544,10 @@ export function hitTest(
  */
 export const EDGE_HANDLE_PX = 8;
 
-/** Where a screen point falls relative to the activities, for gesture routing. */
-export type HitZoneKind = 'empty' | 'body' | 'startHandle' | 'finishHandle';
+/** Where a screen point falls relative to the activities, for gesture routing. The `resize*`
+ * kinds exist only when {@link classifyHit} is asked for resize handles (ADR-0052 M2). */
+export type HitZoneKind =
+  'empty' | 'body' | 'startHandle' | 'finishHandle' | 'resizeStart' | 'resizeFinish';
 
 export interface HitZone {
   kind: HitZoneKind;
@@ -554,17 +556,44 @@ export interface HitZone {
 }
 
 /**
+ * True when a bar's duration is a user-entered number the finish edge can resize (ADR-0052 M2).
+ * False for the duration-derived types — milestones (a zero-duration point), Level of Effort
+ * (span derived from its SS/FF ties, ADR-0035 §21) and WBS summaries (rolled up from the branch,
+ * ADR-0035 §24) — which therefore offer no resize handles. Mirrors `isDurationDerivedType` in
+ * `features/activities` (kept in step by hand: the pure render model imports no other feature —
+ * ADR-0026 D8).
+ */
+export function isResizeEligibleType(type: ActivityType): boolean {
+  return !isMilestone(type) && type !== 'LEVEL_OF_EFFORT' && type !== 'WBS_SUMMARY';
+}
+
+/** Options for {@link classifyHit}'s zone vocabulary (ADR-0052 M2). */
+export interface ClassifyHitOptions {
+  /**
+   * When true (the direct-manipulation flag is on, in `select` mode with a resize handler wired),
+   * the bar-end grab-zones classify as **resize** zones (`resizeStart`/`resizeFinish`) instead of
+   * the link-draw `startHandle`/`finishHandle` — the ADR-0052 §1 edge-handle repurpose. A bar whose
+   * duration isn't resizable ({@link isResizeEligibleType} false: milestone / LOE / WBS summary)
+   * classifies entirely as `body`, so it never advertises a handle it can't honour. Absent/false ⇒
+   * byte-for-byte today's zones (the flag-off parity gate).
+   */
+  resizeHandles?: boolean;
+}
+
+/**
  * Classify a screen point for gesture routing (ADR-0026 D5): the topmost activity (if
  * any) under it, and whether the point is on the bar **body** (→ reposition) or an end
- * **grab-zone** (→ dependency-draw). Iterates topmost-first like {@link hitTest}; the end
- * zones take precedence over the body and are capped at half the bar so they never
- * overlap. `empty` (no activity under the point) routes to pan or create.
+ * **grab-zone** (→ dependency-draw, or — with `resizeHandles` on — duration resize,
+ * ADR-0052 M2). Iterates topmost-first like {@link hitTest}; the end zones take precedence
+ * over the body and are capped at half the bar so they never overlap. `empty` (no activity
+ * under the point) routes to pan or create.
  */
 export function classifyHit(
   activities: readonly RenderActivity[],
   point: Point,
   view: Viewport,
   dataDateIso: string,
+  options?: ClassifyHitOptions,
 ): HitZone {
   for (let i = activities.length - 1; i >= 0; i -= 1) {
     const activity = activities[i]!;
@@ -578,9 +607,18 @@ export function classifyHit(
     ) {
       continue;
     }
+    // Resize vocabulary (ADR-0052 M2): a duration-derived bar has no end zones at all — the whole
+    // rect is body, so a press falls through to reposition/select rather than a dead handle.
+    if (options?.resizeHandles && !isResizeEligibleType(activity.type)) {
+      return { kind: 'body', id: activity.id };
+    }
     const handleW = Math.min(EDGE_HANDLE_PX, rect.w / 2);
-    if (point.x <= rect.x + handleW) return { kind: 'startHandle', id: activity.id };
-    if (point.x >= rect.x + rect.w - handleW) return { kind: 'finishHandle', id: activity.id };
+    if (point.x <= rect.x + handleW) {
+      return { kind: options?.resizeHandles ? 'resizeStart' : 'startHandle', id: activity.id };
+    }
+    if (point.x >= rect.x + rect.w - handleW) {
+      return { kind: options?.resizeHandles ? 'resizeFinish' : 'finishHandle', id: activity.id };
+    }
     return { kind: 'body', id: activity.id };
   }
   return { kind: 'empty' };

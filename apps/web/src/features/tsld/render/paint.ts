@@ -8,6 +8,7 @@ import {
   dependencyPolyline,
   dependencyPolylineTimeTrue,
   isMilestone,
+  isResizeEligibleType,
   labelPlacement,
   makeWorkingDayWalk,
   rectsIntersect,
@@ -714,7 +715,12 @@ export function paintScene(
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 2;
       ctx.strokeRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);
-      if (scene.showEdgeHandles && selected && !isMilestone(selected.type)) {
+      // With direct manipulation on (`timeTrueLinks` mirrors the ADR-0052 flag) the edge marks
+      // advertise the *resize* handles, so a bar whose duration can't be resized (LOE / WBS
+      // summary) draws none — matching classifyHit's refusal. Flag-off keeps today's link-draw
+      // affordance byte-for-byte (milestones were already excluded).
+      const marksSuppressed = scene.timeTrueLinks && !isResizeEligibleType(selected.type);
+      if (scene.showEdgeHandles && selected && !isMilestone(selected.type) && !marksSuppressed) {
         const cy = rect.y + rect.h / 2;
         ctx.fillStyle = palette.selection;
         for (const cx of [rect.x, rect.x + rect.w]) {
@@ -746,6 +752,14 @@ export interface LinkOverlay {
   targetLegal?: boolean;
 }
 
+/** A duration resize in flight (ADR-0052 M2): the tentative bar plus its live duration label. */
+export interface ResizeOverlay {
+  /** The tentative bar span under the pointer (start fixed, finish tracking). */
+  rect: Rect;
+  /** The live duration readout (e.g. `7d`), drawn just above the ghost. */
+  label: string;
+}
+
 /** The transient shapes drawn on the interaction layer for an in-progress edit. */
 export interface InteractionOverlay {
   /** The bar being drawn/moved (solid fill + outline). */
@@ -757,6 +771,8 @@ export interface InteractionOverlay {
   /** The picked predecessor while the two-click link tool waits for its second click (M5): a solid
    * highlight ring so "now click the successor" reads. */
   linkPick?: Rect | null;
+  /** A finish-edge duration resize in flight (ADR-0052 M2): ghost + live duration label. */
+  resize?: ResizeOverlay | null;
 }
 
 /**
@@ -776,7 +792,7 @@ export function paintInteractionLayer(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
-  const { live, pending, link, linkPick } = overlay;
+  const { live, pending, link, linkPick, resize } = overlay;
 
   if (linkPick) {
     // The picked predecessor waiting for the second click (M5): a **dashed** selection-colour ring —
@@ -828,6 +844,27 @@ export function paintInteractionLayer(
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+  }
+
+  if (resize) {
+    // The resize ghost mirrors the reposition/create `live` ghost (fill + solid outline) so the
+    // two in-flight edits read the same, plus a live duration readout just above the bar — the
+    // number a planner is actually choosing (ADR-0052 M2). Guarded like `paintResourceStrip`'s
+    // label so a text-less test context never throws.
+    const r = resize.rect;
+    ctx.fillStyle = palette.bar;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    if (typeof ctx.fillText === 'function') {
+      ctx.font = LABEL_FONT;
+      ctx.textBaseline = 'bottom';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = palette.labelBeside;
+      ctx.fillText(resize.label, r.x + LABEL_PAD_PX, r.y - 2);
+    }
   }
 }
 

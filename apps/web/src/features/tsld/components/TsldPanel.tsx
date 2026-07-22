@@ -9,6 +9,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -16,6 +17,7 @@ import {
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
 import type { EditIntent, LoeSpanStep } from '../interaction/gesture-machine';
+import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
   announceChainStep,
@@ -35,7 +37,13 @@ import {
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
 import { resolveLensPalette } from '../render/palette';
-import { addCalendarDays, daysBetween, isMilestone, type Point } from '../render/render-model';
+import {
+  addCalendarDays,
+  daysBetween,
+  isMilestone,
+  isResizeEligibleType,
+  type Point,
+} from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { snapToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
@@ -114,6 +122,19 @@ export interface TsldEditOutcome {
 
 export type TsldRepositionOutcome = TsldEditOutcome;
 
+/**
+ * A committed finish-edge duration resize (ADR-0052 M2) — the new whole-day duration for the
+ * activity. The route maps it to a `PATCH durationDays` carrying the FULL definition round-trip
+ * (like a reposition) + the coalesced recalc; start day and lane are untouched.
+ */
+export interface TsldResizeInput {
+  activityId: string;
+  /** The new duration in whole days (≥ 1 — the gesture/nudge clamp before emitting). */
+  durationDays: number;
+}
+
+export type TsldResizeOutcome = TsldEditOutcome;
+
 /** A committed dependency-draw — predecessor → successor with the modifier-chosen type. */
 export interface TsldLinkInput {
   predecessorId: string;
@@ -147,6 +168,11 @@ export interface TsldPanelProps {
   /** Route-composed reposition handler (SNET PATCH + recalc). Resolves with a conflict message
    * when the move was refused (stale version) or dates couldn't recalc; rejects on real error. */
   onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
+  /** Route-composed finish-edge duration-resize handler (ADR-0052 M2): the full-definition
+   * `PATCH durationDays` + recalc. Only reachable under `VITE_CANVAS_DIRECT_MANIPULATION`; its
+   * presence arms the bar-end resize handles + the `Shift+←/→` duration nudge. Resolves with a
+   * conflict message when refused (stale version); rejects on real error. */
+  onResize?: (input: TsldResizeInput) => Promise<TsldResizeOutcome>;
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
@@ -277,6 +303,7 @@ export function TsldPanel({
   canEdit = false,
   onCreate,
   onReposition,
+  onResize,
   onLink,
   onLoeSpan,
   onAutoArrange,
@@ -738,6 +765,18 @@ export function TsldPanel({
     announce,
     isPointerBusy: () => pointerRepositionBusyRef.current,
   });
+  // Coalesced duration nudge (ADR-0052 M2, WCAG 2.5.7) — the `Shift+←/→` keyboard equivalent of
+  // the finish-edge resize drag, sharing the pointer-busy gate + ghost + banner seams with the
+  // reposition nudge above. Inert unless the direct-manipulation flag armed the keyboard branch.
+  const durationNudge = useCoalescedDurationNudge({
+    onResize,
+    activities,
+    dataDate,
+    setGhost: setPendingReposition,
+    setConflict: (message) => (message === null ? clearConflict() : showConflict(message)),
+    announce,
+    isPointerBusy: () => pointerRepositionBusyRef.current,
+  });
 
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
@@ -799,6 +838,25 @@ export function TsldPanel({
       event.preventDefault();
       const current = activities.find((a) => a.id === selectedId);
       if (current) announce(summarizeLogic(current.id, dependencies));
+      return;
+    }
+    // Shift+←/→ nudges the focused activity's DURATION one day (ADR-0052 M2) — the keyboard
+    // equivalent of the finish-edge resize drag (WCAG 2.5.7), coalesced like the Alt+arrow moves.
+    // Same eligibility as the pointer path: the flag, a wired handler, editing, and a bar whose
+    // duration is a real user input (milestones / LOE / WBS summaries no-op). Flag-off this branch
+    // is unreachable, so the listbox keymap is byte-for-byte today's.
+    if (
+      CANVAS_DIRECT_MANIPULATION_ENABLED &&
+      editingEnabled &&
+      onResize &&
+      event.shiftKey &&
+      !event.altKey &&
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    ) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current || !isResizeEligibleType(current.type)) return;
+      durationNudge(current, event.key === 'ArrowRight' ? 1 : -1);
       return;
     }
     // Alt+arrows nudge the focused activity — vertical = lane (no recalc), horizontal = start day
@@ -1064,6 +1122,44 @@ export function TsldPanel({
         });
       return;
     }
+    if (intent.kind === 'resize') {
+      // Finish-edge duration resize (ADR-0052 M2) — the reposition contract, with the ghost's
+      // right edge tracking the new duration (start + lane pinned). The route owns the
+      // full-definition PATCH + recalc; a stale-version refusal surfaces in the banner.
+      const activity = activities.find((a) => a.id === intent.activityId);
+      if (!activity || !onResize) return;
+      clearConflict();
+      const startDay =
+        activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
+      const days = intent.newDurationDays;
+      setPendingReposition({
+        startDay,
+        endDay: startDay + days - 1,
+        laneIndex: activity.laneIndex,
+      });
+      // Share the pointer-busy gate with reposition so a keyboard nudge can't race this write.
+      pointerRepositionBusyRef.current = true;
+      void onResize({ activityId: intent.activityId, durationDays: days })
+        .then((outcome) => {
+          setPendingReposition(null);
+          if (outcome.conflict) showConflict(outcome.conflict);
+          // Announce only when the resize actually landed (WCAG 4.1.3), wording matched to the
+          // keyboard nudge so the same operation reads the same to AT users.
+          if (outcome.applied) {
+            announce(
+              `Resized “${activity.name}” to ${days} ${days === 1 ? 'day' : 'days'}; dates will update.`,
+            );
+          }
+        })
+        .catch((err: unknown) => {
+          setPendingReposition(null);
+          showConflict(err instanceof Error ? err.message : 'Couldn’t resize the activity.');
+        })
+        .finally(() => {
+          pointerRepositionBusyRef.current = false;
+        });
+      return;
+    }
     if (intent.kind === 'link') {
       if (!onLink) return;
       clearConflict();
@@ -1233,6 +1329,7 @@ export function TsldPanel({
               createType={createType}
               linkType={linkType}
               canReposition={onReposition !== undefined}
+              canResize={onResize !== undefined}
               canLink={onLink !== undefined}
               onIntent={onIntent}
               onLoeSpanStep={handleLoeSpanStep}
