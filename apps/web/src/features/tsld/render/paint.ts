@@ -2,16 +2,20 @@ import type { GhostBar } from './lenses';
 import { createMeasureCache } from './measure';
 import {
   activityRect,
+  arrowhead,
   cull,
   daysBetween,
   dependencyPolyline,
+  dependencyPolylineTimeTrue,
   isMilestone,
   labelPlacement,
+  makeWorkingDayWalk,
   rectsIntersect,
   screenXOfDay,
   screenYOfLane,
   truncateToWidth,
   BAR_HEIGHT,
+  ELAPSED_DAY_WALK,
   LABEL_FONT,
   LABEL_GAP_PX,
   LABEL_MIN_PX_PER_DAY,
@@ -138,6 +142,13 @@ export interface TsldScene {
    * shape cue, never colour-only (WCAG 1.4.1). A per-bar `Set.has` in the existing single pass, so it
    * adds no repaint. Absent ⇒ the highlight is off / nothing is over-allocated ⇒ byte-for-byte parity. */
   flaggedIds?: ReadonlySet<string> | undefined;
+  // ── Canvas direct manipulation M1 (ADR-0052, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──────
+  /** Time-true link rendering: anchor each dependency at the point in time its lag actually
+   * constrains — `lagDays` walked from the constrained edge on the relationship's lag calendar
+   * (`isWorkingDay`; `TWENTY_FOUR_HOUR` elapsed) — and tip it with a directional arrowhead at the
+   * successor end. Absent/false ⇒ the legacy extreme-end routing, no arrowheads ⇒ byte-for-byte
+   * today's paint (the flag-off parity gate). */
+  timeTrueLinks?: boolean | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -404,7 +415,18 @@ export function paintScene(
   // "driver" without relying on colour (WCAG 1.4.1), mirroring the bar criticality cue.
   // Two batched passes so each dash/width state is set once, not per edge.
   if (scene.edges.length > 0) {
+    // Time-true anchoring (ADR-0052 M1): the working-day walk is built once per frame from the
+    // same predicate the non-working wash reads (memoised + horizon-bounded, so the per-edge cost
+    // stays O(visible edges)); a `TWENTY_FOUR_HOUR` lag swaps in the elapsed walk (ADR-0036 §6).
+    // No calendar loaded ⇒ elapsed for every edge (display-only; the engine stays authoritative).
+    // Flag off ⇒ `null` ⇒ the legacy extreme-end routing below ⇒ byte-for-byte parity.
+    const workingWalk = scene.timeTrueLinks
+      ? scene.isWorkingDay
+        ? makeWorkingDayWalk(scene.isWorkingDay)
+        : ELAPSED_DAY_WALK
+      : null;
     const drawEdges = (driving: boolean): void => {
+      const heads: [Point, Point, Point][] = [];
       ctx.beginPath();
       for (const edge of scene.edges) {
         if (edge.isDriving !== driving) continue;
@@ -412,10 +434,38 @@ export function paintScene(
         const pred = byId.get(edge.predecessorId);
         const succ = byId.get(edge.successorId);
         if (!pred || !succ) continue;
-        const line = dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
-        if (line) drawPolyline(ctx, line);
+        const line = workingWalk
+          ? dependencyPolylineTimeTrue(
+              pred,
+              succ,
+              edge.type,
+              edge.lagDays ?? 0,
+              view,
+              scene.dataDate,
+              edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk,
+            )
+          : dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
+        if (!line) continue;
+        drawPolyline(ctx, line);
+        if (workingWalk) {
+          const head = arrowhead(line);
+          if (head) heads.push(head);
+        }
       }
       ctx.stroke();
+      // Arrowheads fill after the pass's stroke in one batched path. They share the edge colour —
+      // the driving cue stays the line weight + dash (WCAG 1.4.1), so no new colour is introduced.
+      if (heads.length > 0) {
+        ctx.fillStyle = palette.edge;
+        ctx.beginPath();
+        for (const [tip, left, right] of heads) {
+          ctx.moveTo(tip.x, tip.y);
+          ctx.lineTo(left.x, left.y);
+          ctx.lineTo(right.x, right.y);
+          ctx.lineTo(tip.x, tip.y); // close manually (the Ctx2D surface has no closePath)
+        }
+        ctx.fill();
+      }
     };
     ctx.strokeStyle = palette.edge;
     ctx.lineWidth = 1;

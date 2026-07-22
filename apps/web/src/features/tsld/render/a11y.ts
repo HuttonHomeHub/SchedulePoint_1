@@ -87,18 +87,36 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
 }
 
 /**
+ * The spoken form of a tie's type + lag — the accessible equivalent of the time-true anchor
+ * offset the canvas draws (ADR-0052; WCAG 1.1.1): `FS` for a zero-lag tie, `SS + 3 working days`
+ * for a lag, `FS - 1 working day` for a lead. A `TWENTY_FOUR_HOUR` lag is elapsed time, not
+ * working time (ADR-0036 §6), and says so — the offset drawn on the canvas means the same thing.
+ */
+export function lagPhrase(
+  tie: Pick<DependencySummary, 'type' | 'lagDays' | 'lagCalendar'>,
+): string {
+  if (tie.lagDays === 0) return tie.type;
+  const n = Math.abs(tie.lagDays);
+  const unit = tie.lagCalendar === 'TWENTY_FOUR_HOUR' ? 'elapsed' : 'working';
+  return `${tie.type} ${tie.lagDays > 0 ? '+' : '-'} ${n} ${unit} ${n === 1 ? 'day' : 'days'}`;
+}
+
+/**
  * **Tier 2** — the on-demand (`Space`) detail: how many logic ties the activity has and which are
  * driving. `start driven by {name}` names the binding predecessor (the driving edge into it);
  * `drives {names}` names the successors whose start it drives. Derived purely from `dependencies`.
+ * A lagged driving tie appends its {@link lagPhrase} (the spoken twin of the time-true anchor
+ * offset, ADR-0052); a zero-lag tie adds nothing, keeping today's sentences verbatim.
  */
 export function summarizeLogic(id: string, dependencies: readonly DependencySummary[]): string {
   const preds = dependencies.filter((d) => d.successor.id === id);
   const succs = dependencies.filter((d) => d.predecessor.id === id);
   const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`;
+  const lagSuffix = (d: DependencySummary): string => (d.lagDays === 0 ? '' : ` (${lagPhrase(d)})`);
   let text = `${count(preds.length, 'predecessor')}, ${count(succs.length, 'successor')}`;
-  const drivenBy = preds.find((d) => d.isDriving)?.predecessor.name;
-  if (drivenBy) text += `; start driven by ${drivenBy}`;
-  const drives = succs.filter((d) => d.isDriving).map((d) => d.successor.name);
+  const drivenBy = preds.find((d) => d.isDriving);
+  if (drivenBy) text += `; start driven by ${drivenBy.predecessor.name}${lagSuffix(drivenBy)}`;
+  const drives = succs.filter((d) => d.isDriving).map((d) => `${d.successor.name}${lagSuffix(d)}`);
   if (drives.length > 0) text += `; drives ${drives.join(', ')}`;
   return text;
 }

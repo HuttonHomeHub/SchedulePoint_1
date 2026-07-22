@@ -495,6 +495,19 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   `plan:share`) and the public read-only `/share` guest view (a sibling of `_authed`, session-less,
   token in the URL fragment, `noindex`). Flag-off ⇒ the toolbar keeps its "Coming soon" placeholder and
   no `/share` route registers (byte-identical).
+- **ADR-0052** _(Accepted; M1 landed — behind `VITE_CANVAS_DIRECT_MANIPULATION`, default off)_ — TSLD
+  direct manipulation & canvas visual refresh: **frontend-only** composition on the existing PATCH
+  mutations + the ADR-0032 coalesced recalc (**engine/API/DB untouched — the recalc parity gate is
+  structurally untouched**; flag-off paints byte-for-byte, the parity paint test). The bar-end
+  grab-zones become **resize handles** in `select` mode (linking stays the ADR-0032 two-click tool —
+  an amendment to ADR-0032 M5); **time-true GPM lag anchoring** measured on the relationship's **lag
+  calendar** (working-day walk, `TWENTY_FOUR_HOUR` elapsed; lead = left; zero-lag = today's edges;
+  bounded/memoised injected walk — amends ADR-0026's edge-endpoint routing) + directional
+  **arrowheads** with the driving weight/dash cue retained; **start-edge resize** is mode-aware
+  (EARLY: SNET+`durationDays`, VISUAL: `visualStart`+`durationDays` — amends ADR-0033). Sliced
+  **M1 (landed)** time-true anchors + arrowheads (render-only) → M2 finish-edge resize → M3
+  start-edge resize + lag drag → M4/M5 the bar/link **visual refresh** (token-resolved, inside the
+  Canvas-2D ≤ 4 ms p95 @ 2,000 budget). Builds on ADR-0021/0022/0023/0028/0036/0048.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

@@ -86,5 +86,8 @@ export function toRenderEdges(dependencies: readonly DependencySummary[]): Rende
     successorId: d.successor.id,
     type: d.type,
     isDriving: d.isDriving,
+    // Carried for the time-true anchor rendering (ADR-0052); ignored by the legacy routing.
+    lagDays: d.lagDays,
+    lagCalendar: d.lagCalendar,
   }));
 }

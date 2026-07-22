@@ -688,3 +688,21 @@ export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUES
  * the prior behaviour (emergency rollback / opt-out).
  */
 export const ENTRY_ROUTES_ENABLED = flagDefaultOn(import.meta.env.VITE_ENTRY_ROUTES);
+
+/**
+ * TSLD canvas direct manipulation + visual refresh — Milestone 1: time-true link anchoring +
+ * arrowheads (ADR-0052, spec `docs/specs/canvas-direct-manipulation/`). **OFF by default during
+ * build** — it flips on milestone-by-milestone once the specialist reviews (a11y / ux / component /
+ * perf) and the ADR-0026 draw-budget benchmark are green. When on, every dependency link anchors at
+ * the point in time its lag actually constrains — `lagDays` walked from the constrained edge on the
+ * relationship's lag calendar (plan working days; `TWENTY_FOUR_HOUR` elapsed, ADR-0036 §6), a lead
+ * walking left — and carries a directional arrowhead at its successor end, with the driving
+ * weight/dash cue retained (WCAG 1.4.1). Render-only and role-independent (Viewer/External Guest
+ * included): no gesture, write, API or engine change — the recalc parity gate is structurally
+ * untouched. Later milestones (duration resize, lag-anchor drag, the bar/link visual refresh) land
+ * behind this same flag. Set `VITE_CANVAS_DIRECT_MANIPULATION=true` to enable it; flag-off paints
+ * byte-for-byte today's canvas (the parity paint test).
+ */
+export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_CANVAS_DIRECT_MANIPULATION,
+);

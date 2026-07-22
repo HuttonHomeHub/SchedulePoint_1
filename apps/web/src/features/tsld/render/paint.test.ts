@@ -945,3 +945,181 @@ describe('paintScene — over-allocation highlight', () => {
     expect(flagged.strokeRect.mock.calls.length).toBe(base.strokeRect.mock.calls.length);
   });
 });
+
+// ── Time-true anchors + arrowheads (ADR-0052 M1, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──
+describe('paintScene — time-true links', () => {
+  // A synthetic week keyed by day offset (0–4 working, 5–6 not), matching the render-model tests.
+  const isWorkingDay = (d: number): boolean => ((d % 7) + 7) % 7 < 5;
+  const pred = task({ id: 'p', earlyStart: '2026-01-02', earlyFinish: '2026-01-04', laneIndex: 0 });
+  const succ = task({ id: 's', earlyStart: '2026-01-02', earlyFinish: '2026-01-14', laneIndex: 1 });
+  const linkScene = (over: Partial<TsldScene> = {}): TsldScene => ({
+    activities: [pred, succ],
+    edges: [
+      {
+        predecessorId: 'p',
+        successorId: 's',
+        type: 'FS',
+        isDriving: true,
+        lagDays: 2,
+        lagCalendar: 'PROJECT_DEFAULT',
+      },
+    ],
+    dataDate: DATA_DATE,
+    isWorkingDay,
+    ...over,
+  });
+
+  it('is byte-for-byte today’s paint when the flag is off, absent, or explicitly undefined (parity)', () => {
+    const base = recordingCtx();
+    paintScene(base.ctx, linkScene(), VIEW, SIZE, PALETTE);
+    const off = recordingCtx();
+    paintScene(off.ctx, linkScene({ timeTrueLinks: false }), VIEW, SIZE, PALETTE);
+    const explicit = recordingCtx();
+    paintScene(explicit.ctx, linkScene({ timeTrueLinks: undefined }), VIEW, SIZE, PALETTE);
+    expect(off.log).toEqual(base.log);
+    expect(explicit.log).toEqual(base.log);
+  });
+
+  it('draws a batched arrowhead fill at the successor end when the flag is on', () => {
+    const off = mockCtx();
+    paintScene(off, linkScene(), VIEW, SIZE, PALETTE);
+    expect(off.fill).not.toHaveBeenCalled(); // plain task bars: no path fill without arrowheads
+    const on = mockCtx();
+    paintScene(on, linkScene({ timeTrueLinks: true }), VIEW, SIZE, PALETTE);
+    expect(on.fill).toHaveBeenCalledTimes(1); // one batched arrowhead pass for the driving edge
+    expect(on.fillStyle).not.toBe(''); // set — the head shares the edge colour (checked below)
+  });
+
+  it('paints the arrowheads in the edge colour — no new one-off colour', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(r.ctx, linkScene({ timeTrueLinks: true }), VIEW, SIZE, PALETTE);
+      return r;
+    })();
+    expect(log).toContain(`fillStyle=${PALETTE.edge}`);
+  });
+
+  it('retains the driving weight/dash emphasis (non-colour cue) with the flag on', () => {
+    const ctx = mockCtx();
+    const scene = linkScene({
+      timeTrueLinks: true,
+      edges: [
+        {
+          predecessorId: 'p',
+          successorId: 's',
+          type: 'FS',
+          isDriving: false,
+          lagDays: 2,
+          lagCalendar: 'PROJECT_DEFAULT',
+        },
+      ],
+    });
+    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+    // The non-driving pass still strokes thin + dashed; the solid reset still happens.
+    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+  });
+
+  it('shifts the anchor by the walked lag (an SS lag departs INTO the predecessor bar)', () => {
+    // Same-lane pair → the edge is a single straight segment, so its moveTo is the pred anchor.
+    // All decorative layers are toggled off so the only moveTos are the edge + its arrowhead tip.
+    const quiet = {
+      dayGrid: false,
+      monthGrid: false,
+      yearGrid: false,
+      today: false,
+      nonWorking: false,
+      labels: false,
+      lateOverlay: false,
+    };
+    const sameLane = task({ ...succ, laneIndex: 0, id: 's2' });
+    const sceneWith = (lagDays: number): TsldScene =>
+      linkScene({
+        timeTrueLinks: true,
+        view: quiet,
+        activities: [pred, sameLane],
+        edges: [
+          {
+            predecessorId: 'p',
+            successorId: 's2',
+            type: 'SS',
+            isDriving: true,
+            lagDays,
+            lagCalendar: 'PROJECT_DEFAULT',
+          },
+        ],
+      });
+    const zero = mockCtx();
+    paintScene(zero, sceneWith(0), VIEW, SIZE, PALETTE);
+    const lagged = mockCtx();
+    paintScene(lagged, sceneWith(3), VIEW, SIZE, PALETTE);
+    // Pred starts day 1 (x=72 at 12px/day, originX 60); three working days embed → x=108.
+    expect(zero.moveTo.mock.calls[0]![0]).toBeCloseTo(72);
+    expect(lagged.moveTo.mock.calls[0]![0]).toBeCloseTo(108);
+  });
+
+  it('walks a TWENTY_FOUR_HOUR lag in elapsed days, not working days', () => {
+    // Pred finishes day 3 (edge day 4 = x 108); days 5/6 are the synthetic weekend. A +3 lag:
+    // elapsed lands day 7 (x 144); the working-day walk skips the weekend and lands day 9.
+    const quiet = {
+      dayGrid: false,
+      monthGrid: false,
+      yearGrid: false,
+      today: false,
+      nonWorking: false,
+      labels: false,
+      lateOverlay: false,
+    };
+    const sameLane = task({ ...succ, laneIndex: 0, id: 's2' });
+    const sceneFor = (lagCalendar: 'PROJECT_DEFAULT' | 'TWENTY_FOUR_HOUR'): TsldScene =>
+      linkScene({
+        timeTrueLinks: true,
+        view: quiet,
+        activities: [pred, sameLane],
+        edges: [
+          {
+            predecessorId: 'p',
+            successorId: 's2',
+            type: 'FS',
+            isDriving: true,
+            lagDays: 3,
+            lagCalendar,
+          },
+        ],
+      });
+    const elapsed = mockCtx();
+    paintScene(elapsed, sceneFor('TWENTY_FOUR_HOUR'), VIEW, SIZE, PALETTE);
+    const workingWalked = mockCtx();
+    paintScene(workingWalked, sceneFor('PROJECT_DEFAULT'), VIEW, SIZE, PALETTE);
+    // The straight edge's lineTo is the successor anchor (the constrained point).
+    expect(elapsed.lineTo.mock.calls[0]![0]).toBeCloseTo(144); // day 7
+    expect(workingWalked.lineTo.mock.calls[0]![0]).toBeCloseTo(168); // day 9 (weekend skipped)
+  });
+
+  it('falls back to the extreme-end routing when dates are absent (no crash, no anchor math)', () => {
+    const ctx = mockCtx();
+    const unscheduled = task({ id: 'u', earlyStart: null, earlyFinish: null, laneIndex: 1 });
+    paintScene(
+      ctx,
+      linkScene({
+        timeTrueLinks: true,
+        activities: [pred, unscheduled],
+        edges: [
+          {
+            predecessorId: 'p',
+            successorId: 'u',
+            type: 'FS',
+            isDriving: false,
+            lagDays: 2,
+            lagCalendar: 'PROJECT_DEFAULT',
+          },
+        ],
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The unscheduled endpoint has no geometry, so no edge line and no arrowhead — like today.
+    expect(ctx.fill).not.toHaveBeenCalled();
+  });
+});

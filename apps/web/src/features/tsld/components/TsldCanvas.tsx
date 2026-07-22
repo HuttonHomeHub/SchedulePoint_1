@@ -52,7 +52,7 @@ import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-sca
 import { useThemeVersion } from '../render/use-theme-version';
 import type { SelectionAnchor } from '../toolbar/selection-actions';
 
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, CANVAS_DIRECT_MANIPULATION_ENABLED } from '@/config/env';
 
 /** Imperative commands the toolbar issues to the canvas (kept ref-authoritative — ADR-0026 D3). */
 export interface TsldCanvasHandle {
@@ -416,6 +416,9 @@ export function TsldCanvas({
     barInk,
     baselineGhosts,
     flaggedIds,
+    // Time-true link anchoring + arrowheads (ADR-0052 M1). A build-time constant, so it never
+    // re-triggers the scene effect; flag-off the painter keeps today's routing byte-for-byte.
+    timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
   });
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
@@ -457,6 +460,7 @@ export function TsldCanvas({
       barInk,
       baselineGhosts,
       flaggedIds,
+      timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;

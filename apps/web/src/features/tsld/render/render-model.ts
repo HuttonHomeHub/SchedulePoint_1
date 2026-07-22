@@ -1,4 +1,4 @@
-import type { ActivityType, DependencyType } from '@repo/types';
+import type { ActivityType, DependencyType, LagCalendarSource } from '@repo/types';
 
 import type { ConstraintAnchor } from '@/lib/constraint-format';
 
@@ -109,6 +109,12 @@ export interface RenderEdge {
   successorId: string;
   /** Engine-owned: true when this edge drives its successor's start (M3). Drawn emphasised. */
   isDriving: boolean;
+  /** Signed lag in whole days (a lead is negative), drawn as the time-true anchor offset
+   * (ADR-0052). Optional so legacy callers stay valid; absent reads as zero (no offset). */
+  lagDays?: number;
+  /** The calendar the lag is measured on (ADR-0036 §6): `TWENTY_FOUR_HOUR` walks elapsed calendar
+   * days, everything else the plan working-day calendar today. Absent reads as `PROJECT_DEFAULT`. */
+  lagCalendar?: LagCalendarSource;
 }
 
 export interface Rect {
@@ -293,32 +299,213 @@ export function dependencyPolyline(
   // SF start→finish. The tie's *type* — carried on the edge — decides which vertical edge to attach.
   const predFinish = type === 'FS' || type === 'FF';
   const succStart = type === 'FS' || type === 'SS';
-  const x1 = predFinish ? from.x + from.w : from.x;
-  const y1 = from.y + from.h / 2;
-  const x2 = succStart ? to.x : to.x + to.w;
-  const y2 = to.y + to.h / 2;
-  if (y1 === y2)
-    return [
-      { x: x1, y: y1 },
-      { x: x2, y: y2 },
-    ];
+  return routeOrthogonal(
+    { x: predFinish ? from.x + from.w : from.x, y: from.y + from.h / 2 },
+    { x: succStart ? to.x : to.x + to.w, y: to.y + to.h / 2 },
+    type,
+    view,
+  );
+}
+
+/**
+ * The shared orthogonal routing between two edge anchors — extracted so the legacy extreme-end
+ * routing and the time-true anchor routing (ADR-0052) can never disagree on the line's shape.
+ */
+function routeOrthogonal(from: Point, to: Point, type: DependencyType, view: Viewport): Point[] {
+  if (from.y === to.y) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
   const gap = Math.min(12, Math.max(4, view.pxPerDay));
   const elbow =
     type === 'FS'
-      ? x1 + gap
+      ? from.x + gap
       : type === 'SS'
-        ? Math.min(x1, x2) - gap
+        ? Math.min(from.x, to.x) - gap
         : type === 'FF'
-          ? Math.max(x1, x2) + gap
-          : (x1 + x2) / 2; // SF
-  return [
-    { x: x1, y: y1 },
-    { x: elbow, y: y1 },
-    { x: elbow, y: y2 },
-    { x: x2, y: y2 },
-  ];
+          ? Math.max(from.x, to.x) + gap
+          : (from.x + to.x) / 2; // SF
+  return [from, { x: elbow, y: from.y }, { x: elbow, y: to.y }, to];
+}
+
+// ── Time-true lag anchoring + arrowheads (ADR-0052 M1, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──
+
+/**
+ * Walk `n` days from a day offset and return the day offset reached. The working-day variant
+ * counts working days (a lead — negative `n` — walks left); the elapsed variant is plain addition.
+ * Injected into the anchor geometry so the render model stays free of calendar/CPM logic — the
+ * caller builds it from the plan's working-day predicate (the same seam the non-working wash uses).
+ */
+export type DayWalk = (dayOffset: number, n: number) => number;
+
+/** The outward walk bound (days), mirroring `SNAP_HORIZON_DAYS` — a pathological all-non-working
+ * calendar falls back to an elapsed walk rather than scanning forever. */
+export const WALK_HORIZON_DAYS = 366;
+
+/** The elapsed-calendar-day walk — a `TWENTY_FOUR_HOUR` lag is elapsed time, not working time
+ * (ADR-0036 §6), so its anchor offset is plain day addition. */
+export const ELAPSED_DAY_WALK: DayWalk = (dayOffset, n) => dayOffset + n;
+
+/**
+ * Build the working-day {@link DayWalk} for a plan calendar: the day reached after consuming `n`
+ * working days from `dayOffset`, always landing on a working day (so a lag anchor never sits on a
+ * weekend). Memoised — an edge-dense frame re-asks the same walks — and bounded: if the scan
+ * exhausts the horizon (no working day found) it falls back to the elapsed result, never hanging
+ * (the `snapToWorkingDay` contract).
+ */
+export function makeWorkingDayWalk(
+  isWorkingDay: (dayOffset: number) => boolean,
+  horizon = WALK_HORIZON_DAYS,
+): DayWalk {
+  const memo = new Map<string, number>();
+  return (dayOffset, n) => {
+    const key = `${dayOffset}:${n}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+    // Any sane calendar has a working day within a week, so |n| working days lie within ~7|n|
+    // days; the horizon on top guards the pathological calendar.
+    const bound = horizon + Math.abs(n) * 7;
+    const step = n < 0 ? -1 : 1;
+    const target = Math.abs(n);
+    let day = n < 0 ? dayOffset - 1 : dayOffset;
+    let seen = 0;
+    let result: number | null = null;
+    for (let i = 0; i <= bound; i += 1, day += step) {
+      if (n >= 0) {
+        // Forward: consume `n` working days strictly before the landing day, then land working.
+        if (seen === target && isWorkingDay(day)) {
+          result = day;
+          break;
+        }
+        if (isWorkingDay(day)) seen += 1;
+      } else {
+        // Backward: the landing day itself is the last of the `|n|` working days walked over.
+        if (isWorkingDay(day)) seen += 1;
+        if (seen === target) {
+          result = day;
+          break;
+        }
+      }
+    }
+    const value = result ?? dayOffset + n;
+    memo.set(key, value);
+    return value;
+  };
+}
+
+/** The screen points a dependency's two ends anchor at (each on its bar's vertical centre). */
+export interface LagAnchors {
+  pred: Point;
+  succ: Point;
+}
+
+/**
+ * The time-true anchor pair for a relationship (ADR-0052, amending ADR-0026's extreme-end
+ * routing): each end sits at the point in time it actually constrains, so lag/lead reads as
+ * horizontal offset. A zero-lag tie keeps today's constrained-edge endpoints exactly (no visible
+ * change for the common `FS+0`). A non-zero lag is walked on the relationship's lag calendar via
+ * the injected {@link DayWalk}, at the end the lag rides in time:
+ *
+ * - **FS/FF** — the lag runs forward from the predecessor's finish, so the **successor** anchor
+ *   marks the constrained point (`pred finish + lag`; FS constrains a start, FF a finish — whose
+ *   inclusive day converts to the `+1` right edge).
+ * - **SS/SF** — the lag embeds along the **predecessor** bar from its start (the GPM embed point):
+ *   an `SS+3` tie departs three working days into the predecessor.
+ *
+ * A lead (negative lag) walks left. The walked anchor is clamped to its bar's span so it always
+ * sits ON the bar, even for a lag past the bar's extent. Null when either end has no computed
+ * dates — the caller falls back to the extreme-end routing.
+ */
+export function lagAnchorPoints(
+  predecessor: RenderActivity,
+  successor: RenderActivity,
+  type: DependencyType,
+  lagDays: number,
+  view: Viewport,
+  dataDateIso: string,
+  walk: DayWalk,
+): LagAnchors | null {
+  const from = activityRect(predecessor, view, dataDateIso);
+  const to = activityRect(successor, view, dataDateIso);
+  if (!from || !to || predecessor.earlyStart === null) return null;
+  const predFinish = type === 'FS' || type === 'FF';
+  const succStart = type === 'FS' || type === 'SS';
+  let predX = predFinish ? from.x + from.w : from.x;
+  let succX = succStart ? to.x : to.x + to.w;
+  if (lagDays !== 0) {
+    const startDay = daysBetween(dataDateIso, predecessor.earlyStart);
+    const finishDay =
+      predecessor.earlyFinish === null
+        ? startDay
+        : daysBetween(dataDateIso, predecessor.earlyFinish);
+    if (predFinish) {
+      const day = type === 'FS' ? walk(finishDay + 1, lagDays) : walk(finishDay, lagDays) + 1;
+      succX = Math.min(Math.max(screenXOfDay(day, view), to.x), to.x + to.w);
+    } else {
+      const day = walk(startDay, lagDays);
+      predX = Math.min(Math.max(screenXOfDay(day, view), from.x), from.x + from.w);
+    }
+  }
+  return {
+    pred: { x: predX, y: from.y + from.h / 2 },
+    succ: { x: succX, y: to.y + to.h / 2 },
+  };
+}
+
+/**
+ * The dependency polyline routed through the time-true {@link lagAnchorPoints} (ADR-0052), with
+ * the same orthogonal shape as {@link dependencyPolyline}. Null when either end has no geometry —
+ * matching the legacy routing, so the painter's fallback needs no extra branch.
+ */
+export function dependencyPolylineTimeTrue(
+  predecessor: RenderActivity,
+  successor: RenderActivity,
+  type: DependencyType,
+  lagDays: number,
+  view: Viewport,
+  dataDateIso: string,
+  walk: DayWalk,
+): Point[] | null {
+  const anchors = lagAnchorPoints(predecessor, successor, type, lagDays, view, dataDateIso, walk);
+  if (!anchors) return null;
+  return routeOrthogonal(anchors.pred, anchors.succ, type, view);
+}
+
+/** Arrowhead length (px) along the final segment; the head is the same width across. */
+export const ARROWHEAD_PX = 5;
+
+/**
+ * The three vertices of the directional arrowhead at a polyline's successor end (ADR-0052): the
+ * tip is the last point, the two barbs sit `size` back along the final non-degenerate segment,
+ * half a `size` either side of it. Pure vertex math — the painter batches the fills. Null for a
+ * degenerate line (fewer than two distinct points), where no direction exists.
+ */
+export function arrowhead(
+  points: readonly Point[],
+  size = ARROWHEAD_PX,
+): [Point, Point, Point] | null {
+  const tip = points[points.length - 1];
+  if (!tip) return null;
+  // The last segment can be zero-length (e.g. a clamped anchor meeting its elbow) — scan back for
+  // the last segment that actually has a direction.
+  for (let i = points.length - 1; i >= 1; i -= 1) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) continue;
+    const ux = dx / len;
+    const uy = dy / len;
+    const baseX = tip.x - ux * size;
+    const baseY = tip.y - uy * size;
+    const half = size / 2;
+    return [
+      { x: tip.x, y: tip.y },
+      { x: baseX - uy * half, y: baseY + ux * half },
+      { x: baseX + uy * half, y: baseY - ux * half },
+    ];
+  }
+  return null;
 }
 
 /**
