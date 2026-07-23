@@ -1,5 +1,5 @@
 import type { ActivityType, DependencyType } from '@repo/types';
-import { useEffect, useImperativeHandle, useRef } from 'react';
+import { useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 
 import {
   IDLE,
@@ -8,6 +8,7 @@ import {
   type EditIntent,
   type EditMode,
   type GestureState,
+  type LagGrab,
   type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
@@ -18,6 +19,7 @@ import {
   paintResourceStrip,
   paintScene,
   type InteractionOverlay,
+  type LagOverlay,
   type LinkOverlay,
   type ResizeOverlay,
   type ResourceStripPalette,
@@ -28,6 +30,7 @@ import {
 import { resolveResourceStripPalette, resolveTsldPalette } from '../render/palette';
 import {
   activityRect,
+  addCalendarDays,
   classifyHit,
   dayCellRect,
   daysBetween,
@@ -35,10 +38,16 @@ import {
   edgeAnchor,
   fitToContent,
   hitTest,
-  LANE_HEIGHT,
+  lagAnchorDay,
+  makeWorkingDayWalk,
   pan,
   panToDate,
+  screenXOfDay,
   zoomAt,
+  ELAPSED_DAY_WALK,
+  LANE_HEIGHT,
+  type ClassifyHitOptions,
+  type DayWalk,
   type HitZone,
   type Point,
   type Rect,
@@ -54,6 +63,7 @@ import { useThemeVersion } from '../render/use-theme-version';
 import type { SelectionAnchor } from '../toolbar/selection-actions';
 
 import { CANVAS_AUTHORING_ENABLED, CANVAS_DIRECT_MANIPULATION_ENABLED } from '@/config/env';
+import { formatCalendarDate } from '@/lib/format-date';
 
 /** Imperative commands the toolbar issues to the canvas (kept ref-authoritative — ADR-0026 D3). */
 export interface TsldCanvasHandle {
@@ -117,10 +127,15 @@ export interface TsldCanvasProps {
   /** Whether a body-grab in select mode may start a reposition (i.e. a handler is wired). When
    * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
   canReposition?: boolean;
-  /** Whether a bar-end grab in select mode may start a finish-edge duration resize (i.e. a resize
-   * handler is wired — ADR-0052 M2). Only effective under `VITE_CANVAS_DIRECT_MANIPULATION`; when
-   * false (or flag-off) the bar ends keep their previous behaviour byte-for-byte. */
+  /** Whether a bar-end grab in select mode may start a duration resize (i.e. a resize handler is
+   * wired — ADR-0052 M2 finish edge, M3 start edge). Only effective under
+   * `VITE_CANVAS_DIRECT_MANIPULATION`; when false (or flag-off) the bar ends keep their previous
+   * behaviour byte-for-byte. */
   canResize?: boolean;
+  /** Whether a drawn lag anchor may be dragged to change its link's lag (i.e. a lag handler is
+   * wired — ADR-0052 M3). Only effective under `VITE_CANVAS_DIRECT_MANIPULATION`; when false (or
+   * flag-off) no lag-anchor zones exist, byte-for-byte. */
+  canLag?: boolean;
   /** Whether an edge-handle grab may start a dependency-draw (i.e. a link handler is wired).
    * When false, a handle press falls through to M1 select — no dangling rubber-band. */
   canLink?: boolean;
@@ -224,18 +239,85 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
   return null;
 }
 
-/** The in-flight finish-edge resize ghost + its live duration readout (ADR-0052 M2), or null.
- * Start + lane are pinned; only the right edge tracks the pointer's (clamped) day column. */
-function liveResize(state: GestureState, view: Viewport): ResizeOverlay | null {
+/** The in-flight resize ghost + its live readout (ADR-0052 M2/M3), or null. A finish drag pins
+ * the start (label = the tentative duration); a start drag pins the finish and moves the left
+ * edge (label = the tentative start date + duration — the two numbers the planner is choosing).
+ * Exported for unit tests (pure). */
+export function liveResize(
+  state: GestureState,
+  view: Viewport,
+  dataDate: string,
+): ResizeOverlay | null {
   if (state.kind !== 'resizing') return null;
+  const days = `${state.currentDurationDays}d`;
   return {
     rect: dayCellRect(
-      state.originStartDay,
-      state.originStartDay + state.currentDurationDays - 1,
+      state.currentStartDay,
+      state.currentStartDay + state.currentDurationDays - 1,
       state.laneIndex,
       view,
     ),
-    label: `${state.currentDurationDays}d`,
+    label:
+      state.edge === 'start'
+        ? `${formatCalendarDate(addCalendarDays(dataDate, state.currentStartDay))} · ${days}`
+        : days,
+  };
+}
+
+/** The in-flight lag-anchor drag's readout chip (ADR-0052 M3), or null: the tentative anchor's
+ * screen point (the FORWARD anchor mapping over the drag's own lag-calendar walk — the exact
+ * inverse pair of the gesture's `lagFromAnchorDay`) plus a compact `SS + 3d` / `FS - 1d` label.
+ * Exported for unit tests (pure). */
+export function liveLag(state: GestureState, view: Viewport): LagOverlay | null {
+  if (state.kind !== 'lagDragging') return null;
+  const day = lagAnchorDay(
+    state.predStartDay,
+    state.predFinishDay,
+    state.depType,
+    state.currentLagDays,
+    state.walk,
+  );
+  const n = state.currentLagDays;
+  return {
+    x: screenXOfDay(day, view),
+    y: state.anchorY,
+    label: `${state.depType} ${n < 0 ? '-' : '+'} ${Math.abs(n)}d`,
+  };
+}
+
+/** Build the {@link LagGrab} context for a `lagAnchor` press (ADR-0052 M3): the edge's type/lag,
+ * the predecessor's day span (the anchor walk's base), the lag-calendar-resolved walk, and the
+ * anchor bar's centre y for the readout chip. Undefined when the edge or its bars aren't drawn. */
+function lagGrabOf(
+  edges: readonly RenderEdge[],
+  activities: readonly RenderActivity[],
+  dependencyId: string,
+  view: Viewport,
+  dataDate: string,
+  planWalk: DayWalk,
+): LagGrab | undefined {
+  const edge = edges.find((e) => e.id === dependencyId);
+  if (!edge) return undefined;
+  const pred = activities.find((a) => a.id === edge.predecessorId);
+  // The draggable (offset) anchor sits on the successor for FS/FF, the predecessor for SS/SF —
+  // the same rule classifyHit used to report the zone.
+  const anchorBarId =
+    edge.type === 'FS' || edge.type === 'FF' ? edge.successorId : edge.predecessorId;
+  const anchorBar = activities.find((a) => a.id === anchorBarId);
+  if (!pred || pred.earlyStart === null || !anchorBar) return undefined;
+  const rect = activityRect(anchorBar, view, dataDate);
+  if (!rect) return undefined;
+  const predStartDay = daysBetween(dataDate, pred.earlyStart);
+  const predFinishDay =
+    pred.earlyFinish === null ? predStartDay : daysBetween(dataDate, pred.earlyFinish);
+  return {
+    dependencyId,
+    type: edge.type,
+    lagDays: edge.lagDays ?? 0,
+    predStartDay,
+    predFinishDay,
+    walk: edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : planWalk,
+    anchorY: rect.y + rect.h / 2,
   };
 }
 
@@ -356,6 +438,7 @@ export function TsldCanvas({
   linkType,
   canReposition = false,
   canResize = false,
+  canLag = false,
   canLink = false,
   onIntent,
   onLoeSpanStep,
@@ -765,9 +848,11 @@ export function TsldCanvas({
             sceneRef.current.activities,
             sceneRef.current.dataDate,
           ),
-          // Finish-edge resize ghost + live duration label (ADR-0052 M2). Null except while a
-          // `resizing` gesture is active, so every other frame paints byte-for-byte as before.
-          resize: liveResize(gestureRef.current, viewRef.current),
+          // Bar-end resize ghost + live readout (ADR-0052 M2/M3), and the lag-drag readout chip
+          // (M3). Both null except while their gesture is active, so every other frame paints
+          // byte-for-byte as before.
+          resize: liveResize(gestureRef.current, viewRef.current, sceneRef.current.dataDate),
+          lag: liveLag(gestureRef.current, viewRef.current),
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
@@ -926,18 +1011,30 @@ export function TsldCanvas({
     ...(linkType ? { linkType } : {}),
   });
   const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
-  // Whether a bar-end press/hover means "resize" (ADR-0052 M2): flag + editing + Select tool + a
-  // wired handler. Build-time flag first, so flag-off short-circuits to false with zero extra work.
+  // Whether a bar-end press/hover means "resize" (ADR-0052 M2/M3): flag + editing + Select tool +
+  // a wired handler. Build-time flag first, so flag-off short-circuits to false with zero extra
+  // work. `lagArmed` is the same gate for the drawn lag-anchor grab zones (M3).
   const resizeArmed =
     CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canResize;
-  const classifyAt = (p: Point, resizeZones = false): HitZone =>
-    classifyHit(
-      sceneRef.current.activities,
-      p,
-      viewRef.current,
-      dataDate,
-      resizeZones ? { resizeHandles: true } : undefined,
-    );
+  const lagArmed = CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canLag;
+  // The plan working-day walk the lag-anchor hit zones + grabs run on — memoised so the walk's own
+  // per-(day, n) memo survives across pointer events (the painter builds its walk per frame; the
+  // two share `makeWorkingDayWalk`, so they can never place an anchor differently). No calendar ⇒
+  // elapsed, mirroring the painter's fallback.
+  const lagWalk = useMemo(
+    () => (isWorkingDay ? makeWorkingDayWalk(isWorkingDay) : ELAPSED_DAY_WALK),
+    [isWorkingDay],
+  );
+  const classifyAt = (p: Point, resizeZones = false, lagZones = false): HitZone => {
+    const options: ClassifyHitOptions | undefined =
+      resizeZones || lagZones
+        ? {
+            ...(resizeZones ? { resizeHandles: true } : {}),
+            ...(lagZones ? { lagAnchors: { edges: sceneRef.current.edges, walk: lagWalk } } : {}),
+          }
+        : undefined;
+    return classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate, options);
+  };
 
   return (
     <div ref={containerRef} className="bg-card relative h-full w-full overflow-hidden">
@@ -981,7 +1078,7 @@ export function TsldCanvas({
           // in-progress pick before the second click's release lands. Panning still works via `drag`.
           if (editing && mode !== 'link' && mode !== 'loe') {
             const p = localPoint(e);
-            const rawHit = classifyAt(p, resizeArmed);
+            const rawHit = classifyAt(p, resizeArmed, lagArmed);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
             // Downgrade a handle to a body hit when linking isn't wired — OR when direct
             // manipulation is on (ADR-0052 §1 gates the legacy edge-drag-link off under the flag;
@@ -993,12 +1090,27 @@ export function TsldCanvas({
                 : rawHit;
             // A body grab in select mode needs the activity's current geometry to reposition it —
             // but only when a reposition handler is wired, else it falls through to M1 select. A
-            // finish-edge resize grab (ADR-0052 M2) needs the same geometry (its start + span).
+            // bar-end resize grab (ADR-0052 M2 finish, M3 start) needs the same geometry (its
+            // start + span).
             const body =
               mode === 'select' &&
               hit.id &&
-              ((canReposition && hit.kind === 'body') || hit.kind === 'resizeFinish')
+              ((canReposition && hit.kind === 'body') ||
+                hit.kind === 'resizeFinish' ||
+                hit.kind === 'resizeStart')
                 ? bodyGrab(sceneRef.current.activities, hit.id, dataDate)
+                : undefined;
+            // A lag-anchor grab (ADR-0052 M3) instead needs its edge's context + the resolved walk.
+            const lag =
+              hit.kind === 'lagAnchor' && hit.dependencyId
+                ? lagGrabOf(
+                    sceneRef.current.edges,
+                    sceneRef.current.activities,
+                    hit.dependencyId,
+                    viewRef.current,
+                    dataDate,
+                    lagWalk,
+                  )
                 : undefined;
             const { state } = reduce(
               gestureRef.current,
@@ -1008,6 +1120,7 @@ export function TsldCanvas({
                 hit,
                 modifiers: modifiersOf(e),
                 ...(body ? { body } : {}),
+                ...(lag ? { lag } : {}),
               },
               machineCtx(),
             );
@@ -1037,13 +1150,21 @@ export function TsldCanvas({
           }
           if (!drag.current) {
             // Idle hover (no gesture, no pan): show the ew-resize affordance over an eligible
-            // bar's finish grab-zone (ADR-0052 M2). Inline style wins over the className cursor
-            // and clears back to it ('' → class fallback) off the zone. Flag-off / not armed ⇒
-            // no classify, no style write — byte-for-byte today's hover behaviour.
-            if (resizeArmed) {
-              const hover = classifyAt(localPoint(e), true);
+            // bar's grab-zones (ADR-0052 M2 finish, M3 start + lag anchor — all horizontal
+            // time-axis drags). Inline style wins over the className cursor and clears back to it
+            // ('' → class fallback) off the zone. Flag-off / not armed ⇒ no classify, no style
+            // write — byte-for-byte today's hover behaviour.
+            if (resizeArmed || lagArmed) {
+              const hover = classifyAt(localPoint(e), resizeArmed, lagArmed);
               const surface = canvasRef.current;
-              if (surface) surface.style.cursor = hover.kind === 'resizeFinish' ? 'ew-resize' : '';
+              if (surface) {
+                surface.style.cursor =
+                  hover.kind === 'resizeFinish' ||
+                  hover.kind === 'resizeStart' ||
+                  hover.kind === 'lagAnchor'
+                    ? 'ew-resize'
+                    : '';
+              }
             }
             return;
           }

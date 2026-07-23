@@ -7,6 +7,8 @@ export {
   type TsldRepositionOutcome,
   type TsldResizeInput,
   type TsldResizeOutcome,
+  type TsldLagInput,
+  type TsldLagOutcome,
   type TsldLinkInput,
   type TsldLinkOutcome,
   type TsldLoeSpanInput,
@@ -20,3 +22,6 @@ export { addCalendarDays } from './render/render-model';
 export type { WorkingDayCalendar } from './render/time-scale';
 /** Bar-date sourcing per scheduling mode + Late overlay (ADR-0033), for the workspace to derive. */
 export { barDateSourceFor, type BarDateSource } from './render/to-render-model';
+/** Coalesced keyboard lag nudge (ADR-0052 M3) — composed by the route into the Logic panel's
+ * dependency rows (the dependencies keyboard surface), mirroring the duration nudge. */
+export { useCoalescedLagNudge } from './interaction/use-coalesced-lag-nudge';

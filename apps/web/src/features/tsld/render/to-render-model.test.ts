@@ -149,6 +149,8 @@ describe('toRenderEdges', () => {
       updatedAt: '2026-01-01T00:00:00Z',
     } as DependencySummary;
     expect(toRenderEdges([dep])[0]).toEqual({
+      // The dependency id rides along for the lag-anchor grab zone (ADR-0052 M3).
+      id: 'd1',
       predecessorId: 'a1',
       successorId: 'a2',
       type: 'SS',

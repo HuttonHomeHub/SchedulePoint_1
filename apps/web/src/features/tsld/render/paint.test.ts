@@ -516,6 +516,29 @@ describe('paintInteractionLayer', () => {
     paintInteractionLayer(ctx, { live: GHOST }, SIZE, PALETTE);
     expect(ctx.fillText).not.toHaveBeenCalled();
   });
+
+  it('draws the lag readout chip above the dragged anchor (ADR-0052 M3)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { lag: { x: 140, y: 120, label: 'SS + 3d' } }, SIZE, PALETTE);
+    // A filled, outlined chip sized to the measured text, centred on the anchor x…
+    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    const [chipX, chipY, chipW] = ctx.fillRect.mock.calls[0]! as [number, number, number];
+    expect(chipX + chipW / 2).toBeCloseTo(140);
+    // …drawn above the anchor point (never over the bar the anchor sits on).
+    expect(chipY).toBeLessThan(120);
+    // …speaking the tentative lag the planner is choosing.
+    const [text] = ctx.fillText.mock.calls[0]! as [string];
+    expect(text).toBe('SS + 3d');
+  });
+
+  it('draws no lag chip when the overlay carries none', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { resize: { rect: GHOST, label: '7d' } }, SIZE, PALETTE);
+    // Only the resize readout painted text; no chip rect beyond the resize ghost's fill.
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    expect(ctx.fillRect).toHaveBeenCalledTimes(1); // the resize ghost bar only
+  });
 });
 
 describe('paintScene — activity labels (Layer 3.6)', () => {

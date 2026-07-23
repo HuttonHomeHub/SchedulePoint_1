@@ -177,3 +177,23 @@ rendering milestones (M1/M4/M5) apply to read-only roles too.
   `components/layout/workspace/use-plan-workspace-model.ts` (`onTsldResize`),
   `features/undo-redo/commands.ts` (`durationResizeCommand`, key
   `resize:{activityId}`).
+- M3 implementation (start-edge resize + lag-anchor drag): `render-model.ts`
+  (`lagAnchorDay` — the ONE forward mapping shared with `lagAnchorPoints` —
+  its exact inverse `lagFromAnchorDay` with round-trip property tests, and the
+  `lagAnchor` hit zone carrying `dependencyId`; offset anchors only — a
+  zero-lag anchor sits on the constrained edge and must not steal the resize
+  handles); `interaction/gesture-machine.ts` (`resizing.edge: 'start'` —
+  finish-pinned, clamp ≥ 1 day — and the `lagDragging` state whose tentative
+  lag runs the inverse mapping on the edge's lag-calendar walk; `lag` intent);
+  `render/paint.ts` (`InteractionOverlay.lag` readout chip, `SS + 3d`);
+  `components/TsldCanvas.tsx` (`liveResize` start-date label, `liveLag`,
+  `lagGrabOf`); `use-plan-workspace-model.ts` (`onTsldResize` start branch —
+  EARLY: ONE combined `{SNET, constraintDate, durationDays}` full-definition
+  PATCH (spike-verified against `UpdateActivityDto`); VISUAL:
+  `{visualStart, durationDays}` through the extended `setVisualStart` seam —
+  and `onTsldLag` over `useUpdateDependency`); `features/undo-redo/commands.ts`
+  (`visualResizeCommand` sharing the `resize:{activityId}` key,
+  `lagDragCommand`, key `lag:{dependencyId}`);
+  `interaction/use-coalesced-lag-nudge.ts` + the Logic panel's dependency rows
+  (`DependencyEditor.onNudgeLag`, `Shift+←/→`) — the app's per-dependency
+  keyboard surface, since the canvas listbox lists activities.

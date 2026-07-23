@@ -534,10 +534,12 @@ export function createLoeSpanCommand(params: {
   };
 }
 
-/** `useSetActivityVisualStart().mutateAsync` — a Visual-mode placement PATCH (ADR-0033). */
+/** `useSetActivityVisualStart().mutateAsync` — a Visual-mode placement PATCH (ADR-0033).
+ * `durationDays` rides only the VISUAL start-edge resize (ADR-0052 §3). */
 export type SetVisualStartFn = (input: {
   activityId: string;
   visualStart: string | null;
+  durationDays?: number;
   laneIndex?: number;
   version: number;
 }) => Promise<ActivitySummary>;
@@ -587,6 +589,115 @@ export function visualStartCommand(params: {
         activityId,
         before: b,
         after: a,
+        version,
+        ...(params.label !== undefined ? { label: params.label } : {}),
+      }),
+  });
+}
+
+/**
+ * Reverse a **VISUAL-mode start-edge resize** (ADR-0052 M3 / §3) — the minimal
+ * `PATCH {visualStart, durationDays}` that moved a bar's hand-placed start while pinning its
+ * finish. The inverse restores the prior placement AND duration through the same seam; redo
+ * re-applies the dropped pair. It carries FULL activity snapshots (like
+ * {@link durationResizeCommand}) and shares its `resize:{id}` coalescing key, so a start-drag
+ * burst — or a start-then-finish drag on one bar within the interaction window — collapses to a
+ * single step whose restore path is the NEWEST command's (the merge rule); the snapshots keep a
+ * cross-builder merge type-safe in both directions.
+ */
+export function visualResizeCommand(params: {
+  setVisualStart: SetVisualStartFn;
+  before: ActivitySummary;
+  after: ActivitySummary;
+  label?: string;
+}): Command {
+  const { setVisualStart, before, after } = params;
+  let version = after.version;
+  const restore = async (target: ActivitySummary): Promise<void> => {
+    const saved = await setVisualStart({
+      activityId: target.id,
+      visualStart: target.visualStart,
+      durationDays: target.durationDays,
+      version,
+    });
+    version = saved.version;
+  };
+  const command: Command = {
+    // Name the entity ("Resize “Excavate”"), matching the EARLY-mode resize label (S1).
+    label: params.label ?? `Resize “${before.name}”`,
+    undo: () => restore(before),
+    redo: () => restore(after),
+  };
+  return coalescable(command, {
+    key: `resize:${before.id}`,
+    before,
+    after,
+    rebuild: (b, a) =>
+      visualResizeCommand({
+        setVisualStart,
+        before: b,
+        after: a,
+        ...(params.label !== undefined ? { label: params.label } : {}),
+      }),
+  });
+}
+
+/** `useUpdateDependency().mutateAsync` — the dependency PATCH (type + lag + lag calendar). */
+export type UpdateDependencyFn = (input: {
+  dependencyId: string;
+  type: DependencyType;
+  lagDays: number;
+  lagCalendar: LagCalendarSource;
+  version: number;
+}) => Promise<DependencySummary>;
+
+/**
+ * Reverse a **lag-anchor drag / lag nudge** (ADR-0052 M3) — the dependency PATCH whose only
+ * intended change is `lagDays` (type + lag calendar echoed verbatim from the captured row). The
+ * inverse restores the prior lag; redo re-applies the new one. Coalesces per dependency
+ * (`lag:{dependencyId}`) so a drag / held-key burst collapses to ONE undo step, exactly like
+ * {@link relaneCommand}'s lane coalescing. Version threaded from each response.
+ */
+export function lagDragCommand(params: {
+  updateDependency: UpdateDependencyFn;
+  /** The pre-edit row: its `lagDays` is the undo target; endpoints/type/calendar are echoed. */
+  dependency: DependencySummary;
+  afterLagDays: number;
+  /** The post-edit optimistic-lock version (from the forward write's response). */
+  version: number;
+  label?: string;
+}): Command {
+  const { updateDependency, dependency, afterLagDays } = params;
+  const beforeLagDays = dependency.lagDays;
+  let version = params.version;
+  const setLag = async (lagDays: number): Promise<void> => {
+    const saved = await updateDependency({
+      dependencyId: dependency.id,
+      type: dependency.type,
+      lagDays,
+      lagCalendar: dependency.lagCalendar,
+      version,
+    });
+    version = saved.version;
+  };
+  const command: Command = {
+    // Name both endpoints, mirroring the link labels' entity-naming convention (S1).
+    label:
+      params.label ??
+      `Change lag “${dependency.predecessor.name}” → “${dependency.successor.name}”`,
+    undo: () => setLag(beforeLagDays),
+    redo: () => setLag(afterLagDays),
+  };
+  return coalescable(command, {
+    key: `lag:${dependency.id}`,
+    before: beforeLagDays,
+    after: afterLagDays,
+    // A burst rebuilds oldest-before → newest-after, threading the newest version (M2.3).
+    rebuild: (b, a) =>
+      lagDragCommand({
+        updateDependency,
+        dependency: { ...dependency, lagDays: b },
+        afterLagDays: a,
         version,
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),

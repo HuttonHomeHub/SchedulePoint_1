@@ -23,6 +23,7 @@ import {
   announceChainStep,
   chainNeighbour,
   describeActivity,
+  lagPhrase,
   summarizeLogic,
 } from '../render/a11y';
 import { packLanes } from '../render/auto-pack';
@@ -123,17 +124,36 @@ export interface TsldEditOutcome {
 export type TsldRepositionOutcome = TsldEditOutcome;
 
 /**
- * A committed finish-edge duration resize (ADR-0052 M2) — the new whole-day duration for the
- * activity. The route maps it to a `PATCH durationDays` carrying the FULL definition round-trip
- * (like a reposition) + the coalesced recalc; start day and lane are untouched.
+ * A committed bar-end resize (ADR-0052 M2 finish edge, M3 start edge) — the new whole-day
+ * duration, plus (start edge only) the new start day. Finish edge: the route maps it to a
+ * `PATCH durationDays` carrying the FULL definition round-trip (like a reposition) + the
+ * coalesced recalc; start day and lane are untouched. Start edge (`startDay` present): the
+ * finish stays pinned (`durationDays` = finish − newStart + 1) and the route maps it
+ * **mode-aware** (ADR-0052 §3): EARLY → `PATCH {constraintType: SNET, constraintDate,
+ * durationDays}`, VISUAL → `PATCH {visualStart, durationDays}`.
  */
 export interface TsldResizeInput {
   activityId: string;
   /** The new duration in whole days (≥ 1 — the gesture/nudge clamp before emitting). */
   durationDays: number;
+  /** The new start day offset (present iff the START edge was dragged — ADR-0052 M3). */
+  startDay?: number;
 }
 
 export type TsldResizeOutcome = TsldEditOutcome;
+
+/**
+ * A committed lag-anchor drag (ADR-0052 M3) — the dependency's new signed whole-day lag
+ * (negative = lead), snapped on its lag calendar by the inverse anchor mapping. The route maps
+ * it to a `PATCH /dependencies/:id` echoing the unchanged type + lag calendar at the live
+ * version, + the coalesced recalc.
+ */
+export interface TsldLagInput {
+  dependencyId: string;
+  lagDays: number;
+}
+
+export type TsldLagOutcome = TsldEditOutcome;
 
 /** A committed dependency-draw — predecessor → successor with the modifier-chosen type. */
 export interface TsldLinkInput {
@@ -168,11 +188,17 @@ export interface TsldPanelProps {
   /** Route-composed reposition handler (SNET PATCH + recalc). Resolves with a conflict message
    * when the move was refused (stale version) or dates couldn't recalc; rejects on real error. */
   onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
-  /** Route-composed finish-edge duration-resize handler (ADR-0052 M2): the full-definition
-   * `PATCH durationDays` + recalc. Only reachable under `VITE_CANVAS_DIRECT_MANIPULATION`; its
-   * presence arms the bar-end resize handles + the `Shift+←/→` duration nudge. Resolves with a
-   * conflict message when refused (stale version); rejects on real error. */
+  /** Route-composed bar-end resize handler (ADR-0052 M2 finish edge, M3 start edge): the
+   * full-definition `PATCH durationDays` (+ SNET/`visualStart` for a start drag, mode-aware) +
+   * recalc. Only reachable under `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the bar-end
+   * resize handles + the `Shift+←/→` duration nudge. Resolves with a conflict message when
+   * refused (stale version); rejects on real error. */
   onResize?: (input: TsldResizeInput) => Promise<TsldResizeOutcome>;
+  /** Route-composed lag-drag handler (ADR-0052 M3): `PATCH /dependencies/:id` echoing the
+   * unchanged type + lag calendar + recalc. Only reachable under
+   * `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the drawn lag-anchor grab zones.
+   * Resolves with a conflict message when refused (stale version); rejects on real error. */
+  onLag?: (input: TsldLagInput) => Promise<TsldLagOutcome>;
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
@@ -304,6 +330,7 @@ export function TsldPanel({
   onCreate,
   onReposition,
   onResize,
+  onLag,
   onLink,
   onLoeSpan,
   onAutoArrange,
@@ -1123,14 +1150,19 @@ export function TsldPanel({
       return;
     }
     if (intent.kind === 'resize') {
-      // Finish-edge duration resize (ADR-0052 M2) — the reposition contract, with the ghost's
-      // right edge tracking the new duration (start + lane pinned). The route owns the
-      // full-definition PATCH + recalc; a stale-version refusal surfaces in the banner.
+      // Bar-end resize (ADR-0052 M2 finish edge, M3 start edge) — the reposition contract. A
+      // finish drag pins the start (the ghost's right edge tracks the new duration); a start drag
+      // pins the finish (the ghost's left edge tracks the new start; the route maps it mode-aware,
+      // ADR-0052 §3). The route owns the PATCH + recalc; a stale-version refusal banners.
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !onResize) return;
       clearConflict();
       const startDay =
-        activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
+        intent.edge === 'start'
+          ? intent.newStartDay
+          : activity.earlyStart && dataDate
+            ? daysBetween(dataDate, activity.earlyStart)
+            : 0;
       const days = intent.newDurationDays;
       setPendingReposition({
         startDay,
@@ -1139,15 +1171,26 @@ export function TsldPanel({
       });
       // Share the pointer-busy gate with reposition so a keyboard nudge can't race this write.
       pointerRepositionBusyRef.current = true;
-      void onResize({ activityId: intent.activityId, durationDays: days })
+      void onResize({
+        activityId: intent.activityId,
+        durationDays: days,
+        ...(intent.edge === 'start' ? { startDay: intent.newStartDay } : {}),
+      })
         .then((outcome) => {
           setPendingReposition(null);
           if (outcome.conflict) showConflict(outcome.conflict);
           // Announce only when the resize actually landed (WCAG 4.1.3), wording matched to the
-          // keyboard nudge so the same operation reads the same to AT users.
+          // keyboard nudge so the same operation reads the same to AT users. A start drag also
+          // names the new start date — the number that edge actually chose.
           if (outcome.applied) {
+            const newStart =
+              intent.edge === 'start' && dataDate
+                ? formatCalendarDate(addCalendarDays(dataDate, intent.newStartDay))
+                : null;
             announce(
-              `Resized “${activity.name}” to ${days} ${days === 1 ? 'day' : 'days'}; dates will update.`,
+              newStart
+                ? `Moved the start of “${activity.name}” to ${newStart} (${days} ${days === 1 ? 'day' : 'days'}, finish unchanged); dates will update.`
+                : `Resized “${activity.name}” to ${days} ${days === 1 ? 'day' : 'days'}; dates will update.`,
             );
           }
         })
@@ -1157,6 +1200,34 @@ export function TsldPanel({
         })
         .finally(() => {
           pointerRepositionBusyRef.current = false;
+        });
+      return;
+    }
+    if (intent.kind === 'lag') {
+      // Lag-anchor drag (ADR-0052 M3): the dependency PATCH echoing the unchanged type + lag
+      // calendar. No optimistic ghost — the link redraws from the persisted lag on refetch, and
+      // the readout chip already previewed the value through the drag.
+      if (!onLag) return;
+      const dependency = dependencies.find((d) => d.id === intent.dependencyId);
+      clearConflict();
+      void onLag({ dependencyId: intent.dependencyId, lagDays: intent.newLagDays })
+        .then((outcome) => {
+          if (outcome.conflict) showConflict(outcome.conflict);
+          // Announce only when the change actually landed (WCAG 4.1.3), speaking the same
+          // lagPhrase the a11y layer uses for the drawn offset.
+          if (outcome.applied && dependency) {
+            const phrase = lagPhrase({
+              type: dependency.type,
+              lagDays: intent.newLagDays,
+              lagCalendar: dependency.lagCalendar,
+            });
+            announce(
+              `Set the link “${dependency.predecessor.name}” → “${dependency.successor.name}” to ${phrase}${intent.newLagDays === 0 ? ' (no lag)' : ''}; dates will update.`,
+            );
+          }
+        })
+        .catch((err: unknown) => {
+          showConflict(err instanceof Error ? err.message : 'Couldn’t change the link’s lag.');
         });
       return;
     }
@@ -1330,6 +1401,7 @@ export function TsldPanel({
               linkType={linkType}
               canReposition={onReposition !== undefined}
               canResize={onResize !== undefined}
+              canLag={onLag !== undefined}
               canLink={onLink !== undefined}
               onIntent={onIntent}
               onLoeSpanStep={handleLoeSpanStep}

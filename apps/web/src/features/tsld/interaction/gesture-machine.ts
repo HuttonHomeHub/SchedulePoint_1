@@ -2,8 +2,10 @@ import type { ActivityType, DependencyType } from '@repo/types';
 
 import {
   dayColumnAt,
+  lagFromAnchorDay,
   laneRowAt,
   LANE_HEIGHT,
+  type DayWalk,
   type HitZone,
   type Point,
   type Viewport,
@@ -19,8 +21,9 @@ import {
  * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 D8).
  *
  * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), **dependency-draw** (2.3),
- * **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once), and
- * **finish-edge duration resize** (ADR-0052 M2 — the repurposed bar-end handle).
+ * **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once), **duration resize**
+ * (ADR-0052 M2 finish edge, M3 start edge — the repurposed bar-end handles), and the
+ * **lag-anchor drag** (ADR-0052 M3 — a link's drawn lag anchor slides along the time axis).
  */
 
 /**
@@ -93,8 +96,36 @@ export interface BodyGrab {
   laneIndex: number;
 }
 
+/**
+ * The grabbed lag anchor's edge context, supplied by the shell on a `lagAnchor` pointer-down
+ * (ADR-0052 M3) — everything the pure reducer needs to run the anchor mapping's inverse while the
+ * pointer moves. `walk` is already resolved to the edge's **lag calendar** (elapsed for
+ * `TWENTY_FOUR_HOUR`, the plan working-day walk otherwise), so the tentative lag always means what
+ * the engine means (ADR-0036 §6).
+ */
+export interface LagGrab {
+  dependencyId: string;
+  type: DependencyType;
+  /** The persisted signed lag at grab time (a lead is negative). */
+  lagDays: number;
+  /** The predecessor bar's inclusive whole-day span — the anchor walk's base. */
+  predStartDay: number;
+  predFinishDay: number;
+  /** The lag-calendar-resolved day walk the inverse mapping runs on. */
+  walk: DayWalk;
+  /** The anchor's screen y (its bar's vertical centre), for the readout chip. */
+  anchorY: number;
+}
+
 export type GestureEvent =
-  | { type: 'pointerDown'; point: Point; hit: HitZone; body?: BodyGrab; modifiers?: Modifiers }
+  | {
+      type: 'pointerDown';
+      point: Point;
+      hit: HitZone;
+      body?: BodyGrab;
+      lag?: LagGrab;
+      modifiers?: Modifiers;
+    }
   | { type: 'pointerMove'; point: Point; hit?: HitZone; modifiers?: Modifiers }
   | { type: 'pointerUp'; hit?: HitZone; modifiers?: Modifiers }
   /** A discrete click (press-release without a drag) — the two-click `link` tool's input (M5). */
@@ -132,14 +163,37 @@ export type EditIntent =
   | {
       /**
        * A committed finish-edge duration resize (ADR-0052 M2): `TsldPanel` maps it to a
-       * `PATCH durationDays` (the full-definition round-trip) + recalc. `edge` is carried for the
-       * M3 start-edge extension; M2 only ever emits `'finish'`.
+       * `PATCH durationDays` (the full-definition round-trip) + recalc. Start and lane unchanged.
        */
       kind: 'resize';
       activityId: string;
       edge: 'finish';
       /** The new whole-day duration under the drop point, clamped ≥ 1. */
       newDurationDays: number;
+    }
+  | {
+      /**
+       * A committed start-edge resize (ADR-0052 M3): move the start, keep the finish pinned —
+       * `newDurationDays` is always `finish - newStartDay + 1`. `TsldPanel` maps it mode-aware
+       * (ADR-0052 §3): EARLY → `PATCH {constraintType: SNET, constraintDate, durationDays}`,
+       * VISUAL → `PATCH {visualStart, durationDays}`.
+       */
+      kind: 'resize';
+      activityId: string;
+      edge: 'start';
+      /** The new start day offset (clamped so the duration never drops below 1 day). */
+      newStartDay: number;
+      newDurationDays: number;
+    }
+  | {
+      /**
+       * A committed lag-anchor drag (ADR-0052 M3): `TsldPanel` maps it to a
+       * `PATCH /dependencies/:id` echoing the unchanged type + lag calendar. Snapped to whole
+       * days on the relationship's lag calendar by the inverse anchor mapping; negative = lead.
+       */
+      kind: 'lag';
+      dependencyId: string;
+      newLagDays: number;
     }
   | {
       kind: 'link';
@@ -184,26 +238,57 @@ export type GestureState =
     }
   | {
       /**
-       * A finish-edge duration resize in flight (ADR-0052 M2), mirroring {@link GestureState
-       * repositioning}: armed on a `resizeFinish` grab, it tracks the pointer by whole day
-       * columns (the day under the pointer becomes the tentative inclusive finish day) and
-       * commits a `resize` intent on release — or selects the bar if it never really moved.
-       * The start day and lane are fixed; only the duration changes.
+       * A duration resize in flight (ADR-0052 M2 finish edge, M3 start edge), mirroring
+       * {@link GestureState repositioning}: armed on a `resizeFinish`/`resizeStart` grab, it
+       * tracks the pointer by whole day columns and commits a `resize` intent on release — or
+       * selects the bar if it never really moved. A **finish** drag keeps the start pinned (the
+       * day under the pointer is the tentative inclusive finish); a **start** drag keeps the
+       * finish pinned (the day under the pointer is the tentative start). The lane never changes.
        */
       kind: 'resizing';
       activityId: string;
+      /** Which end was grabbed: `finish` = change duration; `start` = move start, keep finish. */
+      edge: 'start' | 'finish';
       /** The screen x grabbed at pointer-down — for the pixel-distance select/resize guard. */
       grabX: number;
       /** Whether the pointer travelled past {@link REPOSITION_THRESHOLD_PX} horizontally. */
       movedPastThreshold: boolean;
-      /** The bar's fixed start day (whole-day offset about the data date). */
+      /** The bar's start day at grab time (whole-day offset about the data date). */
       originStartDay: number;
       /** The duration at grab time, for the "nothing changed → select" check. */
       originDurationDays: number;
       /** The bar's lane, for the ghost geometry (a resize never changes the lane). */
       laneIndex: number;
+      /** The live tentative start day — fixed at {@link originStartDay} for a finish drag. */
+      currentStartDay: number;
       /** The live tentative duration (whole days, clamped ≥ 1) under the pointer. */
       currentDurationDays: number;
+    }
+  | {
+      /**
+       * A lag-anchor drag in flight (ADR-0052 M3): armed on a `lagAnchor` grab, the pointer's day
+       * column runs through the **inverse** of the M1 anchor mapping ({@link lagFromAnchorDay},
+       * on the grab's lag-calendar walk) to a tentative whole-day lag — negative = lead — and
+       * commits a `lag` intent on release, or nothing if the lag never changed.
+       */
+      kind: 'lagDragging';
+      dependencyId: string;
+      /** The relationship type, for the anchor mapping + the readout chip ("SS + 3d"). */
+      depType: DependencyType;
+      /** The screen x grabbed at pointer-down — for the pixel-distance jitter guard. */
+      grabX: number;
+      /** Whether the pointer travelled past {@link REPOSITION_THRESHOLD_PX} horizontally. */
+      movedPastThreshold: boolean;
+      originLagDays: number;
+      /** The live tentative signed lag (whole days on the lag calendar) under the pointer. */
+      currentLagDays: number;
+      /** The predecessor bar's inclusive day span — the anchor walk's base (see {@link LagGrab}). */
+      predStartDay: number;
+      predFinishDay: number;
+      /** The lag-calendar-resolved walk the inverse mapping runs on. */
+      walk: DayWalk;
+      /** The anchor's screen y, for the readout chip. */
+      anchorY: number;
     }
   | {
       kind: 'linking';
@@ -271,10 +356,14 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const laneIndex = laneRowAt(event.point.y, ctx.view);
         return { state: { kind: 'creating', originDay: day, laneIndex, currentDay: day } };
       }
-      if (event.hit.kind === 'resizeFinish' && event.hit.id && event.body) {
-        // Grab the finish-edge resize handle (ADR-0052 M2). The shell only classifies resize
-        // zones for eligible bars (classifyHit's `resizeHandles` refuses milestones / LOE / WBS
-        // summaries), so reaching here means the duration is a real user input. Without the
+      if (
+        (event.hit.kind === 'resizeFinish' || event.hit.kind === 'resizeStart') &&
+        event.hit.id &&
+        event.body
+      ) {
+        // Grab a bar-end resize handle (ADR-0052 M2 finish, M3 start). The shell only classifies
+        // resize zones for eligible bars (classifyHit's `resizeHandles` refuses milestones / LOE /
+        // WBS summaries), so reaching here means the duration is a real user input. Without the
         // grabbed geometry (`body`) there is nothing to resize — fall through to idle.
         const { id, startDay, endDay } = event.body;
         const durationDays = endDay - startDay + 1;
@@ -282,22 +371,44 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
           state: {
             kind: 'resizing',
             activityId: id,
+            edge: event.hit.kind === 'resizeStart' ? 'start' : 'finish',
             grabX: event.point.x,
             movedPastThreshold: false,
             originStartDay: startDay,
             originDurationDays: durationDays,
             laneIndex: event.body.laneIndex,
+            currentStartDay: startDay,
             currentDurationDays: durationDays,
           },
         };
       }
-      if (event.hit.kind === 'resizeStart') {
-        // The start-edge resize zone is classified now (so the hit vocabulary is complete) but its
-        // gesture lands in M3 (mode-aware move-start-keep-finish, ADR-0052 §3). Until then the
-        // press is inert here — the canvas keeps its M1 fall-through (a stationary click still
-        // selects via `hitTest`, a drag pans).
+      if (event.hit.kind === 'resizeStart' || event.hit.kind === 'resizeFinish') {
+        // A resize zone without the grabbed geometry — nothing to resize; stay idle (a stationary
+        // click still selects via `hitTest`, a drag pans — the M1 fall-through).
         return { state: IDLE };
       }
+      if (event.hit.kind === 'lagAnchor' && event.hit.dependencyId && event.lag) {
+        // Grab a link's drawn lag anchor (ADR-0052 M3): the drag slides it along the time axis;
+        // the tentative lag is the inverse of the M1 anchor mapping on the edge's own lag-calendar
+        // walk. Without the grab context there is nothing to manipulate — stay idle.
+        const grab = event.lag;
+        return {
+          state: {
+            kind: 'lagDragging',
+            dependencyId: grab.dependencyId,
+            depType: grab.type,
+            grabX: event.point.x,
+            movedPastThreshold: false,
+            originLagDays: grab.lagDays,
+            currentLagDays: grab.lagDays,
+            predStartDay: grab.predStartDay,
+            predFinishDay: grab.predFinishDay,
+            walk: grab.walk,
+            anchorY: grab.anchorY,
+          },
+        };
+      }
+      if (event.hit.kind === 'lagAnchor') return { state: IDLE };
       if ((event.hit.kind === 'startHandle' || event.hit.kind === 'finishHandle') && event.hit.id) {
         // Grab an edge handle → start a dependency rubber-band from that activity.
         return {
@@ -362,21 +473,54 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         return { state: { ...state, currentStartDay, currentLaneIndex, movedPastThreshold } };
       }
       if (state.kind === 'resizing') {
-        // The day column under the pointer becomes the tentative inclusive finish day — whole-cell
-        // snapping for free, exactly like the reposition ghost. Clamped so the duration never drops
-        // below one day (a zero/negative span would invert the bar). The same pixel threshold as
-        // reposition guards click-jitter at low zoom (a sub-threshold press stays a select).
+        // The day column under the pointer becomes the tentative inclusive finish day (finish
+        // drag) or the tentative start day (start drag, ADR-0052 M3 — the finish stays pinned) —
+        // whole-cell snapping for free, exactly like the reposition ghost. Clamped so the duration
+        // never drops below one day (a zero/negative span would invert the bar). The same pixel
+        // threshold as reposition guards click-jitter at low zoom.
         const movedPastThreshold =
           state.movedPastThreshold ||
           Math.abs(event.point.x - state.grabX) > REPOSITION_THRESHOLD_PX;
-        const finishDay = dayColumnAt(event.point.x, ctx.view);
-        const currentDurationDays = Math.max(1, finishDay - state.originStartDay + 1);
+        const pointerDay = dayColumnAt(event.point.x, ctx.view);
+        let currentStartDay = state.currentStartDay;
+        let currentDurationDays;
+        if (state.edge === 'start') {
+          // Finish pinned: duration = finish - newStart + 1, so newStart clamps at the finish
+          // (duration ≥ 1, never inverted).
+          const finishDay = state.originStartDay + state.originDurationDays - 1;
+          currentStartDay = Math.min(pointerDay, finishDay);
+          currentDurationDays = finishDay - currentStartDay + 1;
+        } else {
+          currentDurationDays = Math.max(1, pointerDay - state.originStartDay + 1);
+        }
         if (
+          currentStartDay === state.currentStartDay &&
           currentDurationDays === state.currentDurationDays &&
           movedPastThreshold === state.movedPastThreshold
         )
           return { state };
-        return { state: { ...state, currentDurationDays, movedPastThreshold } };
+        return { state: { ...state, currentStartDay, currentDurationDays, movedPastThreshold } };
+      }
+      if (state.kind === 'lagDragging') {
+        // The pointer's day column runs through the INVERSE of the anchor mapping (the same
+        // injected walk the painter draws with — one source of truth), so the tentative lag snaps
+        // to whole days on the relationship's lag calendar; left of zero is a lead (negative).
+        const movedPastThreshold =
+          state.movedPastThreshold ||
+          Math.abs(event.point.x - state.grabX) > REPOSITION_THRESHOLD_PX;
+        const currentLagDays = lagFromAnchorDay(
+          state.predStartDay,
+          state.predFinishDay,
+          state.depType,
+          dayColumnAt(event.point.x, ctx.view),
+          state.walk,
+        );
+        if (
+          currentLagDays === state.currentLagDays &&
+          movedPastThreshold === state.movedPastThreshold
+        )
+          return { state };
+        return { state: { ...state, currentLagDays, movedPastThreshold } };
       }
       if (state.kind === 'linking') {
         // Track the free end + the hovered drop target (a different activity) + the live type.
@@ -430,18 +574,47 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         };
       }
       if (state.kind === 'resizing') {
-        // A press that never travelled past the pixel threshold — or that landed back on the
-        // original duration — is a select, not a resize (the same guard as reposition).
-        if (!state.movedPastThreshold || state.currentDurationDays === state.originDurationDays) {
+        // A press that never travelled past the pixel threshold — or that landed back where it
+        // started — is a select, not a resize (the same guard as reposition). For a start drag
+        // the start is the moving part (the duration follows it 1:1 off the pinned finish).
+        const unchanged =
+          state.edge === 'start'
+            ? state.currentStartDay === state.originStartDay
+            : state.currentDurationDays === state.originDurationDays;
+        if (!state.movedPastThreshold || unchanged) {
           return { state: IDLE, select: state.activityId };
         }
         return {
           state: IDLE,
+          intent:
+            state.edge === 'start'
+              ? {
+                  kind: 'resize',
+                  activityId: state.activityId,
+                  edge: 'start',
+                  newStartDay: state.currentStartDay,
+                  newDurationDays: state.currentDurationDays,
+                }
+              : {
+                  kind: 'resize',
+                  activityId: state.activityId,
+                  edge: 'finish',
+                  newDurationDays: state.currentDurationDays,
+                },
+        };
+      }
+      if (state.kind === 'lagDragging') {
+        // No travel, or the drag landed back on the original lag → nothing to write; a lag anchor
+        // is a point control on a link, not a bar, so there is nothing to select either.
+        if (!state.movedPastThreshold || state.currentLagDays === state.originLagDays) {
+          return { state: IDLE };
+        }
+        return {
+          state: IDLE,
           intent: {
-            kind: 'resize',
-            activityId: state.activityId,
-            edge: 'finish',
-            newDurationDays: state.currentDurationDays,
+            kind: 'lag',
+            dependencyId: state.dependencyId,
+            newLagDays: state.currentLagDays,
           },
         };
       }

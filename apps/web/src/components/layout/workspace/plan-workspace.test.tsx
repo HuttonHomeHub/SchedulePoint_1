@@ -115,6 +115,7 @@ vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
+  useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
   DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 

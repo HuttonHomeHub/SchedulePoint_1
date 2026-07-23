@@ -11,15 +11,18 @@ import {
   dependencyLinkOf,
   dependencyRemoveCommand,
   durationResizeCommand,
+  lagDragCommand,
   relaneCommand,
   repositionCommand,
   updateCommand,
+  visualResizeCommand,
   visualStartCommand,
   type BatchPositionsFn,
   type CreateDependencyFn,
   type RepositionLaneFn,
   type SetVisualStartFn,
   type UpdateActivityFn,
+  type UpdateDependencyFn,
 } from './commands';
 
 /** A full activity row; overrides pick out the fields a given test cares about. */
@@ -259,6 +262,132 @@ describe('durationResizeCommand (ADR-0052 M2)', () => {
     // …and merged.redo re-applies the NEWEST after.
     await merged.redo();
     expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ durationDays: 8 }));
+  });
+});
+
+describe('visualResizeCommand (ADR-0052 M3 — VISUAL start-edge resize)', () => {
+  const fakeSetVisualStart = () => {
+    let next = 60;
+    return vi.fn((i: Parameters<SetVisualStartFn>[0]) =>
+      Promise.resolve(activity({ id: i.activityId, version: (next += 1) })),
+    );
+  };
+
+  it('undo restores the prior visualStart AND duration; redo re-applies, threading the version', async () => {
+    const before = activity({ visualStart: null, durationDays: 5, version: 7 });
+    const after = activity({ visualStart: '2026-03-10', durationDays: 8, version: 8 });
+    const setVisualStart = fakeSetVisualStart();
+    const command = visualResizeCommand({ setVisualStart, before, after });
+
+    await command.undo();
+    // The inverse restores BOTH halves of the start-edge edit through the same minimal seam —
+    // the prior placement (null = revert to computed) and the prior duration.
+    expect(setVisualStart).toHaveBeenLastCalledWith({
+      activityId: 'a1',
+      visualStart: null,
+      durationDays: 5,
+      version: 8, // starts from the post-edit version
+    });
+
+    await command.redo();
+    expect(setVisualStart).toHaveBeenLastCalledWith({
+      activityId: 'a1',
+      visualStart: '2026-03-10',
+      durationDays: 8,
+      version: 61, // threaded from the undo response (60 + 1)
+    });
+    expect(command.label).toBe('Resize “Excavate”');
+  });
+
+  it('coalesces on the SHARED resize:{id} key: a start-drag burst collapses first-before → last-after', async () => {
+    const setVisualStart = fakeSetVisualStart();
+    const first = visualResizeCommand({
+      setVisualStart,
+      before: activity({ visualStart: '2026-03-01', durationDays: 5, version: 4 }),
+      after: activity({ visualStart: '2026-03-02', durationDays: 4, version: 5 }),
+    });
+    const second = visualResizeCommand({
+      setVisualStart,
+      before: activity({ visualStart: '2026-03-02', durationDays: 4, version: 5 }),
+      after: activity({ visualStart: '2026-03-04', durationDays: 2, version: 6 }),
+    });
+    // Same key as durationResizeCommand — one bar's resize gesture is ONE undo step whichever
+    // edge it grabbed (both builders stash full ActivitySummary snapshots, so a cross-builder
+    // merge stays type-safe).
+    expect(first.coalescing?.key).toBe('resize:a1');
+    expect(second.coalescing?.key).toBe('resize:a1');
+
+    const merged = second.coalescing!.merge(first);
+    await merged.undo();
+    expect(setVisualStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ visualStart: '2026-03-01', durationDays: 5 }),
+    );
+    await merged.redo();
+    expect(setVisualStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ visualStart: '2026-03-04', durationDays: 2 }),
+    );
+  });
+});
+
+describe('lagDragCommand (ADR-0052 M3)', () => {
+  const fakeUpdateDependency = () => {
+    let next = 300;
+    return vi.fn((i: Parameters<UpdateDependencyFn>[0]) =>
+      Promise.resolve(dependency({ id: i.dependencyId, lagDays: i.lagDays, version: (next += 1) })),
+    );
+  };
+
+  it('undo restores the prior lag, redo the new one — echoing type + lag calendar verbatim', async () => {
+    const updateDependency = fakeUpdateDependency();
+    const command = lagDragCommand({
+      updateDependency,
+      dependency: dependency({ id: 'd7', type: 'SS', lagDays: 2, lagCalendar: 'TWENTY_FOUR_HOUR' }),
+      afterLagDays: 5,
+      version: 9,
+    });
+
+    await command.undo();
+    expect(updateDependency).toHaveBeenLastCalledWith({
+      dependencyId: 'd7',
+      type: 'SS',
+      lagDays: 2,
+      lagCalendar: 'TWENTY_FOUR_HOUR',
+      version: 9, // starts from the post-edit version
+    });
+
+    await command.redo();
+    expect(updateDependency).toHaveBeenLastCalledWith({
+      dependencyId: 'd7',
+      type: 'SS',
+      lagDays: 5,
+      lagCalendar: 'TWENTY_FOUR_HOUR',
+      version: 301, // threaded from the undo response (300 + 1)
+    });
+    expect(command.label).toBe('Change lag “Excavate” → “Pour”');
+  });
+
+  it('coalesces per dependency: a drag/nudge burst collapses to first-before → last-after', async () => {
+    const updateDependency = fakeUpdateDependency();
+    const first = lagDragCommand({
+      updateDependency,
+      dependency: dependency({ lagDays: 0 }),
+      afterLagDays: 1,
+      version: 2,
+    });
+    const second = lagDragCommand({
+      updateDependency,
+      dependency: dependency({ lagDays: 1 }),
+      afterLagDays: -2,
+      version: 3,
+    });
+    expect(first.coalescing?.key).toBe('lag:d1');
+    expect(second.coalescing?.key).toBe('lag:d1');
+
+    const merged = second.coalescing!.merge(first);
+    await merged.undo();
+    expect(updateDependency).toHaveBeenLastCalledWith(expect.objectContaining({ lagDays: 0 }));
+    await merged.redo();
+    expect(updateDependency).toHaveBeenLastCalledWith(expect.objectContaining({ lagDays: -2 }));
   });
 });
 

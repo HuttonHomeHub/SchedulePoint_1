@@ -82,6 +82,7 @@ vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: h.createDependency }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
+  useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@/features/schedule', () => ({
   useRecalculate: () => ({ mutateAsync: vi.fn() }),

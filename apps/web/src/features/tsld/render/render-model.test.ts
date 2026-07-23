@@ -8,7 +8,9 @@ import {
   clampPxPerDay,
   cull,
   labelPlacement,
+  lagAnchorDay,
   lagAnchorPoints,
+  lagFromAnchorDay,
   makeWorkingDayWalk,
   truncateToWidth,
   ELAPSED_DAY_WALK,
@@ -36,6 +38,7 @@ import {
   screenYOfLane,
   zoomAt,
   type RenderActivity,
+  type RenderEdge,
   type Size,
   type Viewport,
 } from './render-model';
@@ -569,6 +572,158 @@ describe('classifyHit — resize handles (ADR-0052 M2)', () => {
     expect(isResizeEligibleType('FINISH_MILESTONE')).toBe(false);
     expect(isResizeEligibleType('LEVEL_OF_EFFORT')).toBe(false);
     expect(isResizeEligibleType('WBS_SUMMARY')).toBe(false);
+  });
+});
+
+describe('lagAnchorDay / lagFromAnchorDay (ADR-0052 M3 — the shared mapping + its inverse)', () => {
+  const walk = makeWorkingDayWalk(working);
+  const START = 0;
+  const FINISH = 2;
+  const TYPES: DependencyType[] = ['FS', 'SS', 'FF', 'SF'];
+
+  it('round-trips every type × signed lag × calendar: inverse(forward(n)) === n', () => {
+    for (const type of TYPES) {
+      for (const dayWalk of [walk, ELAPSED_DAY_WALK]) {
+        for (let n = -6; n <= 8; n += 1) {
+          const day = lagAnchorDay(START, FINISH, type, n, dayWalk);
+          expect(
+            lagFromAnchorDay(START, FINISH, type, day, dayWalk),
+            `${type} lag ${n} (${dayWalk === walk ? 'working' : 'elapsed'})`,
+          ).toBe(n);
+        }
+      }
+    }
+  });
+
+  it('snap is idempotent: forward(inverse(x)) is a fixed point for arbitrary pointer days', () => {
+    for (const type of TYPES) {
+      for (let day = -12; day <= 20; day += 1) {
+        const n = lagFromAnchorDay(START, FINISH, type, day, walk);
+        const snapped = lagAnchorDay(START, FINISH, type, n, walk);
+        expect(lagFromAnchorDay(START, FINISH, type, snapped, walk), `${type} day ${day}`).toBe(n);
+      }
+    }
+  });
+
+  it('a pointer over a non-working day snaps toward zero (working calendar)', () => {
+    // FS from finish day 2: lag 0 → day 3, lag 1 → day 4, lag 2 → day 7 (5/6 non-working) — so
+    // days 5 and 6 have no exact lag; they read as the nearer-zero lag 1.
+    expect(lagFromAnchorDay(START, FINISH, 'FS', 5, walk)).toBe(1);
+    expect(lagFromAnchorDay(START, FINISH, 'FS', 6, walk)).toBe(1);
+    expect(lagFromAnchorDay(START, FINISH, 'FS', 7, walk)).toBe(2);
+  });
+
+  it('matches the drawn anchor: lagAnchorPoints places the anchor at lagAnchorDay', () => {
+    // The forward mapping IS the render mapping — same fn, so assert the wiring stayed shared.
+    const pred = activity({ id: 'p', earlyFinish: '2026-01-03' });
+    const succ = activity({
+      id: 's',
+      earlyStart: '2026-01-01',
+      earlyFinish: '2026-01-15',
+      laneIndex: 2,
+    });
+    const anchors = lagAnchorPoints(pred, succ, 'FS', 2, VIEW, DATA_DATE, walk)!;
+    expect(anchors.succ.x).toBe(screenXOfDay(lagAnchorDay(0, 2, 'FS', 2, walk), VIEW));
+  });
+
+  it('falls back to the elapsed difference when the horizon is exhausted (pathological calendar)', () => {
+    const allNonWorking = makeWorkingDayWalk(() => false, 5);
+    // The bounded walk degrades to elapsed addition, so the inverse degrades to elapsed diff.
+    expect(lagFromAnchorDay(START, FINISH, 'FS', 8, allNonWorking, 5)).toBe(5);
+  });
+});
+
+describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
+  const walk = makeWorkingDayWalk(working);
+  // Predecessor days 0..2 in lane 0; a wide successor days 0..14 in lane 2 (the M1 anchor
+  // fixture). An FS+1 anchor walks to day 4 → x=140, on the successor's centre line (y=120).
+  const pred = activity({ id: 'p', earlyFinish: '2026-01-03' });
+  const succ = activity({
+    id: 's',
+    earlyStart: '2026-01-01',
+    earlyFinish: '2026-01-15',
+    laneIndex: 2,
+  });
+  const acts = [pred, succ];
+  const edge = (overrides: Partial<RenderEdge> = {}): RenderEdge => ({
+    id: 'd1',
+    predecessorId: 'p',
+    successorId: 's',
+    type: 'FS' as const,
+    isDriving: false,
+    lagDays: 1,
+    ...overrides,
+  });
+  const options = (edges: RenderEdge[]) => ({ lagAnchors: { edges, walk } });
+  const ANCHOR = { x: 140, y: 120 };
+
+  it('classifies a point near an offset anchor as lagAnchor, carrying the dependency id', () => {
+    expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE, options([edge()]))).toEqual({
+      kind: 'lagAnchor',
+      id: 's', // the bar the anchor sits on (FS/FF → the successor)
+      dependencyId: 'd1',
+    });
+  });
+
+  it('wins over the bar body it overlaps (topmost/smallest target), body elsewhere', () => {
+    // The anchor sits ON the successor bar — without the zones that point is plain body.
+    expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE)).toEqual({ kind: 'body', id: 's' });
+    // Away from the anchor (outside LAG_ANCHOR_PX) the bar body still wins.
+    expect(classifyHit(acts, { x: 170, y: 120 }, VIEW, DATA_DATE, options([edge()]))).toEqual({
+      kind: 'body',
+      id: 's',
+    });
+  });
+
+  it('offers NO zone for a zero-lag edge (its anchor is the constrained edge itself)', () => {
+    // Zero-lag FS anchors at the successor's start edge — exactly where resizeStart lives; with
+    // both vocabularies on, the resize handle keeps the edge (the dialog sets a first lag).
+    const zeroLag = [edge({ lagDays: 0 })];
+    expect(
+      classifyHit(acts, { x: 104, y: 120 }, VIEW, DATA_DATE, {
+        resizeHandles: true,
+        ...options(zeroLag),
+      }),
+    ).toEqual({ kind: 'resizeStart', id: 's' });
+  });
+
+  it('resolves overlapping anchors on a crowded bar by stable edge-id order', () => {
+    // Two same-shape edges anchoring at the same point: the lexically-first id wins, regardless
+    // of the array order handed in (stable across frames/refetches).
+    const twin = edge({ id: 'd0' });
+    expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE, options([edge(), twin])).dependencyId).toBe(
+      'd0',
+    );
+    expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE, options([twin, edge()])).dependencyId).toBe(
+      'd0',
+    );
+  });
+
+  it('anchors the SS/SF zone on the predecessor bar', () => {
+    // SS+2 embeds two working days into the predecessor: walk(0, 2) = day 2 → x=120, pred lane 0
+    // centre y = 50 + 5 + 9 = 64.
+    const ss = [edge({ type: 'SS', lagDays: 2 })];
+    expect(classifyHit(acts, { x: 120, y: 64 }, VIEW, DATA_DATE, options(ss))).toEqual({
+      kind: 'lagAnchor',
+      id: 'p',
+      dependencyId: 'd1',
+    });
+  });
+
+  it('walks a TWENTY_FOUR_HOUR edge on the elapsed calendar', () => {
+    // FS+3 elapsed from finish day 2 → day 3+3 = 6 (a non-working day the working walk would
+    // skip) → x=160.
+    const elapsed = [edge({ lagDays: 3, lagCalendar: 'TWENTY_FOUR_HOUR' })];
+    expect(classifyHit(acts, { x: 160, y: 120 }, VIEW, DATA_DATE, options(elapsed))).toEqual({
+      kind: 'lagAnchor',
+      id: 's',
+      dependencyId: 'd1',
+    });
+  });
+
+  it('flag-off parity: without the option no lagAnchor kind ever appears', () => {
+    expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE).kind).toBe('body');
+    expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE, { resizeHandles: true }).kind).toBe('body');
   });
 });
 

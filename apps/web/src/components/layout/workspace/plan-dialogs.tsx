@@ -2,8 +2,10 @@ import { useRef } from 'react';
 
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import {
   ACTIVITY_STEPS_ENABLED,
+  CANVAS_DIRECT_MANIPULATION_ENABLED,
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   NOTES_ENABLED,
@@ -20,6 +22,7 @@ import { DependencyEditor } from '@/features/dependencies';
 import { ActivityNotesSection } from '@/features/notes';
 import { PlanFormDialog } from '@/features/plans';
 import { ActivityResourcesDialog } from '@/features/resources';
+import { useCoalescedLagNudge } from '@/features/tsld';
 
 /**
  * The two modal surfaces a plan needs regardless of layout: the per-activity
@@ -39,6 +42,16 @@ export function PlanDialogs({
   // `ActivityNotesSection` (which makes the heading focusable) and the `DependencyEditor` (which scrolls
   // + focuses it when the panel is opened via the toolbar **Add note** button, `logicRevealNotes`).
   const notesHeadingRef = useRef<HTMLHeadingElement>(null);
+  // Keyboard lag nudge (ADR-0052 M3): the coalesced tsld hook over the model's `onTsldLag`,
+  // composed here into the Logic panel's dependency rows — the app's per-dependency keyboard
+  // surface (see `DependencyEditor.onNudgeLag`). The hook is unconditionally called (rules of
+  // hooks) but only wired under the flag for writers, so flag-off is byte-identical.
+  const announce = useAnnounce();
+  const nudgeLag = useCoalescedLagNudge({
+    onLag: model.onTsldLag,
+    dependencies: model.dependencies.data ?? [],
+    announce,
+  });
   return (
     <>
       <DependencyEditor
@@ -49,6 +62,9 @@ export function PlanDialogs({
         open={model.logicActivity !== undefined}
         onClose={() => model.setLogicActivity(undefined)}
         onRemoved={model.recordDependencyRemove}
+        {...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
+          ? { onNudgeLag: nudgeLag }
+          : {})}
         notesHeadingRef={notesHeadingRef}
         revealNotes={model.logicRevealNotes}
         {...(model.logicActivity ? { activity: model.logicActivity } : {})}

@@ -30,6 +30,7 @@ function DirectionTable({
   emptyLabel,
   onEdit,
   onRemove,
+  onNudgeLag,
 }: {
   query: UseQueryResult<DependencySummary[]>;
   endpoint: Endpoint;
@@ -37,6 +38,7 @@ function DirectionTable({
   emptyLabel: string;
   onEdit?: (dependency: DependencySummary) => void;
   onRemove?: (dependency: DependencySummary) => void;
+  onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
 }): React.ReactElement {
   const columns: Column<DependencySummary>[] = [
     {
@@ -91,7 +93,31 @@ function DirectionTable({
       srHeader: true,
       cellClassName: 'py-2 text-right whitespace-nowrap',
       cell: (dep) => (
-        <div className="flex justify-end gap-2">
+        // Keyboard lag nudge (ADR-0052 M3): with a row's Edit/Remove button focused,
+        // Shift+←/→ nudges THIS link's lag ±1 day — the keyboard equivalent of the canvas
+        // lag-anchor drag (WCAG 2.1.1). The canvas's parallel listbox lists *activities*, so this
+        // Logic panel is the app's dependencies keyboard surface and the nudge lands here (it is
+        // therefore not listed in the canvas-scoped TsldShortcutsHelp; the hint above the tables
+        // advertises it). Wired only when the host passes `onNudgeLag` (the direct-manipulation
+        // flag + write role) — absent, the row is byte-for-byte today's.
+        <div
+          className="flex justify-end gap-2"
+          {...(onNudgeLag
+            ? {
+                onKeyDown: (event: React.KeyboardEvent) => {
+                  if (
+                    !event.shiftKey ||
+                    event.altKey ||
+                    (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  onNudgeLag(dep, event.key === 'ArrowRight' ? 1 : -1);
+                },
+              }
+            : {})}
+        >
           <Button
             variant="ghost"
             size="sm"
@@ -147,6 +173,7 @@ export function DependencyEditor({
   open,
   onClose,
   onRemoved,
+  onNudgeLag,
   crossPlanSlot,
   notesSlot,
   notesHeadingRef,
@@ -166,6 +193,15 @@ export function DependencyEditor({
    * Absent (the default) leaves the panel byte-identical.
    */
   onRemoved?: (dependency: DependencySummary) => void;
+  /**
+   * Keyboard lag nudge (ADR-0052 M3): with a row's Edit/Remove button focused, `Shift+←/→` nudges
+   * that link's lag ±1 day — the keyboard equivalent of the canvas lag-anchor drag, landed here
+   * because this panel IS the app's per-dependency keyboard surface (the canvas listbox lists
+   * activities). The composition root passes the coalesced tsld nudge handler, keeping this
+   * feature free of a sideways feature import (the `onRemoved` precedent). Absent (the default —
+   * flag off, or a read-only viewer) leaves the panel byte-identical.
+   */
+  onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
   /**
    * An optional extra panel rendered below Successors — the composition root passes the
    * `VITE_PROGRAMME_SCHEDULING` cross-plan links section here (ADR-0045), keeping this feature free
@@ -237,6 +273,8 @@ export function DependencyEditor({
           setRemoveError(null);
           setRemovingId(dep.id);
         },
+        // The keyboard lag nudge rides the same writer gate as edit/remove (ADR-0052 M3).
+        ...(onNudgeLag ? { onNudgeLag } : {}),
       }
     : {};
 
@@ -273,6 +311,15 @@ export function DependencyEditor({
         description="The predecessors and successors that link this activity into the schedule."
       >
         <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-6 outline-none">
+          {/* Advertise the lag-nudge chord (ADR-0052 M3) — a non-hover, in-context hint, since the
+              canvas-scoped shortcuts sheet doesn't cover this panel. Rendered only when the nudge
+              is wired, so the panel is byte-identical otherwise. */}
+          {canManageLogic && onNudgeLag ? (
+            <p className="text-muted-foreground text-xs">
+              Tip: with a link’s Edit or Remove button focused, Shift + ← / → nudges that link’s lag
+              by one day.
+            </p>
+          ) : null}
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-sm font-medium">Predecessors</h3>

@@ -27,6 +27,7 @@ import {
   useCreateDependency,
   useDeleteDependency,
   usePlanDependencies,
+  useUpdateDependency,
 } from '@/features/dependencies';
 import { useActivityNoteCounts } from '@/features/notes';
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
@@ -41,6 +42,7 @@ import {
   type TsldLinkOutcome,
   type TsldLoeSpanInput,
   type TsldLoeSpanOutcome,
+  type TsldLagInput,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
   type TsldResizeInput,
@@ -55,9 +57,11 @@ import {
   dependencyAddCommand,
   dependencyRemoveCommand,
   durationResizeCommand,
+  lagDragCommand,
   relaneCommand,
   repositionCommand,
   updateCommand,
+  visualResizeCommand,
   visualStartCommand,
   usePlanEditHistory,
   usePlanUndoRedo,
@@ -606,42 +610,86 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     }
   };
 
-  // TSLD finish-edge duration resize (ADR-0052 M2, behind `VITE_CANVAS_DIRECT_MANIPULATION`): the
-  // bar-end drag / `Shift+←/→` nudge becomes a `PATCH durationDays` through the SAME single-activity
-  // update the reposition path uses — carried as the FULL definition round-trip
-  // (`activityDefinitionInput`) so durationType / EV / accrual / constraints are resent verbatim,
-  // never silently cleared. Unlike a reposition it does NOT touch the primary constraint or lane.
-  // Optimistic-lock 409 and pen-loss 423 reuse the exact reposition contract; the follow-up recalc
-  // is the coalesced auto-recalc (or the inline recalc when authoring is off).
+  // TSLD bar-end resize (ADR-0052 M2 finish edge, M3 start edge, behind
+  // `VITE_CANVAS_DIRECT_MANIPULATION`). **Finish edge** (`startDay` absent): the drag / `Shift+←/→`
+  // nudge becomes a `PATCH durationDays` through the SAME single-activity update the reposition
+  // path uses — carried as the FULL definition round-trip (`activityDefinitionInput`) so
+  // durationType / EV / accrual / constraints are resent verbatim, never silently cleared; it does
+  // NOT touch the primary constraint or lane. **Start edge** (`startDay` present): move the start,
+  // keep the finish — mode-aware (ADR-0052 §3): EARLY imposes an SNET at the new start (the same
+  // constraint expression a reposition writes) PLUS the new duration in the one full-definition
+  // PATCH; VISUAL hand-places `visualStart` + the new duration through the minimal
+  // `setVisualStart` PATCH (the reposition-in-VISUAL seam — no constraint write, no definition
+  // resend). Optimistic-lock 409 and pen-loss 423 reuse the exact reposition contract; the
+  // follow-up recalc is the coalesced auto-recalc (or the inline recalc when authoring is off).
   const resizeConflict =
     'This plan changed since you opened it — your resize wasn’t applied. Refresh to see the latest.';
   const onTsldResize = async ({
     activityId,
     durationDays,
+    startDay,
   }: TsldResizeInput): Promise<TsldEditOutcome> => {
     const activity = (activities.data ?? []).find((a) => a.id === activityId);
     if (!activity) return { applied: false, conflict: null };
-    // Defensive no-op: the gesture/nudge only emit a *changed* duration, but a stale caller must
-    // never burn a version bump (and a recalc) on an identical write.
-    if (durationDays === activity.durationDays) return { applied: false, conflict: null };
+    // Defensive no-op (finish edge): the gesture/nudge only emit a *changed* duration, but a stale
+    // caller must never burn a version bump (and a recalc) on an identical write. A start-edge
+    // drag always moves the start (the gesture selects instead when nothing changed).
+    if (startDay === undefined && durationDays === activity.durationDays) {
+      return { applied: false, conflict: null };
+    }
+    const plannedStart = plan.data?.plannedStart;
+    if (startDay !== undefined && !plannedStart) return { applied: false, conflict: null };
     try {
-      const saved = await updateActivity.mutateAsync({
-        activityId,
-        version: activity.version,
-        ...activityDefinitionInput(activity),
-        durationDays,
-      });
-      // Record the resize for undo (ADR-0048) — the single user edit, NOT the follow-up recalc.
-      // The inverse restores the pre-edit definition (its prior duration); a drag/held-key burst
-      // coalesces to one step (`resize:{id}`). Guarded on the flag so behaviour is unchanged off.
-      if (UNDO_REDO_ENABLED) {
-        editHistory.record(
-          durationResizeCommand({
-            update: updateActivity.mutateAsync,
-            before: activity,
-            after: saved,
-          }),
-        );
+      if (startDay !== undefined && isVisualMode) {
+        // VISUAL start-edge: hand-place the new start + duration in ONE minimal PATCH — the
+        // effective-Visual pass then pins the bar (ADR-0033), exactly like a reposition drop.
+        const saved = await setVisualStart.mutateAsync({
+          activityId,
+          visualStart: addCalendarDays(plannedStart!, startDay),
+          durationDays,
+          version: activity.version,
+        });
+        // Record for undo (ADR-0048): the inverse restores the prior `visualStart` AND duration
+        // through the same seam; a drag burst coalesces to one step (`resize:{id}`).
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            visualResizeCommand({
+              setVisualStart: setVisualStart.mutateAsync,
+              before: activity,
+              after: saved,
+            }),
+          );
+        }
+      } else {
+        const saved = await updateActivity.mutateAsync({
+          activityId,
+          version: activity.version,
+          ...activityDefinitionInput(activity),
+          // EARLY start-edge (ADR-0052 §3): the start is computed, so the moved edge is pinned as
+          // an SNET at the new start — mirroring how a reposition builds its SNET payload — and
+          // the duration shrinks/grows so the finish stays put. A finish-edge resize spreads
+          // neither field, leaving the stored constraint round-tripped verbatim.
+          ...(startDay !== undefined
+            ? {
+                constraintType: 'SNET' as const,
+                constraintDate: addCalendarDays(plannedStart!, startDay),
+              }
+            : {}),
+          durationDays,
+        });
+        // Record the resize for undo (ADR-0048) — the single user edit, NOT the follow-up recalc.
+        // The inverse restores the whole pre-edit definition (its prior duration AND, for a
+        // start-edge drag, its prior constraint); a drag/held-key burst coalesces to one step
+        // (`resize:{id}`). Guarded on the flag so behaviour is unchanged off.
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            durationResizeCommand({
+              update: updateActivity.mutateAsync,
+              before: activity,
+              after: saved,
+            }),
+          );
+        }
       }
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
@@ -664,6 +712,67 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         applied: true,
         conflict:
           'Resized, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
+      };
+    }
+  };
+
+  // TSLD lag-anchor drag (ADR-0052 M3, behind `VITE_CANVAS_DIRECT_MANIPULATION`): the dragged (or
+  // Logic-panel-nudged) lag becomes a `PATCH /dependencies/:id` echoing the row's unchanged type +
+  // lag calendar at the live version — exactly `useUpdateDependency`'s input, the same endpoint the
+  // Edit-link dialog writes through. Optimistic-lock 409 and pen-loss 423 reuse the reposition
+  // contract; the follow-up recalc is the coalesced auto-recalc (or the inline recalc when
+  // authoring is off). A no-op when the lag is already the persisted value.
+  const updateDependency = useUpdateDependency(orgSlug);
+  const lagConflict =
+    'This plan changed since you opened it — the lag wasn’t changed. Refresh to see the latest.';
+  const onTsldLag = async ({ dependencyId, lagDays }: TsldLagInput): Promise<TsldEditOutcome> => {
+    const dependency = (dependencies.data ?? []).find((d) => d.id === dependencyId);
+    if (!dependency) return { applied: false, conflict: null };
+    // Defensive no-op: the gesture/nudge only emit a *changed* lag, but a stale caller must never
+    // burn a version bump (and a recalc) on an identical write.
+    if (lagDays === dependency.lagDays) return { applied: false, conflict: null };
+    try {
+      const saved = await updateDependency.mutateAsync({
+        dependencyId,
+        type: dependency.type,
+        lagDays,
+        lagCalendar: dependency.lagCalendar,
+        version: dependency.version,
+      });
+      // Record the lag change for undo (ADR-0048) — the single user edit, NOT the follow-up
+      // recalc. The inverse restores the prior lag through the same PATCH; a drag/nudge burst
+      // coalesces to one step (`lag:{dependencyId}`). Guarded on the flag.
+      if (UNDO_REDO_ENABLED) {
+        editHistory.record(
+          lagDragCommand({
+            updateDependency: updateDependency.mutateAsync,
+            dependency,
+            afterLagDays: lagDays,
+            version: saved.version,
+          }),
+        );
+      }
+    } catch (err) {
+      if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
+      if (err instanceof ApiFetchError && err.status === 409) {
+        // Stale version — the change was NOT applied (nothing changed); never re-send.
+        return { applied: false, conflict: lagConflict };
+      }
+      throw err;
+    }
+    // The change landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
+    if (CANVAS_AUTHORING_ENABLED) {
+      autoRecalc.notify();
+      return { applied: true, conflict: null };
+    }
+    try {
+      await recalculate.mutateAsync();
+      return { applied: true, conflict: null };
+    } catch {
+      return {
+        applied: true,
+        conflict:
+          'Lag changed, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
       };
     }
   };
@@ -1066,9 +1175,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,
-    // Finish-edge duration resize (ADR-0052 M2, `VITE_CANVAS_DIRECT_MANIPULATION`) — the
-    // full-definition durationDays PATCH + coalesced recalc + coalesced undo.
+    // Bar-end resize (ADR-0052 M2 finish, M3 start — `VITE_CANVAS_DIRECT_MANIPULATION`): the
+    // full-definition durationDays PATCH (+ mode-aware SNET/visualStart for a start drag) +
+    // coalesced recalc + coalesced undo.
     onTsldResize,
+    // Lag-anchor drag / Logic-panel lag nudge (ADR-0052 M3): the dependency PATCH echoing the
+    // unchanged type + lag calendar + coalesced recalc + coalesced undo.
+    onTsldLag,
     onTsldLink,
     onTsldAutoArrange,
     onTsldRefresh,

@@ -16,8 +16,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   undoRedo: false,
   authoring: false,
+  schedulingModes: false,
+  planMode: 'EARLY',
   record: vi.fn(),
   updateMutateAsync: vi.fn(),
+  setVisualStartMutateAsync: vi.fn(),
   recalcMutateAsync: vi.fn(),
   notify: vi.fn(),
   onWriteRejected: vi.fn(),
@@ -30,7 +33,9 @@ vi.mock('@/config/env', async (importOriginal) => {
     get CANVAS_AUTHORING_ENABLED() {
       return h.authoring;
     },
-    SCHEDULING_MODES_ENABLED: false,
+    get SCHEDULING_MODES_ENABLED() {
+      return h.schedulingModes;
+    },
     NOTES_ENABLED: false,
     get UNDO_REDO_ENABLED() {
       return h.undoRedo;
@@ -68,7 +73,8 @@ vi.mock('@/features/plan-lock', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/features/plans', () => ({
-  usePlan: () => query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01' }),
+  usePlan: () =>
+    query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01', schedulingMode: h.planMode }),
 }));
 vi.mock('@/features/projects', () => ({ useProject: () => query({ clientId: 'c1' }) }));
 vi.mock('@/features/clients', () => ({ useClient: () => query({ id: 'c1' }) }));
@@ -82,6 +88,7 @@ vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
+  useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@/features/schedule', () => ({
   useRecalculate: () => ({ mutateAsync: h.recalcMutateAsync }),
@@ -156,7 +163,7 @@ vi.mock('@/features/activities', () => ({
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn() }),
   useUpdateActivity: () => ({ mutateAsync: h.updateMutateAsync }),
   useRepositionLane: () => ({ mutateAsync: vi.fn() }),
-  useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
+  useSetActivityVisualStart: () => ({ mutateAsync: h.setVisualStartMutateAsync }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutateAsync: vi.fn() }),
   isMilestoneType: (t: string) => t === 'START_MILESTONE' || t === 'FINISH_MILESTONE',
@@ -174,7 +181,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
   h.authoring = false;
+  h.schedulingModes = false;
+  h.planMode = 'EARLY';
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, durationDays: 8, version: 4 });
+  h.setVisualStartMutateAsync.mockResolvedValue({
+    ...ACTIVITY,
+    visualStart: '2026-01-07',
+    durationDays: 8,
+    version: 4,
+  });
   h.recalcMutateAsync.mockResolvedValue(undefined);
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
 });
@@ -309,5 +324,142 @@ describe('onTsldResize (ADR-0052 M2)', () => {
       conflict:
         'Resized, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
     });
+  });
+});
+
+describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
+  it('EARLY: ONE full-definition PATCH imposing SNET-at-new-start + the new duration', async () => {
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+
+    let outcome;
+    await act(async () => {
+      // Drag the start to day 6 (2026-01-07); finish pinned → duration 8.
+      outcome = await result.current.onTsldResize({
+        activityId: 'a1',
+        durationDays: 8,
+        startDay: 6,
+      });
+    });
+
+    expect(outcome).toEqual({ applied: true, conflict: null });
+    expect(h.updateMutateAsync).toHaveBeenCalledTimes(1);
+    // The two intended changes ride ONE call (the spike-verified combined PATCH): the SNET pin at
+    // the new start — mirroring the reposition payload — plus the recomputed duration…
+    expect(h.updateMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activityId: 'a1',
+        version: 3,
+        constraintType: 'SNET',
+        constraintDate: '2026-01-07',
+        durationDays: 8,
+      }),
+    );
+    // …with every other definition field resent verbatim (never silently cleared).
+    expect(h.updateMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        durationType: 'FIXED_UNITS',
+        percentCompleteType: 'PHYSICAL',
+        accrualType: 'START',
+        calendarId: 'cal-9',
+        levelingPriority: 7,
+      }),
+    );
+    // The visualStart seam is never touched in EARLY mode.
+    expect(h.setVisualStartMutateAsync).not.toHaveBeenCalled();
+    expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('VISUAL: ONE minimal visualStart + durationDays PATCH (no definition resend, no SNET)', async () => {
+    h.schedulingModes = true;
+    h.planMode = 'VISUAL';
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldResize({
+        activityId: 'a1',
+        durationDays: 8,
+        startDay: 6,
+      });
+    });
+
+    expect(outcome).toEqual({ applied: true, conflict: null });
+    expect(h.setVisualStartMutateAsync).toHaveBeenCalledExactlyOnceWith({
+      activityId: 'a1',
+      visualStart: '2026-01-07',
+      durationDays: 8,
+      version: 3,
+    });
+    // The full-definition path is NOT used — a Visual placement never writes a constraint.
+    expect(h.updateMutateAsync).not.toHaveBeenCalled();
+    expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the mode-matching coalescable command on the SHARED resize:{id} key', async () => {
+    h.undoRedo = true;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+    const early = h.record.mock.calls[0]![0];
+    expect(early.label).toBe('Resize “Excavate”');
+    expect(early.coalescing?.key).toBe('resize:a1');
+
+    h.record.mockClear();
+    h.schedulingModes = true;
+    h.planMode = 'VISUAL';
+    const visual = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await visual.result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+    const command = h.record.mock.calls[0]![0];
+    expect(command.label).toBe('Resize “Excavate”');
+    expect(command.coalescing?.key).toBe('resize:a1');
+  });
+
+  it('VISUAL undo restores the prior visualStart AND duration through the same seam', async () => {
+    h.undoRedo = true;
+    h.schedulingModes = true;
+    h.planMode = 'VISUAL';
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
+    });
+    const command = h.record.mock.calls[0]![0];
+    h.setVisualStartMutateAsync.mockClear();
+    await command.undo();
+    // The pre-edit row had no placement (null) and duration 5 — both restored in one PATCH at
+    // the post-edit version.
+    expect(h.setVisualStartMutateAsync).toHaveBeenCalledExactlyOnceWith({
+      activityId: 'a1',
+      visualStart: null,
+      durationDays: 5,
+      version: 4,
+    });
+  });
+
+  it('409 (stale version): resolves applied:false with the conflict message — no record, no recalc', async () => {
+    h.undoRedo = true;
+    h.updateMutateAsync.mockRejectedValue(
+      new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
+    );
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldResize({
+        activityId: 'a1',
+        durationDays: 8,
+        startDay: 6,
+      });
+    });
+    expect(outcome).toEqual({
+      applied: false,
+      conflict:
+        'This plan changed since you opened it — your resize wasn’t applied. Refresh to see the latest.',
+    });
+    expect(h.record).not.toHaveBeenCalled();
+    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
   });
 });

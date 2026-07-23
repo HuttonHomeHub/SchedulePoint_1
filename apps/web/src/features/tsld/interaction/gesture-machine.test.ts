@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Viewport } from '../render/render-model';
+import { makeWorkingDayWalk, type Viewport } from '../render/render-model';
 
 import {
   IDLE,
@@ -404,11 +404,13 @@ describe('gesture-machine: finish-edge resize (ADR-0052 M2)', () => {
     expect(grab()).toEqual({
       kind: 'resizing',
       activityId: 'a',
+      edge: 'finish',
       grabX: 58,
       movedPastThreshold: false,
       originStartDay: 2,
       originDurationDays: 4,
       laneIndex: 1,
+      currentStartDay: 2,
       currentDurationDays: 4,
     });
   });
@@ -500,10 +502,10 @@ describe('gesture-machine: finish-edge resize (ADR-0052 M2)', () => {
     expect(r.state).toEqual(IDLE);
   });
 
-  it('leaves the start-edge zone inert until M3 (falls through to the M1 select/pan path)', () => {
+  it('is inert on a resizeStart grab without the bar geometry (nothing to resize)', () => {
     const r = reduce(
       IDLE,
-      { type: 'pointerDown', point: { x: 21, y: 40 }, hit: { kind: 'resizeStart', id: 'a' }, body },
+      { type: 'pointerDown', point: { x: 21, y: 40 }, hit: { kind: 'resizeStart', id: 'a' } },
       ctx('select'),
     );
     expect(r.state).toEqual(IDLE);
@@ -519,6 +521,187 @@ describe('gesture-machine: finish-edge resize (ADR-0052 M2)', () => {
       ctx('select'),
     );
     expect(r.state).toMatchObject({ kind: 'linking', sourceId: 'a', sourceHandle: 'finishHandle' });
+  });
+});
+
+describe('gesture-machine: start-edge resize (ADR-0052 M3)', () => {
+  // pxPerDay 10 → day = floor(x/10). Bar a: days 2..5 (duration 4) at lane 1; start edge at x=20,
+  // inclusive finish day 5 (pinned throughout).
+  const body = { id: 'a', startDay: 2, endDay: 5, laneIndex: 1 };
+  const grab = (): GestureState =>
+    reduce(
+      IDLE,
+      {
+        type: 'pointerDown',
+        point: { x: 21, y: 40 },
+        hit: { kind: 'resizeStart', id: 'a' },
+        body,
+      },
+      ctx('select'),
+    ).state;
+  const move = (state: GestureState, x: number): GestureState =>
+    reduce(state, { type: 'pointerMove', point: { x, y: 40 } }, ctx('select')).state;
+
+  it('starts a resizing state with edge start, seeded from the bar geometry', () => {
+    expect(grab()).toEqual({
+      kind: 'resizing',
+      activityId: 'a',
+      edge: 'start',
+      grabX: 21,
+      movedPastThreshold: false,
+      originStartDay: 2,
+      originDurationDays: 4,
+      laneIndex: 1,
+      currentStartDay: 2,
+      currentDurationDays: 4,
+    });
+  });
+
+  it('moves the start and recomputes the duration off the pinned finish as the pointer moves', () => {
+    // x=5 → day 0 as the new start → duration = 5 - 0 + 1 = 6 (finish still day 5).
+    expect(move(grab(), 5)).toMatchObject({
+      kind: 'resizing',
+      currentStartDay: 0,
+      currentDurationDays: 6,
+      movedPastThreshold: true,
+    });
+    // x=45 → day 4 → duration = 5 - 4 + 1 = 2 (shrunk from the left, finish pinned).
+    expect(move(grab(), 45)).toMatchObject({
+      kind: 'resizing',
+      currentStartDay: 4,
+      currentDurationDays: 2,
+    });
+  });
+
+  it('clamps the start at the finish day (duration never below 1, bar never inverted)', () => {
+    // x=95 → day 9, past the inclusive finish (5) → clamped to start=5, duration 1.
+    expect(move(grab(), 95)).toMatchObject({
+      kind: 'resizing',
+      currentStartDay: 5,
+      currentDurationDays: 1,
+    });
+  });
+
+  it('commits a start-edge resize intent with the new start + duration on release', () => {
+    const up = reduce(move(grab(), 5), { type: 'pointerUp' }, ctx('select'));
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toEqual({
+      kind: 'resize',
+      activityId: 'a',
+      edge: 'start',
+      newStartDay: 0,
+      newDurationDays: 6,
+    });
+  });
+
+  it('selects (no intent) when the press never moved, or landed back on the origin start', () => {
+    const untouched = reduce(grab(), { type: 'pointerUp' }, ctx('select'));
+    expect(untouched.intent).toBeUndefined();
+    expect(untouched.select).toBe('a');
+    // Out past a day boundary (threshold trips), then back onto the origin start column.
+    const wandered = move(move(grab(), 5), 25);
+    const up = reduce(wandered, { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toBeUndefined();
+    expect(up.select).toBe('a');
+  });
+
+  it('cancels a start-edge resize on escape with no intent', () => {
+    const r = reduce(move(grab(), 5), { type: 'escape' }, ctx('select'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
+  });
+});
+
+describe('gesture-machine: lag-anchor drag (ADR-0052 M3)', () => {
+  // Synthetic week: offsets 0–4 working, 5–6 not (repeating). Predecessor days 0..2; an FS+1
+  // anchor sits at walk(3, 1) = day 4 (x=40..49 under pxPerDay 10).
+  const working = (d: number): boolean => ((d % 7) + 7) % 7 < 5;
+  const walk = makeWorkingDayWalk(working);
+  const grabLag = (lagDays = 1): GestureState =>
+    reduce(
+      IDLE,
+      {
+        type: 'pointerDown',
+        point: { x: 42, y: 14 },
+        hit: { kind: 'lagAnchor', id: 's', dependencyId: 'd1' },
+        lag: {
+          dependencyId: 'd1',
+          type: 'FS',
+          lagDays,
+          predStartDay: 0,
+          predFinishDay: 2,
+          walk,
+          anchorY: 14,
+        },
+      },
+      ctx('select'),
+    ).state;
+  const move = (state: GestureState, x: number): GestureState =>
+    reduce(state, { type: 'pointerMove', point: { x, y: 14 } }, ctx('select')).state;
+
+  it('starts a lagDragging state seeded from the grab context', () => {
+    expect(grabLag()).toEqual({
+      kind: 'lagDragging',
+      dependencyId: 'd1',
+      depType: 'FS',
+      grabX: 42,
+      movedPastThreshold: false,
+      originLagDays: 1,
+      currentLagDays: 1,
+      predStartDay: 0,
+      predFinishDay: 2,
+      walk,
+      anchorY: 14,
+    });
+  });
+
+  it('is inert on a lagAnchor hit without the grab context', () => {
+    const r = reduce(
+      IDLE,
+      {
+        type: 'pointerDown',
+        point: { x: 42, y: 14 },
+        hit: { kind: 'lagAnchor', id: 's', dependencyId: 'd1' },
+      },
+      ctx('select'),
+    );
+    expect(r.state).toEqual(IDLE);
+  });
+
+  it('snaps the tentative lag to whole working days via the inverse anchor mapping', () => {
+    // FS from finish day 2: lag 0 anchors day 3, lag 1 → day 4, lag 2 → day 7 (5/6 non-working).
+    expect(move(grabLag(), 75)).toMatchObject({ kind: 'lagDragging', currentLagDays: 2 });
+    // A pointer over a non-working day (day 5) snaps toward zero: still lag 1.
+    expect(move(grabLag(), 55)).toMatchObject({ kind: 'lagDragging', currentLagDays: 1 });
+    expect(move(grabLag(), 32)).toMatchObject({ kind: 'lagDragging', currentLagDays: 0 });
+  });
+
+  it('goes negative (a lead) when dragged left of the zero-lag anchor', () => {
+    // Day 2 is one working day LEFT of the zero-lag anchor (day 3) → lag -1.
+    expect(move(grabLag(), 25)).toMatchObject({ kind: 'lagDragging', currentLagDays: -1 });
+  });
+
+  it('commits a lag intent with the new signed lag on release', () => {
+    const up = reduce(move(grabLag(), 75), { type: 'pointerUp' }, ctx('select'));
+    expect(up.state).toEqual(IDLE);
+    expect(up.intent).toEqual({ kind: 'lag', dependencyId: 'd1', newLagDays: 2 });
+  });
+
+  it('commits nothing when the press never moved, or the lag landed back unchanged', () => {
+    const untouched = reduce(grabLag(), { type: 'pointerUp' }, ctx('select'));
+    expect(untouched.state).toEqual(IDLE);
+    expect(untouched.intent).toBeUndefined();
+    expect(untouched.select).toBeUndefined();
+    // Threshold tripped but back on the original lag column → no intent.
+    const wandered = move(move(grabLag(), 75), 42);
+    const up = reduce(wandered, { type: 'pointerUp' }, ctx('select'));
+    expect(up.intent).toBeUndefined();
+  });
+
+  it('cancels a lag drag on escape with no intent', () => {
+    const r = reduce(move(grabLag(), 75), { type: 'escape' }, ctx('select'));
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
   });
 });
 

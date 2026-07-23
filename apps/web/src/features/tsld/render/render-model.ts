@@ -102,6 +102,10 @@ export interface RenderActivity {
 
 /** A directed dependency edge (predecessor → successor) by activity id. */
 export interface RenderEdge {
+  /** The dependency's id, carried so the lag-anchor hit zone can name the edge it manipulates
+   * (ADR-0052 M3). Optional so legacy callers/fixtures stay valid; an id-less edge simply offers
+   * no grab zone. */
+  id?: string;
   predecessorId: string;
   /** The dependency type (FS/SS/FF/SF), carried so the link-draw legality pre-check can spot a
    * same-`(predecessor, successor, type)` duplicate (ADR-0026 D5). */
@@ -392,6 +396,63 @@ export function makeWorkingDayWalk(
   };
 }
 
+/**
+ * The day offset a relationship's lag anchor sits at for a given signed lag — the ONE forward
+ * mapping shared by the render path ({@link lagAnchorPoints}) and the drag path's inverse
+ * ({@link lagFromAnchorDay}), so the picture and the gesture can never disagree (ADR-0052 M3).
+ * `predStartDay`/`predFinishDay` are the predecessor bar's inclusive whole-day span:
+ *
+ * - **FS** — the lag runs from the day after the predecessor's inclusive finish.
+ * - **FF** — likewise from the finish, but the anchor marks the constrained successor *finish*,
+ *   whose inclusive day converts to the `+1` right edge.
+ * - **SS/SF** — the lag embeds along the predecessor bar from its start (the GPM embed point).
+ */
+export function lagAnchorDay(
+  predStartDay: number,
+  predFinishDay: number,
+  type: DependencyType,
+  lagDays: number,
+  walk: DayWalk,
+): number {
+  if (type === 'FS') return walk(predFinishDay + 1, lagDays);
+  if (type === 'FF') return walk(predFinishDay, lagDays) + 1;
+  return walk(predStartDay, lagDays); // SS / SF — embed along the predecessor from its start
+}
+
+/**
+ * The signed lag whose anchor sits at (or nearest, snapping **toward zero**) `anchorDay` — the
+ * exact inverse of {@link lagAnchorDay} over the same injected walk (ADR-0052 M3: the lag drag
+ * reads and writes against the render mapping, one source of truth). Because the walk is strictly
+ * monotone in the lag, `lagFromAnchorDay(lagAnchorDay(n)) === n` for every integer `n`; a pointer
+ * day that falls between two valid anchor days (a non-working day) snaps to the nearer-zero lag,
+ * so `lagAnchorDay(lagFromAnchorDay(x))` is the snapped anchor. Horizon-bounded like the walk
+ * itself: a pathological calendar falls back to the elapsed difference, never hanging.
+ */
+export function lagFromAnchorDay(
+  predStartDay: number,
+  predFinishDay: number,
+  type: DependencyType,
+  anchorDay: number,
+  walk: DayWalk,
+  horizon = WALK_HORIZON_DAYS,
+): number {
+  const at = (n: number): number => lagAnchorDay(predStartDay, predFinishDay, type, n, walk);
+  const base = at(0);
+  if (anchorDay === base) return 0;
+  const dir = anchorDay > base ? 1 : -1;
+  let n = 0;
+  for (let i = 0; i < horizon; i += 1) {
+    const next = at(n + dir);
+    // Walked past the pointer day without landing on it → the pointer sits between two valid
+    // anchors; keep the nearer-zero lag (snap toward zero).
+    if (dir > 0 ? next > anchorDay : next < anchorDay) return n;
+    n += dir;
+    if (next === anchorDay) return n;
+  }
+  // Horizon exhausted (pathological calendar) — the elapsed difference, the walk's own fallback.
+  return anchorDay - lagAnchorDay(predStartDay, predFinishDay, type, 0, ELAPSED_DAY_WALK);
+}
+
 /** The screen points a dependency's two ends anchor at (each on its bar's vertical centre). */
 export interface LagAnchors {
   pred: Point;
@@ -437,11 +498,11 @@ export function lagAnchorPoints(
       predecessor.earlyFinish === null
         ? startDay
         : daysBetween(dataDateIso, predecessor.earlyFinish);
+    // The one shared forward mapping (ADR-0052 M3) — the lag drag's inverse reads the same fn.
+    const day = lagAnchorDay(startDay, finishDay, type, lagDays, walk);
     if (predFinish) {
-      const day = type === 'FS' ? walk(finishDay + 1, lagDays) : walk(finishDay, lagDays) + 1;
       succX = Math.min(Math.max(screenXOfDay(day, view), to.x), to.x + to.w);
     } else {
-      const day = walk(startDay, lagDays);
       predX = Math.min(Math.max(screenXOfDay(day, view), from.x), from.x + from.w);
     }
   }
@@ -545,14 +606,17 @@ export function hitTest(
 export const EDGE_HANDLE_PX = 8;
 
 /** Where a screen point falls relative to the activities, for gesture routing. The `resize*`
- * kinds exist only when {@link classifyHit} is asked for resize handles (ADR-0052 M2). */
+ * kinds exist only when {@link classifyHit} is asked for resize handles (ADR-0052 M2);
+ * `lagAnchor` only when it is given the drawn lag anchors (ADR-0052 M3). */
 export type HitZoneKind =
-  'empty' | 'body' | 'startHandle' | 'finishHandle' | 'resizeStart' | 'resizeFinish';
+  'empty' | 'body' | 'startHandle' | 'finishHandle' | 'resizeStart' | 'resizeFinish' | 'lagAnchor';
 
 export interface HitZone {
   kind: HitZoneKind;
-  /** The activity id for a non-empty zone. */
+  /** The activity id for a non-empty zone (for `lagAnchor`, the bar the anchor sits on). */
   id?: string;
+  /** The dependency a `lagAnchor` zone manipulates (ADR-0052 M3). */
+  dependencyId?: string;
 }
 
 /**
@@ -567,7 +631,13 @@ export function isResizeEligibleType(type: ActivityType): boolean {
   return !isMilestone(type) && type !== 'LEVEL_OF_EFFORT' && type !== 'WBS_SUMMARY';
 }
 
-/** Options for {@link classifyHit}'s zone vocabulary (ADR-0052 M2). */
+/** Half-width (px) of the grab zone around a drawn lag anchor (ADR-0052 M3). Kept as small as the
+ * bar-end zones ({@link EDGE_HANDLE_PX}) so a crowded bar isn't swallowed; the same lag is settable
+ * exactly through the dependency dialog (Enter on the listbox → Logic), so the pointer zone falls
+ * under WCAG 2.5.8's Equivalent exception, like the edge handles. */
+export const LAG_ANCHOR_PX = 8;
+
+/** Options for {@link classifyHit}'s zone vocabulary (ADR-0052 M2/M3). */
 export interface ClassifyHitOptions {
   /**
    * When true (the direct-manipulation flag is on, in `select` mode with a resize handler wired),
@@ -578,6 +648,20 @@ export interface ClassifyHitOptions {
    * byte-for-byte today's zones (the flag-off parity gate).
    */
   resizeHandles?: boolean;
+  /**
+   * When present (the flag is on, in `select` mode with a lag handler wired — the same gate as
+   * {@link ClassifyHitOptions.resizeHandles}), a grab zone surrounds each drawn **lag anchor**
+   * (ADR-0052 M3) and classifies as `lagAnchor` carrying the edge's `dependencyId`. Only edges
+   * whose anchor is actually *offset* (`lagDays !== 0`) offer a zone: a zero-lag anchor sits ON
+   * the constrained edge, exactly where the resize handles live, and must not steal them — a
+   * zero-lag tie's lag is set through the dependency dialog instead. `walk` is the plan
+   * working-day {@link DayWalk}; a `TWENTY_FOUR_HOUR` edge branches to the elapsed walk here,
+   * mirroring the painter, so the zone always sits where the anchor is drawn.
+   */
+  lagAnchors?: {
+    edges: readonly RenderEdge[];
+    walk: DayWalk;
+  };
 }
 
 /**
@@ -595,6 +679,43 @@ export function classifyHit(
   dataDateIso: string,
   options?: ClassifyHitOptions,
 ): HitZone {
+  // Lag-anchor zones first (ADR-0052 M3): an anchor is a small point target drawn ON a bar, so it
+  // must win over the bar body (topmost/smallest target wins — the same rule that puts the end
+  // zones above the body). Overlapping anchors on a crowded bar resolve by stable edge-id order,
+  // so the winner never jitters between frames/refetches.
+  if (options?.lagAnchors) {
+    const { edges, walk } = options.lagAnchors;
+    const byId = new Map(activities.map((a) => [a.id, a]));
+    const offsetEdges = edges
+      .filter((e) => e.id !== undefined && (e.lagDays ?? 0) !== 0)
+      .sort((a, b) => (a.id! < b.id! ? -1 : 1));
+    for (const edge of offsetEdges) {
+      const pred = byId.get(edge.predecessorId);
+      const succ = byId.get(edge.successorId);
+      if (!pred || !succ) continue;
+      const anchors = lagAnchorPoints(
+        pred,
+        succ,
+        edge.type,
+        edge.lagDays ?? 0,
+        view,
+        dataDateIso,
+        edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : walk,
+      );
+      if (!anchors) continue;
+      // The *offset* anchor is the draggable one: FS/FF walk the successor end, SS/SF the
+      // predecessor end (see lagAnchorPoints) — the other end sits on a plain bar edge.
+      const predFinish = edge.type === 'FS' || edge.type === 'FF';
+      const anchor = predFinish ? anchors.succ : anchors.pred;
+      const anchorBar = predFinish ? succ : pred;
+      if (
+        Math.abs(point.x - anchor.x) <= LAG_ANCHOR_PX &&
+        Math.abs(point.y - anchor.y) <= BAR_HEIGHT / 2
+      ) {
+        return { kind: 'lagAnchor', id: anchorBar.id, dependencyId: edge.id! };
+      }
+    }
+  }
   for (let i = activities.length - 1; i >= 0; i -= 1) {
     const activity = activities[i]!;
     const rect = activityRect(activity, view, dataDateIso);

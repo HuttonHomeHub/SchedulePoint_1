@@ -760,6 +760,20 @@ export interface ResizeOverlay {
   label: string;
 }
 
+/** A lag-anchor drag in flight (ADR-0052 M3): the tentative-lag readout chip. */
+export interface LagOverlay {
+  /** The tentative anchor's screen point (chip drawn just above it). */
+  x: number;
+  y: number;
+  /** The live lag readout, e.g. `SS + 3d` / `FS - 1d` (negative = lead). */
+  label: string;
+}
+
+/** Chip height (px) of the lag readout drawn above the dragged anchor. */
+const LAG_CHIP_H = 14;
+/** Gap (px) between the dragged anchor point and its readout chip. */
+const LAG_CHIP_GAP = 6;
+
 /** The transient shapes drawn on the interaction layer for an in-progress edit. */
 export interface InteractionOverlay {
   /** The bar being drawn/moved (solid fill + outline). */
@@ -771,8 +785,10 @@ export interface InteractionOverlay {
   /** The picked predecessor while the two-click link tool waits for its second click (M5): a solid
    * highlight ring so "now click the successor" reads. */
   linkPick?: Rect | null;
-  /** A finish-edge duration resize in flight (ADR-0052 M2): ghost + live duration label. */
+  /** A bar-end duration resize in flight (ADR-0052 M2/M3): ghost + live readout label. */
   resize?: ResizeOverlay | null;
+  /** A lag-anchor drag in flight (ADR-0052 M3): the tentative-lag readout chip. */
+  lag?: LagOverlay | null;
 }
 
 /**
@@ -792,7 +808,7 @@ export function paintInteractionLayer(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
-  const { live, pending, link, linkPick, resize } = overlay;
+  const { live, pending, link, linkPick, resize, lag } = overlay;
 
   if (linkPick) {
     // The picked predecessor waiting for the second click (M5): a **dashed** selection-colour ring —
@@ -864,6 +880,29 @@ export function paintInteractionLayer(
       ctx.textAlign = 'left';
       ctx.fillStyle = palette.labelBeside;
       ctx.fillText(resize.label, r.x + LABEL_PAD_PX, r.y - 2);
+    }
+  }
+
+  if (lag) {
+    // The lag-drag readout chip (ADR-0052 M3): the tentative "SS + 3d" the planner is choosing,
+    // drawn just above the dragged anchor point on a filled, outlined chip so it stays legible
+    // over bars and links. Guarded like the resize label so a text-less test context never throws
+    // (`measureText` sizes the chip to its text).
+    if (typeof ctx.fillText === 'function' && typeof ctx.measureText === 'function') {
+      ctx.font = LABEL_FONT;
+      const w = ctx.measureText(lag.label).width + LABEL_PAD_PX * 2;
+      const x = lag.x - w / 2;
+      const y = lag.y - BAR_HEIGHT / 2 - LAG_CHIP_GAP - LAG_CHIP_H;
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(x, y, w, LAG_CHIP_H);
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, LAG_CHIP_H - 1);
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = palette.labelInside;
+      ctx.fillText(lag.label, x + LABEL_PAD_PX, y + LAG_CHIP_H / 2);
     }
   }
 }
