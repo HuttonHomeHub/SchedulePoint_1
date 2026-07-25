@@ -223,3 +223,44 @@ rendering milestones (M1/M4/M5) apply to read-only roles too.
   new per-move hit-test). The export/print path builds a `visualRefresh`-less
   scene (as it omits `timeTrueLinks`), so deliverables keep the print-tuned
   legacy paint.
+- M5 implementation (visual refresh — logic links; render-only, every role;
+  gated on the SAME `visualRefresh` scene field M4 rides — one env flag, one
+  flag-off byte-parity gate): `render/render-model.ts` (`routeOrthogonal`
+  exported with a clamped `elbowShift` — default `0` keeps the legacy shape
+  byte-for-byte; the clamp keeps the shifted elbow strictly clear of the
+  anchored bar edge; `elbowRadius` — the pure per-corner rounding radius,
+  `LINK_ELBOW_RADIUS` clamped to half each adjoining segment so adjacent arcs
+  never overlap, `0` for collinear/degenerate corners; `computeEdgeFanOut` —
+  deterministic de-crowding: relationship ends group by the bar edge their
+  type anchors to (FS/FF pred→finish, SS/SF pred→start; FS/SS succ→start,
+  FF/SF succ→finish), order by **edge id** (the `(pred, succ, type)` triple
+  for id-less edges) and spread `±FAN_OUT_STEP_PX` about the bar centreline
+  capped at `±FAN_OUT_MAX_PX`; singleton groups get no offset, so the common
+  zero-lag FS chain stays byte-identical and reads clean; `lagRunSegment` —
+  the on-bar "waiting time" run between a walked lag anchor and its zero-lag
+  bar edge, sharing `lagAnchorPoints` (the ONE forward mapping) so the run and
+  the drawn anchor can never disagree; `linkHighlightIds`/`edgeTouches` — the
+  incident-link highlight selection logic); `render/paint.ts` (`Ctx2D.arcTo`
+  optional + guarded exactly like M4's `roundRect`, so rounded elbows degrade
+  to hard corners on old/test contexts, never throwing; the edge layer's two
+  driving passes each split into base + **highlight** passes — the selected
+  bar's ties (persistent; selection is the keyboard/AT-reachable equivalent,
+  WCAG 2.1.1) and the idle-hovered bar's ties (transient) re-draw on top one
+  weight step heavier (non-driving 2px still-dashed, driving 3px solid,
+  arrowheads matching) in the **selection** colour — a weight change WITH the
+  colour, so neither the highlight nor the retained driving cue is colour-only
+  (1.4.1), and the ring token clears the 3:1 non-text bar (1.4.11); fan-out
+  offsets computed once per frame over the same edge set the layer already
+  iterates (pan-stable — never keyed to the viewport); lag runs collected
+  during the edge passes and stroked as a **layer 3.2** dashed hairline
+  (`[2,2]`) in the edge colour ABOVE the bars — on-bar geometry under the
+  bars would be invisible; `TsldScene.hoverId`); `components/TsldCanvas.tsx`
+  (the hovered bar's **id** published into the scene from the SAME
+  already-armed idle-hover classify the M4 hover ring reads — editing
+  surfaces only, per M4; a scene repaint per hovered-BAR change, never per
+  pointer move). **No palette entry added**: the highlight reuses `selection`
+  (`--color-ring`), the lag run reuses `edge` (`--color-muted-foreground`).
+  `render/a11y.ts` is byte-identical — lag was already spoken (`lagPhrase`)
+  and highlight state is selection-derived, which AT reaches via the listbox.
+  The deferred **curved/bezier evaluation** closes here: rounded orthogonal
+  elbows win on predictability, draw cost and testability (see Alternatives).

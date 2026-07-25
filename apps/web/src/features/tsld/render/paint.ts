@@ -4,17 +4,24 @@ import {
   activityRect,
   arrowhead,
   barGlyphKind,
+  computeEdgeFanOut,
   cull,
   daysBetween,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
+  edgeTouches,
+  elbowRadius,
   isMilestone,
   isResizeEligibleType,
   labelPlacement,
+  lagAnchorPoints,
+  lagRunSegment,
+  linkHighlightIds,
   loeBracketRects,
   makeWorkingDayWalk,
   progressGeometry,
   rectsIntersect,
+  routeOrthogonal,
   screenXOfDay,
   screenYOfLane,
   summaryTabRects,
@@ -30,6 +37,7 @@ import {
   LANE_HEIGHT,
   MILESTONE_RADIUS,
   PROGRESS_MIN_PX_PER_DAY,
+  type LagRun,
   type Point,
   type Rect,
   type RenderActivity,
@@ -178,8 +186,18 @@ export interface TsldScene {
    * LOE-bracket / WBS-summary-tab glyphs, an outlined constraint pin, and the rounded selection
    * ring. A separate scene field from `timeTrueLinks` so each render change stays independently
    * testable, but fed from the SAME env flag — there is exactly ONE flag-off parity gate.
-   * Absent/false ⇒ byte-for-byte today's bar layer. */
+   * Absent/false ⇒ byte-for-byte today's bar layer.
+   *
+   * Under M5 the same field also gates the **link** refresh: rounded elbows on the orthogonal
+   * routing, deterministic fan-out of crowded bar-edge anchors, the dashed lag-run depiction
+   * (with `timeTrueLinks` geometry), and the incident-link highlight for `selectedId`/`hoverId`. */
   visualRefresh?: boolean | undefined;
+  // ── Canvas direct manipulation M5 (ADR-0052, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ────
+  /** The idle-hovered bar's activity id (published by the canvas from the SAME already-armed
+   * hover classify the M4 hover ring reads — editing surfaces only): its incident links draw
+   * transiently highlighted, mirroring the persistent `selectedId` highlight (the keyboard/AT
+   * equivalent — WCAG 2.1.1). Only read under `visualRefresh`; absent ⇒ no hover highlight. */
+  hoverId?: string | null | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -217,6 +235,10 @@ export type Ctx2D = Pick<
    * corners with it when present and falls back to square rects when not — guarded like the
    * text APIs (`paintResourceStrip`'s label), so a minimal test context never throws. */
   roundRect?: (x: number, y: number, w: number, h: number, radii: number) => void;
+  /** Optional like `roundRect`: the refreshed link routing rounds its elbows with it when present
+   * (ADR-0052 M5) and falls back to hard `lineTo` corners when not — an arc, not a shadow/blur,
+   * so the draw budget holds; a minimal test context never throws. */
+  arcTo?: (x1: number, y1: number, x2: number, y2: number, radius: number) => void;
 };
 
 /**
@@ -269,6 +291,31 @@ function criticalDash(activity: RenderActivity): number[] | null {
 function drawPolyline(ctx: Ctx2D, points: Point[]): void {
   ctx.moveTo(points[0]!.x, points[0]!.y);
   for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i]!.x, points[i]!.y);
+}
+
+/** Dash pattern of the lag-run depiction (ADR-0052 M5) — visibly "waiting", not a solid tie. */
+const LAG_RUN_DASH: readonly number[] = [2, 2];
+
+/**
+ * Trace a polyline with small rounded elbows (ADR-0052 M5): each interior corner arcs with the
+ * pure {@link elbowRadius} (clamped to half its adjoining segments; 0 = a hard corner) via the
+ * optional `arcTo` — degrading to the plain hard-cornered {@link drawPolyline} on contexts
+ * without it (older browsers / minimal test mocks), like the M4 `roundRect` guard. Rect/line/arc
+ * primitives only; called only on the refreshed (flag-on) path.
+ */
+function drawRoundedPolyline(ctx: Ctx2D, points: Point[]): void {
+  if (points.length < 3 || typeof ctx.arcTo !== 'function') {
+    drawPolyline(ctx, points);
+    return;
+  }
+  ctx.moveTo(points[0]!.x, points[0]!.y);
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const radius = elbowRadius(points[i - 1]!, points[i]!, points[i + 1]!);
+    if (radius > 0)
+      ctx.arcTo(points[i]!.x, points[i]!.y, points[i + 1]!.x, points[i + 1]!.y, radius);
+    else ctx.lineTo(points[i]!.x, points[i]!.y);
+  }
+  ctx.lineTo(points[points.length - 1]!.x, points[points.length - 1]!.y);
 }
 
 /**
@@ -596,6 +643,9 @@ export function paintScene(
   // line, versus a thin DASHED line for non-driving ties. The weight + dash encode
   // "driver" without relying on colour (WCAG 1.4.1), mirroring the bar criticality cue.
   // Two batched passes so each dash/width state is set once, not per edge.
+  // Lag runs (ADR-0052 M5) are collected during the edge passes but painted ABOVE the bars
+  // (layer 3.2) — an on-bar depiction under the bars would be invisible. Refresh-only.
+  let lagRuns: LagRun[] | null = null;
   if (scene.edges.length > 0) {
     // Time-true anchoring (ADR-0052 M1): the working-day walk is built once per frame from the
     // same predicate the non-working wash reads (memoised + horizon-bounded, so the per-edge cost
@@ -607,38 +657,81 @@ export function paintScene(
         ? makeWorkingDayWalk(scene.isWorkingDay)
         : ELAPSED_DAY_WALK
       : null;
-    const drawEdges = (driving: boolean): void => {
+    // Link visual refresh (ADR-0052 M5) — the SAME `visualRefresh` scene field M4 reads (ONE env
+    // flag, ONE flag-off parity gate): rounded elbows, deterministic fan-out of crowded bar-edge
+    // anchors (computed once per frame over the scene's edges — the same set this loop already
+    // iterates — so offsets never jitter while panning), the dashed lag-run depiction, and the
+    // incident-link highlight for the selection (persistent, keyboard/AT-reachable) + idle hover
+    // (transient). All inert when `visualRefresh` is off ⇒ byte-for-byte today's edge layer.
+    const refresh = scene.visualRefresh === true;
+    const fanOut = refresh ? computeEdgeFanOut(scene.edges) : null;
+    const highlightIds = refresh ? linkHighlightIds(scene.selectedId, scene.hoverId) : null;
+    if (refresh && workingWalk) lagRuns = [];
+    // The one per-edge geometry seam: flag-off it is exactly the M1 branch (time-true or legacy);
+    // refreshed it composes the SAME anchor mapping with the fan-out offsets + elbow shift, and
+    // collects the edge's lag run while the anchors are at hand.
+    const lineOf = (
+      edge: RenderEdge,
+      pred: RenderActivity,
+      succ: RenderActivity,
+    ): Point[] | null => {
+      if (!workingWalk) return dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
+      const walk = edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk;
+      const lag = edge.lagDays ?? 0;
+      if (!fanOut) {
+        return dependencyPolylineTimeTrue(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+      }
+      const anchors = lagAnchorPoints(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+      if (!anchors) return null;
+      const off = fanOut.get(edge);
+      if (lagRuns && lag !== 0) {
+        const run = lagRunSegment(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+        if (run) {
+          // The run rides the walked end's fan-out offset so it stays under its own anchor.
+          const dy = (edge.type === 'FS' || edge.type === 'FF' ? off?.succ : off?.pred) ?? 0;
+          lagRuns.push(
+            dy === 0
+              ? run
+              : {
+                  from: { x: run.from.x, y: run.from.y + dy },
+                  to: { x: run.to.x, y: run.to.y + dy },
+                },
+          );
+        }
+      }
+      const from =
+        off && off.pred !== 0 ? { x: anchors.pred.x, y: anchors.pred.y + off.pred } : anchors.pred;
+      const to =
+        off && off.succ !== 0 ? { x: anchors.succ.x, y: anchors.succ.y + off.succ } : anchors.succ;
+      return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0);
+    };
+    const drawEdges = (driving: boolean, highlighted = false): void => {
       const heads: [Point, Point, Point][] = [];
       ctx.beginPath();
       for (const edge of scene.edges) {
         if (edge.isDriving !== driving) continue;
+        // With a highlight active, the base passes skip incident edges and the highlight passes
+        // draw ONLY them (on top, restyled). No highlight ⇒ the predicate is never consulted.
+        if (highlightIds && edgeTouches(edge, highlightIds) !== highlighted) continue;
         if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
         const pred = byId.get(edge.predecessorId);
         const succ = byId.get(edge.successorId);
         if (!pred || !succ) continue;
-        const line = workingWalk
-          ? dependencyPolylineTimeTrue(
-              pred,
-              succ,
-              edge.type,
-              edge.lagDays ?? 0,
-              view,
-              scene.dataDate,
-              edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk,
-            )
-          : dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
+        const line = lineOf(edge, pred, succ);
         if (!line) continue;
-        drawPolyline(ctx, line);
+        if (refresh) drawRoundedPolyline(ctx, line);
+        else drawPolyline(ctx, line);
         if (workingWalk) {
           const head = arrowhead(line);
           if (head) heads.push(head);
         }
       }
       ctx.stroke();
-      // Arrowheads fill after the pass's stroke in one batched path. They share the edge colour —
-      // the driving cue stays the line weight + dash (WCAG 1.4.1), so no new colour is introduced.
+      // Arrowheads fill after the pass's stroke in one batched path. They share the pass's line
+      // colour (the edge colour; the selection colour on a highlight pass) — the driving cue
+      // stays the line weight + dash (WCAG 1.4.1), so no new colour is introduced.
       if (heads.length > 0) {
-        ctx.fillStyle = palette.edge;
+        ctx.fillStyle = highlighted ? palette.selection : palette.edge;
         ctx.beginPath();
         for (const [tip, left, right] of heads) {
           ctx.moveTo(tip.x, tip.y);
@@ -657,6 +750,22 @@ export function paintScene(
     ctx.lineWidth = 2;
     drawEdges(true); // driving: heavier, solid
     ctx.lineWidth = 1;
+    // Incident-link highlight passes (ADR-0052 M5): the selected/hovered bar's ties re-draw on
+    // top, one weight step heavier in the selection colour — a WEIGHT change with the colour, and
+    // each pass keeps its dash state, so neither the highlight nor the driving cue is colour-only
+    // (WCAG 1.4.1); the ring token clears the 3:1 non-text bar on the canvas ground (1.4.11).
+    // Selection is the keyboard/AT-reachable equivalent of the pointer hover (WCAG 2.1.1).
+    if (highlightIds) {
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      drawEdges(false, true); // highlighted non-driving: heavier, still dashed
+      ctx.setLineDash([]);
+      ctx.lineWidth = 3;
+      drawEdges(true, true); // highlighted driving: heaviest, solid
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = palette.edge;
+    }
   }
 
   // Layer 2.5: baseline ghost bars (the Baseline overlay lens, `docs/specs/canvas-lenses/`) — the
@@ -807,6 +916,25 @@ export function paintScene(
     if (scene.flaggedIds?.has(id)) {
       drawOverAllocationBadge(ctx, rect.x + rect.w, rect.y, palette);
     }
+  }
+
+  // Layer 3.2: lag-run depiction (ADR-0052 M5, refresh-only) — the horizontal stretch between a
+  // bar edge and its walked lag anchor, as a dashed hairline in the edge colour OVER the bar (the
+  // run is on-bar geometry; under the bars it would be invisible), so lag reads as waiting time.
+  // Batched into one stroke; collected during the edge passes, so it is O(visible lagged edges).
+  // `lagRuns` is only ever allocated under `visualRefresh` + time-true links ⇒ flag-off this whole
+  // block is skipped ⇒ byte-for-byte parity.
+  if (lagRuns && lagRuns.length > 0) {
+    ctx.strokeStyle = palette.edge;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(LAG_RUN_DASH as number[]);
+    ctx.beginPath();
+    for (const run of lagRuns) {
+      ctx.moveTo(run.from.x, run.from.y);
+      ctx.lineTo(run.to.x, run.to.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   // Layer 3.5: the TODAY marker — a dashed vertical in the destructive hue, above the bars and

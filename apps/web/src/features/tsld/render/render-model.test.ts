@@ -7,17 +7,25 @@ import {
   barGlyphKind,
   classifyHit,
   clampPxPerDay,
+  computeEdgeFanOut,
   cull,
+  edgeTouches,
+  elbowRadius,
   labelPlacement,
   lagAnchorDay,
   lagAnchorPoints,
   lagFromAnchorDay,
+  lagRunSegment,
+  linkHighlightIds,
   loeBracketRects,
   makeWorkingDayWalk,
   progressGeometry,
+  routeOrthogonal,
   summaryTabRects,
   truncateToWidth,
   ELAPSED_DAY_WALK,
+  FAN_OUT_MAX_PX,
+  FAN_OUT_STEP_PX,
   LABEL_INSIDE_MIN_PX,
   LABEL_BESIDE_MIN_PX,
   dayAtScreenX,
@@ -933,5 +941,199 @@ describe('barGlyphKind', () => {
     expect(barGlyphKind('LEVEL_OF_EFFORT')).toBe('loe');
     expect(barGlyphKind('HAMMOCK')).toBe('loe');
     expect(barGlyphKind('WBS_SUMMARY')).toBe('summary');
+  });
+});
+
+// ── Link visual refresh (ADR-0052 M5) ─────────────────────────────────────────────────────────────
+
+describe('elbowRadius (rounded link corners)', () => {
+  it('returns the target radius when both segments are long enough', () => {
+    expect(elbowRadius({ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 })).toBe(5);
+  });
+
+  it('clamps to half the shorter adjoining segment so adjacent arcs never overlap', () => {
+    expect(elbowRadius({ x: 0, y: 0 }, { x: 6, y: 0 }, { x: 6, y: 40 })).toBe(3);
+    expect(elbowRadius({ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 4 })).toBe(2);
+  });
+
+  it('returns 0 (a hard corner) for collinear segments — nothing to round', () => {
+    expect(elbowRadius({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 })).toBe(0);
+  });
+
+  it('returns 0 for a degenerate (zero-length) segment', () => {
+    expect(elbowRadius({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 0 })).toBe(0);
+    expect(elbowRadius({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 0 })).toBe(0);
+  });
+
+  it('honours a custom maximum', () => {
+    expect(elbowRadius({ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }, 2)).toBe(2);
+  });
+});
+
+describe('routeOrthogonal — elbow shift (fan-out de-crowding)', () => {
+  // pxPerDay 10 → gap = min(12, max(4, 10)) = 10. Different y so the L-route keeps its elbow.
+  const from = { x: 200, y: 60 };
+  const to = { x: 300, y: 120 };
+
+  it('keeps the legacy elbow byte-for-byte at the default shift of 0', () => {
+    expect(routeOrthogonal(from, to, 'FS', VIEW)).toEqual(routeOrthogonal(from, to, 'FS', VIEW, 0));
+    expect(routeOrthogonal(from, to, 'FS', VIEW)[1]!.x).toBe(210);
+  });
+
+  it('nudges the vertical elbow by the shift, away from the anchored edge', () => {
+    expect(routeOrthogonal(from, to, 'FS', VIEW, 3)[1]!.x).toBe(213);
+    expect(routeOrthogonal(from, to, 'SS', VIEW, 3)[1]!.x).toBe(200 - 10 - 3);
+    expect(routeOrthogonal(from, to, 'FF', VIEW, 3)[1]!.x).toBe(300 + 10 + 3);
+    expect(routeOrthogonal(from, to, 'SF', VIEW, 3)[1]!.x).toBe(250 + 3);
+  });
+
+  it('clamps the shift inside the gap so the elbow never cuts back across the bar edge', () => {
+    // gap 10 → the shift clamps to ±9: the FS elbow stays strictly right of the finish edge.
+    expect(routeOrthogonal(from, to, 'FS', VIEW, -20)[1]!.x).toBe(201);
+    expect(routeOrthogonal(from, to, 'FS', VIEW, 20)[1]!.x).toBe(219);
+  });
+});
+
+describe('computeEdgeFanOut (deterministic de-crowding)', () => {
+  const edge = (
+    id: string,
+    predecessorId: string,
+    successorId: string,
+    type: DependencyType = 'FS',
+  ): RenderEdge => ({ id, predecessorId, successorId, type, isDriving: false });
+
+  it('leaves an uncrowded zero-lag FS chain untouched (every group is a singleton)', () => {
+    const chain = [edge('e1', 'a', 'b'), edge('e2', 'b', 'c'), edge('e3', 'c', 'd')];
+    expect(computeEdgeFanOut(chain).size).toBe(0);
+  });
+
+  it('spreads a crowded bar edge symmetrically about the centreline, in edge-id order', () => {
+    const edges = [edge('e1', 'p', 's1'), edge('e2', 'p', 's2'), edge('e3', 'p', 's3')];
+    const out = computeEdgeFanOut(edges);
+    // Three FS ends share p's finish edge → −step / 0 / +step by id order; the middle edge (and
+    // every singleton successor end) carries no offset, so it is omitted from the map entirely.
+    expect(out.get(edges[0]!)).toEqual({ pred: -FAN_OUT_STEP_PX, succ: 0 });
+    expect(out.get(edges[1]!)).toBeUndefined();
+    expect(out.get(edges[2]!)).toEqual({ pred: FAN_OUT_STEP_PX, succ: 0 });
+  });
+
+  it('is stable across input-array permutations (same offset per edge id — no jitter)', () => {
+    const build = (ids: string[]): Map<string, { pred: number; succ: number }> => {
+      const edges = ids.map((id) => edge(id, 'p', `s-${id}`));
+      const out = computeEdgeFanOut(edges);
+      const byId = new Map<string, { pred: number; succ: number }>();
+      for (const e of edges) byId.set(e.id!, out.get(e) ?? { pred: 0, succ: 0 });
+      return byId;
+    };
+    const a = build(['e1', 'e2', 'e3', 'e4']);
+    const b = build(['e4', 'e2', 'e1', 'e3']);
+    const c = build(['e3', 'e4', 'e2', 'e1']);
+    expect(Object.fromEntries(b)).toEqual(Object.fromEntries(a));
+    expect(Object.fromEntries(c)).toEqual(Object.fromEntries(a));
+  });
+
+  it('caps the spread so a very crowded edge saturates instead of leaving the bar', () => {
+    const edges = Array.from({ length: 9 }, (_, i) => edge(`e${i}`, 'p', `s${i}`));
+    const out = computeEdgeFanOut(edges);
+    for (const e of edges) {
+      const off = out.get(e);
+      if (!off) continue;
+      expect(Math.abs(off.pred)).toBeLessThanOrEqual(FAN_OUT_MAX_PX);
+    }
+    // The extremes are clamped to exactly the cap.
+    expect(out.get(edges[0]!)!.pred).toBe(-FAN_OUT_MAX_PX);
+    expect(out.get(edges[8]!)!.pred).toBe(FAN_OUT_MAX_PX);
+  });
+
+  it('groups by the bar edge the type anchors to, mixing pred and succ ends', () => {
+    // X→B (FS) lands on B's START; B→Y (SS) departs B's START — the same bar edge, so both
+    // spread; B→Z (FS) departs B's FINISH — a different edge, so it stays centred.
+    const inbound = edge('a', 'x', 'b', 'FS');
+    const outboundSS = edge('b', 'b', 'y', 'SS');
+    const outboundFS = edge('c', 'b', 'z', 'FS');
+    const out = computeEdgeFanOut([inbound, outboundSS, outboundFS]);
+    expect(out.get(inbound)).toEqual({ pred: 0, succ: -FAN_OUT_STEP_PX / 2 });
+    expect(out.get(outboundSS)).toEqual({ pred: FAN_OUT_STEP_PX / 2, succ: 0 });
+    expect(out.get(outboundFS)).toBeUndefined();
+  });
+
+  it('orders id-less edges by their (pred, succ, type) triple — still deterministic', () => {
+    const e1: RenderEdge = { predecessorId: 'p', successorId: 's1', type: 'FS', isDriving: false };
+    const e2: RenderEdge = { predecessorId: 'p', successorId: 's2', type: 'FS', isDriving: false };
+    const a = computeEdgeFanOut([e1, e2]);
+    const b = computeEdgeFanOut([e2, e1]);
+    expect(a.get(e1)).toEqual(b.get(e1));
+    expect(a.get(e2)).toEqual(b.get(e2));
+    expect(a.get(e1)!.pred).toBeLessThan(a.get(e2)!.pred);
+  });
+});
+
+describe('lagRunSegment (the on-bar waiting-time depiction)', () => {
+  const walk = makeWorkingDayWalk(working);
+  // Pred days 0–2 (x 100–130) lane 0; a wide successor days 0–14 (x 100–250) lane 2.
+  const pred = activity({ id: 'p', earlyFinish: '2026-01-03', laneIndex: 0 });
+  const succ = activity({
+    id: 's',
+    earlyStart: '2026-01-01',
+    earlyFinish: '2026-01-15',
+    laneIndex: 2,
+  });
+
+  it('runs an SS lag from the predecessor start edge to its embedded anchor', () => {
+    const run = lagRunSegment(pred, succ, 'SS', 2, VIEW, DATA_DATE, walk)!;
+    const y = screenYOfLane(0, VIEW) + LANE_HEIGHT / 2;
+    expect(run).toEqual({ from: { x: 100, y }, to: { x: 120, y } });
+  });
+
+  it('runs an FS lag from the successor start edge to the constrained anchor on the bar', () => {
+    // Pred finishes day 2 → the lag departs day 3; +1 working day lands day 4 → x 140.
+    const run = lagRunSegment(pred, succ, 'FS', 1, VIEW, DATA_DATE, walk)!;
+    const y = screenYOfLane(2, VIEW) + LANE_HEIGHT / 2;
+    expect(run).toEqual({ from: { x: 100, y }, to: { x: 140, y } });
+  });
+
+  it('matches the drawn anchor exactly (shares the ONE forward mapping)', () => {
+    const anchors = lagAnchorPoints(pred, succ, 'SS', 3, VIEW, DATA_DATE, walk)!;
+    const run = lagRunSegment(pred, succ, 'SS', 3, VIEW, DATA_DATE, walk)!;
+    expect(run.to).toEqual(anchors.pred);
+  });
+
+  it('returns null when there is nothing to depict', () => {
+    // Zero lag: the anchor IS the edge.
+    expect(lagRunSegment(pred, succ, 'FS', 0, VIEW, DATA_DATE, walk)).toBeNull();
+    // The anchor clamps onto the edge: a successor starting after the constrained point.
+    const late = activity({
+      id: 'l',
+      earlyStart: '2026-01-11',
+      earlyFinish: '2026-01-15',
+      laneIndex: 2,
+    });
+    expect(lagRunSegment(pred, late, 'FS', 1, VIEW, DATA_DATE, walk)).toBeNull();
+    // Missing geometry.
+    const unscheduled = activity({ id: 'u', earlyStart: null, earlyFinish: null });
+    expect(lagRunSegment(unscheduled, succ, 'SS', 2, VIEW, DATA_DATE, walk)).toBeNull();
+    expect(lagRunSegment(pred, unscheduled, 'FS', 2, VIEW, DATA_DATE, walk)).toBeNull();
+  });
+});
+
+describe('linkHighlightIds / edgeTouches (incident-link highlight selection)', () => {
+  const e: RenderEdge = { predecessorId: 'p', successorId: 's', type: 'FS', isDriving: false };
+
+  it('returns null when neither selection nor hover is set (no highlight passes)', () => {
+    expect(linkHighlightIds(null, null)).toBeNull();
+    expect(linkHighlightIds(undefined, undefined)).toBeNull();
+  });
+
+  it('collects the selection (persistent) and the hover (transient) ids', () => {
+    expect([...linkHighlightIds('a', null)!]).toEqual(['a']);
+    expect([...linkHighlightIds(null, 'b')!]).toEqual(['b']);
+    expect([...linkHighlightIds('a', 'b')!].sort()).toEqual(['a', 'b']);
+    expect([...linkHighlightIds('a', 'a')!]).toEqual(['a']);
+  });
+
+  it('matches an edge touching either endpoint, and only those', () => {
+    expect(edgeTouches(e, new Set(['p']))).toBe(true);
+    expect(edgeTouches(e, new Set(['s']))).toBe(true);
+    expect(edgeTouches(e, new Set(['x']))).toBe(false);
   });
 });

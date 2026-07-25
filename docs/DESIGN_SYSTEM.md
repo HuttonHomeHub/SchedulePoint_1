@@ -254,6 +254,13 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   so the colour-mode lenses recolour whole glyphs and no one-off colour ever
   enters the canvas. Canvas palettes resolve once per theme bump
   (`use-theme-version.ts`), never per frame.
+- **TSLD canvas link refresh (ADR-0052 M5)** — the refreshed link layer adds
+  **no** palette entries: rounded elbows, fan-out and the dashed lag-run
+  depiction restyle shape only (the run strokes in the existing
+  `--color-muted-foreground` edge colour), and the incident-link
+  hover/selection highlight reuses the `--color-ring` selection colour at the
+  next line-weight step up, keeping each pass's dash state — the highlight and
+  the driving cue are weight + dash changes, never colour alone.
 
 ---
 

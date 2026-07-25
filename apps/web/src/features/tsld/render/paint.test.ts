@@ -1667,3 +1667,220 @@ describe('paintInteractionLayer — visual refresh + hover (ADR-0052 M4)', () =>
     expect(rounded.fillText.mock.calls[0]![0]).toBe('7d');
   });
 });
+
+// ── Link visual refresh (ADR-0052 M5, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ─────
+describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
+  // The synthetic week the time-true tests use: offsets 0–4 working, 5–6 not.
+  const isWorkingDay = (d: number): boolean => ((d % 7) + 7) % 7 < 5;
+  /** All decorative layers off so the recorded calls are the edges + bars alone. */
+  const quiet = {
+    dayGrid: false,
+    monthGrid: false,
+    yearGrid: false,
+    today: false,
+    nonWorking: false,
+    labels: false,
+    lateOverlay: false,
+  } as const;
+  const p = task({ id: 'p', laneIndex: 0 });
+  const s1 = task({ id: 's1', laneIndex: 1 });
+  const s2 = task({ id: 's2', laneIndex: 2 });
+  const s3 = task({ id: 's3', laneIndex: 3 });
+  const fs = (id: string, successorId: string, isDriving = false) =>
+    ({
+      id,
+      predecessorId: 'p',
+      successorId,
+      type: 'FS',
+      isDriving,
+      lagDays: 0,
+      lagCalendar: 'PROJECT_DEFAULT',
+    }) as const;
+  /** A crowded fan: three FS ties springing from p's finish edge, plus a lagged SS tie. */
+  const crowded = (over: Partial<TsldScene> = {}): TsldScene => ({
+    activities: [p, s1, s2, s3],
+    edges: [
+      fs('e1', 's1'),
+      fs('e2', 's2', true),
+      fs('e3', 's3'),
+      {
+        id: 'e4',
+        predecessorId: 'p',
+        successorId: 's2',
+        type: 'SS',
+        isDriving: false,
+        lagDays: 3,
+        lagCalendar: 'PROJECT_DEFAULT',
+      },
+    ],
+    dataDate: DATA_DATE,
+    view: quiet,
+    isWorkingDay,
+    ...over,
+  });
+  const refreshOn = (over: Partial<TsldScene> = {}): TsldScene =>
+    crowded({ timeTrueLinks: true, visualRefresh: true, ...over });
+
+  it('is byte-for-byte today’s paint on a CROWDED scene when the flag is off/absent/undefined', () => {
+    const base = recordingCtx();
+    paintScene(base.ctx, crowded({ selectedId: 'p' }), VIEW, SIZE, PALETTE);
+    const off = recordingCtx();
+    paintScene(
+      off.ctx,
+      crowded({ selectedId: 'p', timeTrueLinks: false, visualRefresh: false, hoverId: null }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const explicit = recordingCtx();
+    paintScene(
+      explicit.ctx,
+      crowded({
+        selectedId: 'p',
+        timeTrueLinks: undefined,
+        visualRefresh: undefined,
+        hoverId: undefined,
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // A hover id must be inert while the refresh is off — no highlight without the flag.
+    const hoverWhileOff = recordingCtx();
+    paintScene(
+      hoverWhileOff.ctx,
+      crowded({ selectedId: 'p', visualRefresh: false, hoverId: 's1' }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(off.log).toEqual(base.log);
+    expect(explicit.log).toEqual(base.log);
+    expect(hoverWhileOff.log).toEqual(base.log);
+  });
+
+  it('rounds the elbows with arcTo when available, and degrades to hard corners when not', () => {
+    const rounded = { ...mockCtx(), arcTo: vi.fn() };
+    paintScene(rounded, refreshOn(), VIEW, SIZE, PALETTE);
+    expect(rounded.arcTo).toHaveBeenCalled();
+    // Every arc radius is small and positive (clamped by the pure elbowRadius helper).
+    for (const call of rounded.arcTo.mock.calls) {
+      expect(call[4] as number).toBeGreaterThan(0);
+      expect(call[4] as number).toBeLessThanOrEqual(5);
+    }
+    // A minimal context (no arcTo) falls back to lineTo corners — never throws.
+    const square = mockCtx();
+    expect(() => paintScene(square, refreshOn(), VIEW, SIZE, PALETTE)).not.toThrow();
+    expect(square.lineTo).toHaveBeenCalled();
+  });
+
+  it('fans out crowded finish-edge anchors symmetrically and deterministically', () => {
+    // p's bar: x 72..120, lane-0 centre y 54. Three FS ends share the finish edge → the edge
+    // starts draw at 54 − 3 / 54 / 54 + 3 in edge-id order.
+    const startsAtFinishEdge = (scene: TsldScene): number[] => {
+      const ctx = mockCtx();
+      paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+      return ctx.moveTo.mock.calls
+        .filter((c) => c[0] === 120)
+        .map((c) => c[1] as number)
+        .sort((a, b) => a - b);
+    };
+    const ys = startsAtFinishEdge(refreshOn());
+    expect(ys).toEqual([51, 54, 57]);
+    // Deterministic across an input-order permutation: the same three anchors, regardless.
+    const permuted = refreshOn({
+      edges: [fs('e3', 's3'), fs('e1', 's1'), crowded().edges[3]!, fs('e2', 's2', true)],
+    });
+    expect(startsAtFinishEdge(permuted)).toEqual([51, 54, 57]);
+  });
+
+  it('leaves an uncrowded zero-lag FS tie exactly on the bar centreline (clean chains)', () => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      refreshOn({ edges: [fs('e1', 's1')], activities: [p, s1] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.moveTo.mock.calls.filter((c) => c[0] === 120)[0]![1]).toBe(54);
+  });
+
+  it('draws the lag run as a dashed hairline OVER the bars (the waiting-time depiction)', () => {
+    const { ctx, log } = recordingCtx();
+    // A single lagged SS tie: pred starts day 1 (x 72); +3 working days embed → day 4 (x 108).
+    paintScene(
+      ctx,
+      refreshOn({ edges: [crowded().edges[3]!], activities: [p, s2] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const dashAt = log.indexOf('setLineDash([[2,2]])');
+    expect(dashAt).toBeGreaterThan(-1);
+    expect(log.indexOf('moveTo([72,54])')).toBeGreaterThan(dashAt);
+    expect(log.indexOf('lineTo([108,54])')).toBeGreaterThan(dashAt);
+    // Painted after the bar bodies, so the run reads on the bar, not under it.
+    const lastBarFill = log.reduce((acc, e, i) => (e.startsWith('fillRect(') ? i : acc), -1);
+    expect(dashAt).toBeGreaterThan(lastBarFill);
+    // No new colour: the run strokes in the edge colour.
+    expect(log.lastIndexOf(`strokeStyle=${PALETTE.edge}`)).toBeGreaterThan(-1);
+  });
+
+  it('draws no lag runs on a zero-lag scene (nothing to depict, no stray dash state)', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(
+        r.ctx,
+        refreshOn({ edges: [fs('e1', 's1')], activities: [p, s1] }),
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      return r;
+    })();
+    expect(log).not.toContain('setLineDash([[2,2]])');
+  });
+
+  it('highlights the selected bar’s incident links persistently — heavier AND recoloured', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(r.ctx, refreshOn({ selectedId: 's1' }), VIEW, SIZE, PALETTE);
+      return r;
+    })();
+    // The incident non-driving tie re-draws in the selection colour at the next weight up,
+    // keeping its dash — a weight change with the colour, never colour alone (WCAG 1.4.1).
+    expect(log).toContain(`strokeStyle=${PALETTE.selection}`);
+    expect(log.filter((e) => e === 'setLineDash([[4,3]])').length).toBe(2); // base + highlight
+    // Non-incident ties still stroke in the base edge colour.
+    expect(log).toContain(`strokeStyle=${PALETTE.edge}`);
+  });
+
+  it('weights a highlighted DRIVING tie to 3px solid and tips it in the selection colour', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(r.ctx, refreshOn({ selectedId: 's2' }), VIEW, SIZE, PALETTE);
+      return r;
+    })();
+    expect(log).toContain('lineWidth=3');
+    // The highlighted driving tie's arrowhead fills in the selection colour, batched like M1.
+    expect(log).toContain(`fillStyle=${PALETTE.selection}`);
+  });
+
+  it('highlights transiently from the hovered bar id (the pointer twin of selection)', () => {
+    const hover = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(r.ctx, refreshOn({ hoverId: 's1' }), VIEW, SIZE, PALETTE);
+      return r;
+    })();
+    expect(hover.log).toContain(`strokeStyle=${PALETTE.selection}`);
+    // No selection, no hover ⇒ no highlight pass at all (the selection colour never appears —
+    // there is no ring either, since nothing is selected).
+    const idle = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(r.ctx, refreshOn(), VIEW, SIZE, PALETTE);
+      return r;
+    })();
+    expect(idle.log.some((e) => e === `strokeStyle=${PALETTE.selection}`)).toBe(false);
+  });
+});

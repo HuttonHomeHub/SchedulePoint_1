@@ -318,20 +318,31 @@ export function dependencyPolyline(
 /**
  * The shared orthogonal routing between two edge anchors — extracted so the legacy extreme-end
  * routing and the time-true anchor routing (ADR-0052) can never disagree on the line's shape.
+ * Exported for the painter's refreshed link path (ADR-0052 M5), which composes it directly with
+ * fanned-out anchors. `elbowShift` nudges the vertical elbow sideways so crowded parallel edges
+ * don't collapse onto one vertical run; it is clamped inside the gap so the elbow never cuts
+ * back across the anchored bar edge, and the default `0` keeps the legacy shape byte-for-byte.
  */
-function routeOrthogonal(from: Point, to: Point, type: DependencyType, view: Viewport): Point[] {
+export function routeOrthogonal(
+  from: Point,
+  to: Point,
+  type: DependencyType,
+  view: Viewport,
+  elbowShift = 0,
+): Point[] {
   if (from.y === to.y) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
   const gap = Math.min(12, Math.max(4, view.pxPerDay));
+  const shift = elbowShift === 0 ? 0 : Math.max(-(gap - 1), Math.min(gap - 1, elbowShift));
   const elbow =
     type === 'FS'
-      ? from.x + gap
+      ? from.x + gap + shift
       : type === 'SS'
-        ? Math.min(from.x, to.x) - gap
+        ? Math.min(from.x, to.x) - gap - shift
         : type === 'FF'
-          ? Math.max(from.x, to.x) + gap
-          : (from.x + to.x) / 2; // SF
+          ? Math.max(from.x, to.x) + gap + shift
+          : (from.x + to.x) / 2 + shift; // SF
   return [from, { x: elbow, y: from.y }, { x: elbow, y: to.y }, to];
 }
 
@@ -571,6 +582,162 @@ export function arrowhead(
     ];
   }
   return null;
+}
+
+// ── Link visual refresh (ADR-0052 M5, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ──
+
+/** Target corner radius (px) of a refreshed link elbow — small, so the line reads as routed
+ * wiring (softened, not curved). Clamped per corner to half the adjoining segment lengths. */
+export const LINK_ELBOW_RADIUS = 5;
+
+/**
+ * The rounded-corner radius to draw at polyline vertex `b` between segments `a→b` and `b→c`
+ * (ADR-0052 M5): the target radius clamped to **half** of each adjoining segment, so two corners
+ * sharing a segment can never overlap their arcs, and `0` (a hard corner / plain lineTo) for a
+ * degenerate or collinear vertex where no turn exists. Pure — the painter feeds it to `arcTo`.
+ */
+export function elbowRadius(a: Point, b: Point, c: Point, max = LINK_ELBOW_RADIUS): number {
+  const inLen = Math.hypot(b.x - a.x, b.y - a.y);
+  const outLen = Math.hypot(c.x - b.x, c.y - b.y);
+  if (inLen === 0 || outLen === 0) return 0;
+  // No turn (the cross product vanishes for collinear segments) → nothing to round.
+  if ((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x) === 0) return 0;
+  return Math.min(max, inLen / 2, outLen / 2);
+}
+
+/** Vertical spacing (px) between fanned-out edge ends sharing a bar edge — small, so the spread
+ * stays inside the bar's half-height and reads as separation, not displacement. */
+export const FAN_OUT_STEP_PX = 3;
+/** Cap (px) on a fan-out offset: a very crowded bar edge saturates rather than spilling the
+ * anchors off the bar (BAR_HEIGHT/2 = 9px; ±6 keeps every anchor visibly on it). */
+export const FAN_OUT_MAX_PX = 6;
+
+/** The signed vertical offsets (px) a fanned-out edge applies at each of its two ends. */
+export interface FanOutOffsets {
+  pred: number;
+  succ: number;
+}
+
+/**
+ * Deterministic fan-out for crowded bar edges (ADR-0052 M5): when several relationship ends
+ * attach to the SAME bar edge (e.g. many FS successors springing from one finish, or many
+ * predecessors landing on one start), spread them vertically by {@link FAN_OUT_STEP_PX}, centred
+ * on the bar's centreline and capped at ±{@link FAN_OUT_MAX_PX}, so the links don't overdraw
+ * into one unreadable bundle. Ends group by the bar edge their type anchors to (FS/FF pred ends
+ * at the predecessor's finish, SS/SF at its start; FS/SS succ ends at the successor's start,
+ * FF/SF at its finish — the same mapping the anchors use), and members order by **edge id**
+ * (falling back to the `(pred, succ, type)` triple for id-less edges), so the layout is stable
+ * across frames AND across input-array permutations — no jitter, ever. A group of one gets no
+ * offset (and is omitted from the map), so an uncrowded diagram — the common zero-lag FS chain —
+ * is byte-for-byte unmoved. O(edges) grouping + a per-group sort; one map per frame.
+ */
+export function computeEdgeFanOut(
+  edges: readonly RenderEdge[],
+): ReadonlyMap<RenderEdge, FanOutOffsets> {
+  const keyOf = (e: RenderEdge): string => e.id ?? `${e.predecessorId} ${e.successorId} ${e.type}`;
+  const groups = new Map<string, { edge: RenderEdge; end: 'pred' | 'succ' }[]>();
+  const add = (groupKey: string, edge: RenderEdge, end: 'pred' | 'succ'): void => {
+    const members = groups.get(groupKey);
+    if (members) members.push({ edge, end });
+    else groups.set(groupKey, [{ edge, end }]);
+  };
+  for (const edge of edges) {
+    add(
+      `${edge.predecessorId}:${edge.type === 'FS' || edge.type === 'FF' ? 'F' : 'S'}`,
+      edge,
+      'pred',
+    );
+    add(
+      `${edge.successorId}:${edge.type === 'FS' || edge.type === 'SS' ? 'S' : 'F'}`,
+      edge,
+      'succ',
+    );
+  }
+  const offsets = new Map<RenderEdge, FanOutOffsets>();
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    members.sort((x, y) => {
+      const kx = keyOf(x.edge);
+      const ky = keyOf(y.edge);
+      return kx < ky ? -1 : kx > ky ? 1 : 0;
+    });
+    const mid = (members.length - 1) / 2;
+    for (let i = 0; i < members.length; i += 1) {
+      const raw = (i - mid) * FAN_OUT_STEP_PX;
+      const off = Math.max(-FAN_OUT_MAX_PX, Math.min(FAN_OUT_MAX_PX, raw));
+      if (off === 0) continue;
+      const member = members[i]!;
+      const current = offsets.get(member.edge) ?? { pred: 0, succ: 0 };
+      current[member.end] = off;
+      offsets.set(member.edge, current);
+    }
+  }
+  return offsets;
+}
+
+/** A lag run: the horizontal on-bar segment between a bar edge and its walked lag anchor. */
+export interface LagRun {
+  from: Point;
+  to: Point;
+}
+
+/**
+ * The **lag run** for a lagged relationship (ADR-0052 M5): the horizontal segment between the
+ * walked end's zero-lag bar edge and its time-true anchor — the stretch of bar the lag "waits"
+ * across (the GPM embed for SS/SF; the pre-constraint portion of the successor for FS/FF). The
+ * painter draws it as a subtle dashed hairline over the bar so lag reads as waiting time, not
+ * just displacement. Null when there is nothing to depict: zero lag, the anchor clamped/landing
+ * exactly on the edge, or missing geometry. Shares {@link lagAnchorPoints} (the ONE forward
+ * mapping), so the run can never disagree with where the anchor is drawn.
+ */
+export function lagRunSegment(
+  predecessor: RenderActivity,
+  successor: RenderActivity,
+  type: DependencyType,
+  lagDays: number,
+  view: Viewport,
+  dataDateIso: string,
+  walk: DayWalk,
+): LagRun | null {
+  if (lagDays === 0) return null;
+  const anchors = lagAnchorPoints(predecessor, successor, type, lagDays, view, dataDateIso, walk);
+  if (!anchors) return null;
+  if (type === 'FS' || type === 'FF') {
+    // The walked (offset) end is the successor's; its zero-lag edge is the constrained one.
+    const rect = activityRect(successor, view, dataDateIso);
+    if (!rect) return null;
+    const edgeX = type === 'FS' ? rect.x : rect.x + rect.w;
+    if (anchors.succ.x === edgeX) return null;
+    return { from: { x: edgeX, y: anchors.succ.y }, to: anchors.succ };
+  }
+  // SS/SF embed along the predecessor from its start edge.
+  const rect = activityRect(predecessor, view, dataDateIso);
+  if (!rect) return null;
+  if (anchors.pred.x === rect.x) return null;
+  return { from: { x: rect.x, y: anchors.pred.y }, to: anchors.pred };
+}
+
+/**
+ * The activity ids whose incident links the painter highlights (ADR-0052 M5): the persistent
+ * **selection** (the keyboard/AT-reachable state — WCAG 2.1.1) plus the transient idle **hover**
+ * (editing surfaces only, published like the M4 hover ring). Null when neither is set, so the
+ * painter skips the highlight passes entirely on an idle scene.
+ */
+export function linkHighlightIds(
+  selectedId: string | null | undefined,
+  hoverId: string | null | undefined,
+): ReadonlySet<string> | null {
+  if (!selectedId && !hoverId) return null;
+  const ids = new Set<string>();
+  if (selectedId) ids.add(selectedId);
+  if (hoverId) ids.add(hoverId);
+  return ids;
+}
+
+/** True when the edge touches (is incident to) any of the highlight ids — the pure predicate the
+ * painter partitions its edge passes with (ADR-0052 M5). */
+export function edgeTouches(edge: RenderEdge, ids: ReadonlySet<string>): boolean {
+  return ids.has(edge.predecessorId) || ids.has(edge.successorId);
 }
 
 // ── Bar visual refresh (ADR-0052 M4, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ────────────

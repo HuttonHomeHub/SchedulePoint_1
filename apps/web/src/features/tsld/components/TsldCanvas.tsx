@@ -498,6 +498,13 @@ export function TsldCanvas({
   // and drawn as the hover ring on the interaction layer. Flag-off it is never written, so the
   // overlay stays byte-for-byte today's (the parity gate).
   const hoverRef = useRef<Rect | null>(null);
+  // The idle-hovered bar's id (ADR-0052 M5): published from the SAME classify as the hover rect
+  // above, but into the SCENE (`TsldScene.hoverId`) — the base edge layer draws that bar's
+  // incident links transiently highlighted, the pointer twin of the persistent selection
+  // highlight (which stays the keyboard/AT-reachable equivalent, WCAG 2.1.1). A scene repaint is
+  // marked only when the hovered BAR changes (never per move — the same discipline as the ring).
+  // Flag-off the branch never runs, so the scene stays byte-for-byte today's (the parity gate).
+  const hoverIdRef = useRef<string | null>(null);
   const pendingRef = useRef<PendingGhost | null>(pending);
   // Read by the window key listener (set up once), so it sees the current mode/handler.
   const modeRef = useRef(mode);
@@ -536,6 +543,8 @@ export function TsldCanvas({
     // The M4 bar visual refresh rides the SAME env flag (one flag, one flag-off parity gate);
     // its own scene field keeps the two render changes independently testable in the painter.
     visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+    // M5 hover-driven incident-link highlight — null until the idle-hover branch publishes.
+    hoverId: null,
   });
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
@@ -579,6 +588,10 @@ export function TsldCanvas({
       flaggedIds,
       timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
       visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+      // Preserve the live hover highlight across a data/selection rebuild (M5) — the pointer
+      // hasn't moved, so the hovered bar's ties should not flicker off. Flag-off this is
+      // always null (the branch that writes it never runs), keeping the scene byte-identical.
+      hoverId: hoverIdRef.current,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
@@ -1198,6 +1211,15 @@ export function TsldCanvas({
                 hoverRef.current = rect;
                 interactionDirtyRef.current = true;
               }
+              // Incident-link hover highlight (ADR-0052 M5): the hovered bar's id rides the
+              // SCENE so the base edge layer restyles its ties — a scene repaint per hovered-BAR
+              // change (the same cost as a selection change), never per pointer move.
+              const hoverId = hoveredActivity?.id ?? null;
+              if (hoverId !== hoverIdRef.current) {
+                hoverIdRef.current = hoverId;
+                sceneRef.current = { ...sceneRef.current, hoverId };
+                dirtyRef.current = true;
+              }
             }
             return;
           }
@@ -1264,6 +1286,12 @@ export function TsldCanvas({
           if (hoverRef.current !== null) {
             hoverRef.current = null;
             interactionDirtyRef.current = true;
+          }
+          // …and the transient incident-link highlight with it (M5) — same no-op flag-off.
+          if (hoverIdRef.current !== null) {
+            hoverIdRef.current = null;
+            sceneRef.current = { ...sceneRef.current, hoverId: null };
+            dirtyRef.current = true;
           }
         }}
         onPointerCancel={() => {
