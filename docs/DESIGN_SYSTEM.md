@@ -244,6 +244,23 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   When adding on-canvas text, always pair it with the fill's `*-foreground` token
   rather than picking a raw colour, and keep the identity consistent with the
   activity's accessible name (one shared builder — WCAG 2.5.3).
+- **TSLD canvas bar refresh (ADR-0052 M4)** — the refreshed bar layer adds only
+  two palette entries, both existing tokens: `--color-border` as the calm
+  hairline bar-definition stroke and `--color-muted-foreground` as the idle
+  hover ring (distinct from the `--color-ring` selection). Everything else
+  derives: the in-bar **progress band + front divider** draw in the bar's
+  paired `*-foreground` label ink (or the Colour-by `barInk` override), and the
+  LOE-bracket / WBS-summary glyph caps draw in the bar's own resolved fill —
+  so the colour-mode lenses recolour whole glyphs and no one-off colour ever
+  enters the canvas. Canvas palettes resolve once per theme bump
+  (`use-theme-version.ts`), never per frame.
+- **TSLD canvas link refresh (ADR-0052 M5)** — the refreshed link layer adds
+  **no** palette entries: rounded elbows, fan-out and the dashed lag-run
+  depiction restyle shape only (the run strokes in the existing
+  `--color-muted-foreground` edge colour), and the incident-link
+  hover/selection highlight reuses the `--color-ring` selection colour at the
+  next line-weight step up, keeping each pass's dash state — the highlight and
+  the driving cue are weight + dash changes, never colour alone.
 
 ---
 

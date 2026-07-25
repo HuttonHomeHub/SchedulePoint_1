@@ -9,7 +9,11 @@
  */
 import type { ColourLegend, ColourMode } from '../render/lenses';
 
-import { CANVAS_RESOURCE_VIEW_ENABLED, SCHEDULING_MODES_ENABLED } from '@/config/env';
+import {
+  CANVAS_DIRECT_MANIPULATION_ENABLED,
+  CANVAS_RESOURCE_VIEW_ENABLED,
+  SCHEDULING_MODES_ENABLED,
+} from '@/config/env';
 import { cn } from '@/lib/utils';
 
 type LegendItem =
@@ -20,6 +24,10 @@ type LegendItem =
   | { label: string; conflict: true }
   | { label: string; overlap: true }
   | { label: string; overAllocation: true }
+  | { label: string; loe: true }
+  | { label: string; summary: true }
+  | { label: string; progress: true }
+  | { label: string; lag: true }
   | { label: string; text: true };
 
 /** The Critical / Near-critical / On-schedule colour key (the default, criticality-mode fills). */
@@ -67,6 +75,18 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // successor's start; a non-driving link (thin dashed) carries slack (M3).
   { label: 'Driving link', line: 'solid' },
   { label: 'Non-driving link', line: 'dashed' },
+  // The M4/M5 visual-refresh shape vocabulary (ADR-0052, behind `VITE_CANVAS_DIRECT_MANIPULATION`):
+  // the LOE bracketed span, the WBS-summary bracket/tab glyph, the in-bar progress band, and the
+  // dashed lag (waiting-time) run — all shape cues, never colour alone (WCAG 1.4.1). Flag-off the
+  // legend renders byte-identically (the parity gate).
+  ...(CANVAS_DIRECT_MANIPULATION_ENABLED
+    ? [
+        { label: 'Level of effort', loe: true } as const,
+        { label: 'WBS summary', summary: true } as const,
+        { label: 'Progress', progress: true } as const,
+        { label: 'Lag (waiting time)', lag: true } as const,
+      ]
+    : []),
   // Visual-Planning conflict cue (ADR-0033) — an outlined warning triangle on a bar placed before its
   // earliest feasible start. Only meaningful under scheduling modes, so listed only when enabled.
   ...(SCHEDULING_MODES_ENABLED ? [{ label: 'Visual conflict', conflict: true } as const] : []),
@@ -227,6 +247,88 @@ export function TsldLegend({
                   }}
                 />
               ))}
+            </span>
+          ) : 'loe' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
+              {/* Bracketed span: end caps overhanging a slim bar, matching the canvas LOE glyph
+                  (drawn in the bar's own fill on the canvas — the primary fill by default). */}
+              <span
+                className="absolute inset-x-0 top-1/2 -translate-y-1/2"
+                style={{ height: 4, backgroundColor: 'var(--color-primary)' }}
+              />
+              <span
+                className="absolute inset-y-0 left-0"
+                style={{ width: 2, backgroundColor: 'var(--color-primary)' }}
+              />
+              <span
+                className="absolute inset-y-0 right-0"
+                style={{ width: 2, backgroundColor: 'var(--color-primary)' }}
+              />
+            </span>
+          ) : 'summary' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5">
+              {/* Summary bracket: a top bar with downward end tabs, matching the canvas
+                  WBS-summary glyph. */}
+              <span
+                className="absolute inset-x-0 top-0"
+                style={{ height: 4, backgroundColor: 'var(--color-primary)' }}
+              />
+              <span
+                className="absolute left-0"
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--color-primary)' }}
+              />
+              <span
+                className="absolute right-0"
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--color-primary)' }}
+              />
+            </span>
+          ) : 'progress' in item ? (
+            <span
+              aria-hidden="true"
+              className="relative inline-block h-3 w-5 rounded-sm"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {/* The in-bar progress band + front divider along the bar bottom, in the fill's
+                  paired ink — matching the canvas progress depiction. */}
+              <span
+                className="absolute"
+                style={{
+                  left: 1,
+                  bottom: 1,
+                  width: 9,
+                  height: 3,
+                  backgroundColor: 'var(--color-primary-foreground)',
+                }}
+              />
+              <span
+                className="absolute"
+                style={{
+                  left: 11,
+                  bottom: 1,
+                  width: 1,
+                  height: 3,
+                  backgroundColor: 'var(--color-primary-foreground)',
+                }}
+              />
+            </span>
+          ) : 'lag' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
+              {/* A bar edge with the dotted waiting-time run leading from it, matching the canvas
+                  lag-run depiction (a tighter dash than the non-driving link's). */}
+              <span
+                className="absolute top-1/2 left-0 -translate-y-1/2"
+                style={{ width: 6, height: 8, backgroundColor: 'var(--color-primary)' }}
+              />
+              <span
+                className="absolute top-1/2 -translate-y-1/2"
+                style={{
+                  left: 7,
+                  width: 13,
+                  borderTopWidth: 1.5,
+                  borderTopStyle: 'dotted',
+                  borderTopColor: 'var(--color-muted-foreground)',
+                }}
+              />
             </span>
           ) : 'line' in item ? (
             <span aria-hidden="true" className="inline-flex h-3 w-5 items-center">

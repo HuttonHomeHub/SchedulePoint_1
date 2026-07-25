@@ -103,6 +103,11 @@ describe('toRenderActivities', () => {
     ).toBe('A1020 Erect steel · 5d');
   });
 
+  it('threads percentComplete through — the in-bar progress fill (ADR-0052 M4) reads the same value the row reports', () => {
+    expect(toRenderActivities([activity({ percentComplete: 40 })])[0]!.percentComplete).toBe(40);
+    expect(toRenderActivities([activity()])[0]!.percentComplete).toBe(0);
+  });
+
   it('derives the constraint anchor from the kind — only when type AND date are both present', () => {
     // Start-anchored kind → 'start'.
     expect(

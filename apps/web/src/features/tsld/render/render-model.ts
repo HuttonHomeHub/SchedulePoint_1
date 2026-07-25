@@ -98,6 +98,10 @@ export interface RenderActivity {
    * mapping seam so the render model stays free of constraint-kind logic (ADR-0026 D8,
    * module structure — the pure render model reads no domain enums). */
   constraint?: ConstraintAnchor | null;
+  /** Schedule % complete (0–100), the same value the row/AT reports — drawn as the in-bar
+   * progress fill under the visual refresh (ADR-0052 M4). Optional so legacy callers/fixtures
+   * stay valid; absent (or 0) draws no progress detail. */
+  percentComplete?: number;
 }
 
 /** A directed dependency edge (predecessor → successor) by activity id. */
@@ -314,20 +318,31 @@ export function dependencyPolyline(
 /**
  * The shared orthogonal routing between two edge anchors — extracted so the legacy extreme-end
  * routing and the time-true anchor routing (ADR-0052) can never disagree on the line's shape.
+ * Exported for the painter's refreshed link path (ADR-0052 M5), which composes it directly with
+ * fanned-out anchors. `elbowShift` nudges the vertical elbow sideways so crowded parallel edges
+ * don't collapse onto one vertical run; it is clamped inside the gap so the elbow never cuts
+ * back across the anchored bar edge, and the default `0` keeps the legacy shape byte-for-byte.
  */
-function routeOrthogonal(from: Point, to: Point, type: DependencyType, view: Viewport): Point[] {
+export function routeOrthogonal(
+  from: Point,
+  to: Point,
+  type: DependencyType,
+  view: Viewport,
+  elbowShift = 0,
+): Point[] {
   if (from.y === to.y) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
   const gap = Math.min(12, Math.max(4, view.pxPerDay));
+  const shift = elbowShift === 0 ? 0 : Math.max(-(gap - 1), Math.min(gap - 1, elbowShift));
   const elbow =
     type === 'FS'
-      ? from.x + gap
+      ? from.x + gap + shift
       : type === 'SS'
-        ? Math.min(from.x, to.x) - gap
+        ? Math.min(from.x, to.x) - gap - shift
         : type === 'FF'
-          ? Math.max(from.x, to.x) + gap
-          : (from.x + to.x) / 2; // SF
+          ? Math.max(from.x, to.x) + gap + shift
+          : (from.x + to.x) / 2 + shift; // SF
   return [from, { x: elbow, y: from.y }, { x: elbow, y: to.y }, to];
 }
 
@@ -567,6 +582,266 @@ export function arrowhead(
     ];
   }
   return null;
+}
+
+// ── Link visual refresh (ADR-0052 M5, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ──
+
+/** Target corner radius (px) of a refreshed link elbow — small, so the line reads as routed
+ * wiring (softened, not curved). Clamped per corner to half the adjoining segment lengths. */
+export const LINK_ELBOW_RADIUS = 5;
+
+/**
+ * The rounded-corner radius to draw at polyline vertex `b` between segments `a→b` and `b→c`
+ * (ADR-0052 M5): the target radius clamped to **half** of each adjoining segment, so two corners
+ * sharing a segment can never overlap their arcs, and `0` (a hard corner / plain lineTo) for a
+ * degenerate or collinear vertex where no turn exists. Pure — the painter feeds it to `arcTo`.
+ */
+export function elbowRadius(a: Point, b: Point, c: Point, max = LINK_ELBOW_RADIUS): number {
+  const inLen = Math.hypot(b.x - a.x, b.y - a.y);
+  const outLen = Math.hypot(c.x - b.x, c.y - b.y);
+  if (inLen === 0 || outLen === 0) return 0;
+  // No turn (the cross product vanishes for collinear segments) → nothing to round.
+  if ((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x) === 0) return 0;
+  return Math.min(max, inLen / 2, outLen / 2);
+}
+
+/** Vertical spacing (px) between fanned-out edge ends sharing a bar edge — small, so the spread
+ * stays inside the bar's half-height and reads as separation, not displacement. */
+export const FAN_OUT_STEP_PX = 3;
+/** Cap (px) on a fan-out offset: a very crowded bar edge saturates rather than spilling the
+ * anchors off the bar (BAR_HEIGHT/2 = 9px; ±6 keeps every anchor visibly on it). */
+export const FAN_OUT_MAX_PX = 6;
+
+/** The signed vertical offsets (px) a fanned-out edge applies at each of its two ends. */
+export interface FanOutOffsets {
+  pred: number;
+  succ: number;
+}
+
+/**
+ * Deterministic fan-out for crowded bar edges (ADR-0052 M5): when several relationship ends
+ * attach to the SAME bar edge (e.g. many FS successors springing from one finish, or many
+ * predecessors landing on one start), spread them vertically by {@link FAN_OUT_STEP_PX}, centred
+ * on the bar's centreline and capped at ±{@link FAN_OUT_MAX_PX}, so the links don't overdraw
+ * into one unreadable bundle. Ends group by the bar edge their type anchors to (FS/FF pred ends
+ * at the predecessor's finish, SS/SF at its start; FS/SS succ ends at the successor's start,
+ * FF/SF at its finish — the same mapping the anchors use), and members order by **edge id**
+ * (falling back to the `(pred, succ, type)` triple for id-less edges), so the layout is stable
+ * across frames AND across input-array permutations — no jitter, ever. A group of one gets no
+ * offset (and is omitted from the map), so an uncrowded diagram — the common zero-lag FS chain —
+ * is byte-for-byte unmoved. O(edges) grouping + a per-group sort; one map per frame.
+ */
+export function computeEdgeFanOut(
+  edges: readonly RenderEdge[],
+): ReadonlyMap<RenderEdge, FanOutOffsets> {
+  const keyOf = (e: RenderEdge): string =>
+    e.id ?? `${e.predecessorId}\u0000${e.successorId}\u0000${e.type}`;
+  const groups = new Map<string, { edge: RenderEdge; end: 'pred' | 'succ' }[]>();
+  const add = (groupKey: string, edge: RenderEdge, end: 'pred' | 'succ'): void => {
+    const members = groups.get(groupKey);
+    if (members) members.push({ edge, end });
+    else groups.set(groupKey, [{ edge, end }]);
+  };
+  for (const edge of edges) {
+    add(
+      `${edge.predecessorId}:${edge.type === 'FS' || edge.type === 'FF' ? 'F' : 'S'}`,
+      edge,
+      'pred',
+    );
+    add(
+      `${edge.successorId}:${edge.type === 'FS' || edge.type === 'SS' ? 'S' : 'F'}`,
+      edge,
+      'succ',
+    );
+  }
+  const offsets = new Map<RenderEdge, FanOutOffsets>();
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    members.sort((x, y) => {
+      const kx = keyOf(x.edge);
+      const ky = keyOf(y.edge);
+      return kx < ky ? -1 : kx > ky ? 1 : 0;
+    });
+    const mid = (members.length - 1) / 2;
+    for (let i = 0; i < members.length; i += 1) {
+      const raw = (i - mid) * FAN_OUT_STEP_PX;
+      const off = Math.max(-FAN_OUT_MAX_PX, Math.min(FAN_OUT_MAX_PX, raw));
+      if (off === 0) continue;
+      const member = members[i]!;
+      const current = offsets.get(member.edge) ?? { pred: 0, succ: 0 };
+      current[member.end] = off;
+      offsets.set(member.edge, current);
+    }
+  }
+  return offsets;
+}
+
+/** A lag run: the horizontal on-bar segment between a bar edge and its walked lag anchor. */
+export interface LagRun {
+  from: Point;
+  to: Point;
+}
+
+/**
+ * The **lag run** for a lagged relationship (ADR-0052 M5): the horizontal segment between the
+ * walked end's zero-lag bar edge and its time-true anchor — the stretch of bar the lag "waits"
+ * across (the GPM embed for SS/SF; the pre-constraint portion of the successor for FS/FF). The
+ * painter draws it as a subtle dashed hairline over the bar so lag reads as waiting time, not
+ * just displacement. Null when there is nothing to depict: zero lag, the anchor clamped/landing
+ * exactly on the edge, or missing geometry. Shares {@link lagAnchorPoints} (the ONE forward
+ * mapping), so the run can never disagree with where the anchor is drawn.
+ */
+export function lagRunSegment(
+  predecessor: RenderActivity,
+  successor: RenderActivity,
+  type: DependencyType,
+  lagDays: number,
+  view: Viewport,
+  dataDateIso: string,
+  walk: DayWalk,
+): LagRun | null {
+  if (lagDays === 0) return null;
+  const anchors = lagAnchorPoints(predecessor, successor, type, lagDays, view, dataDateIso, walk);
+  if (!anchors) return null;
+  if (type === 'FS' || type === 'FF') {
+    // The walked (offset) end is the successor's; its zero-lag edge is the constrained one.
+    const rect = activityRect(successor, view, dataDateIso);
+    if (!rect) return null;
+    const edgeX = type === 'FS' ? rect.x : rect.x + rect.w;
+    if (anchors.succ.x === edgeX) return null;
+    return { from: { x: edgeX, y: anchors.succ.y }, to: anchors.succ };
+  }
+  // SS/SF embed along the predecessor from its start edge.
+  const rect = activityRect(predecessor, view, dataDateIso);
+  if (!rect) return null;
+  if (anchors.pred.x === rect.x) return null;
+  return { from: { x: rect.x, y: anchors.pred.y }, to: anchors.pred };
+}
+
+/**
+ * The activity ids whose incident links the painter highlights (ADR-0052 M5): the persistent
+ * **selection** (the keyboard/AT-reachable state — WCAG 2.1.1) plus the transient idle **hover**
+ * (editing surfaces only, published like the M4 hover ring). Null when neither is set, so the
+ * painter skips the highlight passes entirely on an idle scene.
+ */
+export function linkHighlightIds(
+  selectedId: string | null | undefined,
+  hoverId: string | null | undefined,
+): ReadonlySet<string> | null {
+  if (!selectedId && !hoverId) return null;
+  const ids = new Set<string>();
+  if (selectedId) ids.add(selectedId);
+  if (hoverId) ids.add(hoverId);
+  return ids;
+}
+
+/** True when the edge touches (is incident to) any of the highlight ids — the pure predicate the
+ * painter partitions its edge passes with (ADR-0052 M5). */
+export function edgeTouches(edge: RenderEdge, ids: ReadonlySet<string>): boolean {
+  return ids.has(edge.predecessorId) || ids.has(edge.successorId);
+}
+
+// ── Bar visual refresh (ADR-0052 M4, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ────────────
+
+/** Corner radius (px) of a refreshed task bar — subtle at BAR_HEIGHT 18, so the bar reads
+ * "softened", not "pill". The selection/hover rings add 2 so their curve tracks the bar's. */
+export const BAR_RADIUS = 3;
+
+/** Outline width (px) of the refreshed critical/near-critical emphasis stroke — heavier than the
+ * legacy 1.5 so the critical path pops against the calmer hairline-stroked normal bars. The
+ * solid-vs-dashed dash cue is unchanged (WCAG 1.4.1 — never colour/weight alone). */
+export const EMPHASIS_STROKE_W = 2;
+
+/** Height (px) of the in-bar progress band (the completed portion), inset along the bar bottom. */
+export const PROGRESS_BAND_H = 4;
+/** Inset (px) of the progress band from the bar's left/right/bottom edges (shape-bounded). */
+export const PROGRESS_INSET_PX = 2;
+/** Bars narrower than this (px) draw no progress detail — it would be a sub-pixel smear. */
+export const PROGRESS_MIN_BAR_PX = 12;
+/** Below this px-per-day the progress band is culled, mirroring the label LOD gate. */
+export const PROGRESS_MIN_PX_PER_DAY = LABEL_MIN_PX_PER_DAY;
+
+/** The in-bar progress geometry: the completed band plus the divider x at the progress front. */
+export interface ProgressGeometry {
+  /** The completed portion — a band inset along the bar's bottom edge, length ∝ % complete. */
+  band: Rect;
+  /** The x of the hairline divider at the progress front (the boundary/shape cue — never
+   * colour-only, WCAG 1.4.1), or null at 100% where the front coincides with the bar end. */
+  frontX: number | null;
+}
+
+/**
+ * The shape-bounded in-bar progress fill for a bar rect (ADR-0052 M4): a band inset along the
+ * bar's bottom edge whose length is proportional to `percentComplete`, plus a band-height hairline
+ * divider at the progress front so the completed/remaining boundary reads as a shape, not colour
+ * alone (WCAG 1.4.1). The band — and the divider, clamped to the band's vertical extent — sits
+ * below the label's centred text line, so the label ink never loses contrast over it and the
+ * divider never slices through the label row. Null when there is nothing to draw: no progress (≤ 0 / not finite) or a
+ * bar too narrow to hold legible detail ({@link PROGRESS_MIN_BAR_PX}). Percent clamps to 100.
+ */
+export function progressGeometry(rect: Rect, percentComplete: number): ProgressGeometry | null {
+  if (!Number.isFinite(percentComplete) || percentComplete <= 0) return null;
+  if (rect.w < PROGRESS_MIN_BAR_PX) return null;
+  const fraction = Math.min(100, percentComplete) / 100;
+  const innerW = rect.w - PROGRESS_INSET_PX * 2;
+  const band: Rect = {
+    x: rect.x + PROGRESS_INSET_PX,
+    y: rect.y + rect.h - PROGRESS_INSET_PX - PROGRESS_BAND_H,
+    w: innerW * fraction,
+    h: PROGRESS_BAND_H,
+  };
+  return { band, frontX: fraction < 1 ? band.x + band.w : null };
+}
+
+/** Width (px) of an LOE/hammock bracket end-cap; the caps overhang the bar top+bottom. */
+export const GLYPH_CAP_W = 2;
+/** How far (px) an LOE/hammock bracket end-cap overhangs the bar's top and bottom edges. */
+export const GLYPH_CAP_OVERHANG = 3;
+
+/**
+ * The two vertical end-cap rects of the refreshed LOE / hammock **bracketed-span** glyph
+ * (ADR-0052 M4): `[` and `]` caps at the span's ends, overhanging the bar top and bottom, so a
+ * derived-span activity reads as a bracket, not a task bar — a shape cue, consistent across
+ * themes (the painter draws them in the bar's own resolved fill, so lenses compose). Pure vertex
+ * math over the bar rect.
+ */
+export function loeBracketRects(rect: Rect): [Rect, Rect] {
+  const y = rect.y - GLYPH_CAP_OVERHANG;
+  const h = rect.h + GLYPH_CAP_OVERHANG * 2;
+  return [
+    { x: rect.x, y, w: GLYPH_CAP_W, h },
+    { x: rect.x + rect.w - GLYPH_CAP_W, y, w: GLYPH_CAP_W, h },
+  ];
+}
+
+/** Width / height (px) of a WBS-summary bracket's downward end tab. */
+export const SUMMARY_TAB_W = 3;
+export const SUMMARY_TAB_H = 4;
+
+/**
+ * The two downward end-tab rects of the refreshed WBS-summary **bracket** glyph (ADR-0052 M4):
+ * small tabs dropping below the bar at each end — the classic summary-bar silhouette — so a
+ * rolled-up span reads distinctly from a task and from an LOE bracket. Pure vertex math.
+ */
+export function summaryTabRects(rect: Rect): [Rect, Rect] {
+  const y = rect.y + rect.h;
+  return [
+    { x: rect.x, y, w: SUMMARY_TAB_W, h: SUMMARY_TAB_H },
+    { x: rect.x + rect.w - SUMMARY_TAB_W, y, w: SUMMARY_TAB_W, h: SUMMARY_TAB_H },
+  ];
+}
+
+/** Which refreshed glyph family a bar draws as (ADR-0052 M4). */
+export type BarGlyphKind = 'milestone' | 'loe' | 'summary' | 'bar';
+
+/** The refreshed glyph family for an activity type: milestones stay diamonds, LOE **and**
+ * hammock spans draw the bracketed-span glyph (both are derived spans), WBS summaries the
+ * summary bracket, and everything else a plain (rounded) bar. */
+export function barGlyphKind(type: ActivityType): BarGlyphKind {
+  if (isMilestone(type)) return 'milestone';
+  if (type === 'LEVEL_OF_EFFORT' || type === 'HAMMOCK') return 'loe';
+  if (type === 'WBS_SUMMARY') return 'summary';
+  return 'bar';
 }
 
 /**

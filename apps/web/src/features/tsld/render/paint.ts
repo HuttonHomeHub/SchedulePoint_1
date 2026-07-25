@@ -3,26 +3,42 @@ import { createMeasureCache } from './measure';
 import {
   activityRect,
   arrowhead,
+  barGlyphKind,
+  computeEdgeFanOut,
   cull,
   daysBetween,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
+  edgeTouches,
+  elbowRadius,
   isMilestone,
   isResizeEligibleType,
   labelPlacement,
+  lagAnchorPoints,
+  lagRunSegment,
+  linkHighlightIds,
+  loeBracketRects,
   makeWorkingDayWalk,
+  progressGeometry,
   rectsIntersect,
+  routeOrthogonal,
   screenXOfDay,
   screenYOfLane,
+  summaryTabRects,
   truncateToWidth,
   BAR_HEIGHT,
+  BAR_RADIUS,
   ELAPSED_DAY_WALK,
+  EMPHASIS_STROKE_W,
   LABEL_FONT,
   LABEL_GAP_PX,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
   LANE_HEIGHT,
   MILESTONE_RADIUS,
+  PROGRESS_MIN_PX_PER_DAY,
+  type FanOutOffsets,
+  type LagRun,
   type Point,
   type Rect,
   type RenderActivity,
@@ -38,6 +54,32 @@ import { calendarBoundaries } from './time-scale';
  * module scope so it persists across frames and canvas instances — a given label measures once.
  */
 const labelWidths = createMeasureCache();
+
+/**
+ * Fan-out offsets memoised on the edges ARRAY identity (ADR-0052 M5 perf). `scene.edges` is
+ * reference-stable across pan/zoom frames (the scene is only rebuilt on a data / selection /
+ * hover-id change, and those rebuilds reuse the same edges array), so recomputing the pure
+ * `computeEdgeFanOut` per frame is pure waste — measured 5–11 ms alone at 2,000 activities /
+ * 4,000 edges, busting the ADR-0026 ≤4 ms draw budget on its own. A WeakMap keyed by the array
+ * lets a replaced edge list recompute once and lets the old entry be GC'd with its array.
+ */
+const edgeFanOuts = new WeakMap<readonly RenderEdge[], ReadonlyMap<RenderEdge, FanOutOffsets>>();
+
+/**
+ * The memoised {@link computeEdgeFanOut} the painter reads: the SAME array instance returns the
+ * SAME (identical) offsets map; a new array instance recomputes. Exported so the memo identity
+ * is unit-testable — the painter is its only production caller.
+ */
+export function edgeFanOutFor(
+  edges: readonly RenderEdge[],
+): ReadonlyMap<RenderEdge, FanOutOffsets> {
+  let offsets = edgeFanOuts.get(edges);
+  if (!offsets) {
+    offsets = computeEdgeFanOut(edges);
+    edgeFanOuts.set(edges, offsets);
+  }
+  return offsets;
+}
 
 /** Below this px-per-day the per-day gridlines would merge into a solid block, so they're culled. */
 const DAY_GRID_MIN_PX = 6;
@@ -74,6 +116,20 @@ export interface TsldPalette {
   labelInsideCritical: string;
   labelInsideNearCritical: string;
   labelBeside: string;
+  // ── Bar visual refresh (ADR-0052 M4, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──────────
+  /** The calm hairline definition stroke around every refreshed non-critical bar (the border
+   * token) — deliberately quieter than the foreground `outline`, so the emphasised critical /
+   * near-critical outlines pop against it. Read only when `TsldScene.visualRefresh` is on. */
+  barStroke: string;
+  /** The idle-hover ring (muted-foreground) — visually lighter than the `selection` ring so
+   * hover and selection never read as the same state. A transient pointer affordance twinned
+   * with the cursor change; selection stays the keyboard/AT-reachable state. Refresh-only. */
+  hoverRing: string;
+  // The refresh introduces NO other colour: the in-bar progress band + front divider draw in the
+  // bar's own paired label ink (`labelInside*` / the lens `barInk` override), so their contrast is
+  // guaranteed by the same 1:1 fill↔ink pairing labels rely on in both themes and under every
+  // lens; the LOE bracket caps + WBS-summary tabs draw in the bar's own resolved fill, so the
+  // Colour-by lenses recolour the whole glyph as one shape (the lens owns colour, M4 owns shape).
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -150,6 +206,25 @@ export interface TsldScene {
    * successor end. Absent/false ⇒ the legacy extreme-end routing, no arrowheads ⇒ byte-for-byte
    * today's paint (the flag-off parity gate). */
   timeTrueLinks?: boolean | undefined;
+  // ── Canvas direct manipulation M4 (ADR-0052, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ────
+  /** The activity-bar visual refresh (ADR-0052 M4): rounded bar shape with a calm hairline
+   * definition stroke, a heavier critical/near-critical emphasis outline (dash cue retained,
+   * WCAG 1.4.1), the shape-bounded in-bar progress fill (`percentComplete`, LOD-culled), the
+   * LOE-bracket / WBS-summary-tab glyphs, an outlined constraint pin, and the rounded selection
+   * ring. A separate scene field from `timeTrueLinks` so each render change stays independently
+   * testable, but fed from the SAME env flag — there is exactly ONE flag-off parity gate.
+   * Absent/false ⇒ byte-for-byte today's bar layer.
+   *
+   * Under M5 the same field also gates the **link** refresh: rounded elbows on the orthogonal
+   * routing, deterministic fan-out of crowded bar-edge anchors, the dashed lag-run depiction
+   * (with `timeTrueLinks` geometry), and the incident-link highlight for `selectedId`/`hoverId`. */
+  visualRefresh?: boolean | undefined;
+  // ── Canvas direct manipulation M5 (ADR-0052, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ────
+  /** The idle-hovered bar's activity id (published by the canvas from the SAME already-armed
+   * hover classify the M4 hover ring reads — editing surfaces only): its incident links draw
+   * transiently highlighted, mirroring the persistent `selectedId` highlight (the keyboard/AT
+   * equivalent — WCAG 2.1.1). Only read under `visualRefresh`; absent ⇒ no hover highlight. */
+  hoverId?: string | null | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -183,7 +258,27 @@ export type Ctx2D = Pick<
   font: string;
   textBaseline: CanvasTextBaseline;
   textAlign: CanvasTextAlign;
+  /** Optional (Baseline 2023; absent from older/test contexts): the refreshed bar shape rounds its
+   * corners with it when present and falls back to square rects when not — guarded like the
+   * text APIs (`paintResourceStrip`'s label), so a minimal test context never throws. */
+  roundRect?: (x: number, y: number, w: number, h: number, radii: number) => void;
+  /** Optional like `roundRect`: the refreshed link routing rounds its elbows with it when present
+   * (ADR-0052 M5) and falls back to hard `lineTo` corners when not — an arc, not a shadow/blur,
+   * so the draw budget holds; a minimal test context never throws. */
+  arcTo?: (x1: number, y1: number, x2: number, y2: number, radius: number) => void;
 };
+
+/**
+ * Begin a rounded-rect path when the context supports `roundRect` (ADR-0052 M4). Returns whether
+ * the path was begun — callers fall back to the square `fillRect`/`strokeRect` when not, so the
+ * refresh degrades gracefully on contexts without it (older browsers / minimal test mocks).
+ */
+function beginRoundedRect(ctx: Ctx2D, r: Rect, radius: number): boolean {
+  if (typeof ctx.roundRect !== 'function') return false;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.w, r.h, radius);
+  return true;
+}
 
 /**
  * The fill for a bar. A Colour-by lens (`barFill`) overrides per id when present (precomputed from the
@@ -225,19 +320,67 @@ function drawPolyline(ctx: Ctx2D, points: Point[]): void {
   for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i]!.x, points[i]!.y);
 }
 
+/** Dash pattern of the lag-run depiction (ADR-0052 M5) — visibly "waiting", not a solid tie. */
+const LAG_RUN_DASH: readonly number[] = [2, 2];
+
+/**
+ * Trace a polyline with small rounded elbows (ADR-0052 M5): each interior corner arcs with the
+ * pure {@link elbowRadius} (clamped to half its adjoining segments; 0 = a hard corner) via the
+ * optional `arcTo` — degrading to the plain hard-cornered {@link drawPolyline} on contexts
+ * without it (older browsers / minimal test mocks), like the M4 `roundRect` guard. Rect/line/arc
+ * primitives only; called only on the refreshed (flag-on) path.
+ */
+function drawRoundedPolyline(ctx: Ctx2D, points: Point[]): void {
+  if (points.length < 3 || typeof ctx.arcTo !== 'function') {
+    drawPolyline(ctx, points);
+    return;
+  }
+  ctx.moveTo(points[0]!.x, points[0]!.y);
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const radius = elbowRadius(points[i - 1]!, points[i]!, points[i + 1]!);
+    if (radius > 0)
+      ctx.arcTo(points[i]!.x, points[i]!.y, points[i + 1]!.x, points[i + 1]!.y, radius);
+    else ctx.lineTo(points[i]!.x, points[i]!.y);
+  }
+  ctx.lineTo(points[points.length - 1]!.x, points[points.length - 1]!.y);
+}
+
 /**
  * A small downward triangular pin sitting just above a bar's constrained edge (its tip
  * touching the top of the bar). A **shape** cue — not colour — so a set constraint reads
  * without relying on hue (WCAG 1.4.1); the panel's legend names it, and the parallel
- * listbox spells the constraint out for AT.
+ * listbox spells the constraint out for AT. Under the visual refresh (`outlined`, ADR-0052
+ * M4) it gains the same foreground outline the other three badges already carry — a pure
+ * consistency restyle: the shape, position, legend entry and AT text are untouched.
  */
-function drawConstraintPin(ctx: Ctx2D, edgeX: number, barTop: number, palette: TsldPalette): void {
+function drawConstraintPin(
+  ctx: Ctx2D,
+  edgeX: number,
+  barTop: number,
+  palette: TsldPalette,
+  outlined = false,
+): void {
+  const ax = edgeX - CONSTRAINT_PIN_W / 2;
+  const bx = edgeX + CONSTRAINT_PIN_W / 2;
+  const topY = barTop - CONSTRAINT_PIN_H;
   ctx.fillStyle = palette.edge;
   ctx.beginPath();
-  ctx.moveTo(edgeX - CONSTRAINT_PIN_W / 2, barTop - CONSTRAINT_PIN_H);
-  ctx.lineTo(edgeX + CONSTRAINT_PIN_W / 2, barTop - CONSTRAINT_PIN_H);
+  ctx.moveTo(ax, topY);
+  ctx.lineTo(bx, topY);
   ctx.lineTo(edgeX, barTop);
   ctx.fill();
+  if (outlined) {
+    // Traced over the same triangle (closed manually — the Ctx2D surface has no closePath),
+    // matching the conflict badge's outline treatment so the four badges read as one family.
+    ctx.strokeStyle = palette.outline;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ax, topY);
+    ctx.lineTo(bx, topY);
+    ctx.lineTo(edgeX, barTop);
+    ctx.lineTo(ax, topY);
+    ctx.stroke();
+  }
 }
 
 /** Half-width (px) of the upward warning triangle marking a Visual-Planning conflict. */
@@ -352,6 +495,131 @@ function drawOverAllocationBadge(
 }
 
 /**
+ * Begin the 4-vertex milestone diamond path centred on (`cx`, `cy`) — the ONE tracing shared by
+ * the refreshed bar, the baseline ghost, and the legacy bar layer, so the three can never drift.
+ * Left open by default (a `fill` closes it implicitly); `close` traces the final segment back to
+ * the top vertex for stroke-only callers (the Ctx2D surface has no closePath).
+ */
+function traceMilestoneDiamond(ctx: Ctx2D, cx: number, cy: number, r: number, close = false): void {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx, cy + r);
+  ctx.lineTo(cx - r, cy);
+  if (close) ctx.lineTo(cx, cy - r);
+}
+
+/** The criticality-paired inside ink for a bar — the lens `barInk` override when present, else
+ * the painter's own criticality ink (the same fallback chain the inside labels use). */
+function barInkColour(
+  activity: RenderActivity,
+  palette: TsldPalette,
+  barInk?: ReadonlyMap<string, string>,
+): string {
+  const override = barInk?.get(activity.id);
+  if (override !== undefined) return override;
+  if (activity.isCritical) return palette.labelInsideCritical;
+  if (activity.isNearCritical) return palette.labelInsideNearCritical;
+  return palette.labelInside;
+}
+
+/**
+ * Draw one **refreshed** activity bar (ADR-0052 M4, `scene.visualRefresh`). Called with the
+ * bar's fill (`barColour`) already set and `globalAlpha` at the bar's dim state; restores alpha
+ * to 1 before the outline (so the criticality shape cue survives a filter dim, like the legacy
+ * path). Per glyph family:
+ *
+ * - **bar** — a rounded fill (`BAR_RADIUS`; square fallback where `roundRect` is absent) with a
+ *   calm hairline `barStroke` definition stroke, OR the heavier critical/near-critical emphasis
+ *   outline (`EMPHASIS_STROKE_W`, dash cue retained — WCAG 1.4.1).
+ * - **loe** (LOE + hammock) — the bar plus bracket end-caps in the bar's own fill (the
+ *   bracketed-span glyph); **summary** — the bar plus downward end tabs (the summary bracket).
+ * - **milestone** — the diamond, gaining a hairline `barStroke` outline when not emphasised so
+ *   every glyph carries the same stroke language.
+ *
+ * Progress (`percentComplete`): a shape-bounded band along the bar bottom + a band-height
+ * hairline divider at the progress front, drawn in the bar's paired **ink** ({@link barInkColour})
+ * so contrast is guaranteed on every fill in both themes and under every lens. Drawn at the bar's
+ * alpha (a dimmed bar's detail recedes with it) and culled below `PROGRESS_MIN_PX_PER_DAY` /
+ * on too-narrow bars — the label LOD philosophy. Everything here is rects, lines and one rounded
+ * path — no shadow/blur (the ADR-0026 draw budget).
+ */
+function drawRefreshedBar(
+  ctx: Ctx2D,
+  activity: RenderActivity,
+  rect: Rect,
+  palette: TsldPalette,
+  scene: TsldScene,
+  view: Viewport,
+): void {
+  const dash = criticalDash(activity);
+  const glyph = barGlyphKind(activity.type);
+  if (glyph === 'milestone') {
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
+    ctx.fill();
+    ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
+    if (dash) {
+      ctx.strokeStyle = palette.outline;
+      ctx.lineWidth = EMPHASIS_STROKE_W;
+      ctx.setLineDash(dash);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // The consistent-glyph hairline: a calm definition stroke on the same diamond path.
+      ctx.strokeStyle = palette.barStroke;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    return;
+  }
+
+  if (beginRoundedRect(ctx, rect, BAR_RADIUS)) ctx.fill();
+  else ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  // Span glyphs, in the bar's own resolved fill (already set) so a Colour-by lens recolours the
+  // whole shape as one: LOE/hammock bracket end-caps; WBS-summary downward end tabs.
+  if (glyph === 'loe') {
+    for (const cap of loeBracketRects(rect)) ctx.fillRect(cap.x, cap.y, cap.w, cap.h);
+  } else if (glyph === 'summary') {
+    for (const tab of summaryTabRects(rect)) ctx.fillRect(tab.x, tab.y, tab.w, tab.h);
+  }
+  // In-bar progress, LOD-culled like labels; still at the bar's alpha so a dim recedes whole.
+  if (view.pxPerDay >= PROGRESS_MIN_PX_PER_DAY) {
+    const progress = progressGeometry(rect, activity.percentComplete ?? 0);
+    if (progress) {
+      ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
+      const { band, frontX } = progress;
+      ctx.fillRect(band.x, band.y, band.w, band.h);
+      // The hairline front divider — the non-colour boundary cue (WCAG 1.4.1) — clamped to the
+      // band's own vertical extent so it marks the band's front without slicing through the
+      // centred inside label (ux review). Skipped at 100%, where the front coincides with the
+      // bar's end edge.
+      if (frontX !== null) ctx.fillRect(frontX - 0.5, band.y, 1, band.h);
+    }
+  }
+  ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
+  if (dash) {
+    // Stronger-than-legacy emphasis (2px vs 1.5) so the critical path pops; the solid/dashed
+    // dash cue is untouched (WCAG 1.4.1 — never colour or weight alone).
+    ctx.strokeStyle = palette.outline;
+    ctx.lineWidth = EMPHASIS_STROKE_W;
+    ctx.setLineDash(dash);
+    const inset: Rect = { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 };
+    if (beginRoundedRect(ctx, inset, Math.max(1, BAR_RADIUS - 1))) ctx.stroke();
+    else ctx.strokeRect(inset.x, inset.y, inset.w, inset.h);
+    ctx.setLineDash([]);
+  } else {
+    // The calm hairline definition stroke — quieter than the emphasis, so normal bars recede.
+    ctx.strokeStyle = palette.barStroke;
+    ctx.lineWidth = 1;
+    const inset: Rect = { x: rect.x + 0.5, y: rect.y + 0.5, w: rect.w - 1, h: rect.h - 1 };
+    if (beginRoundedRect(ctx, inset, BAR_RADIUS)) ctx.stroke();
+    else ctx.strokeRect(inset.x, inset.y, inset.w, inset.h);
+  }
+}
+
+/**
  * Paint one frame of the TSLD onto `ctx` from the pure render model (ADR-0026). The
  * order is grid → dependency edges → activity bars/milestones → selection ring, so
  * later layers sit on top. Only the culled (visible) activities are drawn, and edges
@@ -415,6 +683,9 @@ export function paintScene(
   // line, versus a thin DASHED line for non-driving ties. The weight + dash encode
   // "driver" without relying on colour (WCAG 1.4.1), mirroring the bar criticality cue.
   // Two batched passes so each dash/width state is set once, not per edge.
+  // Lag runs (ADR-0052 M5) are collected during the edge passes but painted ABOVE the bars
+  // (layer 3.2) — an on-bar depiction under the bars would be invisible. Refresh-only.
+  let lagRuns: LagRun[] | null = null;
   if (scene.edges.length > 0) {
     // Time-true anchoring (ADR-0052 M1): the working-day walk is built once per frame from the
     // same predicate the non-working wash reads (memoised + horizon-bounded, so the per-edge cost
@@ -426,38 +697,82 @@ export function paintScene(
         ? makeWorkingDayWalk(scene.isWorkingDay)
         : ELAPSED_DAY_WALK
       : null;
-    const drawEdges = (driving: boolean): void => {
+    // Link visual refresh (ADR-0052 M5) — the SAME `visualRefresh` scene field M4 reads (ONE env
+    // flag, ONE flag-off parity gate): rounded elbows, deterministic fan-out of crowded bar-edge
+    // anchors (memoised on the edges array identity via `edgeFanOutFor` — the array is stable
+    // across pan/zoom frames, so offsets never jitter while panning and never recompute per
+    // frame), the dashed lag-run depiction, and the incident-link highlight for the selection
+    // (persistent, keyboard/AT-reachable) + idle hover (transient). All inert when
+    // `visualRefresh` is off ⇒ byte-for-byte today's edge layer.
+    const refresh = scene.visualRefresh === true;
+    const fanOut = refresh ? edgeFanOutFor(scene.edges) : null;
+    const highlightIds = refresh ? linkHighlightIds(scene.selectedId, scene.hoverId) : null;
+    if (refresh && workingWalk) lagRuns = [];
+    // The one per-edge geometry seam: flag-off it is exactly the M1 branch (time-true or legacy);
+    // refreshed it composes the SAME anchor mapping with the fan-out offsets + elbow shift, and
+    // collects the edge's lag run while the anchors are at hand.
+    const lineOf = (
+      edge: RenderEdge,
+      pred: RenderActivity,
+      succ: RenderActivity,
+    ): Point[] | null => {
+      if (!workingWalk) return dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
+      const walk = edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk;
+      const lag = edge.lagDays ?? 0;
+      if (!fanOut) {
+        return dependencyPolylineTimeTrue(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+      }
+      const anchors = lagAnchorPoints(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+      if (!anchors) return null;
+      const off = fanOut.get(edge);
+      if (lagRuns && lag !== 0) {
+        const run = lagRunSegment(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+        if (run) {
+          // The run rides the walked end's fan-out offset so it stays under its own anchor.
+          const dy = (edge.type === 'FS' || edge.type === 'FF' ? off?.succ : off?.pred) ?? 0;
+          lagRuns.push(
+            dy === 0
+              ? run
+              : {
+                  from: { x: run.from.x, y: run.from.y + dy },
+                  to: { x: run.to.x, y: run.to.y + dy },
+                },
+          );
+        }
+      }
+      const from =
+        off && off.pred !== 0 ? { x: anchors.pred.x, y: anchors.pred.y + off.pred } : anchors.pred;
+      const to =
+        off && off.succ !== 0 ? { x: anchors.succ.x, y: anchors.succ.y + off.succ } : anchors.succ;
+      return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0);
+    };
+    const drawEdges = (driving: boolean, highlighted = false): void => {
       const heads: [Point, Point, Point][] = [];
       ctx.beginPath();
       for (const edge of scene.edges) {
         if (edge.isDriving !== driving) continue;
+        // With a highlight active, the base passes skip incident edges and the highlight passes
+        // draw ONLY them (on top, restyled). No highlight ⇒ the predicate is never consulted.
+        if (highlightIds && edgeTouches(edge, highlightIds) !== highlighted) continue;
         if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
         const pred = byId.get(edge.predecessorId);
         const succ = byId.get(edge.successorId);
         if (!pred || !succ) continue;
-        const line = workingWalk
-          ? dependencyPolylineTimeTrue(
-              pred,
-              succ,
-              edge.type,
-              edge.lagDays ?? 0,
-              view,
-              scene.dataDate,
-              edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk,
-            )
-          : dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
+        const line = lineOf(edge, pred, succ);
         if (!line) continue;
-        drawPolyline(ctx, line);
+        if (refresh) drawRoundedPolyline(ctx, line);
+        else drawPolyline(ctx, line);
         if (workingWalk) {
           const head = arrowhead(line);
           if (head) heads.push(head);
         }
       }
       ctx.stroke();
-      // Arrowheads fill after the pass's stroke in one batched path. They share the edge colour —
-      // the driving cue stays the line weight + dash (WCAG 1.4.1), so no new colour is introduced.
+      // Arrowheads fill after the pass's stroke in one batched path. They share the pass's line
+      // colour (the edge colour; the selection colour on a highlight pass) — the driving cue
+      // stays the line weight + dash (WCAG 1.4.1), so no new colour is introduced.
       if (heads.length > 0) {
-        ctx.fillStyle = palette.edge;
+        ctx.fillStyle = highlighted ? palette.selection : palette.edge;
         ctx.beginPath();
         for (const [tip, left, right] of heads) {
           ctx.moveTo(tip.x, tip.y);
@@ -476,6 +791,22 @@ export function paintScene(
     ctx.lineWidth = 2;
     drawEdges(true); // driving: heavier, solid
     ctx.lineWidth = 1;
+    // Incident-link highlight passes (ADR-0052 M5): the selected/hovered bar's ties re-draw on
+    // top, one weight step heavier in the selection colour — a WEIGHT change with the colour, and
+    // each pass keeps its dash state, so neither the highlight nor the driving cue is colour-only
+    // (WCAG 1.4.1); the ring token clears the 3:1 non-text bar on the canvas ground (1.4.11).
+    // Selection is the keyboard/AT-reachable equivalent of the pointer hover (WCAG 2.1.1).
+    if (highlightIds) {
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      drawEdges(false, true); // highlighted non-driving: heavier, still dashed
+      ctx.setLineDash([]);
+      ctx.lineWidth = 3;
+      drawEdges(true, true); // highlighted driving: heaviest, solid
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = palette.edge;
+    }
   }
 
   // Layer 2.5: baseline ghost bars (the Baseline overlay lens, `docs/specs/canvas-lenses/`) — the
@@ -517,12 +848,7 @@ export function paintScene(
           continue;
         }
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - MILESTONE_RADIUS);
-        ctx.lineTo(cx + MILESTONE_RADIUS, cy);
-        ctx.lineTo(cx, cy + MILESTONE_RADIUS);
-        ctx.lineTo(cx - MILESTONE_RADIUS, cy);
-        ctx.lineTo(cx, cy - MILESTONE_RADIUS); // close manually (Ctx2D has no closePath)
+        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true); // closed — stroke-only
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
@@ -559,15 +885,15 @@ export function paintScene(
     const dimmed = scene.dimmedIds?.has(id) ?? false;
     ctx.globalAlpha = dimmed ? DIMMED_ALPHA : 1;
     ctx.fillStyle = barColour(activity, palette, scene.barFill);
-    if (isMilestone(activity.type)) {
+    if (scene.visualRefresh) {
+      // M4 refreshed bar body (shape/progress/emphasis/glyphs) — the lens fill above still
+      // decides the colour; the refresh restyles only shape/structure. Restores alpha itself.
+      drawRefreshedBar(ctx, activity, rect, palette, scene, view);
+    } else if (isMilestone(activity.type)) {
       // A diamond centred in the bounding box.
       const cx = rect.x + rect.w / 2;
       const cy = rect.y + rect.h / 2;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - MILESTONE_RADIUS);
-      ctx.lineTo(cx + MILESTONE_RADIUS, cy);
-      ctx.lineTo(cx, cy + MILESTONE_RADIUS);
-      ctx.lineTo(cx - MILESTONE_RADIUS, cy);
+      traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
       ctx.fill();
       ctx.globalAlpha = 1; // outline + badges below stay full-strength even on a dimmed bar
       if (dash) {
@@ -597,7 +923,7 @@ export function paintScene(
         : activity.constraint === 'finish'
           ? rect.x + rect.w
           : rect.x;
-      drawConstraintPin(ctx, edgeX, rect.y, palette);
+      drawConstraintPin(ctx, edgeX, rect.y, palette, scene.visualRefresh === true);
     }
     // Visual-Planning conflict (ADR-0033): the placement is before its earliest feasible start. A
     // warning triangle at the bar's start — never auto-moved, only flagged (the mapping seam gates
@@ -622,6 +948,25 @@ export function paintScene(
     if (scene.flaggedIds?.has(id)) {
       drawOverAllocationBadge(ctx, rect.x + rect.w, rect.y, palette);
     }
+  }
+
+  // Layer 3.2: lag-run depiction (ADR-0052 M5, refresh-only) — the horizontal stretch between a
+  // bar edge and its walked lag anchor, as a dashed hairline in the edge colour OVER the bar (the
+  // run is on-bar geometry; under the bars it would be invisible), so lag reads as waiting time.
+  // Batched into one stroke; collected during the edge passes, so it is O(visible lagged edges).
+  // `lagRuns` is only ever allocated under `visualRefresh` + time-true links ⇒ flag-off this whole
+  // block is skipped ⇒ byte-for-byte parity.
+  if (lagRuns && lagRuns.length > 0) {
+    ctx.strokeStyle = palette.edge;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(LAG_RUN_DASH as number[]);
+    ctx.beginPath();
+    for (const run of lagRuns) {
+      ctx.moveTo(run.from.x, run.from.y);
+      ctx.lineTo(run.to.x, run.to.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   // Layer 3.5: the TODAY marker — a dashed vertical in the destructive hue, above the bars and
@@ -653,6 +998,11 @@ export function paintScene(
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     const measure = (s: string): number => labelWidths.measure(s, (t) => ctx.measureText(t).width);
+    // Placement polish (M4): an inside label clears the refreshed bar's rounded corner with a
+    // little extra pad. Flag-off the extra is 0, so the arithmetic (and the paint log) is
+    // byte-for-byte today's. The font is deliberately unchanged — the module-scope width memo is
+    // keyed by text alone, so a metric change would poison it across palettes (export path).
+    const insidePad = LABEL_PAD_PX + (scene.visualRefresh ? 2 : 0);
 
     const lanes = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
     for (const [id, rect] of rects) {
@@ -676,21 +1026,15 @@ export function paintScene(
         if (placement === 'none') continue;
         const cy = rect.y + rect.h / 2;
         if (placement === 'inside') {
-          const text = truncateToWidth(activity.label, rect.w - LABEL_PAD_PX * 2, measure);
+          const text = truncateToWidth(activity.label, rect.w - insidePad * 2, measure);
           if (!text) continue;
           // A Colour-by lens repaints the bar a non-criticality hue, so the criticality-based ink can
-          // fail contrast (e.g. white-on-warning-yellow at 2.02:1). When `barInk` carries a paired,
-          // contrast-safe ink for this bar (non-default modes only), use it; else fall back to today's
-          // criticality ink (absent map / Criticality mode ⇒ byte-for-byte parity, WCAG 1.4.3).
-          const inkOverride = scene.barInk?.get(activity.id);
-          ctx.fillStyle =
-            inkOverride ??
-            (activity.isCritical
-              ? palette.labelInsideCritical
-              : activity.isNearCritical
-                ? palette.labelInsideNearCritical
-                : palette.labelInside);
-          ctx.fillText(text, rect.x + LABEL_PAD_PX, cy);
+          // fail contrast (e.g. white-on-warning-yellow at 2.02:1). `barInkColour` applies the paired,
+          // contrast-safe override when the lens carries one (non-default modes only), else falls back
+          // to today's criticality ink (absent map / Criticality mode ⇒ byte-for-byte parity, WCAG
+          // 1.4.3) — the SAME chain the in-bar progress band draws with.
+          ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
+          ctx.fillText(text, rect.x + insidePad, cy);
         } else {
           const startX = rect.x + rect.w + LABEL_GAP_PX;
           const maxPx = (nextLeftX === Infinity ? size.width : nextLeftX) - startX - LABEL_PAD_PX;
@@ -714,7 +1058,13 @@ export function paintScene(
     if (selected && rect) {
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 2;
-      ctx.strokeRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);
+      // Under the refresh the ring rounds with the bar (radius tracks BAR_RADIUS at the ring's
+      // 2px offset) so the two shapes read as one crisp outline; square fallback / flag-off is
+      // byte-for-byte today's ring. Never colour-only: the ring is itself the shape cue, and
+      // selection stays keyboard-reachable via the listbox.
+      const ring: Rect = { x: rect.x - 2, y: rect.y - 2, w: rect.w + 4, h: rect.h + 4 };
+      if (scene.visualRefresh && beginRoundedRect(ctx, ring, BAR_RADIUS + 2)) ctx.stroke();
+      else ctx.strokeRect(ring.x, ring.y, ring.w, ring.h);
       // With direct manipulation on (`timeTrueLinks` mirrors the ADR-0052 flag) the edge marks
       // advertise the *resize* handles, so a bar whose duration can't be resized (LOE / WBS
       // summary) draws none — matching classifyHit's refusal. Flag-off keeps today's link-draw
@@ -789,6 +1139,16 @@ export interface InteractionOverlay {
   resize?: ResizeOverlay | null;
   /** A lag-anchor drag in flight (ADR-0052 M3): the tentative-lag readout chip. */
   lag?: LagOverlay | null;
+  // ── Bar visual refresh (ADR-0052 M4, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ──────────
+  /** Restyle the live/resize ghosts (rounded, elevation-by-inner-inset-stroke — never
+   * shadow/blur) and enable the hover ring. Absent/false ⇒ byte-for-byte the legacy overlay. */
+  visualRefresh?: boolean;
+  /** The idle-hovered bar's rect (published by the canvas while the resize/lag zones are armed):
+   * a light `hoverRing` outline around the bar, visually quieter than the selection ring and
+   * cleared when the pointer leaves. A transient pointer affordance twinned with the cursor
+   * change (never the sole carrier of state — selection remains the keyboard/AT state), drawn
+   * OUTSIDE the bar so it obscures no label or badge. Only read under `visualRefresh`. */
+  hover?: Rect | null;
 }
 
 /**
@@ -809,6 +1169,20 @@ export function paintInteractionLayer(
   ctx.clearRect(0, 0, size.width, size.height);
 
   const { live, pending, link, linkPick, resize, lag } = overlay;
+  const refresh = overlay.visualRefresh === true;
+
+  if (refresh && overlay.hover) {
+    // The idle-hover ring (M4): a light rounded outline in the hover hue, drawn FIRST so every
+    // in-flight ghost/ring paints over it. Thinner + quieter than the selection ring (2px
+    // selection colour), so hover and selection never read as the same state.
+    const h = overlay.hover;
+    ctx.strokeStyle = palette.hoverRing;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    const ring: Rect = { x: h.x - 1.5, y: h.y - 1.5, w: h.w + 3, h: h.h + 3 };
+    if (beginRoundedRect(ctx, ring, BAR_RADIUS + 1.5)) ctx.stroke();
+    else ctx.strokeRect(ring.x, ring.y, ring.w, ring.h);
+  }
 
   if (linkPick) {
     // The picked predecessor waiting for the second click (M5): a **dashed** selection-colour ring —
@@ -853,27 +1227,56 @@ export function paintInteractionLayer(
     ctx.setLineDash([]);
   }
 
-  if (live) {
+  // The shared refreshed drag-ghost treatment (M4): a rounded fill with the selection outline
+  // plus an inner inset hairline in the bar-definition stroke — "elevation" approximated by the
+  // double stroke, never a shadow/blur (draw budget). Square fallback where roundRect is absent;
+  // flag-off callers never reach it. Reads as "the bar, lifted", obscuring no label or badge.
+  const refreshedGhost = (r: Rect): void => {
     ctx.fillStyle = palette.bar;
-    ctx.fillRect(live.x, live.y, live.w, live.h);
+    if (beginRoundedRect(ctx, r, BAR_RADIUS)) ctx.fill();
+    else ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = palette.selection;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
-    ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+    const outer: Rect = { x: r.x + 0.5, y: r.y + 0.5, w: r.w - 1, h: r.h - 1 };
+    if (beginRoundedRect(ctx, outer, BAR_RADIUS)) ctx.stroke();
+    else ctx.strokeRect(outer.x, outer.y, outer.w, outer.h);
+    ctx.strokeStyle = palette.barStroke;
+    ctx.lineWidth = 1;
+    const inner: Rect = { x: r.x + 2, y: r.y + 2, w: r.w - 4, h: r.h - 4 };
+    if (beginRoundedRect(ctx, inner, Math.max(1, BAR_RADIUS - 2))) ctx.stroke();
+    else ctx.strokeRect(inner.x, inner.y, inner.w, inner.h);
+  };
+
+  if (live) {
+    if (refresh) {
+      refreshedGhost(live);
+    } else {
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(live.x, live.y, live.w, live.h);
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+    }
   }
 
   if (resize) {
-    // The resize ghost mirrors the reposition/create `live` ghost (fill + solid outline) so the
-    // two in-flight edits read the same, plus a live duration readout just above the bar — the
-    // number a planner is actually choosing (ADR-0052 M2). Guarded like `paintResourceStrip`'s
-    // label so a text-less test context never throws.
+    // The resize ghost mirrors the reposition/create `live` ghost (fill + solid outline; the
+    // refreshed treatment under M4) so the two in-flight edits read the same, plus a live
+    // duration readout just above the bar — the number a planner is actually choosing (ADR-0052
+    // M2). Guarded like `paintResourceStrip`'s label so a text-less test context never throws.
     const r = resize.rect;
-    ctx.fillStyle = palette.bar;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = palette.selection;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([]);
-    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    if (refresh) {
+      refreshedGhost(r);
+    } else {
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    }
     if (typeof ctx.fillText === 'function') {
       ctx.font = LABEL_FONT;
       ctx.textBaseline = 'bottom';
