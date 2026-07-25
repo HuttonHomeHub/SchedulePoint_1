@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.48.0
+
+### Minor Changes
+
+- [#151](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/151) [`38f3d85`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/38f3d854be30501940aa05566b1e3a7921bc5fc2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): flip VITE_CANVAS_DIRECT_MANIPULATION on by default (direct manipulation + visual refresh live: time-true anchors, duration resize both edges, draggable lag, refreshed bars + links)
+
 ## 0.47.0
 
 ### Minor Changes
