@@ -1,24 +1,45 @@
 import type { CalendarSummary, ResourceSummary } from '@repo/types';
+import type { UseQueryResult } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useDeleteResource, useResources } from '../api/use-resources';
-import { RESOURCE_IN_USE, RESOURCE_KIND_LABELS } from '../schemas/resource-schemas';
+import {
+  RESOURCE_IN_USE,
+  RESOURCE_KIND_LABELS,
+  isResourceGroup,
+  toResourceTreeRows,
+  type ResourceTreeRow,
+} from '../schemas/resource-schemas';
 
 import { ResourceFormDialog } from './ResourceFormDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { ApiFetchError } from '@/lib/api/client';
 
 /** Friendly message for a delete blocked because the resource is still assigned. */
 function deleteErrorMessage(error: unknown): string {
   if (error instanceof ApiFetchError && error.status === 409) {
-    const details = error.error.details as { reason?: string } | undefined;
+    const details = error.error.details as
+      { reason?: string; count?: number; subtreeSize?: number } | undefined;
     if (details?.reason === RESOURCE_IN_USE) {
+      // A group's 409 spans its whole subtree (ADR-0053 §3), so the message must say where to
+      // look — "this resource is assigned" would be actively misleading for an empty-looking group.
+      if ((details.subtreeSize ?? 1) > 1) {
+        const count = details.count ?? 0;
+        return `${count} ${count === 1 ? 'resource' : 'resources'} in this group ${
+          count === 1 ? 'is' : 'are'
+        } still assigned. Unassign them before deleting.`;
+      }
       return 'Assigned to one or more activities. Unassign it before deleting.';
+    }
+    if (details?.reason === 'RESOURCE_GROUP_HAS_CHILDREN') {
+      return 'Move the resources out of this group first.';
     }
   }
   return error instanceof Error
@@ -62,23 +83,98 @@ export function ResourcesTable({
 
   const editing = editingId ? resources.data?.find((r) => r.id === editingId) : undefined;
 
-  const columns: Column<ResourceSummary>[] = [
-    { header: 'Name', cell: (resource) => <span className="font-medium">{resource.name}</span> },
-    { header: 'Kind', cell: (resource) => RESOURCE_KIND_LABELS[resource.kind] },
+  // Resource tree (ADR-0053 §3). With the flag ON the flat library is re-ordered depth-first and
+  // each row carries its nesting depth; with it OFF every row is depth 0 in the server's own order
+  // — byte-for-byte today's table. Derived from the `parentId` each row already carries (the
+  // library query pages the whole library), so there is no second request.
+  const rows = useMemo<ResourceTreeRow[]>(() => {
+    const data = resources.data ?? [];
+    if (!LIBRARY_SCOPING_ENABLED) return data.map((resource) => ({ resource, depth: 0 }));
+    return toResourceTreeRows(data);
+  }, [resources.data]);
+  // The parent group's name per row, for the read-only Group column — resolved from the loaded
+  // list, mirroring how `ActivitiesTable` resolves its WBS parent label (no extra fetch).
+  const groupNameById = useMemo(
+    () => new Map((resources.data ?? []).map((r) => [r.id, r.name])),
+    [resources.data],
+  );
+  // Feed the shared DataTable the derived rows while keeping the query's own loading/error/empty
+  // states, so all four states stay identical to every other library screen.
+  const treeQuery: Pick<
+    UseQueryResult<ResourceTreeRow[]>,
+    'isPending' | 'isError' | 'data' | 'refetch'
+  > = {
+    isPending: resources.isPending,
+    isError: resources.isError,
+    data: rows,
+    // The retry button re-runs the underlying library query; only the row SHAPE is derived here,
+    // so the refetch result is deliberately discarded rather than re-typed.
+    refetch: async () => {
+      const result = await resources.refetch();
+      return { ...result, data: undefined } as unknown as Awaited<
+        ReturnType<UseQueryResult<ResourceTreeRow[]>['refetch']>
+      >;
+    },
+  };
+
+  const columns: Column<ResourceTreeRow>[] = [
+    {
+      header: 'Name',
+      cell: ({ resource, depth }) => (
+        <span className="flex items-center gap-2">
+          {/* Indentation is decorative — the Group column below carries the same relationship in
+              text, so nesting is never conveyed by layout alone (WCAG 2.2). */}
+          {depth > 0 ? (
+            <span aria-hidden="true" style={{ width: `${depth * 1.25}rem` }} className="shrink-0" />
+          ) : null}
+          <span className="font-medium">{resource.name}</span>
+          {/* The Kind column already says "Group"; this badge carries the CONSEQUENCE, which is
+              what a planner scanning the library actually needs to know (ADR-0053 §3). */}
+          {LIBRARY_SCOPING_ENABLED && isResourceGroup(resource) ? (
+            <Badge size="sm">Not assignable</Badge>
+          ) : null}
+        </span>
+      ),
+    },
+    { header: 'Kind', cell: ({ resource }) => RESOURCE_KIND_LABELS[resource.kind] },
     {
       header: 'Code',
-      cell: (resource) =>
+      cell: ({ resource }) =>
         resource.code ? (
           <span className="font-mono text-xs">{resource.code}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
     },
+    ...(LIBRARY_SCOPING_ENABLED
+      ? [
+          {
+            header: 'Group',
+            headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+            cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+            cell: ({ resource }: ResourceTreeRow) => {
+              const parentName = resource.parentId
+                ? groupNameById.get(resource.parentId)
+                : undefined;
+              return parentName ? (
+                <span className="text-muted-foreground">{parentName}</span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              );
+            },
+          } satisfies Column<ResourceTreeRow>,
+        ]
+      : []),
     {
       header: 'Calendar',
       headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
       cellClassName: 'hidden py-2 pr-4 whitespace-nowrap md:table-cell',
-      cell: (resource) => {
+      cell: ({ resource }) => {
+        // A group has no calendar by construction (ADR-0053 §3) — say so rather than showing the
+        // same "—" that means "inherits the plan calendar" for a real resource.
+        if (LIBRARY_SCOPING_ENABLED && isResourceGroup(resource)) {
+          return <span className="text-muted-foreground">Not scheduled</span>;
+        }
         if (!resource.calendarId) return <span className="text-muted-foreground">—</span>;
         const name = calendarNameById.get(resource.calendarId);
         if (name) return <span className="text-muted-foreground">{name}</span>;
@@ -95,7 +191,7 @@ export function ResourcesTable({
     srHeader: true,
     headClassName: 'py-2 font-medium',
     cellClassName: 'py-2 text-right whitespace-nowrap',
-    cell: (resource) =>
+    cell: ({ resource }) =>
       canWrite ? (
         <div className="flex justify-end gap-2">
           <Button
@@ -154,8 +250,8 @@ export function ResourcesTable({
       <DataTable
         caption="Resources"
         columns={columns}
-        query={resources}
-        getRowKey={(resource) => resource.id}
+        query={treeQuery}
+        getRowKey={({ resource }) => resource.id}
         loadingLabel="Loading resources…"
         errorLabel="Couldn’t load resources. Please try again."
         empty={
@@ -173,6 +269,8 @@ export function ResourcesTable({
         calendars={calendars}
         calendarsLoading={calendarsLoading}
         calendarsError={calendarsError}
+        // The library itself feeds the parent-group picker (ADR-0053 §3) — already loaded here.
+        resources={resources.data ?? []}
         {...(editing ? { resource: editing } : {})}
       />
       {canWrite ? (

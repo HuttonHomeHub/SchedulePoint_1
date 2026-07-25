@@ -20,6 +20,17 @@ export class ResourceResponseDto implements ResourceSummary {
   @ApiProperty({ enum: ResourceKind })
   kind!: ResourceKind;
 
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
+      'The parent GROUP in the resource tree (ADR-0053 §3); null = top level. Returned on every ' +
+      'resource so a client can nest the flat list itself — the tree is acyclic, same-org and at ' +
+      'most 10 deep by service invariant, so no separate tree endpoint is needed.',
+  })
+  parentId!: string | null;
+
   @ApiProperty({ format: 'uuid', nullable: true, type: String })
   calendarId!: string | null;
 
@@ -64,6 +75,7 @@ export class ResourceResponseDto implements ResourceSummary {
       code: entity.code,
       description: entity.description,
       kind: entity.kind,
+      parentId: entity.parentId,
       calendarId: entity.calendarId,
       // Decimal → number at the API boundary (the DB column is DECIMAL(18,4)); null = uncapped.
       maxUnitsPerHour: entity.maxUnitsPerHour === null ? null : entity.maxUnitsPerHour.toNumber(),

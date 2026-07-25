@@ -510,7 +510,7 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   start-edge resize + lag drag → **M4/M5** the bar/link **visual refresh** (token-resolved, inside
   the Canvas-2D ≤ 4 ms p95 @ 2,000 budget) — all landed. Builds on
   ADR-0021/0022/0023/0028/0036/0048.
-- **ADR-0053** _(Accepted for M1: §1–§2 + §6; §3 accepts with M3, §4 with M4, §5 with M5 — the
+- **ADR-0053** _(Accepted for M1: §1–§2 + §6; **M3: §3**; §4 accepts with M4, §5 with M5 — the
   library-scoping epic, web behind `VITE_LIBRARY_SCOPING`)_ — Calendar scoping tiers & the resource
   management layer: give calendars P6's missing **project tier** — a `CalendarScope { ORG, PROJECT }`
   discriminator + a nullable `calendars.project_id` (FK RESTRICT) pinned together by a **fail-closed**
@@ -543,6 +543,24 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   turning the two 422s and the narrowing 409 (**with its per-class counts**) into actionable sentences.
   Frontend-only — no API/schema/engine change; flag-off is byte-for-byte the prior surface (a dedicated
   flag-off parity suite pins every touched screen).
+  **M3 (landed)** accepts **§3, the resource hierarchy**: `resources.parent_id` (an adjacency-list
+  self-FK, the ADR-0038 WBS precedent) plus a new non-assignable **`GROUP` `ResourceKind`** — a grouping
+  node with **no calendar, capacity or cost** (the same-row, fail-closed `CASE … ELSE false`
+  `ck_resources_group_no_scheduling_fields`) that may **never be an assignment endpoint** (422
+  `GROUP_NOT_ASSIGNABLE`). Those two facts make the levelling / histogram / EV parity argument
+  **structural** — all three read from `resource_assignments`, so a node that cannot be assigned cannot
+  enter demand, capacity or cost; **the CPM engine is untouched** (`EngineResource` is still
+  `id`/`capacity`/`calendar`, pinned by a structural test). The pool stays **one org-global pool**: this
+  is navigation, not a tier. Acyclicity, same-org, "only a GROUP may parent" and **depth ≤ 10** (measured
+  as parent-depth **+ moved-subtree height**) are service invariants held under a new **org-scoped**
+  `resource-tree` advisory lock — a per-resource lock cannot serialise two **mirror** reparents, which
+  take different keys. Deleting a GROUP counts `RESOURCE_IN_USE` across its **whole subtree** and
+  soft-deletes that branch under **one** `delete_batch_id` (lock order: tree lock → per-resource locks
+  ascending by id). Reads add `?parentId=<uuid>|null` and a `parentId` on every row — deliberately **no
+  `tree=true`**, since the client already pages the library and nests it. Two migrations, because
+  Postgres forbids using an enum label in the transaction that added it. Web surface behind the existing
+  `VITE_LIBRARY_SCOPING` (depth-first rows + a `Group` column + a "Not assignable" badge + a parent
+  picker; groups excluded from the assignment picker), flag-off byte-for-byte.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

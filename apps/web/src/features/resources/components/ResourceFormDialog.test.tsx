@@ -15,6 +15,7 @@ const RESOURCE: ResourceSummary = {
   code: 'CRW-A',
   description: null,
   kind: 'LABOUR',
+  parentId: null,
   maxUnitsPerHour: null,
   costPerUnit: null,
   calendarId: null,

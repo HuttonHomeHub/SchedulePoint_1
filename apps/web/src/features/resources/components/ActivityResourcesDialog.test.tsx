@@ -17,6 +17,7 @@ const CREW: ResourceSummary = {
   code: null,
   description: null,
   kind: 'LABOUR',
+  parentId: null,
   maxUnitsPerHour: null,
   costPerUnit: null,
   calendarId: null,
@@ -30,6 +31,7 @@ const CONCRETE: ResourceSummary = {
   id: 'res-2',
   name: 'Concrete',
   kind: 'MATERIAL',
+  parentId: null,
   maxUnitsPerHour: null,
   version: 1,
 };

@@ -1,12 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { RESOURCE_KINDS, type CalendarSummary, type ResourceSummary } from '@repo/types';
-import { useEffect, useId } from 'react';
+import {
+  ASSIGNABLE_RESOURCE_KINDS,
+  RESOURCE_KINDS,
+  type CalendarSummary,
+  type ResourceSummary,
+} from '@repo/types';
+import { useEffect, useId, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateResource, useUpdateResource } from '../api/use-resources';
 import {
   RESOURCE_KIND_LABELS,
   resourceFormSchema,
+  toResourceTreeRows,
   type ResourceFormValues,
 } from '../schemas/resource-schemas';
 
@@ -25,6 +31,7 @@ import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { minorToMajorInput } from '@/lib/format-money';
 
 const INHERIT_CALENDAR_LABEL = 'Plan default (inherit)';
+const TOP_LEVEL_PARENT_LABEL = 'No group (top level)';
 
 /**
  * Create-or-edit dialog for an organisation resource (ADR-0039). Name and kind are
@@ -47,12 +54,18 @@ export function ResourceFormDialog({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
+  resources = [],
 }: {
   orgSlug: string;
   open: boolean;
   onClose: () => void;
   resource?: ResourceSummary;
   readOnly?: boolean;
+  /**
+   * The org's resources, for the parent-group picker's options (ADR-0053 §3, route/table-composed
+   * like `calendars`). Only `GROUP` rows are offered, and only behind `VITE_LIBRARY_SCOPING`.
+   */
+  resources?: ResourceSummary[];
   /** The org's calendars, for the calendar picker's options (route-composed). */
   calendars?: CalendarSummary[];
   /** The calendars list is still loading (its options aren't complete yet). */
@@ -70,6 +83,8 @@ export function ResourceFormDialog({
   const calendarHelpId = useId();
   const kindSelectId = useId();
   const calendarSelectId = useId();
+  const parentSelectId = useId();
+  const parentHelpId = useId();
 
   const {
     register,
@@ -85,6 +100,7 @@ export function ResourceFormDialog({
       description: '',
       kind: 'LABOUR',
       calendarId: '',
+      parentId: '',
       maxUnitsPerHour: undefined,
       costPerUnit: undefined,
     },
@@ -98,6 +114,9 @@ export function ResourceFormDialog({
         description: resource?.description ?? '',
         kind: resource?.kind ?? 'LABOUR',
         calendarId: resource?.calendarId ?? '',
+        // Always seed from the row so a stored tree position round-trips even when the picker is
+        // hidden (flag off) — an edit then never silently promotes the resource to top level.
+        parentId: resource?.parentId ?? '',
         // Always seed from the row so a stored capacity round-trips even when the field is hidden
         // (flag off) — an edit then never silently clears the levelling ceiling. `null` → undefined
         // (blank = uncapped).
@@ -115,6 +134,39 @@ export function ResourceFormDialog({
   // The seeded calendar isn't in the loaded list (still loading, or it failed): keep it
   // selected under an honest label so the Select never reads blank ("inherit").
   const missingCalendar = Boolean(calendarId) && !calendars.some((c) => c.id === calendarId);
+
+  // Resource tree (ADR-0053 §3). A GROUP has no calendar, capacity or cost — those fields are
+  // hidden for one rather than shown-and-rejected, and `use-resources` strips any stale value.
+  const kind = useWatch({ control, name: 'kind' });
+  const isGroup = LIBRARY_SCOPING_ENABLED && kind === 'GROUP';
+  const parentId = useWatch({ control, name: 'parentId' });
+  // The parent options are the org's GROUPs in tree order (indented), minus this resource's own
+  // subtree — nesting a group inside itself is a 409 the picker should never offer. Groups are a
+  // small minority of the library, so this stays a cheap client-side derivation.
+  const parentOptions = useMemo(() => {
+    if (!LIBRARY_SCOPING_ENABLED) return [];
+    const excluded = new Set<string>();
+    if (resource) {
+      excluded.add(resource.id);
+      // Walk down from this resource: everything under it is an illegal parent.
+      let frontier = [resource.id];
+      while (frontier.length > 0) {
+        const next = resources
+          .filter((r) => r.parentId !== null && frontier.includes(r.parentId))
+          .map((r) => r.id)
+          .filter((id) => !excluded.has(id));
+        for (const id of next) excluded.add(id);
+        frontier = next;
+      }
+    }
+    return toResourceTreeRows(resources).filter(
+      (row) => row.resource.kind === 'GROUP' && !excluded.has(row.resource.id),
+    );
+  }, [resources, resource]);
+  // The seeded parent isn't in the offered set (still loading, or its group was removed): keep it
+  // selected under an honest label so the Select never silently reads "top level".
+  const missingParent =
+    Boolean(parentId) && !parentOptions.some((row) => row.resource.id === parentId);
 
   const onSubmit = handleSubmit((values) => {
     if (isEdit) {
@@ -166,13 +218,49 @@ export function ResourceFormDialog({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={kindSelectId}>Kind</Label>
           <Select id={kindSelectId} disabled={readOnly} {...register('kind')}>
-            {RESOURCE_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {RESOURCE_KIND_LABELS[kind]}
-              </option>
-            ))}
+            {/* GROUP is only offered behind the flag (ADR-0053 §3) — with it off the option list
+                is byte-for-byte the three assignable kinds it has always been. */}
+            {(LIBRARY_SCOPING_ENABLED ? RESOURCE_KINDS : ASSIGNABLE_RESOURCE_KINDS).map(
+              (kindOption) => (
+                <option key={kindOption} value={kindOption}>
+                  {RESOURCE_KIND_LABELS[kindOption]}
+                </option>
+              ),
+            )}
           </Select>
+          {isGroup ? (
+            <p className="text-muted-foreground text-sm">
+              A group only organises the library. It can’t be assigned to an activity and has no
+              calendar, capacity or cost of its own.
+            </p>
+          ) : null}
         </div>
+        {LIBRARY_SCOPING_ENABLED ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={parentSelectId}>Group (optional)</Label>
+            <Select
+              id={parentSelectId}
+              disabled={readOnly}
+              aria-describedby={parentHelpId}
+              {...register('parentId')}
+            >
+              <option value="">{TOP_LEVEL_PARENT_LABEL}</option>
+              {missingParent ? <option value={parentId}>Unavailable</option> : null}
+              {parentOptions.map((row) => (
+                <option key={row.resource.id} value={row.resource.id}>
+                  {/* Non-breaking spaces, so the nesting survives the browser's option rendering
+                      (which collapses ordinary whitespace). */}
+                  {'  '.repeat(row.depth)}
+                  {row.resource.name}
+                </option>
+              ))}
+            </Select>
+            <p id={parentHelpId} className="text-muted-foreground text-sm">
+              Nest this resource under a group to keep a large library navigable. Grouping is
+              organisational only — it never changes how anything is scheduled or levelled.
+            </p>
+          </div>
+        ) : null}
         <TextField
           label="Code (optional)"
           autoComplete="off"
@@ -181,42 +269,47 @@ export function ResourceFormDialog({
           error={errors.code?.message}
           {...register('code')}
         />
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={calendarSelectId}>Calendar (optional)</Label>
-          <Select
-            id={calendarSelectId}
-            disabled={readOnly || calendarsLoading}
-            aria-busy={calendarsLoading}
-            aria-invalid={calendarsError ? true : undefined}
-            aria-describedby={
-              calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
-            }
-            {...register('calendarId')}
-          >
-            <option value="">{INHERIT_CALENDAR_LABEL}</option>
-            {missingCalendar ? (
-              <option value={calendarId}>{calendarsLoading ? 'Loading…' : 'Unavailable'}</option>
-            ) : null}
-            {calendars.map((calendar) => (
-              <option key={calendar.id} value={calendar.id}>
-                {calendar.name}
-              </option>
-            ))}
-          </Select>
-          <p id={calendarHelpId} className="text-muted-foreground text-sm">
-            The working-time calendar this resource is scheduled on when it drives an activity.
-            Inherits the plan’s calendar unless you pick one.
-            {LIBRARY_SCOPING_ENABLED
-              ? ' Organisation calendars only — the resource pool is shared across every project, so a project’s own calendar can’t be used here.'
-              : null}
-          </p>
-          {calendarsError ? (
-            <p id={calendarErrorId} role="alert" className="text-destructive-text text-sm">
-              Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is available.
+        {/* A group has no calendar, capacity or cost (ADR-0053 §3) — the fields are hidden rather
+            than shown-and-rejected, and `use-resources` strips any value left over from a kind
+            switch, so what the form shows and what it sends can never disagree. */}
+        {isGroup ? null : (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={calendarSelectId}>Calendar (optional)</Label>
+            <Select
+              id={calendarSelectId}
+              disabled={readOnly || calendarsLoading}
+              aria-busy={calendarsLoading}
+              aria-invalid={calendarsError ? true : undefined}
+              aria-describedby={
+                calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
+              }
+              {...register('calendarId')}
+            >
+              <option value="">{INHERIT_CALENDAR_LABEL}</option>
+              {missingCalendar ? (
+                <option value={calendarId}>{calendarsLoading ? 'Loading…' : 'Unavailable'}</option>
+              ) : null}
+              {calendars.map((calendar) => (
+                <option key={calendar.id} value={calendar.id}>
+                  {calendar.name}
+                </option>
+              ))}
+            </Select>
+            <p id={calendarHelpId} className="text-muted-foreground text-sm">
+              The working-time calendar this resource is scheduled on when it drives an activity.
+              Inherits the plan’s calendar unless you pick one.
+              {LIBRARY_SCOPING_ENABLED
+                ? ' Organisation calendars only — the resource pool is shared across every project, so a project’s own calendar can’t be used here.'
+                : null}
             </p>
-          ) : null}
-        </div>
-        {RESOURCE_LEVELLING_ENABLED ? (
+            {calendarsError ? (
+              <p id={calendarErrorId} role="alert" className="text-destructive-text text-sm">
+                Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is available.
+              </p>
+            ) : null}
+          </div>
+        )}
+        {RESOURCE_LEVELLING_ENABLED && !isGroup ? (
           <TextField
             label="Max units/hour (optional)"
             type="number"
@@ -231,7 +324,7 @@ export function ResourceFormDialog({
             })}
           />
         ) : null}
-        {EARNED_VALUE_ENABLED ? (
+        {EARNED_VALUE_ENABLED && !isGroup ? (
           <TextField
             label="Cost per unit (optional)"
             type="number"

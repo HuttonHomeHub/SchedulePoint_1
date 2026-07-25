@@ -17,6 +17,7 @@ const CREW: ResourceSummary = {
   code: null,
   description: null,
   kind: 'LABOUR',
+  parentId: null,
   maxUnitsPerHour: null,
   costPerUnit: null,
   calendarId: null,

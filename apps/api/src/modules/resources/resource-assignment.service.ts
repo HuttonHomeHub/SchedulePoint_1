@@ -30,6 +30,8 @@ export const ASSIGNMENT_ERROR = {
   DUPLICATE_ASSIGNMENT: 'DUPLICATE_ASSIGNMENT',
   /** A MATERIAL resource cannot be the driving resource of an activity. */
   MATERIAL_CANNOT_DRIVE: 'MATERIAL_CANNOT_DRIVE',
+  /** A GROUP is a grouping node, not a resource — it can never be assigned or drive (ADR-0053 §3). */
+  GROUP_NOT_ASSIGNABLE: 'GROUP_NOT_ASSIGNABLE',
   /** A zero rate on a units-driven duration recompute (N20, ADR-0040 §5) — rejected pre-division. */
   UNITS_PER_HOUR_ZERO: 'UNITS_PER_HOUR_ZERO',
 } as const;
@@ -105,6 +107,13 @@ export class ResourceAssignmentService {
     // scheduling mutation — so it must hold the plan's edit-lock like the activity write path
     // (inert unless PLAN_EDIT_LOCK_ENFORCED). Placed after the 403/404 checks, before business rules.
     await this.editLock.assertHoldsPen(principal, activity.planId, organization.id);
+
+    // A GROUP may never be an assignment endpoint AT ALL (ADR-0053 §3) — stronger than the MATERIAL
+    // rule below, which only bars DRIVING. This single reject is what makes the parity argument
+    // structural: levelling, the histogram and Earned Value all start from resource_assignments, so
+    // a node that can never be assigned can never enter demand, capacity or cost. Checked before
+    // any other business rule, so a group is rejected for the right reason.
+    if (resource.kind === 'GROUP') throw this.groupNotAssignableError();
 
     const isDriving = dto.isDriving ?? false;
     // A MATERIAL resource may never drive (invariant (b)) — the DB cannot read the kind.
@@ -235,6 +244,10 @@ export class ResourceAssignmentService {
         organization.id,
       );
       if (!resource) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+      // Defence in depth: create already bars a GROUP outright, so an assignment to one cannot
+      // exist — but if a row ever did (a direct DB write, or a resource converted to GROUP by a
+      // path that skipped the RESOURCE_IN_USE guard), it must not be allowed to start driving.
+      if (resource.kind === 'GROUP') throw this.groupNotAssignableError();
       if (resource.kind === 'MATERIAL') throw this.materialCannotDriveError();
     }
 
@@ -346,6 +359,13 @@ export class ResourceAssignmentService {
   private duplicateAssignmentError(): ConflictError {
     return new ConflictError(RESOURCE_ERROR.DUPLICATE_ASSIGNMENT, {
       reason: ASSIGNMENT_ERROR.DUPLICATE_ASSIGNMENT,
+    });
+  }
+
+  /** ADR-0053 §3: a GROUP is a grouping node, never an assignment endpoint → 422. */
+  private groupNotAssignableError(): ValidationError {
+    return new ValidationError(RESOURCE_ERROR.GROUP_NOT_ASSIGNABLE, {
+      reason: ASSIGNMENT_ERROR.GROUP_NOT_ASSIGNABLE,
     });
   }
 

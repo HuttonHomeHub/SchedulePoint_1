@@ -26,6 +26,7 @@ import {
   RESOURCE_KIND_LABELS,
   assignmentFormSchema,
   isMaterialResource,
+  isResourceGroup,
   validateActualUnits,
   validateBudgetedUnits,
   validateMoneyMajor,
@@ -652,7 +653,13 @@ export function ActivityResourcesDialog({
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
   const assignedIds = new Set((assignments.data ?? []).map((a) => a.resourceId));
-  const assignable = (resources.data ?? []).filter((r) => !assignedIds.has(r.id));
+  // A GROUP is a grouping node, not a resource (ADR-0053 §3): the API answers 422
+  // GROUP_NOT_ASSIGNABLE, so offering one would only ever produce an error. Deliberately NOT
+  // flag-gated — a picker must never offer an option the server rejects — and byte-identical with
+  // `VITE_LIBRARY_SCOPING` off, where no group can exist in the first place.
+  const assignable = (resources.data ?? []).filter(
+    (r) => !assignedIds.has(r.id) && !isResourceGroup(r),
+  );
 
   const {
     register,

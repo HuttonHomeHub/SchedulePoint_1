@@ -365,6 +365,39 @@ filter, not an authorisation boundary: the security control is the server-side w
 Deleting a project soft-deletes its PROJECT-scoped calendars (and their exceptions) in the **same batch**,
 so restoring the project restores them; ORG-scoped calendars are never touched.
 
+### Resource hierarchy (ADR-0053 §3)
+
+The org resource pool stays **one flat pool** for scheduling and gains a **navigation tree**: every
+resource carries a nullable `parentId`, and a new `ResourceKind` value **`GROUP`** is a
+non-assignable grouping node. Every addition is optional and every existing field keeps its meaning,
+so **no existing call changes shape**.
+
+| Method       | Path                                             | Notes                                                                                                                                                                       |
+| ------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET          | `…/organizations/:orgSlug/resources`             | **+ query** `parentId=<uuid>` (a group's direct children) or `parentId=null` (top level); **omitted = today's flat library**. **+ response field** `parentId` on every row. |
+| POST / PATCH | `…/organizations/:orgSlug/resources[/:id]`       | **+ body** `parentId` (uuid, or `null` for top level — on PATCH, **omitted** means "unchanged"). `kind` additionally accepts `GROUP`.                                       |
+| DELETE       | `…/organizations/:orgSlug/resources/:resourceId` | Unchanged for a leaf. Deleting a **`GROUP`** soft-deletes its whole active **subtree** under one `delete_batch_id`, and its `RESOURCE_IN_USE` count spans that subtree.     |
+| POST         | `…/activities/:activityId/assignments`           | Unchanged shape; **new reject** 422 `GROUP_NOT_ASSIGNABLE`.                                                                                                                 |
+
+There is deliberately **no `?tree=true` response**: every row carries its `parentId` and the tree is
+acyclic, same-org and ≤ 10 deep by invariant, so a client that pages the library nests it itself.
+
+**New rejections:**
+
+| Status | `details.reason`                 | When                                                                                                                                                    |
+| ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `GROUP_NOT_ASSIGNABLE`           | A `GROUP` was assigned to an activity, or set as its driver. A group is never an assignment endpoint.                                                   |
+| 422    | `RESOURCE_PARENT_NOT_GROUP`      | The proposed `parentId` is an in-org resource that is not a `GROUP`.                                                                                    |
+| 422    | `RESOURCE_PARENT_WRONG_SCOPE`    | The proposed parent is in-org but unusable (the guard's fail-closed same-org re-check).                                                                 |
+| 422    | `RESOURCE_TREE_TOO_DEEP`         | The move would exceed 10 levels, measured as the new parent's depth **plus the moved subtree's height**. `details` carries `maxDepth`/`resultingDepth`. |
+| 422    | `GROUP_HAS_NO_SCHEDULING_FIELDS` | A `GROUP` was given a `calendarId`, `maxUnitsPerHour` or `costPerUnit`. `details.fields` names them.                                                    |
+| 409    | `RESOURCE_PARENT_CYCLE`          | The proposed parent is the resource itself or one of its descendants. Nothing is written.                                                               |
+| 409    | `RESOURCE_IN_USE`                | Existing code; for a `GROUP` the `count` spans the whole subtree and `details.subtreeSize` says how many rows it covers. Also raised on `kind → GROUP`. |
+| 409    | `RESOURCE_GROUP_HAS_CHILDREN`    | `kind` changed **away** from `GROUP` while it still contains rows. Reparent them first.                                                                 |
+
+A `parentId` from **another organisation**, soft-deleted, or unknown is an indistinguishable **404** —
+the tree is never a cross-tenant existence oracle.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

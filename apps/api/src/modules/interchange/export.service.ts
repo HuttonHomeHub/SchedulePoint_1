@@ -223,15 +223,24 @@ export class ExportService {
         type: d.type,
         lagMinutes: d.lagMinutes,
       })),
-      resources: resourceRows.map((r) => ({
-        key: r.id,
-        name: r.name,
-        code: r.code,
-        kind: r.kind,
-        calendarKey: calendarKeyOrNull(r.calendarId),
-        costPerUnit: decimalOrNull(r.costPerUnit),
-        maxUnitsPerHour: decimalOrNull(r.maxUnitsPerHour),
-      })),
+      resources: resourceRows
+        // A GROUP is a grouping node, not a resource (ADR-0053 §3): it can never be assigned, so it
+        // can never be in this set (these rows are resolved FROM the plan's assignments). The filter
+        // is a fail-closed type narrowing rather than a cast — the canonical interchange model
+        // deliberately has no GROUP kind, and if one ever did reach here it must be DROPPED from the
+        // export, never emitted as a phantom resource.
+        .filter(
+          (r): r is typeof r & { kind: Exclude<typeof r.kind, 'GROUP'> } => r.kind !== 'GROUP',
+        )
+        .map((r) => ({
+          key: r.id,
+          name: r.name,
+          code: r.code,
+          kind: r.kind,
+          calendarKey: calendarKeyOrNull(r.calendarId),
+          costPerUnit: decimalOrNull(r.costPerUnit),
+          maxUnitsPerHour: decimalOrNull(r.maxUnitsPerHour),
+        })),
       assignments: assignmentRows.map((a) => ({
         key: a.id,
         activityKey: a.activityId,

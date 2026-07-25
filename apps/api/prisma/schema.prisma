@@ -370,10 +370,23 @@ enum ActivityType {
 // activity but may NEVER be the driving resource of dates (drive is a labour/
 // equipment concept) — a service invariant, not a DB constraint. MUST stay in
 // lock-step with the TypeScript `ResourceKind` union in @repo/types (a separate task).
+// The kind of a resource (M7.1, ADR-0039). LABOUR = a crew/trade; EQUIPMENT = plant
+// (the conformance fixture's NONLABOUR maps here); MATERIAL = a consumable quantity.
+// GROUP (ADR-0053 §3, library-scoping M3) is NOT a resource: it is a non-assignable
+// GROUPING NODE in the resource tree (resources.parent_id). A GROUP carries no calendar,
+// no capacity ceiling and no cost rate — ck_resources_group_no_scheduling_fields enforces
+// that in the row itself — and may never be an assignment endpoint (a service invariant,
+// since a CHECK cannot read another table). That is precisely what makes the parity
+// argument STRUCTURAL rather than observational: the levelling pass, the resource
+// histogram and the Earned-Value read-model all start from resource_assignments, so a
+// node that can never be assigned can never enter demand, capacity or cost. Appended LAST
+// so existing labels keep their sort ordinals. MUST stay in lock-step with the TypeScript
+// RESOURCE_KINDS union in @repo/types.
 enum ResourceKind {
   LABOUR
   EQUIPMENT
   MATERIAL
+  GROUP
 }
 
 // The P6 duration type of an activity (M7 rung 4, ADR-0040). It names which of the
@@ -1869,6 +1882,28 @@ model Resource {
   code            String?
   description     String?
   kind            ResourceKind
+  // The parent GROUP in the resource tree (an ADJACENCY LIST — the ADR-0038
+  // `activities.parent_id` precedent, chosen for the same reasons: a reparent is one UPDATE,
+  // and a materialised path would have to be rewritten across a whole subtree). NULL = a
+  // top-level node. The pool itself stays ONE org-global pool (ADR-0053 §3) — this is a
+  // NAVIGATION tree, not a scoping tier, which is why cross-plan over-allocation and levelling
+  // keep working unchanged.
+  //
+  // What the DB can enforce lives in the DB: ck_resources_parent_not_self (a same-row check).
+  // What it cannot — the parent must be ACTIVE, in the SAME ORG, of kind GROUP, must not be a
+  // descendant of this row (acyclicity), and the tree must stay <= RESOURCE_TREE_MAX_DEPTH
+  // deep (measured as the new parent's depth PLUS the moved subtree's height) — needs the
+  // PARENT row, so those are SERVICE invariants (the identical split ADR-0038 makes for the WBS
+  // parent-type rule). They are enforced under the ORG-SCOPED acquireResourceTreeWriteLock,
+  // because two concurrent MIRROR reparents take different per-resource keys and would
+  // otherwise each walk a tree without the other's uncommitted write and jointly form a cycle.
+  //
+  // Self-FK is RESTRICT like every other hierarchy child (resources soft-delete only, so the
+  // referential check never actually fires; the real path is the service-owned subtree cascade,
+  // which stamps a group and its descendants with one delete_batch_id). Like
+  // activities.parent_id / resources.calendar_id, the FK does NOT enforce same-org.
+  // Backed by the partial idx_resources_parent_id. NEVER read by the CPM engine.
+  parentId        String?      @map("parent_id") @db.Uuid
   // The resource's OWN working-time calendar (ADR-0039; the ADR-0037 port seam rung 2
   // rides). Nullable → the resource inherits the plan calendar at schedule time (the
   // driving-calendar fallback order: driving-resource calendar → activity calendar →
@@ -1922,6 +1957,11 @@ model Resource {
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   calendar     Calendar?            @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  // The resource-tree self-relation (ADR-0053 §3). Prisma requires a NAME on a self-relation;
+  // "ResourceHierarchy" mirrors ADR-0038's WBS self-relation. This tree is ORTHOGONAL to every
+  // other graph in the schema — it carries no logic, no dates and no calendar resolution.
+  parent       Resource?            @relation("ResourceHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children     Resource[]           @relation("ResourceHierarchy")
   assignments  ResourceAssignment[]
 
   // Resource name is unique per org among ACTIVE rows — partial unique
@@ -1934,6 +1974,18 @@ model Resource {
   // full-composite pattern as Calendar / Client; it subsumes a standalone org index.
   // The partial idx_resources_calendar_id (the CALENDAR_IN_USE / driving-calendar load)
   // and idx_resources_delete_batch_id (batch restore) are raw SQL in the migration.
+  //
+  // The partial idx_resources_parent_id (parent_id) WHERE deleted_at IS NULL AND parent_id IS
+  // NOT NULL (raw SQL, ADR-0053 §3) backs the children-of-a-group read (?parentId=), the
+  // descendant BFS behind the GROUP subtree cascade + its subtree RESOURCE_IN_USE count, and the
+  // reparent guard's height walk. Restricted to LIVE rows that actually carry a parent so it
+  // stays tiny — most resources are top-level — mirroring idx_activities_parent_id exactly.
+  // TOP-LEVEL rows (parent_id IS NULL) get NO index of their own: they are the MAJORITY of the
+  // live table (poor selectivity, pure write cost) and the composite below already returns them
+  // in cursor order. A (parent_id, created_at, id) tail is the documented measure-first upgrade
+  // if a tenant ever nests thousands under one group. Two raw-SQL CHECKs guard the tree and the
+  // GROUP kind: ck_resources_parent_not_self and ck_resources_group_no_scheduling_fields (a
+  // fail-closed CASE … ELSE false).
   @@index([organizationId, createdAt, id])
   @@map("resources")
 }

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Resource } from '@prisma/client';
 import { RESOURCE_ERROR, type PageMeta } from '@repo/types';
@@ -5,7 +7,13 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { acquireResourceWriteLock } from '../../common/db/resource-advisory-lock';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
+import { acquireResourceTreeWriteLock } from '../../common/db/resource-tree-advisory-lock';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -13,15 +21,26 @@ import { OrganizationsService } from '../organizations/organizations.service';
 
 import type { CreateResourceDto } from './dto/create-resource.dto';
 import type { UpdateResourceDto } from './dto/update-resource.dto';
+import { assertValidResourceParent, resolveActiveSubtreeIds } from './resource-tree.guard';
 import { ResourceRepository, type ResourcePatch } from './resource.repository';
 
 /** Machine-readable conflict reasons carried in a {@link ConflictError}'s `details` (ADR-0039). */
 export const RESOURCE_CONFLICT = {
   /** A resource name/code collides with an active resource in the same org. */
   DUPLICATE_RESOURCE: 'DUPLICATE_RESOURCE',
-  /** Deleting a resource still assigned to an active activity. */
+  /** Deleting a resource still assigned to an active activity (a GROUP: anywhere in its subtree). */
   RESOURCE_IN_USE: 'RESOURCE_IN_USE',
+  /** Turning a `GROUP` back into an ordinary resource while it still contains rows (ADR-0053 §3). */
+  RESOURCE_GROUP_HAS_CHILDREN: 'RESOURCE_GROUP_HAS_CHILDREN',
 } as const;
+
+/**
+ * PostgreSQL's `check_violation` SQLSTATE. The DB CHECKs behind the resource tree
+ * (`ck_resources_parent_not_self`, `ck_resources_group_no_scheduling_fields`) are the LAST line of
+ * defence behind the service rejects below; if one ever fires it means a service guard was
+ * bypassed, and it should degrade to an honest 422 rather than an opaque 500.
+ */
+const PG_CHECK_VIOLATION = '23514';
 
 /**
  * Business logic for the org-scoped resource library (ADR-0039). A near-clone of
@@ -46,7 +65,7 @@ export class ResourcesService {
   async list(
     principal: Principal,
     orgSlug: string,
-    query: { limit: number; cursor?: string },
+    query: { limit: number; cursor?: string; parentId?: string | null },
   ): Promise<{ items: Resource[]; meta: PageMeta; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:read', organization.id);
@@ -58,6 +77,8 @@ export class ResourcesService {
       organizationId: organization.id,
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
+      // Tree filter (ADR-0053 §3). Omitted ⇒ the whole flat library, byte-identical to before.
+      ...(query.parentId === undefined ? {} : { parentId: query.parentId }),
     });
 
     const hasMore = rows.length > query.limit;
@@ -90,8 +111,28 @@ export class ResourcesService {
     const canReadCost = principal.can('cost:read', organization.id);
 
     const calendarId = dto.calendarId ?? null;
+    const parentId = dto.parentId ?? null;
+    // A GROUP is a pure grouping node (ADR-0053 §3): no calendar, no capacity ceiling, no cost
+    // rate. Rejected here as a clean 422 so the same-row CHECK behind it never has to fire.
+    this.assertGroupHasNoSchedulingFields(dto.kind, {
+      calendarId,
+      maxUnitsPerHour: dto.maxUnitsPerHour ?? null,
+      costPerUnit: dto.costPerUnit ?? null,
+    });
+
     try {
       const resource = await this.prisma.$transaction(async (tx) => {
+        // Tree-shape write ⇒ the ORG-scoped tree lock, taken FIRST (see the documented lock order
+        // on `remove`). Only taken when a parent is actually requested, so the ordinary
+        // "create a top-level resource" path keeps today's lock profile exactly.
+        if (parentId !== null) {
+          await acquireResourceTreeWriteLock(tx, organization.id);
+          await assertValidResourceParent(tx, this.resources, {
+            parentId,
+            organizationId: organization.id,
+            selfId: null,
+          });
+        }
         // A specific calendar must be active + in-org (invariant (a)) AND org-GLOBAL: the
         // resource pool is deliberately unfragmented (ADR-0039), so an org-global resource may
         // only hold an org-global calendar. Passing `projectId: null` to THE shared guard is
@@ -112,6 +153,8 @@ export class ResourcesService {
             code: dto.code ?? null,
             description: dto.description ?? null,
             kind: dto.kind,
+            // Resource-tree position (ADR-0053 §3); null = top level. Validated above under the lock.
+            parentId,
             calendarId,
             // Capacity ceiling (ADR-0041 §2); null/omitted = uncapped. Client-settable; dark until L2.
             maxUnitsPerHour: dto.maxUnitsPerHour ?? null,
@@ -130,7 +173,7 @@ export class ResourcesService {
       return { resource, canReadCost };
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateResourceError();
-      throw error;
+      throw this.mapCheckViolation(error);
     }
   }
 
@@ -144,9 +187,8 @@ export class ResourcesService {
     this.assertCan(principal, 'resource:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
 
-    if (!(await this.resources.findActiveByIdInOrg(resourceId, organization.id))) {
-      throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
-    }
+    const existing = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
+    if (!existing) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
 
     const patch: ResourcePatch = {};
     if (dto.name !== undefined) patch.name = dto.name;
@@ -164,8 +206,70 @@ export class ResourcesService {
     const calendarId = dto.calendarId;
     if (calendarId === null) patch.calendarId = null;
 
+    // The POST-PATCH shape of the row, which is what the GROUP rule must be judged against: a
+    // field the client did not send keeps its stored value, so clearing `kind` to GROUP while a
+    // stored calendar/ceiling/rate survives is exactly the case to reject (and the case the DB
+    // CHECK would otherwise catch as a 500).
+    const effectiveKind = dto.kind ?? existing.kind;
+    this.assertGroupHasNoSchedulingFields(effectiveKind, {
+      calendarId: calendarId === undefined ? existing.calendarId : calendarId,
+      maxUnitsPerHour:
+        dto.maxUnitsPerHour === undefined
+          ? (existing.maxUnitsPerHour?.toNumber() ?? null)
+          : dto.maxUnitsPerHour,
+      costPerUnit:
+        dto.costPerUnit === undefined
+          ? (existing.costPerUnit?.toNumber() ?? null)
+          : dto.costPerUnit,
+    });
+
+    // A parent-CHANGING write (including an explicit `null` that promotes a row to top level) and
+    // a kind change to/from GROUP both reshape the tree, so both take the org-scoped tree lock.
+    const reparenting = dto.parentId !== undefined;
+    const kindTouchesGroup =
+      dto.kind !== undefined && (dto.kind === 'GROUP' || existing.kind === 'GROUP');
+    if (dto.parentId !== undefined) patch.parentId = dto.parentId;
+
     try {
       await this.prisma.$transaction(async (tx) => {
+        if (reparenting || kindTouchesGroup) {
+          await acquireResourceTreeWriteLock(tx, organization.id);
+        }
+        // Becoming a GROUP: a group can never be an assignment endpoint, so an already-assigned
+        // resource may not be converted (409 RESOURCE_IN_USE — the same guard the delete uses).
+        if (dto.kind === 'GROUP' && existing.kind !== 'GROUP') {
+          const inUse = await this.resources.countActiveAssignmentsUsing(resourceId, tx);
+          if (inUse > 0) {
+            throw new ConflictError(RESOURCE_ERROR.RESOURCE_IN_USE, {
+              reason: RESOURCE_CONFLICT.RESOURCE_IN_USE,
+              count: inUse,
+            });
+          }
+        }
+        // Ceasing to be a GROUP: only a GROUP may be a parent, so the children would be orphaned
+        // under a non-group. Reparent them first (the ADR-0038 type-change precedent).
+        if (existing.kind === 'GROUP' && dto.kind !== undefined && dto.kind !== 'GROUP') {
+          const children = await this.resources.countActiveChildrenOf(
+            resourceId,
+            organization.id,
+            tx,
+          );
+          if (children > 0) {
+            throw new ConflictError(RESOURCE_ERROR.RESOURCE_GROUP_HAS_CHILDREN, {
+              reason: RESOURCE_CONFLICT.RESOURCE_GROUP_HAS_CHILDREN,
+              count: children,
+            });
+          }
+        }
+        // Nesting under a group: acyclic, same-org, GROUP parent, depth-capped — all under the
+        // lock taken above, so a concurrent mirror reparent cannot slip a cycle past two walks.
+        if (dto.parentId !== undefined && dto.parentId !== null) {
+          await assertValidResourceParent(tx, this.resources, {
+            parentId: dto.parentId,
+            organizationId: organization.id,
+            selfId: resourceId,
+          });
+        }
         if (calendarId !== undefined && calendarId !== null) {
           // Same org-global-only rule as create (ADR-0053 §2): `projectId: null` rejects any
           // project-scoped calendar.
@@ -189,7 +293,7 @@ export class ResourcesService {
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateResourceError();
-      throw error;
+      throw this.mapCheckViolation(error);
     }
 
     const updated = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
@@ -201,37 +305,130 @@ export class ResourcesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:delete', organization.id);
 
-    if (!(await this.resources.findActiveByIdInOrg(resourceId, organization.id))) {
-      throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
-    }
+    const existing = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
+    if (!existing) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
 
-    // Delete-in-use guard (ADR-0039 invariant (c)): a resource assigned to an active
-    // activity cannot be deleted (409 RESOURCE_IN_USE). Soft delete never trips the DB
-    // FK, so this service check is the real guard (RESTRICT is defence in depth). The
-    // resource advisory lock — taken by both this delete and every assign — serialises
-    // the count + delete against a concurrent assign, which a single READ COMMITTED
-    // transaction alone would NOT (a commit landing after the count but before the
-    // delete stays invisible to the count), so the guard cannot be raced.
+    // A GROUP delete is a tree-SHAPE change: it sweeps a whole branch, so it must also hold the
+    // org-scoped tree lock (ADR-0053 §3), or a concurrent reparent could move a resource INTO the
+    // branch between the subtree walk and the write, leaving an active child under a soft-deleted
+    // parent. An ordinary resource can never have children (only a GROUP may be a parent), so its
+    // subtree is itself and it keeps today's per-resource lock profile exactly.
+    //
+    // LOCK ORDER (the only order either path ever takes, so the two can never deadlock):
+    //   1. the org resource-tree lock (GROUP deletes and reparents only), then
+    //   2. the per-resource assign locks, in ASCENDING id order.
+    const isGroup = existing.kind === 'GROUP';
+
+    // Delete-in-use guard (ADR-0039 invariant (c)): a resource assigned to an active activity
+    // cannot be deleted (409 RESOURCE_IN_USE) — for a GROUP, that means ANY resource in its whole
+    // subtree, so the count in the message is honest. Soft delete never trips the DB FK, so this
+    // service check is the real guard (RESTRICT is defence in depth). The resource advisory lock —
+    // taken by both this delete and every assign — serialises the count + delete against a
+    // concurrent assign, which a single READ COMMITTED transaction alone would NOT (a commit
+    // landing after the count but before the delete stays invisible to the count).
     await this.prisma.$transaction(async (tx) => {
-      await acquireResourceWriteLock(tx, resourceId);
-      const inUse = await this.resources.countActiveAssignmentsUsing(resourceId, tx);
+      if (isGroup) await acquireResourceTreeWriteLock(tx, organization.id);
+      const subtreeIds = isGroup
+        ? await resolveActiveSubtreeIds(tx, this.resources, resourceId, organization.id)
+        : [resourceId];
+      // Ascending id order — a fixed total order, so two concurrent deletes of overlapping
+      // branches acquire the shared keys in the same sequence and cannot deadlock.
+      for (const id of [...subtreeIds].sort()) await acquireResourceWriteLock(tx, id);
+
+      // A leaf keeps the single-resource count it has always used; only a GROUP needs the
+      // subtree-wide one, so the ordinary delete path is unchanged in behaviour AND in queries.
+      const inUse = isGroup
+        ? await this.resources.countActiveAssignmentsUsingAny(subtreeIds, tx)
+        : await this.resources.countActiveAssignmentsUsing(resourceId, tx);
       if (inUse > 0) {
         throw new ConflictError(RESOURCE_ERROR.RESOURCE_IN_USE, {
           reason: RESOURCE_CONFLICT.RESOURCE_IN_USE,
           count: inUse,
+          // How many rows the count spans — 1 for an ordinary resource, the branch for a group —
+          // so the UI can say "3 resources in this group are still assigned".
+          subtreeSize: subtreeIds.length,
         });
       }
-      await this.resources.softDelete(resourceId, principal.userId, tx);
+      if (isGroup) {
+        // ONE batch id across the branch (the ADR-0038 subtree-cascade precedent): the branch is
+        // the restore unit, so a future restore reactivates exactly what was deleted together.
+        await this.resources.softDeleteMany(subtreeIds, randomUUID(), principal.userId, tx);
+      } else {
+        // A leaf is its own batch — today's exact single-row path, left untouched.
+        await this.resources.softDelete(resourceId, principal.userId, tx);
+      }
     });
     this.logger.info(
-      { organizationId: organization.id, resourceId, userId: principal.userId },
+      {
+        organizationId: organization.id,
+        resourceId,
+        kind: existing.kind,
+        userId: principal.userId,
+      },
       'resource deleted',
     );
+  }
+
+  /**
+   * A `GROUP` is a grouping node, not a resource: it carries no working calendar, no capacity
+   * ceiling and no cost rate (ADR-0053 §3). That emptiness is not cosmetic — it is exactly why a
+   * group is invisible to the levelling pass, the histogram and the Earned-Value read-model, so
+   * introducing the tree cannot change a single schedule output. Enforced here as a clean 422 in
+   * front of the same-row `ck_resources_group_no_scheduling_fields`, which is the DB backstop.
+   */
+  private assertGroupHasNoSchedulingFields(
+    kind: Resource['kind'],
+    fields: {
+      calendarId: string | null;
+      maxUnitsPerHour: number | null;
+      costPerUnit: number | null;
+    },
+  ): void {
+    if (kind !== 'GROUP') return;
+    const offending = (
+      [
+        ['calendarId', fields.calendarId],
+        ['maxUnitsPerHour', fields.maxUnitsPerHour],
+        ['costPerUnit', fields.costPerUnit],
+      ] as const
+    )
+      .filter(([, value]) => value !== null)
+      .map(([field]) => field);
+    if (offending.length === 0) return;
+    throw new ValidationError(RESOURCE_ERROR.GROUP_HAS_NO_SCHEDULING_FIELDS, {
+      reason: 'GROUP_HAS_NO_SCHEDULING_FIELDS',
+      fields: offending,
+    });
   }
 
   /** A Prisma unique-violation from a partial unique index (resource name or code). */
   private isUniqueViolation(error: unknown): boolean {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+  }
+
+  /**
+   * Degrade a DB CHECK violation (`ck_resources_parent_not_self`,
+   * `ck_resources_group_no_scheduling_fields`) into an honest 422 instead of an opaque 500.
+   * Reaching here means a service guard above was bypassed — the DB is doing its job as the last
+   * line of defence — so the response should say what is wrong rather than "internal error".
+   * Every other error is returned untouched for the caller to rethrow.
+   */
+  private mapCheckViolation(error: unknown): unknown {
+    // Prisma surfaces a CHECK violation differently per client method (a known P2010 for raw, an
+    // "unknown request" for the query engine's own paths), so match on the SQLSTATE / constraint
+    // name carried in the message rather than on the error class — the one thing all of them
+    // share. Not a fragile heuristic: both names are ours and are asserted by the migration test.
+    if (!(error instanceof Error)) return error;
+    const message = error.message;
+    if (!message.includes(PG_CHECK_VIOLATION) && !message.includes('ck_resources_')) return error;
+    if (message.includes('ck_resources_parent_not_self')) {
+      return new ConflictError(RESOURCE_ERROR.RESOURCE_PARENT_CYCLE, {
+        reason: 'RESOURCE_PARENT_CYCLE',
+      });
+    }
+    return new ValidationError(RESOURCE_ERROR.GROUP_HAS_NO_SCHEDULING_FIELDS, {
+      reason: 'GROUP_HAS_NO_SCHEDULING_FIELDS',
+    });
   }
 
   private duplicateResourceError(): ConflictError {

@@ -739,8 +739,38 @@ deleted_at IS NULL` guarantees **≤ 1** driver per activity in the DB; **"exact
   resource `kind`). Duplicate assignments are blocked by `uq_resource_assignments_activity_resource
 (activity_id, resource_id) WHERE deleted_at IS NULL` (backs `DUPLICATE_ASSIGNMENT`
   409), whose leftmost prefix also serves the "load an activity's assignments" query.
+- **The resource tree (`parent_id` + `GROUP`, ADR-0053 §3).** `resources.parent_id` is a
+  nullable **self-FK** (RESTRICT, Prisma relation `ResourceHierarchy`) — an adjacency list,
+  the `activities.parent_id` precedent (ADR-0038). `NULL` = top level. The pool stays **one
+  org-global pool**; this is a **navigation** tree, not a scoping tier, which is why
+  cross-plan over-allocation and levelling are untouched. A new `ResourceKind` member
+  **`GROUP`** is a non-assignable grouping node: `ck_resources_group_no_scheduling_fields`
+  (a **same-row**, **fail-closed** `CASE … ELSE false`) forbids it a `calendar_id`,
+  `max_units_per_hour` or `cost_per_unit`, and the service forbids it as an assignment
+  endpoint (`GROUP_NOT_ASSIGNABLE`). Together those make the CPM/levelling/histogram/EV
+  parity argument **structural** — all four read from `resource_assignments`.
+  `ck_resources_parent_not_self` blocks the trivial 1-node cycle; **transitive acyclicity,
+  same-org, "only a GROUP may parent" and depth ≤ 10** need the _parent_ row and so are
+  **service** invariants, held under a new **org-scoped** `resource-tree` advisory lock
+  (a per-resource lock cannot serialise two mirror reparents — they take different keys).
+  Backed by the partial `idx_resources_parent_id (parent_id) WHERE deleted_at IS NULL AND
+parent_id IS NOT NULL`; top-level rows are served by the existing
+  `(organization_id, created_at, id)` composite and get no index of their own.
+  **Name uniqueness stays org-wide and shared with leaf resources** (`uq_resources_org_name`)
+  — deliberately unlike the per-tier calendar split, because a resource must have one
+  globally unambiguous handle for levelling and the histogram. Because the CHECK names the
+  `'GROUP'` literal, the enum member and everything referencing it are **two migrations**
+  (`20260725130000_resource_group_kind`, `20260725130100_resource_hierarchy`): Postgres
+  forbids using a label in the transaction that added it. Adding a future `ResourceKind`
+  costs the same split, plus a new `WHEN` branch — an e2e round-trip over every enum value
+  makes the omission a CI failure.
 - **Delete guards (service-owned).** A `RESOURCE_IN_USE` guard blocks soft-deleting a
-  resource assigned to an **active** activity (409, mirroring `CALENDAR_IN_USE`), and
+  resource assigned to an **active** activity (409, mirroring `CALENDAR_IN_USE`) — for a
+  `GROUP` the count spans its **whole active subtree**, and the delete then stamps that
+  subtree with **one** `delete_batch_id` (the ADR-0038 subtree-cascade precedent), making
+  the branch a single restore unit. A `GROUP` delete takes the tree lock as well, in the
+  fixed order **org tree lock → per-resource assign locks ascending by id**, so a
+  concurrent reparent cannot leave an active child under a deleted parent. And
   the `CALENDAR_IN_USE` guard is **extended** to also count active resources
   referencing a calendar (a third referencer, alongside active plans + activities) —
   backed by `idx_resources_calendar_id`. Soft-deleting an activity **sweeps its

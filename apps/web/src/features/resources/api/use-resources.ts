@@ -35,33 +35,53 @@ function optional(value?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/**
+ * A `GROUP` is a grouping node, not a resource (ADR-0053 §3): it carries no calendar, capacity or
+ * cost, and the API rejects one that does (422 `GROUP_HAS_NO_SCHEDULING_FIELDS`). The form hides
+ * those fields for a group, but a kind switched AFTER they were filled would otherwise still send
+ * the stale values — so they are stripped here, at the one place every write goes through.
+ */
+function schedulingFieldsFor(input: ResourceFormValues) {
+  const isGroup = input.kind === 'GROUP';
+  return {
+    calendarId: isGroup ? undefined : optional(input.calendarId),
+    maxUnitsPerHour: isGroup ? undefined : input.maxUnitsPerHour,
+    costPerUnit: isGroup ? undefined : majorInputToMinor(input.costPerUnit),
+  };
+}
+
 function createResourceBody(input: ResourceFormValues) {
-  const costPerUnit = majorInputToMinor(input.costPerUnit);
+  const { calendarId, maxUnitsPerHour, costPerUnit } = schedulingFieldsFor(input);
   return {
     name: input.name,
     kind: input.kind,
     code: optional(input.code),
     description: optional(input.description),
-    calendarId: optional(input.calendarId),
+    calendarId,
+    // Resource-tree position (ADR-0053 §3): omit when blank so a resource is created top-level.
+    ...(optional(input.parentId) === undefined ? {} : { parentId: optional(input.parentId) }),
     // Levelling capacity (ADR-0041): omit when blank so an uncapped resource stays uncapped.
-    ...(input.maxUnitsPerHour === undefined ? {} : { maxUnitsPerHour: input.maxUnitsPerHour }),
+    ...(maxUnitsPerHour === undefined ? {} : { maxUnitsPerHour }),
     // Cost rate (EV4b, ADR-0042), major → minor units. Omit when blank so a rate-less resource stays so.
     ...(costPerUnit === undefined ? {} : { costPerUnit }),
   };
 }
 
 function updateResourceBody(input: ResourceFormValues & { version: number }) {
-  const costPerUnit = majorInputToMinor(input.costPerUnit);
+  const { calendarId, maxUnitsPerHour, costPerUnit } = schedulingFieldsFor(input);
   return {
     name: input.name,
     kind: input.kind,
     code: optional(input.code) ?? null,
     description: optional(input.description) ?? null,
-    calendarId: optional(input.calendarId) ?? null,
+    calendarId: calendarId ?? null,
+    // Resource-tree position (ADR-0053 §3): a blank picker means top level, so this sends an
+    // explicit null — the API distinguishes "omitted" (unchanged) from "null" (promote to top).
+    parentId: optional(input.parentId) ?? null,
     // Levelling capacity (ADR-0041): a blank field clears the ceiling → null (uncapped). The form
     // always seeds this from the row (even with the field hidden), so an edit round-trips the stored
     // value rather than silently clearing it.
-    maxUnitsPerHour: input.maxUnitsPerHour === undefined ? null : input.maxUnitsPerHour,
+    maxUnitsPerHour: maxUnitsPerHour === undefined ? null : maxUnitsPerHour,
     // Cost rate (EV4b, ADR-0042): a blank field clears the rate → null. The form always seeds this from
     // the row (even with the field hidden), so an edit round-trips the stored value in minor units.
     costPerUnit: costPerUnit === undefined ? null : costPerUnit,

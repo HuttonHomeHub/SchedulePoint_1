@@ -1154,10 +1154,38 @@ export interface PlanEditLockErrorDetails {
  * consumable quantity (concrete m³, steel te). Kept in lock-step with the API's
  * Prisma `ResourceKind` enum. A MATERIAL resource may be assigned to an activity but
  * may NEVER be the driving resource of its dates (see {@link RESOURCE_ERROR}).
+ *
+ * `GROUP` (ADR-0053 §3, library-scoping M3) is the odd one out: it is **not a resource** but a
+ * non-assignable **grouping node** in the resource tree ({@link ResourceSummary.parentId}). It
+ * carries no calendar, no capacity ceiling and no cost rate (a same-row DB CHECK enforces that),
+ * and may never be assigned to an activity — which is exactly why the levelling pass, the
+ * histogram and the Earned-Value read-model cannot see it: they all start from *assignments*.
+ * Use {@link ASSIGNABLE_RESOURCE_KINDS} wherever a picker offers "a resource to assign".
  */
-export const RESOURCE_KINDS = ['LABOUR', 'EQUIPMENT', 'MATERIAL'] as const;
+export const RESOURCE_KINDS = ['LABOUR', 'EQUIPMENT', 'MATERIAL', 'GROUP'] as const;
 
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+
+/**
+ * The resource kinds that may actually be assigned to an activity (ADR-0053 §3) — every kind
+ * except the `GROUP` grouping node. Exported so a picker filters on the invariant rather than
+ * re-spelling `kind !== 'GROUP'` in each surface (the API rejects a GROUP assignment with 422
+ * `GROUP_NOT_ASSIGNABLE` regardless — this is the usability half).
+ */
+export const ASSIGNABLE_RESOURCE_KINDS = RESOURCE_KINDS.filter(
+  (kind): kind is Exclude<ResourceKind, 'GROUP'> => kind !== 'GROUP',
+);
+
+/** A resource kind that can be assigned to an activity — see {@link ASSIGNABLE_RESOURCE_KINDS}. */
+export type AssignableResourceKind = Exclude<ResourceKind, 'GROUP'>;
+
+/**
+ * The maximum depth of the resource tree (ADR-0053 §3): a resource may sit at most this many
+ * `parentId` hops below a top-level node. Bounds the service's ancestor walk and keeps a picker
+ * legible; exceeding it is a 422 `RESOURCE_TREE_TOO_DEEP`. Shared so the web can warn before the
+ * round-trip rather than duplicating the number.
+ */
+export const RESOURCE_TREE_MAX_DEPTH = 10;
 
 /**
  * The P6 duration type of an activity (M7 rung 4, ADR-0040). It names which of the triad
@@ -1405,6 +1433,14 @@ export interface ResourceSummary {
   code: string | null;
   description: string | null;
   kind: ResourceKind;
+  /**
+   * The parent `GROUP` in the resource tree (adjacency list, ADR-0053 §3 — the ADR-0038 WBS
+   * precedent). `null` = a top-level node. Only a `GROUP` may be a parent, and the tree is
+   * acyclic, same-org and at most {@link RESOURCE_TREE_MAX_DEPTH} deep — service invariants, so
+   * a client may nest the flat list safely. **Never read by the CPM engine, the levelling pass
+   * or the EV read-model** — the pool stays one flat org-global pool for scheduling purposes.
+   */
+  parentId: string | null;
   calendarId: string | null;
   /**
    * Capacity ceiling — the maximum units of this resource available per working hour (ADR-0041 §2).
@@ -1535,6 +1571,32 @@ export const RESOURCE_ERROR = {
    */
   UNITS_PER_HOUR_ZERO:
     'The rate (units/time) must be greater than zero to drive an activity’s duration.',
+  /** A `GROUP` is a grouping node, not a resource — it can never be assigned or drive (→ 422). */
+  GROUP_NOT_ASSIGNABLE: 'A group can’t be assigned to an activity.',
+  /** A proposed `parentId` is an in-org resource that is not a `GROUP` (→ 422). */
+  RESOURCE_PARENT_NOT_GROUP: 'Only a group can contain resources.',
+  /**
+   * A proposed `parentId` is in-org but cannot be used as a parent — today, a resource trying to
+   * parent itself (→ 422). A parent in ANOTHER organisation (or deleted/unknown) is deliberately a
+   * plain 404 instead, so the tree never becomes a cross-tenant existence oracle.
+   */
+  RESOURCE_PARENT_WRONG_SCOPE: 'That parent can’t be used.',
+  /** The proposed parent is the resource itself or one of its descendants (→ 409). */
+  RESOURCE_PARENT_CYCLE: 'That would nest a resource inside itself.',
+  /** The move would push the subtree past {@link RESOURCE_TREE_MAX_DEPTH} (→ 422). */
+  RESOURCE_TREE_TOO_DEEP: 'That group is nested too deeply.',
+  /**
+   * A `GROUP` was given a calendar, a capacity ceiling or a cost rate (→ 422). A grouping node
+   * has none of those by definition — which is what makes it invisible to scheduling, levelling
+   * and Earned Value. Backed by the same-row CHECK `ck_resources_group_no_scheduling_fields`.
+   */
+  GROUP_HAS_NO_SCHEDULING_FIELDS:
+    'A group has no calendar, capacity or cost — clear those to make this a group.',
+  /**
+   * A `GROUP` was being changed into an ordinary resource while it still contains children (→ 409).
+   * Reparent them first; the ADR-0038 type-change precedent (a WBS summary with descendants).
+   */
+  RESOURCE_GROUP_HAS_CHILDREN: 'Move the resources out of this group first.',
   /** The referenced resource does not exist in this organisation (→ 404). */
   RESOURCE_NOT_FOUND: 'Resource not found.',
   /** The referenced assignment does not exist in this organisation (→ 404). */

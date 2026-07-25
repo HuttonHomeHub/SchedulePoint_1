@@ -1,7 +1,7 @@
 # ADR-0053: Calendar scoping tiers & the resource management layer
 
-- **Status:** Accepted (M1 — §1 the tier, §2 the guard & lifecycle). §3 (resource hierarchy)
-  accepts with M3, §4 (archive) with M4, §5 (interchange tiering) with M5 — see the
+- **Status:** Accepted (M1 — §1 the tier, §2 the guard & lifecycle; M3 — §3 the resource
+  hierarchy). §4 (archive) accepts with M4, §5 (interchange tiering) with M5 — see the
   acceptance-status ledger at the foot of this ADR.
 - **Date:** 2026-07-25
 - **Deciders:** Product Owner (scope, CQ-1…CQ-7), Solution Architect, Technical Lead;
@@ -161,13 +161,60 @@ a list returns. The new `GET …/projects/:projectId/calendars` returns the proj
 set_ (its own + all ORG), which is exactly what the guard accepts — so a picker fed from it can
 never offer something the write seam would reject.
 
-### 3. The resource pool stays a single org-level pool _(accepts with M3)_
+### 3. The resource pool stays a single org-level pool _(Accepted with M3)_
 
 Manageability comes from an **adjacency-list `parent_id`** (the ADR-0038 precedent) plus a
 **non-assignable `GROUP` `ResourceKind`**, so a grouping node has no calendar, capacity, cost or
 assignment — which makes the levelling/histogram/EV parity argument _trivial_. Invariants
 (acyclic, same-org, only a `GROUP` may parent, depth ≤ 10) are service-owned under a new
 **org-scoped** resource-tree advisory lock.
+
+**The `GROUP` kind is what makes the parity argument structural.** Every resource-consuming
+read-model — the levelling pass (ADR-0041), the histogram/curve read (ADR-0044) and Earned
+Value (ADR-0042) — starts from `resource_assignments`. A node that can never be an assignment
+endpoint therefore contributes zero demand, zero capacity and zero cost **by construction**,
+not by observation. Two guards make that true: the same-row CHECK
+`ck_resources_group_no_scheduling_fields` (no calendar / capacity ceiling / cost rate) and the
+service's `GROUP_NOT_ASSIGNABLE` reject at the assignment seam. A structural test
+(`resource-tree-parity.structural.spec.ts`) pins both down, alongside the assertion that
+`EngineResource` exposes only `id` / `capacity` / `calendar`.
+
+**Two migration files, not one.** On PostgreSQL 12+ `ALTER TYPE … ADD VALUE` is transactional,
+but the new label **cannot be used** in the transaction that added it
+(`check_safe_enum_use`). `ck_resources_group_no_scheduling_fields` names the `'GROUP'` literal,
+so the enum member lands in `20260725130000_resource_group_kind` and everything referencing it
+in `20260725130100_resource_hierarchy`. (M1's `CalendarScope` avoided this only because a type
+`CREATE`d in the same transaction is exempt.) The CHECK is written **fail-closed** as
+`CASE … ELSE false` over every label — the `ck_notes_exactly_one_parent` / §1 precedent — so a
+future `ResourceKind` added without its own branch is rejected rather than silently granted
+scheduling fields; an e2e round-trip over `Object.values(ResourceKind)` turns that into a CI
+failure instead of a production 500. Adding a kind therefore costs the same two-file dance.
+
+**Depth is measured as `depth(newParent) + height(movedSubtree)`,** not from the ancestors
+alone: an ancestors-only cap would let a 6-deep branch be moved under a 6-deep parent and land
+at 12.
+
+**Delete of a `GROUP` is a subtree cascade** (the ADR-0038 precedent): the whole active branch
+is counted for `RESOURCE_IN_USE` (the 409 carries the **subtree** count, so an empty-looking
+group gives an honest message) and soft-deleted under **one** `delete_batch_id`, making the
+branch the restore unit. A `GROUP` delete also takes the tree lock — a concurrent reparent
+could otherwise move a row into the branch between the subtree walk and the write, leaving an
+active child under a deleted parent. Lock order is fixed at **org tree lock → per-resource
+assign locks in ascending id order**, so the delete and reparent paths cannot deadlock.
+
+**The name namespace stays org-wide and shared with leaf resources** (`uq_resources_org_name`):
+a group named "Excavators" collides with an equipment resource of the same name, and "Crew A"
+cannot exist under two groups. This is deliberately **unlike** §1's per-tier calendar split —
+calendars gained a _tier_, resources gained only a _grouping_, and levelling, the histogram and
+over-allocation all identify a resource by one globally unambiguous handle. Per-parent
+uniqueness would make every picker ambiguous.
+
+**Reads.** Every resource carries its `parentId`, and `GET …/resources` gains an optional
+`?parentId=<uuid>|null` filter (children of a group / top level; omitted = today's flat
+library). A separate bounded `?tree=true` response was **not** built: the web client already
+pages the whole library (`apiFetchAllPages`) and nests client-side from `parentId`, so a second
+unpaginated shape would be a parallel code path with no consumer. If M4's server-side search
+makes whole-library paging untenable, the tree read is re-opened there with a real caller.
 
 ### 4. `archived_at` on `resources` and `calendars` _(accepts with M4)_
 
@@ -245,7 +292,7 @@ rows loaded **by calendar id**; it never receives `organization_id`, and it will
 | §1 Calendar scope tier (schema, CHECK, per-tier uniques)      | M1        | **Accepted** |
 | §2 Shared guard, scope change, cascade, `calendar:manage_org` | M1        | **Accepted** |
 | §6 Engine untouched / parity gate                             | M1        | **Accepted** |
-| §3 Resource hierarchy (`parent_id`, `GROUP`)                  | M3        | Proposed     |
+| §3 Resource hierarchy (`parent_id`, `GROUP`)                  | M3        | **Accepted** |
 | §4 `archived_at` on resources + calendars                     | M4        | Proposed     |
 | §5 Interchange tier mapping                                   | M5        | Proposed     |
 

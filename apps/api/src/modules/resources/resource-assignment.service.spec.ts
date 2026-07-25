@@ -44,6 +44,7 @@ function resource(overrides: Partial<Resource> = {}): Resource {
     code: null,
     description: null,
     kind: 'LABOUR',
+    parentId: null,
     maxUnitsPerHour: null,
     costPerUnit: null,
     calendarId: null,
@@ -226,6 +227,20 @@ describe('ResourceAssignmentService', () => {
       expect(assignments.create).not.toHaveBeenCalled();
     });
 
+    it('rejects assigning a GROUP outright — not merely as the driver (422 GROUP_NOT_ASSIGNABLE)', async () => {
+      // Stronger than the MATERIAL rule above: a GROUP may not be an assignment endpoint AT ALL
+      // (ADR-0053 §3). This single reject is what keeps levelling / the histogram / EV free of the
+      // resource tree, since all three start from assignments.
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ kind: 'GROUP' }));
+      await expect(
+        service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          resourceId: RESOURCE_ID,
+          isDriving: false,
+        }),
+      ).rejects.toMatchObject({ details: { reason: 'GROUP_NOT_ASSIGNABLE' } });
+      expect(assignments.create).not.toHaveBeenCalled();
+    });
+
     it('setting a driver first clears any other driver on the activity (a move, not a P2002)', async () => {
       await service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
         resourceId: RESOURCE_ID,
@@ -324,6 +339,15 @@ describe('ResourceAssignmentService', () => {
       await expect(
         service.update(principalWith(ALL), 'acme', 'asg-1', { isDriving: true, version: 1 }),
       ).rejects.toBeInstanceOf(ValidationError);
+      expect(assignments.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
+    it('rejects setting the driver on when the resource is somehow a GROUP (422, defence in depth)', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ kind: 'GROUP' }));
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'asg-1', { isDriving: true, version: 1 }),
+      ).rejects.toMatchObject({ details: { reason: 'GROUP_NOT_ASSIGNABLE' } });
       expect(assignments.updateIfVersionMatches).not.toHaveBeenCalled();
     });
 

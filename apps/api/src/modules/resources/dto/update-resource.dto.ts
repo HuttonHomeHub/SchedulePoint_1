@@ -50,10 +50,31 @@ export class UpdateResourceDto {
   @MaxLength(2000)
   description?: string;
 
-  @ApiPropertyOptional({ enum: ResourceKind })
+  @ApiPropertyOptional({
+    enum: ResourceKind,
+    description:
+      'Changing to GROUP requires the resource to have no active assignments (409 RESOURCE_IN_USE) ' +
+      'and no calendar/capacity/cost (422 GROUP_HAS_NO_SCHEDULING_FIELDS); changing AWAY from GROUP ' +
+      'requires it to be empty (409 RESOURCE_GROUP_HAS_CHILDREN).',
+  })
   @IsOptional()
   @IsEnum(ResourceKind)
   kind?: ResourceKind;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Re-parent this resource in the tree (ADR-0053 §3): an active GROUP in the same organisation, ' +
+      'or null to move it to top level. Rejects a cycle (409 RESOURCE_PARENT_CYCLE), a non-group ' +
+      'parent (422 RESOURCE_PARENT_NOT_GROUP) and a move past 10 levels (422 RESOURCE_TREE_TOO_DEEP). ' +
+      'Omit to leave the position unchanged.',
+  })
+  @IsOptional()
+  // Allow an explicit null (move to top level); validate the shape only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'parentId must be a valid UUID.' })
+  parentId?: string | null;
 
   @ApiPropertyOptional({
     format: 'uuid',

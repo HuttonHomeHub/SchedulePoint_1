@@ -53,10 +53,29 @@ export class CreateResourceDto {
 
   @ApiProperty({
     enum: ResourceKind,
-    description: 'LABOUR (crew/trade), EQUIPMENT (plant/machinery) or MATERIAL (a consumable).',
+    description:
+      'LABOUR (crew/trade), EQUIPMENT (plant/machinery), MATERIAL (a consumable), or GROUP — a ' +
+      'non-assignable grouping node in the resource tree (ADR-0053 §3). A GROUP must have no ' +
+      'calendarId, maxUnitsPerHour or costPerUnit (422 GROUP_HAS_NO_SCHEDULING_FIELDS) and can ' +
+      'never be assigned to an activity (422 GROUP_NOT_ASSIGNABLE).',
   })
   @IsEnum(ResourceKind)
   kind!: ResourceKind;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'The parent GROUP in the resource tree (ADR-0053 §3); omit or null for a top-level resource. ' +
+      'Must be an active GROUP in the same organisation, must not create a cycle, and must keep the ' +
+      'tree within 10 levels. Validated service-side.',
+  })
+  @IsOptional()
+  // Allow an explicit null (top level); validate the shape only for a value. @Matches(UUID_REGEX),
+  // not @IsUUID, because our ids are UUID v7 which some class-validator versions reject.
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'parentId must be a valid UUID.' })
+  parentId?: string | null;
 
   @ApiPropertyOptional({
     format: 'uuid',

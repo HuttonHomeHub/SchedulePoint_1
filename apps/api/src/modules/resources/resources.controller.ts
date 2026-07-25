@@ -26,10 +26,10 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreateResourceDto } from './dto/create-resource.dto';
+import { ListResourcesQueryDto } from './dto/list-resources-query.dto';
 import { ResourceResponseDto } from './dto/resource-response.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { ResourcesService } from './resources.service';
@@ -51,12 +51,18 @@ export class ResourcesController {
   constructor(private readonly service: ResourcesService) {}
 
   @Get()
-  @ApiOperation({ summary: "List an organisation's resources (cursor-paginated)." })
+  @ApiOperation({
+    summary: "List an organisation's resources (cursor-paginated).",
+    description:
+      'Returns the flat library by default. `?parentId=<uuid>` narrows to one group’s direct ' +
+      'children and `?parentId=null` to top-level rows (ADR-0053 §3); every row carries its own ' +
+      '`parentId`, so a client that pages the whole library can nest it without a second endpoint.',
+  })
   @ApiOkResponse({ type: ResourceResponseDto, isArray: true })
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ListResourcesQueryDto,
   ): Promise<Paginated<ResourceResponseDto>> {
     const { items, meta, canReadCost } = await this.service.list(principal, orgSlug, query);
     return new Paginated(
