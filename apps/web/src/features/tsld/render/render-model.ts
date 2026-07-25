@@ -634,7 +634,8 @@ export interface FanOutOffsets {
 export function computeEdgeFanOut(
   edges: readonly RenderEdge[],
 ): ReadonlyMap<RenderEdge, FanOutOffsets> {
-  const keyOf = (e: RenderEdge): string => e.id ?? `${e.predecessorId} ${e.successorId} ${e.type}`;
+  const keyOf = (e: RenderEdge): string =>
+    e.id ?? `${e.predecessorId}\u0000${e.successorId}\u0000${e.type}`;
   const groups = new Map<string, { edge: RenderEdge; end: 'pred' | 'succ' }[]>();
   const add = (groupKey: string, edge: RenderEdge, end: 'pred' | 'succ'): void => {
     const members = groups.get(groupKey);
@@ -771,10 +772,11 @@ export interface ProgressGeometry {
 
 /**
  * The shape-bounded in-bar progress fill for a bar rect (ADR-0052 M4): a band inset along the
- * bar's bottom edge whose length is proportional to `percentComplete`, plus a full-height hairline
+ * bar's bottom edge whose length is proportional to `percentComplete`, plus a band-height hairline
  * divider at the progress front so the completed/remaining boundary reads as a shape, not colour
- * alone (WCAG 1.4.1). The band sits below the label's centred text line, so the label ink never
- * loses contrast over it. Null when there is nothing to draw: no progress (≤ 0 / not finite) or a
+ * alone (WCAG 1.4.1). The band — and the divider, clamped to the band's vertical extent — sits
+ * below the label's centred text line, so the label ink never loses contrast over it and the
+ * divider never slices through the label row. Null when there is nothing to draw: no progress (≤ 0 / not finite) or a
  * bar too narrow to hold legible detail ({@link PROGRESS_MIN_BAR_PX}). Percent clamps to 100.
  */
 export function progressGeometry(rect: Rect, percentComplete: number): ProgressGeometry | null {

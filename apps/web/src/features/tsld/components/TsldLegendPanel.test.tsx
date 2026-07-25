@@ -18,6 +18,12 @@ describe('TsldLegendPanel', () => {
     // The key itself is the shared TsldLegend list.
     expect(screen.getByRole('list', { name: 'Legend' })).toBeInTheDocument();
     expect(screen.getByText('Critical')).toBeInTheDocument();
+    // Flag-off parity (ADR-0052 M4/M5): none of the visual-refresh rows render without
+    // `VITE_CANVAS_DIRECT_MANIPULATION` — the default key is byte-identical to today's.
+    expect(screen.queryByText('Level of effort')).not.toBeInTheDocument();
+    expect(screen.queryByText('WBS summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('Progress')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lag (waiting time)')).not.toBeInTheDocument();
   });
 
   it('closes via the hide button', () => {

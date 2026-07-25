@@ -505,6 +505,13 @@ export function TsldCanvas({
   // marked only when the hovered BAR changes (never per move — the same discipline as the ring).
   // Flag-off the branch never runs, so the scene stays byte-for-byte today's (the parity gate).
   const hoverIdRef = useRef<string | null>(null);
+  // O(1) id→activity lookup for the per-move idle-hover branch (perf review): rebuilt only when
+  // the activities ARRAY identity changes (a data rebuild), never per pointer move — a linear
+  // `.find` per move over a 2,000-activity plan is avoidable per-frame work.
+  const activityIndexRef = useRef<{
+    list: readonly RenderActivity[];
+    byId: ReadonlyMap<string, RenderActivity>;
+  } | null>(null);
   const pendingRef = useRef<PendingGhost | null>(pending);
   // Read by the window key listener (set up once), so it sees the current mode/handler.
   const modeRef = useRef(mode);
@@ -1052,6 +1059,17 @@ export function TsldCanvas({
     () => (isWorkingDay ? makeWorkingDayWalk(isWorkingDay) : ELAPSED_DAY_WALK),
     [isWorkingDay],
   );
+  // The memoised id→activity resolve backing the idle-hover branch — `.get()` per move, with the
+  // Map rebuilt only on an activities-array identity change (see `activityIndexRef`).
+  const activityById = (id: string): RenderActivity | undefined => {
+    const list = sceneRef.current.activities;
+    let index = activityIndexRef.current;
+    if (!index || index.list !== list) {
+      index = { list, byId: new Map(list.map((a) => [a.id, a])) };
+      activityIndexRef.current = index;
+    }
+    return index.byId.get(id);
+  };
   const classifyAt = (p: Point, resizeZones = false, lagZones = false): HitZone => {
     const options: ClassifyHitOptions | undefined =
       resizeZones || lagZones
@@ -1195,12 +1213,15 @@ export function TsldCanvas({
               // Hover ring (ADR-0052 M4): publish the hovered bar's rect for the interaction
               // layer — reusing the classify this branch already ran, so no extra hit-test. A
               // repaint is marked only when the hovered bar actually changes (not per move).
-              const hoveredActivity = hover.id
-                ? sceneRef.current.activities.find((a) => a.id === hover.id)
-                : undefined;
-              const rect = hoveredActivity
-                ? activityRect(hoveredActivity, viewRef.current, dataDate)
-                : null;
+              // Suppressed on the SELECTED bar: its ±2px selection ring already outlines it, and
+              // stacking the ±1.5px hover ring over it reads as one blurred double outline (ux
+              // review) — the incident-link hover highlight below is unaffected (selection
+              // already highlights its own ties).
+              const hoveredActivity = hover.id ? activityById(hover.id) : undefined;
+              const rect =
+                hoveredActivity && hoveredActivity.id !== sceneRef.current.selectedId
+                  ? activityRect(hoveredActivity, viewRef.current, dataDate)
+                  : null;
               const prev = hoverRef.current;
               const changed =
                 (prev === null) !== (rect === null) ||

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { paintInteractionLayer, paintScene, type TsldPalette, type TsldScene } from './paint';
+import {
+  edgeFanOutFor,
+  paintInteractionLayer,
+  paintScene,
+  type TsldPalette,
+  type TsldScene,
+} from './paint';
 import type { RenderActivity, Viewport } from './render-model';
 
 const PALETTE: TsldPalette = {
@@ -1308,8 +1314,9 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     expect(ctx.fillRect).toHaveBeenCalledTimes(3);
     // Band: inset 2 inside the 72..120 × 45..63 bar, along the bottom → x 74, y 57, w 22, h 4.
     expect(ctx.fillRect).toHaveBeenCalledWith(74, 57, 22, 4);
-    // Divider: a 1px full-height hairline at the progress front (x 96), inset 1 vertically.
-    expect(ctx.fillRect).toHaveBeenCalledWith(95.5, 46, 1, 16);
+    // Divider: a 1px hairline at the progress front (x 96), clamped to the band's own vertical
+    // extent (y 57..61) so it never slices through the centred inside label (ux review).
+    expect(ctx.fillRect).toHaveBeenCalledWith(95.5, 57, 1, 4);
   });
 
   it('draws no divider at 100% and no band at 0%/absent', () => {
@@ -1865,6 +1872,21 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
     expect(log).toContain('lineWidth=3');
     // The highlighted driving tie's arrowhead fills in the selection colour, batched like M1.
     expect(log).toContain(`fillStyle=${PALETTE.selection}`);
+  });
+
+  it('memoises the fan-out on the edges array identity (same array ⇒ === map; new array ⇒ recompute)', () => {
+    // The painter calls `edgeFanOutFor(scene.edges)` every frame; `scene.edges` is reference-
+    // stable across pan/zoom frames, so the SAME array must return the IDENTICAL map (no per-
+    // frame recompute — the ADR-0026 draw-budget fix), while a rebuilt array (a data change)
+    // must recompute to equivalent offsets.
+    const edges = crowded().edges;
+    const first = edgeFanOutFor(edges);
+    expect(edgeFanOutFor(edges)).toBe(first);
+    const rebuilt = [...edges]; // same edge objects, new array identity
+    const second = edgeFanOutFor(rebuilt);
+    expect(second).not.toBe(first);
+    expect(second.size).toBe(first.size);
+    for (const edge of rebuilt) expect(second.get(edge)).toEqual(first.get(edge));
   });
 
   it('highlights transiently from the hovered bar id (the pointer twin of selection)', () => {

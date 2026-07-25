@@ -37,6 +37,7 @@ import {
   LANE_HEIGHT,
   MILESTONE_RADIUS,
   PROGRESS_MIN_PX_PER_DAY,
+  type FanOutOffsets,
   type LagRun,
   type Point,
   type Rect,
@@ -53,6 +54,32 @@ import { calendarBoundaries } from './time-scale';
  * module scope so it persists across frames and canvas instances — a given label measures once.
  */
 const labelWidths = createMeasureCache();
+
+/**
+ * Fan-out offsets memoised on the edges ARRAY identity (ADR-0052 M5 perf). `scene.edges` is
+ * reference-stable across pan/zoom frames (the scene is only rebuilt on a data / selection /
+ * hover-id change, and those rebuilds reuse the same edges array), so recomputing the pure
+ * `computeEdgeFanOut` per frame is pure waste — measured 5–11 ms alone at 2,000 activities /
+ * 4,000 edges, busting the ADR-0026 ≤4 ms draw budget on its own. A WeakMap keyed by the array
+ * lets a replaced edge list recompute once and lets the old entry be GC'd with its array.
+ */
+const edgeFanOuts = new WeakMap<readonly RenderEdge[], ReadonlyMap<RenderEdge, FanOutOffsets>>();
+
+/**
+ * The memoised {@link computeEdgeFanOut} the painter reads: the SAME array instance returns the
+ * SAME (identical) offsets map; a new array instance recomputes. Exported so the memo identity
+ * is unit-testable — the painter is its only production caller.
+ */
+export function edgeFanOutFor(
+  edges: readonly RenderEdge[],
+): ReadonlyMap<RenderEdge, FanOutOffsets> {
+  let offsets = edgeFanOuts.get(edges);
+  if (!offsets) {
+    offsets = computeEdgeFanOut(edges);
+    edgeFanOuts.set(edges, offsets);
+  }
+  return offsets;
+}
 
 /** Below this px-per-day the per-day gridlines would merge into a solid block, so they're culled. */
 const DAY_GRID_MIN_PX = 6;
@@ -467,6 +494,21 @@ function drawOverAllocationBadge(
   }
 }
 
+/**
+ * Begin the 4-vertex milestone diamond path centred on (`cx`, `cy`) — the ONE tracing shared by
+ * the refreshed bar, the baseline ghost, and the legacy bar layer, so the three can never drift.
+ * Left open by default (a `fill` closes it implicitly); `close` traces the final segment back to
+ * the top vertex for stroke-only callers (the Ctx2D surface has no closePath).
+ */
+function traceMilestoneDiamond(ctx: Ctx2D, cx: number, cy: number, r: number, close = false): void {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx, cy + r);
+  ctx.lineTo(cx - r, cy);
+  if (close) ctx.lineTo(cx, cy - r);
+}
+
 /** The criticality-paired inside ink for a bar — the lens `barInk` override when present, else
  * the painter's own criticality ink (the same fallback chain the inside labels use). */
 function barInkColour(
@@ -495,7 +537,7 @@ function barInkColour(
  * - **milestone** — the diamond, gaining a hairline `barStroke` outline when not emphasised so
  *   every glyph carries the same stroke language.
  *
- * Progress (`percentComplete`): a shape-bounded band along the bar bottom + a full-height
+ * Progress (`percentComplete`): a shape-bounded band along the bar bottom + a band-height
  * hairline divider at the progress front, drawn in the bar's paired **ink** ({@link barInkColour})
  * so contrast is guaranteed on every fill in both themes and under every lens. Drawn at the bar's
  * alpha (a dimmed bar's detail recedes with it) and culled below `PROGRESS_MIN_PX_PER_DAY` /
@@ -515,11 +557,7 @@ function drawRefreshedBar(
   if (glyph === 'milestone') {
     const cx = rect.x + rect.w / 2;
     const cy = rect.y + rect.h / 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - MILESTONE_RADIUS);
-    ctx.lineTo(cx + MILESTONE_RADIUS, cy);
-    ctx.lineTo(cx, cy + MILESTONE_RADIUS);
-    ctx.lineTo(cx - MILESTONE_RADIUS, cy);
+    traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
     ctx.fill();
     ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
     if (dash) {
@@ -553,9 +591,11 @@ function drawRefreshedBar(
       ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
       const { band, frontX } = progress;
       ctx.fillRect(band.x, band.y, band.w, band.h);
-      // The hairline front divider — the non-colour boundary cue (WCAG 1.4.1). Skipped at 100%,
-      // where the front coincides with the bar's end edge. Labels paint after (over) it.
-      if (frontX !== null) ctx.fillRect(frontX - 0.5, rect.y + 1, 1, rect.h - 2);
+      // The hairline front divider — the non-colour boundary cue (WCAG 1.4.1) — clamped to the
+      // band's own vertical extent so it marks the band's front without slicing through the
+      // centred inside label (ux review). Skipped at 100%, where the front coincides with the
+      // bar's end edge.
+      if (frontX !== null) ctx.fillRect(frontX - 0.5, band.y, 1, band.h);
     }
   }
   ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
@@ -659,12 +699,13 @@ export function paintScene(
       : null;
     // Link visual refresh (ADR-0052 M5) — the SAME `visualRefresh` scene field M4 reads (ONE env
     // flag, ONE flag-off parity gate): rounded elbows, deterministic fan-out of crowded bar-edge
-    // anchors (computed once per frame over the scene's edges — the same set this loop already
-    // iterates — so offsets never jitter while panning), the dashed lag-run depiction, and the
-    // incident-link highlight for the selection (persistent, keyboard/AT-reachable) + idle hover
-    // (transient). All inert when `visualRefresh` is off ⇒ byte-for-byte today's edge layer.
+    // anchors (memoised on the edges array identity via `edgeFanOutFor` — the array is stable
+    // across pan/zoom frames, so offsets never jitter while panning and never recompute per
+    // frame), the dashed lag-run depiction, and the incident-link highlight for the selection
+    // (persistent, keyboard/AT-reachable) + idle hover (transient). All inert when
+    // `visualRefresh` is off ⇒ byte-for-byte today's edge layer.
     const refresh = scene.visualRefresh === true;
-    const fanOut = refresh ? computeEdgeFanOut(scene.edges) : null;
+    const fanOut = refresh ? edgeFanOutFor(scene.edges) : null;
     const highlightIds = refresh ? linkHighlightIds(scene.selectedId, scene.hoverId) : null;
     if (refresh && workingWalk) lagRuns = [];
     // The one per-edge geometry seam: flag-off it is exactly the M1 branch (time-true or legacy);
@@ -807,12 +848,7 @@ export function paintScene(
           continue;
         }
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - MILESTONE_RADIUS);
-        ctx.lineTo(cx + MILESTONE_RADIUS, cy);
-        ctx.lineTo(cx, cy + MILESTONE_RADIUS);
-        ctx.lineTo(cx - MILESTONE_RADIUS, cy);
-        ctx.lineTo(cx, cy - MILESTONE_RADIUS); // close manually (Ctx2D has no closePath)
+        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true); // closed — stroke-only
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
@@ -857,11 +893,7 @@ export function paintScene(
       // A diamond centred in the bounding box.
       const cx = rect.x + rect.w / 2;
       const cy = rect.y + rect.h / 2;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - MILESTONE_RADIUS);
-      ctx.lineTo(cx + MILESTONE_RADIUS, cy);
-      ctx.lineTo(cx, cy + MILESTONE_RADIUS);
-      ctx.lineTo(cx - MILESTONE_RADIUS, cy);
+      traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
       ctx.fill();
       ctx.globalAlpha = 1; // outline + badges below stay full-strength even on a dimmed bar
       if (dash) {
@@ -997,17 +1029,11 @@ export function paintScene(
           const text = truncateToWidth(activity.label, rect.w - insidePad * 2, measure);
           if (!text) continue;
           // A Colour-by lens repaints the bar a non-criticality hue, so the criticality-based ink can
-          // fail contrast (e.g. white-on-warning-yellow at 2.02:1). When `barInk` carries a paired,
-          // contrast-safe ink for this bar (non-default modes only), use it; else fall back to today's
-          // criticality ink (absent map / Criticality mode ⇒ byte-for-byte parity, WCAG 1.4.3).
-          const inkOverride = scene.barInk?.get(activity.id);
-          ctx.fillStyle =
-            inkOverride ??
-            (activity.isCritical
-              ? palette.labelInsideCritical
-              : activity.isNearCritical
-                ? palette.labelInsideNearCritical
-                : palette.labelInside);
+          // fail contrast (e.g. white-on-warning-yellow at 2.02:1). `barInkColour` applies the paired,
+          // contrast-safe override when the lens carries one (non-default modes only), else falls back
+          // to today's criticality ink (absent map / Criticality mode ⇒ byte-for-byte parity, WCAG
+          // 1.4.3) — the SAME chain the in-bar progress band draws with.
+          ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
           ctx.fillText(text, rect.x + insidePad, cy);
         } else {
           const startX = rect.x + rect.w + LABEL_GAP_PX;
