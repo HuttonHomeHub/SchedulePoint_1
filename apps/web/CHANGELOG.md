@@ -1,5 +1,106 @@
 # @repo/web
 
+## 0.46.0
+
+### Minor Changes
+
+- [#147](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/147) [`af0de56`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/af0de56ed8cd0396f43f01871ede588e9b17f1e7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): time-true TSLD link anchoring + arrowheads (canvas direct manipulation M1, ADR-0052)
+
+  First slice of the canvas direct-manipulation upgrade, behind `VITE_CANVAS_DIRECT_MANIPULATION`
+  (default **off**). When on, every dependency link renders **time-true**:
+
+  - Each end anchors at the point in time its lag actually constrains — `lagDays` walked from the
+    constrained edge on the relationship's **lag calendar** (plan working days; `TWENTY_FOUR_HOUR`
+    lags walk elapsed days — ADR-0036 §6), a lead (negative lag) walking left. FS/FF shift the
+    successor anchor from the predecessor's finish; SS/SF embed the anchor along the predecessor bar
+    (the GPM embed point). Zero-lag ties keep today's endpoints; anchors clamp to their bar's span;
+    null computed dates fall back to the extreme-end routing.
+  - Links carry a directional **arrowhead** at the successor end (batched fills, edge colour — the
+    driving weight/dash emphasis is retained, never colour alone).
+  - The working-day walk is a pure, injected, memoised and horizon-bounded helper
+    (`makeWorkingDayWalk`), keeping the render model CPM-free and the draw cost O(visible edges).
+  - `summarizeLogic` speaks a lagged driving tie ("SS + 3 working days") via the new `lagPhrase`;
+    zero-lag sentences are unchanged.
+
+  Render-only — no gestures, no writes, no API/schema/engine change (the recalc parity gate is
+  untouched). Flag-off paints byte-for-byte today's canvas (parity paint test). Records ADR-0052.
+
+- [#147](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/147) [`af0de56`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/af0de56ed8cd0396f43f01871ede588e9b17f1e7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): finish-edge duration resize on the TSLD canvas (canvas direct manipulation M2, ADR-0052)
+
+  Second slice of the canvas direct-manipulation upgrade, behind `VITE_CANVAS_DIRECT_MANIPULATION`
+  (default **off**). When on, a Planner (pen held, not under the read-only Late overlay) can change a
+  task's duration directly on the canvas:
+
+  - In `select` mode the bar-end grab-zones are repurposed as **duration-resize handles** (ADR-0052
+    §1 — link creation stays the two-click Link tool; the legacy edge-drag-link is gated off under
+    the flag). Dragging the **finish** edge resizes with a live ghost + duration readout, snapped to
+    whole day columns and clamped at ≥ 1 day; an `ew-resize` cursor advertises the zone. Milestones,
+    Level-of-Effort and WBS summaries (duration-derived) offer no handles. The start-edge zone is
+    classified now but stays inert until M3.
+  - The drop issues a `PATCH durationDays` carrying the **full definition round-trip**
+    (`activityDefinitionInput` — durationType/EV/accrual/constraints resent verbatim, never silently
+    cleared) at the live optimistic version, under the existing 409 conflict / 423 pen contracts,
+    then notifies the coalesced auto-recalc.
+  - One-step **undo**: a new coalescable `durationResizeCommand` (key `resize:{activityId}`) folds a
+    drag / held-key burst into a single reversible step (ADR-0048).
+  - **Keyboard equivalent** (WCAG 2.5.7): `Shift+←/→` on the focused bar nudges duration ±1 day,
+    coalesced like the existing Alt+arrow moves, announced via the polite live region, and listed in
+    the shortcuts help sheet.
+
+  Frontend-only — no API/schema/engine change (the recalc parity gate is untouched). Flag-off the
+  bar ends, keymap and paint are byte-for-byte today's (parity tests).
+
+- [#147](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/147) [`af0de56`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/af0de56ed8cd0396f43f01871ede588e9b17f1e7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): start-edge resize + draggable lag anchors on the TSLD canvas (canvas direct manipulation M3, ADR-0052)
+
+  Third slice of the canvas direct-manipulation upgrade, behind `VITE_CANVAS_DIRECT_MANIPULATION`
+  (default **off**). When on, a Planner (pen held, not under the read-only Late overlay) can now:
+
+  - **Resize from the start edge** (mode-aware, ADR-0052 §3): dragging a bar's start moves the start
+    and keeps the finish pinned (`duration = finish − newStart + 1`, clamped ≥ 1 day), with a live
+    ghost labelled with the tentative start date + duration. EARLY mode commits ONE full-definition
+    `PATCH {constraintType: SNET, constraintDate, durationDays}` (the spike-verified combined PATCH,
+    mirroring the reposition payload); VISUAL mode commits the minimal
+    `PATCH {visualStart, durationDays}` through the existing `setVisualStart` seam. One-step undo on
+    the shared `resize:{activityId}` coalescing key (a new `visualResizeCommand` restores the prior
+    placement AND duration in VISUAL mode).
+  - **Drag a link's lag anchor** along the time axis: each drawn (offset) lag anchor gains a grab
+    zone; the tentative lag runs through the exact **inverse** of the M1 anchor mapping
+    (`lagFromAnchorDay`, one shared pure fn with round-trip property tests), snapped to whole days on
+    the relationship's **lag calendar** (negative = lead), with a live `SS + 3d` readout chip. The
+    drop issues `PATCH /dependencies/:id` echoing the unchanged type + lag calendar at the live
+    version, under the existing 409 conflict / 423 pen contracts, then notifies the coalesced
+    auto-recalc. One-step undo via the coalescable `lagDragCommand` (key `lag:{dependencyId}`).
+  - **Keyboard lag nudge** (WCAG 2.1.1): the canvas has no per-dependency keyboard surface, so
+    `Shift+←/→` lands on the Logic panel's dependency rows (with a focused row's Edit/Remove button)
+    — coalesced like the sibling nudges and announced via the polite live region, with an in-panel
+    hint advertising the chord.
+
+  Frontend-only — no API/schema/engine change (the recalc parity gate is untouched; the one web-API
+  seam change is `useSetActivityVisualStart` optionally carrying `durationDays`). Flag-off the
+  zones, gestures, keymaps and paint are byte-for-byte today's (parity tests).
+
+### Patch Changes
+
+- [#147](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/147) [`af0de56`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/af0de56ed8cd0396f43f01871ede588e9b17f1e7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): dock the plan-notes panel instead of overlaying it
+
+  The **Comments** toolbar button opened plan notes as a modal-less `<dialog>` side-sheet that
+  mispositioned over the canvas, obscured the workspace, and did not toggle shut. It now behaves like the
+  activities and Project Explorer panels — a docked, resizable RIGHT panel that participates in the layout
+  and pushes the canvas rather than overlaying it.
+
+  - Notes render in a resizable right column (persisted width via `useNotesPanelPrefs`) with an
+    end-anchored `PanelResizer` (`reverseKeys` so keyboard resize matches the pointer). Below `md` the
+    panel takes the single pane.
+  - **Comments** is now a genuine toggle carrying `aria-pressed` (reflects `notesOpen`), replacing the
+    one-way `aria-haspopup="dialog"` opener; closing returns focus to it, and Escape closes the dock.
+  - `PlanNotesSection` gains a `chromeless` mode so the panel's `SheetHeader` is the single header and its
+    `<section>` the sole landmark (no nested card / duplicate heading).
+  - Removes the now-dead overlay-sheet machinery (`Sheet` modal-less path, the `HTMLDialogElement.show`
+    test shim, and the toolbar `ariaHasPopup` plumbing).
+
+  Behind `VITE_ENTRY_ROUTES` (default on); flag-off the inline notes block is byte-for-byte unchanged. No
+  API or schema change.
+
 ## 0.45.1
 
 ### Patch Changes
