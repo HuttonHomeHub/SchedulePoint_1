@@ -63,3 +63,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0045](0045-live-cross-plan-programme-scheduling.md)            | Live cross-plan / programme scheduling (M2)    | Accepted |
 | [0049](0049-canvas-axis-aligned-resource-strip.md)              | Canvas-axis-aligned resource strip             | Proposed |
 | [0050](0050-schedule-interchange-canonical-model.md)            | Schedule interchange: canonical model + import | Accepted |
+| [0051](0051-external-guest-share-links.md)                      | External-Guest per-plan share links            | Accepted |
+| [0052](0052-canvas-direct-manipulation-and-visual-refresh.md)   | TSLD direct manipulation & visual refresh      | Accepted |

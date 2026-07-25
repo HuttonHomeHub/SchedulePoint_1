@@ -2,16 +2,21 @@ import type { GhostBar } from './lenses';
 import { createMeasureCache } from './measure';
 import {
   activityRect,
+  arrowhead,
   cull,
   daysBetween,
   dependencyPolyline,
+  dependencyPolylineTimeTrue,
   isMilestone,
+  isResizeEligibleType,
   labelPlacement,
+  makeWorkingDayWalk,
   rectsIntersect,
   screenXOfDay,
   screenYOfLane,
   truncateToWidth,
   BAR_HEIGHT,
+  ELAPSED_DAY_WALK,
   LABEL_FONT,
   LABEL_GAP_PX,
   LABEL_MIN_PX_PER_DAY,
@@ -138,6 +143,13 @@ export interface TsldScene {
    * shape cue, never colour-only (WCAG 1.4.1). A per-bar `Set.has` in the existing single pass, so it
    * adds no repaint. Absent ⇒ the highlight is off / nothing is over-allocated ⇒ byte-for-byte parity. */
   flaggedIds?: ReadonlySet<string> | undefined;
+  // ── Canvas direct manipulation M1 (ADR-0052, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──────
+  /** Time-true link rendering: anchor each dependency at the point in time its lag actually
+   * constrains — `lagDays` walked from the constrained edge on the relationship's lag calendar
+   * (`isWorkingDay`; `TWENTY_FOUR_HOUR` elapsed) — and tip it with a directional arrowhead at the
+   * successor end. Absent/false ⇒ the legacy extreme-end routing, no arrowheads ⇒ byte-for-byte
+   * today's paint (the flag-off parity gate). */
+  timeTrueLinks?: boolean | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -404,7 +416,18 @@ export function paintScene(
   // "driver" without relying on colour (WCAG 1.4.1), mirroring the bar criticality cue.
   // Two batched passes so each dash/width state is set once, not per edge.
   if (scene.edges.length > 0) {
+    // Time-true anchoring (ADR-0052 M1): the working-day walk is built once per frame from the
+    // same predicate the non-working wash reads (memoised + horizon-bounded, so the per-edge cost
+    // stays O(visible edges)); a `TWENTY_FOUR_HOUR` lag swaps in the elapsed walk (ADR-0036 §6).
+    // No calendar loaded ⇒ elapsed for every edge (display-only; the engine stays authoritative).
+    // Flag off ⇒ `null` ⇒ the legacy extreme-end routing below ⇒ byte-for-byte parity.
+    const workingWalk = scene.timeTrueLinks
+      ? scene.isWorkingDay
+        ? makeWorkingDayWalk(scene.isWorkingDay)
+        : ELAPSED_DAY_WALK
+      : null;
     const drawEdges = (driving: boolean): void => {
+      const heads: [Point, Point, Point][] = [];
       ctx.beginPath();
       for (const edge of scene.edges) {
         if (edge.isDriving !== driving) continue;
@@ -412,10 +435,38 @@ export function paintScene(
         const pred = byId.get(edge.predecessorId);
         const succ = byId.get(edge.successorId);
         if (!pred || !succ) continue;
-        const line = dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
-        if (line) drawPolyline(ctx, line);
+        const line = workingWalk
+          ? dependencyPolylineTimeTrue(
+              pred,
+              succ,
+              edge.type,
+              edge.lagDays ?? 0,
+              view,
+              scene.dataDate,
+              edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk,
+            )
+          : dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
+        if (!line) continue;
+        drawPolyline(ctx, line);
+        if (workingWalk) {
+          const head = arrowhead(line);
+          if (head) heads.push(head);
+        }
       }
       ctx.stroke();
+      // Arrowheads fill after the pass's stroke in one batched path. They share the edge colour —
+      // the driving cue stays the line weight + dash (WCAG 1.4.1), so no new colour is introduced.
+      if (heads.length > 0) {
+        ctx.fillStyle = palette.edge;
+        ctx.beginPath();
+        for (const [tip, left, right] of heads) {
+          ctx.moveTo(tip.x, tip.y);
+          ctx.lineTo(left.x, left.y);
+          ctx.lineTo(right.x, right.y);
+          ctx.lineTo(tip.x, tip.y); // close manually (the Ctx2D surface has no closePath)
+        }
+        ctx.fill();
+      }
     };
     ctx.strokeStyle = palette.edge;
     ctx.lineWidth = 1;
@@ -664,7 +715,12 @@ export function paintScene(
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 2;
       ctx.strokeRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);
-      if (scene.showEdgeHandles && selected && !isMilestone(selected.type)) {
+      // With direct manipulation on (`timeTrueLinks` mirrors the ADR-0052 flag) the edge marks
+      // advertise the *resize* handles, so a bar whose duration can't be resized (LOE / WBS
+      // summary) draws none — matching classifyHit's refusal. Flag-off keeps today's link-draw
+      // affordance byte-for-byte (milestones were already excluded).
+      const marksSuppressed = scene.timeTrueLinks && !isResizeEligibleType(selected.type);
+      if (scene.showEdgeHandles && selected && !isMilestone(selected.type) && !marksSuppressed) {
         const cy = rect.y + rect.h / 2;
         ctx.fillStyle = palette.selection;
         for (const cx of [rect.x, rect.x + rect.w]) {
@@ -696,6 +752,28 @@ export interface LinkOverlay {
   targetLegal?: boolean;
 }
 
+/** A duration resize in flight (ADR-0052 M2): the tentative bar plus its live duration label. */
+export interface ResizeOverlay {
+  /** The tentative bar span under the pointer (start fixed, finish tracking). */
+  rect: Rect;
+  /** The live duration readout (e.g. `7d`), drawn just above the ghost. */
+  label: string;
+}
+
+/** A lag-anchor drag in flight (ADR-0052 M3): the tentative-lag readout chip. */
+export interface LagOverlay {
+  /** The tentative anchor's screen point (chip drawn just above it). */
+  x: number;
+  y: number;
+  /** The live lag readout, e.g. `SS + 3d` / `FS - 1d` (negative = lead). */
+  label: string;
+}
+
+/** Chip height (px) of the lag readout drawn above the dragged anchor. */
+const LAG_CHIP_H = 14;
+/** Gap (px) between the dragged anchor point and its readout chip. */
+const LAG_CHIP_GAP = 6;
+
 /** The transient shapes drawn on the interaction layer for an in-progress edit. */
 export interface InteractionOverlay {
   /** The bar being drawn/moved (solid fill + outline). */
@@ -707,6 +785,10 @@ export interface InteractionOverlay {
   /** The picked predecessor while the two-click link tool waits for its second click (M5): a solid
    * highlight ring so "now click the successor" reads. */
   linkPick?: Rect | null;
+  /** A bar-end duration resize in flight (ADR-0052 M2/M3): ghost + live readout label. */
+  resize?: ResizeOverlay | null;
+  /** A lag-anchor drag in flight (ADR-0052 M3): the tentative-lag readout chip. */
+  lag?: LagOverlay | null;
 }
 
 /**
@@ -726,7 +808,7 @@ export function paintInteractionLayer(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
-  const { live, pending, link, linkPick } = overlay;
+  const { live, pending, link, linkPick, resize, lag } = overlay;
 
   if (linkPick) {
     // The picked predecessor waiting for the second click (M5): a **dashed** selection-colour ring —
@@ -778,6 +860,50 @@ export function paintInteractionLayer(
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
+  }
+
+  if (resize) {
+    // The resize ghost mirrors the reposition/create `live` ghost (fill + solid outline) so the
+    // two in-flight edits read the same, plus a live duration readout just above the bar — the
+    // number a planner is actually choosing (ADR-0052 M2). Guarded like `paintResourceStrip`'s
+    // label so a text-less test context never throws.
+    const r = resize.rect;
+    ctx.fillStyle = palette.bar;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    if (typeof ctx.fillText === 'function') {
+      ctx.font = LABEL_FONT;
+      ctx.textBaseline = 'bottom';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = palette.labelBeside;
+      ctx.fillText(resize.label, r.x + LABEL_PAD_PX, r.y - 2);
+    }
+  }
+
+  if (lag) {
+    // The lag-drag readout chip (ADR-0052 M3): the tentative "SS + 3d" the planner is choosing,
+    // drawn just above the dragged anchor point on a filled, outlined chip so it stays legible
+    // over bars and links. Guarded like the resize label so a text-less test context never throws
+    // (`measureText` sizes the chip to its text).
+    if (typeof ctx.fillText === 'function' && typeof ctx.measureText === 'function') {
+      ctx.font = LABEL_FONT;
+      const w = ctx.measureText(lag.label).width + LABEL_PAD_PX * 2;
+      const x = lag.x - w / 2;
+      const y = lag.y - BAR_HEIGHT / 2 - LAG_CHIP_GAP - LAG_CHIP_H;
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(x, y, w, LAG_CHIP_H);
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, LAG_CHIP_H - 1);
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = palette.labelInside;
+      ctx.fillText(lag.label, x + LABEL_PAD_PX, y + LAG_CHIP_H / 2);
+    }
   }
 }
 

@@ -140,6 +140,10 @@ function Adr0030PlanWorkspace({
       canEdit={model.canEditSchedule}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
+      // Bar-end resize (ADR-0052 M2/M3) + lag-anchor drag (M3); armed only under the flag,
+      // byte-for-byte off.
+      onResize={model.onTsldResize}
+      onLag={model.onTsldLag}
       onLink={model.onTsldLink}
       onAutoArrange={model.onTsldAutoArrange}
       onOpenLogic={model.setLogicActivity}

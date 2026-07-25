@@ -2,6 +2,9 @@
 export {
   activityDefinitionInput,
   dependencyLinkOf,
+  durationResizeCommand,
+  lagDragCommand,
+  visualResizeCommand,
   relaneCommand,
   repositionCommand,
   updateCommand,
@@ -24,6 +27,7 @@ export {
   type DeleteDependencyFn,
   type DependencyLinkInput,
   type SetVisualStartFn,
+  type UpdateDependencyFn,
   type VisualPlacement,
   type BatchPositionsFn,
   type LanePlacement,

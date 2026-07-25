@@ -109,11 +109,13 @@ vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
+  useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
   DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 vi.mock('@/features/tsld', () => ({
   TsldPanel: () => <div data-testid="tsld-panel" />,
   barDateSourceFor: () => 'early',
+  useCoalescedLagNudge: () => vi.fn(),
 }));
 vi.mock('@/features/schedule', () => ({
   ScheduleSummaryStrip: () => <div data-testid="summary-strip" />,

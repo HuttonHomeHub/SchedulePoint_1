@@ -7,6 +7,7 @@ import {
   announceChainStep,
   chainNeighbour,
   describeActivity,
+  lagPhrase,
   summarizeLogic,
 } from './a11y';
 
@@ -227,6 +228,59 @@ describe('summarizeLogic (Tier 2)', () => {
   it('pluralises correctly and omits driving clauses when there are none', () => {
     const one = [edge({ predecessor: ep('a', 'A'), successor: ep('x', 'X') })];
     expect(summarizeLogic('x', one)).toBe('1 predecessor, 0 successors');
+  });
+
+  it('speaks the lag on a lagged driving tie, and keeps zero-lag sentences verbatim (ADR-0052)', () => {
+    const lagged = [
+      edge({
+        predecessor: ep('p1', 'Survey'),
+        successor: ep('x', 'Excavate'),
+        type: 'SS',
+        lagDays: 3,
+        isDriving: true,
+      }),
+      edge({
+        predecessor: ep('x', 'Excavate'),
+        successor: ep('s1', 'Pour'),
+        type: 'FS',
+        lagDays: -1,
+        isDriving: true,
+      }),
+    ];
+    expect(summarizeLogic('x', lagged)).toBe(
+      '1 predecessor, 1 successor; start driven by Survey (SS + 3 working days); drives Pour (FS - 1 working day)',
+    );
+    // The lag clause is additive: zero-lag ties read exactly as before.
+    expect(summarizeLogic('x', deps)).toBe(
+      '2 predecessors, 2 successors; start driven by Survey; drives Pour',
+    );
+  });
+});
+
+describe('lagPhrase (the spoken time-true anchor offset, ADR-0052)', () => {
+  it('says just the type for a zero-lag tie', () => {
+    expect(lagPhrase({ type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' })).toBe('FS');
+  });
+
+  it('speaks a working-day lag, singular for one day', () => {
+    expect(lagPhrase({ type: 'SS', lagDays: 3, lagCalendar: 'PROJECT_DEFAULT' })).toBe(
+      'SS + 3 working days',
+    );
+    expect(lagPhrase({ type: 'FF', lagDays: 1, lagCalendar: 'SUCCESSOR' })).toBe(
+      'FF + 1 working day',
+    );
+  });
+
+  it('speaks a lead as a minus', () => {
+    expect(lagPhrase({ type: 'FS', lagDays: -2, lagCalendar: 'PROJECT_DEFAULT' })).toBe(
+      'FS - 2 working days',
+    );
+  });
+
+  it('names a TWENTY_FOUR_HOUR lag as elapsed, matching the elapsed anchor walk', () => {
+    expect(lagPhrase({ type: 'SF', lagDays: 7, lagCalendar: 'TWENTY_FOUR_HOUR' })).toBe(
+      'SF + 7 elapsed days',
+    );
   });
 });
 

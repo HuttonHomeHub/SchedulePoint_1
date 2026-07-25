@@ -82,9 +82,14 @@ export function toRenderActivities(
 
 export function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[] {
   return dependencies.map((d) => ({
+    // Carried so the lag-anchor grab zone can name the edge it manipulates (ADR-0052 M3).
+    id: d.id,
     predecessorId: d.predecessor.id,
     successorId: d.successor.id,
     type: d.type,
     isDriving: d.isDriving,
+    // Carried for the time-true anchor rendering (ADR-0052); ignored by the legacy routing.
+    lagDays: d.lagDays,
+    lagCalendar: d.lagCalendar,
   }));
 }

@@ -135,6 +135,7 @@ vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
+  useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
   DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 
@@ -146,6 +147,7 @@ vi.mock('@/features/tsld', () => ({
     return <div data-testid="tsld-panel" />;
   },
   barDateSourceFor: () => 'early',
+  useCoalescedLagNudge: () => vi.fn(),
 }));
 
 // Schedule: stub the summary strip + the recalc/summary hooks the toolbar builder reads.

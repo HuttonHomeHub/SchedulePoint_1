@@ -1,5 +1,5 @@
 import { Dialog } from '@/components/ui/dialog';
-import { UNDO_REDO_ENABLED } from '@/config/env';
+import { CANVAS_DIRECT_MANIPULATION_ENABLED, UNDO_REDO_ENABLED } from '@/config/env';
 
 interface Shortcut {
   keys: string;
@@ -23,6 +23,15 @@ const EDIT_SHORTCUTS: readonly Shortcut[] = [
     keys: 'n',
     action: 'Create an activity in the focused lane and start (uses the armed Add type)',
   },
+];
+
+/**
+ * Direct-manipulation accelerators (ADR-0052 M2) — appended to the Edit list only when
+ * `VITE_CANVAS_DIRECT_MANIPULATION` is on, so the sheet stays byte-for-byte identical flag-off.
+ * No collision: plain `←/→` are unused in the listbox and the start-day nudge is `Alt`-chorded.
+ */
+const DIRECT_MANIPULATION_SHORTCUTS: readonly Shortcut[] = [
+  { keys: 'Shift + ← / →', action: 'Shorten / lengthen the duration one day (recalculates)' },
 ];
 
 /**
@@ -61,9 +70,11 @@ export function TsldShortcutsHelp({
   onClose: () => void;
   editingEnabled: boolean;
 }): React.ReactElement {
-  const editShortcuts = UNDO_REDO_ENABLED
-    ? [...EDIT_SHORTCUTS, ...UNDO_REDO_SHORTCUTS]
-    : EDIT_SHORTCUTS;
+  const editShortcuts = [
+    ...EDIT_SHORTCUTS,
+    ...(CANVAS_DIRECT_MANIPULATION_ENABLED ? DIRECT_MANIPULATION_SHORTCUTS : []),
+    ...(UNDO_REDO_ENABLED ? UNDO_REDO_SHORTCUTS : []),
+  ];
   return (
     <Dialog
       open={open}

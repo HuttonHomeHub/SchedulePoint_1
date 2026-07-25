@@ -2,7 +2,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TsldCanvas, type TsldCanvasHandle } from './TsldCanvas';
+import { liveLag, liveResize, TsldCanvas, type TsldCanvasHandle } from './TsldCanvas';
 
 import type { RenderActivity } from '@/features/tsld/render/render-model';
 
@@ -227,5 +227,80 @@ describe('TsldCanvas', () => {
     const callsBefore = onZoomStopChange.mock.calls.length;
     act(() => controlRef.current!.zoomToPreset('year'));
     expect(onZoomStopChange.mock.calls.length).toBe(callsBefore);
+  });
+});
+
+describe('liveResize / liveLag readouts (ADR-0052 M3 — pure overlay helpers)', () => {
+  const VIEW = { pxPerDay: 10, originX: 0, originY: 0 };
+  const walk = (dayOffset: number, n: number): number => dayOffset + n; // elapsed for readability
+
+  it('labels a finish-edge resize with the tentative duration only', () => {
+    const overlay = liveResize(
+      {
+        kind: 'resizing',
+        activityId: 'a1',
+        edge: 'finish',
+        grabX: 0,
+        movedPastThreshold: true,
+        originStartDay: 2,
+        originDurationDays: 4,
+        laneIndex: 0,
+        currentStartDay: 2,
+        currentDurationDays: 7,
+      },
+      VIEW,
+      '2026-01-01',
+    )!;
+    expect(overlay.label).toBe('7d');
+    expect(overlay.rect.x).toBe(20); // start pinned at day 2
+  });
+
+  it('labels a start-edge resize with the new start DATE + duration, ghost at the new start', () => {
+    const overlay = liveResize(
+      {
+        kind: 'resizing',
+        activityId: 'a1',
+        edge: 'start',
+        grabX: 0,
+        movedPastThreshold: true,
+        originStartDay: 2,
+        originDurationDays: 4,
+        laneIndex: 0,
+        currentStartDay: 0, // dragged left to the data date (2026-01-01)
+        currentDurationDays: 6,
+      },
+      VIEW,
+      '2026-01-01',
+    )!;
+    expect(overlay.label).toBe('01 Jan 2026 · 6d');
+    expect(overlay.rect.x).toBe(0); // ghost's left edge tracks the tentative start
+  });
+
+  it('places the lag chip at the tentative anchor with the compact type ± lag label', () => {
+    const state = {
+      kind: 'lagDragging' as const,
+      dependencyId: 'd1',
+      depType: 'FS' as const,
+      grabX: 0,
+      movedPastThreshold: true,
+      originLagDays: 1,
+      currentLagDays: 3,
+      predStartDay: 0,
+      predFinishDay: 2,
+      walk,
+      anchorY: 14,
+    };
+    expect(liveLag(state, VIEW)).toEqual({ x: 60, y: 14, label: 'FS + 3d' }); // walk(3, 3) = 6
+    expect(liveLag({ ...state, currentLagDays: -1 }, VIEW)).toEqual({
+      x: 20,
+      y: 14,
+      label: 'FS - 1d',
+    });
+    expect(liveLag({ ...state, currentLagDays: 0 }, VIEW)!.label).toBe('FS + 0d');
+  });
+
+  it('returns null for any other gesture state', () => {
+    expect(liveResize({ kind: 'idle' }, VIEW, '2026-01-01')).toBeNull();
+    expect(liveLag({ kind: 'idle' }, VIEW)).toBeNull();
   });
 });

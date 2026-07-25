@@ -139,6 +139,7 @@ vi.mock('@/features/dependencies', () => ({
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: h.createDependency }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
+  useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
   DependencyEditor: ({ canManageLogic }: { canManageLogic: boolean }) => (
     <div data-testid="dependency-editor" data-can-manage={String(canManageLogic)} />
   ),

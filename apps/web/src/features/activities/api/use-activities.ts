@@ -255,7 +255,9 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
  * `visualStart` (never an SNET constraint) and — unlike {@link useRepositionLane} — it *does* feed the
  * effective-Visual pass, so the route recalculates after it (the pass pins this bar and pushes its
  * unplaced successors, server-side). `visualStart: null` clears the placement (revert to computed).
- * It resends no definition fields, so it can never clobber a constraint or duration.
+ * It resends no definition fields, so it can never clobber a constraint — the ONE exception is the
+ * optional `durationDays` the VISUAL start-edge resize sends alongside its placement (ADR-0052 §3:
+ * `PATCH {visualStart, durationDays}` in one call), absent for every other caller.
  */
 export function useSetActivityVisualStart(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
@@ -263,6 +265,7 @@ export function useSetActivityVisualStart(orgSlug: string, planId: string) {
     mutationFn: (input: {
       activityId: string;
       visualStart: string | null;
+      durationDays?: number;
       laneIndex?: number;
       version: number;
     }) =>
@@ -270,6 +273,7 @@ export function useSetActivityVisualStart(orgSlug: string, planId: string) {
         method: 'PATCH',
         body: JSON.stringify({
           visualStart: input.visualStart,
+          ...(input.durationDays !== undefined ? { durationDays: input.durationDays } : {}),
           ...(input.laneIndex !== undefined ? { laneIndex: input.laneIndex } : {}),
           version: input.version,
         }),
