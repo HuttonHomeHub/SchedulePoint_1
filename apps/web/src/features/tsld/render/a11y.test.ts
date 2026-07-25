@@ -325,3 +325,46 @@ describe('chainNeighbour + announceChainStep', () => {
     expect(announceChainStep('succ', null)).toBe('No successors.');
   });
 });
+
+// ── ADR-0052 M4 a11y-string parity ───────────────────────────────────────────────────────
+// The bar visual refresh RESTYLES the canvas (shape/stroke/progress/glyphs/badges) but must not
+// change one character of the parallel accessible representation: these pin the exact strings for
+// the badge-carrying cases the refresh touches visually (constraint pin, conflict triangle,
+// lane-overlap squares) and the lag phrase, so any drift fails loudly.
+describe('a11y-string parity across the M4 visual refresh', () => {
+  it('pins the full badge-carrying Tier-1 sentence byte-for-byte', () => {
+    expect(
+      describeActivity(
+        activity({
+          code: 'A100',
+          constraintType: 'SNET',
+          constraintDate: '2026-01-02',
+          visualConflict: true,
+          visualDriftDays: -2,
+        }),
+        { overlapsInLane: true },
+      ),
+    ).toBe(
+      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 0 days float, ' +
+        'Start no earlier than 02 Jan 2026, ' +
+        'conflict: placed 2 working days before its earliest feasible start, ' +
+        'overlaps another activity in its lane',
+    );
+  });
+
+  it('pins the lag phrases byte-for-byte (the spoken twin of the drawn anchor offset)', () => {
+    expect(lagPhrase({ type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' })).toBe('FS');
+    expect(lagPhrase({ type: 'SS', lagDays: 3, lagCalendar: 'PROJECT_DEFAULT' })).toBe(
+      'SS + 3 working days',
+    );
+    expect(lagPhrase({ type: 'FS', lagDays: -1, lagCalendar: 'TWENTY_FOUR_HOUR' })).toBe(
+      'FS - 1 elapsed day',
+    );
+  });
+
+  it('pins the shared bar-label identity byte-for-byte (visible label = accessible prefix)', () => {
+    expect(activityBarLabel({ code: 'A100', name: 'Excavate', durationDays: 3 })).toBe(
+      'A100 Excavate · 3d',
+    );
+  });
+});

@@ -493,6 +493,11 @@ export function TsldCanvas({
   const gestureRef = useRef<GestureState>(IDLE);
   const gestureActiveRef = useRef(false);
   const interactionDirtyRef = useRef(true);
+  // The idle-hovered bar's rect (ADR-0052 M4): published by the pointermove idle-hover branch
+  // (which already classifies per move while the resize/lag zones are armed — no new hit-test)
+  // and drawn as the hover ring on the interaction layer. Flag-off it is never written, so the
+  // overlay stays byte-for-byte today's (the parity gate).
+  const hoverRef = useRef<Rect | null>(null);
   const pendingRef = useRef<PendingGhost | null>(pending);
   // Read by the window key listener (set up once), so it sees the current mode/handler.
   const modeRef = useRef(mode);
@@ -528,6 +533,9 @@ export function TsldCanvas({
     // Time-true link anchoring + arrowheads (ADR-0052 M1). A build-time constant, so it never
     // re-triggers the scene effect; flag-off the painter keeps today's routing byte-for-byte.
     timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
+    // The M4 bar visual refresh rides the SAME env flag (one flag, one flag-off parity gate);
+    // its own scene field keeps the two render changes independently testable in the painter.
+    visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
   });
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
@@ -570,6 +578,7 @@ export function TsldCanvas({
       baselineGhosts,
       flaggedIds,
       timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
+      visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
@@ -853,6 +862,11 @@ export function TsldCanvas({
           // byte-for-byte as before.
           resize: liveResize(gestureRef.current, viewRef.current, sceneRef.current.dataDate),
           lag: liveLag(gestureRef.current, viewRef.current),
+          // M4 refresh: restyled ghosts + the idle-hover ring (suppressed while a gesture is in
+          // flight — the ghost is the live affordance then). Flag-off both fields are inert
+          // (`visualRefresh` false, `hover` never written) ⇒ byte-for-byte today's overlay.
+          visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+          hover: gestureActiveRef.current ? null : hoverRef.current,
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
@@ -1165,6 +1179,25 @@ export function TsldCanvas({
                     ? 'ew-resize'
                     : '';
               }
+              // Hover ring (ADR-0052 M4): publish the hovered bar's rect for the interaction
+              // layer — reusing the classify this branch already ran, so no extra hit-test. A
+              // repaint is marked only when the hovered bar actually changes (not per move).
+              const hoveredActivity = hover.id
+                ? sceneRef.current.activities.find((a) => a.id === hover.id)
+                : undefined;
+              const rect = hoveredActivity
+                ? activityRect(hoveredActivity, viewRef.current, dataDate)
+                : null;
+              const prev = hoverRef.current;
+              const changed =
+                (prev === null) !== (rect === null) ||
+                (prev !== null &&
+                  rect !== null &&
+                  (prev.x !== rect.x || prev.y !== rect.y || prev.w !== rect.w));
+              if (changed) {
+                hoverRef.current = rect;
+                interactionDirtyRef.current = true;
+              }
             }
             return;
           }
@@ -1224,6 +1257,14 @@ export function TsldCanvas({
             return;
           }
           onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));
+        }}
+        onPointerLeave={() => {
+          // Drop the hover ring when the pointer leaves the surface (M4). Flag-off the ref is
+          // never set, so this is a no-op — today's behaviour byte-for-byte.
+          if (hoverRef.current !== null) {
+            hoverRef.current = null;
+            interactionDirtyRef.current = true;
+          }
         }}
         onPointerCancel={() => {
           if (!gestureActiveRef.current) return;

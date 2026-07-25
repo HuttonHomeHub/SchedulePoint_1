@@ -40,6 +40,13 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
     labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
     labelBeside: token('--color-foreground', '#e6e8ee'),
+    // ── Bar visual refresh (ADR-0052 M4) ─────────────────────────────────────────────────
+    // The calm hairline definition stroke on refreshed non-critical bars (the border token —
+    // quiet, so the foreground emphasis outline pops) and the idle-hover ring (muted-foreground —
+    // lighter than the `--color-ring` selection, so hover ≠ selection). The refresh adds no other
+    // colour: progress draws in the bar's paired label ink, glyph caps in the bar's own fill.
+    barStroke: token('--color-border', '#2a2f3a'),
+    hoverRing: token('--color-muted-foreground', '#7a8090'),
   };
 }
 
@@ -99,6 +106,10 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
       labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
       labelBeside: token('--color-foreground', '#1a1a1a'),
+      // M4 refresh entries with LIGHT fallbacks (the export path builds a `visualRefresh`-less
+      // scene today, but the palette contract stays total — every painter field resolves).
+      barStroke: token('--color-border', '#e5e7eb'),
+      hoverRing: token('--color-muted-foreground', '#6b7280'),
     };
   } finally {
     if (hadDark) root.classList.add('dark');

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   activityRect,
   arrowhead,
+  barGlyphKind,
   classifyHit,
   clampPxPerDay,
   cull,
@@ -11,7 +12,10 @@ import {
   lagAnchorDay,
   lagAnchorPoints,
   lagFromAnchorDay,
+  loeBracketRects,
   makeWorkingDayWalk,
+  progressGeometry,
+  summaryTabRects,
   truncateToWidth,
   ELAPSED_DAY_WALK,
   LABEL_INSIDE_MIN_PX,
@@ -31,6 +35,13 @@ import {
   LANE_HEIGHT,
   MAX_PX_PER_DAY,
   MIN_PX_PER_DAY,
+  GLYPH_CAP_OVERHANG,
+  GLYPH_CAP_W,
+  PROGRESS_BAND_H,
+  PROGRESS_INSET_PX,
+  PROGRESS_MIN_BAR_PX,
+  SUMMARY_TAB_H,
+  SUMMARY_TAB_W,
   pan,
   panToDate,
   rectsIntersect,
@@ -839,5 +850,88 @@ describe('truncateToWidth', () => {
   it('handles empty text and non-positive width', () => {
     expect(truncateToWidth('', 100, measure)).toBe('');
     expect(truncateToWidth('x', 0, measure)).toBe('');
+  });
+});
+
+// ── Bar visual refresh geometry (ADR-0052 M4) ────────────────────────────────────────────
+describe('progressGeometry', () => {
+  const rect = { x: 100, y: 45, w: 60, h: 18 };
+
+  it('returns null for no progress (0, negative, NaN) and for a too-narrow bar', () => {
+    expect(progressGeometry(rect, 0)).toBeNull();
+    expect(progressGeometry(rect, -5)).toBeNull();
+    expect(progressGeometry(rect, Number.NaN)).toBeNull();
+    expect(progressGeometry({ ...rect, w: PROGRESS_MIN_BAR_PX - 1 }, 50)).toBeNull();
+  });
+
+  it('bands the completed fraction along the bar bottom, inset and shape-bounded', () => {
+    const g = progressGeometry(rect, 50)!;
+    expect(g.band).toEqual({
+      x: rect.x + PROGRESS_INSET_PX,
+      y: rect.y + rect.h - PROGRESS_INSET_PX - PROGRESS_BAND_H,
+      w: (rect.w - PROGRESS_INSET_PX * 2) / 2,
+      h: PROGRESS_BAND_H,
+    });
+    // The front divider sits at the band's end — the non-colour boundary cue.
+    expect(g.frontX).toBe(g.band.x + g.band.w);
+  });
+
+  it('drops the front divider at 100% (the front coincides with the bar end)', () => {
+    const g = progressGeometry(rect, 100)!;
+    expect(g.band.w).toBe(rect.w - PROGRESS_INSET_PX * 2);
+    expect(g.frontX).toBeNull();
+  });
+
+  it('clamps over-100 to a full band (defensive — the API bounds the field)', () => {
+    expect(progressGeometry(rect, 150)!.band.w).toBe(rect.w - PROGRESS_INSET_PX * 2);
+  });
+
+  it('never escapes the bar rect (band stays inside for every percent)', () => {
+    for (const pct of [1, 25, 50, 99, 100]) {
+      const g = progressGeometry(rect, pct)!;
+      expect(g.band.x).toBeGreaterThanOrEqual(rect.x);
+      expect(g.band.x + g.band.w).toBeLessThanOrEqual(rect.x + rect.w);
+      expect(g.band.y + g.band.h).toBeLessThanOrEqual(rect.y + rect.h);
+    }
+  });
+});
+
+describe('loeBracketRects / summaryTabRects (M4 glyph vertices)', () => {
+  const rect = { x: 100, y: 45, w: 60, h: 18 };
+
+  it('places the LOE bracket caps at the span ends, overhanging top and bottom', () => {
+    const [left, right] = loeBracketRects(rect);
+    expect(left).toEqual({
+      x: rect.x,
+      y: rect.y - GLYPH_CAP_OVERHANG,
+      w: GLYPH_CAP_W,
+      h: rect.h + GLYPH_CAP_OVERHANG * 2,
+    });
+    expect(right.x).toBe(rect.x + rect.w - GLYPH_CAP_W);
+    expect(right.y).toBe(left.y);
+    expect(right.h).toBe(left.h);
+  });
+
+  it('places the summary tabs directly below the bar at each end', () => {
+    const [left, right] = summaryTabRects(rect);
+    expect(left).toEqual({ x: rect.x, y: rect.y + rect.h, w: SUMMARY_TAB_W, h: SUMMARY_TAB_H });
+    expect(right).toEqual({
+      x: rect.x + rect.w - SUMMARY_TAB_W,
+      y: rect.y + rect.h,
+      w: SUMMARY_TAB_W,
+      h: SUMMARY_TAB_H,
+    });
+  });
+});
+
+describe('barGlyphKind', () => {
+  it('maps every activity type to its refreshed glyph family', () => {
+    expect(barGlyphKind('TASK')).toBe('bar');
+    expect(barGlyphKind('RESOURCE_DEPENDENT')).toBe('bar');
+    expect(barGlyphKind('START_MILESTONE')).toBe('milestone');
+    expect(barGlyphKind('FINISH_MILESTONE')).toBe('milestone');
+    expect(barGlyphKind('LEVEL_OF_EFFORT')).toBe('loe');
+    expect(barGlyphKind('HAMMOCK')).toBe('loe');
+    expect(barGlyphKind('WBS_SUMMARY')).toBe('summary');
   });
 });

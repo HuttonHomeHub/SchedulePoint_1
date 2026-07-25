@@ -19,6 +19,9 @@ const PALETTE: TsldPalette = {
   labelInsideCritical: '#fff',
   labelInsideNearCritical: '#000',
   labelBeside: '#eee',
+  // M4 refresh entries — distinct from every other fixture colour so assertions can pin them.
+  barStroke: '#5a5a5a',
+  hoverRing: '#9a9a9a',
 };
 
 /** All view layers on, matching the default scene. */
@@ -1189,5 +1192,478 @@ describe('paintScene — time-true links', () => {
     );
     // The unscheduled endpoint has no geometry, so no edge line and no arrowhead — like today.
     expect(ctx.fill).not.toHaveBeenCalled();
+  });
+});
+
+// ── Bar visual refresh (ADR-0052 M4, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ─────
+describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
+  /** All decorative layers off so the recorded calls are the bars alone. */
+  const quiet = {
+    dayGrid: false,
+    monthGrid: false,
+    yearGrid: false,
+    today: false,
+    nonWorking: false,
+    labels: false,
+    lateOverlay: false,
+  } as const;
+  const refreshScene = (over: Partial<TsldScene> = {}): TsldScene => ({
+    activities: [task()],
+    edges: [],
+    dataDate: DATA_DATE,
+    view: quiet,
+    visualRefresh: true,
+    ...over,
+  });
+  /** A ctx whose roundRect is real enough to record (the modern-browser path). */
+  const roundedCtx = () => ({ ...mockCtx(), roundRect: vi.fn() });
+
+  it('is byte-for-byte today’s paint when the flag is off, absent, or explicitly undefined (parity)', () => {
+    // A scene exercising every refreshed branch: critical + progress, near-critical, LOE,
+    // summary, milestone, constraint pin, selection ring, labels on — all must paint byte-for-
+    // byte today's when `visualRefresh` is off/absent/undefined.
+    const rich = (visualRefresh?: boolean): TsldScene => ({
+      activities: [
+        task({ id: 'a', isCritical: true, percentComplete: 50, constraint: 'start' }),
+        task({ id: 'b', isNearCritical: true, laneIndex: 1, percentComplete: 100 }),
+        task({ id: 'c', type: 'LEVEL_OF_EFFORT', laneIndex: 2 }),
+        task({ id: 'd', type: 'WBS_SUMMARY', laneIndex: 3 }),
+        task({ id: 'e', type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02', laneIndex: 4 }),
+      ],
+      edges: [],
+      dataDate: DATA_DATE,
+      selectedId: 'a',
+      ...(visualRefresh === undefined ? {} : { visualRefresh }),
+    });
+    const base = recordingCtx();
+    paintScene(base.ctx, rich(), VIEW, SIZE, PALETTE);
+    const off = recordingCtx();
+    paintScene(off.ctx, rich(false), VIEW, SIZE, PALETTE);
+    const explicit = recordingCtx();
+    paintScene(explicit.ctx, { ...rich(), visualRefresh: undefined }, VIEW, SIZE, PALETTE);
+    expect(off.log).toEqual(base.log);
+    expect(explicit.log).toEqual(base.log);
+  });
+
+  it('rounds the bar with roundRect when available, and falls back to fillRect when not', () => {
+    const rounded = roundedCtx();
+    paintScene(rounded, refreshScene(), VIEW, SIZE, PALETTE);
+    // Bar body fills through the rounded path (no square fillRect for the body)…
+    expect(rounded.roundRect).toHaveBeenCalled();
+    expect(rounded.fill).toHaveBeenCalled();
+    expect(rounded.fillRect).not.toHaveBeenCalled();
+    // The task() bar rect: day 1..4 at 12px/day, originX 60 → x 72, w 48; lane 0 → y 45, h 18.
+    expect(rounded.roundRect.mock.calls[0]).toEqual([72, 45, 48, 18, 3]);
+    // …while a minimal context (no roundRect) degrades to the square fill, never throwing.
+    const square = mockCtx();
+    paintScene(square, refreshScene(), VIEW, SIZE, PALETTE);
+    expect(square.fillRect).toHaveBeenCalledWith(72, 45, 48, 18);
+  });
+
+  it('strokes a calm hairline (barStroke, 1px) around a non-critical bar', () => {
+    const { ctx, log } = recordingCtx();
+    paintScene(ctx, refreshScene(), VIEW, SIZE, PALETTE);
+    expect(log).toContain(`strokeStyle=${PALETTE.barStroke}`);
+    expect(log).toContain('lineWidth=1');
+    // Legacy left a non-critical bar strokeless; the refresh gives it the definition stroke.
+    expect(log.some((e) => e.startsWith('strokeRect('))).toBe(true);
+  });
+
+  it('emphasises critical/near-critical (2px outline) while retaining the solid/dashed cue', () => {
+    const critical = recordingCtx();
+    paintScene(
+      critical.ctx,
+      refreshScene({ activities: [task({ isCritical: true })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(critical.log).toContain('lineWidth=2');
+    expect(critical.log).toContain(`strokeStyle=${PALETTE.outline}`);
+    expect(critical.log).toContain('setLineDash([[]])');
+    // The critical bar never gets the calm hairline — emphasis replaces it, so it pops.
+    expect(critical.log).not.toContain(`strokeStyle=${PALETTE.barStroke}`);
+    const near = recordingCtx();
+    paintScene(
+      near.ctx,
+      refreshScene({ activities: [task({ isNearCritical: true })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(near.log).toContain('setLineDash([[3,2]])');
+    expect(near.log).toContain('lineWidth=2');
+  });
+
+  it('draws the in-bar progress band + hairline front divider in the bar’s paired ink', () => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      refreshScene({ activities: [task({ percentComplete: 50 })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // Square-fallback ctx: bar body + band + divider = 3 fillRects.
+    expect(ctx.fillRect).toHaveBeenCalledTimes(3);
+    // Band: inset 2 inside the 72..120 × 45..63 bar, along the bottom → x 74, y 57, w 22, h 4.
+    expect(ctx.fillRect).toHaveBeenCalledWith(74, 57, 22, 4);
+    // Divider: a 1px full-height hairline at the progress front (x 96), inset 1 vertically.
+    expect(ctx.fillRect).toHaveBeenCalledWith(95.5, 46, 1, 16);
+  });
+
+  it('draws no divider at 100% and no band at 0%/absent', () => {
+    const done = mockCtx();
+    paintScene(
+      done,
+      refreshScene({ activities: [task({ percentComplete: 100 })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(done.fillRect).toHaveBeenCalledTimes(2); // body + full band, no divider
+    expect(done.fillRect).toHaveBeenCalledWith(74, 57, 44, 4);
+    const zero = mockCtx();
+    paintScene(
+      zero,
+      refreshScene({ activities: [task({ percentComplete: 0 })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(zero.fillRect).toHaveBeenCalledTimes(1); // body only
+    const absent = mockCtx();
+    paintScene(absent, refreshScene(), VIEW, SIZE, PALETTE);
+    expect(absent.fillRect).toHaveBeenCalledTimes(1);
+  });
+
+  it('culls the progress detail below the zoom LOD threshold (like labels)', () => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      refreshScene({ activities: [task({ percentComplete: 50 })] }),
+      { ...VIEW, pxPerDay: 3 }, // below PROGRESS_MIN_PX_PER_DAY (4)
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fillRect).toHaveBeenCalledTimes(1); // body only — no sub-pixel smear
+  });
+
+  it('progress ink follows the criticality pairing and the lens barInk override', () => {
+    const normal = recordingCtx();
+    paintScene(
+      normal.ctx,
+      refreshScene({ activities: [task({ percentComplete: 50 })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(normal.log).toContain(`fillStyle=${PALETTE.labelInside}`);
+    const critical = recordingCtx();
+    paintScene(
+      critical.ctx,
+      refreshScene({ activities: [task({ percentComplete: 50, isCritical: true })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(critical.log).toContain(`fillStyle=${PALETTE.labelInsideCritical}`);
+    // Under a Colour-by lens the paired barInk override carries the band, so contrast holds on
+    // the recoloured fill (the lens owns colour; the refresh only adds shape).
+    const lensed = recordingCtx();
+    paintScene(
+      lensed.ctx,
+      refreshScene({
+        activities: [task({ percentComplete: 50 })],
+        barFill: new Map([['t', '#fill']]),
+        barInk: new Map([['t', '#ink']]),
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(lensed.log).toContain('fillStyle=#fill');
+    expect(lensed.log).toContain('fillStyle=#ink');
+  });
+
+  it('dims the progress detail with a filter-dimmed bar, restoring full alpha for the outline', () => {
+    const { ctx, log } = recordingCtx();
+    paintScene(
+      ctx,
+      refreshScene({
+        activities: [task({ percentComplete: 50 })],
+        dimmedIds: new Set(['t']),
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The band paints between the dim and the restore — it recedes with its bar.
+    const dimAt = log.indexOf('globalAlpha=0.3');
+    const restoreAt = log.indexOf('globalAlpha=1');
+    const bandAt = log.findIndex((e) => e === 'fillRect([74,57,22,4])');
+    expect(dimAt).toBeGreaterThanOrEqual(0);
+    expect(bandAt).toBeGreaterThan(dimAt);
+    expect(restoreAt).toBeGreaterThan(bandAt);
+  });
+
+  it('draws the LOE/hammock bracketed span: end caps in the bar’s own fill', () => {
+    for (const type of ['LEVEL_OF_EFFORT', 'HAMMOCK'] as const) {
+      const ctx = mockCtx();
+      paintScene(ctx, refreshScene({ activities: [task({ type })] }), VIEW, SIZE, PALETTE);
+      // Body + two bracket caps (overhanging the bar by 3px top and bottom).
+      expect(ctx.fillRect).toHaveBeenCalledTimes(3);
+      expect(ctx.fillRect).toHaveBeenCalledWith(72, 42, 2, 24);
+      expect(ctx.fillRect).toHaveBeenCalledWith(118, 42, 2, 24);
+    }
+  });
+
+  it('draws the WBS-summary bracket: downward end tabs in the bar’s own fill', () => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      refreshScene({ activities: [task({ type: 'WBS_SUMMARY' })] }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(ctx.fillRect).toHaveBeenCalledTimes(3);
+    expect(ctx.fillRect).toHaveBeenCalledWith(72, 63, 3, 4);
+    expect(ctx.fillRect).toHaveBeenCalledWith(117, 63, 3, 4);
+  });
+
+  it('gives a non-critical milestone the hairline diamond outline (consistent glyph language)', () => {
+    const { ctx, log } = recordingCtx();
+    paintScene(
+      ctx,
+      refreshScene({
+        activities: [task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02' })],
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // The diamond fills, then strokes the same path with the calm definition stroke — the
+    // stroke lands AFTER the barStroke style is set (the grid layer's stroke precedes it).
+    const styleAt = log.indexOf(`strokeStyle=${PALETTE.barStroke}`);
+    expect(styleAt).toBeGreaterThanOrEqual(0);
+    expect(log.slice(styleAt).some((e) => e === 'stroke([])')).toBe(true);
+    // A critical milestone keeps the emphasised outline + solid dash instead.
+    const critical = recordingCtx();
+    paintScene(
+      critical.ctx,
+      refreshScene({
+        activities: [
+          task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02', isCritical: true }),
+        ],
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(critical.log).toContain(`strokeStyle=${PALETTE.outline}`);
+    expect(critical.log).toContain('lineWidth=2');
+    expect(critical.log).toContain('setLineDash([[]])');
+  });
+
+  it('composes with a Colour-by barFill override — the lens still decides the base colour', () => {
+    const { log } = ((): { log: string[] } => {
+      const r = recordingCtx();
+      paintScene(
+        r.ctx,
+        refreshScene({ activities: [task()], barFill: new Map([['t', '#override']]) }),
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      return r;
+    })();
+    expect(log).toContain('fillStyle=#override');
+  });
+
+  it('outlines the constraint pin (badge-family consistency) under the refresh only', () => {
+    const scene = (visualRefresh: boolean): TsldScene => ({
+      activities: [task({ constraint: 'start' })],
+      edges: [],
+      dataDate: DATA_DATE,
+      view: quiet,
+      visualRefresh,
+    });
+    const legacy = mockCtx();
+    paintScene(legacy, scene(false), VIEW, SIZE, PALETTE);
+    const refreshed = mockCtx();
+    paintScene(refreshed, scene(true), VIEW, SIZE, PALETTE);
+    // Same pin shape (one path fill beyond the bar), plus one traced outline stroke under M4.
+    expect(legacy.fill).toHaveBeenCalledTimes(1);
+    expect(refreshed.fill).toHaveBeenCalledTimes(1);
+    expect(refreshed.stroke.mock.calls.length).toBe(legacy.stroke.mock.calls.length + 1);
+  });
+
+  it('preserves the conflict / lane-overlap / over-allocation badges byte-for-byte in shape count', () => {
+    // The three warning badges are restyle-exempt (already outlined, one family): the refresh
+    // must not change their draw-call counts relative to a legacy paint of the same scene.
+    const scene = (visualRefresh: boolean): TsldScene => ({
+      activities: [task({ visualConflict: true, laneOverlap: true })],
+      edges: [],
+      dataDate: DATA_DATE,
+      view: quiet,
+      flaggedIds: new Set(['t']),
+      visualRefresh,
+    });
+    const legacy = mockCtx();
+    paintScene(legacy, scene(false), VIEW, SIZE, PALETTE);
+    const refreshed = mockCtx();
+    paintScene(refreshed, scene(true), VIEW, SIZE, PALETTE);
+    // Badge fills: conflict triangle path (fill) is unchanged; the squares + histogram fillRects
+    // are unchanged; the refreshed bar adds exactly one hairline strokeRect over the legacy count
+    // (the legacy non-critical bar had none) and no extra path fills.
+    expect(refreshed.fill.mock.calls.length).toBe(legacy.fill.mock.calls.length);
+    expect(refreshed.fillRect.mock.calls.length).toBe(legacy.fillRect.mock.calls.length);
+    expect(refreshed.strokeRect.mock.calls.length).toBe(legacy.strokeRect.mock.calls.length + 1);
+  });
+
+  it('rounds the selection ring with the bar (roundRect path) and keeps the square fallback', () => {
+    const scene = refreshScene({ selectedId: 't' });
+    const rounded = roundedCtx();
+    paintScene(rounded, scene, VIEW, SIZE, PALETTE);
+    // The ring is the outermost rounded path: rect ± 2 with radius BAR_RADIUS + 2.
+    expect(rounded.roundRect).toHaveBeenCalledWith(70, 43, 52, 22, 5);
+    const square = mockCtx();
+    paintScene(square, scene, VIEW, SIZE, PALETTE);
+    expect(square.strokeRect).toHaveBeenCalledWith(70, 43, 52, 22);
+  });
+
+  it('nudges an inside label clear of the rounded corner (pad +2) under the refresh', () => {
+    const label = 'A1020 Erect steel · 4d';
+    const legacy = mockCtx();
+    paintScene(
+      legacy,
+      { activities: [task({ label })], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const refreshed = mockCtx();
+    paintScene(
+      refreshed,
+      { activities: [task({ label })], edges: [], dataDate: DATA_DATE, visualRefresh: true },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const legacyX = legacy.fillText.mock.calls[0]![1] as number;
+    const refreshedX = refreshed.fillText.mock.calls[0]![1] as number;
+    expect(legacyX).toBe(72 + 3); // LABEL_PAD_PX
+    expect(refreshedX).toBe(72 + 5); // LABEL_PAD_PX + 2
+  });
+
+  it('leaves beside labels (milestones) at their legacy position — only inside pad changes', () => {
+    const milestone = task({
+      type: 'FINISH_MILESTONE',
+      label: 'M1 Handover',
+      earlyStart: '2026-01-02',
+      earlyFinish: '2026-01-02',
+    });
+    const legacy = mockCtx();
+    paintScene(
+      legacy,
+      { activities: [milestone], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const refreshed = mockCtx();
+    paintScene(
+      refreshed,
+      { activities: [milestone], edges: [], dataDate: DATA_DATE, visualRefresh: true },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(refreshed.fillText.mock.calls[0]).toEqual(legacy.fillText.mock.calls[0]);
+  });
+
+  it('keeps the overlap-badge lift clear of the (now outlined) constraint pin under the refresh', () => {
+    // A bar carrying BOTH the pin and the lane-overlap squares: the refresh must keep the
+    // existing stacking (lift) — same squares, same counts — while only adding the pin outline.
+    const both = (visualRefresh: boolean): TsldScene => ({
+      activities: [task({ constraint: 'start', laneOverlap: true })],
+      edges: [],
+      dataDate: DATA_DATE,
+      view: quiet,
+      visualRefresh,
+    });
+    const legacy = mockCtx();
+    paintScene(legacy, both(false), VIEW, SIZE, PALETTE);
+    const refreshed = mockCtx();
+    paintScene(refreshed, both(true), VIEW, SIZE, PALETTE);
+    // The two lifted squares are unchanged in count and position (their fillRects match, after
+    // the differing bar-body draws are accounted: legacy body 1 fillRect, refresh body 1 fillRect).
+    const squares = (ctx: ReturnType<typeof mockCtx>) =>
+      ctx.fillRect.mock.calls.filter((c) => c[2] === 5 && c[3] === 5); // OVERLAP_BADGE_S sides
+    expect(squares(refreshed)).toEqual(squares(legacy));
+    // The pin gains exactly one outline stroke; the squares keep their outlines.
+    expect(refreshed.stroke.mock.calls.length).toBe(legacy.stroke.mock.calls.length + 1);
+  });
+});
+
+describe('paintInteractionLayer — visual refresh + hover (ADR-0052 M4)', () => {
+  const GHOST = { x: 10, y: 10, w: 40, h: 18 };
+  const roundedCtx = () => ({ ...mockCtx(), roundRect: vi.fn() });
+
+  it('is byte-for-byte the legacy overlay when the refresh fields are absent/off (parity)', () => {
+    const base = recordingCtx();
+    paintInteractionLayer(base.ctx, { live: GHOST }, SIZE, PALETTE);
+    const off = recordingCtx();
+    paintInteractionLayer(
+      off.ctx,
+      { live: GHOST, visualRefresh: false, hover: null },
+      SIZE,
+      PALETTE,
+    );
+    expect(off.log).toEqual(base.log);
+  });
+
+  it('draws the hover ring (hoverRing hue, 1.5px) under the refresh, below any ghost', () => {
+    const { ctx, log } = recordingCtx();
+    paintInteractionLayer(ctx, { visualRefresh: true, hover: GHOST }, SIZE, PALETTE);
+    expect(log).toContain(`strokeStyle=${PALETTE.hoverRing}`);
+    expect(log).toContain('lineWidth=1.5');
+    // Square fallback (mock has no roundRect): the ring is a strokeRect at rect ± 1.5.
+    expect(log).toContain('strokeRect([8.5,8.5,43,21])');
+  });
+
+  it('ignores a hover rect when the refresh is off (never a stray ring)', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { hover: GHOST }, SIZE, PALETTE);
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('restyles the live ghost with rounded elevation-by-stroke (outer selection + inner inset)', () => {
+    const rounded = roundedCtx();
+    paintInteractionLayer(rounded, { live: GHOST, visualRefresh: true }, SIZE, PALETTE);
+    // Rounded fill + two rounded strokes (outer selection ring, inner barStroke inset).
+    expect(rounded.roundRect).toHaveBeenCalledTimes(3);
+    expect(rounded.fill).toHaveBeenCalledTimes(1);
+    expect(rounded.stroke).toHaveBeenCalledTimes(2);
+    expect(rounded.strokeStyle).toBe(PALETTE.barStroke); // the last (inner) stroke
+    // The square-fallback context degrades to rects, never throwing.
+    const square = mockCtx();
+    paintInteractionLayer(square, { live: GHOST, visualRefresh: true }, SIZE, PALETTE);
+    expect(square.fillRect).toHaveBeenCalledTimes(1);
+    expect(square.strokeRect).toHaveBeenCalledTimes(2);
+  });
+
+  it('restyles the resize ghost the same way, keeping its duration readout', () => {
+    const rounded = roundedCtx();
+    paintInteractionLayer(
+      rounded,
+      { resize: { rect: GHOST, label: '7d' }, visualRefresh: true },
+      SIZE,
+      PALETTE,
+    );
+    expect(rounded.roundRect).toHaveBeenCalledTimes(3);
+    expect(rounded.fillText).toHaveBeenCalledTimes(1);
+    expect(rounded.fillText.mock.calls[0]![0]).toBe('7d');
   });
 });

@@ -77,6 +77,9 @@ export function toRenderActivities(
     laneOverlap: overlapping.has(a.id),
     constraint: activeConstraintAnchor(a),
     label: activityBarLabel(a),
+    // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,
+    // so the canvas and the table can never disagree on how complete an activity is.
+    percentComplete: a.percentComplete,
   }));
 }
 
