@@ -7,7 +7,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 export const memberKeys = {
   all: (orgSlug: string) => ['members', orgSlug] as const,
@@ -17,7 +17,9 @@ export const memberKeys = {
 export function membersQueryOptions(orgSlug: string) {
   return queryOptions({
     queryKey: memberKeys.list(orgSlug),
-    queryFn: () => apiFetch<OrgMemberSummary[]>(`/organizations/${orgSlug}/members`),
+    // The members screen lists the whole org, not the endpoint's default 20-row page — an org with
+    // more than 20 members would silently hide the rest (and their roles could not be changed).
+    queryFn: () => apiFetchAllPages<OrgMemberSummary>(`/organizations/${orgSlug}/members`),
   });
 }
 

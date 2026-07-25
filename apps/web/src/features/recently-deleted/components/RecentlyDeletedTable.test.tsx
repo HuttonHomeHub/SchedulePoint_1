@@ -1,17 +1,20 @@
 import type { DeletedHierarchyItem } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deletedItemKeys } from '../api/use-deleted-items';
 
 import { RecentlyDeletedTable } from './RecentlyDeletedTable';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 const mockApiFetch = vi.mocked(apiFetch);
+// The list read pages through every deleted row (`apiFetchAllPages`), so the post-restore refetch
+// resolves here rather than through `apiFetch` (which serves only the restore POST).
+const mockApiFetchAllPages = vi.mocked(apiFetchAllPages);
 
 const CLIENT_ID = '00000000-0000-4000-8000-000000000001';
 const PLAN_ID = '00000000-0000-4000-8000-000000000002';
@@ -49,8 +52,13 @@ function renderTable(canWrite: boolean, data: DeletedHierarchyItem[] = ITEMS) {
   );
 }
 
+beforeEach(() => {
+  mockApiFetchAllPages.mockResolvedValue(ITEMS);
+});
+
 afterEach(() => {
   mockApiFetch.mockReset();
+  mockApiFetchAllPages.mockReset();
 });
 
 describe('RecentlyDeletedTable', () => {

@@ -7,7 +7,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { clientKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
 
 export const deletedItemKeys = {
@@ -19,7 +19,9 @@ export const deletedItemKeys = {
 export function deletedItemsQueryOptions(orgSlug: string) {
   return queryOptions({
     queryKey: deletedItemKeys.list(orgSlug),
-    queryFn: () => apiFetch<DeletedHierarchyItem[]>(`/organizations/${orgSlug}/deleted`),
+    // The recycle bin shows everything restorable, not the endpoint's default 20-row page — past 20
+    // deletions the older rows became unrestorable from the UI.
+    queryFn: () => apiFetchAllPages<DeletedHierarchyItem>(`/organizations/${orgSlug}/deleted`),
   });
 }
 

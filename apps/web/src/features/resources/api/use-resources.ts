@@ -18,7 +18,7 @@ import {
 
 import type { AssignmentFormValues, ResourceFormValues } from '../schemas/resource-schemas';
 
-import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 import { majorInputToMinor } from '@/lib/format-money';
 import {
   activityKeys,
@@ -72,7 +72,10 @@ function updateResourceBody(input: ResourceFormValues & { version: number }) {
 export function resourcesQueryOptions(orgSlug: string) {
   return queryOptions({
     queryKey: resourceKeys.list(orgSlug),
-    queryFn: () => apiFetch<ResourceSummary[]>(`/organizations/${orgSlug}/resources`),
+    // The resource library screen and every resource picker need the WHOLE org library, not the
+    // endpoint's default 20-row page — past 20 resources the table simply stopped listing them and a
+    // picker could not select them. Page through every row via the shared cursor helper.
+    queryFn: () => apiFetchAllPages<ResourceSummary>(`/organizations/${orgSlug}/resources`),
   });
 }
 

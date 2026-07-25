@@ -6,12 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CrossPlanLinksSection } from './CrossPlanLinksSection';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import type * as ApiClient from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', async (importActual) => {
   const actual = await importActual<typeof ApiClient>();
-  return { ...actual, apiFetch: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), apiFetchAllPages: vi.fn() };
 });
 
 const ANCHOR = { id: 'anchor', name: 'Pour slab' } as unknown as ActivitySummary;
@@ -33,16 +33,22 @@ function link(overrides: Partial<CrossPlanDependencySummary> = {}): CrossPlanDep
   };
 }
 
-/** Route the mocked apiFetch by path so the links list, delete, and picker queries all resolve. */
+/**
+ * Route the mocked client by path so the links list, delete, and picker queries all resolve. The
+ * list reads page through their endpoints (`apiFetchAllPages`), so the same router serves both
+ * helpers; only the DELETE goes through `apiFetch`.
+ */
 function mockApi(links: CrossPlanDependencySummary[]): void {
-  vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+  const route = (path: string, init?: RequestInit): Promise<unknown> => {
     if (path.includes('/activities/anchor/cross-plan-dependencies')) {
       return Promise.resolve(links);
     }
     if (init?.method === 'DELETE') return Promise.resolve(undefined);
     // Picker cascade queries (clients/projects/plans/activities) — empty is fine for these tests.
     return Promise.resolve([]);
-  });
+  };
+  vi.mocked(apiFetch).mockImplementation(route);
+  vi.mocked(apiFetchAllPages).mockImplementation(route as (path: string) => Promise<unknown[]>);
 }
 
 function renderSection(props: { canManageLogic?: boolean } = {}) {
@@ -65,6 +71,7 @@ function renderSection(props: { canManageLogic?: boolean } = {}) {
 describe('CrossPlanLinksSection', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetchAllPages).mockReset();
   });
 
   it('shows the empty state when the activity has no cross-plan links', async () => {

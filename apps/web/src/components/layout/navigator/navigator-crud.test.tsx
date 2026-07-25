@@ -11,11 +11,11 @@ import {
   type NodeActionTarget,
   type UseExpansionState,
 } from '@/features/navigator';
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 
 const CLIENT: ClientSummary = {
   id: 'c1',
@@ -115,7 +115,8 @@ describe('NavigatorCrud coordinator', () => {
   });
 
   it('seeds the rename dialog from the cached client summary', async () => {
-    vi.mocked(apiFetch).mockResolvedValue([CLIENT]);
+    // The clients list pages through its endpoint, so the summary comes from `apiFetchAllPages`.
+    vi.mocked(apiFetchAllPages).mockResolvedValue([CLIENT]);
     renderCoordinator();
     fireEvent.click(screen.getByText('rename-client'));
 

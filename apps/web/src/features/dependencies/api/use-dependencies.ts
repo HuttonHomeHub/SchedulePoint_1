@@ -33,8 +33,10 @@ export function usePlanDependencies(
 export function predecessorsQueryOptions(orgSlug: string, activityId: string) {
   return queryOptions({
     queryKey: dependencyKeys.predecessors(orgSlug, activityId),
+    // The logic editor lists an activity's links in full — a heavily-tied activity past the endpoint's
+    // default 20-row page would show an incomplete (and so un-editable) set of predecessors.
     queryFn: () =>
-      apiFetch<DependencySummary[]>(
+      apiFetchAllPages<DependencySummary>(
         `/organizations/${orgSlug}/activities/${activityId}/predecessors`,
       ),
   });
@@ -53,8 +55,9 @@ export function usePredecessors(
 export function successorsQueryOptions(orgSlug: string, activityId: string) {
   return queryOptions({
     queryKey: dependencyKeys.successors(orgSlug, activityId),
+    // As above — the successor list is shown in full, not just its first page.
     queryFn: () =>
-      apiFetch<DependencySummary[]>(
+      apiFetchAllPages<DependencySummary>(
         `/organizations/${orgSlug}/activities/${activityId}/successors`,
       ),
   });
