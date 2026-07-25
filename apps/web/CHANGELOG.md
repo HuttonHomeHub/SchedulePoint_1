@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.48.1
+
+### Patch Changes
+
+- [#153](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/153) [`a496bf3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a496bf3efb0302e379a222c5fd23cb9f6e33ebd3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): library lists and pickers no longer truncate at the first 20 rows — the resource and calendar libraries (and the members list, recycle bin, client/project/plan navigator, baselines, and the predecessor/successor/cross-plan link lists) called their cursor-paginated endpoints with no pagination params, so they silently showed only the server's default 20-row page and the rest of an org's rows could be neither seen nor selected. Each now pages through every row via `apiFetchAllPages`, the helper already used by the plan workspace.
+
+- [#153](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/153) [`a496bf3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a496bf3efb0302e379a222c5fd23cb9f6e33ebd3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): visible draggable lag/lead handle on the TSLD canvas (the ADR-0052 M3 anchor was grabbable but painted nothing, so the drag was undiscoverable) — a two-tone disc at every draggable anchor, emphasised on hover/drag, plus a 24px pointer target (WCAG 2.5.8)
+
 ## 0.48.0
 
 ### Minor Changes
