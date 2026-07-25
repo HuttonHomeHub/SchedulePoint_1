@@ -73,6 +73,6 @@ interface ImportMetaEnv {
   readonly VITE_GUEST_SHARE_LINKS?: string;
   /** Entry-route UX improvements — plan notes as a right-side drawer (opened from the Comments toolbar button) + a Resources action on the canvas selection bar, over the already-shipped notes + resource-assignment features (docs spec — entry-route quick wins). "true"/"1" enables it; off by default during build (flips on after the specialist reviews). */
   readonly VITE_ENTRY_ROUTES?: string;
-  /** TSLD canvas direct manipulation + visual refresh — M1 renders time-true link anchoring (lag walked on the relationship's lag calendar from the constrained edge; lead = left) + directional arrowheads; later milestones add duration resize, lag-anchor drag and the bar/link visual refresh behind the same flag (ADR-0052, docs/specs/canvas-direct-manipulation/). "true"/"1" enables it; off by default during build (flips on milestone-by-milestone after reviews + the draw-budget benchmark). */
+  /** TSLD canvas direct manipulation + visual refresh — time-true link anchoring (lag walked on the relationship's lag calendar from the constrained edge; lead = left) + directional arrowheads, duration resize on both bar edges, a draggable lag anchor, and the token-resolved bar/link visual refresh (ADR-0052, docs/specs/canvas-direct-manipulation/). On by default (2026-07-25, M1–M5 landed); "false"/"0" rolls back to the legacy edge-drag zones and canvas paint, byte-for-byte. */
   readonly VITE_CANVAS_DIRECT_MANIPULATION?: string;
 }

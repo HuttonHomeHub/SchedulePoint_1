@@ -690,19 +690,19 @@ export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUES
 export const ENTRY_ROUTES_ENABLED = flagDefaultOn(import.meta.env.VITE_ENTRY_ROUTES);
 
 /**
- * TSLD canvas direct manipulation + visual refresh — Milestone 1: time-true link anchoring +
- * arrowheads (ADR-0052, spec `docs/specs/canvas-direct-manipulation/`). **OFF by default during
- * build** — it flips on milestone-by-milestone once the specialist reviews (a11y / ux / component /
- * perf) and the ADR-0026 draw-budget benchmark are green. When on, every dependency link anchors at
- * the point in time its lag actually constrains — `lagDays` walked from the constrained edge on the
+ * TSLD canvas direct manipulation + visual refresh (ADR-0052, spec
+ * `docs/specs/canvas-direct-manipulation/`). **ON by default** (2026-07-25) now that all five
+ * milestones (M1–M5) have landed with their specialist reviews (a11y / ux / component / perf) and
+ * the ADR-0026 draw-budget benchmark green. When on, every dependency link anchors at the point in
+ * time its lag actually constrains — `lagDays` walked from the constrained edge on the
  * relationship's lag calendar (plan working days; `TWENTY_FOUR_HOUR` elapsed, ADR-0036 §6), a lead
  * walking left — and carries a directional arrowhead at its successor end, with the driving
- * weight/dash cue retained (WCAG 1.4.1). Render-only and role-independent (Viewer/External Guest
- * included): no gesture, write, API or engine change — the recalc parity gate is structurally
- * untouched. Later milestones (duration resize, lag-anchor drag, the bar/link visual refresh) land
- * behind this same flag. Set `VITE_CANVAS_DIRECT_MANIPULATION=true` to enable it; flag-off paints
- * byte-for-byte today's canvas (the parity paint test).
+ * weight/dash cue retained (WCAG 1.4.1); the bar-end grab-zones become duration **resize handles**
+ * (finish edge M2, mode-aware start edge M3) with a draggable lag anchor, and the bars + links get
+ * the token-resolved **visual refresh** (M4/M5). No API or engine change — the recalc parity gate
+ * is structurally untouched. Set `VITE_CANVAS_DIRECT_MANIPULATION=false` to fall back to the legacy
+ * edge-drag zones and paint, byte-for-byte (emergency rollback / opt-out — the parity paint test).
  */
-export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOff(
+export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_DIRECT_MANIPULATION,
 );

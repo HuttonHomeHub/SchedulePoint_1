@@ -2,10 +2,13 @@ import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The M2 editing gate reads a build-time flag; force it on for these tests.
+// The M2 editing gate reads a build-time flag; force it on for these tests. Direct manipulation
+// (ADR-0052, now default-ON) turns the bar-end zones into resize handles and retires the legacy
+// edge-drag link gesture this suite exercises, so pin it off — the flag-on handle/resize/lag
+// behaviour has its own suites (TsldPanel.resize.test.tsx, TsldCanvas.hover.test.tsx, paint.test.ts).
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: true };
+  return { ...actual, TSLD_EDITING_ENABLED: true, CANVAS_DIRECT_MANIPULATION_ENABLED: false };
 });
 
 // Capture live-region announcements so we can assert on (or the absence of) status messages.
