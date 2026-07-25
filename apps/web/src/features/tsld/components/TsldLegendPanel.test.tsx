@@ -2,6 +2,14 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
+// This is the BASE / flag-OFF legend suite: pin `VITE_CANVAS_DIRECT_MANIPULATION` off (it now
+// defaults ON, ADR-0052) so the key stays the pre-refresh vocabulary — the M4/M5 visual-refresh
+// rows have their own flag-on suite (TsldLegend.visual-refresh.test.tsx).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  CANVAS_DIRECT_MANIPULATION_ENABLED: false,
+}));
+
 import { TsldLegendPanel } from './TsldLegendPanel';
 
 describe('TsldLegendPanel', () => {
@@ -18,8 +26,9 @@ describe('TsldLegendPanel', () => {
     // The key itself is the shared TsldLegend list.
     expect(screen.getByRole('list', { name: 'Legend' })).toBeInTheDocument();
     expect(screen.getByText('Critical')).toBeInTheDocument();
-    // Flag-off parity (ADR-0052 M4/M5): none of the visual-refresh rows render without
-    // `VITE_CANVAS_DIRECT_MANIPULATION` — the default key is byte-identical to today's.
+    // Flag-off parity (ADR-0052 M4/M5, pinned off above): none of the visual-refresh rows render
+    // without `VITE_CANVAS_DIRECT_MANIPULATION` — the rollback key is byte-identical to the
+    // pre-refresh one.
     expect(screen.queryByText('Level of effort')).not.toBeInTheDocument();
     expect(screen.queryByText('WBS summary')).not.toBeInTheDocument();
     expect(screen.queryByText('Progress')).not.toBeInTheDocument();

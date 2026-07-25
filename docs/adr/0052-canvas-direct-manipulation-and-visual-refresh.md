@@ -1,6 +1,7 @@
 # ADR-0052: TSLD direct manipulation & canvas visual refresh
 
-- **Status:** Accepted
+- **Status:** Accepted — M1–M5 landed; `VITE_CANVAS_DIRECT_MANIPULATION` flipped **default ON**
+  (2026-07-25; `false` remains the byte-for-byte rollback)
 - **Date:** 2026-07-22
 - **Deciders:** Frontend architecture, UX, Product
 - **Related:** ADR-0021 (dependency DAG), ADR-0022 (CPM execution), ADR-0023
@@ -42,8 +43,10 @@ links** as a **frontend-only** feature composed on the existing REST mutations
 (`PATCH /activities/:id`, `PATCH /dependencies/:id`) + the ADR-0032 coalesced
 auto-recalc + the ADR-0048 undo stack — **no engine, API or DB change**, so the
 recalc parity gate is **structurally untouched**. Everything ships behind one
-flag, **`VITE_CANVAS_DIRECT_MANIPULATION` (default OFF)**; flag-off paints
-byte-for-byte today's canvas (a parity paint test per milestone).
+flag, **`VITE_CANVAS_DIRECT_MANIPULATION`** (default OFF during the build,
+flipped **default ON** on 2026-07-25 once M1–M5 landed with their reviews
+green); flag-off paints byte-for-byte the pre-refresh canvas (a parity paint
+test per milestone).
 
 ### 1. Edge-handle repurpose (amends ADR-0032 M5, ADR-0026 D5)
 
