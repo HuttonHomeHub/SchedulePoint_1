@@ -332,6 +332,39 @@ created**. Same authz (`interchange:import`), org-scope (anti-IDOR) and byte cap
 Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays);
 activities are laid out on a deterministic lane per source order.
 
+### Calendar scope tiers (ADR-0053)
+
+A calendar belongs to one of two **tiers**: **ORG** (the shared organisation library — the default, and
+what every calendar was before ADR-0053) or **PROJECT** (local to one project). Both live on the same
+`…/calendars` resource; `scope` + `projectId` are additive fields on every calendar request and response,
+so **no existing call changes shape or meaning**.
+
+| Method | Path                                                     | Notes                                                                                                                                                                                  |
+| ------ | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/organizations/:orgSlug/calendars`                     | **+ query** `scope=org\|project\|all` (**default `org`** — today's result set). **+ response fields** `scope`, `projectId`.                                                            |
+| GET    | `…/organizations/:orgSlug/projects/:projectId/calendars` | **NEW** — the calendars **usable in** this project: its own PROJECT-scoped ones **plus** every ORG-scoped one. Cursor-paginated. Foreign/unknown project → 404.                        |
+| POST   | `…/organizations/:orgSlug/calendars`                     | **+ body** `scope` (default `ORG`), `projectId`. `scope: ORG` additionally requires **`calendar:manage_org`**; `scope: PROJECT` requires an active in-org `projectId` (404 otherwise). |
+| PATCH  | `…/organizations/:orgSlug/calendars/:calendarId`         | **+ body** `scope`, `projectId` — the **promote / narrow** path, version-gated, requiring `calendar:manage_org`.                                                                       |
+| DELETE | `…/organizations/:orgSlug/calendars/:calendarId`         | Unchanged, except an **ORG**-scoped calendar additionally requires `calendar:manage_org`.                                                                                              |
+
+**New rejections** (every other calendar status code is unchanged):
+
+| Status | `details.reason`                   | When                                                                                                                                                                                  |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `CALENDAR_WRONG_SCOPE`             | A PROJECT-scoped calendar was assigned to a plan or activity **outside** its owning project. `details.projectId` names the owner.                                                     |
+| 422    | `RESOURCE_REQUIRES_ORG_CALENDAR`   | A PROJECT-scoped calendar was assigned to a **resource** — the pool is org-global (ADR-0039), so a resource may only hold an org-global calendar.                                     |
+| 422    | `CALENDAR_SCOPE_PROJECT_MISMATCH`  | `scope: PROJECT` without a `projectId`, or `scope: ORG` with one.                                                                                                                     |
+| 409    | `CALENDAR_SCOPE_NARROWING_BLOCKED` | Narrowing an ORG calendar while active plans/activities outside the target project — or **any** active resource — still use it. `details` carries `{ plans, activities, resources }`. |
+| 409    | `DUPLICATE_CALENDAR`               | A name collision **within a tier**. The same name in two different projects, or in a project and the org library, is allowed by design.                                               |
+
+A calendar id from **another organisation**, soft-deleted, or unknown remains an indistinguishable **404**
+at every seam — the tier is never a cross-tenant existence oracle. Scope-filtered listing is a **usability**
+filter, not an authorisation boundary: the security control is the server-side write guard, applied at
+`plan.calendarId`, `activity.calendarId` and `resource.calendarId` alike.
+
+Deleting a project soft-deletes its PROJECT-scoped calendars (and their exceptions) in the **same batch**,
+so restoring the project restores them; ORG-scoped calendars are never touched.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

@@ -4,10 +4,10 @@ import { RESOURCE_ERROR, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import { acquireResourceWriteLock } from '../../common/db/resource-advisory-lock';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 
@@ -92,9 +92,19 @@ export class ResourcesService {
     const calendarId = dto.calendarId ?? null;
     try {
       const resource = await this.prisma.$transaction(async (tx) => {
-        // A specific calendar must be active + in-org (invariant (a)) — validate under the
-        // calendar lock before the insert, serialised with the delete-in-use guard.
-        if (calendarId !== null) await this.assertCalendarInOrg(tx, calendarId, organization.id);
+        // A specific calendar must be active + in-org (invariant (a)) AND org-GLOBAL: the
+        // resource pool is deliberately unfragmented (ADR-0039), so an org-global resource may
+        // only hold an org-global calendar. Passing `projectId: null` to THE shared guard is
+        // exactly that statement — it hard-rejects ANY project-scoped calendar with 422
+        // RESOURCE_REQUIRES_ORG_CALENDAR (ADR-0053 §2). Runs under the calendar advisory lock
+        // before the insert, serialised with the delete-in-use guard.
+        if (calendarId !== null) {
+          await assertCalendarUsableBy(tx, this.calendars, {
+            calendarId,
+            organizationId: organization.id,
+            projectId: null,
+          });
+        }
         return this.resources.create(
           {
             organizationId: organization.id,
@@ -157,7 +167,13 @@ export class ResourcesService {
     try {
       await this.prisma.$transaction(async (tx) => {
         if (calendarId !== undefined && calendarId !== null) {
-          await this.assertCalendarInOrg(tx, calendarId, organization.id);
+          // Same org-global-only rule as create (ADR-0053 §2): `projectId: null` rejects any
+          // project-scoped calendar.
+          await assertCalendarUsableBy(tx, this.calendars, {
+            calendarId,
+            organizationId: organization.id,
+            projectId: null,
+          });
           patch.calendarId = calendarId;
         }
         const changed = await this.resources.updateIfVersionMatches(
@@ -211,23 +227,6 @@ export class ResourcesService {
       { organizationId: organization.id, resourceId, userId: principal.userId },
       'resource deleted',
     );
-  }
-
-  /**
-   * Validate a non-null `calendarId` is an ACTIVE calendar in the resource's own org
-   * (ADR-0039 invariant (a), mirrors ActivitiesService). Taken under the same calendar
-   * advisory lock the CALENDAR_IN_USE guard uses, so a resource can never be assigned a
-   * calendar mid-deletion (no TOCTOU dangle). A foreign / deleted / unknown id is
-   * indistinguishable from missing (404), leaking nothing.
-   */
-  private async assertCalendarInOrg(
-    tx: Prisma.TransactionClient,
-    calendarId: string,
-    organizationId: string,
-  ): Promise<void> {
-    await acquireCalendarWriteLock(tx, calendarId);
-    const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organizationId, tx);
-    if (!calendar) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_CALENDAR_NOT_FOUND);
   }
 
   /** A Prisma unique-violation from a partial unique index (resource name or code). */

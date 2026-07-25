@@ -510,6 +510,28 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   start-edge resize + lag drag → **M4/M5** the bar/link **visual refresh** (token-resolved, inside
   the Canvas-2D ≤ 4 ms p95 @ 2,000 budget) — all landed. Builds on
   ADR-0021/0022/0023/0028/0036/0048.
+- **ADR-0053** _(Accepted for M1: §1–§2 + §6; §3 accepts with M3, §4 with M4, §5 with M5 — the
+  library-scoping epic, web behind `VITE_LIBRARY_SCOPING`)_ — Calendar scoping tiers & the resource
+  management layer: give calendars P6's missing **project tier** — a `CalendarScope { ORG, PROJECT }`
+  discriminator + a nullable `calendars.project_id` (FK RESTRICT) pinned together by a **fail-closed**
+  `CASE … ELSE false` CHECK (the ADR-0046 precedent), with name uniqueness split into **two partial
+  uniques** (per-org for ORG, per-project for PROJECT; cross-tier reuse deliberately allowed). Constant
+  `DEFAULT ORG` ⇒ every existing row keeps today's behaviour with **no data migration** — the M1
+  acceptance bar. The tier is an invariant, not a convention: **ONE shared guard**
+  `assertCalendarUsableBy({ calendarId, organizationId, projectId })` is called at **every** seam
+  (`plan.calendarId`, `activity.calendarId`, `resource.calendar_id` — where `projectId: null` **hard
+  rejects** any project calendar, 422 `RESOURCE_REQUIRES_ORG_CALENDAR`), under the existing calendar
+  advisory lock; cross-org stays **404** (no existence oracle), in-org wrong tier is **422
+  `CALENDAR_WRONG_SCOPE`**. The per-relationship lag calendar is a `LagCalendarSource` **enum**, not an
+  FK — **no seam**, locked in by a structural seam-set test. Scope change: **widen free, narrow guarded**
+  (409 `CALENDAR_SCOPE_NARROWING_BLOCKED` with per-class counts, under the lock); project soft-delete
+  **cascades** its calendars + exceptions in the same `delete_batch_id` (never an ORG calendar); new
+  **`calendar:manage_org`** permission (Planner + Org Admin — zero capability change) gates shared-library
+  writes. The resource pool deliberately stays **one org-global pool** (levelling/over-allocation depend
+  on it); its manageability comes later as an adjacency-list `parent_id` + a non-assignable `GROUP` kind
+  (§3, M3), `archived_at` (§4, M4) and interchange tiering (§5, M5). **The CPM engine is untouched** —
+  it resolves a calendar BY ID and never sees `scope`/`project_id`, so the ADR-0034 recalc parity gate is
+  structurally trivial. Builds on ADR-0012/0016/0024/0036/0037/0038/0039/0046/0050.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

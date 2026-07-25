@@ -44,6 +44,9 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     organizationId: ORG_ID,
     name: 'Standard',
     description: null,
+    // A resource may only hold an ORG-scoped calendar (ADR-0053 §2); PROJECT is the reject case.
+    scope: 'ORG',
+    projectId: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),

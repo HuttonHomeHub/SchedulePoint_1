@@ -10,7 +10,6 @@ import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import {
   ConflictError,
   ForbiddenError,
@@ -23,6 +22,7 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -84,22 +84,6 @@ export class ActivitiesService {
     private readonly prisma: PrismaService,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
-
-  /**
-   * Validate a non-null `calendarId` is an ACTIVE calendar in the activity's own organisation
-   * (ADR-0037, mirrors PlansService). Taken under the same calendar advisory lock the delete-in-use
-   * guard uses, so an activity can never be assigned a calendar mid-deletion (no TOCTOU dangle). A
-   * foreign / deleted / unknown id is indistinguishable from missing (404), leaking nothing.
-   */
-  private async assertCalendarInOrg(
-    tx: Prisma.TransactionClient,
-    calendarId: string,
-    organizationId: string,
-  ): Promise<void> {
-    await acquireCalendarWriteLock(tx, calendarId);
-    const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organizationId, tx);
-    if (!calendar) throw new NotFoundError('Calendar not found.');
-  }
 
   /**
    * Validate a non-null WBS `parentId` (ADR-0038, M5-epic §24): the parent must be an ACTIVE
@@ -233,8 +217,18 @@ export class ActivitiesService {
 
     try {
       const activity = await this.prisma.$transaction(async (tx) => {
-        // Validate a specific calendar in-org under the calendar lock before the insert (T4).
-        if (calendarId !== null) await this.assertCalendarInOrg(tx, calendarId, organization.id);
+        // Validate a specific calendar through THE shared scope guard before the insert
+        // (ADR-0037 + ADR-0053 §2): active + in-org (404 otherwise) AND usable by this
+        // activity's PROJECT — an ORG calendar anywhere, a PROJECT calendar only inside its
+        // owning project (422 CALENDAR_WRONG_SCOPE). `plan.projectId` is already in hand from
+        // `loadActivePlan`, so the tier check costs NO extra query.
+        if (calendarId !== null) {
+          await assertCalendarUsableBy(tx, this.calendars, {
+            calendarId,
+            organizationId: organization.id,
+            projectId: plan.projectId,
+          });
+        }
         // Validate the WBS parent is a same-plan summary (no cycle possible on a brand-new activity).
         if (parentId !== null)
           await this.assertValidParent(tx, parentId, organization.id, plan.id, null);
@@ -449,10 +443,20 @@ export class ActivitiesService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        // Assigning a specific calendar: validate it is active + in-org under the calendar lock,
-        // serialised with the delete-in-use guard (no TOCTOU dangling reference).
+        // Assigning a specific calendar: THE shared scope guard (ADR-0053 §2) validates active
+        // + in-org (404) under the calendar advisory lock — serialised with the delete-in-use
+        // guard, so no TOCTOU dangling reference — AND that the tier allows it here (422
+        // CALENDAR_WRONG_SCOPE). Unlike create, the update path does not already hold the plan
+        // (only its id), so the owning project is resolved LAZILY inside this branch: one extra
+        // indexed read on the rare calendar-assigning PATCH, and none at all on every other
+        // activity update.
         if (calendarId !== undefined && calendarId !== null) {
-          await this.assertCalendarInOrg(tx, calendarId, organization.id);
+          const plan = await this.loadActivePlan(existing.planId, organization.id);
+          await assertCalendarUsableBy(tx, this.calendars, {
+            calendarId,
+            organizationId: organization.id,
+            projectId: plan.projectId,
+          });
           patch.calendarId = calendarId;
         }
         // Re-parenting to a specific summary: validate same-plan + no cycle inside the write tx.

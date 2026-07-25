@@ -482,6 +482,21 @@ enum NoteEntityType {
   ACTIVITY
 }
 
+// Which TIER a calendar belongs to (ADR-0053 §1) — SchedulePoint's answer to P6's
+// Global / Project calendar split. ORG is the shared organisation library (the only
+// tier before ADR-0053, and the constant DEFAULT, so every pre-existing row keeps
+// today's behaviour); PROJECT is local to one project, listed and selectable only
+// within it, so a one-off shutdown calendar (or an import's dozen) never pollutes
+// shared tenant state. The discriminator and the nullable `project_id` FK are pinned
+// to each other by the FAIL-CLOSED ck_calendars_scope_parent CHECK (the ADR-0046
+// `CASE … ELSE false` precedent): a future third tier (CLIENT) inserted before its
+// CHECK branch is added is rejected, never silently unconstrained. MUST stay in
+// lock-step with the TypeScript `CalendarScope` union in @repo/types.
+enum CalendarScope {
+  ORG
+  PROJECT
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -532,6 +547,12 @@ model Project {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   client       Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   plans        Plan[]
+  // PROJECT-scoped calendars owned by this project (ADR-0053 §1). ORG-scoped calendars are
+  // NOT here (their project_id is NULL), so the project cascade's `project_id = :id`
+  // predicate is exactly the set that must be swept and can never touch a shared org
+  // calendar. FK is RESTRICT; the real delete path is the service cascade
+  // (HierarchyLifecycleService), which stamps them into the project's delete_batch_id.
+  calendars    Calendar[]
 
   // Project name is unique per CLIENT among ACTIVE rows — partial unique
   // (uq_projects_client_name ON (client_id, name) WHERE deleted_at IS NULL), raw
@@ -1351,6 +1372,27 @@ model Calendar {
   name           String
   description    String?
 
+  // Which TIER this calendar belongs to (ADR-0053 §1). Constant DEFAULT ORG ⇒ every existing
+  // row is the shared-library calendar it is today (no data migration, no behaviour change);
+  // the service ALWAYS sets it explicitly on create. Filtered by the org list (`?scope=`) and
+  // by the per-tier partial uniques below. NEVER read by the CPM engine: the engine builds its
+  // WorkingTimeCalendar port from shift/exception rows loaded BY CALENDAR ID, so the tier
+  // cannot reach `computeSchedule` and the ADR-0034 parity gate is structurally untouched.
+  // MUST stay in lock-step with the `CalendarScope` union in @repo/types.
+  scope     CalendarScope @default(ORG)
+  // The owning project of a PROJECT-scoped calendar; NULL for an ORG one. Nullable with NO
+  // default, so every existing row reads NULL — the ck_calendars_scope_parent partner of
+  // `scope` (ORG ⇒ NULL, PROJECT ⇒ NOT NULL; a future tier fails closed). Because that CHECK is
+  // a ROW constraint, a promote/narrow must set BOTH columns in a single UPDATE. FK is
+  // RESTRICT: calendars only ever soft-delete, so the referential check never fires — the real
+  // path is the service-owned project cascade (HierarchyLifecycleService), which stamps this
+  // project's calendars AND their exceptions with the project's delete_batch_id; RESTRICT is
+  // defence in depth. Like activities.calendar_id and activities.parent_id, the FK does NOT
+  // enforce SAME-ORG (a cross-org project_id would satisfy it), so "the project is active and
+  // in this org" stays a SERVICE check inside the write transaction. Backed by the partial
+  // idx_calendars_project_id (raw SQL).
+  projectId String?       @map("project_id") @db.Uuid
+
   // The weekly working pattern is the child `shifts` rows (ADR-0036 §2): per weekday a
   // sorted list of [start,end) minute windows (split shifts, 24h, midnight-crossing
   // nights). NO working-time guard lives here — a window-only calendar (all weekdays
@@ -1367,6 +1409,8 @@ model Calendar {
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  // The owning project of a PROJECT-scoped calendar (ADR-0053 §1); absent for an ORG one.
+  project      Project?            @relation(fields: [projectId], references: [id], onDelete: Restrict)
   shifts       CalendarShift[]
   exceptions   CalendarException[]
   // Plans defaulting to this calendar (M5 Task C1). The service in-use guard counts
@@ -1384,10 +1428,14 @@ model Calendar {
   // follow-on when the resources module lands). FK is RESTRICT as defence in depth.
   resources    Resource[]
 
-  // Calendar name is unique per organisation among ACTIVE rows — partial unique
-  // (uq_calendars_org_name ON (organization_id, name) WHERE deleted_at IS NULL),
-  // raw SQL in the migration (Prisma cannot express partial indexes). A soft-
-  // deleted name is free to reuse. Backs the create DUPLICATE_CALENDAR (409) check.
+  // Calendar name is unique per TIER among ACTIVE rows (ADR-0053 §1) — two partial
+  // uniques, raw SQL in the migration (Prisma can express neither a partial index nor a
+  // per-tier one):
+  //   uq_calendars_org_name     (organization_id, name) WHERE deleted_at IS NULL AND scope = 'ORG'
+  //   uq_calendars_project_name (project_id, name)      WHERE deleted_at IS NULL AND scope = 'PROJECT'
+  // Both back the create DUPLICATE_CALENDAR (409) check. A soft-deleted name is free to
+  // reuse. A name may be reused ACROSS tiers deliberately (a project's own "Standard" may
+  // sit beside the org's) — the UI disambiguates with a tier badge, not a name rule.
   //
   // (organization_id, created_at, id) covers the organization_id FK (leftmost
   // prefix), the org-scoped active-list query AND its deterministic cursor sort

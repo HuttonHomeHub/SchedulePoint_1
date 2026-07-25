@@ -6,6 +6,7 @@ import {
   type Calendar,
   type CalendarException,
   type CalendarExceptionWindow,
+  type CalendarScope,
   type CalendarShift,
 } from '@prisma/client';
 import { WorkingWeekdays } from '@repo/types';
@@ -27,6 +28,13 @@ export interface CalendarPatch {
   description?: string | null;
   /** New weekday mask; the repository replaces the calendar's full-day shift rows to match. */
   workingWeekdays?: number;
+  /**
+   * The calendar tier (ADR-0053 §1). Always written together with {@link CalendarPatch.projectId}
+   * so the pair can never disagree — the service sets both or neither, and
+   * ck_calendars_scope_parent is the DB backstop.
+   */
+  scope?: CalendarScope;
+  projectId?: string | null;
 }
 
 /** The scalar inputs plus the weekday mask a calendar create needs (shifts derived from the mask). */
@@ -35,9 +43,19 @@ export interface CreateCalendarInput {
   name: string;
   workingWeekdays: number;
   description: string | null;
+  /** The tier to create at (ADR-0053 §1); `PROJECT` requires a `projectId`, `ORG` forbids one. */
+  scope: CalendarScope;
+  projectId: string | null;
   createdBy: string;
   updatedBy: string;
 }
+
+/**
+ * Which tier(s) a calendar list should return (ADR-0053 §1). `org` is the DEFAULT on the
+ * organisation list, so the shared library keeps exactly today's result set for existing
+ * clients; `project` and `all` are opt-in.
+ */
+export type CalendarScopeFilter = 'org' | 'project' | 'all';
 
 /** The inputs a whole-day calendar exception create needs (windows derived from `isWorking`). */
 export interface CreateCalendarExceptionInput {
@@ -123,6 +141,10 @@ export class CalendarRepository {
         organizationId: input.organizationId,
         name: input.name,
         description: input.description,
+        // The tier + its owning project are written as a PAIR (ADR-0053 §1); the service has
+        // already validated the project is active and in-org.
+        scope: input.scope,
+        projectId: input.projectId,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
         shifts: { create: fullDayShiftsFromMask(input.workingWeekdays) },
@@ -283,18 +305,87 @@ export class CalendarRepository {
     return db.activity.count({ where: { calendarId, deletedAt: null } });
   }
 
-  /** A page of an organisation's active calendars with their shift rows (keyset cursor by id). */
+  /**
+   * A page of an organisation's active calendars with their shift rows (keyset cursor by id),
+   * filtered by tier (ADR-0053 §1). `scope` defaults to `org` at the service, so an existing
+   * client that sends nothing sees exactly today's result set — project calendars are a
+   * usability filter here, never an authorisation boundary (the write-time
+   * `assertCalendarUsableBy` guard is the security control).
+   */
   findManyActiveByOrg(params: {
     organizationId: string;
+    scope: CalendarScopeFilter;
     take: number;
     cursor?: string;
   }): Promise<CalendarWithShifts[]> {
     return this.prisma.calendar.findMany({
-      where: this.active({ organizationId: params.organizationId }),
+      where: this.active({
+        organizationId: params.organizationId,
+        ...(params.scope === 'all' ? {} : { scope: params.scope === 'org' ? 'ORG' : 'PROJECT' }),
+      }),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: params.take,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
       include: { shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] } },
+    });
+  }
+
+  /**
+   * A page of the calendars USABLE IN a project (ADR-0053 §1) — its own PROJECT-scoped
+   * calendars plus every ORG-scoped one — which is exactly the set `assertCalendarUsableBy`
+   * accepts for a plan/activity in that project, so a picker fed from this list can never
+   * offer a calendar the write seam will reject. Same keyset cursor + shift include as the
+   * org list. The `project_id` branch is served by idx_calendars_project_created, the `ORG`
+   * branch by the org composite.
+   */
+  findManyActiveForProject(params: {
+    organizationId: string;
+    projectId: string;
+    take: number;
+    cursor?: string;
+  }): Promise<CalendarWithShifts[]> {
+    return this.prisma.calendar.findMany({
+      where: this.active({
+        organizationId: params.organizationId,
+        OR: [{ scope: 'ORG' }, { scope: 'PROJECT', projectId: params.projectId }],
+      }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: params.take,
+      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+      include: { shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] } },
+    });
+  }
+
+  /**
+   * Count the ACTIVE plans using `calendarId` that live OUTSIDE `projectId` — the narrowing
+   * guard (ADR-0053 §2, W2). Narrowing an ORG calendar to one project is only safe when no
+   * referencer sits outside it; plans inside the target project keep working, so they are
+   * deliberately excluded from the count. Backed by the partial `idx_plans_calendar_id`
+   * (the `project_id` filter is a cheap re-check on the few matching rows).
+   */
+  countActivePlansUsingOutsideProject(
+    calendarId: string,
+    projectId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.plan.count({
+      where: { calendarId, deletedAt: null, projectId: { not: projectId } },
+    });
+  }
+
+  /**
+   * Count the ACTIVE activities using `calendarId` whose PLAN lives outside `projectId` — the
+   * other half of the narrowing guard (ADR-0053 §2). An activity has no `project_id` of its
+   * own, so the scope is expressed through its plan (the same relation filter the step/note
+   * cascades use). Backed by the partial `idx_activities_calendar_id`.
+   */
+  countActiveActivitiesUsingOutsideProject(
+    calendarId: string,
+    projectId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.activity.count({
+      where: { calendarId, deletedAt: null, plan: { projectId: { not: projectId } } },
     });
   }
 

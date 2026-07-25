@@ -30,6 +30,8 @@ function makeTx() {
     baselineActivity: model(),
     note: model(),
     planShare: model(),
+    calendar: model(),
+    calendarException: model(),
   };
 }
 
@@ -65,6 +67,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        calendars: 0,
       });
       // Activities deleted are those under the client's active plans.
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -100,6 +103,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        calendars: 0,
       });
     });
 
@@ -121,11 +125,74 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        calendars: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1'] }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
+    });
+
+    // ADR-0053 §2: a project's PROJECT-scoped calendars (and their exceptions) go with it, in
+    // the SAME batch as its plans and activities, so a restore brings the whole project back
+    // intact and no active calendar is left under a soft-deleted project.
+    it('sweeps a project’s PROJECT-scoped calendars and their exceptions into the same batch', async () => {
+      tx.plan.findMany.mockResolvedValue([{ id: 'pl1' }]);
+      tx.calendar.findMany.mockResolvedValue([{ id: 'cal1' }, { id: 'cal2' }]);
+      tx.calendar.updateMany.mockResolvedValue({ count: 2 });
+      tx.project.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.cascadeSoftDelete(asTx(), 'project', 'p1', ACTOR);
+
+      expect(result.counts.calendars).toBe(2);
+      // The predicate is `project_id = :id` — NULL for every ORG calendar, so a shared-library
+      // calendar can never be swept by a project delete.
+      expect(tx.calendar.findMany).toHaveBeenCalledWith({
+        where: { projectId: { in: ['p1'] }, deletedAt: null },
+        select: { id: true },
+      });
+      // Children (exceptions) before parents, all under the one batch id.
+      expect(tx.calendarException.updateMany).toHaveBeenCalledWith({
+        where: { calendarId: { in: ['cal1', 'cal2'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+      expect(tx.calendar.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['cal1', 'cal2'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
+    });
+
+    it('touches no calendar table when a project owns no project calendars', async () => {
+      tx.plan.findMany.mockResolvedValue([{ id: 'pl1' }]);
+      tx.calendar.findMany.mockResolvedValue([]);
+
+      const result = await service.cascadeSoftDelete(asTx(), 'project', 'p1', ACTOR);
+
+      expect(result.counts.calendars).toBe(0);
+      expect(tx.calendar.updateMany).not.toHaveBeenCalled();
+      expect(tx.calendarException.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('sweeps the project calendars of every project under a deleted client', async () => {
+      tx.project.findMany.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+      tx.plan.findMany.mockResolvedValue([]);
+      tx.calendar.findMany.mockResolvedValue([{ id: 'cal1' }]);
+      tx.calendar.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
+
+      expect(result.counts.calendars).toBe(1);
+      expect(tx.calendar.findMany).toHaveBeenCalledWith({
+        where: { projectId: { in: ['p1', 'p2'] }, deletedAt: null },
+        select: { id: true },
+      });
+    });
+
+    it('never sweeps calendars for a plan or activity delete (they are project-scoped)', async () => {
+      await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(tx.calendar.findMany).not.toHaveBeenCalled();
+      expect(tx.calendar.updateMany).not.toHaveBeenCalled();
     });
 
     it('deletes a plan with its activities (the plan is not a leaf anymore)', async () => {
@@ -152,6 +219,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        calendars: 0,
       });
     });
 
@@ -179,6 +247,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        calendars: 0,
       });
     });
 
@@ -391,6 +460,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        calendars: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-9' },
@@ -475,6 +545,26 @@ describe('HierarchyLifecycleService', () => {
       // swept in the same batch), like a note/step and unlike a dependency.
       expect(tx.planShare.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-p' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+    });
+
+    it("restores the batch's project calendars and their exceptions (ADR-0053 §2)", async () => {
+      tx.project.findFirst.mockResolvedValue({ deleteBatchId: 'batch-pr', clientId: 'c1' });
+      tx.client.findFirst.mockResolvedValue({ id: 'c1' }); // parent client active
+      tx.calendar.updateMany.mockResolvedValue({ count: 3 });
+
+      const counts = await service.restoreBatch(asTx(), 'project', 'pr1', ACTOR);
+
+      expect(counts.calendars).toBe(3);
+      // Calendars come back purely by their batch id — no endpoint guard (a calendar has exactly
+      // one parent, swept in the same batch), like a note/step and unlike a dependency.
+      expect(tx.calendar.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-pr' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+      expect(tx.calendarException.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-pr' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
     });

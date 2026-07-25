@@ -77,6 +77,16 @@ export type OrgPermission =
   | 'calendar:create'
   | 'calendar:update'
   | 'calendar:delete'
+  // Writing to the SHARED organisation calendar library — creating, editing or deleting an
+  // ORG-scoped calendar, and promoting/narrowing a calendar between the two tiers (ADR-0053 §2).
+  // A PROJECT-scoped calendar needs only the plain `calendar:create/update/delete` above; this
+  // extra code is what a write to shared tenant state additionally requires. Granted to
+  // **Planner + Org Admin** — exactly the roles that already held `calendar:*`, so there is ZERO
+  // capability change today. It exists as its own code (the `dependency:link_cross_plan`
+  // precedent) so writes to the shared library are independently revocable and auditable:
+  // narrowing it to Org-Admin-only later is a one-line move out of HIERARCHY_WRITE, with no
+  // schema or API change.
+  | 'calendar:manage_org'
   // Baselines — named plan-of-record snapshots (M7, ADR-0025). Read/variance is
   // granted to every member (browse the record, see variance); capture/activate/
   // delete ("write") to Planner + Org Admin — the same rule as the hierarchy, and
@@ -188,6 +198,10 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'calendar:create',
   'calendar:update',
   'calendar:delete',
+  // Shared-library writes (ADR-0053 §2) ride with the other calendar writes so Planner +
+  // Org Admin keep exactly today's capability; lifting this single line into its own const
+  // is all it takes to make the shared library Org-Admin-only.
+  'calendar:manage_org',
   'baseline:create',
   'baseline:activate',
   'baseline:delete',

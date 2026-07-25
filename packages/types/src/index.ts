@@ -883,10 +883,24 @@ export const WorkingWeekdays = {
 } as const;
 
 /**
- * A working-day calendar (M5, ADR-0024) — an org-scoped, reusable library entry: a
- * weekly working pattern (a {@link WorkingWeekdays} bitmask) plus dated exceptions.
- * The list shape mirrors the other `*Summary` types; the embedded exceptions live
- * on {@link CalendarDetail} (the single-calendar read).
+ * The tiers a calendar can belong to (ADR-0053 §1). `ORG` is the shared organisation
+ * library — the only tier before ADR-0053, and still the default; `PROJECT` is local to
+ * one project (listed and selectable only within it), so a one-off shutdown calendar
+ * never pollutes shared tenant state. MUST stay in lock-step with the API's Prisma
+ * `CalendarScope` enum (the house rule); the DB pins the pairing with `project_id` via
+ * the fail-closed `ck_calendars_scope_parent` CHECK.
+ */
+export const CALENDAR_SCOPES = ['ORG', 'PROJECT'] as const;
+
+/** Which tier a calendar belongs to — see {@link CALENDAR_SCOPES}. */
+export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
+
+/**
+ * A working-day calendar (M5, ADR-0024) — a reusable library entry: a weekly working
+ * pattern (a {@link WorkingWeekdays} bitmask) plus dated exceptions. Since ADR-0053 a
+ * calendar sits in one of two tiers ({@link CalendarScope}): the shared organisation
+ * library, or one project. The list shape mirrors the other `*Summary` types; the
+ * embedded exceptions live on {@link CalendarDetail} (the single-calendar read).
  */
 export interface CalendarSummary {
   id: string;
@@ -894,6 +908,10 @@ export interface CalendarSummary {
   description: string | null;
   /** 7-bit weekly pattern (bit 0 = Monday … bit 6 = Sunday); see {@link WorkingWeekdays}. */
   workingWeekdays: number;
+  /** Which tier this calendar belongs to (ADR-0053 §1). */
+  scope: CalendarScope;
+  /** The owning project when `scope` is `PROJECT`; `null` for an `ORG` calendar. */
+  projectId: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -919,6 +937,36 @@ export interface CalendarExceptionSummary {
 export interface CalendarDetail extends CalendarSummary {
   exceptions: CalendarExceptionSummary[];
 }
+
+/**
+ * Human messages for the calendar-scope rejections (ADR-0053 §2), shared client↔server like
+ * {@link RESOURCE_ERROR} so the same rejection reads identically wherever it surfaces. The key
+ * is the machine-readable reason carried in a domain error's `details.reason`; the value is the
+ * human message. A cross-org / deleted / unknown calendar id is deliberately NOT here — it stays
+ * an ordinary 404 "Calendar not found." so the tier never becomes a cross-tenant existence oracle.
+ */
+export const CALENDAR_ERROR = {
+  /** A PROJECT-scoped calendar was assigned outside its owning project (→ 422). */
+  CALENDAR_WRONG_SCOPE: 'This calendar belongs to another project and can’t be used here.',
+  /**
+   * A PROJECT-scoped calendar was assigned to a RESOURCE (→ 422). The resource pool is
+   * org-global (ADR-0039), so an org-global resource may only hold an org-global calendar.
+   */
+  RESOURCE_REQUIRES_ORG_CALENDAR: 'A resource can only use an organisation-wide calendar.',
+  /**
+   * Narrowing an ORG calendar to one project while active plans/activities outside that project
+   * — or any active resource — still reference it (→ 409). Widening is always safe and never
+   * blocked; the per-class counts ride in `details`.
+   */
+  CALENDAR_SCOPE_NARROWING_BLOCKED:
+    'This calendar is still used outside the project you are narrowing it to.',
+  /** `scope: PROJECT` needs a `projectId`, and `scope: ORG` forbids one (→ 422). */
+  CALENDAR_SCOPE_PROJECT_MISMATCH:
+    'A project calendar needs a projectId; an organisation calendar must not have one.',
+} as const;
+
+/** A machine-readable calendar-scope error reason (a key of {@link CALENDAR_ERROR}). */
+export type CalendarErrorReason = keyof typeof CALENDAR_ERROR;
 
 /**
  * A baseline — a named, frozen snapshot of a plan's schedule, the "plan of record"

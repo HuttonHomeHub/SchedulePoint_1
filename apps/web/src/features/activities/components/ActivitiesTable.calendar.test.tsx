@@ -25,6 +25,9 @@ const CALENDARS: CalendarSummary[] = [
     name: '24/7',
     description: null,
     workingWeekdays: 0b1111111,
+    // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
+    scope: 'ORG',
+    projectId: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
