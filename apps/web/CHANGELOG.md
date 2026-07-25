@@ -1,5 +1,78 @@
 # @repo/web
 
+## 0.47.0
+
+### Minor Changes
+
+- [#149](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/149) [`afb1f82`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/afb1f82bffc95c54d6a29b9f6be0edd4e6714060) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): activity-bar visual refresh on the TSLD canvas (canvas direct manipulation M4, ADR-0052)
+
+  Fourth slice of the canvas direct-manipulation upgrade, behind the SAME
+  `VITE_CANVAS_DIRECT_MANIPULATION` flag (default **off**). Render-only and role-independent
+  (Viewer/External Guest included): when on, the activity bars get the M4 visual refresh —
+
+  - **Refreshed bar shape + stroke layering:** subtly rounded corners (`roundRect`, with a square
+    fallback on contexts without it), a calm hairline definition stroke (the border token) on
+    normal bars, and a **stronger 2px critical/near-critical emphasis outline** — the solid/dashed
+    non-colour cue is retained (WCAG 1.4.1) — so the critical path pops against calmer normal bars.
+  - **In-bar progress fill:** the completed portion (`percentComplete`, the same value the row/AT
+    reports) as a shape-bounded band along the bar bottom plus a hairline divider at the progress
+    front (a boundary/shape cue, never colour alone). Drawn in the bar's **paired label ink**
+    (or the Colour-by `barInk` override), so contrast holds on every fill in both themes and under
+    every lens; culled below the label LOD zoom threshold and on too-narrow bars.
+  - **Consistent glyph language:** refined milestone diamond (hairline-outlined when not
+    emphasised), an LOE/hammock **bracketed-span** glyph (overhanging end caps) and a WBS-summary
+    **bracket** (downward end tabs), each drawn in the bar's own resolved fill so the colour-mode
+    lenses recolour the whole glyph as one shape.
+  - **Interaction states:** a rounded selection ring that tracks the bar's corners, an idle
+    **hover ring** (muted, lighter than selection — published from the already-armed hover
+    hit-test, no new per-move work), and rounded drag/resize ghosts with elevation approximated by
+    a double stroke — no shadow/blur (the ADR-0026 draw budget).
+  - **Labels + badges:** inside labels nudge clear of the rounded corner (LOD gating, truncation
+    and collision logic unchanged); the constraint pin gains the foreground outline the other three
+    badges already carry (one badge family) — every badge **shape, legend entry and a11y string is
+    byte-identical** (string-parity tests).
+
+  All colour resolves from the semantic design tokens via the extended `TsldPalette`
+  (`barStroke`, `hoverRing` — resolved once per theme bump, never per frame); the refresh composes
+  with `barFill`/`barInk` (the lens owns colour, M4 owns shape) and the legend stays accurate.
+  Frontend-only — no API/schema/engine change (the recalc parity gate is untouched). Flag-off the
+  canvas paints byte-for-byte today's (recording-context parity tests).
+
+- [#149](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/149) [`afb1f82`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/afb1f82bffc95c54d6a29b9f6be0edd4e6714060) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): logic-link visual refresh on the TSLD canvas (canvas direct manipulation M5, ADR-0052)
+
+  Fifth and final slice of the canvas direct-manipulation upgrade, behind the SAME
+  `VITE_CANVAS_DIRECT_MANIPULATION` flag (default **off**). Render-only and role-independent
+  (Viewer/External Guest included): when on, the logic network gets the M5 visual refresh —
+
+  - **Rounded elbows:** the orthogonal routing's hard 90° corners round with a small arc
+    (`arcTo`, guarded with a hard-corner fallback like M4's `roundRect`), the per-corner radius
+    clamped by a pure helper to half each adjoining segment so adjacent arcs never overlap. The
+    shared `routeOrthogonal` stays the single source of the line's shape.
+  - **Deterministic fan-out / de-crowding:** when several relationship ends share the same bar
+    edge (many successors off one finish, many predecessors into one start), they spread a few px
+    about the bar centreline — grouped by the bar edge their type anchors to, ordered by **edge
+    id** (stable across frames and input permutations — no jitter), stepped and capped so anchors
+    stay on the bar; crowded parallel verticals also separate via a clamped elbow shift.
+    Uncrowded ends — the common zero-lag FS chain — are byte-for-byte unmoved. Computed once per
+    frame, O(edges), no viewport coupling (pan-stable).
+  - **Lag/lead depiction:** with the time-true anchors on, the on-bar stretch between a walked
+    lag anchor and its zero-lag bar edge draws as a subtle dashed hairline in the existing edge
+    colour, painted above the bars — so lag reads as "waiting time", sharing the ONE forward
+    anchor mapping (the run and the anchor can never disagree).
+  - **Incident-link highlight:** selecting an activity highlights its incident links
+    persistently — the keyboard/AT-reachable equivalent (WCAG 2.1.1, selection is listbox-
+    reachable); hovering a bar (the same already-armed idle-hover classify the M4 hover ring
+    reads — editing surfaces only) highlights them transiently. Highlighted ties re-draw one
+    weight step heavier (non-driving 2px still-dashed, driving 3px solid, arrowheads matching) in
+    the selection (`--color-ring`) colour — a weight change WITH the colour, so neither the
+    highlight nor the retained driving dash cue is ever colour-only (WCAG 1.4.1/1.4.11).
+
+  **No palette entry added** — the highlight reuses `selection`, the lag run reuses `edge`; the
+  a11y strings are byte-identical (`lagPhrase` already speaks lag). Rect/line/arc primitives
+  only, no shadow/blur, all passes batched and O(visible) (the ADR-0026 draw budget). Frontend-
+  only — no API/schema/engine change (the recalc parity gate is untouched). Flag-off the canvas
+  paints byte-for-byte today's, including on crowded scenes (recording-context parity tests).
+
 ## 0.46.0
 
 ### Minor Changes
