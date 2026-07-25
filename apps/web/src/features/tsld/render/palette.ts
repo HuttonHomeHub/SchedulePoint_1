@@ -47,6 +47,11 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // colour: progress draws in the bar's paired label ink, glyph caps in the bar's own fill.
     barStroke: token('--color-border', '#2a2f3a'),
     hoverRing: token('--color-muted-foreground', '#7a8090'),
+    // The grab-handle halo (ADR-0052 M3 discoverability fix) — the canvas ground (`--color-card`,
+    // the surface the canvas sits on), which is the theme-inverse of the `outline` foreground the
+    // handle's core draws in. That pairing is what lets one handle read on every bar fill in both
+    // themes without a per-bar contrast decision (see `palette.test.ts`). No new hue is added.
+    handleHalo: token('--color-card', '#161a22'),
   };
 }
 
@@ -110,6 +115,9 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       // scene today, but the palette contract stays total — every painter field resolves).
       barStroke: token('--color-border', '#e5e7eb'),
       hoverRing: token('--color-muted-foreground', '#6b7280'),
+      // The export builds a handle-less scene (the handles are an editing affordance), but the
+      // palette contract stays total — every painter field resolves, here to the white paper.
+      handleHalo: token('--color-card', '#ffffff'),
     };
   } finally {
     if (hadDark) root.classList.add('dark');

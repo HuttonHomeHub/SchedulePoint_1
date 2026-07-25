@@ -1,7 +1,7 @@
 import type { ClientSummary, PlanSummary, ProjectSummary } from '@repo/types';
 import { queryOptions } from '@tanstack/react-query';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { clientKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
 
 /**
@@ -14,10 +14,16 @@ import { clientKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
  * and everything shares one cache key, so page mutations refresh the tree for free.
  */
 
+/**
+ * Each hierarchy level pages through EVERY row (`apiFetchAllPages`) rather than taking the list
+ * endpoints' default 20-row page: the navigator rail, the breadcrumb resolvers and the
+ * client → project → plan pickers all render a level in full, so a partial page silently hid the
+ * 21st client/project/plan — unreachable, not merely unlisted.
+ */
 export function clientsQueryOptions(orgSlug: string) {
   return queryOptions({
     queryKey: clientKeys.list(orgSlug),
-    queryFn: () => apiFetch<ClientSummary[]>(`/organizations/${orgSlug}/clients`),
+    queryFn: () => apiFetchAllPages<ClientSummary>(`/organizations/${orgSlug}/clients`),
   });
 }
 
@@ -25,7 +31,7 @@ export function projectsQueryOptions(orgSlug: string, clientId: string) {
   return queryOptions({
     queryKey: projectKeys.listByClient(orgSlug, clientId),
     queryFn: () =>
-      apiFetch<ProjectSummary[]>(`/organizations/${orgSlug}/clients/${clientId}/projects`),
+      apiFetchAllPages<ProjectSummary>(`/organizations/${orgSlug}/clients/${clientId}/projects`),
   });
 }
 
@@ -41,7 +47,8 @@ export function projectQueryOptions(orgSlug: string, projectId: string) {
 export function plansQueryOptions(orgSlug: string, projectId: string) {
   return queryOptions({
     queryKey: planKeys.listByProject(orgSlug, projectId),
-    queryFn: () => apiFetch<PlanSummary[]>(`/organizations/${orgSlug}/projects/${projectId}/plans`),
+    queryFn: () =>
+      apiFetchAllPages<PlanSummary>(`/organizations/${orgSlug}/projects/${projectId}/plans`),
   });
 }
 

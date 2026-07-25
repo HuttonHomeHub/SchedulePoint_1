@@ -505,6 +505,11 @@ export function TsldCanvas({
   // marked only when the hovered BAR changes (never per move — the same discipline as the ring).
   // Flag-off the branch never runs, so the scene stays byte-for-byte today's (the parity gate).
   const hoverIdRef = useRef<string | null>(null);
+  // The lag anchor drawing emphasised (ADR-0052 M3 discoverability fix): the hovered one, or the
+  // one a `lagDragging` gesture holds. Published into the SCENE like `hoverId` (the handles live
+  // on the base layer, above the bars), and written only when it actually changes — a scene
+  // repaint per hovered-ANCHOR change, never per pointer move. Flag-off nothing writes it.
+  const activeLagIdRef = useRef<string | null>(null);
   // O(1) id→activity lookup for the per-move idle-hover branch (perf review): rebuilt only when
   // the activities ARRAY identity changes (a data rebuild), never per pointer move — a linear
   // `.find` per move over a 2,000-activity plan is avoidable per-frame work.
@@ -530,6 +535,14 @@ export function TsldCanvas({
   const showEdgeHandles = CANVAS_DIRECT_MANIPULATION_ENABLED
     ? editing && canResize
     : editing && canLink && !CANVAS_AUTHORING_ENABLED;
+  // Whether a bar-end press/hover means "resize" (ADR-0052 M2/M3): flag + editing + Select tool +
+  // a wired handler. Build-time flag first, so flag-off short-circuits to false with zero extra
+  // work. `lagArmed` is the same gate for the drawn lag-anchor grab zones (M3) — and, since the
+  // fix, for the painted handles that advertise them, so the affordance and the target appear and
+  // disappear together (a read-only surface gets neither).
+  const resizeArmed =
+    CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canResize;
+  const lagArmed = CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canLag;
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -552,6 +565,11 @@ export function TsldCanvas({
     visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
     // M5 hover-driven incident-link highlight — null until the idle-hover branch publishes.
     hoverId: null,
+    // The visible lag-anchor handles ride the SAME gate as their grab zones (`lagArmed`), so the
+    // picture never advertises a drag the surface can't perform; `activeLagId` is null until a
+    // hover / drag emphasises one.
+    lagHandles: lagArmed,
+    activeLagId: null,
   });
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
@@ -599,6 +617,10 @@ export function TsldCanvas({
       // hasn't moved, so the hovered bar's ties should not flicker off. Flag-off this is
       // always null (the branch that writes it never runs), keeping the scene byte-identical.
       hoverId: hoverIdRef.current,
+      lagHandles: lagArmed,
+      // Preserved across a rebuild for the same reason as `hoverId`: the pointer hasn't moved (and
+      // a drag may be in flight), so the emphasised handle must not blink back to rest.
+      activeLagId: activeLagIdRef.current,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
@@ -608,6 +630,7 @@ export function TsldCanvas({
     dataDate,
     selectedId,
     showEdgeHandles,
+    lagArmed,
     view,
     isWorkingDay,
     todayOffset,
@@ -1045,12 +1068,6 @@ export function TsldCanvas({
     ...(linkType ? { linkType } : {}),
   });
   const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
-  // Whether a bar-end press/hover means "resize" (ADR-0052 M2/M3): flag + editing + Select tool +
-  // a wired handler. Build-time flag first, so flag-off short-circuits to false with zero extra
-  // work. `lagArmed` is the same gate for the drawn lag-anchor grab zones (M3).
-  const resizeArmed =
-    CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canResize;
-  const lagArmed = CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canLag;
   // The plan working-day walk the lag-anchor hit zones + grabs run on — memoised so the walk's own
   // per-(day, n) memo survives across pointer events (the painter builds its walk per frame; the
   // two share `makeWorkingDayWalk`, so they can never place an anchor differently). No calendar ⇒
@@ -1069,6 +1086,13 @@ export function TsldCanvas({
       activityIndexRef.current = index;
     }
     return index.byId.get(id);
+  };
+  /** Publish the emphasised lag anchor into the scene, repainting only on a real change. */
+  const setActiveLagId = (id: string | null): void => {
+    if (activeLagIdRef.current === id) return;
+    activeLagIdRef.current = id;
+    sceneRef.current = { ...sceneRef.current, activeLagId: id };
+    dirtyRef.current = true;
   };
   const classifyAt = (p: Point, resizeZones = false, lagZones = false): HitZone => {
     const options: ClassifyHitOptions | undefined =
@@ -1170,6 +1194,10 @@ export function TsldCanvas({
               machineCtx(),
             );
             gestureRef.current = state;
+            // Hold the grabbed anchor emphasised for the whole drag: the idle-hover branch below
+            // is skipped while a gesture runs, so without this the handle would drop back to rest
+            // the moment the pointer moved.
+            if (state.kind === 'lagDragging') setActiveLagId(state.dependencyId);
             if (state.kind !== 'idle') {
               gestureActiveRef.current = true;
               interactionDirtyRef.current = true;
@@ -1210,6 +1238,9 @@ export function TsldCanvas({
                     ? 'ew-resize'
                     : '';
               }
+              // Emphasise the hovered lag handle from the SAME classify (no extra hit-test) — the
+              // visual twin of the cursor change, so the point announces itself before the press.
+              setActiveLagId(hover.kind === 'lagAnchor' ? (hover.dependencyId ?? null) : null);
               // Hover ring (ADR-0052 M4): publish the hovered bar's rect for the interaction
               // layer — reusing the classify this branch already ran, so no extra hit-test. A
               // repaint is marked only when the hovered bar actually changes (not per move).
@@ -1275,6 +1306,8 @@ export function TsldCanvas({
             );
             gestureRef.current = state;
             interactionDirtyRef.current = true;
+            // The drag is over — the next idle move re-emphasises whatever the pointer rests on.
+            setActiveLagId(null);
             if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
             else if (select) onSelect(select);
             return;
@@ -1314,8 +1347,11 @@ export function TsldCanvas({
             sceneRef.current = { ...sceneRef.current, hoverId: null };
             dirtyRef.current = true;
           }
+          // …and any emphasised lag handle with it (same no-op flag-off).
+          setActiveLagId(null);
         }}
         onPointerCancel={() => {
+          setActiveLagId(null); // a cancelled drag leaves no handle stuck emphasised
           if (!gestureActiveRef.current) return;
           gestureActiveRef.current = false;
           drag.current = null;

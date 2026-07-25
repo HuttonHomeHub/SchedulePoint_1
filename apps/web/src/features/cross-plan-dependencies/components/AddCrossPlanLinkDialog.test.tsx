@@ -6,19 +6,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AddCrossPlanLinkDialog } from './AddCrossPlanLinkDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import { ApiFetchError, apiFetch } from '@/lib/api/client';
+import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import type * as ApiClient from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', async (importActual) => {
   const actual = await importActual<typeof ApiClient>();
-  return { ...actual, apiFetch: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), apiFetchAllPages: vi.fn() };
 });
 
 const ANCHOR = { id: 'anchor', name: 'Pour slab' } as unknown as ActivitySummary;
 
-/** A path-routed apiFetch mock feeding the client → project → plan → activity cascade. */
+/**
+ * A path-routed client mock feeding the client → project → plan → activity cascade. The cascade's
+ * list reads page through their endpoints (`apiFetchAllPages`, so a >20-row level isn't truncated),
+ * so the same router serves both helpers — only the create POST goes through `apiFetch`.
+ */
 function mockCascade(create?: () => Promise<unknown>): void {
-  vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+  const route = (path: string, init?: RequestInit): Promise<unknown> => {
     if (init?.method === 'POST' && path.endsWith('/cross-plan-dependencies')) {
       return create ? create() : Promise.resolve({});
     }
@@ -38,7 +42,9 @@ function mockCascade(create?: () => Promise<unknown>): void {
       return Promise.resolve([{ id: 'up1', code: 'A-1', name: 'Deliver steel' }]);
     }
     return Promise.resolve([]);
-  });
+  };
+  vi.mocked(apiFetch).mockImplementation(route);
+  vi.mocked(apiFetchAllPages).mockImplementation(route as (path: string) => Promise<unknown[]>);
 }
 
 function renderDialog() {

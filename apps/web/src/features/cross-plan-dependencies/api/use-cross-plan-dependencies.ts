@@ -12,7 +12,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { activityKeys, crossPlanDependencyKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
 
 export { crossPlanDependencyKeys };
@@ -21,7 +21,11 @@ export { crossPlanDependencyKeys };
  * The activities of ANOTHER plan, for the cross-plan endpoint picker's leaf select. Shares the
  * activities-list cache key (`activityKeys.listByPlan`) with the activities feature so the picker
  * reuses any already-loaded list, without a sideways feature → feature import (the query is declared
- * against the shared key + the shared `apiFetch`). `enabled` gates it until a plan is chosen.
+ * against the shared key + the shared client helper). `enabled` gates it until a plan is chosen.
+ *
+ * It pages through EVERY activity for the same reason `activitiesQueryOptions` does — and because it
+ * shares that query's cache key: a first-page-only fetch here would also seed the plan workspace's
+ * cache with a truncated list.
  */
 export function useOtherPlanActivities(
   orgSlug: string,
@@ -31,7 +35,7 @@ export function useOtherPlanActivities(
   return useQuery({
     queryKey: activityKeys.listByPlan(orgSlug, planId),
     queryFn: () =>
-      apiFetch<ActivitySummary[]>(`/organizations/${orgSlug}/plans/${planId}/activities`),
+      apiFetchAllPages<ActivitySummary>(`/organizations/${orgSlug}/plans/${planId}/activities`),
     enabled: enabled && planId !== '',
   });
 }
@@ -39,8 +43,10 @@ export function useOtherPlanActivities(
 export function activityCrossPlanLinksQueryOptions(orgSlug: string, activityId: string) {
   return queryOptions({
     queryKey: crossPlanDependencyKeys.byActivity(orgSlug, activityId),
+    // The panel lists an activity's interfaces in full, so page through them all rather than take the
+    // endpoint's default 20-row page.
     queryFn: () =>
-      apiFetch<CrossPlanDependencySummary[]>(
+      apiFetchAllPages<CrossPlanDependencySummary>(
         `/organizations/${orgSlug}/activities/${activityId}/cross-plan-dependencies`,
       ),
   });
@@ -50,8 +56,6 @@ export function activityCrossPlanLinksQueryOptions(orgSlug: string, activityId: 
  * An activity's live cross-plan links in **both directions** (ADR-0045) — the inter-project edges
  * where it is the successor (an edge from an upstream plan) or the predecessor (an edge into a
  * downstream plan). `enabled` lets a host keep the query mounted but idle (e.g. a closed dialog).
- * The list read is cursor-paginated on the wire, but the panel consumes the first page — a single
- * activity carries a handful of cross-plan interfaces, so paging is deferred (see the report note).
  */
 export function useActivityCrossPlanLinks(
   orgSlug: string,

@@ -26,6 +26,7 @@ import {
   ELAPSED_DAY_WALK,
   FAN_OUT_MAX_PX,
   FAN_OUT_STEP_PX,
+  LAG_ANCHOR_PX,
   LABEL_INSIDE_MIN_PX,
   LABEL_BESIDE_MIN_PX,
   dayAtScreenX,
@@ -738,6 +739,36 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
       id: 's',
       dependencyId: 'd1',
     });
+  });
+
+  it('accepts a press up to LAG_ANCHOR_PX either side — a 24px target (WCAG 2.5.8)', () => {
+    const zones = options([edge()]);
+    for (const dx of [-LAG_ANCHOR_PX, LAG_ANCHOR_PX]) {
+      expect(classifyHit(acts, { x: ANCHOR.x + dx, y: ANCHOR.y }, VIEW, DATA_DATE, zones)).toEqual({
+        kind: 'lagAnchor',
+        id: 's',
+        dependencyId: 'd1',
+      });
+    }
+    // A pixel beyond falls through to the bar body — the zone is bounded, not greedy.
+    for (const dx of [-LAG_ANCHOR_PX - 1, LAG_ANCHOR_PX + 1]) {
+      expect(
+        classifyHit(acts, { x: ANCHOR.x + dx, y: ANCHOR.y }, VIEW, DATA_DATE, zones).kind,
+      ).toBe('body');
+    }
+    expect(LAG_ANCHOR_PX * 2).toBeGreaterThanOrEqual(24);
+  });
+
+  it('keeps the y tolerance to the bar the anchor sits on (covers the M5 fan-out spread)', () => {
+    const zones = options([edge()]);
+    // Half a bar above/below the anchor still grabs it; beyond the bar it is empty canvas.
+    expect(classifyHit(acts, { x: ANCHOR.x, y: ANCHOR.y - 9 }, VIEW, DATA_DATE, zones).kind).toBe(
+      'lagAnchor',
+    );
+    expect(FAN_OUT_MAX_PX).toBeLessThanOrEqual(9);
+    expect(classifyHit(acts, { x: ANCHOR.x, y: ANCHOR.y - 12 }, VIEW, DATA_DATE, zones).kind).toBe(
+      'empty',
+    );
   });
 
   it('flag-off parity: without the option no lagAnchor kind ever appears', () => {

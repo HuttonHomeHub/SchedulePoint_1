@@ -75,15 +75,21 @@ const plans: PlanSummary[] = [
   },
 ];
 
+// Each level of the tree pages through its list endpoint (`apiFetchAllPages`) so a client/project/
+// plan past the server's default 20-row page still appears; the single-node reads use `apiFetch`.
+// One router serves both.
+const route = (path: string): Promise<unknown> => {
+  if (path.endsWith('/clients')) return Promise.resolve(clients);
+  if (path.includes('/clients/c1/projects')) return Promise.resolve(projects);
+  if (path.includes('/projects/p1/plans')) return Promise.resolve(plans);
+  if (path.endsWith('/plans/pl1')) return Promise.resolve(plans[0]);
+  if (path.endsWith('/projects/p1')) return Promise.resolve(projects[0]);
+  return Promise.reject(new Error(`unexpected ${path}`));
+};
+
 vi.mock('@/lib/api/client', () => ({
-  apiFetch: (path: string) => {
-    if (path.endsWith('/clients')) return Promise.resolve(clients);
-    if (path.includes('/clients/c1/projects')) return Promise.resolve(projects);
-    if (path.includes('/projects/p1/plans')) return Promise.resolve(plans);
-    if (path.endsWith('/plans/pl1')) return Promise.resolve(plans[0]);
-    if (path.endsWith('/projects/p1')) return Promise.resolve(projects[0]);
-    return Promise.reject(new Error(`unexpected ${path}`));
-  },
+  apiFetch: (path: string) => route(path),
+  apiFetchAllPages: (path: string) => route(path),
 }));
 
 function renderTree() {

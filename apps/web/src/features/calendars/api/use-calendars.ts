@@ -9,7 +9,7 @@ import {
 
 import type { CalendarFormValues, ExceptionFormValues } from '../schemas/calendar-schemas';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { calendarKeys } from '@/lib/query/hierarchy-keys';
 
 export { calendarKeys };
@@ -40,7 +40,10 @@ function updateBody(input: CalendarFormValues & { version: number }) {
 export function calendarsQueryOptions(orgSlug: string) {
   return queryOptions({
     queryKey: calendarKeys.list(orgSlug),
-    queryFn: () => apiFetch<CalendarSummary[]>(`/organizations/${orgSlug}/calendars`),
+    // The calendar library screen and every calendar picker (plan, activity, resource) need the WHOLE
+    // org library, not the endpoint's default 20-row page — past 20 calendars the table stopped
+    // listing them and a picker could not select them. Page through every row.
+    queryFn: () => apiFetchAllPages<CalendarSummary>(`/organizations/${orgSlug}/calendars`),
   });
 }
 

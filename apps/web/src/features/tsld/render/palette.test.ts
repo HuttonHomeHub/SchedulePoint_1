@@ -43,6 +43,20 @@ describe('resolvePrintPalette — title/subtitle ink contrast on paper (WCAG 1.4
   });
 });
 
+// ── Grab-handle two-tone entries (ADR-0052 M3 discoverability fix) ───────────────────────────
+describe('lag-handle palette entries (outline core / handleHalo ring)', () => {
+  it('resolveTsldPalette resolves the halo (documented jsdom fallback)', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.handleHalo).toBe('#161a22'); // --color-card fallback
+    // The core/halo pair must be two distinct colours — the ring is what makes the disc read.
+    expect(palette.handleHalo).not.toBe(palette.outline);
+  });
+
+  it('resolvePrintPalette carries a LIGHT fallback for the same entry (total contract)', () => {
+    expect(resolvePrintPalette().handleHalo).toBe('#ffffff');
+  });
+});
+
 // ── Bar visual refresh palette entries (ADR-0052 M4) ─────────────────────────────────────
 describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   it('resolveTsldPalette resolves the refresh entries (documented jsdom fallbacks)', () => {
@@ -147,6 +161,42 @@ describe('M4/M5 refresh contrast on the canvas ground (WCAG 1.4.11-equivalent, b
     for (const [name, fill] of fills[theme]!) {
       it(`${name} fill clears 3:1 on the canvas background (${theme})`, () => {
         expect(ratio(fill, background[theme]!)).toBeGreaterThanOrEqual(3);
+      });
+    }
+  }
+});
+
+// The lag handle (ADR-0052 M3 discoverability fix) is drawn ON a bar, so its perceivability can't
+// ride the canvas ground: it must read against every bar FILL, in both themes, under no
+// assumption about which fill a lens produced. That is what the two-tone construction buys — the
+// `outline` core (foreground) and the `handleHalo` ring (card, the canvas ground) are each other's
+// theme-inverse, so whichever loses contrast against the ground it lands on, the other holds it.
+// Asserted as `max(core, halo) ≥ 3` per fill, plus the pair's own separation.
+describe('lag-handle core/halo contrast on the bar fills (WCAG 1.4.11-equivalent, both themes)', () => {
+  const core: Record<string, Oklch> = { light: [0.145, 0, 0], dark: [0.985, 0, 0] }; // foreground
+  const halo: Record<string, Oklch> = { light: [1, 0, 0], dark: [0.205, 0, 0] }; // card
+  const grounds: Record<string, Array<[string, Oklch]>> = {
+    light: [
+      ['on-schedule (primary)', [0.5, 0.18, 255]],
+      ['critical (destructive)', [0.577, 0.245, 27.325]],
+      ['near-critical (warning)', [0.769, 0.15, 80]],
+      ['bare canvas (background)', [1, 0, 0]],
+    ],
+    dark: [
+      ['on-schedule (primary)', [0.65, 0.17, 255]],
+      ['critical (destructive)', [0.52, 0.2, 22.216]],
+      ['near-critical (warning)', [0.82, 0.16, 82]],
+      ['bare canvas (background)', [0.145, 0, 0]],
+    ],
+  };
+  for (const theme of ['light', 'dark'] as const) {
+    it(`the core and its halo are mutually distinguishable (${theme})`, () => {
+      expect(ratio(core[theme]!, halo[theme]!)).toBeGreaterThanOrEqual(3);
+    });
+    for (const [name, ground] of grounds[theme]!) {
+      it(`the handle reads on ${name} — core or halo clears 3:1 (${theme})`, () => {
+        const best = Math.max(ratio(core[theme]!, ground), ratio(halo[theme]!, ground));
+        expect(best).toBeGreaterThanOrEqual(3);
       });
     }
   }

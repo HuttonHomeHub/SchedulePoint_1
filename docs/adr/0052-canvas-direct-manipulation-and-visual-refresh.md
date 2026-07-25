@@ -200,6 +200,34 @@ rendering milestones (M1/M4/M5) apply to read-only roles too.
   `interaction/use-coalesced-lag-nudge.ts` + the Logic panel's dependency rows
   (`DependencyEditor.onNudgeLag`, `Shift+←/→`) — the app's per-dependency
   keyboard surface, since the canvas listbox lists activities.
+  **Post-landing fix — the anchor gained a visible handle.** M3 shipped the
+  `lagAnchor` grab zone (and M5 the dashed lag _run_) but nothing was ever
+  painted AT the anchor, so the drag was undiscoverable: the user had to guess
+  an invisible target ("I can't seem to click a lag/lead point"). The anchor
+  now paints a small two-tone **disc** — an `outline` core ringed by the new
+  `TsldPalette.handleHalo` (`--color-card`); the pair are theme-inverses, so
+  whichever loses contrast against the bar it lands on, the other holds it
+  (pinned per criticality fill in both themes, `palette.test.ts`) — at layer
+  3.2b, above the bars and their runs. A **disc** deliberately: it collides
+  with none of the existing shape vocabulary (milestone diamond, square resize
+  marks, triangle/squares/histogram badges). Gated by `TsldScene.lagHandles`,
+  set from the canvas's existing `lagArmed` (flag + editing/pen + `select` +
+  a wired handler), so a read-only surface sees no affordance it cannot
+  honour, and drawn for exactly the anchors `classifyHit` accepts (offset
+  anchors only) — ink and target cannot disagree. `TsldScene.activeLagId`
+  emphasises the hovered / dragged handle with a larger disc and heavier halo
+  (size + weight, never colour alone — WCAG 1.4.1), twinned with the
+  `ew-resize` cursor the canvas already set. `LAG_ANCHOR_PX` 8 → **12**, a
+  24px target meeting WCAG 2.5.8 outright rather than leaning on the
+  Equivalent exception (y tolerance unchanged at `BAR_HEIGHT / 2`, which also
+  covers the M5 fan-out spread). Anchor **geometry is untouched**
+  (`lagAnchorPoints`/`lagAnchorDay`/`lagFromAnchorDay`), as are the engine,
+  the API and `render/a11y.ts` — the handle is a pointer affordance for an
+  action already keyboard-reachable via `Shift+←/→` on the Logic panel rows.
+  **Still open:** a **zero-lag** tie offers no draggable point at all
+  (`classifyHit` builds zones only for `lagDays !== 0`, since a zero-lag
+  anchor sits exactly where the resize handles live), so the first lag must
+  still be typed in the Logic panel dialog.
 - M4 implementation (visual refresh — activity bars; render-only, every role):
   `render/render-model.ts` (`progressGeometry` — the shape-bounded in-bar
   progress band + front-divider mapping, LOD-culled like labels;
@@ -261,8 +289,10 @@ rendering milestones (M1/M4/M5) apply to read-only roles too.
   (the hovered bar's **id** published into the scene from the SAME
   already-armed idle-hover classify the M4 hover ring reads — editing
   surfaces only, per M4; a scene repaint per hovered-BAR change, never per
-  pointer move). **No palette entry added**: the highlight reuses `selection`
-  (`--color-ring`), the lag run reuses `edge` (`--color-muted-foreground`).
+  pointer move). **No palette entry added by M5 itself**: the highlight reuses
+  `selection` (`--color-ring`), the lag run reuses `edge`
+  (`--color-muted-foreground`); the later lag-handle fix (see M3 above) adds
+  the single `handleHalo` entry and paints its discs just above these runs.
   `render/a11y.ts` is byte-identical — lag was already spoken (`lagPhrase`)
   and highlight state is selection-derived, which AT reaches via the listbox.
   The deferred **curved/bezier evaluation** closes here: rounded orthogonal

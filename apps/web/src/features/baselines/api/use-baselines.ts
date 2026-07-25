@@ -12,7 +12,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 import { baselineKeys } from '@/lib/query/hierarchy-keys';
 
 export { baselineKeys };
@@ -36,8 +36,10 @@ const EMPTY_SUMMARY: PlanVarianceSummary = {
 export function baselinesQueryOptions(orgSlug: string, planId: string) {
   return queryOptions({
     queryKey: baselineKeys.listByPlan(orgSlug, planId),
+    // The baselines panel lists every snapshot a plan holds (any of which may be activated), not the
+    // endpoint's default 20-row page — a long-running plan's older baselines would drop out of view.
     queryFn: () =>
-      apiFetch<BaselineSummary[]>(`/organizations/${orgSlug}/plans/${planId}/baselines`),
+      apiFetchAllPages<BaselineSummary>(`/organizations/${orgSlug}/plans/${planId}/baselines`),
   });
 }
 

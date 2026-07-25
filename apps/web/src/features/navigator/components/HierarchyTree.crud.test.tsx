@@ -71,13 +71,18 @@ const plans: PlanSummary[] = [
   },
 ];
 
+// Each level of the tree pages through its list endpoint (`apiFetchAllPages`), so one router serves
+// both helpers.
+const route = (path: string): Promise<unknown> => {
+  if (path.endsWith('/clients')) return Promise.resolve(clients);
+  if (path.includes('/clients/c1/projects')) return Promise.resolve(projects);
+  if (path.includes('/projects/p1/plans')) return Promise.resolve(plans);
+  return Promise.reject(new Error(`unexpected ${path}`));
+};
+
 vi.mock('@/lib/api/client', () => ({
-  apiFetch: (path: string) => {
-    if (path.endsWith('/clients')) return Promise.resolve(clients);
-    if (path.includes('/clients/c1/projects')) return Promise.resolve(projects);
-    if (path.includes('/projects/p1/plans')) return Promise.resolve(plans);
-    return Promise.reject(new Error(`unexpected ${path}`));
-  },
+  apiFetch: (path: string) => route(path),
+  apiFetchAllPages: (path: string) => route(path),
 }));
 
 function renderTree(crud: Partial<NavigatorCrudApi>) {
