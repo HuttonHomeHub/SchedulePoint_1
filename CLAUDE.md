@@ -532,6 +532,17 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   (§3, M3), `archived_at` (§4, M4) and interchange tiering (§5, M5). **The CPM engine is untouched** —
   it resolves a calendar BY ID and never sees `scope`/`project_id`, so the ADR-0034 recalc parity gate is
   structurally trivial. Builds on ADR-0012/0016/0024/0036/0037/0038/0039/0046/0050.
+  **M2 (landed)** gives §1–§2 their **web surface** behind `VITE_LIBRARY_SCOPING` (default off): a `Scope`
+  badge column + an Organisation/Project/All filter on the calendar library; a **Calendars section on the
+  project-detail screen** (the project's only detail surface — no separate settings route) reading
+  `GET …/projects/:projectId/calendars`; a scope choice on **create** (the shared library disabled with an
+  explanation without `calendar:manage_org`, the project implied when created from one); confirmed
+  **promote / narrow** tier moves; **tier-grouped `<optgroup>`** plan + activity calendar pickers fed by
+  that project-usable list (so a picker can never offer a calendar the write seam would 422), with the
+  resource picker deliberately **organisation-only**; and one shared `lib/api/calendar-scope-errors` mapper
+  turning the two 422s and the narrowing 409 (**with its per-class counts**) into actionable sentences.
+  Frontend-only — no API/schema/engine change; flag-off is byte-for-byte the prior surface (a dedicated
+  flag-off parity suite pins every touched screen).
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

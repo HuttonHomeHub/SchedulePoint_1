@@ -16,7 +16,12 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { EARNED_VALUE_ENABLED, RESOURCE_LEVELLING_ENABLED } from '@/config/env';
+import {
+  EARNED_VALUE_ENABLED,
+  LIBRARY_SCOPING_ENABLED,
+  RESOURCE_LEVELLING_ENABLED,
+} from '@/config/env';
+import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { minorToMajorInput } from '@/lib/format-money';
 
 const INHERIT_CALENDAR_LABEL = 'Plan default (inherit)';
@@ -145,7 +150,10 @@ export function ResourceFormDialog({
         <FormErrorSummary errors={errors} />
         {mutation.isError ? (
           <p role="alert" className="text-destructive-text text-sm">
-            {mutation.error.message}
+            {/* Chiefly the 422 RESOURCE_REQUIRES_ORG_CALENDAR (ADR-0053 §2) — the picker only ever
+                offers organisation calendars, so this is defence in depth against a calendar that
+                was narrowed to a project after the list loaded. */}
+            {calendarScopeErrorMessage(mutation.error) ?? mutation.error.message}
           </p>
         ) : null}
         <TextField
@@ -198,6 +206,9 @@ export function ResourceFormDialog({
           <p id={calendarHelpId} className="text-muted-foreground text-sm">
             The working-time calendar this resource is scheduled on when it drives an activity.
             Inherits the plan’s calendar unless you pick one.
+            {LIBRARY_SCOPING_ENABLED
+              ? ' Organisation calendars only — the resource pool is shared across every project, so a project’s own calendar can’t be used here.'
+              : null}
           </p>
           {calendarsError ? (
             <p id={calendarErrorId} role="alert" className="text-destructive-text text-sm">

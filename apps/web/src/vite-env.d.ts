@@ -75,4 +75,6 @@ interface ImportMetaEnv {
   readonly VITE_ENTRY_ROUTES?: string;
   /** TSLD canvas direct manipulation + visual refresh — time-true link anchoring (lag walked on the relationship's lag calendar from the constrained edge; lead = left) + directional arrowheads, duration resize on both bar edges, a draggable lag anchor, and the token-resolved bar/link visual refresh (ADR-0052, docs/specs/canvas-direct-manipulation/). On by default (2026-07-25, M1–M5 landed); "false"/"0" rolls back to the legacy edge-drag zones and canvas paint, byte-for-byte. */
   readonly VITE_CANVAS_DIRECT_MANIPULATION?: string;
+  /** Calendar scoping tiers web surface — the library scope badge/filter, the project Calendars section, the scope choice on create, and the tier-grouped plan/activity pickers (ADR-0053, library-scoping M2). "true"/"1" enables it; off by default during build (flips on after the specialist reviews). */
+  readonly VITE_LIBRARY_SCOPING?: string;
 }

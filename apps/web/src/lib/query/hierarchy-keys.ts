@@ -88,7 +88,31 @@ export const noteKeys = {
 
 export const calendarKeys = {
   all: (orgSlug: string) => ['calendars', orgSlug] as const,
+  /**
+   * The shared **organisation** library — the endpoint's default result set (`?scope=org`), and the
+   * only list that existed before ADR-0053. Every other calendar list nests UNDER this key, so a
+   * create/update/delete keeps invalidating exactly `list(orgSlug)` and TanStack Query's prefix
+   * match sweeps the scoped and per-project lists with it.
+   */
   list: (orgSlug: string) => [...calendarKeys.all(orgSlug), 'list'] as const,
+  /**
+   * A tier-filtered organisation list (ADR-0053 §1, `?scope=org|project|all`). `org` deliberately
+   * returns {@link list} itself rather than a sibling key: it is the same request and the same rows,
+   * so the default filter shares one cache entry with every pre-existing `useCalendars` caller
+   * instead of double-fetching it — and the flag-off surface keeps hitting exactly today's key.
+   */
+  scoped: (orgSlug: string, scope: 'org' | 'project' | 'all') =>
+    scope === 'org'
+      ? calendarKeys.list(orgSlug)
+      : ([...calendarKeys.list(orgSlug), 'scope', scope] as const),
+  /**
+   * The calendars **usable in** a project (its own + every organisation one) — the
+   * `…/projects/:projectId/calendars` read that feeds the project section and the scope-aware plan /
+   * activity pickers. Keyed per project so one project's list can never stomp another's, nor the
+   * org list (the picker-regression risk in the M2 plan).
+   */
+  forProject: (orgSlug: string, projectId: string) =>
+    [...calendarKeys.list(orgSlug), 'project', projectId] as const,
   detail: (orgSlug: string, calendarId: string) =>
     [...calendarKeys.all(orgSlug), 'detail', calendarId] as const,
 };

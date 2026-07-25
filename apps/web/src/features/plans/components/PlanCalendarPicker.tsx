@@ -7,6 +7,13 @@ import { useOptimisticSelect } from '../hooks/use-optimistic-select';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
+import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
+import {
+  groupCalendarsByTier,
+  ORG_TIER_GROUP_LABEL,
+  PROJECT_TIER_GROUP_LABEL,
+} from '@/lib/calendar-tiers';
 
 const NONE_LABEL = 'None (all days work)';
 
@@ -58,6 +65,14 @@ export function PlanCalendarPicker({
   // selected (not silently blank, which would read as "None").
   const missingCurrent = displayed !== '' && !calendars.some((c) => c.id === displayed);
 
+  // Behind `LIBRARY_SCOPING_ENABLED` the list spans two tiers (ADR-0053 §1), so the options are
+  // grouped under named `<optgroup>`s — a native grouping screen readers announce as the option's
+  // group, so "Site shutdown, This project's calendars" is unambiguous next to an identically-named
+  // organisation calendar (the tiers deliberately allow the same name). A group with no members is
+  // not rendered, so a project with no calendars of its own shows one flat, unheaded list.
+  const tiers = groupCalendarsByTier(calendars);
+  const grouped = LIBRARY_SCOPING_ENABLED && tiers.project.length > 0;
+
   const selectedName = plan.calendarId
     ? (calendars.find((calendar) => calendar.id === plan.calendarId)?.name ?? '—')
     : NONE_LABEL;
@@ -106,18 +121,41 @@ export function PlanCalendarPicker({
       >
         <option value="">{NONE_LABEL}</option>
         {missingCurrent ? <option value={displayed}>Loading…</option> : null}
-        {calendars.map((calendar) => (
-          <option key={calendar.id} value={calendar.id}>
-            {calendar.name}
-          </option>
-        ))}
+        {grouped ? (
+          <>
+            {tiers.org.length > 0 ? (
+              <optgroup label={ORG_TIER_GROUP_LABEL}>
+                {tiers.org.map((calendar) => (
+                  <option key={calendar.id} value={calendar.id}>
+                    {calendar.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            <optgroup label={PROJECT_TIER_GROUP_LABEL}>
+              {tiers.project.map((calendar) => (
+                <option key={calendar.id} value={calendar.id}>
+                  {calendar.name}
+                </option>
+              ))}
+            </optgroup>
+          </>
+        ) : (
+          calendars.map((calendar) => (
+            <option key={calendar.id} value={calendar.id}>
+              {calendar.name}
+            </option>
+          ))
+        )}
       </Select>
       <p id={hintId} className="text-muted-foreground text-sm">
         {busy ? 'Saving…' : 'Recalculate to apply the calendar to the schedule’s dates.'}
       </p>
       {setCalendar.isError ? (
         <p id={errorId} role="alert" className="text-destructive-text text-sm">
-          {setCalendar.error.message}
+          {/* A scope rejection (ADR-0053 §2) reads as its own actionable sentence; anything else
+              keeps the server's message verbatim, exactly as before. */}
+          {calendarScopeErrorMessage(setCalendar.error) ?? setCalendar.error.message}
         </p>
       ) : null}
     </div>

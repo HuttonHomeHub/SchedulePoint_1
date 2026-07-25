@@ -39,8 +39,15 @@ import {
   DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
+  LIBRARY_SCOPING_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
+import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
+import {
+  groupCalendarsByTier,
+  ORG_TIER_GROUP_LABEL,
+  PROJECT_TIER_GROUP_LABEL,
+} from '@/lib/calendar-tiers';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 import { minorToMajorInput } from '@/lib/format-money';
 
@@ -208,6 +215,12 @@ export function ActivityFormDialog({
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
   const missingCalendar = Boolean(calendarId) && !calendars.some((c) => c.id === calendarId);
+  // Behind `LIBRARY_SCOPING_ENABLED` the list spans two tiers (ADR-0053 §1) — the project's own
+  // calendars alongside the organisation's — so the options are grouped under named `<optgroup>`s,
+  // which a screen reader announces with the option. Not grouped when the project has none of its
+  // own: a single-group list reads better flat.
+  const calendarTiers = groupCalendarsByTier(calendars);
+  const groupCalendars = LIBRARY_SCOPING_ENABLED && calendarTiers.project.length > 0;
   // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off
   // option so opening the form never coerces it (US-2). Derived from the live field value, so
   // it appears when a parked value is selected and disappears once the planner changes away.
@@ -254,7 +267,9 @@ export function ActivityFormDialog({
         <FormErrorSummary errors={errors} />
         {mutation.isError ? (
           <p role="alert" className="text-destructive-text text-sm">
-            {mutation.error.message}
+            {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
+                every other failure keeps the server's message verbatim, exactly as before. */}
+            {calendarScopeErrorMessage(mutation.error) ?? mutation.error.message}
           </p>
         ) : null}
         <TextField
@@ -411,11 +426,32 @@ export function ActivityFormDialog({
               {missingCalendar ? (
                 <option value={calendarId}>{calendarsLoading ? 'Loading…' : 'Unavailable'}</option>
               ) : null}
-              {calendars.map((calendar) => (
-                <option key={calendar.id} value={calendar.id}>
-                  {calendar.name}
-                </option>
-              ))}
+              {groupCalendars ? (
+                <>
+                  {calendarTiers.org.length > 0 ? (
+                    <optgroup label={ORG_TIER_GROUP_LABEL}>
+                      {calendarTiers.org.map((calendar) => (
+                        <option key={calendar.id} value={calendar.id}>
+                          {calendar.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  <optgroup label={PROJECT_TIER_GROUP_LABEL}>
+                    {calendarTiers.project.map((calendar) => (
+                      <option key={calendar.id} value={calendar.id}>
+                        {calendar.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                </>
+              ) : (
+                calendars.map((calendar) => (
+                  <option key={calendar.id} value={calendar.id}>
+                    {calendar.name}
+                  </option>
+                ))
+              )}
             </Select>
             <p id="activity-calendar-help" className="text-muted-foreground text-sm">
               The working-time calendar this activity is scheduled on. Inherits the plan’s calendar

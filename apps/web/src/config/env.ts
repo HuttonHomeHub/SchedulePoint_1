@@ -706,3 +706,27 @@ export const ENTRY_ROUTES_ENABLED = flagDefaultOn(import.meta.env.VITE_ENTRY_ROU
 export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_DIRECT_MANIPULATION,
 );
+
+/**
+ * Calendar scoping tiers — the web surface for the ORG / PROJECT calendar split (ADR-0053 §1–§2,
+ * spec `docs/specs/library-scoping-and-manageability/`, library-scoping M2). **OFF by default**
+ * while the milestone's quality gates (a11y / ux / component review + the Playwright journey) run;
+ * set `VITE_LIBRARY_SCOPING=true` to enable it in an environment. When on:
+ *
+ * - the **calendar library** screen gains a `Scope` badge column (Organisation / a named project)
+ *   and a scope filter (Organisation · Project · All), reading the M1 `?scope=org|project|all` list;
+ * - the **project detail** screen gains a *Calendars* section listing the calendars usable in that
+ *   project — its own plus every organisation one — off the M1
+ *   `GET …/projects/:projectId/calendars` endpoint;
+ * - **creating** a calendar gains a scope choice: the shared organisation library (additionally
+ *   gated on `calendar:manage_org`) or the project it was opened from;
+ * - the **plan** and **activity** calendar pickers read that project-usable list and group their
+ *   options by tier, while the **resource** picker stays organisation-only (the API hard-rejects a
+ *   project calendar on a resource — the pool is org-global, ADR-0039).
+ *
+ * Frontend-only: every endpoint, error code and permission behind it shipped with M1, and the CPM
+ * engine is untouched. Flag-off ⇒ no scope column, filter, section or grouping renders and every
+ * list still requests today's default (the shared organisation library) — byte-for-byte the prior
+ * behaviour (the flag-off parity tests).
+ */
+export const LIBRARY_SCOPING_ENABLED = flagDefaultOff(import.meta.env.VITE_LIBRARY_SCOPING);

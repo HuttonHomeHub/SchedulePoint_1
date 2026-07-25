@@ -1,5 +1,37 @@
-import { ALL_WEEKDAYS_MASK, STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
+import {
+  ALL_WEEKDAYS_MASK,
+  CALENDAR_SCOPES,
+  STANDARD_WEEKDAYS_MASK,
+  WorkingWeekdays,
+  type CalendarScope,
+} from '@repo/types';
 import { z } from 'zod';
+
+/**
+ * The tier filter the organisation calendar list accepts (`?scope=`, ADR-0053 §1) — mirrors the
+ * API's `CalendarListQueryDto`. `org` is the default and returns exactly the pre-ADR-0053 result
+ * set, so an unfiltered read is unchanged.
+ */
+export const CALENDAR_SCOPE_FILTERS = ['org', 'project', 'all'] as const;
+
+/** Which calendar tier(s) a list request asks for — see {@link CALENDAR_SCOPE_FILTERS}. */
+export type CalendarScopeFilter = (typeof CALENDAR_SCOPE_FILTERS)[number];
+
+/** The filter's visible option labels, in the order they are offered. */
+export const CALENDAR_SCOPE_FILTER_LABELS: Record<CalendarScopeFilter, string> = {
+  org: 'Organisation',
+  project: 'Project',
+  all: 'All',
+};
+
+/**
+ * How each tier is named to a planner. "Organisation" and "Project" (not the wire's `ORG`/`PROJECT`)
+ * — one place, so the badge, the filter, the create control and every picker's group heading agree.
+ */
+export const CALENDAR_SCOPE_LABELS: Record<CalendarScope, string> = {
+  ORG: 'Organisation',
+  PROJECT: 'Project',
+};
 
 /**
  * Short weekday labels, indexed 0 = Monday … 6 = Sunday to match the
@@ -36,13 +68,29 @@ export function formatWorkingWeekdays(mask: number): string {
  * the 7-bit pattern (bit 0 = Monday … bit 6 = Sunday) bound to the toggle group;
  * it must be a valid mask (≥ 1 working day). Name ≤ 120, description ≤ 2000.
  */
-export const calendarFormSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required.').max(120, 'Name is too long.'),
-  description: z.string().trim().max(2000, 'Description is too long.').optional(),
-  workingWeekdays: z
-    .number()
-    .refine((mask) => WorkingWeekdays.isValid(mask), 'Select at least one working day.'),
-});
+export const calendarFormSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required.').max(120, 'Name is too long.'),
+    description: z.string().trim().max(2000, 'Description is too long.').optional(),
+    workingWeekdays: z
+      .number()
+      .refine((mask) => WorkingWeekdays.isValid(mask), 'Select at least one working day.'),
+    // The tier to create in (ADR-0053 §1). Optional so the field is simply ABSENT from the submitted
+    // body unless a scope control was rendered (flag-off), leaving the server's ORG default to apply
+    // — the same JSON the form sent before. `projectId` is required with `PROJECT` and forbidden with
+    // `ORG`, mirroring the API's paired validator, so an impossible pair can't leave the browser.
+    scope: z.enum(CALENDAR_SCOPES).optional(),
+    projectId: z.string().optional(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.scope === 'PROJECT' && !values.projectId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['projectId'],
+        message: 'Choose the project this calendar belongs to.',
+      });
+    }
+  });
 
 export type CalendarFormValues = z.infer<typeof calendarFormSchema>;
 

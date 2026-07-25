@@ -16,6 +16,9 @@ export function ResourcesScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));
+  // ORGANISATION calendars only, deliberately: the resource pool is org-global (ADR-0039), so the
+  // API hard-rejects a project-scoped calendar on a resource with a 422 (ADR-0053 §2). The default
+  // `?scope=org` list IS the usable set, so the picker can never offer one that would be refused.
   const calendars = useCalendars(orgSlug);
 
   return (

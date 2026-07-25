@@ -21,7 +21,7 @@ import {
 } from '@/features/activities';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
-import { useCalendar, useCalendars } from '@/features/calendars';
+import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import {
   useCreateDependency,
@@ -195,8 +195,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const activities = useActivities(orgSlug, planId);
   // The plan's dependency edges — drawn as logic lines on the TSLD canvas.
   const dependencies = usePlanDependencies(orgSlug, planId);
-  // The org's calendars, for the plan calendar picker (read for every member).
-  const calendars = useCalendars(orgSlug);
+  // The calendars offered by the plan and activity calendar pickers (read for every member). Flag
+  // off this is the org library exactly as before; behind `VITE_LIBRARY_SCOPING` it becomes the set
+  // usable in this plan's PROJECT — its own calendars plus every organisation one (ADR-0053 §1),
+  // which is precisely what the API's write guard accepts here. The switch lives in the calendars
+  // feature; this composer only supplies the project.
+  const calendars = usePlanScopedCalendars(orgSlug, plan.data?.projectId ?? '');
   // The plan's working-day calendar (mask + holiday exceptions) drives the TSLD's non-working
   // shading. The mask comes from the already-loaded list; the exceptions from the (cached) detail.
   const planCalendarId = plan.data?.calendarId ?? null;
