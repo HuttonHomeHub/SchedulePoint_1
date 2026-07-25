@@ -56,6 +56,18 @@ const ACTIVITIES: RenderActivity[] = [
   },
 ];
 
+/** A second, long-running bar the lagged tie can anchor on (the lag fixtures below). */
+const A2: RenderActivity = {
+  id: 'a2',
+  type: 'TASK',
+  laneIndex: 1,
+  label: 'a2',
+  earlyStart: '2026-01-02',
+  earlyFinish: '2026-01-20',
+  isCritical: false,
+  isNearCritical: false,
+};
+
 function renderCanvas(props: Partial<React.ComponentProps<typeof TsldCanvas>> = {}) {
   const utils = render(
     <TsldCanvas
@@ -124,6 +136,72 @@ describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
     }
   });
 
+  it('arms the lag handles only where the drag itself is armed', async () => {
+    // Editing + Select + a wired lag handler ⇒ the anchors advertise themselves…
+    const armed = renderCanvas({ canLag: true });
+    await waitFor(() => expect(lastScene().lagHandles).toBe(true));
+    armed.unmount();
+    vi.clearAllMocks();
+    // …without a lag handler (a read-only / unwired surface) they must not: no fake affordance.
+    const unwired = renderCanvas();
+    await waitFor(() => expect(paintMocks.paintScene).toHaveBeenCalled());
+    expect(lastScene().lagHandles).toBe(false);
+    unwired.unmount();
+    vi.clearAllMocks();
+    // …nor outside Select mode, where a press means "draw"/"link", not "drag this anchor".
+    renderCanvas({ canLag: true, mode: 'add-activity' });
+    await waitFor(() => expect(paintMocks.paintScene).toHaveBeenCalled());
+    expect(lastScene().lagHandles).toBe(false);
+  });
+
+  it('emphasises the hovered lag anchor, and clears it on pointer-leave', async () => {
+    const { canvas } = renderCanvas({
+      activities: [...ACTIVITIES, A2],
+      edges: [
+        {
+          id: 'd1',
+          predecessorId: 'a1',
+          successorId: 'a2',
+          type: 'FS',
+          isDriving: true,
+          lagDays: 2,
+        },
+      ],
+      canLag: true,
+    });
+    // a1 finishes day 4; FS+2 walks (no calendar ⇒ elapsed) to day 7 → x 138, on a2's lane-1
+    // centre line (y 82) at the default viewport.
+    fireEvent.pointerMove(canvas, { clientX: 138, clientY: 82, pointerId: 1 });
+    await waitFor(() => expect(lastScene().activeLagId).toBe('d1'));
+    fireEvent.pointerLeave(canvas);
+    await waitFor(() => expect(lastScene().activeLagId).toBeNull());
+  });
+
+  it('holds the grabbed anchor emphasised for the whole drag', async () => {
+    const { canvas } = renderCanvas({
+      activities: [...ACTIVITIES, A2],
+      edges: [
+        {
+          id: 'd1',
+          predecessorId: 'a1',
+          successorId: 'a2',
+          type: 'FS',
+          isDriving: true,
+          lagDays: 2,
+        },
+      ],
+      canLag: true,
+    });
+    fireEvent.pointerDown(canvas, { clientX: 138, clientY: 82, pointerId: 1 });
+    await waitFor(() => expect(lastScene().activeLagId).toBe('d1'));
+    // The idle-hover branch is skipped while a gesture runs, so the emphasis must survive moves…
+    fireEvent.pointerMove(canvas, { clientX: 180, clientY: 82, pointerId: 1 });
+    expect(lastScene().activeLagId).toBe('d1');
+    // …and drop on release, so the next hover decides afresh.
+    fireEvent.pointerUp(canvas, { clientX: 180, clientY: 82, pointerId: 1 });
+    await waitFor(() => expect(lastScene().activeLagId).toBeNull());
+  });
+
   it('publishes nothing when the flag is off (the parity gate)', async () => {
     flags.directManipulation = false;
     const { canvas } = renderCanvas();
@@ -131,6 +209,9 @@ describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
     await waitFor(() => expect(paintMocks.paintScene).toHaveBeenCalled());
     for (const call of paintMocks.paintScene.mock.calls) {
       expect((call[1] as TsldScene).hoverId).toBeNull();
+      // The lag handles ride the same gate — flag-off nothing is armed, so nothing paints.
+      expect((call[1] as TsldScene).lagHandles).toBe(false);
+      expect((call[1] as TsldScene).activeLagId ?? null).toBeNull();
     }
     for (const call of paintMocks.paintInteractionLayer.mock.calls) {
       expect((call[1] as InteractionOverlay).hover ?? null).toBeNull();

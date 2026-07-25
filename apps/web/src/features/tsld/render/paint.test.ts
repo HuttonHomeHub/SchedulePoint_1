@@ -7,7 +7,13 @@ import {
   type TsldPalette,
   type TsldScene,
 } from './paint';
-import type { RenderActivity, Viewport } from './render-model';
+import {
+  lagAnchorPoints,
+  makeWorkingDayWalk,
+  type RenderActivity,
+  type RenderEdge,
+  type Viewport,
+} from './render-model';
 
 const PALETTE: TsldPalette = {
   gridLine: '#111',
@@ -28,6 +34,7 @@ const PALETTE: TsldPalette = {
   // M4 refresh entries — distinct from every other fixture colour so assertions can pin them.
   barStroke: '#5a5a5a',
   hoverRing: '#9a9a9a',
+  handleHalo: '#0b0b0b',
 };
 
 /** All view layers on, matching the default scene. */
@@ -678,11 +685,11 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
 // ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────────────────────────────────
 // A recording ctx that logs method calls AND property assignments in order, so two paints can be
 // compared byte-for-byte (the flag-off / no-lens parity gate).
-function recordingCtx(): {
+function recordingCtx(base: Record<string, unknown> = mockCtx()): {
   ctx: Parameters<typeof paintScene>[0];
   log: string[];
 } {
-  const target: Record<string | symbol, unknown> = mockCtx();
+  const target: Record<string | symbol, unknown> = base;
   const log: string[] = [];
   const proxy = new Proxy(target, {
     get(t, prop) {
@@ -1904,5 +1911,189 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
       return r;
     })();
     expect(idle.log.some((e) => e === `strokeStyle=${PALETTE.selection}`)).toBe(false);
+  });
+});
+
+// ── Draggable lag handles (ADR-0052 M3 discoverability fix, the SAME env flag) ────────────────
+// The M3 lag drag shipped with a grab zone but nothing painted at it: the user had to guess an
+// invisible target. These pin the affordance — drawn exactly where `classifyHit` accepts the
+// press, only where the drag is armed, and never on the flag-off path.
+describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
+  const isWorkingDay = (d: number): boolean => ((d % 7) + 7) % 7 < 5;
+  const walk = makeWorkingDayWalk(isWorkingDay);
+  /** All decorative layers off so the recorded calls are the edges + bars + handles alone. */
+  const quiet = {
+    dayGrid: false,
+    monthGrid: false,
+    yearGrid: false,
+    today: false,
+    nonWorking: false,
+    labels: false,
+    lateOverlay: false,
+  } as const;
+  // A short predecessor (days 1–4) and a long successor (days 1–19) so a walked anchor lands on
+  // the bar rather than clamping — the geometry the M1/M5 anchor tests use.
+  const pred = task({ id: 'p', laneIndex: 0 });
+  const succ = task({ id: 's', laneIndex: 1, earlyStart: '2026-01-02', earlyFinish: '2026-01-20' });
+  const edge = (over: Partial<RenderEdge> = {}): RenderEdge => ({
+    id: 'd1',
+    predecessorId: 'p',
+    successorId: 's',
+    type: 'FS',
+    isDriving: true,
+    lagDays: 2,
+    lagCalendar: 'PROJECT_DEFAULT',
+    ...over,
+  });
+  const scene = (over: Partial<TsldScene> = {}): TsldScene => ({
+    activities: [pred, succ],
+    edges: [edge()],
+    dataDate: DATA_DATE,
+    view: quiet,
+    isWorkingDay,
+    timeTrueLinks: true,
+    visualRefresh: true,
+    lagHandles: true,
+    ...over,
+  });
+  /** A ctx whose roundRect records (the modern-browser path the disc is traced with). */
+  const roundedCtx = () => ({ ...mockCtx(), roundRect: vi.fn() });
+  /**
+   * The recorded handle discs (square boxes whose corner radius is half the side), de-duplicated
+   * in first-drawn order — each disc is traced twice, once for the core fill and once for the
+   * halo stroke (two batched paths, one per colour).
+   */
+  const handles = (ctx: ReturnType<typeof roundedCtx>): number[][] => {
+    const seen = new Set<string>();
+    return ctx.roundRect.mock.calls
+      .map((c) => c.map(Number))
+      .filter(([, , w, h, r]) => w === h && w === (r ?? 0) * 2)
+      .filter((box) => {
+        const key = JSON.stringify(box);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  };
+
+  it('draws a handle centred on the walked anchor for every dependency type', () => {
+    for (const type of ['FS', 'FF', 'SS', 'SF'] as const) {
+      const ctx = roundedCtx();
+      paintScene(ctx, scene({ edges: [edge({ type })] }), VIEW, SIZE, PALETTE);
+      // FS/FF walk the successor end, SS/SF the predecessor end — the same end `classifyHit`
+      // makes draggable, so the ink and the target can never disagree.
+      const anchors = lagAnchorPoints(pred, succ, type, 2, VIEW, DATA_DATE, walk)!;
+      const at = type === 'FS' || type === 'FF' ? anchors.succ : anchors.pred;
+      expect(handles(ctx)).toEqual([[at.x - 3.5, at.y - 3.5, 7, 7, 3.5]]);
+    }
+  });
+
+  it('pins the SS embed handle to its known screen point (guards a helper-wide drift)', () => {
+    const ctx = roundedCtx();
+    // p starts day 1 (x 72); +3 working days embeds at day 4 (x 108), on its lane-0 centre (54).
+    paintScene(ctx, scene({ edges: [edge({ type: 'SS', lagDays: 3 })] }), VIEW, SIZE, PALETTE);
+    expect(handles(ctx)).toEqual([[104.5, 50.5, 7, 7, 3.5]]);
+  });
+
+  it('draws the core in the outline colour ringed by the contrasting halo, above the bars', () => {
+    // A recording ctx WITH roundRect, so the discs trace as roundRect and every `fillRect` in the
+    // log is a bar body — which is what makes the layering assertion below meaningful.
+    const { ctx, log } = recordingCtx({ ...mockCtx(), roundRect: vi.fn() });
+    paintScene(ctx, scene(), VIEW, SIZE, PALETTE);
+    // The two-tone construction: a foreground core, then the ground-coloured halo over its edge.
+    const core = log.lastIndexOf(`fillStyle=${PALETTE.outline}`);
+    const halo = log.lastIndexOf(`strokeStyle=${PALETTE.handleHalo}`);
+    expect(core).toBeGreaterThan(-1);
+    expect(halo).toBeGreaterThan(core);
+    // Painted after every bar body (the refreshed bars trace at BAR_RADIUS 3) — an on-bar
+    // affordance drawn under the bars would be exactly as invisible as no affordance at all.
+    const lastBar = log.reduce(
+      (acc, e, i) => (e.startsWith('roundRect(') && e.endsWith(',3])') ? i : acc),
+      -1,
+    );
+    expect(lastBar).toBeGreaterThan(-1);
+    expect(core).toBeGreaterThan(lastBar);
+  });
+
+  it('draws NO handle when the drag is not armed (no affordance a viewer cannot honour)', () => {
+    const armed = recordingCtx();
+    paintScene(armed.ctx, scene(), VIEW, SIZE, PALETTE);
+    const off = recordingCtx();
+    paintScene(off.ctx, scene({ lagHandles: false }), VIEW, SIZE, PALETTE);
+    const absent = recordingCtx();
+    paintScene(absent.ctx, scene({ lagHandles: undefined }), VIEW, SIZE, PALETTE);
+    expect(armed.log).not.toEqual(off.log); // the armed paint really does add something…
+    expect(absent.log).toEqual(off.log); // …and absent is exactly not-armed (parity)
+    expect(off.log).not.toContain(`strokeStyle=${PALETTE.handleHalo}`);
+  });
+
+  it('is byte-for-byte the no-handle paint when the refresh flag is off, even if armed (parity)', () => {
+    const base = recordingCtx();
+    paintScene(
+      base.ctx,
+      scene({ timeTrueLinks: false, visualRefresh: false, lagHandles: false, activeLagId: null }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // A scene that still carries the handle fields while the render flag is off must not paint
+    // them — one env flag drives all three, so this is the flag-off gate.
+    const flagOff = recordingCtx();
+    paintScene(
+      flagOff.ctx,
+      scene({ timeTrueLinks: false, visualRefresh: false, activeLagId: 'd1' }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(flagOff.log).toEqual(base.log);
+  });
+
+  it('draws no handle for a zero-lag tie (its anchor is the resize handle, not a lag grab)', () => {
+    const ctx = roundedCtx();
+    paintScene(ctx, scene({ edges: [edge({ lagDays: 0 })] }), VIEW, SIZE, PALETTE);
+    expect(handles(ctx)).toEqual([]);
+  });
+
+  it('emphasises the hovered / dragged handle with a bigger disc and a heavier halo, drawn last', () => {
+    const ctx = roundedCtx();
+    paintScene(
+      ctx,
+      scene({
+        edges: [edge(), edge({ id: 'd2', type: 'SS', lagDays: 3 })],
+        activeLagId: 'd2',
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const drawn = handles(ctx);
+    expect(drawn).toHaveLength(2);
+    // The active one grew (radius 5, not 3.5) and — drawn last — sits over its neighbours.
+    expect(drawn.at(-1)![4]).toBe(5);
+    expect(drawn[0]![4]).toBe(3.5);
+    // Never colour alone (WCAG 1.4.1): the halo weight steps up with the size.
+    const { ctx: rec, log } = recordingCtx();
+    paintScene(rec, scene({ activeLagId: 'd1' }), VIEW, SIZE, PALETTE);
+    const restLog = ((): string[] => {
+      const r = recordingCtx();
+      paintScene(r.ctx, scene(), VIEW, SIZE, PALETTE);
+      return r.log;
+    })();
+    expect(log.filter((e) => e === 'lineWidth=2').length).toBeGreaterThan(
+      restLog.filter((e) => e === 'lineWidth=2').length,
+    );
+  });
+
+  it('degrades to a square handle on a context without roundRect (never throws)', () => {
+    const square = mockCtx();
+    expect(() => paintScene(square, scene(), VIEW, SIZE, PALETTE)).not.toThrow();
+    const anchors = lagAnchorPoints(pred, succ, 'FS', 2, VIEW, DATA_DATE, walk)!;
+    expect(square.fillRect.mock.calls).toContainEqual([
+      anchors.succ.x - 3.5,
+      anchors.succ.y - 3.5,
+      7,
+      7,
+    ]);
   });
 });

@@ -125,6 +125,13 @@ export interface TsldPalette {
    * hover and selection never read as the same state. A transient pointer affordance twinned
    * with the cursor change; selection stays the keyboard/AT-reachable state. Refresh-only. */
   hoverRing: string;
+  /** The **halo** ring drawn around a canvas grab-handle's `outline` core (the canvas ground /
+   * card token). The pair is what makes a handle perceivable on ANY ground without a per-bar
+   * contrast calculation: `outline` and `handleHalo` are each other's theme-inverse, so whichever
+   * of the two loses contrast against the bar it lands on, the other holds it (verified for every
+   * criticality fill in both themes — see `palette.test.ts`). Read only by the lag handle today
+   * (ADR-0052 M3 discoverability fix); flag-off it is never read. */
+  handleHalo: string;
   // The refresh introduces NO other colour: the in-bar progress band + front divider draw in the
   // bar's own paired label ink (`labelInside*` / the lens `barInk` override), so their contrast is
   // guaranteed by the same 1:1 fill↔ink pairing labels rely on in both themes and under every
@@ -225,6 +232,22 @@ export interface TsldScene {
    * transiently highlighted, mirroring the persistent `selectedId` highlight (the keyboard/AT
    * equivalent — WCAG 2.1.1). Only read under `visualRefresh`; absent ⇒ no hover highlight. */
   hoverId?: string | null | undefined;
+  /**
+   * Draw a visible **grab handle** at every draggable lag anchor (the ADR-0052 M3 discoverability
+   * fix). Set from the canvas's `lagArmed` gate — flag + editing/pen + `select` mode + a wired lag
+   * handler — so a read-only viewer (or any surface that can't commit a lag) never sees an
+   * affordance it can't honour. The painted handles mirror `classifyHit`'s `lagAnchor` zones
+   * exactly (offset anchors only, `lagDays !== 0`), so what the user sees is precisely what they
+   * can grab. Absent/false ⇒ no handles ⇒ byte-for-byte today's paint (the parity gate).
+   */
+  lagHandles?: boolean | undefined;
+  /**
+   * The dependency id whose lag handle draws **emphasised** — the hovered anchor, or the one a
+   * `lagDragging` gesture currently holds. A size + stroke-weight change (never colour alone —
+   * WCAG 1.4.1), twinned with the `ew-resize` cursor the canvas already sets over the zone. Only
+   * read when {@link TsldScene.lagHandles} is on; absent ⇒ every handle draws at rest.
+   */
+  activeLagId?: string | null | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -322,6 +345,53 @@ function drawPolyline(ctx: Ctx2D, points: Point[]): void {
 
 /** Dash pattern of the lag-run depiction (ADR-0052 M5) — visibly "waiting", not a solid tie. */
 const LAG_RUN_DASH: readonly number[] = [2, 2];
+
+/** Radius (px) of the lag handle's core disc at rest, and while hovered / dragged. Small enough
+ * to sit on an 18px bar without hiding it, large enough to read as "grab me"; the emphasised
+ * radius is a SIZE change (with the heavier halo below), never colour alone — WCAG 1.4.1. The
+ * pointer target is far larger than the ink: `LAG_ANCHOR_PX` gives it 24px (WCAG 2.5.8). */
+const LAG_HANDLE_R = 3.5;
+const LAG_HANDLE_R_ACTIVE = 5;
+/** Width (px) of the contrasting halo ring straddling the core's edge, at rest / emphasised. */
+const LAG_HANDLE_HALO_W = 1.5;
+const LAG_HANDLE_HALO_W_ACTIVE = 2;
+
+/**
+ * Draw the draggable **lag handles** (ADR-0052 M3 discoverability fix): a small disc in the
+ * foreground `outline` colour ringed by the contrasting `handleHalo`, centred on each walked lag
+ * anchor. The two-tone construction is what guarantees the handle reads on **any** bar fill in
+ * both themes — the pair are theme-inverses, so whichever loses contrast against the bar, the
+ * other holds it (`palette.test.ts` pins this for every criticality fill).
+ *
+ * A **disc**, deliberately, so it never collides with the canvas's existing shape vocabulary: the
+ * milestone/baseline diamond, the square selected-bar resize marks, and the triangle/squares/
+ * histogram badges. Traced with the same optional, guarded `roundRect` the M4 bar refresh uses
+ * (radius = half the box ⇒ a circle), degrading to a square on contexts without it — never
+ * throwing. Batched: one path per colour for the whole set, so a crowded diagram costs two fills.
+ */
+function drawLagHandles(
+  ctx: Ctx2D,
+  points: readonly Point[],
+  palette: TsldPalette,
+  active: boolean,
+): void {
+  const r = active ? LAG_HANDLE_R_ACTIVE : LAG_HANDLE_R;
+  const boxes = points.map((p) => ({ x: p.x - r, y: p.y - r, w: r * 2, h: r * 2 }));
+  const trace = (): boolean => {
+    if (typeof ctx.roundRect !== 'function') return false;
+    ctx.beginPath();
+    for (const b of boxes) ctx.roundRect(b.x, b.y, b.w, b.h, r);
+    return true;
+  };
+  ctx.fillStyle = palette.outline;
+  if (trace()) ctx.fill();
+  else for (const b of boxes) ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.strokeStyle = palette.handleHalo;
+  ctx.lineWidth = active ? LAG_HANDLE_HALO_W_ACTIVE : LAG_HANDLE_HALO_W;
+  if (trace()) ctx.stroke();
+  else for (const b of boxes) ctx.strokeRect(b.x, b.y, b.w, b.h);
+  ctx.lineWidth = 1;
+}
 
 /**
  * Trace a polyline with small rounded elbows (ADR-0052 M5): each interior corner arcs with the
@@ -686,6 +756,11 @@ export function paintScene(
   // Lag runs (ADR-0052 M5) are collected during the edge passes but painted ABOVE the bars
   // (layer 3.2) — an on-bar depiction under the bars would be invisible. Refresh-only.
   let lagRuns: LagRun[] | null = null;
+  // The draggable lag anchors' handle centres, collected in the same pass as the runs and painted
+  // just above them (layer 3.2) — the affordance sits ON the bar, so it must clear the bar layer.
+  // The emphasised (hovered / dragged) one is held out so it draws last, at its larger radius.
+  let lagHandlePoints: Point[] | null = null;
+  let activeLagHandle: Point | null = null;
   if (scene.edges.length > 0) {
     // Time-true anchoring (ADR-0052 M1): the working-day walk is built once per frame from the
     // same predicate the non-working wash reads (memoised + horizon-bounded, so the per-edge cost
@@ -708,6 +783,10 @@ export function paintScene(
     const fanOut = refresh ? edgeFanOutFor(scene.edges) : null;
     const highlightIds = refresh ? linkHighlightIds(scene.selectedId, scene.hoverId) : null;
     if (refresh && workingWalk) lagRuns = [];
+    // Handles ride the SAME gate as the runs plus their own scene flag: they are only meaningful
+    // where the anchors are time-true (the geometry `classifyHit` grabs), and only wanted where
+    // the drag is actually armed. Flag-off ⇒ null ⇒ not one extra call in the paint log.
+    if (lagRuns && scene.lagHandles === true) lagHandlePoints = [];
     // The one per-edge geometry seam: flag-off it is exactly the M1 branch (time-true or legacy);
     // refreshed it composes the SAME anchor mapping with the fan-out offsets + elbow shift, and
     // collects the edge's lag run while the anchors are at hand.
@@ -726,10 +805,14 @@ export function paintScene(
       if (!anchors) return null;
       const off = fanOut.get(edge);
       if (lagRuns && lag !== 0) {
+        // FS/FF walk the successor end, SS/SF the predecessor end — the SAME choice `classifyHit`
+        // makes for the draggable anchor, so the handle can never land on the wrong end. Both the
+        // run and the handle ride that end's fan-out offset, staying with their own link line
+        // (the ±FAN_OUT_MAX_PX spread is well inside the zone's ±BAR_HEIGHT/2 y tolerance).
+        const walkedSucc = edge.type === 'FS' || edge.type === 'FF';
+        const dy = (walkedSucc ? off?.succ : off?.pred) ?? 0;
         const run = lagRunSegment(pred, succ, edge.type, lag, view, scene.dataDate, walk);
         if (run) {
-          // The run rides the walked end's fan-out offset so it stays under its own anchor.
-          const dy = (edge.type === 'FS' || edge.type === 'FF' ? off?.succ : off?.pred) ?? 0;
           lagRuns.push(
             dy === 0
               ? run
@@ -738,6 +821,15 @@ export function paintScene(
                   to: { x: run.to.x, y: run.to.y + dy },
                 },
           );
+        }
+        if (lagHandlePoints) {
+          // Collected off the ANCHOR, not the run: a clamped anchor (a lag past the bar's extent)
+          // yields no run but is still grabbable, and that is exactly the case where an invisible
+          // target would silently shadow the bar-end resize handle.
+          const anchor = walkedSucc ? anchors.succ : anchors.pred;
+          const point: Point = { x: anchor.x, y: anchor.y + dy };
+          if (edge.id !== undefined && edge.id === scene.activeLagId) activeLagHandle = point;
+          else lagHandlePoints.push(point);
         }
       }
       const from =
@@ -968,6 +1060,16 @@ export function paintScene(
     ctx.stroke();
     ctx.setLineDash([]);
   }
+
+  // Layer 3.2b: the draggable lag handles, drawn just above their runs and above every bar so the
+  // grab point is never occluded (ADR-0052 M3 discoverability fix — the drag shipped with an
+  // invisible target). Only ever collected when the drag is armed AND the flag is on, so a
+  // read-only surface and the flag-off path skip this block entirely (byte-for-byte parity). The
+  // emphasised handle draws LAST, so it sits over any neighbour it grew into.
+  if (lagHandlePoints && lagHandlePoints.length > 0) {
+    drawLagHandles(ctx, lagHandlePoints, palette, false);
+  }
+  if (activeLagHandle) drawLagHandles(ctx, [activeLagHandle], palette, true);
 
   // Layer 3.5: the TODAY marker — a dashed vertical in the destructive hue, above the bars and
   // below the labels + selection ring. Dashed (not colour alone) and named in the panel legend.

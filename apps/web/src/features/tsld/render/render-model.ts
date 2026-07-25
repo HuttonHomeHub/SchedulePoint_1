@@ -906,11 +906,14 @@ export function isResizeEligibleType(type: ActivityType): boolean {
   return !isMilestone(type) && type !== 'LEVEL_OF_EFFORT' && type !== 'WBS_SUMMARY';
 }
 
-/** Half-width (px) of the grab zone around a drawn lag anchor (ADR-0052 M3). Kept as small as the
- * bar-end zones ({@link EDGE_HANDLE_PX}) so a crowded bar isn't swallowed; the same lag is settable
- * exactly through the dependency dialog (Enter on the listbox → Logic), so the pointer zone falls
- * under WCAG 2.5.8's Equivalent exception, like the edge handles. */
-export const LAG_ANCHOR_PX = 8;
+/** Half-width (px) of the grab zone around a drawn lag anchor (ADR-0052 M3) — 12, so the target is
+ * a full **24px** wide and meets WCAG 2.5.8 outright rather than leaning on the Equivalent
+ * exception the bar-end zones ({@link EDGE_HANDLE_PX}) take. It is deliberately wider than those
+ * zones because the anchor is a *point* target with no bar edge to aim at, and because the anchor
+ * now paints a visible handle (`TsldScene.lagHandles`) the user aims for: an under-sized target
+ * around a drawn dot is the defect this widens away. The vertical tolerance stays `BAR_HEIGHT / 2`
+ * (the bar the anchor sits on), which also covers the M5 fan-out offset (±`FAN_OUT_MAX_PX`). */
+export const LAG_ANCHOR_PX = 12;
 
 /** Options for {@link classifyHit}'s zone vocabulary (ADR-0052 M2/M3). */
 export interface ClassifyHitOptions {
