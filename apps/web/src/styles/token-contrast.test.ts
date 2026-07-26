@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { compositeOver, fmtRatio, parseColour, relativeLuminance, type Srgb } from '@/test/colour';
-import { blockBody, declarations, THEME_SELECTORS, themeTokens } from '@/test/css-blocks';
+import { blockBody, declarations, hasBlock, THEME_SELECTORS, themeTokens } from '@/test/css-blocks';
 
 /**
  * The computed contrast matrix (ADR-0055 §2).
@@ -19,7 +19,22 @@ import { blockBody, declarations, THEME_SELECTORS, themeTokens } from '@/test/cs
 type Scope = 'page' | 'chrome' | 'panel';
 const SCOPES: Scope[] = ['page', 'chrome', 'panel'];
 
-const FLAG_LAYERS = ['[data-designed-chrome]', '[data-canvas-visual-language]'] as const;
+const FLAG_ATTRIBUTES = ['data-designed-chrome', 'data-canvas-visual-language'] as const;
+
+/**
+ * The flag layers that apply to a theme, in cascade order: the global layer first, then the
+ * theme-scoped one (`[attr].corporate`), which has the higher specificity and therefore wins.
+ * Absent layers are skipped — a flag whose values are Corporate-only (S3's light rail) has no
+ * global block at all.
+ */
+function flagLayersFor(theme: (typeof THEME_SELECTORS)[number]): string[] {
+  const suffix = theme === ':root' ? '' : theme;
+  return FLAG_ATTRIBUTES.flatMap((attribute) =>
+    [`[${attribute}]`, suffix ? `[${attribute}]${suffix}` : ''].filter(
+      (selector) => selector !== '' && hasBlock(selector),
+    ),
+  );
+}
 
 /**
  * Resolve the tokens a component would actually see, given a theme, a surface scope and
@@ -32,7 +47,7 @@ function resolve(
 ): Map<string, string> {
   const tokens = new Map(themeTokens(theme));
   if (flagsOn) {
-    for (const layer of FLAG_LAYERS) {
+    for (const layer of flagLayersFor(theme)) {
       for (const [name, value] of declarations(blockBody(layer))) tokens.set(name, value);
     }
   }

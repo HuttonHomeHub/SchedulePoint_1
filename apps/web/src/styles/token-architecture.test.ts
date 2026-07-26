@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   blockBody,
   declarations,
+  hasBlock,
   readGlobalsCss,
   THEME_SELECTORS,
   themeTokens,
@@ -139,10 +140,18 @@ describe.each(FAMILIES)('the [data-surface="%s"] rule', (family) => {
 });
 
 describe('the flag-keyed override layers', () => {
-  it.each(['[data-designed-chrome]', '[data-canvas-visual-language]'])(
-    '%s is present so a flagged value change has a home',
-    (selector) => {
-      expect(() => blockBody(selector)).not.toThrow();
+  it.each(['data-designed-chrome', 'data-canvas-visual-language'])(
+    '%s has a home, so a flagged value change never leaks into a theme block',
+    (attribute) => {
+      // Either a global layer or a theme-scoped one (`[attr].corporate`) — S3's light rail is
+      // Corporate-only, so it takes the scoped form. What matters is that the flag's values
+      // live behind the attribute rather than in the theme block, which is what makes the
+      // rollback byte-for-byte for colour.
+      const anyLayer = [
+        `[${attribute}]`,
+        ...THEME_SELECTORS.filter((t) => t !== ':root').map((t) => `[${attribute}]${t}`),
+      ].some(hasBlock);
+      expect(anyLayer, `no [${attribute}] layer found in globals.css`).toBe(true);
     },
   );
 });

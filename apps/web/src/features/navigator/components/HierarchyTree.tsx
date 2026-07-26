@@ -375,7 +375,17 @@ export function HierarchyTree({
                 )}
               />
               <Icon aria-hidden="true" className="size-4 shrink-0 opacity-80" />
-              <span className="min-w-0 flex-1 truncate">{node.name}</span>
+              <span
+                className={cn(
+                  'min-w-0 flex-1 truncate',
+                  // A client is the top of the hierarchy, so it reads as a heading rather than
+                  // a peer of the projects beneath it. Weight only — the indent and the icon
+                  // already carry the level, and `aria-level` carries it for AT.
+                  row.level === 1 && 'font-medium',
+                )}
+              >
+                {node.name}
+              </span>
               {showActions ? (
                 <Button
                   variant="ghost"

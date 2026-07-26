@@ -469,8 +469,34 @@
 /* theme blocks above. If you find these still here with no flag, that is the   */
 /* cleanup that was missed.                                                     */
 /* ------------------------------------------------------------------------- */
-[data-designed-chrome] {
-  /* S3 fills this: Corporate's rail becomes a light panel. */
+/* S3: Corporate's Project Explorer becomes a LIGHT working surface. One dark band across
+   the top and two light surfaces below it reads as a designed application; three competing
+   dark/light regions does not. Scoped to `.corporate` because Light and Dark already have a
+   light rail — their chrome values land at S5.
+
+   The rail sits at 1.09:1 against the page. That is deliberately a *preference*, not a WCAG
+   rule (1.4.11 exempts a decorative surface boundary), which is why it is reported by the
+   contrast suite rather than gated — and why the rail keeps a real `border-r` rather than
+   relying on the fill difference alone. */
+[data-designed-chrome].corporate {
+  --panel: oklch(0.955 0.004 248);
+  --panel-foreground: oklch(0.321 0 0);
+  --panel-muted-foreground: oklch(0.51 0 0);
+  --panel-border: oklch(0.895 0.005 248);
+  /* The pale amber wash the page already uses for a selected row — the brand accent where
+     ordinary dark text still sits on top of it at full contrast. */
+  --panel-accent: oklch(0.955 0.04 78);
+  --panel-accent-foreground: oklch(0.252 0.056 264);
+  /* Navy, matching the page: amber is 1.9:1 on a light fill and cannot identify a control. */
+  --panel-primary: oklch(0.252 0.056 264);
+  --panel-primary-foreground: oklch(0.985 0 0);
+  --panel-field: oklch(1 0 0);
+  --panel-field-foreground: oklch(0.321 0 0);
+  --panel-field-muted-foreground: oklch(0.51 0 0);
+  --panel-destructive-text: oklch(0.505 0.19 27.5);
+  --panel-warning-text: oklch(0.47 0.11 55);
+  --panel-info-text: oklch(0.3 0.075 262);
+  --panel-ring: oklch(0.35 0.09 262);
 }
 
 [data-canvas-visual-language] {

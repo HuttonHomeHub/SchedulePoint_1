@@ -61,13 +61,12 @@ export function NavigatorRail({
             {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
                 a "New client" entry point here; hidden for non-writers and flag-off. */}
             {orgSlug && crud.canWrite ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="New client"
-                onClick={crud.onCreateClient}
-              >
+              // A labelled primary button rather than a bare `+` icon: creating the first client
+              // is the one action an empty Project Explorer exists to offer, and an unlabelled
+              // glyph makes the entry point something you have to already know about.
+              <Button size="sm" onClick={crud.onCreateClient} className="h-7 gap-1 px-2">
                 <Plus aria-hidden="true" className="size-4" />
+                Client
               </Button>
             ) : null}
             {onCollapse ? (

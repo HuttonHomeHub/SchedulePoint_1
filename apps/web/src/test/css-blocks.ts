@@ -25,6 +25,11 @@ function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
+/** Whether a top-level block with this exact selector exists. */
+export function hasBlock(selector: string): boolean {
+  return readGlobalsCss().includes(`\n${selector} {`);
+}
+
 /**
  * The body of the top-level block with the given selector, comments removed.
  * Throws when the selector is absent — a renamed theme block must fail loudly, not silently
