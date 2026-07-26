@@ -30,6 +30,85 @@ export const LABEL_INSIDE_MIN_PX = 24;
 export const LABEL_PAD_PX = 3;
 /** Gap (px) between a bar's right edge and a beside label. */
 export const LABEL_GAP_PX = 4;
+
+/**
+ * The zoom below which the **flanking start/finish date labels** (ADR-0054 §3) are suppressed.
+ *
+ * Deliberately far above {@link LABEL_MIN_PX_PER_DAY}: a name label is one string per bar, while
+ * dates are two per bar plus the `measureText` each needs for collision — the epic's one real
+ * draw-budget risk (ADR-0026's ≤4 ms p95 at 2,000 activities). At 6 px/day a whole year spans
+ * ~2,200 px, so the visible activity count is already high while each date needs ~55 px of room;
+ * below that the labels would collide far more often than they would render, so the cheapest
+ * correct thing is not to measure them at all. Set from the M3-T5 measurement, not by eye — see
+ * `docs/specs/canvas-live-feedback/implementation-plan.md`.
+ */
+export const DATE_LABEL_MIN_PX_PER_DAY = 6;
+
+/** Month abbreviations for {@link formatCanvasDate} — fixed, never locale-derived. */
+const CANVAS_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/**
+ * A `YYYY-MM-DD` rendered compactly for an on-canvas flanking date label (ADR-0054 §3): `2 Jan`.
+ *
+ * No year: the ruler above already carries it, and every character costs horizontal room that
+ * decides whether the label is drawn at all. Deliberately **not** locale-formatted — the painter
+ * is pure and its output is snapshot-tested, so a machine's locale must not change what is drawn
+ * (the same reason the render model does no other domain string work).
+ */
+export function formatCanvasDate(isoDate: string): string {
+  const [, month, day] = isoDate.split('-');
+  const index = Number(month) - 1;
+  const name = CANVAS_MONTHS[index] ?? month ?? '';
+  return `${Number(day)} ${name}`;
+}
+
+/** A flanking date label's placement decision for one bar (ADR-0054 §3). */
+export interface DateLabelSlot {
+  /** Draw the start date to the LEFT of the bar (there is room before its left neighbour). */
+  start: boolean;
+  /** Draw the finish date to the RIGHT of the bar (there is room before its right neighbour). */
+  finish: boolean;
+}
+
+/**
+ * Decide, per bar, which flanking date labels fit (ADR-0054 §3) — pure, so the LOD rule is
+ * testable without a canvas.
+ *
+ * A date is drawn only where the gap to the neighbouring bar **in the same lane** can hold it.
+ * The caller supplies the already-lane-bucketed, x-sorted row and the text widths; this makes no
+ * measurement of its own, so the painter can cull a whole lane before touching `measureText`.
+ * A milestone is treated exactly like a bar — its diamond is narrow, so its dates almost always
+ * have room, which is the point.
+ */
+export function dateLabelSlot(args: {
+  /** Room (px) between this bar's left edge and the previous bar's right edge in the lane. */
+  roomLeftPx: number;
+  /** Room (px) between this bar's right edge and the next bar's left edge in the lane. */
+  roomRightPx: number;
+  /** Rendered width (px) of the start date text. */
+  startWidthPx: number;
+  /** Rendered width (px) of the finish date text. */
+  finishWidthPx: number;
+}): DateLabelSlot {
+  const { roomLeftPx, roomRightPx, startWidthPx, finishWidthPx } = args;
+  return {
+    start: roomLeftPx >= startWidthPx + LABEL_GAP_PX * 2,
+    finish: roomRightPx >= finishWidthPx + LABEL_GAP_PX * 2,
+  };
+}
 /** Minimum clear room (px) to the same-lane neighbour before a beside label is worth drawing. */
 export const LABEL_BESIDE_MIN_PX = 24;
 /** The fixed label font. Constant so the width memo can key by text alone (font-stable). */

@@ -100,6 +100,14 @@ needed for collision. The LOD threshold is therefore set **from a measurement ta
 budget cannot be held with dates on, the toggle stays default-off and that is documented
 rather than papered over.
 
+**Measured outcome (2026-07-26): default-off.** At 2,000 activities and 12 px/day the pass adds
+**640 text draws** and the total crossed the 4 ms line in both runs; the harness also proved too
+noisy to certify anything (baseline alone 3.70–3.79 ms, dates-on moving 1.3 ms between identical
+runs). An uncertified budget means default-off, so the `Dates` toggle ships **off**, discoverable
+in `View▾` for anyone who wants it. The LOD threshold _is_ certified: below
+`DATE_LABEL_MIN_PX_PER_DAY` the pass costs exactly zero. Full numbers in the implementation
+plan's M3-T5 section.
+
 ### §4 — Float and drift as GPM tails on the bar (M4)
 
 A **hollow tail extending right** from a bar's finish for **total float**, and a **hollow tail

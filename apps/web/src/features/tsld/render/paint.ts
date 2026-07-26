@@ -32,6 +32,9 @@ import {
   EMPHASIS_STROKE_W,
   LABEL_FONT,
   LABEL_GAP_PX,
+  DATE_LABEL_MIN_PX_PER_DAY,
+  dateLabelSlot,
+  formatCanvasDate,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
   LANE_HEIGHT,
@@ -148,6 +151,10 @@ export interface TsldViewToggles {
   nonWorking: boolean;
   /** On-canvas activity labels (`{code} {name} · {n}d`). */
   labels: boolean;
+  /** Flanking start/finish **dates** on each bar (ADR-0054 §3, `VITE_CANVAS_LIVE_FEEDBACK`).
+   * Optional so every existing caller/fixture stays valid and paints byte-for-byte; absent or
+   * false ⇒ the pass never runs and not one `measureText` is spent. */
+  dates?: boolean;
   /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
@@ -1164,6 +1171,54 @@ export function paintScene(
         }
       }
     }
+  }
+
+  // Layer 3.7: flanking start/finish DATES (ADR-0054 §3) — the start date left of the bar, the
+  // finish date right of it, never inside (an inside date competes with the name label for the
+  // same pixels and vanishes on any bar narrower than its text). Gated by the `dates` toggle AND
+  // a zoom well above the label LOD, because this is two strings + two measurements per bar
+  // against the ADR-0026 draw budget. Absent toggle ⇒ not one call ⇒ byte-for-byte parity.
+  if (toggles.dates === true && view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY) {
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    const measure = (t: string): number => labelWidths.measure(t, (x) => ctx.measureText(x).width);
+    // Lane-bucketed and x-sorted exactly like the label pass, so each bar's neighbours — and so
+    // the room its dates have — are known without a per-bar scan.
+    const laneRows = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
+    for (const [id, rect] of rects) {
+      const activity = byId.get(id)!;
+      const row = laneRows.get(activity.laneIndex);
+      if (row) row.push({ activity, rect });
+      else laneRows.set(activity.laneIndex, [{ activity, rect }]);
+    }
+    ctx.fillStyle = palette.labelBeside;
+    for (const row of laneRows.values()) {
+      row.sort((a, b) => a.rect.x - b.rect.x);
+      for (let i = 0; i < row.length; i += 1) {
+        const { activity, rect } = row[i]!;
+        if (!activity.earlyStart || !activity.earlyFinish) continue; // uncalculated ⇒ no dates
+        const startText = formatCanvasDate(activity.earlyStart);
+        const finishText = formatCanvasDate(activity.earlyFinish);
+        const prevRight = i > 0 ? row[i - 1]!.rect.x + row[i - 1]!.rect.w : 0;
+        const nextLeft = i + 1 < row.length ? row[i + 1]!.rect.x : size.width;
+        const slot = dateLabelSlot({
+          roomLeftPx: rect.x - prevRight,
+          roomRightPx: nextLeft - (rect.x + rect.w),
+          startWidthPx: measure(startText),
+          finishWidthPx: measure(finishText),
+        });
+        const cy = rect.y + rect.h / 2;
+        if (slot.start) {
+          ctx.textAlign = 'right';
+          ctx.fillText(startText, rect.x - LABEL_GAP_PX, cy);
+        }
+        if (slot.finish) {
+          ctx.textAlign = 'left';
+          ctx.fillText(finishText, rect.x + rect.w + LABEL_GAP_PX, cy);
+        }
+      }
+    }
+    ctx.textAlign = 'left';
   }
 
   // Layer 4: the selection ring on the selected activity (if visible), plus — when editing

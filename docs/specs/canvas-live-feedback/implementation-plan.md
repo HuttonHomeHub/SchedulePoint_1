@@ -44,6 +44,33 @@ exhaustively testable. **Risk** low. **Dependency** none.
 a formality: if the budget cannot be held, the toggle ships default-off and the measurement is
 recorded in this plan.
 
+### M3-T5 measurement — the result (2026-07-26)
+
+Harness: `render/paint.dates-budget.test.ts`, the real painter over 2,000 activities (50 lanes ×
+40, 5-day bars with 15-day gaps) at 12 px/day into a 1920×1080 viewport, counting-stub context.
+
+| Metric                 | Dates off | Dates on |
+| ---------------------- | --------- | -------- |
+| Painter time (run 1)   | 3.70 ms   | 4.34 ms  |
+| Painter time (run 2)   | 3.79 ms   | 5.67 ms  |
+| Extra `fillText` calls | —         | **640**  |
+
+**Outcome: the `Dates` toggle ships DEFAULT-OFF.** Two things the numbers say plainly:
+
+1. Dates are **not free** — 640 extra text draws at 2,000 activities is real work, and in both
+   runs the total crossed ADR-0026's 4 ms line.
+2. This harness is **not a reliable absolute meter**: the baseline alone measured 3.70–3.79 ms and
+   the dates-on figure moved 1.3 ms between identical runs. It counts painter work, not GPU
+   rasterisation, under jsdom.
+
+So the measurement cannot _certify_ the budget is held with dates on, and the rule set in
+ADR-0054 §3 was that an uncertified budget means default-off. The toggle is there, discoverable
+in `View▾`, and a planner who wants dates opts in — a choice, rather than a cost imposed on every
+plan. What the measurement **does** certify is that the LOD threshold works: below
+`DATE_LABEL_MIN_PX_PER_DAY` the pass adds exactly zero draws and zero measurements.
+
+Re-measure in a real browser before ever revisiting the default.
+
 ## M4 — Float & drift tails
 
 | Task  | What                                                                    | Files                                                         |

@@ -65,6 +65,7 @@ import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EARNED_VALUE_ENABLED,
@@ -89,7 +90,11 @@ const ZOOM_LABELS: Record<string, string> = {
   year: 'Year',
 };
 
-/** The six view-layer toggles, in the order the `View▾` popover lists them (mirrors TsldViewControls). */
+/**
+ * The view-layer toggles, in the order the `View▾` popover lists them (mirrors TsldViewControls).
+ * **Dates** (ADR-0054 §3) is appended only under `VITE_CANVAS_LIVE_FEEDBACK`, so flag-off the
+ * popover lists exactly the six it always did — the byte-for-byte rollback contract.
+ */
 const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }> = [
   { key: 'dayGrid', label: 'Day grid' },
   { key: 'monthGrid', label: 'Month grid' },
@@ -97,6 +102,7 @@ const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }>
   { key: 'today', label: 'Today line' },
   { key: 'nonWorking', label: 'Non-working' },
   { key: 'labels', label: 'Labels' },
+  ...(CANVAS_LIVE_FEEDBACK_ENABLED ? ([{ key: 'dates', label: 'Dates' }] as const) : ([] as const)),
 ];
 
 /**
