@@ -1,6 +1,7 @@
 # ADR-0055: Surface scopes, a designed chrome band, and the canvas visual language
 
-- **Status:** Proposed
+- **Status:** Accepted — S0–S5 landed; `VITE_DESIGNED_CHROME` and
+  `VITE_CANVAS_VISUAL_LANGUAGE` flipped **default ON** 2026-07-26 (S5-T4)
 - **Date:** 2026-07-26
 - **Deciders:** James Ewbank (product) with Claude Code — ui-architect
 - **Related:** ADR-0006 (tokens/shadcn/CVA — **amended**: adds surface-scoped token

@@ -116,3 +116,26 @@ were held back rather than rushed alongside a change to the painter's hot path i
 
 They are additive and behind the same `VITE_CANVAS_VISUAL_LANGUAGE` flag, so they can land as their
 own slice without re-opening anything S4 shipped.
+
+### 59. The device-authoritative canvas draw measurement was never made
+
+ADR-0026 §16 defines the hardware envelope for the ≤ 4 ms p95 draw budget: a mid-tier laptop and
+iPad-class Safari. Every measurement the project has actually made — ADR-0054 M3-T5, ADR-0055
+S5-T2 — was made on a **headless Chromium on a shared cloud runner**, which has no GPU compositor
+and no comparable thermal or memory profile.
+
+Those measurements were still the right thing to run, and their conclusions are sound within what
+they measure: each asked _does this change move the cost?_ and answered it against a matched
+baseline. What none of them establishes is the **absolute** number on a real device, so ADR-0026's
+headline budget currently has no device-side evidence behind it.
+
+This did not block S5's flip, and the reasoning is worth keeping: the band pass sits inside the
+baseline's own run-to-run spread, so S4 demonstrably does not move the cost, and blocking a change
+on an unknown it does not affect would be blocking on the wrong thing. But the unknown compounds
+quietly — each additive layer is judged against a baseline nobody has ever measured on the target
+hardware.
+
+**What would close it:** run `prototypes/tsld-spike/bench.mjs` (and, better, the shipped painter
+under DevTools) at 500 and 2,000 activities on the §16 envelope, and record the numbers in
+ADR-0026 the way the flag-flip measurements are recorded in their plans. Until then, treat the
+≤ 4 ms figure as a design target rather than a verified property.

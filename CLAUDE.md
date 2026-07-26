@@ -617,6 +617,40 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   `@/config/env` with `LIBRARY_SCOPING_ENABLED: false`) rather than weakened — that is the rollback
   contract.
 
+- **ADR-0054** _(Accepted; M1–M6 landed — `VITE_CANVAS_LIVE_FEEDBACK` **default-on**)_ — Canvas
+  live feedback & GPM float/drift visualisation: **frontend-only** work on the existing painter —
+  full-fidelity drag ghosts with source-bar dimming, a cursor date chip + guideline + ruler tick,
+  flanking start/finish date labels behind a `Dates` toggle with its own level-of-detail rule, the
+  GPM float & drift tails lens, and relationship slack on the selected activity's links. The
+  engine, the API and the recalc parity gate are untouched; the draw budget is held by
+  counting-stub gates (`paint.dates-budget.test.ts` and siblings) that assert the **shape** of the
+  per-frame cost rather than a millisecond count, because a CI runner's absolute timings are noise.
+- **ADR-0055** _(**Accepted** — S0–S5 landed; `VITE_DESIGNED_CHROME` and
+  `VITE_CANVAS_VISUAL_LANGUAGE` **default-on** 2026-07-26)_ — Surface scopes, a designed chrome
+  band, and the canvas visual language. The load-bearing idea is **surface scopes**: ONE semantic
+  token vocabulary **rebound per surface** (`chrome`, `panel`, page) by a `[data-surface]` rule, so
+  `text-muted-foreground` inside the navy header resolves to a grey validated **against navy** and
+  no descendant component learns where it is. The families are deliberately **absent from
+  `@theme inline`** — `bg-chrome` does not compile, `<Surface>` is the only route in
+  (`surface-seams.structural.test.ts`) — and **`inline` is load-bearing**: without it utilities
+  compile to a value resolved once at `:root` and every scope silently stops working, with no error
+  and a diff that looks like a tidy-up. Each family is **complete (17 tokens) or it is a trap**: the
+  original bug was a three-token header stub whose secondary text fell through to the page grey and
+  vanished on navy. `--input` is a **separate token from `--border`** — a divider is decoration
+  (1.4.11-exempt), a control's outline identifies the control and is gated at 3:1. Structure and
+  values land **separately** (S2–S4 structure, S5 values) so the flag-off parity suites still mean
+  something on the day they are needed, and the flag layers carry values behind a root attribute so
+  a rollback is byte-for-byte for **colour** as well as markup. The plan toolbar reaches the band
+  through a **portal**, keeping the shell plan-unaware (ADR-0029) — which is why the keyboard scopes
+  had to become React handlers first (React events follow the React tree; native listeners do not).
+  S4 adds an opaque canvas ground + **alternating month bands** whose parity is the absolute month
+  ordinal, so panning cannot invert the stripes; its cost is pinned by call count and was measured
+  in a browser to sit **inside the baseline's own run-to-run spread** at 2,000 activities. The
+  epic's own gates — a computed contrast matrix over 3 themes × 3 scopes × 2 flag states, a
+  structural seam test, and a lint rule rejecting colour literals in `className`/`style` — exist
+  because every defect it fixes had shipped past a human reviewer, a component reviewer and an axe
+  suite: the class names were right.
+
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
