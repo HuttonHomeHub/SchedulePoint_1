@@ -44,6 +44,52 @@ export const LABEL_GAP_PX = 4;
  */
 export const DATE_LABEL_MIN_PX_PER_DAY = 6;
 
+/** Height (px) of a float/drift tail — thinner than the bar, so it never reads as duration. */
+export const TAIL_HEIGHT = 6;
+
+/**
+ * The hollow **float** tail (ADR-0054 §4): the room this activity has to slip, drawn extending
+ * RIGHT from its finish in the same time-scale as the bar, so slack is comparable between two
+ * activities by eye without selecting either — the Graphical Path Method idiom.
+ *
+ * Returns `null` when there is nothing truthful to draw: no float computed yet, or zero/negative
+ * float (a critical activity has no room, and a negative-float one is already late — neither is a
+ * tail, and drawing a backwards rectangle would be a lie).
+ */
+export function floatTailRect(
+  bar: Rect,
+  totalFloatDays: number | null | undefined,
+  view: Viewport,
+): Rect | null {
+  if (totalFloatDays === null || totalFloatDays === undefined || totalFloatDays <= 0) return null;
+  return {
+    x: bar.x + bar.w,
+    y: bar.y + (bar.h - TAIL_HEIGHT) / 2,
+    w: totalFloatDays * view.pxPerDay,
+    h: TAIL_HEIGHT,
+  };
+}
+
+/**
+ * The hollow **drift** tail (ADR-0054 §4): how much earlier this activity could have gone, drawn
+ * extending LEFT from its start.
+ *
+ * **Absent in Early mode by construction, and that is correct rather than a defect** — an
+ * early-start schedule already places everything as early as logic allows, so drift is zero
+ * everywhere. It becomes non-zero only under Visual mode (hand placement, ADR-0033) or where a
+ * constraint pushes an activity later than its logic permits. The datum is the engine's
+ * `visualDriftDays`; the canvas never computes drift itself.
+ */
+export function driftTailRect(
+  bar: Rect,
+  driftDays: number | null | undefined,
+  view: Viewport,
+): Rect | null {
+  if (driftDays === null || driftDays === undefined || driftDays <= 0) return null;
+  const w = driftDays * view.pxPerDay;
+  return { x: bar.x - w, y: bar.y + (bar.h - TAIL_HEIGHT) / 2, w, h: TAIL_HEIGHT };
+}
+
 /** Month abbreviations for {@link formatCanvasDate} — fixed, never locale-derived. */
 const CANVAS_MONTHS = [
   'Jan',
@@ -181,6 +227,10 @@ export interface RenderActivity {
    * progress fill under the visual refresh (ADR-0052 M4). Optional so legacy callers/fixtures
    * stay valid; absent (or 0) draws no progress detail. */
   percentComplete?: number;
+  /** Engine-owned total float in whole days (ADR-0054 §4) — drawn as a hollow tail extending
+   * right from the bar's finish under the float/drift lens. Null/absent (uncalculated, or the
+   * lens off) ⇒ no tail. */
+  totalFloat?: number | null;
 }
 
 /** A directed dependency edge (predecessor → successor) by activity id. */

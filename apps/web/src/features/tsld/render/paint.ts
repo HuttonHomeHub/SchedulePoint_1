@@ -34,6 +34,8 @@ import {
   LABEL_GAP_PX,
   DATE_LABEL_MIN_PX_PER_DAY,
   dateLabelSlot,
+  driftTailRect,
+  floatTailRect,
   formatCanvasDate,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
@@ -155,6 +157,17 @@ export interface TsldViewToggles {
    * Optional so every existing caller/fixture stays valid and paints byte-for-byte; absent or
    * false ⇒ the pass never runs and not one `measureText` is spent. */
   dates?: boolean;
+  /** The GPM **float / drift tails** (ADR-0054 §4, `VITE_CANVAS_LIVE_FEEDBACK`): a hollow tail
+   * right of each bar for total float, left for drift.
+   *
+   * A view TOGGLE rather than a lens (a deliberate departure from the plan's "beside Baseline
+   * overlay"): a lens exists because it needs data that can be loading or absent — Baseline
+   * overlay is disabled with a reason when there is no active baseline. Float and drift are
+   * already on every activity, so the control can never be unavailable and needs none of the
+   * lens context's loading/error/enablement machinery. It belongs with Labels and Dates.
+   *
+   * Optional ⇒ absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
+  floatTails?: boolean;
   /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
@@ -342,6 +355,9 @@ const DIMMED_ALPHA = 0.3;
  * the ghost". Still visible, so the origin of the drag stays readable.
  */
 const GESTURE_SOURCE_ALPHA = 0.18;
+
+/** Spacing (px) between a float/drift tail's hatch strokes — the non-colour cue's density. */
+const TAIL_HATCH_STEP = 6;
 
 /** Line dash + width of a baseline ghost's outline (thin, dashed — visibly not a live bar). */
 const GHOST_DASH: readonly number[] = [2, 2];
@@ -1110,6 +1126,42 @@ export function paintScene(
       ctx.lineTo(x, size.height);
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+  }
+
+  // Layer 3.55: GPM **float / drift tails** (ADR-0054 §4) — a hollow tail right of the bar for
+  // total float ("how far can this slip?") and left of it for drift ("how much earlier could it
+  // have gone?"), in the same time-scale as the bar so slack is comparable across the whole
+  // diagram at a glance, which a number printed on a link cannot be.
+  //
+  // Hollow and hatched, never filled: a filled extension would read as duration. The hatch is the
+  // non-colour cue (WCAG 1.4.1), so the tails survive a monochrome print and a colour-blind
+  // reader. Drawn BELOW the labels, so no name is ever obscured by slack.
+  //
+  // Cheap by construction: no text, no measurement — two stroked rects and a few hatch lines per
+  // bar, culled with the bar itself. Absent flag ⇒ not one call ⇒ parity.
+  if (toggles.floatTails === true) {
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = palette.labelBeside;
+    for (const [id, rect] of rects) {
+      const activity = byId.get(id)!;
+      const tails = [
+        floatTailRect(rect, activity.totalFloat, view),
+        driftTailRect(rect, activity.visualDriftDays, view),
+      ];
+      for (const tail of tails) {
+        if (!tail || tail.w < 2) continue; // sub-2px slack is not worth a shape
+        ctx.strokeRect(tail.x + 0.5, tail.y + 0.5, tail.w - 1, tail.h - 1);
+        // Diagonal hatch — the non-colour cue. Stepped so a long tail costs a bounded number of
+        // lines rather than one per pixel.
+        ctx.beginPath();
+        for (let hx = tail.x + TAIL_HATCH_STEP; hx < tail.x + tail.w; hx += TAIL_HATCH_STEP) {
+          ctx.moveTo(hx, tail.y + tail.h);
+          ctx.lineTo(hx + tail.h, tail.y);
+        }
+        ctx.stroke();
+      }
     }
   }
 

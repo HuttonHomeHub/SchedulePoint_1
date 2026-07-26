@@ -37,6 +37,17 @@ const SIZE = { width: 800, height: 400 };
 const DATA_DATE = '2026-01-01';
 const GHOST: Rect = { x: 100, y: 50, w: 160, h: 18 };
 
+/** All the pre-existing view layers on, matching the painter's defaults. */
+const ALL_ON = {
+  dayGrid: true,
+  monthGrid: true,
+  yearGrid: true,
+  today: true,
+  nonWorking: true,
+  labels: true,
+  lateOverlay: false,
+} as const;
+
 function mockCtx() {
   return {
     clearRect: vi.fn(),
@@ -245,5 +256,71 @@ describe('cursor date readout (ADR-0054 §2)', () => {
     expect(withField.fillRect.mock.calls).toEqual(withoutField.fillRect.mock.calls);
     expect(withField.moveTo.mock.calls).toEqual(withoutField.moveTo.mock.calls);
     expect(withField.fillText).not.toHaveBeenCalled();
+  });
+});
+
+describe('float & drift tails (ADR-0054 §4)', () => {
+  const withTails = (activity: Partial<RenderActivity>) => {
+    const ctx = mockCtx();
+    const scene: TsldScene = {
+      activities: [task(activity)],
+      edges: [],
+      dataDate: DATA_DATE,
+      view: { ...ALL_ON, floatTails: true },
+    };
+    paintScene(ctx, scene, VIEW, SIZE, PALETTE, 1);
+    return ctx;
+  };
+
+  it('draws a float tail for an activity with slack', () => {
+    const none = withTails({ totalFloat: 0 });
+    const some = withTails({ totalFloat: 5 });
+    expect(some.strokeRect.mock.calls.length).toBeGreaterThan(none.strokeRect.mock.calls.length);
+  });
+
+  it('draws nothing for zero, negative or uncomputed float — no backwards rectangles', () => {
+    const base = withTails({ totalFloat: 0 }).strokeRect.mock.calls.length;
+    // Negative float means the activity is already late; that is not slack and gets no tail.
+    expect(withTails({ totalFloat: -3 }).strokeRect.mock.calls.length).toBe(base);
+    expect(withTails({ totalFloat: null }).strokeRect.mock.calls.length).toBe(base);
+    expect(withTails({}).strokeRect.mock.calls.length).toBe(base);
+  });
+
+  it('draws no drift tail in Early mode — drift is zero there by construction', () => {
+    // ADR-0054 §4: an early-start schedule already places everything as early as logic allows, so
+    // `visualDriftDays` is 0/absent and the LEFT tail is correctly absent. Not a defect.
+    const early = withTails({ totalFloat: 4 });
+    const visual = withTails({ totalFloat: 4, visualDriftDays: 3 });
+    expect(visual.strokeRect.mock.calls.length).toBeGreaterThan(early.strokeRect.mock.calls.length);
+  });
+
+  it('hatches each tail, so the cue is never colour alone (WCAG 1.4.1)', () => {
+    const ctx = withTails({ totalFloat: 10 });
+    expect(ctx.moveTo).toHaveBeenCalled();
+    expect(ctx.lineTo).toHaveBeenCalled();
+  });
+
+  it('is a no-op without the toggle — the flag-off parity contract', () => {
+    const off = mockCtx();
+    const absent = mockCtx();
+    const activities = [task({ totalFloat: 8, visualDriftDays: 2 })];
+    paintScene(
+      off,
+      { activities, edges: [], dataDate: DATA_DATE, view: { ...ALL_ON, floatTails: false } },
+      VIEW,
+      SIZE,
+      PALETTE,
+      1,
+    );
+    paintScene(
+      absent,
+      { activities, edges: [], dataDate: DATA_DATE, view: ALL_ON },
+      VIEW,
+      SIZE,
+      PALETTE,
+      1,
+    );
+    expect(off.strokeRect.mock.calls).toEqual(absent.strokeRect.mock.calls);
+    expect(off.moveTo.mock.calls).toEqual(absent.moveTo.mock.calls);
   });
 });
