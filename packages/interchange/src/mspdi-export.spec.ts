@@ -20,6 +20,15 @@ function asText(bytes: Uint8Array): string {
   return new TextDecoder('utf-8').decode(bytes);
 }
 
+/**
+ * The one drop every MSPDI export with a calendar carries: MSPDI has no P6 `clndr_type` equivalent, so
+ * the ADR-0053 §5 organisation/project calendar TIER cannot be written to the file. Asserted explicitly
+ * (rather than relaxing the "nothing is silently dropped" checks) so the loss stays named and bounded.
+ */
+function calendarTierDrop() {
+  return [expect.objectContaining({ kind: 'drop', entity: 'calendar', sourceRef: null })];
+}
+
 /** All `<Task>` elements across the parsed `<Tasks>` containers. */
 function tasksOf(bytes: Uint8Array): ReturnType<typeof childElements> {
   const parsed = parseMspdi(bytes);
@@ -56,7 +65,8 @@ describe('exportMspdi', () => {
     expect(result.report.mapped.activities).toBe(3);
     expect(result.report.mapped.relationships).toBe(2);
     expect(result.report.mapped.calendars).toBe(1);
-    expect(result.report.drops).toEqual([]);
+    // The only drop is the calendar tier MSPDI cannot express (ADR-0053 §5).
+    expect(result.report.drops).toEqual(calendarTierDrop());
   });
 
   it('round-trips the core network: export → re-import → structurally equivalent', () => {
@@ -225,8 +235,8 @@ describe('exportMspdi', () => {
     const exported = exportMspdi({ graph: original });
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
-    // Neither category is dropped any more.
-    expect(exported.report.drops).toEqual([]);
+    // Neither category is dropped any more; only the MSPDI-inexpressible calendar tier is.
+    expect(exported.report.drops).toEqual(calendarTierDrop());
 
     const reimported = importSchedule({ content: exported.bytes });
     expect(reimported.ok).toBe(true);
@@ -244,8 +254,9 @@ describe('exportMspdi', () => {
     const exported = exportMspdi({ graph: original });
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
-    // Nothing is a silent drop; MSP-inexpressible detail is surfaced as approximations.
-    expect(exported.report.drops).toEqual([]);
+    // Nothing is a silent drop; MSP-inexpressible detail is surfaced as approximations, and the
+    // one genuine drop (the calendar tier) is named.
+    expect(exported.report.drops).toEqual(calendarTierDrop());
 
     const reimported = importSchedule({ content: exported.bytes, filename: 'rich.xml' });
     expect(reimported.ok).toBe(true);

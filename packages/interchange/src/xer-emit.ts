@@ -3,6 +3,7 @@ import type {
   CanonicalActivityStatus,
   CanonicalActivityType,
   CanonicalCalendar,
+  CanonicalCalendarSourceType,
   CanonicalConstraintType,
   CanonicalModel,
   CanonicalPercentCompleteType,
@@ -40,6 +41,16 @@ const TYPE_TO_TASK_TYPE: Readonly<Record<Exclude<CanonicalActivityType, 'WBS_SUM
   RESOURCE_DEPENDENT: 'TT_Rsrc',
   START_MILESTONE: 'TT_Mile',
   FINISH_MILESTONE: 'TT_FinMile',
+};
+
+/**
+ * Canonical calendar source type → P6 `clndr_type` — the exact inverse of the adapter's
+ * `CLNDR_TYPE_TO_CANONICAL`, so an exported calendar's tier is re-read on import (ADR-0053 §5).
+ */
+const SOURCE_TYPE_TO_CLNDR_TYPE: Readonly<Record<CanonicalCalendarSourceType, string>> = {
+  GLOBAL: 'CA_Base',
+  PROJECT: 'CA_Project',
+  RESOURCE: 'CA_Rsrc',
 };
 
 /** Canonical relationship type → P6 `pred_type`. */
@@ -170,6 +181,9 @@ const PROJECT_FIELDS = [
 const CALENDAR_FIELDS = [
   'clndr_id',
   'clndr_name',
+  // The calendar TIER (ADR-0053 §5) — read back by the adapter on a re-import, so the tier round-trips
+  // instead of every exported calendar arriving as an untyped (and therefore project-local) one.
+  'clndr_type',
   'default_flag',
   'day_hr_cnt',
   'clndr_data',
@@ -305,6 +319,7 @@ export function emitXerFromCanonical(model: CanonicalModel): XerEmitResult {
   const calendarRows: Array<Record<string, string>> = model.calendars.map((calendar) => ({
     clndr_id: calendar.id,
     clndr_name: calendar.name,
+    clndr_type: SOURCE_TYPE_TO_CLNDR_TYPE[calendar.sourceType],
     default_flag: calendar.id === model.project.defaultCalendarId ? 'Y' : 'N',
     day_hr_cnt: '8',
     clndr_data: emitClndrData(calendar),

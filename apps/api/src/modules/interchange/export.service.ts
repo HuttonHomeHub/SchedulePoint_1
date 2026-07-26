@@ -258,6 +258,10 @@ export class ExportService {
     return {
       key: calendar.id,
       name: calendar.name,
+      // The stored tier (ADR-0053 §5). The pure exporter turns it — plus whether a resource holds the
+      // calendar — into the file's own type field (P6 `clndr_type`), so an export→import round trip
+      // preserves the tier instead of flattening every calendar into the receiving org's library.
+      scope: calendar.scope,
       shifts: calendar.shifts.map((s) => ({
         weekday: s.weekday,
         startMinute: s.startMinute,

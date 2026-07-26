@@ -291,6 +291,7 @@ describe('mapCanonicalToImportGraph — hand-built canonical round-trips to a va
       {
         id: 'CAL',
         name: 'Standard',
+        sourceType: 'PROJECT',
         workWeek: {
           monday: [{ start: '08:00', end: '16:00' }],
           tuesday: [
@@ -523,7 +524,9 @@ describe('validateAndRepair — resources + assignments (ADR-0039/0040)', () => 
   it('nulls an unresolved resource calendar reference', () => {
     const { graph, findings } = validateAndRepair(
       fullGraph({
-        calendars: [{ key: 'CAL', name: 'Std', shifts: [], exceptions: [] }],
+        calendars: [
+          { key: 'CAL', name: 'Std', scope: 'PROJECT' as const, shifts: [], exceptions: [] },
+        ],
         resources: [resource('R1', 'LABOUR', 'GHOST')],
       }),
     );
@@ -534,7 +537,9 @@ describe('validateAndRepair — resources + assignments (ADR-0039/0040)', () => 
   it('keeps a resolvable resource calendar', () => {
     const { graph, findings } = validateAndRepair(
       fullGraph({
-        calendars: [{ key: 'CAL', name: 'Std', shifts: [], exceptions: [] }],
+        calendars: [
+          { key: 'CAL', name: 'Std', scope: 'PROJECT' as const, shifts: [], exceptions: [] },
+        ],
         resources: [resource('R1', 'LABOUR', 'CAL')],
       }),
     );

@@ -104,12 +104,30 @@ export const importCalendarExceptionSchema = z
   .strict();
 export type ImportCalendarException = z.infer<typeof importCalendarExceptionSchema>;
 
+/**
+ * The domain `CalendarScope` tiers (ADR-0053 §1): `ORG` = the shared organisation library, `PROJECT` =
+ * local to one project. The mapper decides which tier each imported calendar lands at; the persisting
+ * layer pins a `PROJECT` one to the **target project** of the import. MUST stay in lock-step with the
+ * Prisma `CalendarScope` enum / the `CalendarScope` union in `@repo/types` — the import graph speaks the
+ * domain's vocabulary, and this is the domain's.
+ */
+export const IMPORT_CALENDAR_SCOPES = ['ORG', 'PROJECT'] as const;
+export const importCalendarScopeSchema = z.enum(IMPORT_CALENDAR_SCOPES);
+export type ImportCalendarScope = z.infer<typeof importCalendarScopeSchema>;
+
 /** A working calendar → a SchedulePoint `Calendar` (+ its shifts + exceptions). */
 export const importCalendarSchema = z
   .object({
     /** Stable source-derived import key; `ImportActivity.calendarKey` / `ImportPlan.defaultCalendarKey` resolve to it. */
     key: z.string().min(1),
     name: z.string().min(1),
+    /**
+     * The tier to create this calendar at (ADR-0053 §5). `PROJECT` (the default an import lands at) is
+     * pinned to the import's target project by the persisting layer; `ORG` joins the shared library and
+     * is reserved for calendars an org-global holder must be able to hold — today, a **resource's** own
+     * calendar — plus the explicit `globalCalendarScope: 'ORG'` opt-in for source *global* calendars.
+     */
+    scope: importCalendarScopeSchema,
     shifts: z.array(importCalendarShiftSchema),
     exceptions: z.array(importCalendarExceptionSchema),
   })

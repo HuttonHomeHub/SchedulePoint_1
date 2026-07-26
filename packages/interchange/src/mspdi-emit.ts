@@ -403,6 +403,20 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
 
   // --- Calendars ------------------------------------------------------------------------------------
   const calendarNodes: MspdiNode[] = model.calendars.map(calendarNode);
+  // MSPDI has no P6 `clndr_type` equivalent — `IsBaseCalendar`/`BaseCalendarUID` express calendar
+  // INHERITANCE, not an organisation-vs-project tier — so the tier cannot be written to the file
+  // (ADR-0053 §5). Reported once per file rather than silently flattened: an MSPDI round trip loses
+  // the tier, an XER round trip does not.
+  if (model.calendars.length > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'calendar',
+      sourceRef: null,
+      detail:
+        'the organisation/project calendar tier was not written to the file; re-importing this file creates every calendar in the target project',
+      reason: 'MSPDI carries no calendar tier (no P6 clndr_type equivalent, ADR-0053 §5)',
+    });
+  }
 
   // --- Predecessor links grouped by successor (MSP nests them inside the successor <Task>) -----------
   const linksBySuccessor = new Map<string, CanonicalRelationship[]>();

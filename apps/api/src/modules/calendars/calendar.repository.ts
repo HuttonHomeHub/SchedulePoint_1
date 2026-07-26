@@ -93,6 +93,15 @@ export interface ImportCalendarBatchInput {
   organizationId: string;
   name: string;
   workingWeekdays: number;
+  /**
+   * The tier to create the imported calendar at (ADR-0053 §5). An import defaults to `PROJECT` —
+   * pinned to the import's target project, so a foreign file stops permanently polluting the shared
+   * organisation library — and only lands `ORG` where an org-global holder (a resource) needs it, or
+   * where the caller explicitly opted its global calendars in. Written as a PAIR with `projectId`, so
+   * the columns can never disagree (`ck_calendars_scope_parent` is the DB backstop).
+   */
+  scope: CalendarScope;
+  projectId: string | null;
   createdBy: string;
   updatedBy: string;
   exceptions: readonly {
@@ -192,6 +201,9 @@ export class CalendarRepository {
         organizationId: calendar.organizationId,
         name: calendar.name,
         description: null,
+        // The tier + its owning project, always written together (ADR-0053 §1/§5).
+        scope: calendar.scope,
+        projectId: calendar.projectId,
         createdBy: calendar.createdBy,
         updatedBy: calendar.updatedBy,
       });
@@ -226,6 +238,40 @@ export class CalendarRepository {
     if (windowRows.length > 0) {
       await db.calendarExceptionWindow.createMany({ data: windowRows });
     }
+  }
+
+  /**
+   * The names already TAKEN in one tier, out of a candidate set — the import's name-collision probe
+   * (ADR-0053 §5). A calendar name is unique per tier among non-deleted rows (`uq_calendars_org_name`
+   * for `ORG`, `uq_calendars_project_name` for `PROJECT`), so an import that blindly inserted a name the
+   * tenant already holds would abort the whole commit on a `P2002` it could never resolve. One indexed
+   * `IN` query per tier, never a query per calendar.
+   *
+   * ARCHIVED rows are deliberately included: archiving does NOT free the name (ADR-0053 §4), so an
+   * archived calendar still blocks the insert and must still be disambiguated around. That is also why
+   * calendars have no unarchive-on-match rule — an import never REUSES a calendar (see the service), so
+   * there is nothing to unarchive.
+   */
+  async findTakenNames(
+    params: {
+      organizationId: string;
+      scope: CalendarScope;
+      projectId: string | null;
+      names: readonly string[];
+    },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Set<string>> {
+    if (params.names.length === 0) return new Set();
+    const rows = await db.calendar.findMany({
+      where: this.active({
+        organizationId: params.organizationId,
+        scope: params.scope,
+        projectId: params.projectId,
+        name: { in: [...params.names] },
+      }),
+      select: { name: true },
+    });
+    return new Set(rows.map((row) => row.name));
   }
 
   /** An active calendar scoped to its organisation (anti-IDOR). */

@@ -67,14 +67,16 @@ function standardClndrData(): string {
 
 /**
  * A valid XER with a named calendar (NOT "Standard", to avoid colliding with the org-seeded calendar),
- * two tasks on it, and one FS link — the calendar-bearing happy-path fixture for commit.
+ * two tasks on it, and one FS link — the calendar-bearing happy-path fixture for commit. The project
+ * name is parameterised so two files can be imported into ONE project (plan names are unique per
+ * project) while deliberately sharing a CALENDAR name — the ADR-0053 §5 collision case.
  */
-function xerWithCalendar(): string {
+function xerWithCalendar(projectName = 'Imported'): string {
   return [
     'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
     '%T\tPROJECT',
     '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
-    '%R\tP1\tImported\t2026-01-05 00:00\t2026-01-04 00:00\tC1',
+    `%R\tP1\t${projectName}\t2026-01-05 00:00\t2026-01-04 00:00\tC1`,
     '%T\tCALENDAR',
     '%F\tclndr_id\tclndr_name\tdefault_flag\tday_hr_cnt\tclndr_data',
     `%R\tC1\tSite 6-Day\tY\t8\t${standardClndrData()}`,
@@ -188,10 +190,10 @@ function richXer(): string {
 
 /**
  * A calendar-free resource XER for the resource-reuse re-import: one task with a labour (driving) + a
- * material (non-driving) assignment on two coded resources (CREW-A / MAT-C), no CALENDAR table. Because
- * the M1 commit always creates NEW calendars (there is no calendar resolve-or-create), a calendar-bearing
- * file cannot be re-imported into the same org (its calendar name collides); this fixture isolates the
- * RESOURCE resolve-or-create path so a same-org re-import reuses the two resources by code.
+ * material (non-driving) assignment on two coded resources (CREW-A / MAT-C), no CALENDAR table. The
+ * commit still always CREATES calendars — an import never reuses one (ADR-0053 §5) — it just no longer
+ * collides on the name (a taken name is suffixed + reported); this fixture keeps the RESOURCE
+ * resolve-or-create path isolated from that, so a same-org re-import reuses the two resources by code.
  */
 function resourceOnlyXer(): string {
   const row = (...fields: string[]): string => `%R\t${fields.join('\t')}`;
@@ -211,6 +213,37 @@ function resourceOnlyXer(): string {
     '%F\ttaskrsrc_id\ttask_id\trsrc_id\ttarget_qty\tdriving_flag',
     row('X1', 'T1', 'RA', '40', 'Y'), // labour drives
     row('X2', 'T1', 'RB', '10', 'N'), // material, non-driving
+    '%E',
+  ].join('\n');
+}
+
+/**
+ * A three-calendar XER exercising every `clndr_type` (ADR-0053 §5): a project calendar an activity uses,
+ * a P6 GLOBAL (`CA_Base`) calendar, and a RESOURCE (`CA_Rsrc`) calendar an imported labour resource
+ * holds. The three land at three different places, which is the whole point of the M5 mapping.
+ */
+function tieredCalendarXer(): string {
+  const row = (...fields: string[]): string => `%R\t${fields.join('\t')}`;
+  return [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
+    row('P1', 'Tiered', '2026-01-05 00:00', '2026-01-04 00:00', 'C1'),
+    '%T\tCALENDAR',
+    '%F\tclndr_id\tclndr_name\tclndr_type\tdefault_flag\tday_hr_cnt\tclndr_data',
+    row('C1', 'Site 6-Day', 'CA_Project', 'Y', '8', standardClndrData()),
+    row('C2', 'Enterprise 5-Day', 'CA_Base', 'N', '8', standardClndrData()),
+    row('C3', 'Crew Shift', 'CA_Rsrc', 'N', '8', standardClndrData()),
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    row('T1', 'P1', 'C1', 'A100', 'Mobilise', 'TT_Task', '40'),
+    row('T2', 'P1', 'C2', 'A110', 'Design', 'TT_Task', '40'),
+    '%T\tRSRC',
+    '%F\trsrc_id\trsrc_name\trsrc_short_name\trsrc_type\tclndr_id',
+    row('RA', 'Site Crew', 'CREW-A', 'RT_Labor', 'C3'), // holds the CA_Rsrc calendar
+    '%T\tTASKRSRC',
+    '%F\ttaskrsrc_id\ttask_id\trsrc_id\ttarget_qty\tdriving_flag',
+    row('X1', 'T1', 'RA', '40', 'N'),
     '%E',
   ].join('\n');
 }
@@ -722,5 +755,163 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       }),
     ]);
     expect(secondDriving?.resourceId).toBe(firstDriving?.resourceId);
+  });
+
+  // ---- M5: calendar tiering (ADR-0053 §5, US-9) ---------------------------
+
+  it('creates imported calendars in the TARGET PROJECT, leaving the shared org library untouched', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    // The org library as it stands before the import (the seeded "Standard" calendar).
+    const orgCalendarsBefore = await prisma.calendar.count({
+      where: { organizationId: orgId, scope: 'ORG', deletedAt: null },
+    });
+
+    const planId = (
+      await actor.agent
+        .post(commitUrl(projectId))
+        .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+        .expect(201)
+    ).body.data.planId as string;
+
+    // The headline acceptance criterion: the import added ZERO rows to the shared library …
+    expect(
+      await prisma.calendar.count({
+        where: { organizationId: orgId, scope: 'ORG', deletedAt: null },
+      }),
+    ).toBe(orgCalendarsBefore);
+    // … and its calendar is pinned to the project it was imported into.
+    const imported = await prisma.calendar.findFirstOrThrow({
+      where: { organizationId: orgId, name: 'Site 6-Day', deletedAt: null },
+    });
+    expect(imported.scope).toBe('PROJECT');
+    expect(imported.projectId).toBe(projectId);
+
+    // The plan really uses it (the tier did not break the binding).
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.calendarId).toBe(imported.id);
+  });
+
+  it('maps each clndr_type to its tier: CA_Project/CA_Base → project, a resource’s CA_Rsrc → org', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(tieredCalendarXer(), 'utf8'), 'tiered.xer')
+      .expect(201);
+
+    const byName = new Map(
+      (
+        await prisma.calendar.findMany({
+          where: { organizationId: orgId, deletedAt: null },
+        })
+      ).map((c) => [c.name, c]),
+    );
+    // A project calendar and a global one both land project-local (the safe default) …
+    expect(byName.get('Site 6-Day')).toMatchObject({ scope: 'PROJECT', projectId });
+    expect(byName.get('Enterprise 5-Day')).toMatchObject({ scope: 'PROJECT', projectId });
+    // … and the calendar the imported RESOURCE holds is forced into the shared library, because a
+    // resource is org-global and can hold nothing else (ADR-0053 §2).
+    expect(byName.get('Crew Shift')).toMatchObject({ scope: 'ORG', projectId: null });
+
+    // The resource really holds it — the forcing is what keeps that binding legal.
+    const resource = await prisma.resource.findFirstOrThrow({ where: { code: 'CREW-A' } });
+    expect(resource.calendarId).toBe(byName.get('Crew Shift')?.id);
+
+    // Nothing was silent: both decisions are named in the report.
+    const findings = res.body.data.report.approximations as { detail: string }[];
+    expect(findings.some((f) => /Crew Shift/.test(f.detail) && /organisation/.test(f.detail))).toBe(
+      true,
+    );
+    expect(
+      findings.some((f) => /Enterprise 5-Day/.test(f.detail) && /promote/i.test(f.detail)),
+    ).toBe(true);
+  });
+
+  it('honours globalCalendarScope=ORG: the file’s global calendars join the shared library', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .field('globalCalendarScope', 'ORG')
+      .attach('file', Buffer.from(tieredCalendarXer(), 'utf8'), 'tiered.xer')
+      .expect(201);
+
+    const global = await prisma.calendar.findFirstOrThrow({
+      where: { organizationId: orgId, name: 'Enterprise 5-Day', deletedAt: null },
+    });
+    expect(global).toMatchObject({ scope: 'ORG', projectId: null });
+    // The project calendar is unaffected — the option is about GLOBAL calendars only.
+    const project = await prisma.calendar.findFirstOrThrow({
+      where: { organizationId: orgId, name: 'Site 6-Day', deletedAt: null },
+    });
+    expect(project).toMatchObject({ scope: 'PROJECT', projectId });
+  });
+
+  it('422s an unknown globalCalendarScope value (the option is validated, not trusted)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    await actor.agent
+      .post(commitUrl(projectId))
+      .field('globalCalendarScope', 'PLAN')
+      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .expect(422);
+  });
+
+  it('suffixes (never reuses) a calendar name the project already holds, and reports the rename', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .expect(201);
+
+    // A SECOND file into the SAME project, carrying a calendar of the SAME name (only the source
+    // project name differs, because plan names are unique per project). Before M5 this aborted the
+    // whole commit on the calendar unique; it now succeeds with a disambiguated name.
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithCalendar('Imported Again'), 'utf8'), 'again.xer')
+      .expect(201);
+
+    const calendars = await prisma.calendar.findMany({
+      where: { organizationId: orgId, projectId, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(calendars).toHaveLength(2);
+    expect(calendars[0]?.name).toBe('Site 6-Day');
+    // A second, INDEPENDENT calendar — never a silent reuse of the first (two calendars sharing a
+    // name can have different working weeks, so reuse would silently reschedule the import).
+    expect(calendars[1]?.name).toMatch(/^Site 6-Day \(imported \d{4}-\d{2}-\d{2}\)/);
+    expect(calendars[1]?.id).not.toBe(calendars[0]?.id);
+
+    const repairs = res.body.data.report.repairs as { entity: string; detail: string }[];
+    expect(repairs.some((f) => f.entity === 'calendar' && /was created as/.test(f.detail))).toBe(
+      true,
+    );
+  });
+
+  it('names the coming rename in the DRY-RUN report, so the planner reviews what will happen', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .expect(201);
+
+    const res = await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .expect(200);
+
+    const repairs = res.body.data.repairs as { entity: string; detail: string }[];
+    expect(repairs.some((f) => f.entity === 'calendar' && /was created as/.test(f.detail))).toBe(
+      true,
+    );
+    // A dry run is still stateless — nothing was created by looking.
+    expect(await prisma.plan.count({ where: { projectId } })).toBe(1);
   });
 });

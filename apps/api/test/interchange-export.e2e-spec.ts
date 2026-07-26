@@ -350,7 +350,13 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
       expect(report.mapped).toMatchObject({ activities: 2, wbsSummaries: 2, constraints: 1 });
       expect(report.mapped.resources).toBe(1);
       expect(report.mapped.assignments).toBe(1);
-      expect(report.drops).toEqual([]);
+      // Nothing is silently dropped. The one genuine drop is MSPDI-only: MS Project has no calendar
+      // tier to write (ADR-0053 §5), which the XER path does carry as `clndr_type`.
+      expect(report.drops).toEqual(
+        format === 'mspdi'
+          ? [expect.objectContaining({ kind: 'drop', entity: 'calendar', sourceRef: null })]
+          : [],
+      );
 
       const bytes = res.body as Buffer;
       const reimport = importSchedule({ content: new Uint8Array(bytes), filename: `rt.${format}` });
@@ -390,6 +396,51 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
       const res = await actor.agent.get(exportUrl(planId, format)).expect(422);
       expect(res.body.error?.details?.reason).toBe('EXPORT_UNSUPPORTED_FORMAT');
     }
+  });
+
+  // ---- M5: the calendar tier survives the round trip (ADR-0053 §5) --------
+
+  it('exports the calendar tier and re-imports it into the SAME tier (project stays project)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const planId = await seedPlan(actor, projectId);
+
+    // The seeded plan's calendar is project-scoped (an import never writes the shared library).
+    const source = await prisma.calendar.findFirstOrThrow({
+      where: { organizationId: orgId, name: 'Site 6-Day', deletedAt: null },
+    });
+    expect(source.scope).toBe('PROJECT');
+
+    const res = await actor.agent.get(exportUrl(planId)).responseType('blob').expect(200);
+    const reimport = importSchedule({ content: new Uint8Array(res.body as Buffer) });
+    expect(reimport.ok).toBe(true);
+    if (!reimport.ok) return;
+    // The exported `clndr_type` was read back: the calendar lands project-local again, not in the
+    // receiving organisation's shared library.
+    expect(reimport.graph.calendars.map((c) => c.scope)).toEqual(['PROJECT']);
+  });
+
+  it('exports an ORG calendar as a global one, which a receiving import keeps out of its shared library', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const planId = await seedPlan(actor, projectId);
+
+    // Promote the plan's calendar to the shared organisation library (the M1 promote path).
+    await prisma.calendar.updateMany({
+      where: { organizationId: orgId, name: 'Site 6-Day' },
+      data: { scope: 'ORG', projectId: null },
+    });
+
+    const res = await actor.agent.get(exportUrl(planId)).responseType('blob').expect(200);
+    const bytes = new Uint8Array(res.body as Buffer);
+    // The file states the tier faithfully (`CA_Base`) …
+    expect(new TextDecoder().decode(bytes)).toContain('CA_Base');
+    // … but the RECEIVING tenant decides: by default a foreign global calendar lands project-local,
+    // and only the explicit opt-in puts it in the shared library.
+    const guarded = importSchedule({ content: bytes });
+    expect(guarded.ok && guarded.graph.calendars[0]?.scope).toBe('PROJECT');
+    const optedIn = importSchedule({ content: bytes, globalCalendarScope: 'ORG' });
+    expect(optedIn.ok && optedIn.graph.calendars[0]?.scope).toBe('ORG');
   });
 
   it('401s without a session', async () => {

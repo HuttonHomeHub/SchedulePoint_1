@@ -4,6 +4,7 @@ import type {
   CanonicalActivityType,
   CanonicalAssignment,
   CanonicalCalendar,
+  CanonicalCalendarSourceType,
   CanonicalConstraintType,
   CanonicalModel,
   CanonicalPercentCompleteType,
@@ -91,6 +92,18 @@ const PCT_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalPercentCompleteTyp
   CP_Drtn: 'DURATION',
   CP_Units: 'UNITS',
   CP_Phys: 'PHYSICAL',
+};
+
+/**
+ * P6 `CALENDAR.clndr_type` → the canonical calendar **source type** (ADR-0053 §5). This is the field
+ * that tells us whether a calendar is P6's *global* library, one *project's* own, or a *resource's* —
+ * the only signal in the file about which SchedulePoint tier it belongs in. An absent column (an older
+ * export, or a hand-built fixture) or an unrecognised value falls back to `PROJECT`, the safe tier.
+ */
+const CLNDR_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalCalendarSourceType>> = {
+  CA_Base: 'GLOBAL',
+  CA_Project: 'PROJECT',
+  CA_Rsrc: 'RESOURCE',
 };
 
 /** P6 `rsrc_type` → canonical `ResourceKind` (ADR-0039). Unknown → `LABOUR` + reported. */
@@ -347,10 +360,28 @@ export function adaptXerToCanonical(
     const parsed = parseClndrData(row.get('clndr_data'), clndrId);
     findings.push(...parsed.findings);
 
+    // The P6 tier this calendar came from (ADR-0053 §5). An absent column falls back silently to the
+    // safe `PROJECT` default (nothing was mis-read — the source simply did not say); a value that IS
+    // present but unrecognised is reported, because that one we did not understand.
+    const clndrType = field(row, 'clndr_type');
+    const sourceType =
+      clndrType === undefined ? 'PROJECT' : lookup(CLNDR_TYPE_TO_CANONICAL, clndrType);
+    if (sourceType === undefined) {
+      findings.push({
+        kind: 'approximation',
+        entity: 'calendar',
+        sourceRef: clndrId,
+        detail: `unrecognised calendar type "${clndrType ?? ''}" treated as a project calendar`,
+        reason: 'unmapped P6 clndr_type (ADR-0053 §5)',
+      });
+    }
+    const resolvedSourceType: CanonicalCalendarSourceType = sourceType ?? 'PROJECT';
+
     if (parsed.hasWorkingTime) {
       calendars.push({
         id: clndrId,
         name,
+        sourceType: resolvedSourceType,
         workWeek: parsed.workWeek,
         exceptions: parsed.exceptions,
       });
@@ -359,6 +390,7 @@ export function adaptXerToCanonical(
       calendars.push({
         id: clndrId,
         name,
+        sourceType: resolvedSourceType,
         workWeek: fallbackWorkWeek(hoursPerDay),
         exceptions: parsed.exceptions,
       });
@@ -377,7 +409,7 @@ export function adaptXerToCanonical(
       entity: 'calendar',
       sourceRef: null,
       detail:
-        'P6 calendar attributes beyond weekly work windows + dated exceptions (hours-per-day/-week, calendar type/inheritance) were not imported',
+        'P6 calendar attributes beyond weekly work windows + dated exceptions (hours-per-day/-week, base-calendar inheritance) were not imported',
       reason: 'not expressible in the SchedulePoint calendar model (ADR-0036)',
     });
   }

@@ -346,4 +346,81 @@ describe('exportXer', () => {
     expect(result.error.stage).toBe('limit');
     expect(result.error.code).toBe('TOO_MANY_ACTIVITIES');
   });
+
+  // --- M5: the calendar tier round-trips through `clndr_type` (ADR-0053 §5) -------------------------
+
+  /** The `CALENDAR` row for `clndrId`, as the parser's field → value map. */
+  function calendarRow(bytes: Uint8Array, clndrId: string): ReadonlyMap<string, string> {
+    const parsed = parseXer(bytes);
+    if (!parsed.ok) throw new Error('expected a parseable XER document');
+    const row = parsed.document.tables
+      .get('CALENDAR')
+      ?.rows.find((r) => r.get('clndr_id') === clndrId);
+    if (row === undefined) throw new Error(`no CALENDAR row for ${clndrId}`);
+    return row;
+  }
+
+  /** A tiered three-calendar export graph: one project, one shared, one a resource holds. */
+  function tieredGraph() {
+    const template = buildExportGraph().calendars[0];
+    if (template === undefined) throw new Error('fixture must carry a calendar');
+    return buildExportGraph({
+      calendars: [
+        { ...template, key: 'CAL1', name: 'Site', scope: 'PROJECT' },
+        { ...template, key: 'CAL2', name: 'Shared 5-Day', scope: 'ORG' },
+        { ...template, key: 'CAL3', name: 'Crew Shift', scope: 'ORG' },
+      ],
+      resources: [
+        {
+          key: 'RES1',
+          name: 'Crew',
+          code: 'CR',
+          kind: 'LABOUR',
+          // A resource holds CAL3, so it must emit as a RESOURCE calendar — that is what makes a
+          // re-import put it back in the shared library rather than in the receiving project.
+          calendarKey: 'CAL3',
+          costPerUnit: null,
+          maxUnitsPerHour: null,
+        },
+      ],
+    });
+  }
+
+  it('emits clndr_type from the calendar tier: CA_Project / CA_Base / CA_Rsrc', () => {
+    const result = exportXer({ graph: tieredGraph() });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(calendarRow(result.bytes, 'CAL1').get('clndr_type')).toBe('CA_Project');
+    expect(calendarRow(result.bytes, 'CAL2').get('clndr_type')).toBe('CA_Base');
+    expect(calendarRow(result.bytes, 'CAL3').get('clndr_type')).toBe('CA_Rsrc');
+  });
+
+  it('round-trips every tier when the importer opts global calendars back into the org library', () => {
+    const original = tieredGraph();
+    const exported = exportXer({ graph: original });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+
+    const reimported = importSchedule({
+      content: exported.bytes,
+      globalCalendarScope: 'ORG',
+    });
+    expect(reimported.ok).toBe(true);
+    if (!reimported.ok) return;
+    expect(toComparable(reimported.graph)).toEqual(toComparable(original));
+  });
+
+  it('lands the exported GLOBAL calendar project-local WITHOUT that opt-in — the receiving tenant decides', () => {
+    const exported = exportXer({ graph: tieredGraph() });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+
+    const reimported = importSchedule({ content: exported.bytes });
+    expect(reimported.ok).toBe(true);
+    if (!reimported.ok) return;
+    const scopeByKey = Object.fromEntries(reimported.graph.calendars.map((c) => [c.key, c.scope]));
+    // CAL2 (CA_Base) defers to the default; CAL3 (CA_Rsrc, held by a resource) is still forced to ORG.
+    expect(scopeByKey).toEqual({ CAL1: 'PROJECT', CAL2: 'PROJECT', CAL3: 'ORG' });
+  });
 });

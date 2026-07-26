@@ -1,8 +1,8 @@
 # ADR-0053: Calendar scoping tiers & the resource management layer
 
 - **Status:** Accepted (M1 — §1 the tier, §2 the guard & lifecycle; M3 — §3 the resource
-  hierarchy; M4 — §4 archive, search & the shared combobox). §5 (interchange tiering) accepts
-  with M5 — see the acceptance-status ledger at the foot of this ADR.
+  hierarchy; M4 — §4 archive, search & the shared combobox; M5 — §5 interchange tiering). Every
+  section is now accepted — see the acceptance-status ledger at the foot of this ADR.
 - **Date:** 2026-07-25
 - **Deciders:** Product Owner (scope, CQ-1…CQ-7), Solution Architect, Technical Lead;
   schema / CHECK / indexes / migration safety designed with the **database-architect** agent
@@ -312,11 +312,48 @@ path — not the CPM engine, not the levelling pass (ADR-0041), not the histogra
 (ADR-0044), not Earned Value (ADR-0042), all of which start from `resource_assignments`, which
 archive does not touch.
 
-### 5. Interchange maps the tier _(accepts with M5)_
+### 5. Interchange maps the tier _(Accepted with M5)_
 
 Import creates calendars at **PROJECT** scope pinned to the target project (resource calendars
 at ORG, with a report finding); export emits `clndr_type`. The ADR-0050 mapping-contract table
 is updated in lock-step.
+
+**The decision lives in the pure package**, in one function: `mapCanonicalToImportGraph` resolves each
+calendar's tier and reports it, so the persisting layer only obeys. `CanonicalCalendar` gained a
+`sourceType` (`GLOBAL`/`PROJECT`/`RESOURCE`) — P6's `clndr_type`, which M1 found was **neither read on
+import nor emitted on export** — and `ImportCalendar` gained the domain's own `scope`. Three rules,
+in precedence order:
+
+1. **A calendar an imported resource holds → forced `ORG`**, whatever the source called it. A resource
+   is org-global, so §2's guard hard-rejects a project calendar on one (422
+   `RESOURCE_REQUIRES_ORG_CALENDAR`); a project-scoped resource calendar would fail the commit outright.
+   The commit **re-asserts** this and fails the transaction rather than writing the row (the import must
+   never be the one path that bypasses the tier).
+2. **A source global (`CA_Base`) calendar → `PROJECT`** with a "promote it if you want it shared"
+   finding, unless the caller passes `globalCalendarScope: 'ORG'` (a new optional multipart field on
+   dry-run + commit). A foreign file never writes shared tenant state on its own say-so.
+3. **Everything else → `PROJECT`**, pinned to the target project. An absent `clndr_type` falls back
+   here silently (the source simply did not say); a _present but unrecognised_ value is reported.
+
+**Export** emits `clndr_type` from `scope` **plus** whether a resource holds the calendar
+(`CA_Rsrc` > `CA_Base`/`CA_Project`), so an XER round trip preserves the tier — with one deliberate
+asymmetry: a re-imported `CA_Base` still lands at PROJECT unless the receiving caller opts in. The file
+states the tier faithfully; the _receiving_ tenant decides whether a foreign file may write its library.
+**MSPDI has no equivalent** — `IsBaseCalendar`/`BaseCalendarUID` express calendar _inheritance_, not an
+org-vs-project tier — so MSPDI import is always PROJECT and MSPDI export reports the tier as a **drop**.
+
+**An import never REUSES a calendar.** A name the target tier already holds is created afresh under
+`"<name> (imported YYYY-MM-DD)"` and reported as a `repair`. Matching by name would silently reschedule
+every imported activity onto a calendar with a different working week — the one change an import must
+never make quietly (resources are matched, but a resource carries no working time of its own to
+substitute). The pleasant side effect: importing two files that share a calendar name into one project,
+which the per-tier unique previously aborted with an unresolvable `P2002`, now just works.
+
+That settles **CQ-4 (archived match) for calendars as _not applicable_**, rather than deferring it a
+second time: with no match path there is nothing to unarchive. An archived calendar still holds its
+name (§4 deliberately does not free it), so it is disambiguated around exactly like an active one.
+Should calendar reuse ever be introduced, the resource answer immediately below is the precedent to
+copy — and this paragraph is the seam to revisit.
 
 **CQ-4 (archived match) landed with M4 for resources, and only for resources.** `InterchangeService`
 already resolves-or-creates the org resource library by `code` else `name`, and that match
@@ -327,9 +364,10 @@ resolve. The commit therefore **matches, auto-unarchives in the same transaction
 assignments to an archived resource, contradicting the `RESOURCE_ARCHIVED` rule the same commit
 enforces everywhere else. The unarchive is deliberately **not** version-gated — the importer never
 read a version, and an import must not fail on a concurrent edit to an unrelated library row.
-**Calendars have no matching path today** (import always creates them), so their archived-match
-rule has nothing to attach to; it lands with the tiering work in M5, at the same seam that
-introduces calendar reuse.
+**Calendars have no matching path** (import always creates them) — and M5 **kept it that way** on
+purpose, for the reason given in §5: reuse-by-name would silently reschedule an import. With no
+match path there is no archived-match rule to write, so CQ-4 is answered for calendars as _not
+applicable_, not deferred.
 
 ### 6. The CPM engine is untouched
 
@@ -396,7 +434,7 @@ rows loaded **by calendar id**; it never receives `organization_id`, and it will
 | §6 Engine untouched / parity gate                             | M1        | **Accepted** |
 | §3 Resource hierarchy (`parent_id`, `GROUP`)                  | M3        | **Accepted** |
 | §4 `archived_at` on resources + calendars, search, combobox   | M4        | **Accepted** |
-| §5 Interchange tier mapping                                   | M5        | Proposed     |
+| §5 Interchange tier mapping                                   | M5        | **Accepted** |
 
 ## References
 

@@ -323,11 +323,20 @@ export function adaptMspdiToCanonical(
       findings.push(...parsed.findings);
 
       if (parsed.hasWorkingTime) {
-        calendars.push({ id: uid, name, workWeek: parsed.workWeek, exceptions: parsed.exceptions });
+        calendars.push({
+          id: uid,
+          name,
+          // MSPDI has NO tier discriminator (see the file-level finding below): every MSP calendar
+          // is project-local, so the canonical source type is always PROJECT (ADR-0053 §5).
+          sourceType: 'PROJECT',
+          workWeek: parsed.workWeek,
+          exceptions: parsed.exceptions,
+        });
       } else {
         calendars.push({
           id: uid,
           name,
+          sourceType: 'PROJECT',
           workWeek: fallbackWorkWeek(8),
           exceptions: parsed.exceptions,
         });
@@ -349,6 +358,20 @@ export function adaptMspdiToCanonical(
       detail:
         'MSP calendar attributes beyond weekly work windows + dated exceptions (base-calendar inheritance, recurrence rules) were not imported',
       reason: 'not expressible in the SchedulePoint calendar model (ADR-0036)',
+    });
+    // MSPDI has no equivalent of P6's `clndr_type`: an MSPDI file is ONE project, and its
+    // `<Calendar>` carries only `IsBaseCalendar`/`BaseCalendarUID` — calendar *inheritance*
+    // (which calendar this one derives from), not an organisation-vs-project TIER. So every MSP
+    // calendar imports project-local, which is also the safe default. Reported once per file, not
+    // per calendar, because it is a property of the format rather than of any one row.
+    findings.push({
+      kind: 'approximation',
+      entity: 'calendar',
+      sourceRef: null,
+      detail:
+        'every calendar was created in this project (project scope); promote any you want shared to the organisation library',
+      reason:
+        'MSPDI carries no organisation-vs-project calendar tier (no P6 clndr_type equivalent, ADR-0053 §5)',
     });
   }
 

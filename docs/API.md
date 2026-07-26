@@ -315,10 +315,10 @@ contract) **without writing anything**, then a separate **commit** creates the p
 Contributor); the authoritative org-scope check is on the **target project** (anti-IDOR). Uploads are
 multipart with a **byte cap enforced at the boundary** (→ 413 before the file is fully buffered).
 
-| Method | Path                                        | Notes                                                                                                                                                                                     |
-| ------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. 422 unrecognised/malformed/no file · 413 oversize. `interchange:import`.                          |
-| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413. |
+| Method | Path                                        | Notes                                                                                                                                                                                                                                                      |
+| ------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. Optional form field `globalCalendarScope=PROJECT\|ORG` (default `PROJECT`). 422 unrecognised/malformed/no file or bad option · 413 oversize. `interchange:import`. |
+| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. Same optional `globalCalendarScope` field. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413.                       |
 
 The dry-run is **read-only** (returns `200`, not `201` — no resource is created). A parseable file returns
 its report **even when it needed repairs** (dangling edge dropped, duplicate `(pred,succ,type)`
@@ -338,6 +338,19 @@ dependency — the whole transaction rolls back), or a recalculation failure (co
 created**. Same authz (`interchange:import`), org-scope (anti-IDOR) and byte cap (→ 413) as the dry-run.
 Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays);
 activities are laid out on a deterministic lane per source order.
+
+**Imported calendars land in the target project, not the shared library** (ADR-0053 §5). An import
+creates each calendar at **`PROJECT`** scope pinned to the target project — so a fresh import adds
+**zero rows** to the organisation library and its calendars are deleted with the project. Two
+exceptions, both **named in the report**: a calendar an imported **resource** holds is forced to
+**`ORG`** (a resource is organisation-global and can hold nothing else), and a source **global**
+calendar (P6 `clndr_type = CA_Base`) is created at `ORG` when the caller sends
+`globalCalendarScope=ORG` — otherwise it lands in the project with a "promote it if others need it"
+finding. A calendar name the target tier already holds is created afresh as
+`"<name> (imported YYYY-MM-DD)"` and reported as a repair — **never silently reused**, because two
+calendars sharing a name can have different working weeks. **Export** emits `clndr_type` from the
+stored tier, so an XER export→import round trip preserves it; MSPDI has no equivalent field and
+reports the tier as a drop.
 
 ### Calendar scope tiers (ADR-0053)
 

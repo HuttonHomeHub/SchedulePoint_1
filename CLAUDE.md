@@ -510,7 +510,7 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   start-edge resize + lag drag → **M4/M5** the bar/link **visual refresh** (token-resolved, inside
   the Canvas-2D ≤ 4 ms p95 @ 2,000 budget) — all landed. Builds on
   ADR-0021/0022/0023/0028/0036/0048.
-- **ADR-0053** _(Accepted for M1: §1–§2 + §6; **M3: §3**; **M4: §4**; §5 accepts with M5 — the
+- **ADR-0053** _(Accepted: M1 §1–§2 + §6; **M3: §3**; **M4: §4**; **M5: §5** — the
   library-scoping epic, web behind `VITE_LIBRARY_SCOPING`)_ — Calendar scoping tiers & the resource
   management layer: give calendars P6's missing **project tier** — a `CalendarScope { ORG, PROJECT }`
   discriminator + a nullable `calendars.project_id` (FK RESTRICT) pinned together by a **fail-closed**
@@ -550,8 +550,20 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   hand-rolled APG `Combobox`** (`components/ui/combobox.tsx`, the `menu.tsx` precedent) replacing the raw
   `<Select>` pickers — controlled server search, grouped/annotated options, `aria-activedescendant`,
   announced result counts, and the "render the current value even when outside the filtered page" rule
-  generalised. Interchange (CQ-4) **matches + auto-unarchives + reports a finding** for resources; the
-  calendar half waits for M5's matching seam.
+  generalised. Interchange (CQ-4) **matches + auto-unarchives + reports a finding** for resources; for calendars
+  M5 answered it **not applicable** (an import never reuses a calendar, so there is nothing to match).
+  **M5 (§5) makes interchange respect the tier:** the pure mapper (`@repo/interchange`) decides each
+  imported calendar's tier and **reports every decision** — a calendar an imported **resource** holds
+  is **forced `ORG`** (a resource is org-global; the commit re-asserts it and fails the transaction
+  otherwise), a source **global** (`CA_Base`) calendar lands `PROJECT` with a "promote it" finding
+  unless the new optional `globalCalendarScope: 'ORG'` upload field opts in, and everything else lands
+  `PROJECT` **pinned to the target project** — so a fresh import adds **zero rows to the org library**.
+  P6's `clndr_type` (previously neither read nor emitted) now round-trips: read on import to drive the
+  tier, emitted on export from `scope` + resource-reference. **MSPDI has no equivalent** (`IsBaseCalendar`
+  is inheritance, not a tier) — import is always `PROJECT`, export reports the tier as a **drop**. A name
+  the target tier already holds is **suffixed + reported, never reused** (two calendars sharing a name can
+  have different working weeks), which also fixes importing two files with a shared calendar name into one
+  project. The ADR-0050 mapping-contract table is updated in lock-step; the CPM engine is untouched.
   **M2 (landed)** gives §1–§2 their **web surface** behind `VITE_LIBRARY_SCOPING` (default off): a `Scope`
   badge column + an Organisation/Project/All filter on the calendar library; a **Calendars section on the
   project-detail screen** (the project's only detail surface — no separate settings route) reading
