@@ -1,5 +1,113 @@
 # @repo/web
 
+## 0.49.0
+
+### Minor Changes
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): the calendar scope tier in the UI — project calendars, tier-aware pickers (ADR-0053, M2, behind `VITE_LIBRARY_SCOPING`)
+
+  The organisation/project calendar split that shipped dark in M1 gets its web surface, behind the new
+  compile-time flag `VITE_LIBRARY_SCOPING` (off by default). With it on:
+
+  - **Calendar library** — each row shows a `Scope` badge (Organisation, or `Project: <name>`), and an
+    Organisation · Project · All filter reads the API's `?scope=` list.
+  - **Project → Calendars** — a project's detail screen gains a Calendars section listing what that
+    project's plans can actually be scheduled on (its own calendars plus every organisation one),
+    with a "New calendar" that defaults to the project.
+  - **Creating** a calendar gains a scope choice. The shared organisation library additionally
+    requires `calendar:manage_org`; without it the option is disabled with a plain explanation
+    instead of silently missing.
+  - **Moving tiers** — promote a project calendar into the shared library, or narrow a shared one to a
+    project. A narrowing the server refuses now reads as, e.g., "Still used by 2 plans and 3
+    activities outside it — reassign them to another calendar first", not a bare error code.
+  - **Pickers** — the plan and per-activity calendar pickers offer the project's own calendars
+    alongside the organisation's, grouped and labelled by tier. The resource picker stays
+    organisation-only and says so, because the resource pool is shared across every project.
+
+  Frontend only: every endpoint, permission and error code behind it shipped with M1, and the CPM
+  engine is untouched. With the flag off every touched screen renders exactly as before and every
+  calendar list requests the same URL it always did.
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): flip `VITE_LIBRARY_SCOPING` on by default — calendar project tier, resource hierarchy, archive and search go live (ADR-0053, M6)
+
+  The library-scoping epic's web surface is now **on by default**. Everything below shipped dark
+  across M1–M5 and was reachable only by setting the flag; from this release it is what planners see:
+
+  - **Calendars have a project tier.** A calendar belongs either to the shared organisation library or
+    to one project. The library screen shows each row's tier and filters by it; a project's detail
+    screen lists exactly what its plans can be scheduled on; creating a calendar from a project
+    defaults to that project; and a calendar can be promoted to the shared library or narrowed to a
+    project (a narrowing that would strand other work is refused with the counts that explain why).
+    Plan and activity pickers group their options by tier, so a picker can never offer a calendar the
+    server would reject. The resource picker stays organisation-only, because the resource pool is
+    shared across every project.
+  - **Resources nest.** A non-assignable `Group` kind plus a parent picker turn the flat pool into a
+    browsable tree, without fragmenting the single shared pool that cross-plan over-allocation and
+    levelling depend on.
+  - **Both libraries can be archived and searched.** Archiving retires a calendar or resource from the
+    pickers **without touching anything already using it** — every existing plan, activity and
+    assignment keeps scheduling exactly as before. That distinction is stated on screen next to every
+    archive control, badged on every archived row, and reversible from the same place. Search and the
+    filters are server-side and now live in the URL, so a filtered view survives a reload and can be
+    shared as a link.
+  - **Every picker pages properly.** The shared searched combobox replaces the raw dropdowns, closing
+    the defect where a library of more than 20 rows was silently truncated in every picker. "Load
+    more" is reachable by keyboard as well as pointer.
+  - **Imports no longer pollute the shared library.** A `.xer`/`.xml` import tiers its calendars to the
+    target project by default; an Org-Admin-level importer can opt the file's global calendars into
+    the shared library from a checkbox in the import review dialog, which re-runs the dry-run so the
+    report always describes the import being confirmed.
+
+  Frontend only — no API, schema or CPM-engine change, so the schedule-recalculation parity gate is
+  untouched. Set `VITE_LIBRARY_SCOPING=false` for a byte-for-byte rollback to the previous surface.
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): nested resource library with groups (ADR-0053 §3, M3 — behind `VITE_LIBRARY_SCOPING`)
+
+  The web surface for the resource hierarchy, behind the existing `VITE_LIBRARY_SCOPING` flag
+  (**off by default**). With it on:
+
+  - the **resources library** lists rows in tree order — a group is followed by its own contents,
+    indented — with a `Group` column naming each row's parent and a **Not assignable** badge on
+    every group, so the constraint is readable rather than implied;
+  - a group shows **Not scheduled** in the Calendar column, distinct from the "—" that means
+    "inherits the plan calendar";
+  - the **resource form** offers `Group` as a kind and a **parent group picker** (indented by depth)
+    that never offers a resource its own contents as a parent; choosing `Group` hides the calendar,
+    capacity and cost fields, and those values are never sent for a group;
+  - deleting a group that still contains assigned resources explains **how many are assigned inside
+    it**, rather than the misleading "this resource is assigned".
+
+  Groups are excluded from the **assign-a-resource** picker regardless of the flag — the API rejects
+  a group assignment, so offering one could only ever produce an error.
+
+  With the flag off, the library renders exactly as before: flat, in the server's order, with no
+  group column, badge, kind option or parent picker.
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(web): a shared searchable picker, plus library search and archive (ADR-0053, M4)
+
+  A new shared **combobox** replaces the plain dropdowns used to pick a calendar, a resource or a
+  resource group. It searches the server as you type, pages the rest in on demand, groups options by
+  tier, and annotates them ("Project", "Archived") — so choosing from a library of hundreds is
+  typing, not scrolling.
+
+  - Full keyboard operation and screen-reader support (WAI-ARIA combobox pattern): arrows, Home/End,
+    Enter, Escape, an announced result count, and disabled options that stay discoverable without
+    being selectable.
+  - The current selection is always shown, even when a search or filter has hidden it — a picker can
+    never silently blank out what you already chose, and an archived selection keeps its badge.
+  - The calendar and resource libraries gain a search box, a "Show archived" toggle, a kind filter,
+    and Archive / Unarchive row actions with wording that makes clear an archived row still
+    schedules — it is retired from the pickers, not deleted.
+
+  All of it sits behind `VITE_LIBRARY_SCOPING`, which remains off by default: with the flag off the
+  screens and pickers behave exactly as before.
+
+### Patch Changes
+
+- Updated dependencies [[`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e), [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e), [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e), [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e)]:
+  - @repo/types@0.17.0
+  - @repo/interchange@0.5.0
+
 ## 0.48.1
 
 ### Patch Changes

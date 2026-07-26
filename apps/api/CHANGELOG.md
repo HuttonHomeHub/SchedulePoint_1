@@ -1,5 +1,117 @@
 # @repo/api
 
+## 0.28.0
+
+### Minor Changes
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(api): give calendars a project scope tier (ADR-0053, M1 — backend only, no user-visible change yet)
+
+  A calendar now belongs to one of two tiers: `ORG` (the shared organisation library — what every
+  calendar was before, and still the default) or `PROJECT` (local to one project), so a one-off
+  shutdown calendar no longer permanently pollutes the library every other project picks from.
+
+  - `POST/PATCH …/calendars` accept `scope` + `projectId`; every calendar response carries them.
+  - `GET …/calendars?scope=org|project|all` (default `org`, today's result set) and a new
+    `GET …/projects/:projectId/calendars` returning the calendars usable in a project (its own
+    plus all organisation ones).
+  - A calendar can be promoted to the shared library at any time; narrowing it to one project is
+    refused with 409 `CALENDAR_SCOPE_NARROWING_BLOCKED` while anything outside that project still
+    uses it.
+  - Assigning a project calendar outside its project is refused with 422 `CALENDAR_WRONG_SCOPE`
+    (a resource may only hold an organisation-wide calendar: 422 `RESOURCE_REQUIRES_ORG_CALENDAR`).
+  - Deleting a project now soft-deletes its project calendars with it, and restoring brings them
+    back; shared calendars are never touched.
+  - New `calendar:manage_org` permission gates writes to the shared library, granted to Planner and
+    Org Admin — no role loses a capability.
+
+  Existing data is entirely unaffected: every existing calendar is `ORG`-scoped and behaves exactly
+  as before. The CPM engine is untouched and recalculation output is unchanged.
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(interchange): import calendars into the target project instead of the shared library (ADR-0053, M5)
+
+  Importing a P6 or MS Project file used to create every one of its calendars in the shared
+  **organisation** library, so importing three files could silently add a dozen `Standard 5 Day`
+  calendars that every other project then had to scroll past. An import now creates its calendars **in
+  the project you imported into**, where they belong — and where they are deleted with it.
+
+  - A fresh import adds **zero rows** to the organisation calendar library.
+  - A calendar an imported **resource** uses is still created organisation-wide (a resource can only
+    hold an organisation calendar), and the report says so.
+  - A file's **global** calendars land in the project with a "promote it to the library if other
+    projects need it" note — or in the shared library outright if you send the new optional
+    `globalCalendarScope=ORG` field with the upload.
+  - P6's calendar type (`clndr_type`) is now **read on import and written on export**, so exporting a
+    plan and importing it again preserves each calendar's tier. MS Project's format has no equivalent
+    field, so an MSPDI export reports the tier as dropped rather than losing it silently.
+  - A calendar name the project (or library) already holds is imported as
+    `"Site 6-Day (imported 2026-07-26)"` and reported — never silently merged into the existing one,
+    because two calendars sharing a name can have completely different working weeks. This also fixes
+    importing two files that share a calendar name into the same project, which previously failed.
+
+  Every decision above appears in the interchange report you review on the dry-run, so nothing about
+  where a calendar went is a surprise. The CPM engine is untouched and recalculation output is
+  unchanged.
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(api): archive, search and filter the calendar & resource libraries (ADR-0053, M4)
+
+  Both shared libraries gain a **retire** action that is not a delete, and server-side search so a
+  library stays usable past a page of rows.
+
+  - **Archive / unarchive** — `POST …/calendars/:id/archive` · `…/unarchive` and
+    `POST …/resources/:id/archive` · `…/unarchive` (204, version-gated). An archived calendar or
+    resource is still entirely valid: it keeps every existing plan, activity, resource and
+    assignment binding, and **keeps scheduling, levelling, loading the histogram and earning value
+    exactly as before**. It is simply hidden from the libraries' default lists and from every
+    picker.
+  - **Archiving is deliberately not blocked by use** — that is the whole point, and the contrast
+    with delete. It is the only way to retire a calendar that "this calendar is in use" (correctly)
+    refuses to delete, and a resource can be retired while it still drives a live activity.
+  - **Only new usages are refused** — assigning an archived resource to an activity is 422
+    `RESOURCE_ARCHIVED`, and binding an archived calendar to a plan, activity or resource is 422
+    `CALENDAR_ARCHIVED`. Editing an **existing** assignment still succeeds, and something already
+    bound to a calendar that was archived afterwards stays fully editable.
+  - **Search and filter** — `?q=` on both list endpoints (calendars by name; resources by name or
+    code, case-insensitive), plus `?archived=exclude|include|only` on both and `?kind=` on
+    resources, all cursor-paginated and combinable with the existing `scope` / `parentId` filters.
+  - **Import matching** — an import that matches an archived resource now unarchives it and says so
+    in the report, instead of silently creating assignments to a retired row.
+
+  Every list default reproduces today's result set, `archivedAt` is an additive response field, and
+  an archived row keeps its name and code so unarchiving can never fail. The CPM engine is untouched
+  and recalculation output is unchanged.
+
+- [#156](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/156) [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat(api): organise the resource library into groups (ADR-0053 §3, M3)
+
+  A resource pool of hundreds is now navigable. Resources can be nested under **groups**, without
+  fragmenting the pool itself — it stays a single organisation-wide pool, which is what makes
+  cross-plan over-allocation detection and resource levelling meaningful.
+
+  - A new resource kind, **`GROUP`**, is a grouping node rather than a resource: it has no calendar,
+    no capacity ceiling and no cost rate, and it can never be assigned to an activity (422
+    `GROUP_NOT_ASSIGNABLE`).
+  - Every resource carries a `parentId` (null = top level), settable on create and update.
+    `GET …/resources?parentId=<id>` lists a group's contents and `?parentId=null` the top level;
+    omitting it returns the whole library exactly as before.
+  - Moves are validated server-side: a group can't contain itself (409 `RESOURCE_PARENT_CYCLE`),
+    only a group can contain resources (422 `RESOURCE_PARENT_NOT_GROUP`), a parent in another
+    organisation is simply not found, and nesting stops at 10 levels (422 `RESOURCE_TREE_TOO_DEEP`).
+    Two people re-organising at once can't combine their moves into a loop.
+  - Deleting a group deletes its whole contents together, unless something inside it is still
+    assigned — in which case it is refused with the count of assigned resources in the group.
+  - An assigned resource can't be turned into a group, and a group that still holds resources can't
+    be turned back into one.
+
+  Existing data is entirely unaffected: every existing resource is top-level and no resource is a
+  group. The CPM engine, the levelling pass, the resource histogram and Earned Value are untouched
+  and all read the same inputs as before — a group has no assignments, so it cannot appear in demand,
+  capacity or cost. Recalculation output is byte-identical.
+
+### Patch Changes
+
+- Updated dependencies [[`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e), [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e), [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e), [`f2de423`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2de42312711bf94864983a43bc96d06285f150e)]:
+  - @repo/types@0.17.0
+  - @repo/interchange@0.5.0
+
 ## 0.27.0
 
 ### Minor Changes
