@@ -779,6 +779,6 @@ export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRAR
  * `VITE_CANVAS_LIVE_FEEDBACK=false` for a byte-for-byte rollback to the ADR-0052 surface (the
  * flag-off parity suites).
  */
-export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOff(
+export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_LIVE_FEEDBACK,
 );

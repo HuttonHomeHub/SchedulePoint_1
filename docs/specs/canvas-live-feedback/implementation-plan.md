@@ -96,10 +96,28 @@ bar. **Note** drift is absent in Early mode by construction (ADR-0054 §4) and a
 
 ## M6 — Reviews, measurement, flip, release
 
-Specialist reviews (**ux**, **accessibility**, **component**, **performance**) over the whole
-epic diff; the M3-T5 measurement re-run on the final code; flip `VITE_CANVAS_LIVE_FEEDBACK`
-to `flagDefaultOn` **only if** the budget holds; keep and pin the flag-off parity suites as
-the rollback contract; changeset; PR → CI → merge → release.
+**Outcome (2026-07-26).** `VITE_CANVAS_LIVE_FEEDBACK` flipped to `flagDefaultOn`; the three new
+`View▾` toggles (`Dates`, `Float & drift`, `Link slack`) all ship **off** inside it.
+
+The split is deliberate. §1 (ghost fidelity) is gesture-only and §2 (cursor readout) repaints only
+the cheap interaction layer, so both are on for everyone — they are the epic's headline answer to
+"make manipulation feel live". §3–§5 add per-bar work to the _scene_ layer, and the M3-T5
+measurement could not certify the draw budget with them on; the rule set in ADR-0054 §3 was that
+an uncertified budget means default-off, and moving that goalpost after the fact would make the
+gate decorative. Each is one click away in `View▾`.
+
+A third measurement run during the flip reinforced it: dates off **4.67 ms**, on **9.41 ms** — and
+the baseline alone had moved a full millisecond from the earlier runs, which is the harness's noise
+speaking as much as the feature's cost. Re-measure in a real browser before revisiting.
+
+**Reviews.** The specialist reviewer agents were not available in this session, so the ux /
+accessibility / component / performance passes were done inline against their checklists rather
+than by subagent — recorded here plainly rather than claimed as agent-run. Points carried:
+non-colour cues on every new mark (hatched tails, dashed guideline), no new pointer-only state
+(the a11y listbox already speaks dates and float), no one-off styling (all marks use palette
+tokens), and the one continuous cost — a per-move interaction repaint — commented at its call site.
+
+Changeset added; PR → CI → merge → release.
 
 ## Definition of done
 

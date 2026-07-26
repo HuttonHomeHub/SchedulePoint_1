@@ -1,7 +1,9 @@
 # ADR-0054: Canvas live feedback & GPM float/drift visualisation
 
-- **Status:** Accepted (M1–M5 to land behind `VITE_CANVAS_LIVE_FEEDBACK`, default off;
-  M6 flips it)
+- **Status:** Accepted — M1–M5 landed; `VITE_CANVAS_LIVE_FEEDBACK` flipped **default ON**
+  (2026-07-26). The §1 ghost fidelity and §2 cursor readout are live for everyone; the §3 `Dates`,
+  §4 `Float & drift` and §5 `Link slack` **view toggles ship OFF** on the M3-T5 measurement
+  (see §3). `VITE_CANVAS_LIVE_FEEDBACK=false` remains the byte-for-byte rollback.
 - **Date:** 2026-07-26
 - **Deciders:** Frontend architecture, UX, Product
 - **Related:** ADR-0022 (CPM execution — the engine stays server-owned), ADR-0023 (date
