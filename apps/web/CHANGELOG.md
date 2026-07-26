@@ -1,5 +1,201 @@
 # @repo/web
 
+## 0.52.0
+
+### Minor Changes
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the **designed chrome band** behind `VITE_DESIGNED_CHROME` (default off, ADR-0055 S2).
+
+  With the flag on, the header row and — when a plan is open — its two toolbar rows render as one
+  full-bleed band across the top of the app, with the Project Explorer and the workspace below it.
+  The band is navy in Corporate and neutral in Light/Dark, and its height follows its content: one
+  row on a list screen, three on a plan.
+
+  The toolbar reaches the band through a **portal**, so only its DOM node moves. In the React tree
+  it stays exactly where it was, which is what keeps `usePlanWorkspaceModel`, `useTsldToolbarContext`
+  and every ADR-0031 registry predicate untouched — and keeps the shell ignorant of plans (ADR-0029).
+
+  Two shipped keyboard contracts had to be made portal-safe **first**, because both would have
+  broken silently: the `?` shortcuts sheet and the ADR-0048 undo/redo accelerators were native
+  `keydown` listeners on the workspace root, and a native listener follows the DOM tree. They are now
+  one React `onKeyDown` (`usePlanWorkspaceKeyScope`), which follows the React tree and therefore
+  crosses the portal by construction. Every binding is regression-tested from a portalled control.
+
+  The flag also stamps `data-designed-chrome` on `<html>`, which activates the flagged token layer —
+  so the rollback is byte-for-byte for colour as well as structure. `VITE_DESIGNED_CHROME=false`
+  renders today's shell exactly: header as its own measure-capped chrome surface, no band, no slot,
+  and `ChromePortal` an identity wrapper. Pinned by a flag-off parity suite that is kept, not
+  weakened, when the flag flips.
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The designed chrome band and the canvas visual language are now on by default
+
+  `VITE_DESIGNED_CHROME` and `VITE_CANVAS_VISUAL_LANGUAGE` flip default-on (ADR-0055 S5-T4). The
+  shell becomes one full-bleed chrome band — header row and, on a plan, the toolbar rows as a single
+  surface — with the Project Explorer and the workspace below it, and the TSLD diagram sits on a
+  ground of its own with alternating month bands, so a planner can count months without reading a
+  label.
+
+  The flip surfaced one real defect that only exists once the toolbar actually moves: closing the
+  plan-notes dock looked its Comments button up **inside the workspace root**, which the portal had
+  just moved the toolbar out of, so focus was stranded instead of returning (WCAG 2.4.3). Fixed, and
+  the test that caught it now runs against the shipped default rather than the old one.
+
+  Both flags remain a byte-for-byte rollback — set either to `false`. The flag-off parity suites are
+  kept and pinned rather than weakened, and the flag-off Playwright suite now sets the flags
+  explicitly instead of relying on the default that just changed: it is the rollback side of the
+  contract, and its flag-on sibling covers what ships.
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Give the TSLD diagram a **ground of its own with alternating month bands**, behind
+  `VITE_CANVAS_VISUAL_LANGUAGE` (default off, ADR-0055 S4).
+
+  A time-scaled diagram exists to make time legible, and counting months by reading labels is work
+  the surface should be doing. Banded ground makes it free. Three decisions worth knowing:
+
+  - **Banding is ground, not a gridline**, so it deliberately does not follow the `Month grid`
+    toggle — that toggle governs a line, this governs a surface.
+  - **Parity is the absolute month ordinal**, not a running count of crossed boundaries, so the
+    stripes cannot invert when the viewport pans.
+  - **The band is opaque**, not an alpha wash: an alpha band would tint whatever it overlaps and
+    would have to be re-checked against every layer above it.
+
+  The canvas now reads `--canvas` / `--canvas-band` rather than borrowing `--card`, and the lag
+  handle's halo follows that ground — it is the theme-inverse of the handle's core, so it must track
+  the surface it is meant to match rather than silently drifting from it. Both tokens are valued
+  identically to `--card` in every theme block, so the re-point is a **no-op** until the flagged
+  cream values apply.
+
+  The month/year boundary walk is now computed **once per frame** and shared by the bands and the
+  gridlines. Two walks could disagree by a day; one cannot.
+
+  Cost is pinned by a new counting-stub gate (`paint.band-budget.test.ts`) at 2,000 activities, at
+  day zoom **and** at year zoom over a multi-year span — the case a naive per-day loop would blow up
+  on: at most `visibleMonths + 1` extra `fillRect`, and not one glyph of text. Flag-off the scene
+  carries no `monthBands` at all, so the band layer is skipped entirely and the frame is
+  byte-for-byte today's paint.
+
+  Not in this slice, and deferred deliberately rather than rushed into the hot path: the tiered
+  ruler redesign and the TODAY chip.
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Light and Dark get their own designed chrome (behind `VITE_DESIGNED_CHROME`)
+
+  The last theme values of the designed-UI epic, and deliberately the last: flipping structure and
+  values in one change makes every flag-off parity suite meaningless on the day it is most needed.
+
+  Light's band steps a shade off the page rather than being the page with a line under it, and its
+  rail sits between the two — so band, rail and content read as a hierarchy. Dark goes the other
+  way, because a dark theme has no "lighter than white" to reach for: a near-black band with the
+  content lifted off it. Dark's field is a **raised dark**, not white — a white field on a
+  near-black band is a glare source at night, which is the condition the theme exists for.
+
+  The global flag layer and the `.dark`/`.corporate` blocks have equal specificity and all match
+  `<html>`, so the global layer wins over a theme block by source order. Every theme-scoped layer
+  therefore restates the global list in full, including values it does not change — pinned by
+  `token-architecture.test.ts`, because a forgotten token would silently paint Light's grey on a
+  dark theme and look like a colour choice rather than a bug.
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Split `--input` from `--border` so a control's outline is visible (WCAG 1.4.11)
+
+  `--input` shared `--border`'s value, and because `--field` is deliberately identical to the
+  surface it sits on, a text field's outline — the only thing indicating a field is there — sat at
+  **1.26:1** in every theme, on every surface. It is now its own per-surface token held at ≥ 3:1 by
+  the contrast suite, which previously reported the border ratio without asserting it and so never
+  looked at this one. Reach for `border-input` on anything whose edge identifies a control;
+  `border-border` is for dividers.
+
+  Two further computed defects fixed in the same pass: `bg-muted text-muted-foreground` inside the
+  Corporate chrome resolved to a light grey on a light grey (**1.81:1**), because the surface
+  families carried `-muted-foreground` with no `-muted` fill of their own — `-muted` now joins the
+  family. Corporate's solid warning fill carried a white label at **3.61:1**, and the light
+  secondary grey missed 4.5:1 against `--muted`; both values were corrected.
+
+  The theme options in the account menu are now a named `role="group"`, so the visible "Theme"
+  heading relates to them programmatically and not only by proximity (WCAG 1.3.1).
+
+### Patch Changes
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Extract the redesign's repeated patterns into shared primitives before any surface consumes
+  them, so "no one-off styling" survives the rest of the epic (ADR-0055, S1).
+
+  - `SegmentedControl` — the APG `radiogroup` lifted out of the workspace view toggle (roving
+    tabindex, Arrow/Home/End, focus follows selection). Its caller keeps its exact behaviour.
+  - `ToggleChip` — an `aria-pressed` button for independent booleans, with the segmented-vs-chip
+    rule written down: a radiogroup means "one of a set", a pressed button means "this is on",
+    and using one for the other misdescribes the control even when it looks right.
+  - `CheckboxField` gains `density="compact"` for inline rows. Density is spacing only — the
+    ≥24px hit target and the label association are unchanged and pinned by test.
+  - The Add control gains the split-button _look_ (a caret divider). Deliberately not a real
+    split button: two focusable halves inside one toolbar item would re-open the roving-tabindex
+    gate ADR-0031 closed. A test pins the single stop.
+  - `BrandMark` and `AccountChip` replace the header's product name, theme-cycling button,
+    always-visible email and `outline` Sign-out button. Two Corporate contrast defects are fixed
+    by deletion: the low-contrast email and the invisible Sign-out button no longer exist on the
+    band — they live in a portalled menu that paints on the page's own colours. The theme becomes
+    a radio group rather than a cycle, which is the first time the picker shows what the other
+    options are.
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Docs: accept ADR-0055 and close the designed-UI epic's paper trail
+
+  ADR-0055 moves to Accepted with the flip recorded. The ADR index had drifted badly — 0030–0037,
+  0046–0048 and 0054 were never added — so it is filled in and re-sorted, and CLAUDE.md §16 gains
+  0054 and 0055.
+
+  `FRONTEND_QUALITY.md` gains the flag-on e2e suite alongside the flag-off one and a third habit
+  next to the two it already listed: a reported ratio is **recomputed, not quoted**, and the
+  decorative-border exemption covers `--border` only — never `--input`, which is how a 1.26:1 field
+  outline survived in every theme.
+
+  `TECH_DEBT.md` [#59](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/59) records what the epic did not establish: every draw measurement this project
+  has made was on a headless cloud runner, not ADR-0026 §16's device envelope, so the ≤ 4 ms budget
+  is a design target rather than a verified property.
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix the Corporate theme's colour-contrast defects structurally, by giving the token
+  vocabulary a notion of **surface** (ADR-0055 §1–§2, S0).
+
+  Corporate paints a navy chrome around a light page, so a single `--muted-foreground` cannot
+  be right in both places. Each theme now declares a complete 15-token family per surface
+  (`chrome`, `panel`), and a new `<Surface>` primitive rebinds the ordinary semantic names
+  inside a region — so the header and rail keep every class they had and simply start
+  resolving colours that were validated against the fill they sit on. Six defects are fixed
+  without touching the components that carried them: nav links at rest, on hover and on the
+  current page; the account area; the rail's secondary text; and the tree rows.
+
+  Also fixed, both found by the new gates rather than by eye:
+
+  - The `outline` button variant specified a fill and inherited its ink — invisible on navy.
+  - Placeholder text used the surface's grey rather than the field's, so a placeholder in a
+    white input on navy chrome was 2:1. Fields now have their own `--field-muted-foreground`.
+  - Corporate's primary action on the page is the brand navy; amber (1.9:1 against the
+    off-white page) stays where it is legible — the navy chrome, the focus ring there, the
+    row wash and the charts.
+
+  New gates so this class of defect fails the build rather than reaching a user: a computed
+  contrast matrix over 3 themes × 3 surfaces, structural pins on the token architecture and
+  the surface seam, an ESLint rule against raw colour literals in markup, and a Playwright
+  suite that runs axe over **all four** theme options instead of only the default.
+
+  Light and Dark are unchanged.
+
+- [#166](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/166) [`d9f4291`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9f42919ffb427734f610168d4a6bfc4ce4cd0d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Corporate's Project Explorer becomes a **light working surface** behind `VITE_DESIGNED_CHROME`
+  (ADR-0055 S3).
+
+  One dark band across the top and two light surfaces below it reads as a designed application;
+  three competing dark/light regions does not. The values live in a `[data-designed-chrome].corporate`
+  layer, so flag-off the rail is navy again with no code path involved — the rollback stays
+  byte-for-byte for colour. Light and Dark are untouched here.
+
+  The rail's boundary against the page is 1.09:1, which is deliberately a preference rather than a
+  WCAG rule (1.4.11 exempts a decorative surface edge) — so the contrast suite reports it instead of
+  gating it, and the rail keeps a real border rather than relying on the fill difference.
+
+  Two rail refinements ride along, both token-only and geometry-safe: the root create affordance
+  becomes a labelled `+ Client` primary button instead of a bare `+` glyph (creating the first client
+  is the one action an empty explorer exists to offer), and client rows carry the heading weight their
+  level implies.
+
+  Deliberately **not** in this slice: the reference's rail search field and All/Clients/Projects/Plans
+  filter chips. The tree loads lazily, one query per expanded node, so neither is buildable
+  client-side — both need an org-scoped hierarchy search endpoint and belong to their own spec.
+
 ## 0.51.0
 
 ### Minor Changes
