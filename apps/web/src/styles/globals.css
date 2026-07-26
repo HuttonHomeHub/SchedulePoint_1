@@ -489,6 +489,106 @@
 /* theme blocks above. If you find these still here with no flag, that is the   */
 /* cleanup that was missed.                                                     */
 /* ------------------------------------------------------------------------- */
+/* S5: Light's and Dark's own designed chrome — the last theme values to land, and
+   deliberately the last, because flipping structure and values in one change makes every
+   flag-off parity suite meaningless on the day it is most needed (ADR-0055 §8.1).
+
+   CASCADE ORDER MATTERS HERE. `[data-designed-chrome]` and `.dark` have the SAME specificity
+   and both match <html>, so this block — being later in the file — wins over the `.dark` theme
+   block. That is why it holds LIGHT's values and why the two theme-scoped blocks below must
+   RESTATE every token it declares, including ones they do not change. A token declared here and
+   forgotten there silently paints Light's grey on a dark theme.
+   `token-architecture.test.ts` pins exactly that, so the trap cannot be re-set by hand. */
+[data-designed-chrome] {
+  /* A band that is a shade off the page, not the page with a line under it. White-on-white
+     asks the 1px border to do all the work of saying "this is chrome, not content". */
+  --chrome: oklch(0.975 0 0);
+  --chrome-foreground: oklch(0.145 0 0);
+  --chrome-muted: oklch(0.955 0 0);
+  --chrome-muted-foreground: oklch(0.535 0 0);
+  --chrome-border: oklch(0.9 0 0);
+  --chrome-input: oklch(0.62 0 0);
+  --chrome-accent: oklch(0.925 0 0);
+  --chrome-accent-foreground: oklch(0.205 0 0);
+  --chrome-primary: oklch(0.5 0.18 255);
+  --chrome-primary-foreground: oklch(0.985 0 0);
+  /* White stays the field even though the band no longer is: a field reads as a place to type
+     because it is LIGHTER than what surrounds it, which only works once the band is not white. */
+  --chrome-field: oklch(1 0 0);
+  --chrome-field-foreground: oklch(0.145 0 0);
+  --chrome-field-muted-foreground: oklch(0.535 0 0);
+  --chrome-destructive-text: oklch(0.505 0.21 27.5);
+  --chrome-warning-text: oklch(0.48 0.13 80);
+  --chrome-info-text: oklch(0.45 0.14 250);
+  --chrome-ring: oklch(0.55 0.18 255);
+
+  /* The rail sits between the band and the page — lighter than the chrome, darker than the
+     content — so the three surfaces read as a hierarchy rather than as two arbitrary greys. */
+  --panel: oklch(0.98 0 0);
+  --panel-foreground: oklch(0.145 0 0);
+  --panel-muted: oklch(0.96 0 0);
+  --panel-muted-foreground: oklch(0.535 0 0);
+  --panel-border: oklch(0.9 0 0);
+  --panel-input: oklch(0.62 0 0);
+  --panel-accent: oklch(0.93 0 0);
+  --panel-accent-foreground: oklch(0.205 0 0);
+  --panel-primary: oklch(0.5 0.18 255);
+  --panel-primary-foreground: oklch(0.985 0 0);
+  --panel-field: oklch(1 0 0);
+  --panel-field-foreground: oklch(0.145 0 0);
+  --panel-field-muted-foreground: oklch(0.535 0 0);
+  --panel-destructive-text: oklch(0.505 0.21 27.5);
+  --panel-warning-text: oklch(0.48 0.13 80);
+  --panel-info-text: oklch(0.45 0.14 250);
+  --panel-ring: oklch(0.55 0.18 255);
+}
+
+/* S5: Dark's chrome goes BELOW the page rather than above it — a near-black band with the
+   content lifted off it. Dark themes have no "lighter than white" to reach for, so depth has
+   to run the other way.
+
+   `--chrome-field` is a RAISED DARK, not white (ADR-0055 §8.2). A white field on a near-black
+   band is a glare source at night, which is the condition the theme exists for; if a literal
+   white field is ever wanted here it is a deliberate Dark-theme regression and has to be
+   recorded as one. */
+[data-designed-chrome].dark {
+  --chrome: oklch(0.115 0 0);
+  --chrome-foreground: oklch(0.985 0 0);
+  --chrome-muted: oklch(0.235 0 0);
+  --chrome-muted-foreground: oklch(0.708 0 0);
+  --chrome-border: oklch(1 0 0 / 12%);
+  --chrome-input: oklch(1 0 0 / 38%);
+  --chrome-accent: oklch(0.25 0 0);
+  --chrome-accent-foreground: oklch(0.985 0 0);
+  --chrome-primary: oklch(0.65 0.17 255);
+  --chrome-primary-foreground: oklch(0.205 0 0);
+  --chrome-field: oklch(0.19 0 0);
+  --chrome-field-foreground: oklch(0.985 0 0);
+  --chrome-field-muted-foreground: oklch(0.708 0 0);
+  --chrome-destructive-text: oklch(0.7 0.19 22);
+  --chrome-warning-text: oklch(0.85 0.14 82);
+  --chrome-info-text: oklch(0.82 0.11 245);
+  --chrome-ring: oklch(0.65 0.17 255);
+
+  --panel: oklch(0.175 0 0);
+  --panel-foreground: oklch(0.985 0 0);
+  --panel-muted: oklch(0.26 0 0);
+  --panel-muted-foreground: oklch(0.708 0 0);
+  --panel-border: oklch(1 0 0 / 12%);
+  --panel-input: oklch(1 0 0 / 38%);
+  --panel-accent: oklch(0.27 0 0);
+  --panel-accent-foreground: oklch(0.985 0 0);
+  --panel-primary: oklch(0.65 0.17 255);
+  --panel-primary-foreground: oklch(0.205 0 0);
+  --panel-field: oklch(0.215 0 0);
+  --panel-field-foreground: oklch(0.985 0 0);
+  --panel-field-muted-foreground: oklch(0.708 0 0);
+  --panel-destructive-text: oklch(0.7 0.19 22);
+  --panel-warning-text: oklch(0.85 0.14 82);
+  --panel-info-text: oklch(0.82 0.11 245);
+  --panel-ring: oklch(0.65 0.17 255);
+}
+
 /* S3: Corporate's Project Explorer becomes a LIGHT working surface. One dark band across
    the top and two light surfaces below it reads as a designed application; three competing
    dark/light regions does not. Scoped to `.corporate` because Light and Dark already have a
@@ -502,6 +602,28 @@
    recomputing it, which is the same trap one level up: a later edit to `--panel` or
    `--background` would have drifted it silently and this comment would still say 1.09.) */
 [data-designed-chrome].corporate {
+  /* RESTATED, not changed. The global `[data-designed-chrome]` layer above holds Light's grey
+     chrome at equal specificity and earlier in the file, so without these lines Corporate's
+     navy band would silently become that grey. Values are byte-identical to the `.corporate`
+     theme block; `token-architecture.test.ts` fails if one is dropped. */
+  --chrome: oklch(0.252 0.056 264);
+  --chrome-foreground: oklch(0.985 0 0);
+  --chrome-muted: oklch(0.32 0.05 264);
+  --chrome-muted-foreground: oklch(0.78 0.02 264);
+  --chrome-border: oklch(1 0 0 / 14%);
+  --chrome-input: oklch(0.62 0.02 264);
+  --chrome-accent: oklch(0.338 0.081 262);
+  --chrome-accent-foreground: oklch(0.985 0 0);
+  --chrome-primary: oklch(0.786 0.167 70);
+  --chrome-primary-foreground: oklch(0.252 0.056 264);
+  --chrome-field: oklch(1 0 0);
+  --chrome-field-foreground: oklch(0.321 0 0);
+  --chrome-field-muted-foreground: oklch(0.51 0 0);
+  --chrome-destructive-text: oklch(0.74 0.15 25);
+  --chrome-warning-text: oklch(0.8 0.14 70);
+  --chrome-info-text: oklch(0.8 0.09 245);
+  --chrome-ring: oklch(0.786 0.167 70);
+
   --panel: oklch(0.955 0.004 248);
   --panel-foreground: oklch(0.321 0 0);
   --panel-muted-foreground: oklch(0.51 0 0);

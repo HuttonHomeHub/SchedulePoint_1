@@ -165,6 +165,27 @@ describe('the flag-keyed override layers', () => {
   );
 });
 
+describe('a theme-scoped flag layer restates its global layer in full', () => {
+  it.each(['data-designed-chrome', 'data-canvas-visual-language'])(
+    '%s: every token the global layer declares is restated per theme',
+    (attribute) => {
+      if (!hasBlock(`[${attribute}]`)) return; // no global layer ⇒ nothing to shadow
+      const global = [...declarations(blockBody(`[${attribute}]`)).keys()];
+      for (const theme of THEME_SELECTORS.filter((t) => t !== ':root')) {
+        const selector = `[${attribute}]${theme}`;
+        // `[attr]` and `.dark` have EQUAL specificity and both match <html>, so the later rule
+        // wins — the global layer overrides the theme block it sits after. A theme-scoped layer
+        // that forgets a token therefore inherits the global layer's value, which is Light's.
+        // The failure is silent and looks like a colour choice, so it is pinned rather than
+        // trusted: a scoped layer must restate the global list in full, unchanged values included.
+        const scoped = hasBlock(selector) ? declarations(blockBody(selector)) : new Map();
+        const missing = global.filter((name) => !scoped.has(name));
+        expect(missing, `${selector} does not restate ${missing.join(', ')}`).toEqual([]);
+      }
+    },
+  );
+});
+
 describe('the retired token families are gone', () => {
   it.each(['--app-header', '--sidebar'])('%s has no declarations left', (prefix) => {
     // Both were replaced by a complete surface family. Leaving them declared invites a
