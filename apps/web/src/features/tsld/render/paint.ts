@@ -187,6 +187,11 @@ export interface TsldScene {
    * while keeping the criticality outline, so the diagram geometry stays stable and the shape cue
    * survives the dim. Absent ⇒ no filter active ⇒ every bar at full emphasis. */
   dimmedIds?: ReadonlySet<string> | undefined;
+  /** The activity whose ghost is in flight right now (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`) —
+   * its source bar recedes to {@link GESTURE_SOURCE_ALPHA} so a drag or resize reads as one shape
+   * moving rather than a bar plus a floating rectangle. Absent (the flag-off path never sets it)
+   * ⇒ no-op ⇒ byte-for-byte parity. */
+  gestureSourceId?: string | null | undefined;
   /** Per-activity Colour-by fill override (id → CSS colour), precomputed by `buildColourMap`. When a
    * bar's id is present the painter uses this fill; absent ids (and an absent map) fall back to today's
    * `barColour`. Passed only for the non-default Colour-by modes, so Criticality ⇒ absent ⇒ parity. */
@@ -323,6 +328,13 @@ function barColour(
 /** The reduced alpha a filter-dimmed bar paints at — enough to recede without vanishing (the
  * criticality outline is still drawn at full strength, so the shape cue survives the dim). */
 const DIMMED_ALPHA = 0.3;
+
+/**
+ * Alpha of the bar a gesture is currently dragging (ADR-0054 §1) — below {@link DIMMED_ALPHA},
+ * because a filter dim says "not in your filter" while this says "this shape has moved; look at
+ * the ghost". Still visible, so the origin of the drag stays readable.
+ */
+const GESTURE_SOURCE_ALPHA = 0.18;
 
 /** Line dash + width of a baseline ghost's outline (thin, dashed — visibly not a live bar). */
 const GHOST_DASH: readonly number[] = [2, 2];
@@ -974,8 +986,13 @@ export function paintScene(
     // Filter lens: a dimmed (non-matching) bar recedes via reduced alpha, but its criticality outline
     // is drawn at full strength below (alpha restored), so the shape cue survives the dim (WCAG 1.4.1
     // — never colour/emphasis alone). Absent `dimmedIds` ⇒ this is a no-op ⇒ byte-for-byte parity.
-    const dimmed = scene.dimmedIds?.has(id) ?? false;
-    ctx.globalAlpha = dimmed ? DIMMED_ALPHA : 1;
+    // The bar a gesture is currently dragging/resizing recedes further still (ADR-0054 §1), so the
+    // in-flight ghost reads as *the bar itself moving* rather than a second shape beside it; what
+    // stays is a faint "you came from here" trace. It counts as `dimmed` for everything downstream
+    // (label ink, badges), so only the alpha differs. Absent `gestureSourceId` ⇒ no-op ⇒ parity.
+    const gestureSource = scene.gestureSourceId === id;
+    const dimmed = gestureSource || (scene.dimmedIds?.has(id) ?? false);
+    ctx.globalAlpha = dimmed ? (gestureSource ? GESTURE_SOURCE_ALPHA : DIMMED_ALPHA) : 1;
     ctx.fillStyle = barColour(activity, palette, scene.barFill);
     if (scene.visualRefresh) {
       // M4 refreshed bar body (shape/progress/emphasis/glyphs) — the lens fill above still
@@ -1221,6 +1238,21 @@ export interface LagOverlay {
   label: string;
 }
 
+/**
+ * Full-fidelity detail for the in-flight ghost (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`). The
+ * ADR-0052 ghost was a deliberately bare fill+outline, which was right while it sat beside a
+ * fully-painted source bar; now the source recedes, the ghost IS the bar and must look like it.
+ * Absent ⇒ the ADR-0052 ghost, byte-for-byte.
+ */
+export interface GhostDetail {
+  /** The bar's own label (`{code} {name} · {n}d`), drawn inside when the ghost is wide enough. */
+  label: string;
+  /** Schedule % complete, drawn as the same in-bar progress band the real bar carries. */
+  percentComplete?: number;
+  /** Draw the milestone diamond rather than a rounded bar, matching the real glyph. */
+  milestone?: boolean;
+}
+
 /** Chip height (px) of the lag readout drawn above the dragged anchor. */
 const LAG_CHIP_H = 14;
 /** Gap (px) between the dragged anchor point and its readout chip. */
@@ -1251,6 +1283,10 @@ export interface InteractionOverlay {
    * change (never the sole carrier of state — selection remains the keyboard/AT state), drawn
    * OUTSIDE the bar so it obscures no label or badge. Only read under `visualRefresh`. */
   hover?: Rect | null;
+  // ── Live feedback (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`) ─────────────────────────────
+  /** Full-fidelity detail for the in-flight `live`/`resize` ghost, so a drag reads as the bar
+   * itself moving. Absent ⇒ the ADR-0052 ghost, byte-for-byte. */
+  ghost?: GhostDetail | null;
 }
 
 /**
@@ -1333,8 +1369,51 @@ export function paintInteractionLayer(
   // plus an inner inset hairline in the bar-definition stroke — "elevation" approximated by the
   // double stroke, never a shadow/blur (draw budget). Square fallback where roundRect is absent;
   // flag-off callers never reach it. Reads as "the bar, lifted", obscuring no label or badge.
+  const detail = overlay.ghost;
+
+  /**
+   * The ghost's own bar detail (ADR-0054 §1): the milestone diamond where the type calls for it,
+   * the in-bar progress band, and the inside label — the same three things that make the real bar
+   * recognisable. Drawn only when the caller supplies `overlay.ghost`, so the flag-off path paints
+   * the ADR-0052 ghost byte-for-byte. Text is guarded like every other label pass so a text-less
+   * test context never throws.
+   */
+  const ghostDetail = (r: Rect): void => {
+    if (!detail) return;
+    if (detail.percentComplete !== undefined && !detail.milestone) {
+      const progress = progressGeometry(r, detail.percentComplete);
+      if (progress) {
+        ctx.fillStyle = palette.labelInside;
+        const { band, frontX } = progress;
+        ctx.fillRect(band.x, band.y, band.w, band.h);
+        if (frontX !== null) ctx.fillRect(frontX - 0.5, band.y, 1, band.h);
+      }
+    }
+    if (detail.milestone) return; // a diamond has no room for an inside label
+    if (typeof ctx.fillText !== 'function' || typeof ctx.measureText !== 'function') return;
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    const pad = LABEL_PAD_PX + 2;
+    const text = truncateToWidth(detail.label, r.w - pad * 2, (s) => ctx.measureText(s).width);
+    if (!text) return;
+    ctx.fillStyle = palette.labelInside;
+    ctx.fillText(text, r.x + pad, r.y + r.h / 2);
+  };
+
   const refreshedGhost = (r: Rect): void => {
     ctx.fillStyle = palette.bar;
+    // A milestone ghosts as the diamond it really is, so a dragged milestone never momentarily
+    // becomes a bar (ADR-0054 §1). The outline below then traces the same path.
+    if (detail?.milestone) {
+      traceMilestoneDiamond(ctx, r.x + r.w / 2, r.y + r.h / 2, MILESTONE_RADIUS);
+      ctx.fill();
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+      return;
+    }
     if (beginRoundedRect(ctx, r, BAR_RADIUS)) ctx.fill();
     else ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = palette.selection;
@@ -1353,6 +1432,7 @@ export function paintInteractionLayer(
   if (live) {
     if (refresh) {
       refreshedGhost(live);
+      ghostDetail(live);
     } else {
       ctx.fillStyle = palette.bar;
       ctx.fillRect(live.x, live.y, live.w, live.h);
@@ -1371,6 +1451,7 @@ export function paintInteractionLayer(
     const r = resize.rect;
     if (refresh) {
       refreshedGhost(r);
+      ghostDetail(r);
     } else {
       ctx.fillStyle = palette.bar;
       ctx.fillRect(r.x, r.y, r.w, r.h);

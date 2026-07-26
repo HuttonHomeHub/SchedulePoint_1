@@ -744,3 +744,41 @@ export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
  * flag-off parity suites.
  */
 export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRARY_SCOPING);
+
+/**
+ * Canvas **live feedback & GPM float/drift visualisation** (ADR-0054, spec
+ * `docs/specs/canvas-live-feedback/`). Default **off** until its M6 enablement gate — the
+ * specialist reviews and, critically, the ADR-0026 draw-budget measurement at 2,000 activities
+ * with every new layer enabled. When on, the TSLD canvas answers the two questions a
+ * time-scaled logic diagram exists to answer — *when*, and *how much room*:
+ *
+ * - an in-flight gesture reads as **the bar itself moving**: the source bar dims and the ghost
+ *   carries the real bar treatment (label, progress, milestone diamond) rather than a bare
+ *   rectangle (amends ADR-0052 §4's deliberately-minimal ghost, which was right only while the
+ *   source stayed fully painted beside it);
+ * - a **date chip tracks the cursor** through every gesture and on idle hover in an edit mode,
+ *   with a vertical guideline to the ruler and the hovered day's tick emphasised — and it states
+ *   the datum actually being chosen (the tentative *finish* on a finish-edge resize, the *start*
+ *   on a reposition), read through the same `dayColumnAt` mapping the gesture commits with, so
+ *   the number shown can never disagree with the edit performed;
+ * - each bar's **start and finish dates draw flanking it** behind a `Dates` view toggle,
+ *   level-of-detail culled by zoom and collision (flanking, not inside: an inside date competes
+ *   with the name label and vanishes on any bar narrower than its text);
+ * - **total float draws as a hollow tail right** of the bar and **drift as a hollow tail left**,
+ *   behind a lens toggle — the Graphical Path Method idiom, comparable across the whole diagram
+ *   at a glance in a way a per-link number is not. Drift is engine-owned (`visualDriftDays`,
+ *   ADR-0033) and is **absent in Early mode by construction**: an early-start schedule already
+ *   places everything as early as logic allows, so drift is non-zero only under Visual mode or a
+ *   constraint. That absence is correct, not a defect;
+ * - **relationship slack** annotates the **selected** activity's links only — a number on every
+ *   edge of a real network obscures the structure the diagram exists to show.
+ *
+ * Frontend-only: every datum (dates, `totalFloat`, `visualDriftDays`) is already on the wire, so
+ * there is no API, DTO, schema or engine change and no code path from any of this back into
+ * `computeSchedule` — the ADR-0034 recalc parity gate is structurally untouched. Set
+ * `VITE_CANVAS_LIVE_FEEDBACK=false` for a byte-for-byte rollback to the ADR-0052 surface (the
+ * flag-off parity suites).
+ */
+export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_CANVAS_LIVE_FEEDBACK,
+);

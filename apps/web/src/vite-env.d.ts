@@ -77,4 +77,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_DIRECT_MANIPULATION?: string;
   /** Library scoping & manageability web surface — the calendar ORG/PROJECT tier (scope badge/filter, the project Calendars section, the scope choice on create, tier-grouped pickers), the resource parent tree + non-assignable GROUP kind, archive/restore, URL-backed server-side library search, the shared searched combobox pickers, and the interchange calendar-tier import option (ADR-0053). On by default (2026-07-26, M1-M6 landed); "false"/"0" rolls the whole surface back, byte-for-byte. */
   readonly VITE_LIBRARY_SCOPING?: string;
+  /** TSLD canvas live feedback + GPM float/drift visualisation — the in-flight ghost carrying the dragged bar's own label/progress/glyph while its source recedes, a cursor date chip + ruler guideline, start/finish dates flanking each bar behind a Dates toggle, hollow float/drift tails, and relationship slack on the selected activity's links (ADR-0054, docs/specs/canvas-live-feedback/). "true"/"1" enables it; off by default until the M6 draw-budget measurement + specialist reviews. */
+  readonly VITE_CANVAS_LIVE_FEEDBACK?: string;
 }

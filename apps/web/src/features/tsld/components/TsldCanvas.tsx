@@ -18,6 +18,7 @@ import {
   paintInteractionLayer,
   paintResourceStrip,
   paintScene,
+  type GhostDetail,
   type InteractionOverlay,
   type LagOverlay,
   type LinkOverlay,
@@ -41,6 +42,7 @@ import {
   lagAnchorDay,
   makeWorkingDayWalk,
   pan,
+  isMilestone,
   panToDate,
   screenXOfDay,
   zoomAt,
@@ -62,7 +64,11 @@ import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-sca
 import { useThemeVersion } from '../render/use-theme-version';
 import type { SelectionAnchor } from '../toolbar/selection-actions';
 
-import { CANVAS_AUTHORING_ENABLED, CANVAS_DIRECT_MANIPULATION_ENABLED } from '@/config/env';
+import {
+  CANVAS_AUTHORING_ENABLED,
+  CANVAS_DIRECT_MANIPULATION_ENABLED,
+  CANVAS_LIVE_FEEDBACK_ENABLED,
+} from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Imperative commands the toolbar issues to the canvas (kept ref-authoritative — ADR-0026 D3). */
@@ -237,6 +243,37 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
     );
   }
   return null;
+}
+
+/**
+ * The activity a gesture is currently dragging or resizing (ADR-0054 §1) — the bar the scene dims
+ * so its ghost reads as the bar itself moving rather than a second shape beside it. A `creating`
+ * gesture has no source bar yet, and the link / LOE tools move nothing. Exported for unit tests.
+ */
+export function gestureSourceId(state: GestureState): string | null {
+  return state.kind === 'repositioning' || state.kind === 'resizing' ? state.activityId : null;
+}
+
+/**
+ * Full-fidelity detail for that gesture's ghost (ADR-0054 §1): the manipulated bar's own label,
+ * progress and glyph, so the ghost looks like the thing being moved. A create has no activity to
+ * describe yet, so it ghosts plain — there is nothing truthful to draw. Exported for unit tests.
+ */
+export function gestureGhostDetail(
+  state: GestureState,
+  lookup: (id: string) => RenderActivity | undefined,
+): GhostDetail | null {
+  const id = gestureSourceId(state);
+  if (id === null) return null;
+  const activity = lookup(id);
+  if (!activity) return null;
+  return {
+    label: activity.label,
+    ...(activity.percentComplete === undefined
+      ? {}
+      : { percentComplete: activity.percentComplete }),
+    ...(isMilestone(activity.type) ? { milestone: true } : {}),
+  };
 }
 
 /** The in-flight resize ghost + its live readout (ADR-0052 M2/M3), or null. A finish drag pins
@@ -510,6 +547,11 @@ export function TsldCanvas({
   // on the base layer, above the bars), and written only when it actually changes — a scene
   // repaint per hovered-ANCHOR change, never per pointer move. Flag-off nothing writes it.
   const activeLagIdRef = useRef<string | null>(null);
+  // The bar the in-flight gesture is dragging (ADR-0054 §1). Published into the SCENE (the bars
+  // live on the base layer), so it is written — and the scene marked dirty — only when it actually
+  // CHANGES: once when a drag arms and once when it drops, never per pointer move. Flag-off nothing
+  // writes it, so the scene stays byte-for-byte today's (the parity gate).
+  const gestureSourceIdRef = useRef<string | null>(null);
   // O(1) id→activity lookup for the per-move idle-hover branch (perf review): rebuilt only when
   // the activities ARRAY identity changes (a data rebuild), never per pointer move — a linear
   // `.find` per move over a 2,000-activity plan is avoidable per-frame work.
@@ -570,7 +612,33 @@ export function TsldCanvas({
     // hover / drag emphasises one.
     lagHandles: lagArmed,
     activeLagId: null,
+    // The bar a gesture is dragging (ADR-0054 §1) — null until a gesture arms one.
+    gestureSourceId: null,
   });
+
+  /**
+   * Publish the bar the in-flight gesture is dragging into the SCENE (ADR-0054 §1), mirroring
+   * {@link setActiveLagId}: written — and the scene marked dirty — only when it actually changes,
+   * so a drag costs exactly two scene repaints (arm and drop), never one per pointer move. Called
+   * after every `gestureRef` transition; flag-off it is a permanent no-op (the id stays null).
+   */
+  const syncGestureSource = (): void => {
+    const id = CANVAS_LIVE_FEEDBACK_ENABLED ? gestureSourceId(gestureRef.current) : null;
+    if (gestureSourceIdRef.current === id) return;
+    gestureSourceIdRef.current = id;
+    sceneRef.current = { ...sceneRef.current, gestureSourceId: id };
+    dirtyRef.current = true;
+  };
+
+  const activityById = (id: string): RenderActivity | undefined => {
+    const list = sceneRef.current.activities;
+    let index = activityIndexRef.current;
+    if (!index || index.list !== list) {
+      index = { list, byId: new Map(list.map((a) => [a.id, a])) };
+      activityIndexRef.current = index;
+    }
+    return index.byId.get(id);
+  };
 
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
   // no per-frame setState). Row containers + reusable element pools live in refs; `rulerSyncRef`
@@ -621,6 +689,9 @@ export function TsldCanvas({
       // Preserved across a rebuild for the same reason as `hoverId`: the pointer hasn't moved (and
       // a drag may be in flight), so the emphasised handle must not blink back to rest.
       activeLagId: activeLagIdRef.current,
+      // Preserved across a data/selection rebuild for the same reason as `hoverId` — a drag may be
+      // in flight, and the source bar must not blink back to full strength mid-gesture.
+      gestureSourceId: gestureSourceIdRef.current,
     };
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
@@ -751,6 +822,7 @@ export function TsldCanvas({
   useEffect(() => {
     if (gestureRef.current.kind !== 'idle') {
       gestureRef.current = IDLE;
+      syncGestureSource();
       gestureActiveRef.current = false;
       interactionDirtyRef.current = true;
     }
@@ -773,6 +845,7 @@ export function TsldCanvas({
     } else if (gestureRef.current.kind === 'loePicking') {
       // The pick was cleared (Escape / cancel / commit) — drop the stale ring.
       gestureRef.current = IDLE;
+      syncGestureSource();
       interactionDirtyRef.current = true;
     }
   }, [loePickStartId, mode]);
@@ -910,6 +983,12 @@ export function TsldCanvas({
           // (`visualRefresh` false, `hover` never written) ⇒ byte-for-byte today's overlay.
           visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
           hover: gestureActiveRef.current ? null : hoverRef.current,
+          // Live feedback (ADR-0054 §1): the ghost carries the dragged bar's own label, progress
+          // and glyph. Null off-flag and whenever no bar is being manipulated (a create has none),
+          // so the ghost falls back to the ADR-0052 treatment byte-for-byte.
+          ghost: CANVAS_LIVE_FEEDBACK_ENABLED
+            ? gestureGhostDetail(gestureRef.current, activityById)
+            : null,
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
@@ -1011,10 +1090,12 @@ export function TsldCanvas({
           { type: 'escape' },
           { mode: 'select', view: viewRef.current, dataDate: sceneRef.current.dataDate },
         ).state;
+        syncGestureSource();
         interactionDirtyRef.current = true;
       } else if (gestureRef.current.kind === 'linkPicking') {
         // First Escape drops an unfinished link pick (M5) — the tool stays armed for another try.
         gestureRef.current = IDLE;
+        syncGestureSource();
         interactionDirtyRef.current = true;
       } else if (
         editing &&
@@ -1078,15 +1159,6 @@ export function TsldCanvas({
   );
   // The memoised id→activity resolve backing the idle-hover branch — `.get()` per move, with the
   // Map rebuilt only on an activities-array identity change (see `activityIndexRef`).
-  const activityById = (id: string): RenderActivity | undefined => {
-    const list = sceneRef.current.activities;
-    let index = activityIndexRef.current;
-    if (!index || index.list !== list) {
-      index = { list, byId: new Map(list.map((a) => [a.id, a])) };
-      activityIndexRef.current = index;
-    }
-    return index.byId.get(id);
-  };
   /** Publish the emphasised lag anchor into the scene, repainting only on a real change. */
   const setActiveLagId = (id: string | null): void => {
     if (activeLagIdRef.current === id) return;
@@ -1194,6 +1266,7 @@ export function TsldCanvas({
               machineCtx(),
             );
             gestureRef.current = state;
+            syncGestureSource();
             // Hold the grabbed anchor emphasised for the whole drag: the idle-hover branch below
             // is skipped while a gesture runs, so without this the handle would drop back to rest
             // the moment the pointer moved.
@@ -1218,6 +1291,7 @@ export function TsldCanvas({
               machineCtx(),
             );
             gestureRef.current = state;
+            syncGestureSource();
             interactionDirtyRef.current = true;
             return;
           }
@@ -1305,6 +1379,7 @@ export function TsldCanvas({
               machineCtx(),
             );
             gestureRef.current = state;
+            syncGestureSource();
             interactionDirtyRef.current = true;
             // The drag is over — the next idle move re-emphasises whatever the pointer rests on.
             setActiveLagId(null);
@@ -1327,6 +1402,7 @@ export function TsldCanvas({
               machineCtx(),
             );
             gestureRef.current = state;
+            syncGestureSource();
             interactionDirtyRef.current = true;
             if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
             if (loe) onLoeSpanStep?.(loe);
@@ -1356,6 +1432,7 @@ export function TsldCanvas({
           gestureActiveRef.current = false;
           drag.current = null;
           gestureRef.current = reduce(gestureRef.current, { type: 'escape' }, machineCtx()).state;
+          syncGestureSource();
           interactionDirtyRef.current = true;
         }}
       />
