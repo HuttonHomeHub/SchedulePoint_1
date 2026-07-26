@@ -35,13 +35,17 @@ export async function chooseComboboxOption(
   optionName: string,
 ): Promise<void> {
   const field = comboboxField(scope, name);
-  await field.press('ArrowDown');
   // Look the option up inside THIS combobox's own listbox, resolved through `aria-controls`. A
   // wider `getByRole('option')` would also see the canvas's parallel activity listbox on the plan
   // workspace, and an attribute selector (rather than `#id`) keeps it safe for any `useId` shape.
   const listboxId = await field.getAttribute('aria-controls');
   const listbox = scope.locator(`[id="${listboxId ?? ''}"]`);
-  await expect(listbox).toBeVisible();
+  // Retry the open: a picker that commits straight to the server disables itself while saving, so
+  // a single key press can land on a momentarily-disabled input and be dropped.
+  await expect(async () => {
+    await field.press('ArrowDown');
+    await expect(listbox).toBeVisible({ timeout: 500 });
+  }).toPass({ timeout: 15_000 });
   const option = listbox.getByRole('option', { name: optionName, exact: true });
   await expect(option).toBeVisible();
   await option.click();
