@@ -862,6 +862,20 @@ export function TsldCanvas({
     if (!canvas || !container) return;
 
     let raf = 0;
+    // The size actually WRITTEN to the canvas backing stores, tracked per loop-init rather than
+    // compared against `sizeRef`.
+    //
+    // This is the fix for a canvas that looked dead while editing. The interaction canvas is mounted
+    // by `editing` flipping true — i.e. it appears *after* the last measure, unsized (a default
+    // 300×150 backing store) — while the container's own size has not changed. Comparing against
+    // `sizeRef` therefore skipped the whole body, so the new canvas kept that default: the loop went
+    // on painting ghosts, the cursor guideline and the resize readout onto a surface a fraction of
+    // the size it was addressing, and everything past ~300px simply landed off it. Taking the pen
+    // and drawing produced no visible bar; resizing the window (the one thing that does change the
+    // container) silently "fixed" it, which is what made it look intermittent.
+    //
+    // Resetting per init makes the first measure after any (re-)mount always apply.
+    let applied: Size = { width: 0, height: 0 };
 
     const measure = (): void => {
       const rect = container.getBoundingClientRect();
@@ -874,7 +888,8 @@ export function TsldCanvas({
         width: Math.max(1, rect.width),
         height: Math.max(1, rect.height - RULER_HEIGHT - stripBand),
       };
-      if (size.width !== sizeRef.current.width || size.height !== sizeRef.current.height) {
+      if (size.width !== applied.width || size.height !== applied.height) {
+        applied = size;
         sizeRef.current = size;
         const dpr = getDpr();
         for (const c of [canvas, interactionCanvasRef.current]) {

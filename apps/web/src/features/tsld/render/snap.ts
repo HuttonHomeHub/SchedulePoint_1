@@ -31,3 +31,46 @@ export function snapToWorkingDay(
   }
   return dayOffset;
 }
+
+/** What a drawn span must be created as: where the bar starts, and how long it is in working days. */
+export interface DrawnPlacement {
+  startDay: number;
+  durationDays: number;
+}
+
+/**
+ * Turn the **calendar-day span the planner drew** into the `(startDay, durationDays)` an activity
+ * must be created with — the translation between what the canvas measures and what the engine means.
+ *
+ * These are two different units and conflating them is a visible lie. The TSLD's x-axis is
+ * **calendar** time (a weekend still occupies two columns), but `durationDays` is a **working-day**
+ * duration (ADR-0023/0036) — so a Friday→Tuesday drag is 5 columns wide and 3 working days long.
+ * Creating it with `endDay - startDay + 1 = 5` makes the engine lay out five *working* days
+ * (Fri, Mon–Thu) and the bar comes back a Wednesday and a Thursday longer than it was drawn.
+ *
+ * The start is snapped **forward** to the first working day at or after the press, never backward:
+ * the SNET pin (or a Visual placement) can only be pushed later by a non-working start, so rounding
+ * the other way would produce a bar the engine immediately moves right of where it was released.
+ *
+ * A task always gets at least one working day — a span drawn entirely inside a shutdown would
+ * otherwise be a zero-duration task, which is a milestone, which is not what was drawn.
+ *
+ * With **no calendar predicate** (a plan whose calendar hasn't loaded) the raw calendar span is
+ * returned unchanged — the pre-fix behaviour, so nothing changes on that path.
+ */
+export function drawnSpanPlacement(
+  startDay: number,
+  endDay: number,
+  isWorkingDay: ((dayOffset: number) => boolean) | null,
+  horizon: number = SNAP_HORIZON_DAYS,
+): DrawnPlacement {
+  const left = Math.min(startDay, endDay);
+  const right = Math.max(startDay, endDay);
+  if (!isWorkingDay) return { startDay: left, durationDays: right - left + 1 };
+  // Forward-only scan, bounded like snapToWorkingDay so a pathological calendar can never hang.
+  let first = left;
+  for (let delta = 1; delta <= horizon && !isWorkingDay(first); delta += 1) first = left + delta;
+  let working = 0;
+  for (let day = first; day <= right; day += 1) if (isWorkingDay(day)) working += 1;
+  return { startDay: first, durationDays: Math.max(1, working) };
+}

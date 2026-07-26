@@ -47,7 +47,7 @@ import {
   type Point,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
-import { snapToWorkingDay } from '../render/snap';
+import { drawnSpanPlacement, snapToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
@@ -1290,7 +1290,17 @@ export function TsldPanel({
 
   const commitCreate = (name: string): void => {
     if (!pendingCreate || !onCreate) return;
-    const { type, startDay, endDay, laneIndex } = pendingCreate;
+    const { type, laneIndex } = pendingCreate;
+    // Translate the drawn CALENDAR span into the WORKING-day duration the engine schedules with
+    // (ADR-0023/0036). Without this a Friday→Tuesday drag — 5 columns on a calendar x-axis — was
+    // created as `durationDays: 5`, which the engine lays out as five *working* days, so the bar
+    // came back two days longer than it was drawn and its finish sat nowhere near the release
+    // point. A milestone is a point and keeps its press day untouched.
+    const { startDay, durationDays } = isMilestone(type)
+      ? { startDay: pendingCreate.startDay, durationDays: 0 }
+      : drawnSpanPlacement(pendingCreate.startDay, pendingCreate.endDay, workingDayPredicate);
+    // `onCreate` still speaks in drawn days, so hand back the inclusive end the duration implies.
+    const endDay = startDay + Math.max(0, durationDays - 1);
     setPendingCreate((p) => (p ? { ...p, saving: true, error: null } : p));
     // onCreate resolves iff the row persisted → close and never re-POST. A recalc conflict is
     // non-fatal (row kept) and shown in the banner; only a create failure keeps the popover.
