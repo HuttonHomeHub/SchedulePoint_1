@@ -65,6 +65,7 @@ import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EARNED_VALUE_ENABLED,
@@ -89,7 +90,16 @@ const ZOOM_LABELS: Record<string, string> = {
   year: 'Year',
 };
 
-/** The six view-layer toggles, in the order the `View▾` popover lists them (mirrors TsldViewControls). */
+/**
+ * The view-layer toggles, in the order the `View▾` popover lists them (mirrors TsldViewControls).
+ *
+ * The three ADR-0054 insight layers — **Dates** (§3), **Float & drift** (§4) and **Link slack**
+ * (§5) — are appended only under `VITE_CANVAS_LIVE_FEEDBACK`, so flag-off the popover lists
+ * exactly the six it always did (the byte-for-byte rollback contract). `TSLD_VIEW_TOGGLE_KEYS`
+ * below pins this list in a test: two of these three were once silently dropped by a bad
+ * search-and-replace, leaving their paint passes unreachable while the release notes claimed
+ * they shipped. A registry that can rot silently gets a test.
+ */
 const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }> = [
   { key: 'dayGrid', label: 'Day grid' },
   { key: 'monthGrid', label: 'Month grid' },
@@ -97,7 +107,19 @@ const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }>
   { key: 'today', label: 'Today line' },
   { key: 'nonWorking', label: 'Non-working' },
   { key: 'labels', label: 'Labels' },
+  ...(CANVAS_LIVE_FEEDBACK_ENABLED
+    ? ([
+        { key: 'dates', label: 'Dates' },
+        { key: 'floatTails', label: 'Float & drift' },
+        { key: 'linkSlack', label: 'Link slack' },
+      ] as const)
+    : ([] as const)),
 ];
+
+/** The keys `View▾` actually offers, exported so a test can pin the registry against drift. */
+export const TSLD_VIEW_TOGGLE_KEYS: ReadonlyArray<keyof TsldViewToggles> = VIEW_TOGGLES.map(
+  (t) => t.key,
+);
 
 /**
  * The **Go to date** navigation control (ADR-0033 M2) — a labelled disclosure that opens a small date

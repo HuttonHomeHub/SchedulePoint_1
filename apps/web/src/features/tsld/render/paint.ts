@@ -32,6 +32,12 @@ import {
   EMPHASIS_STROKE_W,
   LABEL_FONT,
   LABEL_GAP_PX,
+  DATE_LABEL_MIN_PX_PER_DAY,
+  dateLabelSlot,
+  driftTailRect,
+  edgeGapDays,
+  floatTailRect,
+  formatCanvasDate,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
   LANE_HEIGHT,
@@ -148,6 +154,26 @@ export interface TsldViewToggles {
   nonWorking: boolean;
   /** On-canvas activity labels (`{code} {name} · {n}d`). */
   labels: boolean;
+  /** Flanking start/finish **dates** on each bar (ADR-0054 §3, `VITE_CANVAS_LIVE_FEEDBACK`).
+   * Optional so every existing caller/fixture stays valid and paints byte-for-byte; absent or
+   * false ⇒ the pass never runs and not one `measureText` is spent. */
+  dates?: boolean;
+  /** The GPM **float / drift tails** (ADR-0054 §4, `VITE_CANVAS_LIVE_FEEDBACK`): a hollow tail
+   * right of each bar for total float, left for drift.
+   *
+   * A view TOGGLE rather than a lens (a deliberate departure from the plan's "beside Baseline
+   * overlay"): a lens exists because it needs data that can be loading or absent — Baseline
+   * overlay is disabled with a reason when there is no active baseline. Float and drift are
+   * already on every activity, so the control can never be unavailable and needs none of the
+   * lens context's loading/error/enablement machinery. It belongs with Labels and Dates.
+   *
+   * Optional ⇒ absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
+  floatTails?: boolean;
+  /** Annotate **relationship slack** on the SELECTED activity's own links (ADR-0054 §5). Scoped to
+   * the selection on purpose: a number on every edge of a real network is noise that obscures the
+   * very structure the diagram exists to show, so this is an *inspection* affordance. Optional ⇒
+   * absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
+  linkSlack?: boolean;
   /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
@@ -187,6 +213,11 @@ export interface TsldScene {
    * while keeping the criticality outline, so the diagram geometry stays stable and the shape cue
    * survives the dim. Absent ⇒ no filter active ⇒ every bar at full emphasis. */
   dimmedIds?: ReadonlySet<string> | undefined;
+  /** The activity whose ghost is in flight right now (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`) —
+   * its source bar recedes to {@link GESTURE_SOURCE_ALPHA} so a drag or resize reads as one shape
+   * moving rather than a bar plus a floating rectangle. Absent (the flag-off path never sets it)
+   * ⇒ no-op ⇒ byte-for-byte parity. */
+  gestureSourceId?: string | null | undefined;
   /** Per-activity Colour-by fill override (id → CSS colour), precomputed by `buildColourMap`. When a
    * bar's id is present the painter uses this fill; absent ids (and an absent map) fall back to today's
    * `barColour`. Passed only for the non-default Colour-by modes, so Criticality ⇒ absent ⇒ parity. */
@@ -323,6 +354,26 @@ function barColour(
 /** The reduced alpha a filter-dimmed bar paints at — enough to recede without vanishing (the
  * criticality outline is still drawn at full strength, so the shape cue survives the dim). */
 const DIMMED_ALPHA = 0.3;
+
+/**
+ * Alpha of the bar a gesture is currently dragging (ADR-0054 §1) — below {@link DIMMED_ALPHA},
+ * because a filter dim says "not in your filter" while this says "this shape has moved; look at
+ * the ghost". Still visible, so the origin of the drag stays readable.
+ */
+const GESTURE_SOURCE_ALPHA = 0.18;
+
+/** Spacing (px) between a float/drift tail's hatch strokes — the non-colour cue's density. */
+const TAIL_HATCH_STEP = 6;
+
+/** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
+const SLACK_CHIP_H = 13;
+
+/**
+ * Height (px) of the opaque plate drawn behind a flanking date when the float/drift tails are ALSO
+ * on — just taller than the label text, so the hatched tail passes visibly behind the date instead
+ * of striking through it. Only ever drawn with both toggles on.
+ */
+const DATE_PLATE_H = 12;
 
 /** Line dash + width of a baseline ghost's outline (thin, dashed — visibly not a live bar). */
 const GHOST_DASH: readonly number[] = [2, 2];
@@ -974,8 +1025,13 @@ export function paintScene(
     // Filter lens: a dimmed (non-matching) bar recedes via reduced alpha, but its criticality outline
     // is drawn at full strength below (alpha restored), so the shape cue survives the dim (WCAG 1.4.1
     // — never colour/emphasis alone). Absent `dimmedIds` ⇒ this is a no-op ⇒ byte-for-byte parity.
-    const dimmed = scene.dimmedIds?.has(id) ?? false;
-    ctx.globalAlpha = dimmed ? DIMMED_ALPHA : 1;
+    // The bar a gesture is currently dragging/resizing recedes further still (ADR-0054 §1), so the
+    // in-flight ghost reads as *the bar itself moving* rather than a second shape beside it; what
+    // stays is a faint "you came from here" trace. It counts as `dimmed` for everything downstream
+    // (label ink, badges), so only the alpha differs. Absent `gestureSourceId` ⇒ no-op ⇒ parity.
+    const gestureSource = scene.gestureSourceId === id;
+    const dimmed = gestureSource || (scene.dimmedIds?.has(id) ?? false);
+    ctx.globalAlpha = dimmed ? (gestureSource ? GESTURE_SOURCE_ALPHA : DIMMED_ALPHA) : 1;
     ctx.fillStyle = barColour(activity, palette, scene.barFill);
     if (scene.visualRefresh) {
       // M4 refreshed bar body (shape/progress/emphasis/glyphs) — the lens fill above still
@@ -1089,6 +1145,127 @@ export function paintScene(
     }
   }
 
+  // Layer 3.55: GPM **float / drift tails** (ADR-0054 §4) — a hollow tail right of the bar for
+  // total float ("how far can this slip?") and left of it for drift ("how much earlier could it
+  // have gone?"), in the same time-scale as the bar so slack is comparable across the whole
+  // diagram at a glance, which a number printed on a link cannot be.
+  //
+  // Hollow and hatched, never filled: a filled extension would read as duration. The hatch is the
+  // non-colour cue (WCAG 1.4.1), so the tails survive a monochrome print and a colour-blind
+  // reader. Drawn BELOW the labels, so no name is ever obscured by slack.
+  //
+  // Cheap by construction: no text, no measurement — two stroked rects and a few hatch lines per
+  // bar, culled with the bar itself. Absent flag ⇒ not one call ⇒ parity.
+  if (toggles.floatTails === true) {
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = palette.labelBeside;
+    // ONE batched path for every hatch line on screen (the file's established discipline — a
+    // stroke per bar would be up to 4,000 calls), traced after the outlines.
+    ctx.beginPath();
+    for (const [id, rect] of rects) {
+      const activity = byId.get(id)!;
+      const tails = [
+        floatTailRect(rect, activity.totalFloat, view),
+        driftTailRect(rect, activity.visualDriftDays, view),
+      ];
+      for (const tail of tails) {
+        if (!tail || tail.w < 2) continue; // sub-2px slack is not worth a shape
+        ctx.strokeRect(tail.x + 0.5, tail.y + 0.5, tail.w - 1, tail.h - 1);
+        // Diagonal hatch — the non-colour cue. CLAMPED TO THE VIEWPORT, which is the difference
+        // between bounded and unbounded work: a tail's width is `float × pxPerDay`, so a routine
+        // 200-day float at day zoom is 8,000px of tail off the side of a 1,920px screen. Hatching
+        // its full length measured 320,000 line segments for a 2,000-activity plan — cost scaling
+        // with the DATA rather than with the screen. The visible span is all that can be seen, so
+        // it is all that is traced (the same clamp the day grid a few layers above applies).
+        const from = Math.max(tail.x + TAIL_HATCH_STEP, -tail.h);
+        const to = Math.min(tail.x + tail.w, size.width);
+        for (let hx = from; hx < to; hx += TAIL_HATCH_STEP) {
+          ctx.moveTo(hx, tail.y + tail.h);
+          ctx.lineTo(hx + tail.h, tail.y);
+        }
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Layer 3.58: relationship SLACK on the selected activity's links (ADR-0054 §5) — the gap in
+  // days each tie leaves, answering "why is this activity waiting?". Scoped to the selection: a
+  // number on every edge is unreadable at real network sizes. A driving edge's gap is 0 by
+  // definition and is skipped, so what remains is exactly the non-binding slack worth reading.
+  if (
+    toggles.linkSlack === true &&
+    scene.selectedId &&
+    typeof ctx.fillText === 'function' &&
+    typeof ctx.measureText === 'function'
+  ) {
+    const selected = scene.selectedId;
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'bottom';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = palette.labelBeside;
+    for (const edge of scene.edges) {
+      if (edge.predecessorId !== selected && edge.successorId !== selected) continue;
+      const pred = byId.get(edge.predecessorId);
+      const succ = byId.get(edge.successorId);
+      const predRect = rects.get(edge.predecessorId);
+      const succRect = rects.get(edge.successorId);
+      if (!pred?.earlyStart || !pred.earlyFinish || !succ?.earlyStart || !succ.earlyFinish)
+        continue;
+      if (!predRect || !succRect) continue; // both ends culled off-screen ⇒ nothing to annotate
+      const gap = edgeGapDays({
+        type: edge.type,
+        predStartDay: daysBetween(scene.dataDate, pred.earlyStart),
+        predFinishDay: daysBetween(scene.dataDate, pred.earlyFinish),
+        succStartDay: daysBetween(scene.dataDate, succ.earlyStart),
+        succFinishDay: daysBetween(scene.dataDate, succ.earlyFinish),
+        lagDays: edge.lagDays ?? 0,
+      });
+      if (gap <= 0) continue; // driving / binding: no slack to report
+      // Anchor the annotation on the endpoints the RELATIONSHIP actually constrains, not always
+      // the predecessor's right edge: an SS tie runs start→start and an FF tie finish→finish, so a
+      // fixed right-edge midpoint would float the number away from the line it explains.
+      const predX = edge.type === 'SS' || edge.type === 'SF' ? predRect.x : predRect.x + predRect.w;
+      const succX = edge.type === 'FF' || edge.type === 'SF' ? succRect.x + succRect.w : succRect.x;
+      const midX = (predX + succX) / 2;
+      const midY = (predRect.y + predRect.h / 2 + (succRect.y + succRect.h / 2)) / 2;
+      // Drawn on the same filled+outlined chip the lag and cursor readouts use — a bare fillText
+      // lands on bars, grid lines and other links with no guaranteed contrast.
+      const text = `${gap}d`;
+      const cw = ctx.measureText(text).width + LABEL_PAD_PX * 2;
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(midX - cw / 2, midY - SLACK_CHIP_H / 2, cw, SLACK_CHIP_H);
+      ctx.strokeStyle = palette.barStroke;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.strokeRect(midX - cw / 2 + 0.5, midY - SLACK_CHIP_H / 2 + 0.5, cw - 1, SLACK_CHIP_H - 1);
+      ctx.fillStyle = palette.labelInside;
+      ctx.fillText(text, midX, midY + SLACK_CHIP_H / 2 - 3);
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+  }
+
+  // The visible bars bucketed by lane and x-sorted — the shape both text passes below need, since
+  // each asks "what is my neighbour in this lane, and how much room does it leave?". Built ONCE and
+  // lazily: with the labels and dates layers both on, this was the same O(v log v) bucket-and-sort
+  // done twice per frame over the same data, which is the second-largest cost in the pass after
+  // `measureText`. A paint with both layers off never calls it.
+  let laneRowsCache: Map<number, { activity: RenderActivity; rect: Rect }[]> | null = null;
+  const laneRows = (): Map<number, { activity: RenderActivity; rect: Rect }[]> => {
+    if (laneRowsCache) return laneRowsCache;
+    const lanes = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
+    for (const [id, rect] of rects) {
+      const activity = byId.get(id)!;
+      const row = lanes.get(activity.laneIndex);
+      if (row) row.push({ activity, rect });
+      else lanes.set(activity.laneIndex, [{ activity, rect }]);
+    }
+    for (const row of lanes.values()) row.sort((a, b) => a.rect.x - b.rect.x);
+    laneRowsCache = lanes;
+    return lanes;
+  };
+
   // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting
   // (ADR-0026 D1). Gated by the toggle and a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
   // a wide-enough task bar (truncated + ellipsised to fit, so no clip needed), beside a short bar or
@@ -1106,16 +1283,7 @@ export function paintScene(
     // keyed by text alone, so a metric change would poison it across palettes (export path).
     const insidePad = LABEL_PAD_PX + (scene.visualRefresh ? 2 : 0);
 
-    const lanes = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
-    for (const [id, rect] of rects) {
-      const activity = byId.get(id)!;
-      const row = lanes.get(activity.laneIndex);
-      if (row) row.push({ activity, rect });
-      else lanes.set(activity.laneIndex, [{ activity, rect }]);
-    }
-
-    for (const row of lanes.values()) {
-      row.sort((a, b) => a.rect.x - b.rect.x);
+    for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
         const { activity, rect } = row[i]!;
         const nextLeftX = i + 1 < row.length ? row[i + 1]!.rect.x : Infinity;
@@ -1147,6 +1315,62 @@ export function paintScene(
         }
       }
     }
+  }
+
+  // Layer 3.7: flanking start/finish DATES (ADR-0054 §3) — the start date left of the bar, the
+  // finish date right of it, never inside (an inside date competes with the name label for the
+  // same pixels and vanishes on any bar narrower than its text). Gated by the `dates` toggle AND
+  // a zoom well above the label LOD, because this is two strings + two measurements per bar
+  // against the ADR-0026 draw budget. Absent toggle ⇒ not one call ⇒ byte-for-byte parity.
+  if (toggles.dates === true && view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY) {
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    const measure = (t: string): number => labelWidths.measure(t, (x) => ctx.measureText(x).width);
+    // With the float/drift tails ALSO on, the two layers want the same pixels: a tail runs out of
+    // the very edge the date is written beside, so the hatch strikes through the text. The date is
+    // NOT moved clear of the tail — a date printed at the far end of a 200-day tail would sit
+    // 1,200px from the bar and, on a time-scaled diagram, assert the wrong day. Instead each date
+    // gets an opaque plate in the canvas ground behind it: the date keeps the one position that is
+    // true, and the tail visibly passes behind it. One extra fillRect per drawn date, and only
+    // when both toggles are on — with tails off, the draw is byte-for-byte the M3 pass.
+    const plated = toggles.floatTails === true;
+    for (const row of laneRows().values()) {
+      for (let i = 0; i < row.length; i += 1) {
+        const { activity, rect } = row[i]!;
+        if (!activity.earlyStart || !activity.earlyFinish) continue; // uncalculated ⇒ no dates
+        const startText = formatCanvasDate(activity.earlyStart);
+        const finishText = formatCanvasDate(activity.earlyFinish);
+        const startWidthPx = measure(startText);
+        const finishWidthPx = measure(finishText);
+        const prevRight = i > 0 ? row[i - 1]!.rect.x + row[i - 1]!.rect.w : 0;
+        const nextLeft = i + 1 < row.length ? row[i + 1]!.rect.x : size.width;
+        const slot = dateLabelSlot({
+          roomLeftPx: rect.x - prevRight,
+          roomRightPx: nextLeft - (rect.x + rect.w),
+          startWidthPx,
+          finishWidthPx,
+        });
+        const cy = rect.y + rect.h / 2;
+        const plate = (x: number, w: number): void => {
+          if (!plated) return;
+          ctx.fillStyle = palette.handleHalo; // the canvas ground, so the plate reads as "behind"
+          ctx.fillRect(x, cy - DATE_PLATE_H / 2, w, DATE_PLATE_H);
+        };
+        if (slot.start) {
+          plate(rect.x - LABEL_GAP_PX - startWidthPx - 1, startWidthPx + 2);
+          ctx.fillStyle = palette.labelBeside;
+          ctx.textAlign = 'right';
+          ctx.fillText(startText, rect.x - LABEL_GAP_PX, cy);
+        }
+        if (slot.finish) {
+          plate(rect.x + rect.w + LABEL_GAP_PX - 1, finishWidthPx + 2);
+          ctx.fillStyle = palette.labelBeside;
+          ctx.textAlign = 'left';
+          ctx.fillText(finishText, rect.x + rect.w + LABEL_GAP_PX, cy);
+        }
+      }
+    }
+    ctx.textAlign = 'left';
   }
 
   // Layer 4: the selection ring on the selected activity (if visible), plus — when editing
@@ -1221,6 +1445,21 @@ export interface LagOverlay {
   label: string;
 }
 
+/**
+ * Full-fidelity detail for the in-flight ghost (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`). The
+ * ADR-0052 ghost was a deliberately bare fill+outline, which was right while it sat beside a
+ * fully-painted source bar; now the source recedes, the ghost IS the bar and must look like it.
+ * Absent ⇒ the ADR-0052 ghost, byte-for-byte.
+ */
+export interface GhostDetail {
+  /** The bar's own label (`{code} {name} · {n}d`), drawn inside when the ghost is wide enough. */
+  label: string;
+  /** Schedule % complete, drawn as the same in-bar progress band the real bar carries. */
+  percentComplete?: number;
+  /** Draw the milestone diamond rather than a rounded bar, matching the real glyph. */
+  milestone?: boolean;
+}
+
 /** Chip height (px) of the lag readout drawn above the dragged anchor. */
 const LAG_CHIP_H = 14;
 /** Gap (px) between the dragged anchor point and its readout chip. */
@@ -1251,7 +1490,28 @@ export interface InteractionOverlay {
    * change (never the sole carrier of state — selection remains the keyboard/AT state), drawn
    * OUTSIDE the bar so it obscures no label or badge. Only read under `visualRefresh`. */
   hover?: Rect | null;
+  // ── Live feedback (ADR-0054 §1–§2, `VITE_CANVAS_LIVE_FEEDBACK`) ──────────────────────────
+  /** Full-fidelity detail for the in-flight `live`/`resize` ghost, so a drag reads as the bar
+   * itself moving. Absent ⇒ the ADR-0052 ghost, byte-for-byte. */
+  ghost?: GhostDetail | null;
+  /** The cursor date readout (ADR-0054 §2): a full-height guideline at the day being chosen plus
+   * a chip stating its date. Computed by the pure `cursorReadout`, so the number shown is the one
+   * the gesture will commit. Absent ⇒ nothing drawn. */
+  cursor?: CursorChip | null;
 }
+
+/** The cursor date readout's screen shape (ADR-0054 §2) — see `render/cursor-readout.ts`. */
+export interface CursorChip {
+  /** Screen x of the guideline: the day boundary, not the raw pointer. */
+  x: number;
+  /** The date sentence, e.g. `Fri 2 Jan` or `2 Jan – 6 Jan · 5d`. */
+  label: string;
+}
+
+/** Height (px) of the cursor date chip. */
+const CURSOR_CHIP_H = 16;
+/** Gap (px) between the canvas top edge and the chip. */
+const CURSOR_CHIP_TOP = 4;
 
 /**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):
@@ -1272,6 +1532,37 @@ export function paintInteractionLayer(
 
   const { live, pending, link, linkPick, resize, lag } = overlay;
   const refresh = overlay.visualRefresh === true;
+
+  // The cursor date readout (ADR-0054 §2), drawn FIRST so every ghost, ring and chip paints over
+  // it — it is a reference line, not a foreground object. A full-height dashed rule marks the day
+  // boundary being chosen; the chip above it states the date. Absent ⇒ not one call ⇒ parity.
+  if (overlay.cursor) {
+    const { x, label } = overlay.cursor;
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, size.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Guarded like every other label pass so a text-less test context never throws; `measureText`
+    // sizes the chip, and the x is clamped so the chip never leaves the surface at either edge.
+    if (typeof ctx.fillText === 'function' && typeof ctx.measureText === 'function') {
+      ctx.font = LABEL_FONT;
+      const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
+      const cx = Math.max(0, Math.min(x - w / 2, size.width - w));
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(cx, CURSOR_CHIP_TOP, w, CURSOR_CHIP_H);
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx + 0.5, CURSOR_CHIP_TOP + 0.5, w - 1, CURSOR_CHIP_H - 1);
+      ctx.fillStyle = palette.labelInside;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, cx + LABEL_PAD_PX, CURSOR_CHIP_TOP + CURSOR_CHIP_H / 2);
+    }
+  }
 
   if (refresh && overlay.hover) {
     // The idle-hover ring (M4): a light rounded outline in the hover hue, drawn FIRST so every
@@ -1333,8 +1624,51 @@ export function paintInteractionLayer(
   // plus an inner inset hairline in the bar-definition stroke — "elevation" approximated by the
   // double stroke, never a shadow/blur (draw budget). Square fallback where roundRect is absent;
   // flag-off callers never reach it. Reads as "the bar, lifted", obscuring no label or badge.
+  const detail = overlay.ghost;
+
+  /**
+   * The ghost's own bar detail (ADR-0054 §1): the milestone diamond where the type calls for it,
+   * the in-bar progress band, and the inside label — the same three things that make the real bar
+   * recognisable. Drawn only when the caller supplies `overlay.ghost`, so the flag-off path paints
+   * the ADR-0052 ghost byte-for-byte. Text is guarded like every other label pass so a text-less
+   * test context never throws.
+   */
+  const ghostDetail = (r: Rect): void => {
+    if (!detail) return;
+    if (detail.percentComplete !== undefined && !detail.milestone) {
+      const progress = progressGeometry(r, detail.percentComplete);
+      if (progress) {
+        ctx.fillStyle = palette.labelInside;
+        const { band, frontX } = progress;
+        ctx.fillRect(band.x, band.y, band.w, band.h);
+        if (frontX !== null) ctx.fillRect(frontX - 0.5, band.y, 1, band.h);
+      }
+    }
+    if (detail.milestone) return; // a diamond has no room for an inside label
+    if (typeof ctx.fillText !== 'function' || typeof ctx.measureText !== 'function') return;
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    const pad = LABEL_PAD_PX + 2;
+    const text = truncateToWidth(detail.label, r.w - pad * 2, (s) => ctx.measureText(s).width);
+    if (!text) return;
+    ctx.fillStyle = palette.labelInside;
+    ctx.fillText(text, r.x + pad, r.y + r.h / 2);
+  };
+
   const refreshedGhost = (r: Rect): void => {
     ctx.fillStyle = palette.bar;
+    // A milestone ghosts as the diamond it really is, so a dragged milestone never momentarily
+    // becomes a bar (ADR-0054 §1). The outline below then traces the same path.
+    if (detail?.milestone) {
+      traceMilestoneDiamond(ctx, r.x + r.w / 2, r.y + r.h / 2, MILESTONE_RADIUS);
+      ctx.fill();
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+      return;
+    }
     if (beginRoundedRect(ctx, r, BAR_RADIUS)) ctx.fill();
     else ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = palette.selection;
@@ -1353,6 +1687,7 @@ export function paintInteractionLayer(
   if (live) {
     if (refresh) {
       refreshedGhost(live);
+      ghostDetail(live);
     } else {
       ctx.fillStyle = palette.bar;
       ctx.fillRect(live.x, live.y, live.w, live.h);
@@ -1371,6 +1706,7 @@ export function paintInteractionLayer(
     const r = resize.rect;
     if (refresh) {
       refreshedGhost(r);
+      ghostDetail(r);
     } else {
       ctx.fillStyle = palette.bar;
       ctx.fillRect(r.x, r.y, r.w, r.h);

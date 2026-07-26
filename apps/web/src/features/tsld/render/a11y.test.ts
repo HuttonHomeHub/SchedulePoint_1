@@ -255,6 +255,26 @@ describe('summarizeLogic (Tier 2)', () => {
       '2 predecessors, 2 successors; start driven by Survey; drives Pour',
     );
   });
+
+  it('speaks per-tie slack for the non-binding ties (the spoken twin of the canvas chip)', () => {
+    // The map is what the canvas draws its `Nd` chips from; the driving ties carry 0 and are
+    // already reported as the driver, so only the two waiting ties get a clause (ADR-0054 §5).
+    const slack = new Map([
+      ['p1->x', 0],
+      ['p2->x', 4],
+      ['x->s1', 0],
+      ['x->s2', 2],
+    ]);
+    expect(summarizeLogic('x', deps, slack)).toBe(
+      '2 predecessors, 2 successors; start driven by Survey; drives Pour; slack to Permit 4 days, Backfill 2 days',
+    );
+  });
+
+  it('leaves the sentence untouched when no slack is supplied or none is positive', () => {
+    const before = '2 predecessors, 2 successors; start driven by Survey; drives Pour';
+    expect(summarizeLogic('x', deps, new Map())).toBe(before);
+    expect(summarizeLogic('x', deps, new Map([['p2->x', 0]]))).toBe(before);
+  });
 });
 
 describe('lagPhrase (the spoken time-true anchor offset, ADR-0052)', () => {

@@ -11,6 +11,7 @@ import type { ColourLegend, ColourMode } from '../render/lenses';
 
 import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
+  CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
@@ -28,6 +29,8 @@ type LegendItem =
   | { label: string; summary: true }
   | { label: string; progress: true }
   | { label: string; lag: true }
+  | { label: string; tail: 'float' | 'drift' }
+  | { label: string; slack: true }
   | { label: string; text: true };
 
 /** The Critical / Near-critical / On-schedule colour key (the default, criticality-mode fills). */
@@ -90,6 +93,19 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // Visual-Planning conflict cue (ADR-0033) — an outlined warning triangle on a bar placed before its
   // earliest feasible start. Only meaningful under scheduling modes, so listed only when enabled.
   ...(SCHEDULING_MODES_ENABLED ? [{ label: 'Visual conflict', conflict: true } as const] : []),
+  // The ADR-0054 §4/§5 insight marks (behind `VITE_CANVAS_LIVE_FEEDBACK`). Listed like every other
+  // toggleable cue here (Non-working and Today are keyed whether or not their toggle is on), so a
+  // planner who turns `Float & drift` on has somewhere to learn what the hatched tails mean — and,
+  // more importantly, why the left-hand one is usually absent. Drift is zero everywhere in Early
+  // mode by construction (everything is already as early as logic allows), so the label says
+  // *when* it appears rather than leaving its absence to read as a broken feature.
+  ...(CANVAS_LIVE_FEEDBACK_ENABLED
+    ? [
+        { label: 'Total float (room to slip)', tail: 'float' } as const,
+        { label: 'Drift — earlier it could go (Visual mode)', tail: 'drift' } as const,
+        { label: 'Link slack (days)', slack: true } as const,
+      ]
+    : []),
   // Over-allocation cue (Stage E M2, ADR-0049) — a small rising-bars badge matching the canvas
   // mini-histogram, in the warning hue with a foreground outline (shape, not colour — WCAG 1.4.1). Only
   // meaningful with the resource view, so listed only when the feature is on.
@@ -327,6 +343,45 @@ export function TsldLegend({
                   borderTopWidth: 1.5,
                   borderTopStyle: 'dotted',
                   borderTopColor: 'var(--color-muted-foreground)',
+                }}
+              />
+            </span>
+          ) : 'tail' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
+              {/* A bar stub with the hollow, hatched slack tail running off it — right for float,
+                  left for drift, mirroring the canvas. Hatched, not filled: a filled extension
+                  would read as duration (and the hatch is the non-colour cue, WCAG 1.4.1). */}
+              <span
+                className="absolute top-1/2 -translate-y-1/2"
+                style={{
+                  [item.tail === 'float' ? 'left' : 'right']: 0,
+                  width: 8,
+                  height: 8,
+                  backgroundColor: 'var(--color-primary)',
+                }}
+              />
+              <span
+                className="absolute top-1/2 -translate-y-1/2"
+                style={{
+                  [item.tail === 'float' ? 'left' : 'right']: 9,
+                  width: 11,
+                  height: 5,
+                  border: '1px solid var(--color-muted-foreground)',
+                  backgroundImage:
+                    'repeating-linear-gradient(45deg, transparent 0 2px, var(--color-muted-foreground) 2px 3px)',
+                }}
+              />
+            </span>
+          ) : 'slack' in item ? (
+            <span aria-hidden="true" className="inline-flex h-3 w-5 items-center justify-center">
+              {/* The outlined chip the canvas prints the gap in, on the selected activity's links. */}
+              <span
+                className="rounded-[2px]"
+                style={{
+                  width: 14,
+                  height: 10,
+                  backgroundColor: 'var(--color-card)',
+                  border: '1px solid var(--color-border)',
                 }}
               />
             </span>

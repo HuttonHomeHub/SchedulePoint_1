@@ -80,6 +80,9 @@ export function toRenderActivities(
     // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,
     // so the canvas and the table can never disagree on how complete an activity is.
     percentComplete: a.percentComplete,
+    // Engine-owned total float, for the GPM float tail (ADR-0054 §4). Carried straight through —
+    // the canvas never computes float, it only draws what the engine decided.
+    totalFloat: a.totalFloat,
   }));
 }
 

@@ -43,6 +43,7 @@ import {
   daysBetween,
   isMilestone,
   isResizeEligibleType,
+  slackByDependencyId,
   type Point,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
@@ -742,6 +743,17 @@ export function TsldPanel({
     () => (dataDate && todayIso ? daysBetween(dataDate, todayIso) : null),
     [dataDate, todayIso],
   );
+  // The same per-tie slack the canvas draws as an `Nd` chip on the selected activity's links
+  // (ADR-0054 §5), built from the one shared builder so the drawn number and the spoken one are the
+  // same computation. Fed to the Tier-2 `Space` summary, which is the only way a non-sighted
+  // planner can get it (WCAG 1.1.1). Empty (and the sentence unchanged) until the plan has dates.
+  const linkSlack = useMemo(
+    () =>
+      dataDate
+        ? slackByDependencyId({ dataDate, activities, dependencies })
+        : new Map<string, number>(),
+    [dataDate, activities, dependencies],
+  );
 
   const select = (id: string | null): void => {
     setSelectedId(id);
@@ -864,7 +876,7 @@ export function TsldPanel({
     if (event.key === ' ') {
       event.preventDefault();
       const current = activities.find((a) => a.id === selectedId);
-      if (current) announce(summarizeLogic(current.id, dependencies));
+      if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
       return;
     }
     // Shift+←/→ nudges the focused activity's DURATION one day (ADR-0052 M2) — the keyboard

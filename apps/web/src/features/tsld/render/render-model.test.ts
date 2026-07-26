@@ -55,6 +55,7 @@ import {
   panToDate,
   rectsIntersect,
   screenXOfDay,
+  slackByDependencyId,
   screenYOfLane,
   zoomAt,
   type RenderActivity,
@@ -1166,5 +1167,53 @@ describe('linkHighlightIds / edgeTouches (incident-link highlight selection)', (
     expect(edgeTouches(e, new Set(['p']))).toBe(true);
     expect(edgeTouches(e, new Set(['s']))).toBe(true);
     expect(edgeTouches(e, new Set(['x']))).toBe(false);
+  });
+});
+
+describe('slackByDependencyId (the one shared per-tie gap, ADR-0054 §5)', () => {
+  const a = (id: string, earlyStart: string | null, earlyFinish: string | null) => ({
+    id,
+    earlyStart,
+    earlyFinish,
+  });
+  const d = (
+    id: string,
+    predecessorId: string,
+    successorId: string,
+    type: DependencyType = 'FS',
+    lagDays = 0,
+  ) => ({
+    id,
+    type,
+    lagDays,
+    predecessor: { id: predecessorId },
+    successor: { id: successorId },
+  });
+
+  it('measures each tie’s gap from the drawn dates, per relationship type and lag', () => {
+    const slack = slackByDependencyId({
+      dataDate: '2026-01-01',
+      activities: [
+        a('p', '2026-01-01', '2026-01-03'),
+        a('s', '2026-01-08', '2026-01-10'),
+        a('t', '2026-01-05', '2026-01-06'),
+      ],
+      // FS: successor starts day 7, predecessor finishes day 2 ⇒ 7 − (2 + 1) = 4 days waiting.
+      dependencies: [d('e1', 'p', 's'), d('e2', 'p', 't', 'SS'), d('e3', 'p', 's', 'FS', 4)],
+    });
+    expect(slack.get('e1')).toBe(4);
+    // SS: successor starts day 4, predecessor starts day 0 ⇒ 4 days.
+    expect(slack.get('e2')).toBe(4);
+    // The lag consumes the gap: a 4-day lag on the same FS tie leaves nothing (a binding tie).
+    expect(slack.get('e3')).toBe(0);
+  });
+
+  it('omits a tie whose endpoints are not scheduled — there is no gap to state', () => {
+    const slack = slackByDependencyId({
+      dataDate: '2026-01-01',
+      activities: [a('p', null, null), a('s', '2026-01-08', '2026-01-10')],
+      dependencies: [d('e1', 'p', 's'), d('e2', 'p', 'missing')],
+    });
+    expect(slack.size).toBe(0);
   });
 });
