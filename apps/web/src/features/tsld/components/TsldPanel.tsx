@@ -1175,10 +1175,19 @@ export function TsldPanel({
           : activity.earlyStart && dataDate
             ? daysBetween(dataDate, activity.earlyStart)
             : 0;
-      const days = intent.newDurationDays;
+      // The gesture measures in CANVAS COLUMNS — the drag's whole-day geometry off the drawn bar —
+      // but `durationDays` is a WORKING-day duration, the same unit mismatch the create path had.
+      // A 4-day activity drawn over a weekend occupies 6 columns; dragging its end one column right
+      // sent 7, and the engine laid out 7 *working* days (9 calendar). Convert the drawn span the
+      // same way a fresh draw is converted, so one column of drag is one working day of growth.
+      const drawnEndDay = startDay + intent.newDurationDays - 1;
+      const placement = drawnSpanPlacement(startDay, drawnEndDay, workingDayPredicate);
+      const days = placement.durationDays;
+      // The optimistic ghost keeps the DRAWN span: it is the shape the pointer just described, and
+      // (barring a start snapped off a non-working day) it is where the recalculated bar lands.
       setPendingReposition({
-        startDay,
-        endDay: startDay + days - 1,
+        startDay: placement.startDay,
+        endDay: drawnEndDay,
         laneIndex: activity.laneIndex,
       });
       // Share the pointer-busy gate with reposition so a keyboard nudge can't race this write.
@@ -1186,7 +1195,7 @@ export function TsldPanel({
       void onResize({
         activityId: intent.activityId,
         durationDays: days,
-        ...(intent.edge === 'start' ? { startDay: intent.newStartDay } : {}),
+        ...(intent.edge === 'start' ? { startDay: placement.startDay } : {}),
       })
         .then((outcome) => {
           setPendingReposition(null);
@@ -1197,7 +1206,7 @@ export function TsldPanel({
           if (outcome.applied) {
             const newStart =
               intent.edge === 'start' && dataDate
-                ? formatCalendarDate(addCalendarDays(dataDate, intent.newStartDay))
+                ? formatCalendarDate(addCalendarDays(dataDate, placement.startDay))
                 : null;
             announce(
               newStart

@@ -61,6 +61,7 @@ import {
   type ZoomLevel,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
+import { drawnSpanPlacement } from '../render/snap';
 import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
 import { useThemeVersion } from '../render/use-theme-version';
 import type { SelectionAnchor } from '../toolbar/selection-actions';
@@ -285,9 +286,16 @@ export function liveResize(
   state: GestureState,
   view: Viewport,
   dataDate: string,
+  isWorkingDay?: ((dayOffset: number) => boolean) | null,
 ): ResizeOverlay | null {
   if (state.kind !== 'resizing') return null;
-  const days = `${state.currentDurationDays}d`;
+  // The gesture tracks CANVAS COLUMNS; the duration the activity ends up with is counted in
+  // WORKING days. Over a weekend those differ, so a raw column count in the chip would promise a
+  // number the commit cannot deliver — the exact thing this readout exists to prevent. Converted
+  // through the same helper the write uses, so the chip and the saved duration are one number.
+  // Without a calendar (not loaded) the column count is all there is, which is today's behaviour.
+  const drawnEnd = state.currentStartDay + state.currentDurationDays - 1;
+  const days = `${drawnSpanPlacement(state.currentStartDay, drawnEnd, isWorkingDay ?? null).durationDays}d`;
   return {
     rect: dayCellRect(
       state.currentStartDay,
@@ -997,7 +1005,12 @@ export function TsldCanvas({
           // Bar-end resize ghost + live readout (ADR-0052 M2/M3), and the lag-drag readout chip
           // (M3). Both null except while their gesture is active, so every other frame paints
           // byte-for-byte as before.
-          resize: liveResize(gestureRef.current, viewRef.current, sceneRef.current.dataDate),
+          resize: liveResize(
+            gestureRef.current,
+            viewRef.current,
+            sceneRef.current.dataDate,
+            sceneRef.current.isWorkingDay,
+          ),
           lag: liveLag(gestureRef.current, viewRef.current),
           // M4 refresh: restyled ghosts + the idle-hover ring (suppressed while a gesture is in
           // flight — the ghost is the live affordance then). Flag-off both fields are inert
