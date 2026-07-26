@@ -44,6 +44,40 @@ export const LABEL_GAP_PX = 4;
  */
 export const DATE_LABEL_MIN_PX_PER_DAY = 6;
 
+/**
+ * The **gap** in whole days a relationship leaves between its two endpoints (ADR-0054 §5) — the
+ * answer to "why is this activity waiting?".
+ *
+ * Measured from the *drawn* day offsets, per relationship type, with the lag already accounted
+ * for. A **driving** edge is by definition the binding constraint, so its gap is 0; a positive
+ * gap is genuine slack in that one tie.
+ *
+ * Deliberately a **calendar-day** count off the drawn geometry, not a working-day walk: this
+ * annotates what the planner can see on the diagram, and the diagram's x-axis is calendar time.
+ * The engine remains the authority on float — this is a reading of the picture, not a second
+ * opinion about the schedule.
+ */
+export function edgeGapDays(args: {
+  type: DependencyType;
+  predStartDay: number;
+  predFinishDay: number;
+  succStartDay: number;
+  succFinishDay: number;
+  lagDays: number;
+}): number {
+  const { type, predStartDay, predFinishDay, succStartDay, succFinishDay, lagDays } = args;
+  switch (type) {
+    case 'FS':
+      return succStartDay - (predFinishDay + 1 + lagDays);
+    case 'SS':
+      return succStartDay - (predStartDay + lagDays);
+    case 'FF':
+      return succFinishDay - (predFinishDay + lagDays);
+    case 'SF':
+      return succFinishDay - (predStartDay - 1 + lagDays);
+  }
+}
+
 /** Height (px) of a float/drift tail — thinner than the bar, so it never reads as duration. */
 export const TAIL_HEIGHT = 6;
 

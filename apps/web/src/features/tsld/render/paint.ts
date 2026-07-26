@@ -35,6 +35,7 @@ import {
   DATE_LABEL_MIN_PX_PER_DAY,
   dateLabelSlot,
   driftTailRect,
+  edgeGapDays,
   floatTailRect,
   formatCanvasDate,
   LABEL_MIN_PX_PER_DAY,
@@ -168,6 +169,11 @@ export interface TsldViewToggles {
    *
    * Optional ⇒ absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
   floatTails?: boolean;
+  /** Annotate **relationship slack** on the SELECTED activity's own links (ADR-0054 §5). Scoped to
+   * the selection on purpose: a number on every edge of a real network is noise that obscures the
+   * very structure the diagram exists to show, so this is an *inspection* affordance. Optional ⇒
+   * absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
+  linkSlack?: boolean;
   /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
@@ -1163,6 +1169,42 @@ export function paintScene(
         ctx.stroke();
       }
     }
+  }
+
+  // Layer 3.58: relationship SLACK on the selected activity's links (ADR-0054 §5) — the gap in
+  // days each tie leaves, answering "why is this activity waiting?". Scoped to the selection: a
+  // number on every edge is unreadable at real network sizes. A driving edge's gap is 0 by
+  // definition and is skipped, so what remains is exactly the non-binding slack worth reading.
+  if (toggles.linkSlack === true && scene.selectedId && typeof ctx.fillText === 'function') {
+    const selected = scene.selectedId;
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'bottom';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = palette.labelBeside;
+    for (const edge of scene.edges) {
+      if (edge.predecessorId !== selected && edge.successorId !== selected) continue;
+      const pred = byId.get(edge.predecessorId);
+      const succ = byId.get(edge.successorId);
+      const predRect = rects.get(edge.predecessorId);
+      const succRect = rects.get(edge.successorId);
+      if (!pred?.earlyStart || !pred.earlyFinish || !succ?.earlyStart || !succ.earlyFinish)
+        continue;
+      if (!predRect || !succRect) continue; // both ends culled off-screen ⇒ nothing to annotate
+      const gap = edgeGapDays({
+        type: edge.type,
+        predStartDay: daysBetween(scene.dataDate, pred.earlyStart),
+        predFinishDay: daysBetween(scene.dataDate, pred.earlyFinish),
+        succStartDay: daysBetween(scene.dataDate, succ.earlyStart),
+        succFinishDay: daysBetween(scene.dataDate, succ.earlyFinish),
+        lagDays: edge.lagDays ?? 0,
+      });
+      if (gap <= 0) continue; // driving / binding: no slack to report
+      const midX = (predRect.x + predRect.w + succRect.x) / 2;
+      const midY = (predRect.y + succRect.y) / 2;
+      ctx.fillText(`${gap}d`, midX, midY);
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
   }
 
   // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting

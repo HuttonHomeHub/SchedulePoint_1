@@ -324,3 +324,51 @@ describe('float & drift tails (ADR-0054 §4)', () => {
     expect(off.moveTo.mock.calls).toEqual(absent.moveTo.mock.calls);
   });
 });
+
+describe('relationship slack on the selection (ADR-0054 §5)', () => {
+  const pred = task({ id: 'p', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' });
+  // Starts 5 days after the predecessor finishes, so this FS tie carries 5 days of slack.
+  const succ = task({
+    id: 's',
+    laneIndex: 1,
+    earlyStart: '2026-01-11',
+    earlyFinish: '2026-01-14',
+  });
+  const edges = [
+    { predecessorId: 'p', successorId: 's', type: 'FS' as const, isDriving: false, lagDays: 0 },
+  ];
+  const paintWith = (selectedId: string | null, linkSlack = true) => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      {
+        activities: [pred, succ],
+        edges,
+        dataDate: DATA_DATE,
+        selectedId,
+        view: { ...ALL_ON, linkSlack },
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+      1,
+    );
+    return ctx.fillText.mock.calls.map((c) => c[0]);
+  };
+
+  it('annotates the gap on the selected activity’s own tie', () => {
+    expect(paintWith('p')).toContain('5d');
+  });
+
+  it('annotates it from either end of the tie', () => {
+    expect(paintWith('s')).toContain('5d');
+  });
+
+  it('annotates nothing without a selection — it is an inspection affordance', () => {
+    expect(paintWith(null)).not.toContain('5d');
+  });
+
+  it('is a no-op without the toggle — the flag-off parity contract', () => {
+    expect(paintWith('p', false)).not.toContain('5d');
+  });
+});
