@@ -79,4 +79,6 @@ interface ImportMetaEnv {
   readonly VITE_LIBRARY_SCOPING?: string;
   /** TSLD canvas live feedback + GPM float/drift visualisation — the in-flight ghost carrying the dragged bar's own label/progress/glyph while its source recedes, a cursor date chip + ruler guideline, start/finish dates flanking each bar behind a Dates toggle, hollow float/drift tails, and relationship slack on the selected activity's links (ADR-0054, docs/specs/canvas-live-feedback/). "true"/"1" enables it; off by default until the M6 draw-budget measurement + specialist reviews. */
   readonly VITE_CANVAS_LIVE_FEEDBACK?: string;
+  /** Designed chrome band — the header row and (on a plan) the two toolbar rows rendered as ONE full-bleed band across the top, with the Project Explorer and the workspace below it; the toolbar reaches the band through a portal, so no plan state moves into the shell (ADR-0055, docs/specs/designed-ui/). Also stamps `data-designed-chrome` on <html>, activating the flagged token values. "true"/"1" enables it; off by default until the S5 enablement gate. */
+  readonly VITE_DESIGNED_CHROME?: string;
 }

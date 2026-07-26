@@ -7,7 +7,7 @@ import { RailResizer } from './rail-resizer';
 import { ShellContext } from './shell-context';
 import { useRailPrefs } from './use-rail-prefs';
 
-import { AppHeader } from '@/components/layout/app-header';
+import { ChromeBand } from '@/components/layout/chrome/chrome-band';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
 import { Surface } from '@/components/ui/surface';
@@ -88,36 +88,40 @@ function ShellFrame(): React.ReactElement {
     <ShellContext.Provider value={shell}>
       <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
         <div className="flex min-h-dvh flex-col">
-          <AppHeader />
-          <div className="flex min-h-0 flex-1">
-            {rail.collapsed ? (
-              <div className="hidden shrink-0 lg:block">
-                <NavigatorRailCollapsed onExpand={expand} focusToggleOnMount={interacted} />
-              </div>
-            ) : (
-              <>
-                <div className="hidden shrink-0 lg:block" style={{ width: rail.width }}>
-                  <NavigatorRail
-                    orgSlug={orgSlug}
-                    expansion={expansion}
-                    onCollapse={collapse}
-                    focusToggleOnMount={interacted}
-                  />
+          {/* The chrome band owns the header and (flag-on) the slot a plan's toolbar portals
+              into — so the top of the app reads as one designed surface without the shell ever
+              learning what a plan is (ADR-0029 / ADR-0055 §3). Flag-off it is just the header. */}
+          <ChromeBand>
+            <div className="flex min-h-0 flex-1">
+              {rail.collapsed ? (
+                <div className="hidden shrink-0 lg:block">
+                  <NavigatorRailCollapsed onExpand={expand} focusToggleOnMount={interacted} />
                 </div>
-                {/* The resizer sits *between* the rail and `<main>`, but it is rail chrome, so
+              ) : (
+                <>
+                  <div className="hidden shrink-0 lg:block" style={{ width: rail.width }}>
+                    <NavigatorRail
+                      orgSlug={orgSlug}
+                      expansion={expansion}
+                      onCollapse={collapse}
+                      focusToggleOnMount={interacted}
+                    />
+                  </div>
+                  {/* The resizer sits *between* the rail and `<main>`, but it is rail chrome, so
                     it takes the rail's colours. `contents` keeps the scope purely a colour
                     context — custom properties still inherit, and no box is added to the row. */}
-                <Surface tone="panel" className="contents">
-                  <RailResizer width={rail.width} onResize={rail.setWidth} />
-                </Surface>
-              </>
-            )}
-            {/* The single workspace region — the one <main> for the page; routed screens
+                  <Surface tone="panel" className="contents">
+                    <RailResizer width={rail.width} onResize={rail.setWidth} />
+                  </Surface>
+                </>
+              )}
+              {/* The single workspace region — the one <main> for the page; routed screens
                 render their content into it (M3). */}
-            <main className="flex min-w-0 flex-1 flex-col">
-              <Outlet />
-            </main>
-          </div>
+              <main className="flex min-w-0 flex-1 flex-col">
+                <Outlet />
+              </main>
+            </div>
+          </ChromeBand>
         </div>
 
         {/* Below lg: the rail as an off-canvas drawer. */}

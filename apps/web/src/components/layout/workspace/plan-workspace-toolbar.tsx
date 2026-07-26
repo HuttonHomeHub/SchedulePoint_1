@@ -18,10 +18,12 @@ import {
   NOTES_PANEL_MIN_WIDTH,
   useNotesPanelPrefs,
 } from './use-notes-panel-prefs';
+import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
+import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
@@ -58,7 +60,6 @@ import {
   useTsldToolbarContext,
   type PlanDialogKind,
 } from '@/features/tsld/toolbar/use-tsld-toolbar-context';
-import { useUndoRedoKeybindings } from '@/features/undo-redo';
 import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
@@ -136,11 +137,11 @@ export function ToolbarPlanWorkspace({
 
   // "Press ? for keyboard shortcuts" (ADR-0031 amendment) — scoped to the workspace region rather than
   // the whole document (WCAG 2.1.4: a single-character shortcut must not be globally active). The
-  // listener is attached to the workspace root element, so it only fires when focus is inside it
-  // (keydown bubbles from the canvas or a toolbar control), mirroring the listbox-scoped `?` in
-  // TsldPanel. Ignore it while typing in a field, and don't stack the sheet on an already-open plan
-  // dialog / edit form (whose modal keydown still bubbles to this root).
-  const openShortcuts = canvasUi.setShowHelp;
+  // handler is bound to the workspace root, so it only fires when focus is inside it (keydown
+  // bubbles from the canvas or a toolbar control — through the chrome portal too, since React
+  // events follow the React tree), mirroring the listbox-scoped `?` in TsldPanel. Ignore it while
+  // typing in a field, and don't stack the sheet on an already-open plan dialog / edit form.
+  const showShortcuts = useCallback(() => canvasUi.setShowHelp(true), [canvasUi]);
   const rootRef = useRef<HTMLDivElement>(null);
   // "A modal is open" — the plan dialogs + the edit-plan form + the activity edit/delete dialogs.
   // Gates both the `?` shortcut (don't stack the sheet on an open modal) and the undo/redo keybindings
@@ -150,20 +151,6 @@ export function ToolbarPlanWorkspace({
     model.editing ||
     model.editActivityId !== null ||
     model.deleteActivityId !== null;
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
-      if (anotherDialogOpen) return;
-      event.preventDefault();
-      openShortcuts(true);
-    };
-    root.addEventListener('keydown', onKeyDown);
-    return () => root.removeEventListener('keydown', onKeyDown);
-  }, [openShortcuts, anotherDialogOpen]);
 
   // Below `md` the vertical split can't give the canvas and the table useful height at once, so
   // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
@@ -260,16 +247,16 @@ export function ToolbarPlanWorkspace({
   // tools read as live while doing nothing on the canvas (ux/a11y review).
   const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
 
-  // Undo/Redo keybindings (ADR-0048 M3.2), scoped to the workspace root (like the `?` shortcut above) —
-  // `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` / `Ctrl+Y`, suppressing the browser default via preventDefault
-  // (TECH_DEBT #25). Enabled only when the flag is on AND the user can author (holds the pen, not the
-  // read-only Late overlay) — the same `authoringEnabled` predicate the toolbar's pen-gated cluster
-  // uses, so the keyboard path and the buttons gate identically. Flag-off ⇒ no listener (byte-identical).
-  useUndoRedoKeybindings({
-    rootRef,
-    enabled: UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive,
-    // Inert while any modal is open, so `Ctrl+Z` never mutates plan state under a dialog (ADR-0048).
+  // The workspace keyboard scope — `?` plus the ADR-0048 undo/redo accelerators — as ONE React
+  // handler bound to the workspace root. React events follow the React tree, so this keeps working
+  // when the toolbar is portalled into the chrome band (ADR-0055 S2); the two native listeners it
+  // replaces would have gone silently deaf there. Undo/redo is live only when the flag is on AND
+  // the user can author (holds the pen, not the read-only Late overlay) — the same predicate the
+  // toolbar's pen-gated cluster uses, so keyboard and buttons gate identically.
+  const onWorkspaceKeyDown = usePlanWorkspaceKeyScope({
     modalOpen: anotherDialogOpen,
+    onShowShortcuts: showShortcuts,
+    undoRedoEnabled: UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive,
     undo: model.undoRedo.undo,
     redo: model.undoRedo.redo,
   });
@@ -438,7 +425,13 @@ export function ToolbarPlanWorkspace({
   ];
 
   return (
-    <div ref={rootRef} className="flex min-h-0 flex-1 flex-col">
+    // The workspace root is an event DELEGATION root, not a control masquerading as one: no role,
+    // no tabIndex, no click handler, never focusable itself. It only observes keydowns bubbling
+    // from the real focusable controls inside it — the case jsx-a11y cannot distinguish from a
+    // fake button. Making it focusable to satisfy the rule would ADD a meaningless tab stop, so
+    // the accessible answer here is the disable, not the "fix".
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div ref={rootRef} onKeyDown={onWorkspaceKeyDown} className="flex min-h-0 flex-1 flex-col">
       {/* Slim header: one line — breadcrumb (…→ plan name) + status pill, then compact pen status. */}
       <header className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-2">
         <h1 className="sr-only">{plan.name}</h1>
@@ -470,25 +463,31 @@ export function ToolbarPlanWorkspace({
           Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
           the always-live plan & deliverable actions. Both rows share one `authoringEnabled` — only
           Row 2's `penGated` items react. Row 1 right-aligns its status read-outs (Finish/Summary/Legend). */}
-      <div className="border-border flex flex-col border-b">
-        <div className="border-border border-b px-2 py-1">
-          <Toolbar
-            items={rows.look}
-            context={ctx}
-            label="View and navigate"
-            authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-            alignEndGroup="object"
-          />
+      {/* Flag-on (`VITE_DESIGNED_CHROME`) these two rows portal into the chrome band, so the top of
+          the app reads as one surface. Only the DOM node moves — in the React tree they stay right
+          here, which is why `ctx`, the registry predicates and the workspace key scope are all
+          untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
+      <ChromePortal>
+        <div className="border-border flex flex-col border-b">
+          <div className="border-border border-b px-2 py-1">
+            <Toolbar
+              items={rows.look}
+              context={ctx}
+              label="View and navigate"
+              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+              alignEndGroup="object"
+            />
+          </div>
+          <div className="px-2 py-1">
+            <Toolbar
+              items={rows.do}
+              context={ctx}
+              label="Build and manage"
+              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+            />
+          </div>
         </div>
-        <div className="px-2 py-1">
-          <Toolbar
-            items={rows.do}
-            context={ctx}
-            label="Build and manage"
-            authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-          />
-        </div>
-      </div>
+      </ChromePortal>
 
       {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
           toolbar commands only announce (sr-only), so this is the sighted-user error surface. Renders

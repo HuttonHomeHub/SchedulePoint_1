@@ -246,6 +246,13 @@ jobs:
       - name: Web end-to-end tests (all four themes, accessibility)
         run: pnpm --filter @repo/web test:e2e:designed-ui
 
+      # The chrome band with VITE_DESIGNED_CHROME on (ADR-0055 S2) — the header and a plan's two
+      # toolbar rows rendered as ONE surface, the tab order that follows from the new DOM order,
+      # and axe over the band itself. The sibling step above stays flag-OFF deliberately, so the
+      # shipped default surface keeps its four-theme scan while the band is still behind a flag.
+      - name: Web end-to-end tests (designed chrome band, flag on)
+        run: pnpm --filter @repo/web test:e2e:designed-chrome
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -266,6 +273,7 @@ jobs:
             apps/web/playwright-report-share/
             apps/web/playwright-report-library/
             apps/web/playwright-report-designed-ui/
+            apps/web/playwright-report-designed-chrome/
           if-no-files-found: ignore
           retention-days: 7
 

@@ -782,3 +782,27 @@ export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRAR
 export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_LIVE_FEEDBACK,
 );
+
+/**
+ * The **designed chrome band** (ADR-0055 S2–S3, spec `docs/specs/designed-ui/`). Default **off**
+ * until its S5 enablement gate — the specialist reviews and the four-theme accessibility run.
+ *
+ * When on, the shell stops being "a centred header above a rail" and becomes one **full-bleed
+ * chrome band**: the header row and, on a plan, the two toolbar rows render as a single navy
+ * (Corporate) / neutral (Light, Dark) band across the top, with the Project Explorer and the
+ * workspace below it. The toolbar reaches the band through a **portal**, so the React tree — and
+ * therefore `usePlanWorkspaceModel`, `useTsldToolbarContext` and every registry predicate — is
+ * untouched, and the shell never becomes plan-aware (which would contradict ADR-0029). Route
+ * bodies keep their `max-w-6xl` measure cap: chrome is full-bleed, content is not.
+ *
+ * The flag also stamps `data-designed-chrome` on `<html>`, which is what activates the flagged
+ * token-value layer in `styles/globals.css` (S3's light Corporate rail). That is deliberate: it
+ * makes the rollback byte-for-byte for **colour** as well as structure, rather than leaving a
+ * value change stranded behind a structural flag.
+ *
+ * Frontend-only — no API, DTO, schema or engine change. Set `VITE_DESIGNED_CHROME=false` for a
+ * byte-for-byte rollback: `ChromePortal` becomes an identity wrapper, the shell renders today's
+ * `column[ header ][ row(rail | main) ]`, the header re-centres at `max-w-6xl`, and the root
+ * attribute is absent so every token keeps today's value (the flag-off shell parity suite).
+ */
+export const DESIGNED_CHROME_ENABLED = flagDefaultOff(import.meta.env.VITE_DESIGNED_CHROME);
