@@ -1,5 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
+import { chooseComboboxOption } from '../e2e/combobox';
+
 /**
  * Journey helpers for the flag-ON **canvas-axis-aligned resource strip** suite
  * (`VITE_CANVAS_RESOURCE_VIEW`, Stage E, `docs/specs/canvas-resource-view/`). Mirrors the on-canvas
@@ -111,11 +113,11 @@ export async function assignResource(
   const dialog = page.getByRole('dialog', { name: 'Resources' });
   await expect(dialog).toBeVisible();
   // The assign form's resource picker lists each unassigned library resource as "<name> (<kind>)"; a
-  // freshly created resource defaults to Labour. Exact match: the dialog's "Driving resource" checkbox
-  // also carries "Resource" in its label, which a substring match would ambiguously also select.
-  await dialog
-    .getByLabel('Resource', { exact: true })
-    .selectOption({ label: `${resourceName} (Labour)` });
+  // freshly created resource defaults to Labour. Behind `VITE_LIBRARY_SCOPING` it is the shared APG
+  // combobox rather than a native `<select>` (ADR-0053 §4), so it is driven by role + exact label —
+  // the dialog's "Driving resource" checkbox and the combobox's own "Show resources" toggle both
+  // carry "Resource" in their names and would make a substring label match ambiguous.
+  await chooseComboboxOption(dialog, 'Resource', `${resourceName} (Labour)`);
   await dialog.getByLabel('Budgeted units').fill(String(budgetedUnits));
   await dialog.getByRole('button', { name: 'Assign resource' }).click();
   await expect(dialog.locator('li').filter({ hasText: resourceName })).toBeVisible();

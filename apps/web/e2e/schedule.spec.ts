@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { chooseComboboxOption, comboboxField } from './combobox';
+
 /**
  * The CPM schedule journey (M6): a Planner sets the plan's start date, adds two
  * linked activities, and recalculates — the summary strip and the activities
@@ -111,16 +113,15 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
     .fill('2026-01-01');
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
 
-  // The plan defaults to the org's seeded Standard (Mon–Fri) calendar.
-  const calendar = page.getByLabel('Calendar');
-  await expect(calendar).toHaveValue(/.+/);
-  await expect(calendar.getByRole('option', { name: 'Standard' })).toBeAttached();
+  // The plan defaults to the org's seeded Standard (Mon–Fri) calendar. Behind
+  // `VITE_LIBRARY_SCOPING` (ADR-0053 §4) this picker is the shared APG combobox, not a native
+  // `<select>` — the empty option renders as its label rather than blanking the field.
+  const calendar = comboboxField(page, 'Calendar');
+  await expect(calendar).toHaveValue('Standard');
 
   // Switch to all-days-work, then back to Standard — the choice persists.
-  await calendar.selectOption({ label: 'None (all days work)' });
-  await expect(calendar).toHaveValue('');
-  await calendar.selectOption({ label: 'Standard' });
-  await expect(calendar).not.toHaveValue('');
+  await chooseComboboxOption(page, 'Calendar', 'None (all days work)');
+  await chooseComboboxOption(page, 'Calendar', 'Standard');
 
   await addActivity(page, 'Excavate');
   await page.getByRole('button', { name: 'Recalculate' }).click();
