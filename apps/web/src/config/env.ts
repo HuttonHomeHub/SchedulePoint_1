@@ -782,3 +782,61 @@ export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRAR
 export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_LIVE_FEEDBACK,
 );
+
+/**
+ * The **designed chrome band** (ADR-0055 S2–S3, spec `docs/specs/designed-ui/`). Default **ON**
+ * since 2026-07-26 (S5-T4), once the deferred specialist gates ran over the whole epic diff and
+ * every blocking finding was folded — **accessibility** (the `--input` control boundary at 1.26:1
+ * sitewide, `bg-muted` resolving light-on-light inside the Corporate chrome, the account menu's
+ * theme radios with no programmatic group, and a `globals.css` comment claiming a contrast
+ * coverage the suite did not have), **ux** (the client-row accent bar ADR-0055 §3 promised but
+ * never shipped, and the unstated breadcrumb-seam decision, now named in the ADR), **component**
+ * (catalogue gaps, `ToggleChip`'s zero consumers logged as debt) and **performance** (pass, no
+ * blockers). Light's and Dark's own chrome values landed first and separately (S5-T1) so that the
+ * flag-off parity suites still meant something on the day they were most needed.
+ *
+ * When on, the shell stops being "a centred header above a rail" and becomes one **full-bleed
+ * chrome band**: the header row and, on a plan, the two toolbar rows render as a single navy
+ * (Corporate) / neutral (Light, Dark) band across the top, with the Project Explorer and the
+ * workspace below it. The toolbar reaches the band through a **portal**, so the React tree — and
+ * therefore `usePlanWorkspaceModel`, `useTsldToolbarContext` and every registry predicate — is
+ * untouched, and the shell never becomes plan-aware (which would contradict ADR-0029). Route
+ * bodies keep their `max-w-6xl` measure cap: chrome is full-bleed, content is not.
+ *
+ * The flag also stamps `data-designed-chrome` on `<html>`, which is what activates the flagged
+ * token-value layer in `styles/globals.css` (S3's light Corporate rail). That is deliberate: it
+ * makes the rollback byte-for-byte for **colour** as well as structure, rather than leaving a
+ * value change stranded behind a structural flag.
+ *
+ * Frontend-only — no API, DTO, schema or engine change. Set `VITE_DESIGNED_CHROME=false` for a
+ * byte-for-byte rollback: `ChromePortal` becomes an identity wrapper, the shell renders today's
+ * `column[ header ][ row(rail | main) ]`, the header re-centres at `max-w-6xl`, and the root
+ * attribute is absent so every token keeps today's value (the flag-off shell parity suite).
+ */
+export const DESIGNED_CHROME_ENABLED = flagDefaultOn(import.meta.env.VITE_DESIGNED_CHROME);
+
+/**
+ * The **canvas visual language** (ADR-0055 S4, spec `docs/specs/designed-ui/`). Default **ON**
+ * since 2026-07-26 (S5-T4), once the browser draw measurement was made and recorded: at 2,000
+ * activities the band pass sits **inside the baseline's own run-to-run spread** — several runs
+ * land below it — so its cost is smaller than the noise floor rather than merely small. Method,
+ * hardware and the caveat that this was NOT the ADR-0026 §16 device envelope are written down in
+ * `docs/specs/designed-ui/implementation-plan.md` (S5-T2).
+ *
+ * When on, the diagram sits on a ground of its own with **alternating month bands**: a planner can
+ * count months without reading a single label, which is the one thing a time-scaled diagram should
+ * make free. Banding is *ground*, not a gridline, so it deliberately does not follow the `Month
+ * grid` toggle, and its parity comes from the absolute month ordinal — calendar-derived, so the
+ * stripes cannot invert when the viewport pans.
+ *
+ * The cost is one `fillStyle` and at most `visibleMonths + 1` `fillRect` per frame, with zero text
+ * — pinned by `render/paint.band-budget.test.ts` in the counting-stub style, which asserts the
+ * *shape* of the cost rather than milliseconds (a CI runner's absolute timings are noise).
+ *
+ * Frontend-only, and the painter is the only thing that changes: no API, DTO, schema or engine
+ * change. Set `VITE_CANVAS_VISUAL_LANGUAGE=false` for a byte-for-byte paint — the
+ * scene simply carries no `monthBands`, so the band layer is skipped entirely.
+ */
+export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
+  import.meta.env.VITE_CANVAS_VISUAL_LANGUAGE,
+);

@@ -73,6 +73,12 @@ export interface CheckboxFieldProps extends Omit<InputProps, 'type'> {
   error?: string | undefined;
   /** Optional helper text rendered under the control when there is no error. */
   hint?: string | undefined;
+  /**
+   * `'compact'` tightens the label for inline/toolbar use (a view-options row, not a form).
+   * It trims the surrounding gap and label weight — it does **not** shrink the hit target,
+   * which stays at the WCAG 2.2 SC 2.5.8 ≥24px floor. Density is spacing, never accessibility.
+   */
+  density?: 'default' | 'compact';
 }
 
 /**
@@ -84,7 +90,16 @@ export interface CheckboxFieldProps extends Omit<InputProps, 'type'> {
  */
 export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
   function CheckboxField(
-    { label, error, hint, id, className, 'aria-describedby': ariaDescribedBy, ...props },
+    {
+      label,
+      error,
+      hint,
+      id,
+      className,
+      density = 'default',
+      'aria-describedby': ariaDescribedBy,
+      ...props
+    },
     ref,
   ) {
     const generatedId = useId();
@@ -97,10 +112,13 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
     );
 
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className={cn('flex flex-col', density === 'compact' ? 'gap-0.5' : 'gap-1.5')}>
         <label
           htmlFor={fieldId}
-          className="flex min-h-6 items-center gap-2 py-1 text-sm font-medium"
+          className={cn(
+            'flex min-h-6 items-center gap-2 py-1 text-sm',
+            density === 'compact' ? 'font-normal' : 'font-medium',
+          )}
         >
           <input
             ref={ref}

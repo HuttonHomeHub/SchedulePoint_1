@@ -91,3 +91,51 @@ Keep this honest and current — undocumented debt is the expensive kind.
 - Prefer paying debt down opportunistically while touching nearby code.
 - Never add **undocumented** debt: if you take a shortcut, add a row here.
 - Security- and data-integrity-related debt is prioritised above convenience.
+
+### 57. `ToggleChip` has no consumers yet (ADR-0055 S1)
+
+`components/ui/toggle-chip.tsx` ships fully built, documented and tested with **zero call sites**.
+That is deliberate — S1 extracted the epic's repeated patterns before the surfaces that consume
+them, so "no one-off styling" survives the later slices — but CLAUDE.md §5 is "no dead code", and
+an unconsumed primitive is a standing risk if its intended consumer slips or changes shape.
+
+**Its consumer is named:** the Project Explorer's `All / Clients / Projects / Plans` filter chips,
+which ADR-0055 §3 and the designed-UI spec (CQ-2) deferred because the tree loads lazily — one
+query per expanded node — so client-side filtering is not buildable. Those chips need an org-scoped
+hierarchy **search endpoint** and belong to their own feature spec.
+
+**Expiry:** if that spec has not landed by the time the next UI epic closes, either build the first
+consumer or delete the primitive. An unconsumed primitive with no dated owner becomes permanent.
+
+### 58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
+
+S4 landed the canvas month bands — the diagram on its own banded ground — but deliberately stopped
+short of the tiered ruler redesign (year centred / month names / day numbers) and the TODAY chip.
+Both are DOM work over the canvas, both were specified (`docs/specs/designed-ui/`, S4-F2), and both
+were held back rather than rushed alongside a change to the painter's hot path in the same slice.
+
+They are additive and behind the same `VITE_CANVAS_VISUAL_LANGUAGE` flag, so they can land as their
+own slice without re-opening anything S4 shipped.
+
+### 59. The device-authoritative canvas draw measurement was never made
+
+ADR-0026 §16 defines the hardware envelope for the ≤ 4 ms p95 draw budget: a mid-tier laptop and
+iPad-class Safari. Every measurement the project has actually made — ADR-0054 M3-T5, ADR-0055
+S5-T2 — was made on a **headless Chromium on a shared cloud runner**, which has no GPU compositor
+and no comparable thermal or memory profile.
+
+Those measurements were still the right thing to run, and their conclusions are sound within what
+they measure: each asked _does this change move the cost?_ and answered it against a matched
+baseline. What none of them establishes is the **absolute** number on a real device, so ADR-0026's
+headline budget currently has no device-side evidence behind it.
+
+This did not block S5's flip, and the reasoning is worth keeping: the band pass sits inside the
+baseline's own run-to-run spread, so S4 demonstrably does not move the cost, and blocking a change
+on an unknown it does not affect would be blocking on the wrong thing. But the unknown compounds
+quietly — each additive layer is judged against a baseline nobody has ever measured on the target
+hardware.
+
+**What would close it:** run `prototypes/tsld-spike/bench.mjs` (and, better, the shipped painter
+under DevTools) at 500 and 2,000 activities on the §16 envelope, and record the numbers in
+ADR-0026 the way the flag-flip measurements are recorded in their plans. Until then, treat the
+≤ 4 ms figure as a design target rather than a verified property.

@@ -70,6 +70,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
+  CANVAS_VISUAL_LANGUAGE_ENABLED,
 } from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -608,6 +609,9 @@ export function TsldCanvas({
     view,
     isWorkingDay,
     todayOffset,
+    // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the
+    // scene carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4).
+    monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
     dimmedIds,
     barFill,
     barInk,
@@ -688,6 +692,7 @@ export function TsldCanvas({
       view,
       isWorkingDay,
       todayOffset,
+      monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
       dimmedIds,
       barFill,
       barInk,
@@ -1223,13 +1228,13 @@ export function TsldCanvas({
   };
 
   return (
-    <div ref={containerRef} className="bg-card relative h-full w-full overflow-hidden">
+    <div ref={containerRef} className="bg-canvas relative h-full w-full overflow-hidden">
       {/* The sticky date ruler: a DOM band updated imperatively from the rAF loop (aria-hidden — the
           canvas already has the parallel a11y listbox; pointer-events-none so pan/zoom fall through). */}
       <div
         aria-hidden="true"
         data-testid="tsld-ruler"
-        className="bg-card text-muted-foreground border-border pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden border-b text-xs leading-none"
+        className="bg-canvas text-muted-foreground border-border pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden border-b text-xs leading-none"
         // RULER_HEIGHT is a raw px value (not a Tailwind class) because the canvas-sizing math in
         // measure() needs the exact same number — one source of truth for the CSS + JS.
         style={{ height: RULER_HEIGHT }}

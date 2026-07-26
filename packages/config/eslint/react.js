@@ -33,4 +33,40 @@ export default [
       'react/prop-types': 'off',
     },
   },
+  {
+    // No raw colours in component markup (ADR-0055 §5). Every colour must come from a semantic
+    // token, because a literal is invisible to the surface-scope mechanism AND to the computed
+    // contrast suite: a hard-coded `#666` looks fine on the page and disappears on navy chrome,
+    // and nothing in the build would ever tell you.
+    //
+    // Deliberately narrow. It matches COLOUR LITERALS inside `className`/`style` — not the
+    // `style` attribute itself, which is the legitimate home of `{{ width }}` and
+    // `{{ height: RULER_HEIGHT }}`. A rule everyone disables is worse than no rule.
+    files: ['**/src/components/**/*.{ts,tsx}', '**/src/features/**/*.{ts,tsx}'],
+    // The Canvas 2D painter is exempt: `fillStyle` takes a colour string, not a class, and
+    // `render/palette.ts` resolves tokens at runtime with documented literal fallbacks for the
+    // one case where `getComputedStyle` cannot answer (an offscreen export canvas).
+    ignores: ['**/src/features/tsld/render/**', '**/src/features/tsld/export/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'JSXAttribute[name.name=/^(className|style)$/] Literal[value=/#[0-9a-fA-F]{3,8}\\b|\\b(rgba?|hsla?|oklch|oklab|lab|lch)\\(/]',
+          message:
+            'Use a semantic token (bg-*, text-*, border-*) instead of a raw colour. A literal ' +
+            'cannot follow a surface scope and is invisible to the token contrast suite — see ' +
+            'ADR-0055 §5.',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(className|style)$/] TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b|\\b(rgba?|hsla?|oklch|oklab|lab|lch)\\(/]',
+          message:
+            'Use a semantic token (bg-*, text-*, border-*) instead of a raw colour. A literal ' +
+            'cannot follow a surface scope and is invisible to the token contrast suite — see ' +
+            'ADR-0055 §5.',
+        },
+      ],
+    },
+  },
 ];

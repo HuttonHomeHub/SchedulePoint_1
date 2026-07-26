@@ -98,3 +98,20 @@ describe('TSLD toolbar — on-canvas advanced activity types (flag on)', () => {
     expect(context.toggleLoeSpanMode).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The **split-button look is a look, not a split button** (ADR-0055 §3, S1-T3). A true split
+ * button is two focusable halves, which inside a toolbar means two roving-tabindex stops in one
+ * item — re-opening the a11y gate ADR-0031 closed. The caret divider is therefore decoration on a
+ * single control, and this pins that: if someone later makes the caret its own `<button>`, the
+ * item count changes and this fails.
+ */
+describe('the Add control keeps one roving-tabindex stop', () => {
+  it('renders the caret inside the trigger, not as a second focusable half', () => {
+    const { container } = renderDoRow(ctx());
+    const addStops = container.querySelectorAll('[data-toolbar-item="add-activity"]');
+    expect(addStops).toHaveLength(1);
+    expect(addStops[0]!.tagName).toBe('BUTTON');
+    expect(addStops[0]!.querySelectorAll('button')).toHaveLength(0);
+  });
+});

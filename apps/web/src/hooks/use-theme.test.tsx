@@ -1,9 +1,8 @@
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ThemeToggle } from '@/components/theme-toggle';
 import { THEME_STORAGE_KEY } from '@/config/env';
-import { ThemeProvider, useTheme } from '@/hooks/use-theme';
+import { ThemeProvider, useTheme, type Theme } from '@/hooks/use-theme';
 
 /**
  * The theme picker gained a fourth entry — `corporate`, the navy + amber brand skin. Because the
@@ -11,17 +10,28 @@ import { ThemeProvider, useTheme } from '@/hooks/use-theme';
  * stale `.dark` left behind while `.corporate` is applied would resolve tokens from whichever rule
  * won the cascade rather than from the chosen theme. These tests pin that invariant, the light
  * baseline (which stamps no class at all), and the persistence round-trip.
+ *
+ * The harness drives the provider directly rather than through a UI control: the picker now lives
+ * inside {@link AccountChip}'s menu (S1), and these tests are about the cascade rule, not about
+ * whichever surface happens to host the control this month.
  */
 
+const ORDER: Theme[] = ['light', 'dark', 'system', 'corporate'];
+
 function ThemeProbe(): React.ReactElement {
-  const { theme, resolvedTheme } = useTheme();
-  return <span data-testid="probe">{`${theme}|${resolvedTheme}`}</span>;
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length]!;
+  return (
+    <>
+      <span data-testid="probe">{`${theme}|${resolvedTheme}`}</span>
+      <button type="button" onClick={() => setTheme(next)}>{`Switch to ${next}`}</button>
+    </>
+  );
 }
 
 function renderWithProvider(): void {
   render(
     <ThemeProvider>
-      <ThemeToggle />
       <ThemeProbe />
     </ThemeProvider>,
   );
@@ -72,12 +82,11 @@ describe('theme switching', () => {
     expect(classes()).toContain('corporate');
   });
 
-  it('persists the choice and names both states on the control (WCAG 4.1.2)', () => {
+  it('persists the choice', () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, 'system');
     renderWithProvider();
     act(() => screen.getByRole('button').click());
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('corporate');
-    expect(screen.getByRole('button')).toHaveAccessibleName('Theme: Corporate. Switch to Light.');
   });
 
   it('ignores an unrecognised stored value rather than stamping it', () => {

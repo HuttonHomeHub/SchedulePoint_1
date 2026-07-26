@@ -2,7 +2,7 @@
   "name": "@repo/web",
   "version": "0.51.0",
   "private": true,
-  "description": "Blank App web client — React + Vite + Tailwind CSS + shadcn/ui.",
+  "description": "Blank App web client \u2014 React + Vite + Tailwind CSS + shadcn/ui.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -26,6 +26,8 @@
     "test:e2e:interchange": "playwright test --config playwright.interchange.config.ts --pass-with-no-tests",
     "test:e2e:share": "playwright test --config playwright.share.config.ts --pass-with-no-tests",
     "test:e2e:library": "playwright test --config playwright.library.config.ts --pass-with-no-tests",
+    "test:e2e:designed-ui": "playwright test --config playwright.designed-ui.config.ts --pass-with-no-tests",
+    "test:e2e:designed-chrome": "playwright test --config playwright.designed-chrome.config.ts --pass-with-no-tests",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {

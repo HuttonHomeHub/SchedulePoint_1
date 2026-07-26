@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SheetHeader } from '@/components/ui/sheet';
+import { Surface } from '@/components/ui/surface';
 import { HierarchyTree, useNavigatorCrud, type UseExpansionState } from '@/features/navigator';
 import { AppVersionLine } from '@/features/system';
 
@@ -40,9 +41,11 @@ export function NavigatorRail({
   }, [focusToggleOnMount]);
 
   return (
-    <nav
+    <Surface
+      tone="panel"
+      as="nav"
       aria-label="Project Explorer"
-      className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-full min-h-0 flex-col border-r"
+      className="border-border flex h-full min-h-0 flex-col border-r"
     >
       {/* Shared drawer header chrome ({@link SheetHeader}) — class overrides keep this rail's exact look
           (sidebar border, fixed h-12/no padding, semibold title, gap-1, size-`icon` buttons). The
@@ -50,7 +53,7 @@ export function NavigatorRail({
           SheetHeader's own. */}
       <SheetHeader
         title="Project Explorer"
-        className="border-sidebar-border h-12 shrink-0 gap-1 px-4 py-0"
+        className="border-border h-12 shrink-0 gap-1 px-4 py-0"
         titleClassName="font-semibold tracking-tight"
         actionsClassName="gap-1"
         actions={
@@ -58,13 +61,23 @@ export function NavigatorRail({
             {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
                 a "New client" entry point here; hidden for non-writers and flag-off. */}
             {orgSlug && crud.canWrite ? (
+              // A labelled primary button rather than a bare `+` icon: creating the first client
+              // is the one action an empty Project Explorer exists to offer, and an unlabelled
+              // glyph makes the entry point something you have to already know about.
+              //
+              // The visible label is shortened to "Client" to fit the rail header, so the button
+              // needs an explicit accessible name: "Client" on its own names a NOUN, not what
+              // pressing it does. WCAG 2.5.3 (Label in Name) is satisfied because the visible
+              // text is contained in the accessible name, so voice control still reaches it by
+              // the word on screen.
               <Button
-                variant="ghost"
-                size="icon"
+                size="sm"
                 aria-label="New client"
                 onClick={crud.onCreateClient}
+                className="h-7 gap-1 px-2"
               >
                 <Plus aria-hidden="true" className="size-4" />
+                Client
               </Button>
             ) : null}
             {onCollapse ? (
@@ -96,10 +109,10 @@ export function NavigatorRail({
         )}
       </div>
       {/* A quiet footer with both service versions — subtle build metadata, not a nav item. */}
-      <div className="border-sidebar-border shrink-0 border-t px-4 py-2">
+      <div className="border-border shrink-0 border-t px-4 py-2">
         <AppVersionLine />
       </div>
-    </nav>
+    </Surface>
   );
 }
 
@@ -120,7 +133,7 @@ export function NavigatorRailCollapsed({
   }, [focusToggleOnMount]);
 
   return (
-    <div className="bg-sidebar border-sidebar-border flex h-full flex-col items-center border-r py-2">
+    <Surface tone="panel" className="border-border flex h-full flex-col items-center border-r py-2">
       <Button
         ref={toggleRef}
         variant="ghost"
@@ -130,6 +143,6 @@ export function NavigatorRailCollapsed({
       >
         <PanelLeftOpen aria-hidden="true" className="size-4" />
       </Button>
-    </div>
+    </Surface>
   );
 }

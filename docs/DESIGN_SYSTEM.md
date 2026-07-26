@@ -50,7 +50,9 @@ automatically. Full values (light + dark) are in `globals.css`.
 | `warning` / `*-fg`           | Caution status                                        |
 | `warning-text`               | Caution **text** on page surfaces (e.g. status chips) |
 | `info` / `*-fg`              | Informational status                                  |
-| `border` / `input` / `ring`  | Lines, field borders, focus ring                      |
+| `border`                     | Decorative dividers/hairlines (1.4.11-exempt)         |
+| `input`                      | **Control** boundaries — its own value, ≥ 3:1         |
+| `ring`                       | Focus indicator                                       |
 | `chart-1…5`                  | Categorical data-visualisation series                 |
 | `sidebar*`                   | Navigation shell surface + states                     |
 
@@ -154,22 +156,26 @@ around a light working canvas — that resolves as a light scheme. It is applied
 `.corporate` class on `<html>`, a sibling of `.dark`; exactly one theme class is ever
 stamped, and light stamps none (it is the `:root` baseline).
 
-| Role                   | Colour                 | Token                                          |
-| ---------------------- | ---------------------- | ---------------------------------------------- |
-| Chrome (top bar, rail) | Navy `#14213D`         | `--app-header`, `--sidebar`                    |
-| Primary action         | Amber `#fca311`        | `--primary` (ink: navy `--primary-foreground`) |
-| Secondary surface      | Lighter navy `#1f3661` | `--secondary`, `--info`                        |
-| Page background        | Off-white `#f8f9fa`    | `--background`                                 |
-| Body text              | `#333`                 | `--foreground`                                 |
+| Role                    | Colour                 | Token                                            |
+| ----------------------- | ---------------------- | ------------------------------------------------ |
+| Chrome (top bar, rail)  | Navy `#14213D`         | `--chrome`, `--panel` (see Surface scopes below) |
+| Primary action (page)   | Navy `#14213D`         | `--primary` (ink: off-white)                     |
+| Primary action (chrome) | Amber `#fca311`        | `--chrome-primary` (ink: navy, 7.9:1)            |
+| Secondary surface       | Lighter navy `#1f3661` | `--secondary`, `--info`, `--accent` on chrome    |
+| Page background         | Off-white `#f8f9fa`    | `--background`                                   |
+| Body text               | `#333`                 | `--foreground`                                   |
 
 Two rules make the palette work rather than merely look right on a swatch sheet:
 
-1. **Amber is a fill, never ink or a line on a light surface.** `#fca311` on `#f8f9fa`
-   is **1.9:1** — it fails both the 4.5:1 text bar and the 3:1 non-text bar, so it can
-   never be body text, an icon-only glyph or a focus ring there. It carries navy ink at
-   **7.9:1**, which is what makes it a good button. Consequently the focus ring on light
-   surfaces is **navy** (`--ring`), and the brand's amber ring lives on the navy chrome
-   (`--sidebar-ring`), where it reaches 7.9:1.
+1. **Amber is a fill on navy, never a fill on the page and never ink or a line on a light
+   surface.** `#fca311` on `#f8f9fa` is **1.9:1** — it fails the 4.5:1 text bar, the 3:1
+   non-text bar, and (the case that is easy to miss) the 3:1
+   [1.4.11](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast) bar a solid
+   button's fill must clear against the page behind it. Darkening amber far enough to reach
+   3:1 lands on the bronze `--warning` already uses. So on the page the primary action is
+   the brand **navy** (12:1), and amber is the primary on the navy chrome, where it carries
+   navy ink at **7.9:1**. Same rule for focus: the ring is navy on light surfaces (`--ring`)
+   and amber on chrome (`--chrome-ring`, 7.9:1).
 2. **Near-critical moved to bronze.** `--warning` is the TSLD's near-critical bar fill,
    and in light/dark it is essentially this same amber. With amber promoted to `--primary`
    (which is the ordinary bar fill), a normal bar and a near-critical bar would have been
@@ -186,6 +192,55 @@ off-white **12:1**; amber fill / navy ink **7.9:1**; destructive `#b91c1c` on of
 the typeface per theme would shift layout and pull a second font at runtime for no
 accessibility or brand gain that colour doesn't already deliver. Corporate is a colour
 theme.
+
+### Surface scopes (ADR-0055)
+
+A **theme** answers "what does this product look like". A **surface scope** answers "what
+does this token mean _here_". Corporate is why the second question exists: its chrome is
+navy while its page is off-white, so `--muted-foreground` cannot be one colour. The first
+attempt gave the header three bespoke tokens and no muted grey, and every piece of secondary
+text in the chrome fell back to the page's grey — invisible on navy, in six separate places.
+
+There are three scopes:
+
+| Scope    | Where                     | Applied by                 |
+| -------- | ------------------------- | -------------------------- |
+| _(page)_ | everything by default     | `:root` — nothing to apply |
+| `chrome` | the top band              | `<Surface tone="chrome">`  |
+| `panel`  | the Project Explorer rail | `<Surface tone="panel">`   |
+
+Each theme block declares a **complete 17-token family** per scope — fill, foreground,
+muted-foreground, border, accent (+ foreground), primary (+ foreground), field (+ foreground
+
+- muted-foreground), muted, input, destructive/warning/info text, and ring. A `[data-surface]`
+  rule then
+  rebinds the ordinary semantic names to that family. Inside a scope, `bg-background` **is**
+  the header's navy and `text-muted-foreground` **is** a grey validated against it — so no
+  descendant component changes at all, and none of them learn where they are.
+
+Three rules keep this honest:
+
+- **A family is complete or it is a trap.** A missing token silently falls through to the
+  page's value, which is the original bug. `styles/token-architecture.test.ts` fails, naming
+  the missing token.
+- **The families have no Tailwind utilities.** `--chrome-*` and `--panel-*` are deliberately
+  absent from `@theme inline`, so `bg-chrome` does not compile. `<Surface>` is the only route
+  in, pinned by `components/ui/surface-seams.structural.test.ts`.
+- **`@theme inline` is load-bearing.** `inline` is what makes utilities compile to
+  `var(--token)` rather than a value resolved once at `:root`. Drop it and every scope
+  silently stops working, with no error and a diff that looks like a tidy-up. Pinned by test.
+
+**A field is not a surface.** `--field` / `--field-foreground` /
+`--field-muted-foreground` are their own pair set, because an input inside the navy chrome
+is white: its ink and its placeholder belong to the field's colour system, not the band's.
+
+**A control boundary is not a divider.** `--input` and `--border` once shared a value, and
+because `--field` is deliberately identical to the surface it sits on, that made a text
+field's outline — the only thing saying a field is there — 1.26:1 in every theme. WCAG 1.4.11
+exempts a decorative separator and does **not** exempt this, so `--input` is now its own
+per-surface token held at ≥ 3:1 by `styles/token-contrast.test.ts`. Reach for `border-input`
+on anything whose edge identifies a control (fields, `outline` buttons, an unfilled chip);
+`border-border` is for dividers only.
 
 ---
 
@@ -253,6 +308,22 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   collapse middle items on small screens.
 - **Tabs** — Radix tabs; roving focus; arrow-key navigation; panels labelled by
   their tab. Don't use tabs to hide critical primary actions.
+- **Surface scopes** — `Surface` (`components/ui/surface.tsx`) marks a region as `chrome`
+  (the top band) or `panel` (the Project Explorer). Inside a scope the ordinary semantic
+  names resolve to that surface's own validated family, so descendants need no change. A
+  scope is a component, not a class — the families have no Tailwind utilities, so `bg-chrome`
+  does not compile. See "Surface scopes (ADR-0055)" above.
+- **Segmented control** — `SegmentedControl` (`components/ui/segmented-control.tsx`), the APG
+  `radiogroup`: a **mutually-exclusive** choice from a known set (Diagram _or_ Activities),
+  roving tabindex, Arrow/Home/End, focus follows selection.
+- **Toggle chip** — `ToggleChip` (`components/ui/toggle-chip.tsx`), an `aria-pressed` button for
+  an **independent boolean** ("also show this"). Pressed state changes fill **and** border, never
+  hue alone. Pair it with an announced result count — a chip that filters silently is a WCAG 4.1.3
+  miss. Choosing between this and a segmented control is semantic, not visual: see
+  [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md).
+- **Account chip** — `AccountChip` (`components/layout/account-chip.tsx`), the initials avatar +
+  caret opening the account menu (theme radio group, signed-in email, sign out). The caret is
+  required, not decoration: a bare circle of initials is indistinguishable from an avatar.
 - **Menus (dropdown/context)** — the hand-rolled `Menu`/`MenuItem` primitive
   (`components/ui/menu.tsx`), WAI-ARIA APG "Menu Button" on semantic HTML (no
   Radix): portal-rendered and anchored to a trigger or pointer point, roving

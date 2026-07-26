@@ -361,13 +361,21 @@ export function HierarchyTree({
               onPointerMove={showActions ? cancelLongPress : undefined}
               onPointerCancel={showActions ? cancelLongPress : undefined}
               className={cn(
-                'focus-visible:ring-sidebar-ring group flex cursor-pointer items-center gap-1.5 pr-1 text-sm outline-none focus-visible:ring-2',
-                isSelected
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                  : 'hover:bg-sidebar-accent/50',
+                'focus-visible:ring-ring group flex cursor-pointer items-center gap-1.5 pr-1 text-sm outline-none focus-visible:ring-2',
+                isSelected ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-accent/50',
               )}
               style={rowStyle(item.start, row.level)}
             >
+              {/* A client is the top of the hierarchy; the accent bar marks where each branch
+                  begins so the tree reads as grouped rather than as one long list. Drawn
+                  ABSOLUTELY inside the row's existing box — a border would change the row's
+                  geometry, and these rows are virtualized at a fixed height. */}
+              {row.level === 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="bg-primary absolute inset-y-0.5 left-0 w-0.5 rounded-full"
+                />
+              ) : null}
               <ChevronRight
                 aria-hidden="true"
                 className={cn(
@@ -377,7 +385,17 @@ export function HierarchyTree({
                 )}
               />
               <Icon aria-hidden="true" className="size-4 shrink-0 opacity-80" />
-              <span className="min-w-0 flex-1 truncate">{node.name}</span>
+              <span
+                className={cn(
+                  'min-w-0 flex-1 truncate',
+                  // A client is the top of the hierarchy, so it reads as a heading rather than
+                  // a peer of the projects beneath it. Weight only — the indent and the icon
+                  // already carry the level, and `aria-level` carries it for AT.
+                  row.level === 1 && 'font-medium',
+                )}
+              >
+                {node.name}
+              </span>
               {showActions ? (
                 <Button
                   variant="ghost"

@@ -14,6 +14,20 @@ import { cva } from 'class-variance-authority';
  * - `disabled` — dimmed + inert cursor (the control stays focusable via `aria-disabled`, so this is
  *   presentation only).
  */
+/**
+ * The **split-button caret** treatment: a hairline divider before the caret, so a control that
+ * both acts and opens a menu *reads* as two halves.
+ *
+ * It is the **look only**, deliberately (ADR-0055 §3 / spec §4.7 D11). A true split button is two
+ * focusable halves, which inside a toolbar means two roving-tabindex stops in one item — that
+ * re-opens the a11y gate ADR-0031 closed, and would need its own composite-stop design. Until
+ * that lands, the Add control stays one stop that opens a menu; this variant only gives it the
+ * affordance a planner recognises. `Toolbar.test.tsx` asserts the single stop.
+ */
+export const toolbarSplitCaretVariants = cva(
+  'border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70',
+);
+
 export const toolbarControlVariants = cva(
   'focus-visible:ring-ring inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
   {

@@ -53,6 +53,14 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0027](0027-per-package-release-tagging.md)                     | Per-package release tagging & versions         | Accepted |
 | [0028](0028-plan-edit-lock.md)                                  | Single-editor plan edit-lock                   | Accepted |
 | [0029](0029-persistent-hierarchy-navigator.md)                  | Persistent app-shell & hierarchy navigator     | Proposed |
+| [0030](0030-canvas-first-plan-workspace.md)                     | Canvas-first plan workspace                    | Proposed |
+| [0031](0031-tsld-toolbar-registry-and-taxonomy.md)              | TSLD toolbar-item registry & taxonomy          | Proposed |
+| [0032](0032-canvas-first-plan-authoring.md)                     | Canvas-first plan authoring                    | Proposed |
+| [0033](0033-scheduling-modes-and-canvas-planning.md)            | Scheduling modes & a de-overloaded plan start  | Accepted |
+| [0034](0034-engine-conformance-methodology.md)                  | Engine conformance & validation methodology    | Accepted |
+| [0035](0035-schedulepoint-cpm-semantics.md)                     | SchedulePoint CPM semantics (golden contract)  | Proposed |
+| [0036](0036-hour-granular-calendars-and-durations.md)           | Hour/shift-granular calendars & durations      | Accepted |
+| [0037](0037-per-activity-calendars-and-instant-axis.md)         | Per-activity calendars & the instant axis      | Accepted |
 | [0038](0038-wbs-activity-hierarchy.md)                          | WBS activity hierarchy (parent tree)           | Accepted |
 | [0039](0039-resource-model-and-resource-calendar-scheduling.md) | Resource model & resource-calendar scheduling  | Accepted |
 | [0040](0040-duration-types-and-resource-units.md)               | Duration types & the resource-units model      | Accepted |
@@ -61,8 +69,13 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0043](0043-inter-project-external-dates.md)                    | Inter-project external dates (M1)              | Accepted |
 | [0044](0044-resource-curves-accrual-steps.md)                   | Resource curves, cost accrual & weighted steps | Accepted |
 | [0045](0045-live-cross-plan-programme-scheduling.md)            | Live cross-plan / programme scheduling (M2)    | Accepted |
+| [0046](0046-polymorphic-entity-notes.md)                        | Polymorphic entity notes                       | Accepted |
+| [0047](0047-automatic-redeploy-on-release.md)                   | Automatic redeploy of released images          | Accepted |
+| [0048](0048-undo-redo-command-stack.md)                         | Client-side command-stack undo/redo            | Accepted |
 | [0049](0049-canvas-axis-aligned-resource-strip.md)              | Canvas-axis-aligned resource strip             | Proposed |
 | [0050](0050-schedule-interchange-canonical-model.md)            | Schedule interchange: canonical model + import | Accepted |
 | [0051](0051-external-guest-share-links.md)                      | External-Guest per-plan share links            | Accepted |
 | [0052](0052-canvas-direct-manipulation-and-visual-refresh.md)   | TSLD direct manipulation & visual refresh      | Accepted |
 | [0053](0053-calendar-scoping-and-resource-management.md)        | Calendar scoping tiers & resource management   | Accepted |
+| [0054](0054-canvas-live-feedback-and-float-visualisation.md)    | Canvas live feedback & float visualisation     | Accepted |
+| [0055](0055-designed-chrome-and-canvas-visual-language.md)      | Surface scopes, designed chrome & canvas UI    | Accepted |

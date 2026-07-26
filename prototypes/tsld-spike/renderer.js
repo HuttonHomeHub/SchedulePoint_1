@@ -43,7 +43,21 @@ function indexByDay(activities) {
   return byStartDay;
 }
 
-export function createRenderer(canvas, scene) {
+/**
+ * S4's canvas visual language (ADR-0055 §4): an opaque ground plus alternating month bands.
+ * Per theme, because Corporate's ground and bands are fill work Light and Dark did not have —
+ * though fill COST is hue-independent, so what this actually varies is the eyeball check, not
+ * the number. The measured axis is `bands` on/off.
+ */
+const GROUNDS = {
+  light: { ground: '#ffffff', band: '#f7f7f7' },
+  dark: { ground: '#1c1c1c', band: '#232323' },
+  corporate: { ground: '#fdfcf8', band: '#f7f4ea' },
+};
+
+export function createRenderer(canvas, scene, options = {}) {
+  const bands = options.bands === true;
+  const ground = GROUNDS[options.theme ?? 'light'] ?? GROUNDS.light;
   const ctx = canvas.getContext('2d');
   const byDay = indexByDay(scene.activities);
   const activityById = new Map(scene.activities.map((a) => [a.id, a]));
@@ -86,6 +100,23 @@ export function createRenderer(canvas, scene) {
     const lastDay = Math.ceil(dayAtX(cssW)) + 1;
     const firstLane = Math.max(0, Math.floor((0 - view.panY) / LANE_HEIGHT));
     const lastLane = Math.ceil((cssH - view.panY) / LANE_HEIGHT);
+
+    // Layer -0.5: the S4 ground + alternating month bands, beneath everything. One `fillStyle`
+    // and at most `visibleMonths + 1` `fillRect` of full canvas height — the shape
+    // `paint.band-budget.test.ts` pins by call count, measured here in a real rasteriser.
+    // 30-day months: this is a cost benchmark, not a calendar.
+    if (bands) {
+      ctx.fillStyle = ground.ground;
+      ctx.fillRect(0, 0, cssW, cssH);
+      ctx.fillStyle = ground.band;
+      const firstMonth = Math.floor(firstDay / 30);
+      const lastMonth = Math.ceil(lastDay / 30);
+      for (let m = firstMonth; m <= lastMonth; m += 1) {
+        if (m % 2 === 0) continue;
+        const x = worldX(m * 30);
+        ctx.fillRect(x, 0, worldX((m + 1) * 30) - x, cssH);
+      }
+    }
 
     // Layer 1: time-axis gridlines (weekly), cheap.
     ctx.strokeStyle = 'rgba(120,120,140,0.15)';

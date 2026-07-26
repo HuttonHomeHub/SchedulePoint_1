@@ -47,11 +47,20 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // colour: progress draws in the bar's paired label ink, glyph caps in the bar's own fill.
     barStroke: token('--color-border', '#2a2f3a'),
     hoverRing: token('--color-muted-foreground', '#7a8090'),
-    // The grab-handle halo (ADR-0052 M3 discoverability fix) — the canvas ground (`--color-card`,
-    // the surface the canvas sits on), which is the theme-inverse of the `outline` foreground the
-    // handle's core draws in. That pairing is what lets one handle read on every bar fill in both
-    // themes without a per-bar contrast decision (see `palette.test.ts`). No new hue is added.
-    handleHalo: token('--color-card', '#161a22'),
+    // The grab-handle halo (ADR-0052 M3 discoverability fix) — **the canvas ground**, which is the
+    // theme-inverse of the `outline` foreground the handle's core draws in. That pairing is what
+    // lets one handle read on every bar fill in every theme without a per-bar contrast decision
+    // (see `palette.test.ts`). No new hue is added.
+    //
+    // It reads `--color-canvas` rather than `--color-card` because the diagram now has a ground of
+    // its own (ADR-0055 §4). `--canvas` is valued identically to `--card` in every theme block, so
+    // this re-point is a no-op until the flagged cream value lands — and when it does, the halo
+    // follows the ground it is meant to match instead of silently drifting from it.
+    handleHalo: token('--color-canvas', '#161a22'),
+    // The alternating month band (ADR-0055 §4) — the diagram's own ground, banded, so a planner
+    // can count months without reading a single label. Opaque rather than an alpha wash: an alpha
+    // band would tint whatever it overlaps and would have to be re-checked against every layer.
+    monthBand: token('--color-canvas-band', '#1b202a'),
   };
 }
 
@@ -115,9 +124,11 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       // scene today, but the palette contract stays total — every painter field resolves).
       barStroke: token('--color-border', '#e5e7eb'),
       hoverRing: token('--color-muted-foreground', '#6b7280'),
-      // The export builds a handle-less scene (the handles are an editing affordance), but the
-      // palette contract stays total — every painter field resolves, here to the white paper.
-      handleHalo: token('--color-card', '#ffffff'),
+      // The export builds a handle-less scene (the handles are an editing affordance) and prints
+      // on unbanded paper, but the palette contract stays TOTAL — every painter field resolves, so
+      // a future export that does paint them cannot pick up an undefined colour.
+      handleHalo: token('--color-canvas', '#ffffff'),
+      monthBand: token('--color-canvas-band', '#f7f7f7'),
     };
   } finally {
     if (hadDark) root.classList.add('dark');

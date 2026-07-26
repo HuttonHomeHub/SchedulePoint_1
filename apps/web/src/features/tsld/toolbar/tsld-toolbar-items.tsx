@@ -59,7 +59,10 @@ import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import type { ToolbarItemRenderApi, ToolbarRow } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
-import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
+import {
+  toolbarControlVariants,
+  toolbarSplitCaretVariants,
+} from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
@@ -252,7 +255,10 @@ function AddActivityControl({
       >
         <Plus aria-hidden="true" className="size-4" />
         <span className="truncate">{triggerLabel}</span>
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        {/* The split look, not a split button — see `toolbarSplitCaretVariants`. */}
+        <span className={toolbarSplitCaretVariants()}>
+          <ChevronDown aria-hidden="true" className="size-3.5" />
+        </span>
       </button>
       <Menu
         open={open}
