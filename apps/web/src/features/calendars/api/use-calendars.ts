@@ -1,10 +1,12 @@
 import type {
+  ArchivedFilter,
   CalendarDetail,
   CalendarExceptionSummary,
   CalendarScope,
   CalendarSummary,
 } from '@repo/types';
 import {
+  keepPreviousData,
   queryOptions,
   useMutation,
   useQuery,
@@ -63,15 +65,54 @@ function updateBody(input: CalendarFormValues & { version: number }) {
 }
 
 /**
+ * The management filters a calendar list may carry (ADR-0053 §4 / US-8): a case-insensitive `q`
+ * over the name, and how archived rows are treated. Both default to "as before" — no search,
+ * active rows only — so an unfiltered read is byte-for-byte the pre-M4 request.
+ */
+export interface CalendarListFilters {
+  q?: string | undefined;
+  archived?: ArchivedFilter | undefined;
+}
+
+/**
+ * The `q`/`archived` half of a list query string, empty when both are at their defaults. Kept in
+ * one place so the two calendar list reads can never disagree about the parameter spelling — and so
+ * the "send nothing, get today's result set" contract is enforced by construction, not by care.
+ */
+function libraryQueryParams(filters: CalendarListFilters): string[] {
+  const parts: string[] = [];
+  const q = filters.q?.trim();
+  if (q) parts.push(`q=${encodeURIComponent(q)}`);
+  if (filters.archived && filters.archived !== 'exclude')
+    parts.push(`archived=${filters.archived}`);
+  return parts;
+}
+
+/** `?a=1&b=2`, or `''` for no params — so an unfiltered read keeps its bare path. */
+function queryString(parts: string[]): string {
+  return parts.length === 0 ? '' : `?${parts.join('&')}`;
+}
+
+/**
  * The organisation calendar list. `scope` selects the tier(s) (ADR-0053 §1): `org` (the default) is
  * the shared library — exactly today's result set — while `project`/`all` opt into project-scoped
- * rows. The default deliberately sends **no** `scope` param at all, so the flag-off request is the
- * same URL it always was.
+ * rows. `filters` adds the M4 search/archive controls (ADR-0053 §4). Every default deliberately
+ * sends **no** param at all, so the flag-off request is the same URL it always was.
  */
-export function calendarsQueryOptions(orgSlug: string, scope: CalendarScopeFilter = 'org') {
-  const query = scope === 'org' ? '' : `?scope=${scope}`;
+export function calendarsQueryOptions(
+  orgSlug: string,
+  scope: CalendarScopeFilter = 'org',
+  filters: CalendarListFilters = {},
+) {
+  const query = queryString([
+    ...(scope === 'org' ? [] : [`scope=${scope}`]),
+    ...libraryQueryParams(filters),
+  ]);
   return queryOptions({
-    queryKey: calendarKeys.scoped(orgSlug, scope),
+    queryKey: calendarKeys.scoped(orgSlug, scope, filters),
+    // Keep the current rows on screen while a new search settles, rather than flashing the
+    // table's loading state on every keystroke (the `resourceHistogramQueryOptions` precedent).
+    placeholderData: keepPreviousData,
     // The calendar library screen and every calendar picker (plan, activity, resource) need the WHOLE
     // org library, not the endpoint's default 20-row page — past 20 calendars the table stopped
     // listing them and a picker could not select them. Page through every row.
@@ -82,8 +123,9 @@ export function calendarsQueryOptions(orgSlug: string, scope: CalendarScopeFilte
 export function useCalendars(
   orgSlug: string,
   scope: CalendarScopeFilter = 'org',
+  filters: CalendarListFilters = {},
 ): UseQueryResult<CalendarSummary[]> {
-  return useQuery(calendarsQueryOptions(orgSlug, scope));
+  return useQuery(calendarsQueryOptions(orgSlug, scope, filters));
 }
 
 /**
@@ -94,12 +136,18 @@ export function useCalendars(
  *
  * Paged in full for the same reason as the org list: a picker must be able to select every row.
  */
-export function projectCalendarsQueryOptions(orgSlug: string, projectId: string) {
+export function projectCalendarsQueryOptions(
+  orgSlug: string,
+  projectId: string,
+  filters: CalendarListFilters = {},
+) {
+  const query = queryString(libraryQueryParams(filters));
   return queryOptions({
-    queryKey: calendarKeys.forProject(orgSlug, projectId),
+    queryKey: calendarKeys.forProject(orgSlug, projectId, filters),
+    placeholderData: keepPreviousData,
     queryFn: () =>
       apiFetchAllPages<CalendarSummary>(
-        `/organizations/${orgSlug}/projects/${projectId}/calendars`,
+        `/organizations/${orgSlug}/projects/${projectId}/calendars${query}`,
       ),
     // Don't fire for an absent id (e.g. while the parent plan is still loading).
     enabled: Boolean(projectId),
@@ -109,9 +157,19 @@ export function projectCalendarsQueryOptions(orgSlug: string, projectId: string)
 export function useProjectCalendars(
   orgSlug: string,
   projectId: string,
+  filters: CalendarListFilters = {},
 ): UseQueryResult<CalendarSummary[]> {
-  return useQuery(projectCalendarsQueryOptions(orgSlug, projectId));
+  return useQuery(projectCalendarsQueryOptions(orgSlug, projectId, filters));
 }
+
+/**
+ * What a calendar PICKER asks the server for behind `VITE_LIBRARY_SCOPING`: archived rows included,
+ * so a picker can label an archived current value honestly (it filters them out of the OFFERED
+ * options itself). Exported so the resource screen — whose org-only picker is composed at the
+ * route — applies the same rule as the plan/activity ones. Flag off it is never applied, and the
+ * request keeps its bare path.
+ */
+export const PICKER_CALENDAR_FILTERS: CalendarListFilters = { archived: 'include' };
 
 /**
  * The calendars a **plan's** pickers (plan default + per-activity) may offer, resolved for the
@@ -122,6 +180,13 @@ export function useProjectCalendars(
  * one). Both queries are declared unconditionally (rules of hooks) but only ONE is ever enabled, so
  * exactly one request fires either way — the switch lives here, in the feature that owns the tier
  * rules, rather than being re-derived by every composing screen.
+ *
+ * Flag on it also asks for `?archived=include`. That looks backwards for a picker — until you note
+ * the alternative: with archived rows absent, a plan whose calendar was archived AFTER it was
+ * chosen would show "Unavailable" instead of its name. The pickers filter archived rows out of the
+ * offered options themselves, keeping only the CURRENT value and badging it `Archived` (ADR-0053 §4
+ * / US-8's "current value outside the filtered page" rule) — one request, and never a selection
+ * that reads as broken.
  */
 export function usePlanScopedCalendars(
   orgSlug: string,
@@ -129,7 +194,7 @@ export function usePlanScopedCalendars(
 ): UseQueryResult<CalendarSummary[]> {
   const org = useQuery({ ...calendarsQueryOptions(orgSlug), enabled: !LIBRARY_SCOPING_ENABLED });
   const project = useQuery({
-    ...projectCalendarsQueryOptions(orgSlug, projectId),
+    ...projectCalendarsQueryOptions(orgSlug, projectId, PICKER_CALENDAR_FILTERS),
     enabled: LIBRARY_SCOPING_ENABLED && Boolean(projectId),
   });
   return LIBRARY_SCOPING_ENABLED ? project : org;
@@ -211,6 +276,54 @@ export function useMoveCalendarScope(orgSlug: string) {
         queryClient.invalidateQueries({ queryKey: calendarKeys.detail(orgSlug, input.calendarId) }),
       ]),
   });
+}
+
+/** What an archive/unarchive action needs: the row, and its optimistic-locking `version`. */
+export interface CalendarArchiveInput {
+  calendarId: string;
+  version: number;
+}
+
+/**
+ * Archive or unarchive a calendar (ADR-0053 §4 / US-7) — a `POST …/archive` | `…/unarchive`
+ * carrying only `{ version }`, answering **204**.
+ *
+ * It is an ACTION, not a PATCH field, because `archivedAt` is server-set; and it is deliberately
+ * **not** blocked by use — that is the whole point. `CALENDAR_IN_USE` (correctly) refuses to delete
+ * a calendar plans still reference, so archiving is the only way to retire one: every existing
+ * binding stays live and keeps scheduling identically (the CPM engine never reads `archived_at`),
+ * and only a NEW binding is refused (422 `CALENDAR_ARCHIVED`).
+ *
+ * Invalidating the `list` prefix sweeps the org list, every filtered/scoped list and every
+ * per-project list at once — the row just left or rejoined most of them.
+ */
+function useSetCalendarArchived(orgSlug: string, archived: boolean) {
+  const queryClient = useQueryClient();
+  const action = archived ? 'archive' : 'unarchive';
+  return useMutation({
+    mutationFn: (input: CalendarArchiveInput) =>
+      apiFetch<void>(`/organizations/${orgSlug}/calendars/${input.calendarId}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ version: input.version }),
+      }),
+    // Settle, not success: a 409 (stale version) must still refresh the cached row so a retry
+    // carries the current version.
+    onSettled: (_data, _error, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: calendarKeys.list(orgSlug) }),
+        queryClient.invalidateQueries({ queryKey: calendarKeys.detail(orgSlug, input.calendarId) }),
+      ]),
+  });
+}
+
+/** Retire a calendar from the pickers, keeping every existing binding live — see above. */
+export function useArchiveCalendar(orgSlug: string) {
+  return useSetCalendarArchived(orgSlug, true);
+}
+
+/** Return an archived calendar to the library and the pickers. */
+export function useUnarchiveCalendar(orgSlug: string) {
+  return useSetCalendarArchived(orgSlug, false);
 }
 
 export function useDeleteCalendar(orgSlug: string) {

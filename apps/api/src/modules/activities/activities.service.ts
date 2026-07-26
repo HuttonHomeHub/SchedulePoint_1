@@ -227,6 +227,9 @@ export class ActivitiesService {
             calendarId,
             organizationId: organization.id,
             projectId: plan.projectId,
+            // A brand-new activity holds no calendar yet, so ANY archived calendar is a new
+            // binding here and is refused (ADR-0053 §4).
+            currentCalendarId: null,
           });
         }
         // Validate the WBS parent is a same-plan summary (no cycle possible on a brand-new activity).
@@ -456,6 +459,9 @@ export class ActivitiesService {
             calendarId,
             organizationId: organization.id,
             projectId: plan.projectId,
+            // The activity's CURRENT calendar: an edit that re-submits it is not a new binding,
+            // so an activity already on an archived calendar stays editable (ADR-0053 §4).
+            currentCalendarId: existing.calendarId,
           });
           patch.calendarId = calendarId;
         }

@@ -18,6 +18,7 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     description: null,
     scope: 'ORG',
     projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -40,7 +41,10 @@ describe('assertCalendarUsableBy', () => {
   let repo: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let tx: { $executeRaw: ReturnType<typeof vi.fn> };
 
-  const run = (projectId: string | null): Promise<Calendar> =>
+  const run = (
+    projectId: string | null,
+    currentCalendarId: string | null = null,
+  ): Promise<Calendar> =>
     assertCalendarUsableBy(
       tx as unknown as Prisma.TransactionClient,
       repo as unknown as CalendarRepository,
@@ -48,6 +52,10 @@ describe('assertCalendarUsableBy', () => {
         calendarId: 'cal-1',
         organizationId: ORG_ID,
         projectId,
+        // Default `null` = the holder currently has no calendar, so every binding under test is
+        // a NEW one — the fail-closed case. Tests that need the "re-submitting what I already
+        // have" path pass 'cal-1' explicitly.
+        currentCalendarId,
       },
     );
 
@@ -90,6 +98,57 @@ describe('assertCalendarUsableBy', () => {
       await expect(run(null)).rejects.toBeInstanceOf(ValidationError);
       await expect(run(null)).rejects.toMatchObject({
         details: { reason: 'RESOURCE_REQUIRES_ORG_CALENDAR', projectId: PROJECT_A },
+      });
+    });
+  });
+
+  describe('an ARCHIVED calendar (ADR-0053 §4)', () => {
+    it('rejects a NEW binding (422 CALENDAR_ARCHIVED), even for an ORG calendar usable by anyone', async () => {
+      repo.findActiveByIdInOrg.mockResolvedValue(
+        calendar({ scope: 'ORG', archivedAt: new Date() }),
+      );
+      await expect(run(PROJECT_A)).rejects.toBeInstanceOf(ValidationError);
+      await expect(run(PROJECT_A)).rejects.toMatchObject({
+        details: { reason: 'CALENDAR_ARCHIVED', calendarId: 'cal-1' },
+      });
+    });
+
+    it('allows a holder that ALREADY has it — re-submitting is not a NEW binding', async () => {
+      repo.findActiveByIdInOrg.mockResolvedValue(
+        calendar({ scope: 'ORG', archivedAt: new Date() }),
+      );
+      await expect(run(PROJECT_A, 'cal-1')).resolves.toMatchObject({ id: 'cal-1' });
+    });
+
+    it('still refuses a DIFFERENT holder’s new binding even though the calendar is org-wide usable', async () => {
+      // currentCalendarId names a DIFFERENT calendar than the one being bound: this holder does
+      // not already have 'cal-1', so it is a new binding despite already holding something.
+      repo.findActiveByIdInOrg.mockResolvedValue(
+        calendar({ scope: 'ORG', archivedAt: new Date() }),
+      );
+      await expect(run(PROJECT_A, 'some-other-calendar')).rejects.toMatchObject({
+        details: { reason: 'CALENDAR_ARCHIVED' },
+      });
+    });
+
+    it('the archive check runs BEFORE the tier check — archived wins over CALENDAR_WRONG_SCOPE', async () => {
+      // A PROJECT-A calendar, archived, probed from PROJECT_B: an unarchived row would 422 with
+      // CALENDAR_WRONG_SCOPE here, but the archive rule is checked first (ADR-0053 §4 — the
+      // coarser, more actionable fact), so this must surface CALENDAR_ARCHIVED instead.
+      repo.findActiveByIdInOrg.mockResolvedValue(
+        calendar({ scope: 'PROJECT', projectId: PROJECT_A, archivedAt: new Date() }),
+      );
+      await expect(run(PROJECT_B)).rejects.toMatchObject({
+        details: { reason: 'CALENDAR_ARCHIVED', calendarId: 'cal-1' },
+      });
+    });
+
+    it('the archive check runs BEFORE the org-global-only check — archived wins over RESOURCE_REQUIRES_ORG_CALENDAR', async () => {
+      repo.findActiveByIdInOrg.mockResolvedValue(
+        calendar({ scope: 'PROJECT', projectId: PROJECT_A, archivedAt: new Date() }),
+      );
+      await expect(run(null)).rejects.toMatchObject({
+        details: { reason: 'CALENDAR_ARCHIVED', calendarId: 'cal-1' },
       });
     });
   });

@@ -1,0 +1,144 @@
+-- M4 Archive lifecycle: `archived_at` on the two shared libraries (ADR-0053 §4, epic
+-- "Library scoping & manageability", Task 4.1). See docs/DATABASE.md "Calendar &
+-- CalendarException" / "Resource & ResourceAssignment" and
+-- docs/specs/library-scoping-and-manageability/.
+--
+-- MODEL. Archive is ORTHOGONAL to soft delete, not a second flavour of it:
+--   deleted_at  — the row is GONE. Nothing active may reference it; the RESOURCE_IN_USE /
+--                 CALENDAR_IN_USE guards exist precisely to keep that true.
+--   archived_at — the row is RETIRED but still VALID. Every existing reference stays live and
+--                 keeps scheduling, levelling, loading the histogram and earning value
+--                 identically; it is merely hidden from pickers and refused for NEW usages.
+-- That "keeps its references" property is exactly what soft delete cannot express, which is why
+-- this is its own column rather than a reuse of deleted_at (ADR-0053 §4, US-7). Both columns may
+-- be set at once — archiving does not bypass the delete guard, and deleting an archived row is
+-- the normal path (the spec's edge-case table). No CHECK relates them: every combination of the
+-- four states is legal, so a constraint would only forbid something the domain allows.
+--
+-- The RULES that make archive mean anything all live ABOVE the DB — they need rows the DB cannot
+-- see from the row being written (the assignment's resource, the picker's caller):
+--   * new assignment to an archived resource ⇒ 422 RESOURCE_ARCHIVED (service);
+--   * editing an EXISTING assignment of an archived resource ⇒ allowed (service);
+--   * archived rows excluded from pickers/lists by default ⇒ the tri-state `archived` filter.
+-- `archived_at` is SERVER-SET (a POST …/archive | …/unarchive action, never a PATCH field), so
+-- there is no client-supplied value for a CHECK to police.
+--
+-- ADDITIVE, NO DATA MIGRATION. Both columns are NULLABLE with NO default, so on PostgreSQL 11+
+-- each ADD COLUMN is METADATA-ONLY (no table rewrite, no full scan; a brief ACCESS EXCLUSIVE for
+-- the catalog update) and every existing row reads NULL = ACTIVE — today's exact behaviour. A
+-- DEFAULT is deliberately omitted: `now()` would archive the entire library, and there is no
+-- other meaningful constant. Same posture as calendars.project_id / resources.parent_id.
+--
+-- NON-SCHEDULING / BYTE-PARITY. The CPM engine builds its WorkingTimeCalendar port from
+-- shift/exception rows loaded BY CALENDAR ID and resolves a resource's calendar and demand BY
+-- RESOURCE ID; neither load ever receives `archived_at`, and `computeSchedule`'s signature is
+-- unchanged. The levelling pass (ADR-0041), the histogram/curve read (ADR-0044) and Earned Value
+-- (ADR-0042) all start from `resource_assignments`, which archive does not touch. The ADR-0034
+-- golden + scenario suite is therefore STRUCTURALLY untouched (ADR-0053 §6) — an archived
+-- resource that drives an activity keeps driving it on the same calendar, by construction.
+--
+-- ============================================================================================
+-- NO INDEX CHANGES. Three deliberate decisions, recorded here because the next author will ask.
+-- ============================================================================================
+--
+-- (1) THE PARTIAL UNIQUES ARE NOT RE-PREDICATED. `uq_calendars_org_name`,
+--     `uq_calendars_project_name` and `uq_resources_org_name` keep `WHERE deleted_at IS NULL`
+--     (+ the M1 tier term) and deliberately do NOT gain `AND archived_at IS NULL`:
+--     AN ARCHIVED ROW STILL OCCUPIES ITS NAME.
+--     The decisive argument is that UNARCHIVE MUST NOT BE ABLE TO FAIL. Unarchive is a
+--     version-gated metadata-only UPDATE with no lock, no cascade and no guard (spec W4). If an
+--     archived row freed its name, an active row could be created on that name in the meantime
+--     and the unarchive would then explode on a 23505 at a moment the user cannot reason about —
+--     forcing unarchive to grow a duplicate-name guard, a lock and a rename-then-unarchive UX.
+--     A uniqueness predicate must be CLOSED under the lifecycle transitions the app permits;
+--     archive→unarchive is unguarded, so the name must be held across it. (Soft delete may free
+--     its name precisely because RESTORE is already a guarded, conflict-capable operation.)
+--     It is also what makes the M5 import rule work: CQ-4 resolves a source row matching an
+--     archived one by UNARCHIVE-AND-MATCH, which is only well-defined while the archived row
+--     still owns the name — otherwise an import could mint a second active row on the same name
+--     and name-matching would be ambiguous forever after.
+--     CONSEQUENCE, accepted: you CANNOT create a new ACTIVE row carrying an archived row's name;
+--     the create is a 409 DUPLICATE_CALENDAR / DUPLICATE_RESOURCE. The service should detect the
+--     archived collision and return the 409 with the archived row's id in `details` so the UI can
+--     offer "Unarchive it instead" rather than a dead-end message.
+--     This is also why M4 needs NO index DROP/CREATE at all: unlike M1's atomic unique swap, this
+--     migration never leaves a uniqueness rule momentarily unenforced.
+--
+-- (2) THE LIST / CURSOR INDEXES ARE UNCHANGED, and no `WHERE … AND archived_at IS NULL` twin is
+--     added. The new `archived` filter is TRI-STATE (`exclude` (default) ⇒ `archived_at IS NULL`,
+--     `include` ⇒ no term, `only` ⇒ `archived_at IS NOT NULL`), so it is NOT a constant predicate
+--     and a partial index could serve only one of the three. Reasoning per index:
+--       * `calendars_organization_id_created_at_id_idx` / `resources_organization_id_created_at_id_idx`
+--         (organization_id, created_at, id) — the leading equality on organization_id already
+--         bounds the scan to ONE TENANT'S rows in exact cursor order, and ADR-0053 sizes a tenant
+--         at <= 1,000 calendars / <= 5,000 resources. Worst case (archived=exclude with most of an
+--         org archived) is an ordered scan of a few thousand index entries with a heap recheck —
+--         low single-digit milliseconds warm, an order of magnitude inside the 200 ms p95 budget,
+--         and the common case stops at the LIMIT after ~20 entries. Appending `archived_at` as a
+--         trailing key would let the filter be applied in the index (fewer heap fetches) but
+--         CANNOT narrow the scan range — it sits after the sort keys — so it buys an unmeasurable
+--         win in exchange for a wider entry on every row of both tables plus index maintenance on
+--         every archive/unarchive. A separate partial `WHERE deleted_at IS NULL AND archived_at IS
+--         NULL` composite would today be byte-for-byte a DUPLICATE of the existing one (no row is
+--         archived yet): pure write cost, zero read benefit. Both are the documented MEASURE-FIRST
+--         escalation (docs/PERFORMANCE.md, docs/TECH_DEBT.md), warranted only if a tenant's
+--         archived rows come to dominate its live library.
+--       * `idx_calendars_project_id` (WHERE deleted_at IS NULL AND project_id IS NOT NULL) — its
+--         job is the PROJECT-DELETE CASCADE sweep, which MUST see archived rows: an archived
+--         project calendar has to be swept into the project's delete_batch_id like any other.
+--         Adding `archived_at IS NULL` here would be a CORRECTNESS BUG (a live archived calendar
+--         left orphaned under a deleted project), not merely an over-narrowing.
+--       * `idx_resources_parent_id` (WHERE deleted_at IS NULL AND parent_id IS NOT NULL) — same
+--         argument, twice over: the GROUP subtree cascade, the subtree RESOURCE_IN_USE count and
+--         the reparent height walk must ALL traverse archived nodes (archived != deleted; an
+--         archived child is still a real child that must be swept and counted). Untouched.
+--     Net: the only query shape the archive filter changes is the org-scoped list, and the
+--     existing full composite already serves it within budget at the documented cardinalities.
+--
+-- (3) THE `q` SEARCH IS UNINDEXABLE HERE, BY CONSTRUCTION, AND THAT IS FINE. `q` compiles (Prisma
+--     `contains` + `mode: 'insensitive'`) to `name ILIKE '%q%'` — on `resources` OR'd with the
+--     same over `code`; `calendars` has no `code`, so it matches `name` only. A LEADING-WILDCARD,
+--     case-insensitive match is not a btree range: neither the existing composites, nor a
+--     `text_pattern_ops` index (left-anchored only), nor an expression index on `lower(name)`
+--     (prefix only) can serve it, and the OR across two columns removes what little was left. The
+--     plan is therefore, deliberately: index-scan `(organization_id, created_at, id)` to bound the
+--     candidate set to ONE TENANT in cursor order, then apply the ILIKE as a recheck — a BOUNDED
+--     sequential filter over <= 1,000 / <= 5,000 rows, not a table-wide seq scan. Adding an index
+--     that cannot be used would be pure write cost. The documented escalation, deferred and
+--     measured first (Task 4.3 records the seeded-500-row EXPLAIN), is a `pg_trgm` GIN index on
+--     `lower(name)` (`gin_trgm_ops`) — deferred not only on cardinality but because it needs
+--     `CREATE EXTENSION pg_trgm`, a privileged one-off DDL step the app's DB role may not hold
+--     (docs/TECH_DEBT.md; ADR-0053 "Follow-ups").
+--
+-- LOCKS. Two catalog-only ADD COLUMNs: each takes a brief ACCESS EXCLUSIVE on its table to update
+-- pg_attribute and releases it immediately — no rewrite, no scan, no validation. The whole file
+-- runs in ONE transaction (Prisma Migrate wraps a migration file on PostgreSQL); no CONCURRENTLY
+-- variant is possible or wanted (the repo uses none, and there is no index to build).
+
+-- AddColumn: the calendar archive marker (ADR-0053 §4). NULL = active. Set by
+-- POST …/calendars/:id/archive, cleared by …/unarchive — never a PATCH field, never client input.
+-- An archived calendar STAYS BOUND to its plans, activities and resources and still schedules
+-- identically; it is hidden from the pickers and from the default library list, and refused for a
+-- NEW binding at the assertCalendarUsableBy seam. It is the ONLY way to retire a calendar the
+-- CALENDAR_IN_USE guard — correctly — refuses to delete (CQ-5). It does NOT free the calendar's
+-- name (see decision (1) above), and it does NOT relax the M1 scope-narrowing count: a calendar
+-- referenced by an ARCHIVED resource is still blocked from narrowing, because that reference is
+-- live (the spec's edge-case table). NEVER read by the CPM engine.
+ALTER TABLE "calendars" ADD COLUMN "archived_at" TIMESTAMPTZ(3);
+
+-- AddColumn: the resource archive marker (ADR-0053 §4). NULL = active. Same shape and same
+-- server-set action endpoints. An archived resource keeps EVERY existing assignment — which still
+-- schedules, levels, loads the histogram and earns value byte-identically, including when it is
+-- the DRIVING resource of a live activity — and only a NEW assignment is refused (422
+-- RESOURCE_ARCHIVED, a service check: a CHECK cannot read the assignment's resource row).
+-- Archiving is explicitly NOT blocked by use — that is the entire point, and the contrast with
+-- delete. Applies to a GROUP node too, and deliberately does NOT cascade to its subtree (archive
+-- has no cascade, spec W4): an archived group with active children is legal and the tree renders
+-- the badge on the group alone. NEVER read by the CPM engine, the levelling pass or the EV
+-- read-model.
+ALTER TABLE "resources" ADD COLUMN "archived_at" TIMESTAMPTZ(3);
+
+-- Down (forward-only in production; documented for completeness). Both drops are metadata-only
+-- and lose only the archive state itself — nothing references these columns by FK or index:
+--   ALTER TABLE "resources" DROP COLUMN "archived_at";
+--   ALTER TABLE "calendars" DROP COLUMN "archived_at";

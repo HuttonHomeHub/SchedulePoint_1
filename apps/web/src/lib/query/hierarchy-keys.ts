@@ -10,7 +10,33 @@
  * `@/features/clients` as before.
  */
 
-import type { HistogramGranularity } from '@repo/types';
+import type { ArchivedFilter, HistogramGranularity, ResourceKind } from '@repo/types';
+
+/**
+ * The library list filters that take part in a cache key (ADR-0053 §4 / US-8) — free-text `q`,
+ * archive state, and (resources only) `kind`. Shared by the calendar and resource key factories so
+ * "the default filter" means one thing on both.
+ */
+export interface LibraryFilterKey {
+  q?: string | undefined;
+  archived?: ArchivedFilter | undefined;
+  kind?: ResourceKind | undefined;
+}
+
+/**
+ * The key segments a filter set contributes — and **nothing at all** for the default filter (no
+ * search, active rows only, every kind). That is deliberate, and mirrors `calendarKeys.scoped`'s
+ * `org` case: the default filter is the same request returning the same rows as the pre-ADR-0053
+ * read, so it must share ONE cache entry with every existing caller rather than double-fetch it —
+ * which is also what keeps the flag-off surface on exactly today's key.
+ */
+function libraryFilterSegments(filters?: LibraryFilterKey): readonly string[] {
+  const q = filters?.q?.trim() ?? '';
+  const archived = filters?.archived ?? 'exclude';
+  const kind = filters?.kind ?? '';
+  if (q === '' && archived === 'exclude' && kind === '') return [];
+  return ['filter', q, archived, kind];
+}
 
 export const clientKeys = {
   all: (orgSlug: string) => ['clients', orgSlug] as const,
@@ -101,25 +127,66 @@ export const calendarKeys = {
    * so the default filter shares one cache entry with every pre-existing `useCalendars` caller
    * instead of double-fetching it — and the flag-off surface keeps hitting exactly today's key.
    */
-  scoped: (orgSlug: string, scope: 'org' | 'project' | 'all') =>
-    scope === 'org'
+  scoped: (
+    orgSlug: string,
+    scope: 'org' | 'project' | 'all',
+    filters?: LibraryFilterKey,
+  ): readonly unknown[] => [
+    ...(scope === 'org'
       ? calendarKeys.list(orgSlug)
-      : ([...calendarKeys.list(orgSlug), 'scope', scope] as const),
+      : ([...calendarKeys.list(orgSlug), 'scope', scope] as const)),
+    ...libraryFilterSegments(filters),
+  ],
   /**
    * The calendars **usable in** a project (its own + every organisation one) — the
    * `…/projects/:projectId/calendars` read that feeds the project section and the scope-aware plan /
    * activity pickers. Keyed per project so one project's list can never stomp another's, nor the
    * org list (the picker-regression risk in the M2 plan).
    */
-  forProject: (orgSlug: string, projectId: string) =>
-    [...calendarKeys.list(orgSlug), 'project', projectId] as const,
+  forProject: (
+    orgSlug: string,
+    projectId: string,
+    filters?: LibraryFilterKey,
+  ): readonly unknown[] => [
+    ...calendarKeys.list(orgSlug),
+    'project',
+    projectId,
+    ...libraryFilterSegments(filters),
+  ],
   detail: (orgSlug: string, calendarId: string) =>
     [...calendarKeys.all(orgSlug), 'detail', calendarId] as const,
 };
 
 export const resourceKeys = {
   all: (orgSlug: string) => ['resources', orgSlug] as const,
+  /**
+   * The whole organisation library — the endpoint's default result set, and the only list that
+   * existed before ADR-0053 §4. Every filtered list nests UNDER this key, so a create/update/
+   * delete/archive keeps invalidating exactly `list(orgSlug)` and the prefix match sweeps the
+   * filtered lists and the picker searches with it.
+   */
   list: (orgSlug: string) => [...resourceKeys.all(orgSlug), 'list'] as const,
+  /**
+   * A search/kind/archive-filtered library list (ADR-0053 §4). The DEFAULT filter deliberately
+   * returns {@link list} itself rather than a sibling key — same request, same rows — so the
+   * unfiltered screen and every pre-existing `useResources` caller share one cache entry, exactly
+   * as `calendarKeys.scoped` does for `org`.
+   */
+  filtered: (orgSlug: string, filters?: LibraryFilterKey): readonly unknown[] => [
+    ...resourceKeys.list(orgSlug),
+    ...libraryFilterSegments(filters),
+  ],
+  /**
+   * The picker's cursor-paginated server search (ADR-0053 §4 / US-8) — a DIFFERENT read from the
+   * library list (one page at a time, "Load more" for the rest), so it gets its own key under the
+   * same `list` prefix: a library write still sweeps it, but a picker page can never be mistaken
+   * for the whole library and truncate a screen that needs every row.
+   */
+  search: (orgSlug: string, filters?: LibraryFilterKey): readonly unknown[] => [
+    ...resourceKeys.list(orgSlug),
+    'search',
+    ...libraryFilterSegments(filters),
+  ],
   detail: (orgSlug: string, resourceId: string) =>
     [...resourceKeys.all(orgSlug), 'detail', resourceId] as const,
 };

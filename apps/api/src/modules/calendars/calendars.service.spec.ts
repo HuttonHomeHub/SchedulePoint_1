@@ -26,6 +26,7 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     // Every pre-ADR-0053 row is the shared-library tier; the tests opt into PROJECT explicitly.
     scope: 'ORG',
     projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -92,6 +93,8 @@ describe('CalendarsService', () => {
   let calendars: {
     create: ReturnType<typeof vi.fn>;
     findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findArchivedByNameInTier: ReturnType<typeof vi.fn>;
+    setArchivedIfVersionMatches: ReturnType<typeof vi.fn>;
     findActiveDetailByIdInOrg: ReturnType<typeof vi.fn>;
     findManyActiveByOrg: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
@@ -118,6 +121,8 @@ describe('CalendarsService', () => {
     calendars = {
       create: vi.fn(),
       findActiveByIdInOrg: vi.fn(),
+      findArchivedByNameInTier: vi.fn().mockResolvedValue(null),
+      setArchivedIfVersionMatches: vi.fn().mockResolvedValue(1),
       findActiveDetailByIdInOrg: vi.fn(),
       findManyActiveByOrg: vi.fn(),
       updateIfVersionMatches: vi.fn(),

@@ -1,7 +1,8 @@
 import { useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
-import { useCalendars } from '@/features/calendars';
+import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
+import { PICKER_CALENDAR_FILTERS, useCalendars } from '@/features/calendars';
 import { CreateResourceButton, ResourcesTable } from '@/features/resources';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -19,7 +20,14 @@ export function ResourcesScreen(): React.ReactElement {
   // ORGANISATION calendars only, deliberately: the resource pool is org-global (ADR-0039), so the
   // API hard-rejects a project-scoped calendar on a resource with a 422 (ADR-0053 §2). The default
   // `?scope=org` list IS the usable set, so the picker can never offer one that would be refused.
-  const calendars = useCalendars(orgSlug);
+  // Archived rows ride along behind the flag (ADR-0053 §4): the picker filters them out of what it
+  // OFFERS, but a resource already bound to a since-archived calendar must still show its name
+  // rather than "Unnamed". Flag off, the request is byte-for-byte today's.
+  const calendars = useCalendars(
+    orgSlug,
+    'org',
+    LIBRARY_SCOPING_ENABLED ? PICKER_CALENDAR_FILTERS : {},
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 p-6">

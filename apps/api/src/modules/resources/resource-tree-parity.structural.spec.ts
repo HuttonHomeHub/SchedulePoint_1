@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -57,5 +57,20 @@ describe('resource tree parity (structural)', () => {
     const assignmentService = readSource('./resource-assignment.service.ts');
     expect(assignmentService).toMatch(/resource\.kind === 'GROUP'/);
     expect(assignmentService).toMatch(/GROUP_NOT_ASSIGNABLE/);
+  });
+
+  /**
+   * The same argument for M4's archive lifecycle (ADR-0053 §4). `archived_at` is a pure library
+   * concern: an archived resource keeps every assignment and must schedule, level, load and earn
+   * BYTE-IDENTICALLY. The `EngineResource` field assertion above already forbids a field being
+   * added to the port, so this scans the whole engine directory for a read of the column by any
+   * other route (a raw query, a load helper, a filter slipped into the assignment fetch).
+   */
+  it('no file under the engine directory reads archivedAt', () => {
+    const engineDir = join(__dirname, '../schedule/engine');
+    const offenders = readdirSync(engineDir, { recursive: true, encoding: 'utf8' })
+      .filter((entry) => entry.endsWith('.ts'))
+      .filter((entry) => readFileSync(join(engineDir, entry), 'utf8').includes('archivedAt'));
+    expect(offenders).toEqual([]);
   });
 });

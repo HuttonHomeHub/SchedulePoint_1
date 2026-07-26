@@ -205,7 +205,7 @@ describe('ActivitiesService', () => {
     calendars = {
       findActiveByIdInOrg: vi
         .fn()
-        .mockResolvedValue({ id: 'cal-1', scope: 'ORG', projectId: null }),
+        .mockResolvedValue({ id: 'cal-1', scope: 'ORG', projectId: null, archivedAt: null }),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new ActivitiesService(

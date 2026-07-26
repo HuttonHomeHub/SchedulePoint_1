@@ -29,6 +29,7 @@ function calendar(overrides: Partial<CalendarSummary> & { id: string }): Calenda
     workingWeekdays: 31,
     scope: 'ORG',
     projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',

@@ -218,6 +218,15 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   arrow-key focus, `Esc`/`Tab`/click-away dismissal, and focus-return to the
   trigger. Used for the Project Explorer row-actions (context) menu. A shared
   Command palette pattern for power users remains a future addition.
+- **Comboboxes (pickers)** — the hand-rolled `Combobox` primitive
+  (`components/ui/combobox.tsx`), WAI-ARIA APG "Combobox with List Autocomplete"
+  on semantic HTML (no Radix): type-ahead filtering, `aria-activedescendant`
+  keyboard operation, grouped options, trailing state/tier badges folded into the
+  accessible name, tree indentation, an explicit "Load more" page, and an
+  announced result count. Fully controlled and non-fetching — the consumer owns
+  the query, the debounce and the paging. Use it wherever a native `<select>`
+  would truncate or hide a large library; keep `<select>` for short, fixed option
+  sets. See [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) for the usage contract.
 - **Pagination** — shared control paired with the DataTable; disabled
   prev/next at bounds; announces page changes; keyboard operable.
 - **Search** — labelled input with a leading search icon, debounced, clearable;

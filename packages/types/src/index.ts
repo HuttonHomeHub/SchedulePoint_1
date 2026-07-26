@@ -896,6 +896,25 @@ export const CALENDAR_SCOPES = ['ORG', 'PROJECT'] as const;
 export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
 
 /**
+ * How a library list treats **archived** rows (ADR-0053 §4) — shared by the calendar and
+ * resource libraries so "Show archived" means one thing everywhere. `exclude` is the default
+ * on every list and every picker, so today's result set (nothing is archived) is preserved
+ * byte-for-byte. Like the calendar `scope` filter this is a **usability** control, never an
+ * authorisation boundary: the security control is the write-time reject.
+ */
+export const ARCHIVED_FILTERS = ['exclude', 'include', 'only'] as const;
+
+/** How a library list treats archived rows — see {@link ARCHIVED_FILTERS}. */
+export type ArchivedFilter = (typeof ARCHIVED_FILTERS)[number];
+
+/**
+ * Maximum length of a library search term (`?q=`, ADR-0053 §4 / US-8). Bounds the
+ * case-insensitive `contains` predicate the server runs against `name` (and `code` for
+ * resources) so a pathological term cannot turn a bounded scan into an expensive one.
+ */
+export const LIBRARY_SEARCH_MAX_LENGTH = 100;
+
+/**
  * A working-day calendar (M5, ADR-0024) — a reusable library entry: a weekly working
  * pattern (a {@link WorkingWeekdays} bitmask) plus dated exceptions. Since ADR-0053 a
  * calendar sits in one of two tiers ({@link CalendarScope}): the shared organisation
@@ -912,6 +931,14 @@ export interface CalendarSummary {
   scope: CalendarScope;
   /** The owning project when `scope` is `PROJECT`; `null` for an `ORG` calendar. */
   projectId: string | null;
+  /**
+   * When this calendar was **archived** (ADR-0053 §4) — retired from pickers while every
+   * existing plan/activity/resource binding stays live and keeps scheduling exactly as before.
+   * `null` = active. Orthogonal to soft delete: archiving is deliberately **not** blocked by
+   * use, which is the only way to retire a calendar `CALENDAR_IN_USE` correctly refuses to
+   * delete. **Never read by the CPM engine.**
+   */
+  archivedAt: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -963,6 +990,12 @@ export const CALENDAR_ERROR = {
   /** `scope: PROJECT` needs a `projectId`, and `scope: ORG` forbids one (→ 422). */
   CALENDAR_SCOPE_PROJECT_MISMATCH:
     'A project calendar needs a projectId; an organisation calendar must not have one.',
+  /**
+   * An **archived** calendar was bound to a plan, an activity or a resource (→ 422, ADR-0053 §4).
+   * Archiving retires a calendar from pickers; every EXISTING binding stays live and keeps
+   * scheduling, so only a **new** binding is refused. Unarchive it to use it again.
+   */
+  CALENDAR_ARCHIVED: 'This calendar is archived. Unarchive it to use it again.',
 } as const;
 
 /** A machine-readable calendar-scope error reason (a key of {@link CALENDAR_ERROR}). */
@@ -1456,6 +1489,16 @@ export interface ResourceSummary {
    * caller-not-permitted.
    */
   costPerUnit: number | null;
+  /**
+   * When this resource was **archived** (ADR-0053 §4) — retired from pickers while every
+   * existing assignment stays live and keeps scheduling, levelling, loading the histogram and
+   * earning value **exactly as before**. `null` = active. Orthogonal to soft delete: a
+   * soft-deleted resource cannot be referenced by an active assignment (`RESOURCE_IN_USE`),
+   * which is precisely what archive must allow. Only **new** assignments are rejected (422
+   * `RESOURCE_ARCHIVED`). **Never read by the CPM engine, the levelling pass or the EV
+   * read-model.**
+   */
+  archivedAt: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1573,6 +1616,13 @@ export const RESOURCE_ERROR = {
     'The rate (units/time) must be greater than zero to drive an activity’s duration.',
   /** A `GROUP` is a grouping node, not a resource — it can never be assigned or drive (→ 422). */
   GROUP_NOT_ASSIGNABLE: 'A group can’t be assigned to an activity.',
+  /**
+   * A **new** assignment was made to an archived resource (→ 422, ADR-0053 §4). Archiving retires
+   * a resource from pickers; every EXISTING assignment stays live and keeps scheduling, levelling
+   * and earning value, and may still be edited (maintaining history is not new exposure). Only
+   * the new assignment is refused.
+   */
+  RESOURCE_ARCHIVED: 'This resource is archived. Unarchive it to assign it.',
   /** A proposed `parentId` is an in-org resource that is not a `GROUP` (→ 422). */
   RESOURCE_PARENT_NOT_GROUP: 'Only a group can contain resources.',
   /**

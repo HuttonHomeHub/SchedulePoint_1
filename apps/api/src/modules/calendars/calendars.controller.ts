@@ -26,6 +26,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -172,6 +173,57 @@ export class CalendarsController {
     @Param('calendarId', ParseUuidPipe) calendarId: string,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, calendarId);
+  }
+
+  @Post(':calendarId/archive')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Archive a calendar — retire it from the pickers without deleting it.',
+    description:
+      'ADR-0053 §4. An archived calendar STAYS BOUND to its plans, activities and resources ' +
+      'and still schedules identically; it is hidden from the default list and from every ' +
+      'picker, and refused for a NEW binding (422 CALENDAR_ARCHIVED). Archiving is ' +
+      'deliberately NOT blocked by use — it is the only way to retire a calendar the ' +
+      'CALENDAR_IN_USE delete guard (correctly) refuses to delete. Archiving an ORG-scoped ' +
+      'calendar additionally requires `calendar:manage_org`.',
+  })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for an ORG-scoped calendar.',
+  })
+  @ApiNotFoundResponse({ description: 'No such calendar in this organisation.' })
+  @ApiConflictResponse({ description: 'Stale `version` — the calendar changed elsewhere.' })
+  async archive(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Body() dto: ArchiveActionDto,
+  ): Promise<void> {
+    await this.service.setArchived(principal, orgSlug, calendarId, true, dto.version);
+  }
+
+  @Post(':calendarId/unarchive')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Unarchive a calendar — return it to the library and the pickers.',
+    description:
+      'ADR-0053 §4. Clears `archivedAt`. This can never fail on a name collision: an archived ' +
+      'calendar keeps its name (the per-tier partial uniques are predicated on `deleted_at` ' +
+      'alone), so nothing can have taken it meanwhile.',
+  })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for an ORG-scoped calendar.',
+  })
+  @ApiNotFoundResponse({ description: 'No such calendar in this organisation.' })
+  @ApiConflictResponse({ description: 'Stale `version` — the calendar changed elsewhere.' })
+  async unarchive(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Body() dto: ArchiveActionDto,
+  ): Promise<void> {
+    await this.service.setArchived(principal, orgSlug, calendarId, false, dto.version);
   }
 
   @Post(':calendarId/exceptions')

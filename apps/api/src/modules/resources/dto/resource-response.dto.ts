@@ -54,6 +54,18 @@ export class ResourceResponseDto implements ResourceSummary {
   })
   costPerUnit!: number | null;
 
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description:
+      'When this resource was archived (ADR-0053 §4); null = active. An archived resource ' +
+      'keeps every existing assignment — which still schedules, levels, loads the histogram ' +
+      'and earns value identically — and is hidden from pickers; only a NEW assignment is ' +
+      'refused (422 RESOURCE_ARCHIVED).',
+  })
+  archivedAt!: string | null;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -82,6 +94,7 @@ export class ResourceResponseDto implements ResourceSummary {
       // Cost rate is gated on `cost:read` (EV4a): null unless the caller may read cost AND it is set.
       costPerUnit:
         canReadCost && entity.costPerUnit !== null ? entity.costPerUnit.toNumber() : null,
+      archivedAt: entity.archivedAt === null ? null : entity.archivedAt.toISOString(),
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

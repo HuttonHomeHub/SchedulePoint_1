@@ -11,6 +11,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../common/errors/domain-errors';
+import { normaliseSearchTerm, type ArchivedFilter } from '../../common/query/library-filters';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -69,16 +70,27 @@ export class CalendarsService {
   async list(
     principal: Principal,
     orgSlug: string,
-    query: { limit: number; cursor?: string; scope?: CalendarScopeFilter },
+    query: {
+      limit: number;
+      cursor?: string;
+      scope?: CalendarScopeFilter;
+      archived?: ArchivedFilter;
+      q?: string;
+    },
   ): Promise<{ items: CalendarWithShifts[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:read', organization.id);
 
+    const search = normaliseSearchTerm(query.q);
     const rows = await this.calendars.findManyActiveByOrg({
       organizationId: organization.id,
       // Default `org` (ADR-0053 §1): the shared library list keeps EXACTLY today's result
       // set for a client that sends no filter — project calendars are opt-in here.
       scope: query.scope ?? 'org',
+      // Default `exclude` (ADR-0053 §4): same contract for the archive filter — nothing is
+      // archived until someone archives it, so today's result set is preserved exactly.
+      archived: query.archived ?? 'exclude',
+      ...(search === undefined ? {} : { search }),
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
@@ -97,7 +109,7 @@ export class CalendarsService {
     principal: Principal,
     orgSlug: string,
     projectId: string,
-    query: { limit: number; cursor?: string },
+    query: { limit: number; cursor?: string; archived?: ArchivedFilter; q?: string },
   ): Promise<{ items: CalendarWithShifts[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:read', organization.id);
@@ -106,9 +118,14 @@ export class CalendarsService {
       throw new NotFoundError('Project not found.');
     }
 
+    const search = normaliseSearchTerm(query.q);
     const rows = await this.calendars.findManyActiveForProject({
       organizationId: organization.id,
       projectId,
+      // Default `exclude` — an archived calendar is retired from every picker, and this list
+      // IS the picker source for a plan/activity in this project (ADR-0053 §4).
+      archived: query.archived ?? 'exclude',
+      ...(search === undefined ? {} : { search }),
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
@@ -182,7 +199,9 @@ export class CalendarsService {
       );
       return { ...calendar, exceptions: [] };
     } catch (error) {
-      if (this.isUniqueViolation(error)) throw this.duplicateCalendarError(scope);
+      if (this.isUniqueViolation(error)) {
+        throw await this.duplicateCalendarError(organization.id, dto.name, scope, projectId);
+      }
       throw error;
     }
   }
@@ -265,7 +284,12 @@ export class CalendarsService {
     } catch (error) {
       // The effective tier of THIS write — the target when the scope moved, else the stored one.
       if (this.isUniqueViolation(error)) {
-        throw this.duplicateCalendarError(target?.scope ?? existing.scope);
+        throw await this.duplicateCalendarError(
+          organization.id,
+          dto.name ?? existing.name,
+          target?.scope ?? existing.scope,
+          target?.projectId ?? existing.projectId,
+        );
       }
       throw error;
     }
@@ -273,6 +297,61 @@ export class CalendarsService {
     const updated = await this.calendars.findActiveDetailByIdInOrg(calendarId, organization.id);
     if (!updated) throw new NotFoundError('Calendar not found.');
     return updated;
+  }
+
+  /**
+   * Archive or unarchive a calendar (ADR-0053 §4, workflow W4) — a version-gated,
+   * metadata-only `UPDATE archived_at`. There is deliberately **no** lock, **no** cascade and
+   * **no** in-use guard: archiving is explicitly NOT blocked by use. That is the entire point,
+   * and the contrast with delete — it is the only way to retire a calendar that
+   * `CALENDAR_IN_USE` (correctly) refuses to delete. Every existing plan/activity/resource
+   * binding stays live and keeps scheduling identically; only NEW bindings are refused, at the
+   * `assertCalendarUsableBy` seam.
+   *
+   * Authorisation mirrors `update`: `calendar:update` always, plus `calendar:manage_org` when
+   * the row sits in the SHARED tier — retiring something from the shared library is a write to
+   * shared tenant state exactly as editing or deleting it is.
+   *
+   * Idempotent by intent but not silently so: re-archiving an already-archived calendar simply
+   * rewrites the instant, which is a harmless no-op the caller cannot distinguish — there is no
+   * state machine to violate.
+   */
+  async setArchived(
+    principal: Principal,
+    orgSlug: string,
+    calendarId: string,
+    archived: boolean,
+    version: number,
+  ): Promise<void> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'calendar:update', organization.id);
+
+    const existing = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
+    if (!existing) throw new NotFoundError('Calendar not found.');
+    if (existing.scope === 'ORG') {
+      this.assertCan(principal, 'calendar:manage_org', organization.id);
+    }
+
+    const changed = await this.calendars.setArchivedIfVersionMatches(
+      calendarId,
+      version,
+      archived ? new Date() : null,
+      principal.userId,
+    );
+    if (changed === 0) {
+      throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
+    }
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        calendarId,
+        scope: existing.scope,
+        archived,
+        userId: principal.userId,
+      },
+      archived ? 'calendar archived' : 'calendar unarchived',
+    );
   }
 
   async remove(principal: Principal, orgSlug: string, calendarId: string): Promise<void> {
@@ -500,8 +579,33 @@ export class CalendarsService {
    * out of the driver's error text: the service already knows which tier it was writing into,
    * and that does not depend on how Prisma happens to render a raw partial index.
    */
-  private duplicateCalendarError(scope: CalendarScope): ConflictError {
+  private async duplicateCalendarError(
+    organizationId: string,
+    name: string,
+    scope: CalendarScope,
+    projectId: string | null,
+  ): Promise<ConflictError> {
     const tier = scope === 'PROJECT' ? 'in that project' : 'in the organisation library';
+    // An ARCHIVED calendar keeps its name (the M4 migration's decision (1): the partial uniques
+    // stay predicated on `deleted_at IS NULL` so unarchive — an unguarded version-gated UPDATE —
+    // can never fail on a name taken meanwhile). The accepted cost is this 409; naming the
+    // archived row in `details` turns a dead end into "unarchive that one instead". The lookup
+    // runs ONLY here, on the error path, so the happy path pays nothing.
+    const archived = await this.calendars.findArchivedByNameInTier({
+      organizationId,
+      name,
+      scope,
+      projectId,
+    });
+    if (archived) {
+      return new ConflictError(
+        `An archived calendar named “${name}” already exists ${tier}. Unarchive it instead, or choose another name.`,
+        {
+          reason: CALENDAR_CONFLICT.DUPLICATE_CALENDAR,
+          archivedCalendarId: archived.id,
+        },
+      );
+    }
     return new ConflictError(`A calendar with this name already exists ${tier}.`, {
       reason: CALENDAR_CONFLICT.DUPLICATE_CALENDAR,
     });

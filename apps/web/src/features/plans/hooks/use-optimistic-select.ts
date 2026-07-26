@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
  * `extraBusy` lets a caller stay busy for its own reason too (e.g. a dependent list still loading).
  * The generic `T` is the option value (`''`-for-none strings, an enum, …).
  */
-export function useOptimisticSelect<T>(params: {
+export function useOptimisticSelect<T, E extends HTMLElement = HTMLSelectElement>(params: {
   serverValue: T;
   isPending: boolean;
   extraBusy?: boolean;
@@ -21,15 +21,19 @@ export function useOptimisticSelect<T>(params: {
   displayed: T;
   /** True while a pick is in flight or the caller is otherwise busy — disable the control. */
   busy: boolean;
-  /** Attach to the `<select>` so focus can be restored after the busy state clears. */
-  selectRef: React.RefObject<HTMLSelectElement | null>;
+  /**
+   * Attach to the control so focus can be restored after the busy state clears. `E` defaults to
+   * `HTMLSelectElement` (every pre-existing caller); the calendar picker passes `HTMLInputElement`
+   * for the {@link Combobox} it renders behind `VITE_LIBRARY_SCOPING`.
+   */
+  selectRef: React.RefObject<E | null>;
   /** Record an in-flight pick (call before firing the mutation). */
   choose: (value: T) => void;
   /** Clear the pending pick (call from the mutation's `onError` to roll back). */
   rollback: () => void;
 } {
   const { serverValue, isPending, extraBusy = false } = params;
-  const selectRef = useRef<HTMLSelectElement | null>(null);
+  const selectRef = useRef<E | null>(null);
   const wasBusy = useRef(false);
   // The just-picked value, shown until the refetched plan confirms it (or a failure rolls it back);
   // null means "no pending choice".

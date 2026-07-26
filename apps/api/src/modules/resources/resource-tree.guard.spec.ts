@@ -21,6 +21,7 @@ function resource(overrides: Partial<Resource> = {}): Resource {
     parentId: null,
     maxUnitsPerHour: null,
     costPerUnit: null,
+    archivedAt: null,
     calendarId: null,
     version: 1,
     createdAt: new Date(),

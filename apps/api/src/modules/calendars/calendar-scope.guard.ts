@@ -17,6 +17,19 @@ export interface CalendarUsableByParams {
   calendarId: string;
   organizationId: string;
   projectId: string | null;
+  /**
+   * The calendar the holder is bound to RIGHT NOW (`null` when it holds none) — what makes the
+   * archive rule expressible here rather than as a second, drifting guard (ADR-0053 §4).
+   *
+   * Archiving retires a calendar from pickers and refuses **new** bindings while leaving every
+   * existing one live and scheduling. "New" is precisely `calendarId !== currentCalendarId`: a
+   * form that re-submits the calendar it already had is not a new usage and must keep working,
+   * or a plan bound to an archived calendar could never be edited again. Like `projectId` this
+   * is deliberately NOT optional — a new seam must state what the holder already has, so
+   * "forgot to pass it" fails CLOSED (every re-bind reads as new and an archived calendar is
+   * rejected) rather than silently permitting archived bindings everywhere.
+   */
+  currentCalendarId: string | null;
 }
 
 /**
@@ -55,6 +68,20 @@ export async function assertCalendarUsableBy(
     db,
   );
   if (!calendar) throw new NotFoundError('Calendar not found.');
+
+  // The ARCHIVE rule (ADR-0053 §4). Checked BEFORE the tier because it is the coarser fact —
+  // an archived calendar is unusable for a new binding by ANY holder, so "it's archived" is
+  // the more actionable message than "it belongs to another project" (unarchiving is the fix
+  // either way, and the tier rejection resurfaces on the retry if it also applies). It is
+  // refused only for a NEW binding: re-submitting the binding the holder already has is not
+  // new, so a plan, activity or resource already on an archived calendar stays fully editable
+  // (US-7 — archiving retires a calendar from pickers, it does not freeze its holders).
+  if (calendar.archivedAt !== null && params.calendarId !== params.currentCalendarId) {
+    throw new ValidationError(CALENDAR_ERROR.CALENDAR_ARCHIVED, {
+      reason: 'CALENDAR_ARCHIVED',
+      calendarId: calendar.id,
+    });
+  }
 
   // The shared tier is usable by every holder in the org — today's only behaviour, and the
   // reason every pre-ADR-0053 row (all ORG) keeps working unchanged.

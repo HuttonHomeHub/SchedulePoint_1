@@ -95,6 +95,26 @@
 - **Hard deletes** are reserved for compliance/erasure requests and are explicit,
   audited, and rare.
 
+**Archive (`archived_at`) is _not_ soft delete** (ADR-0053 §4). Where a library row
+must be **retired without breaking its references**, add a nullable
+`archived_at timestamptz` alongside `deleted_at` — they are orthogonal, and every
+combination of the two is legal (an archived row may later be deleted):
+
+| Column        | Meaning                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `deleted_at`  | the row is **gone**; nothing active may reference it (the `*_IN_USE` guards keep that true) and it is excluded by default   |
+| `archived_at` | the row is **retired but valid**; existing references stay live and behave identically, and only **new** usages are refused |
+
+Rules for an archive column: it is **server-set** (a `POST …/archive` / `…/unarchive`
+action, never a writable PATCH field); list endpoints take a **tri-state** filter
+(`exclude` (default) / `include` / `only`); and — the non-obvious one — **an archived
+row keeps its name**. Partial uniques stay predicated on `deleted_at IS NULL` only,
+because unarchive is an unguarded, version-gated metadata write that must never be able
+to fail on a name taken meanwhile. The accepted cost is that creating an **active** row
+on an archived row's name is a 409 (the service should name the archived row in
+`details` so the UI can offer "unarchive instead"). Soft delete may free its name
+precisely because **restore** is already a guarded, conflict-capable operation.
+
 ## Auditing
 
 - Every table carries **`created_at`** and **`updated_at`** (`timestamptz`,
@@ -570,6 +590,16 @@ project_id IS NOT NULL ELSE false END`) — the ADR-0046 `ck_notes_exactly_one_p
   covers any given day** (a day cannot be both a holiday and a worked window). It backs the add
   `DUPLICATE_EXCEPTION` (409); because `23P01` (exclusion_violation) is not a Prisma `P2002`, the
   service matches it by constraint name to map it to the 409.
+- **Archive (ADR-0053 §4).** `calendars.archived_at` (nullable, no default; `NULL` = active)
+  retires a calendar **without** unbinding it: an archived calendar stays bound to its plans,
+  activities and resources and schedules identically — it is hidden from the pickers and the
+  default library list, and refused only for a **new** binding at the `assertCalendarUsableBy`
+  seam. It is therefore the only way to retire a calendar the `CALENDAR_IN_USE` guard —
+  correctly — refuses to delete. It does **not** free the calendar's name (the per-tier uniques
+  stay predicated on `deleted_at IS NULL` + the tier), it is still **counted by the
+  scope-narrowing guard** (an archived referencer is a live one), and it is still **swept by the
+  project-delete cascade** — which is why `idx_calendars_project_id` deliberately does _not_ gain
+  an `archived_at IS NULL` term. See _Soft deletes → Archive is not soft delete_ above.
 - **Ranged exceptions.** `CalendarException` carries an inclusive `[start_date, end_date]`
   **range** (single-day when `start_date = end_date`; `ck_calendar_exceptions_date_order`
   enforces `end_date ≥ start_date`), so a multi-day shutdown is one row.
@@ -764,6 +794,19 @@ parent_id IS NOT NULL`; top-level rows are served by the existing
   forbids using a label in the transaction that added it. Adding a future `ResourceKind`
   costs the same split, plus a new `WHEN` branch — an e2e round-trip over every enum value
   makes the omission a CI failure.
+- **Archive (ADR-0053 §4).** `resources.archived_at` (nullable, no default; `NULL` = active) is
+  the resource twin of `calendars.archived_at`, and is the case that shows why archive **cannot**
+  be soft delete: a soft-deleted resource may not be referenced by an active assignment (exactly
+  what `RESOURCE_IN_USE` protects), whereas an archived one **keeps every existing assignment** —
+  still scheduling, levelling, loading the histogram and earning value byte-identically, even as
+  the **driving** resource of a live activity. Only a **new** assignment is refused (422
+  `RESOURCE_ARCHIVED`, a service check — a CHECK cannot read the assignment's resource row);
+  editing an existing one still succeeds, and archiving is deliberately **not** blocked by use.
+  Legal on a `GROUP`, with **no** subtree cascade (archive never cascades). Deleting an archived
+  resource obeys the normal `RESOURCE_IN_USE` rules. `uq_resources_org_name`/`_code` keep their
+  `deleted_at IS NULL` predicate (an archived row holds its name/code), and
+  `idx_resources_parent_id` keeps its — the `GROUP` subtree cascade, the subtree in-use count and
+  the reparent height walk must all traverse archived nodes.
 - **Delete guards (service-owned).** A `RESOURCE_IN_USE` guard blocks soft-deleting a
   resource assigned to an **active** activity (409, mirroring `CALENDAR_IN_USE`) — for a
   `GROUP` the count spans its **whole active subtree**, and the delete then stamps that

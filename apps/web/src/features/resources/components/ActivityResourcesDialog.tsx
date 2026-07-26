@@ -6,13 +6,14 @@ import {
   type ResourceCurveType,
   type ResourceSummary,
 } from '@repo/types';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import {
   useAssignments,
   useCreateAssignment,
   useDeleteAssignment,
+  useResourceSearch,
   useResources,
   useUpdateAssignment,
 } from '../api/use-resources';
@@ -36,6 +37,7 @@ import {
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -44,9 +46,12 @@ import { Select } from '@/components/ui/select';
 import {
   DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
+  LIBRARY_SCOPING_ENABLED,
   RESOURCE_CURVES_ENABLED,
 } from '@/config/env';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { minorToMajorInput } from '@/lib/format-money';
+import { ARCHIVED_BADGE, isArchivedRow } from '@/lib/library-filters';
 
 /** A MATERIAL resource may never drive an activity's dates (ADR-0039). */
 const MATERIAL_DRIVING_HINT = 'A material resource can’t drive an activity’s dates.';
@@ -639,7 +644,10 @@ export function ActivityResourcesDialog({
   onClose: () => void;
   canWrite: boolean;
 }): React.ReactElement {
-  const resources = useResources(orgSlug);
+  // The whole library, for LABELLING the assigned rows (and, flag off, for the picker's options).
+  // Behind the flag it asks for archived rows too: an assignment to a since-archived resource keeps
+  // scheduling and stays editable (ADR-0053 §4 / US-7), so its row must still show its name.
+  const resources = useResources(orgSlug, LIBRARY_SCOPING_ENABLED ? { archived: 'include' } : {});
   const assignments = useAssignments(orgSlug, activityId ?? '');
   const create = useCreateAssignment(orgSlug, activityId ?? '', planId);
   const announce = useAnnounce();
@@ -657,8 +665,43 @@ export function ActivityResourcesDialog({
   // GROUP_NOT_ASSIGNABLE, so offering one would only ever produce an error. Deliberately NOT
   // flag-gated — a picker must never offer an option the server rejects — and byte-identical with
   // `VITE_LIBRARY_SCOPING` off, where no group can exist in the first place.
+  // An ARCHIVED resource is refused for a NEW assignment (422 `RESOURCE_ARCHIVED`, ADR-0053 §4), so
+  // it is likewise never offered. Flag-gated only because flag-off nothing can be archived and the
+  // expression must stay byte-for-byte the one that shipped.
   const assignable = (resources.data ?? []).filter(
-    (r) => !assignedIds.has(r.id) && !isResourceGroup(r),
+    (r) =>
+      !assignedIds.has(r.id) &&
+      !isResourceGroup(r) &&
+      !(LIBRARY_SCOPING_ENABLED && isArchivedRow(r)),
+  );
+
+  // The picker's SERVER-side search (ADR-0053 §4 / US-8). Unlike the calendar pickers this dialog
+  // owns its own fetch, and the resource pool is org-global and potentially large — so the term is
+  // debounced and pushed to the API (`?q=` over name OR code), one page at a time with an explicit
+  // "Load more" for the rest. Idle unless the dialog is actually open for a writer.
+  const [resourceQuery, setResourceQuery] = useState('');
+  const debouncedResourceQuery = useDebouncedValue(resourceQuery);
+  const search = useResourceSearch(
+    orgSlug,
+    { q: debouncedResourceQuery },
+    LIBRARY_SCOPING_ENABLED && open && canWrite,
+  );
+  // GROUPs and already-assigned rows are dropped from the page client-side: the API has no "not a
+  // group" filter, and "already assigned here" is per-activity knowledge the library cannot hold.
+  // (Archived rows never arrive — the search defaults to `?archived=exclude`.)
+  const searchOptions = useMemo<ComboboxOption[]>(
+    () =>
+      search.resources
+        .filter((r) => !assignedIds.has(r.id) && !isResourceGroup(r))
+        .map((r) => ({
+          value: r.id,
+          label: `${r.name} (${RESOURCE_KIND_LABELS[r.kind]})`,
+          ...(isArchivedRow(r) ? { badge: ARCHIVED_BADGE } : {}),
+        })),
+    // `assignedIds` is rebuilt each render from the assignments query; depending on the query's own
+    // data keeps the memo honest without a new identity every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [search.resources, assignments.data],
   );
 
   const {
@@ -780,18 +823,45 @@ export function ActivityResourcesDialog({
                 ) : null}
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={resourceSelectId}>Resource</Label>
-                  <Select
-                    id={resourceSelectId}
-                    aria-invalid={errors.resourceId ? true : undefined}
-                    {...register('resourceId')}
-                  >
-                    <option value="">Choose a resource…</option>
-                    {assignable.map((resource) => (
-                      <option key={resource.id} value={resource.id}>
-                        {resource.name} ({RESOURCE_KIND_LABELS[resource.kind]})
-                      </option>
-                    ))}
-                  </Select>
+                  {LIBRARY_SCOPING_ENABLED ? (
+                    <Combobox
+                      id={resourceSelectId}
+                      value={selectedResourceId}
+                      onChange={(value) =>
+                        setValue('resourceId', value, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                      query={resourceQuery}
+                      onQueryChange={setResourceQuery}
+                      options={searchOptions}
+                      // The chosen resource may sit outside the current server page; label it from
+                      // the full library so the field never blanks after a fresh search.
+                      selectedLabel={resourceById.get(selectedResourceId)?.name}
+                      loading={search.isFetching}
+                      errored={search.isError}
+                      hasMore={search.hasMore}
+                      onLoadMore={search.loadMore}
+                      invalid={errors.resourceId !== undefined}
+                      placeholder="Choose a resource…"
+                      toggleLabel="Show resources"
+                      emptyMessage="No resources match your search."
+                    />
+                  ) : (
+                    <Select
+                      id={resourceSelectId}
+                      aria-invalid={errors.resourceId ? true : undefined}
+                      {...register('resourceId')}
+                    >
+                      <option value="">Choose a resource…</option>
+                      {assignable.map((resource) => (
+                        <option key={resource.id} value={resource.id}>
+                          {resource.name} ({RESOURCE_KIND_LABELS[resource.kind]})
+                        </option>
+                      ))}
+                    </Select>
+                  )}
                   {errors.resourceId ? (
                     <p className="text-destructive-text text-sm">{errors.resourceId.message}</p>
                   ) : null}

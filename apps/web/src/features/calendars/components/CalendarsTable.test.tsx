@@ -24,6 +24,7 @@ const CALENDARS: CalendarSummary[] = [
     // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
     scope: 'ORG',
     projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -36,6 +37,7 @@ const CALENDARS: CalendarSummary[] = [
     // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
     scope: 'ORG',
     projectId: null,
+    archivedAt: null,
     version: 2,
     createdAt: '2026-01-02T00:00:00Z',
     updatedAt: '2026-01-02T00:00:00Z',

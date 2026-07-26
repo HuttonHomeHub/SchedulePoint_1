@@ -5,7 +5,7 @@ import {
   type CalendarSummary,
   type ResourceSummary,
 } from '@repo/types';
-import { useEffect, useId, useMemo } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateResource, useUpdateResource } from '../api/use-resources';
@@ -18,6 +18,7 @@ import {
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,7 @@ import {
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { minorToMajorInput } from '@/lib/format-money';
+import { ARCHIVED_BADGE, isArchivedRow, matchesLibraryQuery } from '@/lib/library-filters';
 
 const INHERIT_CALENDAR_LABEL = 'Plan default (inherit)';
 const TOP_LEVEL_PARENT_LABEL = 'No group (top level)';
@@ -91,6 +93,7 @@ export function ResourceFormDialog({
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
@@ -163,10 +166,49 @@ export function ResourceFormDialog({
       (row) => row.resource.kind === 'GROUP' && !excluded.has(row.resource.id),
     );
   }, [resources, resource]);
-  // The seeded parent isn't in the offered set (still loading, or its group was removed): keep it
-  // selected under an honest label so the Select never silently reads "top level".
-  const missingParent =
-    Boolean(parentId) && !parentOptions.some((row) => row.resource.id === parentId);
+  // ADR-0053 §4 / US-8 — the two comboboxes' search terms. Neither is debounced: both lists are
+  // already complete in memory (the calendars are route-composed, the groups come from the library
+  // query that pages every row), so filtering is a client-side array pass with nothing to await.
+  const [calendarQuery, setCalendarQuery] = useState('');
+  const [parentQuery, setParentQuery] = useState('');
+
+  // ORGANISATION calendars only — the resource pool is org-global, so the API hard-rejects a
+  // project calendar here (422 `RESOURCE_REQUIRES_ORG_CALENDAR`). That is why this picker has no
+  // tier grouping: there is only ever one tier in it.
+  const calendarOptions = useMemo<ComboboxOption[]>(() => {
+    if (!LIBRARY_SCOPING_ENABLED) return [];
+    return calendars
+      .filter(
+        (calendar) =>
+          (!isArchivedRow(calendar) || calendar.id === calendarId) &&
+          matchesLibraryQuery(calendarQuery, calendar.name),
+      )
+      .map((calendar) => ({
+        value: calendar.id,
+        label: calendar.name,
+        ...(isArchivedRow(calendar) ? { badge: ARCHIVED_BADGE } : {}),
+      }));
+  }, [calendars, calendarId, calendarQuery]);
+
+  // The group picker keeps the tree shape: `depth` is the combobox's indentation, replacing the
+  // non-breaking-space padding a native `<option>` needed. A matching search flattens nothing — the
+  // depth still shows where each group sits.
+  const parentComboboxOptions = useMemo<ComboboxOption[]>(
+    () =>
+      parentOptions
+        .filter(
+          (row) =>
+            (!isArchivedRow(row.resource) || row.resource.id === parentId) &&
+            matchesLibraryQuery(parentQuery, row.resource.name, row.resource.code),
+        )
+        .map((row) => ({
+          value: row.resource.id,
+          label: row.resource.name,
+          ...(row.depth > 0 ? { depth: row.depth } : {}),
+          ...(isArchivedRow(row.resource) ? { badge: ARCHIVED_BADGE } : {}),
+        })),
+    [parentOptions, parentId, parentQuery],
+  );
 
   const onSubmit = handleSubmit((values) => {
     if (isEdit) {
@@ -238,23 +280,26 @@ export function ResourceFormDialog({
         {LIBRARY_SCOPING_ENABLED ? (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={parentSelectId}>Group (optional)</Label>
-            <Select
+            <Combobox
               id={parentSelectId}
+              value={parentId ?? ''}
+              onChange={(value) =>
+                setValue('parentId', value, { shouldDirty: true, shouldValidate: true })
+              }
+              query={parentQuery}
+              onQueryChange={setParentQuery}
+              options={parentComboboxOptions}
+              // A seeded group no longer on offer stays selected under the combobox's own
+              // "Unavailable" fallback, so the field never silently reads "top level".
+              selectedLabel={
+                parentOptions.find((row) => row.resource.id === parentId)?.resource.name
+              }
+              emptyOption={{ label: TOP_LEVEL_PARENT_LABEL }}
               disabled={readOnly}
-              aria-describedby={parentHelpId}
-              {...register('parentId')}
-            >
-              <option value="">{TOP_LEVEL_PARENT_LABEL}</option>
-              {missingParent ? <option value={parentId}>Unavailable</option> : null}
-              {parentOptions.map((row) => (
-                <option key={row.resource.id} value={row.resource.id}>
-                  {/* Non-breaking spaces, so the nesting survives the browser's option rendering
-                      (which collapses ordinary whitespace). */}
-                  {'  '.repeat(row.depth)}
-                  {row.resource.name}
-                </option>
-              ))}
-            </Select>
+              describedBy={parentHelpId}
+              toggleLabel="Show groups"
+              emptyMessage="No groups match your search."
+            />
             <p id={parentHelpId} className="text-muted-foreground text-sm">
               Nest this resource under a group to keep a large library navigable. Grouping is
               organisational only — it never changes how anything is scheduled or levelled.
@@ -275,26 +320,52 @@ export function ResourceFormDialog({
         {isGroup ? null : (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={calendarSelectId}>Calendar (optional)</Label>
-            <Select
-              id={calendarSelectId}
-              disabled={readOnly || calendarsLoading}
-              aria-busy={calendarsLoading}
-              aria-invalid={calendarsError ? true : undefined}
-              aria-describedby={
-                calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
-              }
-              {...register('calendarId')}
-            >
-              <option value="">{INHERIT_CALENDAR_LABEL}</option>
-              {missingCalendar ? (
-                <option value={calendarId}>{calendarsLoading ? 'Loading…' : 'Unavailable'}</option>
-              ) : null}
-              {calendars.map((calendar) => (
-                <option key={calendar.id} value={calendar.id}>
-                  {calendar.name}
-                </option>
-              ))}
-            </Select>
+            {LIBRARY_SCOPING_ENABLED ? (
+              <Combobox
+                id={calendarSelectId}
+                value={calendarId ?? ''}
+                onChange={(value) =>
+                  setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
+                }
+                query={calendarQuery}
+                onQueryChange={setCalendarQuery}
+                options={calendarOptions}
+                selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
+                emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
+                loading={calendarsLoading}
+                errored={calendarsError}
+                disabled={readOnly}
+                describedBy={
+                  calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
+                }
+                invalid={calendarsError}
+                toggleLabel="Show calendars"
+                emptyMessage="No calendars match your search."
+              />
+            ) : (
+              <Select
+                id={calendarSelectId}
+                disabled={readOnly || calendarsLoading}
+                aria-busy={calendarsLoading}
+                aria-invalid={calendarsError ? true : undefined}
+                aria-describedby={
+                  calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
+                }
+                {...register('calendarId')}
+              >
+                <option value="">{INHERIT_CALENDAR_LABEL}</option>
+                {missingCalendar ? (
+                  <option value={calendarId}>
+                    {calendarsLoading ? 'Loading…' : 'Unavailable'}
+                  </option>
+                ) : null}
+                {calendars.map((calendar) => (
+                  <option key={calendar.id} value={calendar.id}>
+                    {calendar.name}
+                  </option>
+                ))}
+              </Select>
+            )}
             <p id={calendarHelpId} className="text-muted-foreground text-sm">
               The working-time calendar this resource is scheduled on when it drives an activity.
               Inherits the plan’s calendar unless you pick one.

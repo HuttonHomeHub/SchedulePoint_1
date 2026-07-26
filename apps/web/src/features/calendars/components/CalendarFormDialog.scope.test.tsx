@@ -133,6 +133,7 @@ describe('CalendarFormDialog — scope choice (flag on)', () => {
         workingWeekdays: 31,
         scope: 'PROJECT',
         projectId: 'proj-1',
+        archivedAt: null,
         version: 3,
         createdAt: '2026-01-01T00:00:00Z',
         updatedAt: '2026-01-01T00:00:00Z',

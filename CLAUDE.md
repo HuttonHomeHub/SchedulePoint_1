@@ -510,7 +510,7 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   start-edge resize + lag drag → **M4/M5** the bar/link **visual refresh** (token-resolved, inside
   the Canvas-2D ≤ 4 ms p95 @ 2,000 budget) — all landed. Builds on
   ADR-0021/0022/0023/0028/0036/0048.
-- **ADR-0053** _(Accepted for M1: §1–§2 + §6; **M3: §3**; §4 accepts with M4, §5 with M5 — the
+- **ADR-0053** _(Accepted for M1: §1–§2 + §6; **M3: §3**; **M4: §4**; §5 accepts with M5 — the
   library-scoping epic, web behind `VITE_LIBRARY_SCOPING`)_ — Calendar scoping tiers & the resource
   management layer: give calendars P6's missing **project tier** — a `CalendarScope { ORG, PROJECT }`
   discriminator + a nullable `calendars.project_id` (FK RESTRICT) pinned together by a **fail-closed**
@@ -518,7 +518,7 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   uniques** (per-org for ORG, per-project for PROJECT; cross-tier reuse deliberately allowed). Constant
   `DEFAULT ORG` ⇒ every existing row keeps today's behaviour with **no data migration** — the M1
   acceptance bar. The tier is an invariant, not a convention: **ONE shared guard**
-  `assertCalendarUsableBy({ calendarId, organizationId, projectId })` is called at **every** seam
+  `assertCalendarUsableBy({ calendarId, organizationId, projectId, currentCalendarId })` is called at **every** seam
   (`plan.calendarId`, `activity.calendarId`, `resource.calendar_id` — where `projectId: null` **hard
   rejects** any project calendar, 422 `RESOURCE_REQUIRES_ORG_CALENDAR`), under the existing calendar
   advisory lock; cross-org stays **404** (no existence oracle), in-org wrong tier is **422
@@ -530,8 +530,28 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   writes. The resource pool deliberately stays **one org-global pool** (levelling/over-allocation depend
   on it); its manageability comes later as an adjacency-list `parent_id` + a non-assignable `GROUP` kind
   (§3, M3), `archived_at` (§4, M4) and interchange tiering (§5, M5). **The CPM engine is untouched** —
-  it resolves a calendar BY ID and never sees `scope`/`project_id`, so the ADR-0034 recalc parity gate is
-  structurally trivial. Builds on ADR-0012/0016/0024/0036/0037/0038/0039/0046/0050.
+  it resolves a calendar BY ID and never sees `scope`/`project_id`/`archived_at`, so the ADR-0034 recalc
+  parity gate is structurally trivial. Builds on ADR-0012/0016/0024/0036/0037/0038/0039/0046/0050.
+  **M4 (§4) adds the archive lifecycle, server-side search and the shared picker:** a nullable
+  `archived_at` on **both** libraries — **orthogonal to soft delete**, so an archived row stays valid,
+  keeps every existing reference live and **keeps scheduling identically**, is hidden from pickers, and
+  refuses only **NEW** usages (422 `RESOURCE_ARCHIVED` on assignment _create_ — _update_ still succeeds;
+  422 `CALENDAR_ARCHIVED` inside the same shared guard, which gains a **non-optional `currentCalendarId`**
+  so re-submitting an existing binding is not "new" and an entity on an archived calendar stays editable).
+  Archiving is deliberately **NOT blocked by use** — the whole point, and the only way to retire a calendar
+  `CALENDAR_IN_USE` refuses to delete (CQ-5); it takes no lock, no cascade (a `GROUP`'s subtree is not
+  archived) and no in-use count, and an archived referencer still **blocks** a §2 narrowing. An archived
+  row **keeps its name/`code`** (the partial uniques stay `deleted_at`-only) so **unarchive can never
+  fail** — the accepted cost is a 409 carrying the archived row's id. Server-side `q` + `kind`/`scope`/
+  `archived` filters on both list routes with cursor pagination; **no index changes** (measured: 0.21 ms
+  default page / 2.9 ms worst-case search at 5,000 rows with 40% archived — the candidate partial saved
+  0.14 ms for 1,296 kB, and narrowing `idx_calendars_project_id`/`idx_resources_parent_id` would be a
+  cascade-correctness bug), with `pg_trgm` GIN the documented measure-first escalation. Web: **one shared
+  hand-rolled APG `Combobox`** (`components/ui/combobox.tsx`, the `menu.tsx` precedent) replacing the raw
+  `<Select>` pickers — controlled server search, grouped/annotated options, `aria-activedescendant`,
+  announced result counts, and the "render the current value even when outside the filtered page" rule
+  generalised. Interchange (CQ-4) **matches + auto-unarchives + reports a finding** for resources; the
+  calendar half waits for M5's matching seam.
   **M2 (landed)** gives §1–§2 their **web surface** behind `VITE_LIBRARY_SCOPING` (default off): a `Scope`
   badge column + an Organisation/Project/All filter on the calendar library; a **Calendars section on the
   project-detail screen** (the project's only detail surface — no separate settings route) reading

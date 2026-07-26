@@ -1413,6 +1413,21 @@ model Calendar {
   // the horizon" is a cross-row/temporal property enforced at the engine factory + the
   // N11/N16 iteration cap (ADR-0036 §5), not a DB CHECK (the DAG-invariant precedent).
 
+  // RETIRED from the pickers, but still entirely VALID (ADR-0053 §4). NULL = active. This is
+  // ORTHOGONAL to `deleted_at`, not a second flavour of it: an archived calendar STAYS BOUND to
+  // its plans, activities and resources and still schedules identically — only NEW bindings are
+  // refused (at the assertCalendarUsableBy seam) and it is hidden from the default list. It is
+  // therefore the only way to retire a calendar the CALENDAR_IN_USE guard — correctly — refuses
+  // to delete. SERVER-SET by POST …/archive | …/unarchive; never a PATCH field, never client
+  // input. It deliberately does NOT free the calendar's NAME: uq_calendars_org_name /
+  // uq_calendars_project_name keep `WHERE deleted_at IS NULL (+ scope)` so that UNARCHIVE — an
+  // unguarded, lock-free, version-gated UPDATE — can never fail on a name taken meanwhile (and
+  // so the M5 import's unarchive-and-match rule, CQ-4, stays well-defined). The cost, accepted:
+  // creating an ACTIVE calendar on an archived one's name is a 409 DUPLICATE_CALENDAR. Archived
+  // rows are still counted by the M1 scope-NARROWING guard (an archived referencer is live) and
+  // are still swept by the project-delete cascade. NEVER read by the CPM engine.
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1946,6 +1961,22 @@ model Resource {
   // max_units_per_hour/N21. No index: read only on the plan-scoped EV assignment/rate load,
   // never a query predicate. MUST stay in lock-step with @repo/types. DARK until EV2 reads it.
   costPerUnit     Decimal?     @map("cost_per_unit") @db.Decimal(18, 4)
+  // RETIRED from the pickers, but still entirely VALID (ADR-0053 §4). NULL = active. ORTHOGONAL
+  // to `deleted_at`, which cannot express this: a soft-deleted resource may not be referenced by
+  // an active assignment (that is exactly what RESOURCE_IN_USE protects), whereas an ARCHIVED one
+  // keeps EVERY existing assignment — still scheduling, levelling, loading the histogram and
+  // earning value byte-identically, including as the DRIVING resource of a live activity. Only a
+  // NEW assignment is refused (422 RESOURCE_ARCHIVED — a service check; a CHECK cannot read the
+  // assignment's resource row), while EDITING an existing assignment still succeeds. Archiving is
+  // explicitly NOT blocked by use — the whole point, and the contrast with delete; deleting an
+  // archived resource still obeys the normal RESOURCE_IN_USE rules. SERVER-SET by POST …/archive
+  // | …/unarchive; never a PATCH field, never client input. Legal on a GROUP, and deliberately
+  // does NOT cascade to its subtree (archive has no cascade). It does NOT free the resource's
+  // NAME — uq_resources_org_name / uq_resources_org_code keep `WHERE deleted_at IS NULL` so
+  // unarchive can never fail on a name taken meanwhile (see Calendar.archivedAt for the full
+  // argument); creating an ACTIVE resource on an archived one's name is a 409 DUPLICATE_RESOURCE.
+  // NEVER read by the CPM engine, the levelling pass or the EV read-model.
+  archivedAt      DateTime?    @map("archived_at") @db.Timestamptz(3)
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)

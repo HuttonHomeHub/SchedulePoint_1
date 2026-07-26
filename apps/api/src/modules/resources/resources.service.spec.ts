@@ -27,6 +27,7 @@ function resource(overrides: Partial<Resource> = {}): Resource {
     parentId: null,
     maxUnitsPerHour: null,
     costPerUnit: null,
+    archivedAt: null,
     calendarId: null,
     version: 1,
     createdAt: new Date(),
@@ -48,6 +49,7 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     // A resource may only hold an ORG-scoped calendar (ADR-0053 §2); PROJECT is the reject case.
     scope: 'ORG',
     projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -79,6 +81,8 @@ describe('ResourcesService', () => {
   let resources: {
     create: ReturnType<typeof vi.fn>;
     findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findArchivedByNameOrCodeInOrg: ReturnType<typeof vi.fn>;
+    setArchivedIfVersionMatches: ReturnType<typeof vi.fn>;
     findManyActiveByOrg: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
     softDelete: ReturnType<typeof vi.fn>;
@@ -99,6 +103,8 @@ describe('ResourcesService', () => {
     resources = {
       create: vi.fn(),
       findActiveByIdInOrg: vi.fn(),
+      findArchivedByNameOrCodeInOrg: vi.fn().mockResolvedValue(null),
+      setArchivedIfVersionMatches: vi.fn().mockResolvedValue(1),
       findManyActiveByOrg: vi.fn(),
       updateIfVersionMatches: vi.fn(),
       softDelete: vi.fn(),

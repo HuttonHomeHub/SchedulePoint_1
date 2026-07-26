@@ -290,6 +290,7 @@ describe('PlansService', () => {
         id: 'cal-1',
         scope: 'ORG',
         projectId: null,
+        archivedAt: null,
       });
 
       await service.update(principalWith(ALL), 'acme', 'pl1', { calendarId: 'cal-1', version: 1 });

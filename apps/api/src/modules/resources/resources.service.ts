@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Resource } from '@prisma/client';
+import { Prisma, type Resource, type ResourceKind } from '@prisma/client';
 import { RESOURCE_ERROR, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -14,6 +14,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../common/errors/domain-errors';
+import { normaliseSearchTerm, type ArchivedFilter } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -65,7 +66,14 @@ export class ResourcesService {
   async list(
     principal: Principal,
     orgSlug: string,
-    query: { limit: number; cursor?: string; parentId?: string | null },
+    query: {
+      limit: number;
+      cursor?: string;
+      parentId?: string | null;
+      kind?: ResourceKind;
+      archived?: ArchivedFilter;
+      q?: string;
+    },
   ): Promise<{ items: Resource[]; meta: PageMeta; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:read', organization.id);
@@ -73,12 +81,19 @@ export class ResourcesService {
     // be a cross-tenant IDOR). Threaded to the response DTO so the money `costPerUnit` is gated per role.
     const canReadCost = principal.can('cost:read', organization.id);
 
+    const search = normaliseSearchTerm(query.q);
     const rows = await this.resources.findManyActiveByOrg({
       organizationId: organization.id,
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
       // Tree filter (ADR-0053 §3). Omitted ⇒ the whole flat library, byte-identical to before.
       ...(query.parentId === undefined ? {} : { parentId: query.parentId }),
+      // Kind + search + archive filters (ADR-0053 §4 / US-8). `archived` defaults to `exclude`,
+      // which is today's result set (nothing is archived until someone archives it), so a client
+      // that sends none of these still sees exactly what it saw before.
+      ...(query.kind === undefined ? {} : { kind: query.kind }),
+      archived: query.archived ?? 'exclude',
+      ...(search === undefined ? {} : { search }),
     });
 
     const hasMore = rows.length > query.limit;
@@ -144,6 +159,8 @@ export class ResourcesService {
             calendarId,
             organizationId: organization.id,
             projectId: null,
+            // A brand-new resource holds no calendar yet — any archived calendar is a new binding.
+            currentCalendarId: null,
           });
         }
         return this.resources.create(
@@ -172,7 +189,9 @@ export class ResourcesService {
       );
       return { resource, canReadCost };
     } catch (error) {
-      if (this.isUniqueViolation(error)) throw this.duplicateResourceError();
+      if (this.isUniqueViolation(error)) {
+        throw await this.duplicateResourceError(organization.id, dto.name, dto.code ?? null);
+      }
       throw this.mapCheckViolation(error);
     }
   }
@@ -277,6 +296,9 @@ export class ResourcesService {
             calendarId,
             organizationId: organization.id,
             projectId: null,
+            // The resource's CURRENT calendar: re-submitting it is not a new binding, so a
+            // resource already on an archived calendar stays editable (ADR-0053 §4).
+            currentCalendarId: existing.calendarId,
           });
           patch.calendarId = calendarId;
         }
@@ -292,13 +314,71 @@ export class ResourcesService {
         }
       });
     } catch (error) {
-      if (this.isUniqueViolation(error)) throw this.duplicateResourceError();
+      if (this.isUniqueViolation(error)) {
+        throw await this.duplicateResourceError(
+          organization.id,
+          dto.name ?? existing.name,
+          dto.code === undefined ? existing.code : dto.code,
+        );
+      }
       throw this.mapCheckViolation(error);
     }
 
     const updated = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
     if (!updated) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
     return { resource: updated, canReadCost };
+  }
+
+  /**
+   * Archive or unarchive a resource (ADR-0053 §4, workflow W4) — a version-gated,
+   * metadata-only `UPDATE archived_at`. There is deliberately **no** lock, **no** cascade and
+   * **no** in-use guard:
+   *
+   * - **Not blocked by use.** Archiving a resource that is assigned — even one that is the
+   *   DRIVING resource of a live activity — succeeds. That is the entire point and the
+   *   contrast with delete: every existing assignment stays live and keeps scheduling,
+   *   levelling, loading the histogram and earning value byte-identically. Only a NEW
+   *   assignment is refused (422 `RESOURCE_ARCHIVED`).
+   * - **No subtree cascade.** Archiving a `GROUP` does not archive its children; archive has
+   *   no cascade (unlike the `GROUP` delete, which soft-deletes its subtree under one batch).
+   *   An archived group with active children is legal, and the tree badges the group alone.
+   *
+   * Authorisation is `resource:update` — the same capability as any other resource edit; there
+   * is no shared-tier distinction here because the pool is deliberately one org-global pool.
+   */
+  async setArchived(
+    principal: Principal,
+    orgSlug: string,
+    resourceId: string,
+    archived: boolean,
+    version: number,
+  ): Promise<void> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'resource:update', organization.id);
+
+    const existing = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
+    if (!existing) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+
+    const changed = await this.resources.setArchivedIfVersionMatches(
+      resourceId,
+      version,
+      archived ? new Date() : null,
+      principal.userId,
+    );
+    if (changed === 0) {
+      throw new ConflictError('This resource was changed elsewhere. Refresh and try again.');
+    }
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        resourceId,
+        kind: existing.kind,
+        archived,
+        userId: principal.userId,
+      },
+      archived ? 'resource archived' : 'resource unarchived',
+    );
   }
 
   async remove(principal: Principal, orgSlug: string, resourceId: string): Promise<void> {
@@ -431,7 +511,27 @@ export class ResourcesService {
     });
   }
 
-  private duplicateResourceError(): ConflictError {
+  private async duplicateResourceError(
+    organizationId: string,
+    name: string,
+    code: string | null,
+  ): Promise<ConflictError> {
+    // An ARCHIVED resource keeps its name AND its code (the M4 migration's decision (1): the
+    // partial uniques stay predicated on `deleted_at IS NULL` so unarchive — an unguarded,
+    // version-gated UPDATE — can never fail on a handle taken meanwhile). The accepted cost is
+    // this 409; naming the archived row in `details` turns a dead end into "unarchive that one
+    // instead". The lookup runs ONLY here, on the error path, so the happy path pays nothing.
+    const archived = await this.resources.findArchivedByNameOrCodeInOrg({
+      organizationId,
+      name,
+      code,
+    });
+    if (archived) {
+      return new ConflictError(
+        'An archived resource already uses this name or code. Unarchive it instead, or choose another.',
+        { reason: RESOURCE_CONFLICT.DUPLICATE_RESOURCE, archivedResourceId: archived.id },
+      );
+    }
     return new ConflictError(RESOURCE_ERROR.DUPLICATE_RESOURCE, {
       reason: RESOURCE_CONFLICT.DUPLICATE_RESOURCE,
     });

@@ -32,6 +32,12 @@ export const ASSIGNMENT_ERROR = {
   MATERIAL_CANNOT_DRIVE: 'MATERIAL_CANNOT_DRIVE',
   /** A GROUP is a grouping node, not a resource — it can never be assigned or drive (ADR-0053 §3). */
   GROUP_NOT_ASSIGNABLE: 'GROUP_NOT_ASSIGNABLE',
+  /**
+   * A NEW assignment to an archived resource (ADR-0053 §4). Only `create` raises it — editing
+   * an EXISTING assignment of an archived resource stays allowed (maintaining history is not
+   * new exposure).
+   */
+  RESOURCE_ARCHIVED: 'RESOURCE_ARCHIVED',
   /** A zero rate on a units-driven duration recompute (N20, ADR-0040 §5) — rejected pre-division. */
   UNITS_PER_HOUR_ZERO: 'UNITS_PER_HOUR_ZERO',
 } as const;
@@ -115,6 +121,13 @@ export class ResourceAssignmentService {
     // any other business rule, so a group is rejected for the right reason.
     if (resource.kind === 'GROUP') throw this.groupNotAssignableError();
 
+    // An ARCHIVED resource is retired from the pickers and refused for a NEW assignment
+    // (ADR-0053 §4, US-7). This is the ONLY archive rule on the assignment seam: `update`
+    // deliberately has no counterpart, because editing an EXISTING assignment of an archived
+    // resource (units, rate, cost, curve) is maintaining history, not new exposure — and
+    // forbidding it would strand every assignment the moment its resource was retired.
+    if (resource.archivedAt !== null) throw this.resourceArchivedError();
+
     const isDriving = dto.isDriving ?? false;
     // A MATERIAL resource may never drive (invariant (b)) — the DB cannot read the kind.
     if (isDriving && resource.kind === 'MATERIAL') throw this.materialCannotDriveError();
@@ -153,9 +166,16 @@ export class ResourceAssignmentService {
         // resource is still active inside it, so this assign can never land against a resource
         // being soft-deleted (which a pre-transaction check alone would not prevent).
         await acquireResourceWriteLock(tx, resource.id);
-        if (!(await this.resources.findActiveByIdInOrg(resource.id, organization.id, tx))) {
-          throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
-        }
+        const confirmed = await this.resources.findActiveByIdInOrg(
+          resource.id,
+          organization.id,
+          tx,
+        );
+        if (!confirmed) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+        // Re-check the archive state under the same lock: archiving is a lock-free metadata
+        // write, so without this a resource archived between the pre-transaction check and here
+        // would still take a new assignment (a TOCTOU the pre-check alone cannot close).
+        if (confirmed.archivedAt !== null) throw this.resourceArchivedError();
         // Setting a driver is a MOVE: clear any other driver on this activity first so the
         // ≤1-driver partial-unique never trips a P2002.
         if (isDriving) {
@@ -363,6 +383,18 @@ export class ResourceAssignmentService {
   }
 
   /** ADR-0053 §3: a GROUP is a grouping node, never an assignment endpoint → 422. */
+  /**
+   * A NEW assignment to an archived resource (ADR-0053 §4) → 422. Deliberately a
+   * {@link ValidationError} and not a conflict: the request is well-formed and the resource is
+   * perfectly real and still scheduling — it is simply not offered for new work. The fix is to
+   * unarchive it, which the message says.
+   */
+  private resourceArchivedError(): ValidationError {
+    return new ValidationError(RESOURCE_ERROR.RESOURCE_ARCHIVED, {
+      reason: ASSIGNMENT_ERROR.RESOURCE_ARCHIVED,
+    });
+  }
+
   private groupNotAssignableError(): ValidationError {
     return new ValidationError(RESOURCE_ERROR.GROUP_NOT_ASSIGNABLE, {
       reason: ASSIGNMENT_ERROR.GROUP_NOT_ASSIGNABLE,

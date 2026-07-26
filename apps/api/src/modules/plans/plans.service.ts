@@ -191,6 +191,9 @@ export class PlansService {
             calendarId,
             organizationId: organization.id,
             projectId: existing.projectId,
+            // The plan's CURRENT calendar: re-submitting it is not a new binding, so a plan
+            // already on an archived calendar stays editable (ADR-0053 §4).
+            currentCalendarId: existing.calendarId,
           });
           patch.calendarId = calendar.id;
         }

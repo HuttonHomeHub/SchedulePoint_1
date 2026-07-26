@@ -22,6 +22,8 @@ export const RESOURCE_REQUIRES_ORG_CALENDAR = 'RESOURCE_REQUIRES_ORG_CALENDAR';
 export const CALENDAR_SCOPE_NARROWING_BLOCKED = 'CALENDAR_SCOPE_NARROWING_BLOCKED';
 /** `scope: PROJECT` needs a `projectId`, and `scope: ORG` forbids one (→ 422). */
 export const CALENDAR_SCOPE_PROJECT_MISMATCH = 'CALENDAR_SCOPE_PROJECT_MISMATCH';
+/** An **archived** calendar was bound to a plan, an activity or a resource (→ 422, ADR-0053 §4). */
+export const CALENDAR_ARCHIVED = 'CALENDAR_ARCHIVED';
 
 /**
  * The `details` a narrowing 409 carries: the blocking totals, split per referencing class so the
@@ -95,6 +97,12 @@ export function calendarScopeErrorMessage(error: unknown): string | null {
 
   if (reason === RESOURCE_REQUIRES_ORG_CALENDAR) {
     return `${CALENDAR_ERROR.RESOURCE_REQUIRES_ORG_CALENDAR} Promote the calendar to the organisation library, or pick one that is already shared.`;
+  }
+
+  if (reason === CALENDAR_ARCHIVED) {
+    // Names the ONE action that fixes it. A planner who has just archived a calendar for good
+    // reason must not be told, vaguely, that "something is wrong" with an otherwise valid pick.
+    return `${CALENDAR_ERROR.CALENDAR_ARCHIVED} Everything already using it is unaffected and still schedules the same.`;
   }
 
   if (reason === CALENDAR_SCOPE_PROJECT_MISMATCH) {

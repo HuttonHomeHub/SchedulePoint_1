@@ -25,6 +25,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -118,6 +119,53 @@ export class ResourcesController {
       dto,
     );
     return ResourceResponseDto.from(resource, canReadCost);
+  }
+
+  @Post(':resourceId/archive')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Archive a resource — retire it from the pickers without deleting it.',
+    description:
+      'ADR-0053 §4. An archived resource keeps EVERY existing assignment — which still ' +
+      'schedules, levels, loads the histogram and earns value identically, including when it ' +
+      'is the driving resource of a live activity — and existing assignments stay editable. ' +
+      'It is hidden from the default list and from every picker, and only a NEW assignment is ' +
+      'refused (422 RESOURCE_ARCHIVED). Archiving is deliberately NOT blocked by use. ' +
+      'Archiving a GROUP does not archive its subtree.',
+  })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({ description: 'No such resource in this organisation.' })
+  @ApiConflictResponse({ description: 'Stale `version` — the resource changed elsewhere.' })
+  async archive(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Body() dto: ArchiveActionDto,
+  ): Promise<void> {
+    await this.service.setArchived(principal, orgSlug, resourceId, true, dto.version);
+  }
+
+  @Post(':resourceId/unarchive')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Unarchive a resource — return it to the library and the pickers.',
+    description:
+      'ADR-0053 §4. Clears `archivedAt`. This can never fail on a name/code collision: an ' +
+      'archived resource keeps both (the partial uniques are predicated on `deleted_at` ' +
+      'alone), so nothing can have taken them meanwhile.',
+  })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({ description: 'No such resource in this organisation.' })
+  @ApiConflictResponse({ description: 'Stale `version` — the resource changed elsewhere.' })
+  async unarchive(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Body() dto: ArchiveActionDto,
+  ): Promise<void> {
+    await this.service.setArchived(principal, orgSlug, resourceId, false, dto.version);
   }
 
   @Delete(':resourceId')

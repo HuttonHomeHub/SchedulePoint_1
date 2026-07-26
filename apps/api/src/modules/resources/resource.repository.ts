@@ -3,7 +3,29 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Resource, type ResourceKind } from '@prisma/client';
 
+import { archivedFilterWhere, type ArchivedFilter } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
+
+/**
+ * The `?q=` term for a resource list (ADR-0053 §4 / US-8). A resource has both a `name` and an
+ * optional natural-key `code`, and a planner searches by either, so this is an OR of two
+ * case-insensitive `contains` — `name ILIKE '%q%' OR code ILIKE '%q%'`. Neither side is
+ * btree-servable (leading wildcard), which is deliberate and bounded: the leading equality on
+ * `organization_id` in the org composite confines the recheck to ONE tenant's rows in cursor
+ * order. The documented, measure-first escalation is a `pg_trgm` GIN index (docs/TECH_DEBT.md).
+ *
+ * Nested under `AND` rather than spread at the top level so it composes with any other `OR` a
+ * caller adds without either clobbering the other.
+ */
+function resourceSearchWhere(search: string | undefined): Prisma.ResourceWhereInput {
+  if (search === undefined) return {};
+  return {
+    OR: [
+      { name: { contains: search, mode: 'insensitive' } },
+      { code: { contains: search, mode: 'insensitive' } },
+    ],
+  };
+}
 
 /** The scalar inputs a resource create needs (the org id is copied from the route scope). */
 export interface CreateResourceInput {
@@ -133,16 +155,93 @@ export class ResourceRepository {
     take: number;
     cursor?: string;
     parentId?: string | null;
+    kind?: ResourceKind;
+    archived: ArchivedFilter;
+    search?: string;
   }): Promise<Resource[]> {
     return this.prisma.resource.findMany({
       where: this.active({
         organizationId: params.organizationId,
         ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
+        ...(params.kind === undefined ? {} : { kind: params.kind }),
+        ...archivedFilterWhere(params.archived),
+        ...resourceSearchWhere(params.search),
       }),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: params.take,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
     });
+  }
+
+  /**
+   * Clear `archived_at` on a set of resources an import matched (CQ-4, ADR-0053 §4 / ADR-0050).
+   * NOT version-gated, unlike {@link setArchivedIfVersionMatches}: the importer never read a
+   * version to gate on, and an import must not fail because someone edited an unrelated library
+   * row meanwhile. Runs inside the import's own transaction, so the unarchives and the imported
+   * graph land together or not at all. The change is reported as a `repair` finding — never
+   * silent.
+   */
+  async unarchiveManyForImport(
+    params: { ids: readonly string[]; organizationId: string },
+    actorId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (params.ids.length === 0) return 0;
+    const { count } = await db.resource.updateMany({
+      // `organizationId` is re-asserted here rather than trusted from the caller's ids: this is
+      // the one archive write reached from a bulk import path, so the org filter is defence in
+      // depth against a future caller passing an unfiltered id set (security review).
+      where: this.active({
+        id: { in: [...params.ids] },
+        organizationId: params.organizationId,
+        archivedAt: { not: null },
+      }),
+      data: { archivedAt: null, updatedBy: actorId, version: { increment: 1 } },
+    });
+    return count;
+  }
+
+  /**
+   * The ARCHIVED resource holding this name or code in the org, if any (ADR-0053 §4). An
+   * archived row deliberately keeps both: `uq_resources_org_name` / `uq_resources_org_code`
+   * stay predicated on `deleted_at IS NULL` alone so that unarchive — an unguarded, lock-free,
+   * version-gated UPDATE — can never fail on a handle taken meanwhile (see the M4 migration's
+   * decision (1)). The accepted cost is that creating an ACTIVE resource on that name/code is a
+   * 409; this lookup runs ONLY on that 409 path, to name the archived row in `details` so the
+   * UI can offer "unarchive it instead" rather than a dead end.
+   */
+  findArchivedByNameOrCodeInOrg(
+    params: { organizationId: string; name: string; code: string | null },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Resource | null> {
+    return db.resource.findFirst({
+      where: this.active({
+        organizationId: params.organizationId,
+        archivedAt: { not: null },
+        OR: [{ name: params.name }, ...(params.code === null ? [] : [{ code: params.code }])],
+      }),
+    });
+  }
+
+  /**
+   * Set or clear `archived_at` on an active resource, gated on the optimistic `version`
+   * (ADR-0053 §4, workflow W4). A metadata-only write: no advisory lock, no cascade (archiving
+   * a `GROUP` deliberately does NOT archive its subtree) and no in-use guard — archiving is
+   * explicitly NOT blocked by use, which is the entire point and the contrast with delete.
+   * Returns rows changed; `0` means a version conflict or the row is gone → 409.
+   */
+  async setArchivedIfVersionMatches(
+    id: string,
+    expectedVersion: number,
+    archivedAt: Date | null,
+    actorId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const { count } = await db.resource.updateMany({
+      where: this.active({ id, version: expectedVersion }),
+      data: { archivedAt, updatedBy: actorId, version: { increment: 1 } },
+    });
+    return count;
   }
 
   /**

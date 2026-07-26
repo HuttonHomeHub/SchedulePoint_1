@@ -89,7 +89,7 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 | ---- | ---------------------------------------------------------- |
 | 200  | Successful read/update                                     |
 | 201  | Resource created (include `Location`)                      |
-| 204  | Success, no body (e.g. delete)                             |
+| 204  | Success, no body (delete, or a lifecycle-flag sub-action)  |
 | 400  | Malformed request                                          |
 | 401  | Not authenticated                                          |
 | 403  | Authenticated but not authorised                           |
@@ -100,6 +100,13 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
 | 429  | Rate limited                                               |
 | 500  | Unexpected server error                                    |
+
+**`POST :id/<verb>` sub-actions: `200` + the resource, or `204`?** A sub-action that changes what
+the resource **is** returns it (`…/clients/:id/restore`, `…/baselines/:id/activate` — a restore
+brings a cascade back, an activation moves a per-plan invariant and reports a count the client
+cannot derive). A sub-action that flips an **orthogonal lifecycle flag** to a value the caller
+already knows returns `204` (`…/archive`, `…/unarchive`, ADR-0053 §4) — the body would carry only
+the incremented `version`, and the list the caller is looking at is invalidated either way.
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and
@@ -397,6 +404,45 @@ acyclic, same-org and ≤ 10 deep by invariant, so a client that pages the libra
 
 A `parentId` from **another organisation**, soft-deleted, or unknown is an indistinguishable **404** —
 the tree is never a cross-tenant existence oracle.
+
+### Library archive, search & filter (ADR-0053 §4)
+
+Both shared libraries — calendars and resources — gain an **archive** lifecycle and server-side
+**search/filter**. Archive is **orthogonal to delete**: an archived row is still entirely valid, keeps
+every existing reference live and **keeps scheduling identically**; it is hidden from the default list
+and from every picker, and only a **new** usage is refused. Archiving is deliberately **not** blocked by
+use — it is the only way to retire a calendar that `CALENDAR_IN_USE` (correctly) refuses to delete.
+
+`archivedAt` (ISO instant or `null`) is an additive response field on every calendar and resource, and
+every query param below is optional with a default that reproduces today's result set — so **no existing
+call changes shape or meaning**.
+
+| Method | Path                                                     | Notes                                                                                                                                                                       |
+| ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/organizations/:orgSlug/calendars`                     | **+ query** `q` (name, case-insensitive substring, ≤ 100 chars, trimmed), `archived=exclude\|include\|only` (**default `exclude`**). **+ response field** `archivedAt`.     |
+| GET    | `…/organizations/:orgSlug/projects/:projectId/calendars` | **+ query** `q`, `archived` (same semantics). No `scope` — this route's contract is "the calendars usable here".                                                            |
+| POST   | `…/organizations/:orgSlug/calendars/:calendarId/archive` | **NEW** — `204`. Body `{ version }` (optimistic; stale → 409). An **ORG**-scoped calendar additionally requires `calendar:manage_org`.                                      |
+| POST   | `…/calendars/:calendarId/unarchive`                      | **NEW** — `204`. Same body and permissions. Cannot fail on a name collision: an archived calendar keeps its name.                                                           |
+| GET    | `…/organizations/:orgSlug/resources`                     | **+ query** `q` (matches **name OR code**), `kind` (a `ResourceKind`, incl. `GROUP`), `archived`. **+ response field** `archivedAt`. Combines with the existing `parentId`. |
+| POST   | `…/organizations/:orgSlug/resources/:resourceId/archive` | **NEW** — `204`. Body `{ version }`. `resource:update`. Archiving a `GROUP` does **not** archive its subtree.                                                               |
+| POST   | `…/resources/:resourceId/unarchive`                      | **NEW** — `204`. Same body and permission.                                                                                                                                  |
+
+**New rejections:**
+
+| Status | `details.reason`    | When                                                                                                                                                                                                                                                       |
+| ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `CALENDAR_ARCHIVED` | An archived calendar was bound to a plan, activity or resource. Only a **new** binding is refused — re-submitting the binding the holder already has still succeeds, so an entity already on an archived calendar stays editable.                          |
+| 422    | `RESOURCE_ARCHIVED` | A **new** assignment was created against an archived resource. **Editing an existing assignment** (units, rate, cost, curve) still succeeds — maintaining history is not new exposure.                                                                     |
+| 409    | `DUPLICATE_*`       | Creating an **active** row on an archived row's name (or a resource's `code`). An archived row keeps its handles, so unarchive can never fail; `details` carries `archivedCalendarId` / `archivedResourceId` so a client can offer "unarchive it instead". |
+
+Archived rows are still counted by the §2 scope-**narrowing** guard (archived ≠ deleted — the reference
+is live) and are still swept by the project-delete cascade. Deleting an archived row obeys the ordinary
+`RESOURCE_IN_USE` / `CALENDAR_IN_USE` rules — archive does not bypass the delete guard.
+
+The `archived` filter, like `scope`, is a **usability** control and never an authorisation boundary: the
+security controls are the write-time rejects above, applied server-side whatever a list returns. `q` is a
+case-insensitive substring match bounded by the org filter; there is deliberately no index for it (see
+`docs/TECH_DEBT.md` for the measured `pg_trgm` escalation).
 
 ## Pagination, filtering, sorting
 

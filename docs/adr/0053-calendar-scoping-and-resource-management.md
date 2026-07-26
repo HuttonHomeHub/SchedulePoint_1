@@ -1,8 +1,8 @@
 # ADR-0053: Calendar scoping tiers & the resource management layer
 
 - **Status:** Accepted (M1 — §1 the tier, §2 the guard & lifecycle; M3 — §3 the resource
-  hierarchy). §4 (archive) accepts with M4, §5 (interchange tiering) with M5 — see the
-  acceptance-status ledger at the foot of this ADR.
+  hierarchy; M4 — §4 archive, search & the shared combobox). §5 (interchange tiering) accepts
+  with M5 — see the acceptance-status ledger at the foot of this ADR.
 - **Date:** 2026-07-25
 - **Deciders:** Product Owner (scope, CQ-1…CQ-7), Solution Architect, Technical Lead;
   schema / CHECK / indexes / migration safety designed with the **database-architect** agent
@@ -115,6 +115,11 @@ so "forgot to pass a project" cannot silently become "org-global, anything goes"
 takes the same calendar advisory lock the `CALENDAR_IN_USE` delete guard uses, so a calendar
 can never be bound mid-deletion and a concurrent narrow cannot slip past the count.
 
+M4 adds a second non-optional parameter to the same guard for the same reason —
+`currentCalendarId`, the binding the holder already has — so the archive rule ("refuse **new**
+usages, leave existing ones alone") is decided in the one place the tier is, rather than in a
+parallel check each seam re-derives. See §4.
+
 A calendar id from **another organisation**, soft-deleted, or unknown stays a **404** at every
 seam — the tier must never become a cross-tenant existence oracle. Only an in-org calendar of
 the wrong tier produces the 422, and its `details` name the owning project.
@@ -216,18 +221,115 @@ pages the whole library (`apiFetchAllPages`) and nests client-side from `parentI
 unpaginated shape would be a parallel code path with no consumer. If M4's server-side search
 makes whole-library paging untenable, the tree read is re-opened there with a real caller.
 
-### 4. `archived_at` on `resources` and `calendars` _(accepts with M4)_
+### 4. `archived_at` on `resources` and `calendars` _(Accepted with M4)_
 
 Orthogonal to soft delete: an archived row stays valid and keeps scheduling; it is hidden from
-pickers and rejected for **new** assignments only. Soft delete cannot serve this purpose — a
+pickers and rejected for **new** usages only. Soft delete cannot serve this purpose — a
 soft-deleted resource cannot be referenced by an active assignment, which is exactly what
-`RESOURCE_IN_USE` exists to prevent.
+`RESOURCE_IN_USE` exists to prevent. Both tables gain a nullable `archived_at TIMESTAMPTZ(3)`
+with no default, so both `ADD COLUMN`s are metadata-only and every existing row reads
+`NULL = active` — today's exact behaviour, no data migration.
+
+**Archive is a lifecycle, not a second delete.** The two columns are independent and all four
+states are legal, so **no CHECK relates them**: archiving does not bypass the delete guard, and
+deleting an archived row is the ordinary path. `archived_at` is **server-set** — a
+`POST …/archive` | `…/unarchive` action carrying only the optimistic `version`, never a PATCH
+field — so there is no client-supplied value for a constraint to police.
+
+**The action returns `204`, not `200` + the resource** — a deliberate, narrow divergence from the
+repo's other `POST :id/<verb>` sub-actions (`clients` `restore`, `baselines` `activate`), flagged
+by the API review and kept. Those two return the row because they change what the row **is**:
+`restore` resurrects it with a cascade behind it, `activate` moves the one-active-per-plan
+invariant and reports an activity count the client cannot derive. Archive changes **one
+orthogonal metadata field to a value the client already knows** ("archived, now"), and the
+response body would exist only to carry the incremented `version`. The list the client is looking
+at is invalidated either way. The rule this establishes — and the one a future author should
+follow — is: **a sub-action that changes the resource's meaning returns it; a sub-action that
+flips an orthogonal lifecycle flag returns `204`.** The alternative (echo the row) was rejected
+as inventing a body nobody reads; see `docs/API.md`'s status-code table.
+
+**"New usage" is the whole rule, and it is enforced at the seams that already exist.** For
+resources it is the assignment `create` (422 `RESOURCE_ARCHIVED`), checked again under the
+resource advisory lock so a concurrent archive cannot slip past a pre-transaction read; `update`
+deliberately has no counterpart, because editing an existing assignment is maintaining history,
+not new exposure. For calendars the check lands **inside `assertCalendarUsableBy`** (§2) rather
+than beside it — the guard gains a **non-optional `currentCalendarId`**, mirroring why
+`projectId` is non-optional, and "new" is exactly `calendarId !== currentCalendarId`. Without
+that distinction a plan bound to a calendar archived after the fact could never be edited again;
+with it, a re-submitted binding is a no-op and a genuinely new one is 422 `CALENDAR_ARCHIVED`.
+A new seam that forgets to pass it fails **closed**.
+
+**Archiving is explicitly not blocked by use — that is the point.** It is the only way to retire
+a calendar the `CALENDAR_IN_USE` guard (correctly) refuses to delete (CQ-5), and archiving a
+resource that drives a live activity leaves the schedule byte-identical. There is no lock, no
+cascade and no in-use count on the archive write: archiving a `GROUP` does **not** archive its
+subtree (unlike the `GROUP` delete, which soft-deletes its subtree under one batch), and an
+archived referencer still **blocks** a §2 scope narrowing, because archived is not deleted and
+the reference is live.
+
+**An archived row keeps its name (and a resource its `code`).** The partial uniques stay
+predicated on `deleted_at IS NULL` (+ the §1 tier term) and deliberately do **not** gain
+`AND archived_at IS NULL`. The decisive reason is that **unarchive must never be able to fail**:
+it is an unguarded, lock-free, version-gated metadata `UPDATE`, so if archiving freed the name,
+another row could take it meanwhile and the unarchive would explode on a `23505` at a moment the
+user cannot reason about — forcing unarchive to grow a duplicate-name guard, a lock and a
+rename-then-unarchive flow. A uniqueness predicate must be **closed under the lifecycle
+transitions the app permits**; soft delete may free its name precisely because _restore_ is
+already a guarded, conflict-capable operation. It is also what makes the §5 import rule
+well-defined (CQ-4). The accepted cost is that creating an **active** row on an archived one's
+name is a 409 — mitigated by returning the archived row's id in `details` so the UI offers
+"unarchive it instead" rather than a dead end.
+
+**No index changes, measured rather than assumed.** The `archived` filter is **tri-state**
+(`exclude` default / `include` / `only`), so no partial index can serve more than one branch. On
+a seeded 24,000-resource database with the target tenant at this ADR's 5,000-row ceiling and a
+pessimistic 40% archived, the existing `(organization_id, created_at, id)` composite serves the
+default page in **0.21 ms** and a zero-match search in **2.9 ms** — an order of magnitude inside
+the 200 ms p95 budget. The counterfactual partial index
+(`WHERE deleted_at IS NULL AND archived_at IS NULL`) saved 0.14 ms for **1,296 kB** plus
+maintenance on every archive/unarchive, and a trailing `archived_at` key sits _after_ the sort
+keys so it can never narrow the scan range at all — both rejected as over-indexing and recorded
+as the measure-first escalation. Two existing partials must **not** be narrowed at all, for
+correctness rather than cost: `idx_calendars_project_id` serves the project-delete cascade and
+`idx_resources_parent_id` the `GROUP` subtree cascade, the subtree in-use count and the reparent
+walk — all of which **must** traverse archived rows.
+
+**The `q` search is deliberately unindexed.** `contains` + `mode: 'insensitive'` compiles to a
+leading-wildcard `ILIKE` (OR'd across `name` and `code` for resources; `name` only for calendars,
+which have no `code`), which no btree can serve. The org equality is what makes it bounded: the
+composite confines the recheck to one tenant's rows in cursor order. The documented escalation is
+a `pg_trgm` GIN index on `lower(name)` — deferred on cardinality **and** because it needs
+`CREATE EXTENSION pg_trgm`, a privileged one-off step the app's DB role may not hold.
+
+**The web side is one shared APG combobox**, not four hand-rolled pickers: `components/ui/combobox.tsx`
+(the `menu.tsx` hand-rolled-primitive precedent) with controlled server-side search, grouped and
+annotated options, `aria-activedescendant`, an announced result count, and the
+"render the current value even when it is outside the filtered page" rule generalised out of the
+three places that had each grown their own copy.
+
+**The engine is untouched**, structurally: `archived_at` is read by no scheduling or read-model
+path — not the CPM engine, not the levelling pass (ADR-0041), not the histogram/curve read
+(ADR-0044), not Earned Value (ADR-0042), all of which start from `resource_assignments`, which
+archive does not touch.
 
 ### 5. Interchange maps the tier _(accepts with M5)_
 
 Import creates calendars at **PROJECT** scope pinned to the target project (resource calendars
 at ORG, with a report finding); export emits `clndr_type`. The ADR-0050 mapping-contract table
 is updated in lock-step.
+
+**CQ-4 (archived match) landed with M4 for resources, and only for resources.** `InterchangeService`
+already resolves-or-creates the org resource library by `code` else `name`, and that match
+necessarily sees archived rows — §4 keeps an archived row's name and code, so refusing to match
+would collide with the active partial unique and hard-fail the import on a `P2002` it could never
+resolve. The commit therefore **matches, auto-unarchives in the same transaction, and records a
+`repair` finding per row** (never silently): leaving it archived would have the import create
+assignments to an archived resource, contradicting the `RESOURCE_ARCHIVED` rule the same commit
+enforces everywhere else. The unarchive is deliberately **not** version-gated — the importer never
+read a version, and an import must not fail on a concurrent edit to an unrelated library row.
+**Calendars have no matching path today** (import always creates them), so their archived-match
+rule has nothing to attach to; it lands with the tiering work in M5, at the same seam that
+introduces calendar reuse.
 
 ### 6. The CPM engine is untouched
 
@@ -293,7 +395,7 @@ rows loaded **by calendar id**; it never receives `organization_id`, and it will
 | §2 Shared guard, scope change, cascade, `calendar:manage_org` | M1        | **Accepted** |
 | §6 Engine untouched / parity gate                             | M1        | **Accepted** |
 | §3 Resource hierarchy (`parent_id`, `GROUP`)                  | M3        | **Accepted** |
-| §4 `archived_at` on resources + calendars                     | M4        | Proposed     |
+| §4 `archived_at` on resources + calendars, search, combobox   | M4        | **Accepted** |
 | §5 Interchange tier mapping                                   | M5        | Proposed     |
 
 ## References

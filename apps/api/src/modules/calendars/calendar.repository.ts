@@ -11,7 +11,21 @@ import {
 } from '@prisma/client';
 import { WorkingWeekdays } from '@repo/types';
 
+import { archivedFilterWhere, type ArchivedFilter } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
+
+/**
+ * The `?q=` term for a calendar list (ADR-0053 §4 / US-8). A calendar has no `code`, so the
+ * search is `name` alone — a single case-insensitive `contains`, i.e. `name ILIKE '%q%'`, which
+ * no btree can serve (leading wildcard). Deliberately: the org composite bounds the candidate
+ * set to one tenant in cursor order and this is a recheck over that bounded set. Returned as a
+ * spreadable fragment (`{}` when there is no search) — and NOT as an `OR`, so it composes with
+ * the project list's tier `OR` without either clobbering the other.
+ */
+function calendarSearchWhere(search: string | undefined): Prisma.CalendarWhereInput {
+  if (search === undefined) return {};
+  return { name: { contains: search, mode: 'insensitive' } };
+}
 
 /**
  * Day↔minute factor (ADR-0036 §4.2). The public calendar contract stays weekday-mask +
@@ -282,6 +296,56 @@ export class CalendarRepository {
   }
 
   /**
+   * The ARCHIVED calendar holding `name` in the tier a create/rename was aiming at, if any
+   * (ADR-0053 §4). An archived row deliberately keeps its name — the partial uniques stay
+   * predicated on `deleted_at IS NULL` alone so that unarchive, an unguarded version-gated
+   * UPDATE, can never fail on a name taken meanwhile (see the M4 migration's decision (1)).
+   * The accepted cost is that creating an ACTIVE calendar on that name is a 409; this lookup
+   * runs ONLY on that 409 path, to name the archived row in `details` so the UI can offer
+   * "unarchive it instead" rather than a dead end.
+   */
+  findArchivedByNameInTier(
+    params: {
+      organizationId: string;
+      name: string;
+      scope: CalendarScope;
+      projectId: string | null;
+    },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Calendar | null> {
+    return db.calendar.findFirst({
+      where: this.active({
+        organizationId: params.organizationId,
+        name: params.name,
+        scope: params.scope,
+        ...(params.scope === 'PROJECT' ? { projectId: params.projectId } : {}),
+        archivedAt: { not: null },
+      }),
+    });
+  }
+
+  /**
+   * Set or clear `archived_at` on an active calendar, gated on the optimistic `version`
+   * (ADR-0053 §4, workflow W4). A metadata-only write: no advisory lock, no cascade and no
+   * in-use guard — archiving is explicitly NOT blocked by use, which is the entire point and
+   * the contrast with delete. Returns rows changed; `0` means a version conflict or the row is
+   * gone, which the service maps to 409 / 404 exactly as the other version-gated updates do.
+   */
+  async setArchivedIfVersionMatches(
+    id: string,
+    expectedVersion: number,
+    archivedAt: Date | null,
+    actorId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const { count } = await db.calendar.updateMany({
+      where: this.active({ id, version: expectedVersion }),
+      data: { archivedAt, updatedBy: actorId, version: { increment: 1 } },
+    });
+    return count;
+  }
+
+  /**
    * Count the ACTIVE plans whose default calendar is `calendarId` — the delete-in-use
    * guard (Task C1). A soft-deleted plan does not count (it no longer references the
    * calendar for scheduling). Backed by the partial `idx_plans_calendar_id`.
@@ -315,6 +379,8 @@ export class CalendarRepository {
   findManyActiveByOrg(params: {
     organizationId: string;
     scope: CalendarScopeFilter;
+    archived: ArchivedFilter;
+    search?: string;
     take: number;
     cursor?: string;
   }): Promise<CalendarWithShifts[]> {
@@ -322,6 +388,8 @@ export class CalendarRepository {
       where: this.active({
         organizationId: params.organizationId,
         ...(params.scope === 'all' ? {} : { scope: params.scope === 'org' ? 'ORG' : 'PROJECT' }),
+        ...archivedFilterWhere(params.archived),
+        ...calendarSearchWhere(params.search),
       }),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: params.take,
@@ -341,6 +409,8 @@ export class CalendarRepository {
   findManyActiveForProject(params: {
     organizationId: string;
     projectId: string;
+    archived: ArchivedFilter;
+    search?: string;
     take: number;
     cursor?: string;
   }): Promise<CalendarWithShifts[]> {
@@ -348,6 +418,8 @@ export class CalendarRepository {
       where: this.active({
         organizationId: params.organizationId,
         OR: [{ scope: 'ORG' }, { scope: 'PROJECT', projectId: params.projectId }],
+        ...archivedFilterWhere(params.archived),
+        ...calendarSearchWhere(params.search),
       }),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: params.take,

@@ -1,4 +1,4 @@
-import type { CalendarSummary, PlanSummary } from '@repo/types';
+import type { CalendarSummary, PlanSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,13 @@ import { CalendarsTable } from './CalendarsTable';
 
 import { ActivityFormDialog } from '@/features/activities';
 import { PlanCalendarPicker } from '@/features/plans';
-import { ResourceFormDialog } from '@/features/resources';
+import {
+  ActivityResourcesDialog,
+  ResourceFormDialog,
+  ResourcesTable,
+  assignmentKeys,
+  resourceKeys,
+} from '@/features/resources';
 import type * as ApiClient from '@/lib/api/client';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
@@ -38,6 +44,7 @@ function calendar(overrides: Partial<CalendarSummary> & { id: string }): Calenda
     workingWeekdays: 31,
     scope: 'ORG',
     projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -53,6 +60,22 @@ const OWN = calendar({
   scope: 'PROJECT',
   projectId: 'proj-1',
 });
+
+const RESOURCE: ResourceSummary = {
+  id: 'res-1',
+  name: 'Crew A',
+  code: null,
+  description: null,
+  kind: 'LABOUR',
+  parentId: null,
+  maxUnitsPerHour: null,
+  costPerUnit: null,
+  calendarId: null,
+  archivedAt: null,
+  version: 1,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+};
 
 const PLAN: PlanSummary = {
   id: 'plan-1',
@@ -137,15 +160,16 @@ describe('library scoping — flag off parity', () => {
     expect(screen.queryByText('Organisation')).not.toBeInTheDocument();
   });
 
-  it('the plan calendar picker stays a flat, ungrouped option list', () => {
+  it('the plan calendar picker stays a native, flat, ungrouped select', () => {
     withClient(<PlanCalendarPicker orgSlug="acme" plan={PLAN} calendars={[ORG, OWN]} canEdit />);
 
+    expect(screen.getByLabelText('Calendar').tagName).toBe('SELECT');
     expect(document.querySelectorAll('optgroup')).toHaveLength(0);
     expect(screen.getByRole('option', { name: 'Standard' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Site shutdown' })).toBeInTheDocument();
   });
 
-  it('the activity calendar picker stays a flat, ungrouped option list', () => {
+  it('the activity calendar picker stays a native, flat, ungrouped select', () => {
     withClient(
       <ActivityFormDialog
         orgSlug="acme"
@@ -156,12 +180,55 @@ describe('library scoping — flag off parity', () => {
       />,
     );
 
+    expect(screen.getByLabelText('Calendar (optional)').tagName).toBe('SELECT');
     expect(document.querySelectorAll('optgroup')).toHaveLength(0);
   });
 
-  it('the resource calendar picker gains no organisation-only note', () => {
+  it('the resource calendar picker stays a native select and gains no organisation-only note', () => {
     withClient(<ResourceFormDialog orgSlug="acme" open onClose={vi.fn()} calendars={[ORG]} />);
 
+    expect(screen.getByLabelText('Calendar (optional)').tagName).toBe('SELECT');
+    // …and no group picker at all: the resource tree is itself behind the flag (ADR-0053 §3).
+    expect(screen.queryByLabelText('Group (optional)')).not.toBeInTheDocument();
     expect(screen.queryByText(/Organisation calendars only/)).not.toBeInTheDocument();
+  });
+
+  it('the assignment resource picker stays a native select over the whole library', () => {
+    withClient(
+      <ActivityResourcesDialog orgSlug="acme" activityId="act-1" open onClose={vi.fn()} canWrite />,
+      (client) => {
+        client.setQueryData(resourceKeys.list('acme'), [RESOURCE]);
+        client.setQueryData(assignmentKeys.listByActivity('acme', 'act-1'), []);
+      },
+    );
+
+    expect(screen.getByLabelText('Resource').tagName).toBe('SELECT');
+    expect(screen.getByRole('option', { name: 'Crew A (Labour)' })).toBeInTheDocument();
+  });
+
+  it('neither library screen grows a search box or an archived filter', () => {
+    withClient(<CalendarsTable orgSlug="acme" canWrite />, (client) =>
+      client.setQueryData(calendarKeys.list('acme'), [ORG]),
+    );
+    expect(screen.queryByLabelText('Search calendars')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Show archived')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Archive /i })).not.toBeInTheDocument();
+  });
+
+  it('the resource library grows no search, kind or archived control either', () => {
+    withClient(<ResourcesTable orgSlug="acme" canWrite />, (client) =>
+      client.setQueryData(resourceKeys.list('acme'), [RESOURCE]),
+    );
+    expect(screen.queryByLabelText('Search resources')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Kind')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Show archived')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Archive /i })).not.toBeInTheDocument();
+  });
+
+  it('the resource library still requests the same bare URL', async () => {
+    const { resourcesQueryOptions } = await import('@/features/resources');
+    await resourcesQueryOptions('acme').queryFn!({} as never);
+
+    expect(apiFetchAllPages).toHaveBeenCalledWith('/organizations/acme/resources');
   });
 });

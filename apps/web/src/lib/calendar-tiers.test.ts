@@ -11,6 +11,7 @@ function calendar(id: string, scope: CalendarSummary['scope']): CalendarSummary 
     workingWeekdays: 31,
     scope,
     projectId: scope === 'PROJECT' ? 'proj-1' : null,
+    archivedAt: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',

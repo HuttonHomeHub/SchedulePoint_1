@@ -11,10 +11,10 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CalendarsService } from './calendars.service';
+import { ProjectCalendarListQueryDto } from './dto/calendar-list-query.dto';
 import { CalendarResponseDto } from './dto/calendar-response.dto';
 
 /**
@@ -48,7 +48,7 @@ export class ProjectCalendarsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('projectId', ParseUuidPipe) projectId: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ProjectCalendarListQueryDto,
   ): Promise<Paginated<CalendarResponseDto>> {
     const { items, meta } = await this.service.listForProject(principal, orgSlug, projectId, query);
     return new Paginated(

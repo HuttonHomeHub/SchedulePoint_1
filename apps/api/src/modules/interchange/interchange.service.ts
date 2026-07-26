@@ -143,9 +143,26 @@ export class InterchangeService {
 
     // Phase 1 — persist the whole graph atomically via the existing repositories (each accepts `tx`),
     // mirroring how the domain services compose repository writes inside a single `$transaction`.
-    const { planId, createdCalendarIds, createdResourceIds } = await this.prisma.$transaction(
-      (tx) => this.persistGraph(tx, principal, project, graph),
-    );
+    const { planId, createdCalendarIds, createdResourceIds, unarchivedResources } =
+      await this.prisma.$transaction((tx) => this.persistGraph(tx, principal, project, graph));
+
+    // CQ-4 (ADR-0053 §4): a source row that matched an ARCHIVED library row is matched and the row
+    // auto-unarchived — never silently. Recorded as a `repair` finding, the ADR-0050 class for "a
+    // structural fix that kept the graph valid": without it the import would create assignments to
+    // an archived resource, which the RESOURCE_ARCHIVED rule forbids everywhere else. Pushed onto
+    // the report the caller receives, so the post-commit report is honest about a change the
+    // importer made to shared tenant state it did not create.
+    for (const resource of unarchivedResources) {
+      report.repairs.push({
+        kind: 'repair',
+        entity: 'resource',
+        sourceRef: resource.code ?? resource.name,
+        detail: `matched the archived resource “${resource.name}” and unarchived it`,
+        reason:
+          'An archived resource keeps its name and code, so a matching import row would otherwise ' +
+          'collide with it; leaving it archived would create assignments to an archived resource.',
+      });
+    }
 
     this.logger.info(
       {
@@ -233,7 +250,13 @@ export class InterchangeService {
     principal: Principal,
     project: { id: string; organizationId: string },
     graph: ImportGraph,
-  ): Promise<{ planId: string; createdCalendarIds: string[]; createdResourceIds: string[] }> {
+  ): Promise<{
+    planId: string;
+    createdCalendarIds: string[];
+    createdResourceIds: string[];
+    /** Archived library resources this import matched and auto-unarchived (CQ-4, ADR-0053 §4). */
+    unarchivedResources: { id: string; name: string; code: string | null }[];
+  }> {
     const stamp = { createdBy: principal.userId, updatedBy: principal.userId };
     const organizationId = project.organizationId;
 
@@ -406,7 +429,8 @@ export class InterchangeService {
                 { name: { in: importNames } },
               ],
             },
-            select: { id: true, code: true, name: true },
+            // `archivedAt` rides along so the CQ-4 unarchive-and-report path needs no second query.
+            select: { id: true, code: true, name: true, archivedAt: true },
           });
     const idByCode = new Map<string, string>();
     const idByName = new Map<string, string>();
@@ -414,12 +438,28 @@ export class InterchangeService {
       if (r.code !== null) idByCode.set(r.code, r.id);
       idByName.set(r.name, r.id);
     }
+    // An ARCHIVED row is still an ACTIVE row (archive is orthogonal to soft delete, ADR-0053 §4),
+    // so `existingResources` above already matched archived resources — and it must: an archived
+    // row keeps its name and code (the partial uniques are predicated on `deleted_at` alone), so
+    // refusing to match would hard-fail the import on a P2002 it could never resolve. CQ-4's
+    // answer is therefore MATCH + AUTO-UNARCHIVE + REPORT: leaving it archived would have the
+    // import create assignments to an archived resource, contradicting the RESOURCE_ARCHIVED rule
+    // that the very same commit enforces everywhere else.
+    const archivedById = new Map(
+      existingResources.filter((r) => r.archivedAt !== null).map((r) => [r.id, r]),
+    );
+    const unarchivedResources: { id: string; name: string; code: string | null }[] = [];
     for (const resource of graph.resources) {
       // Match an existing ACTIVE org resource by `code` (when the import carries one) else by `name`.
       const existingId =
         resource.code !== null ? idByCode.get(resource.code) : idByName.get(resource.name);
       if (existingId !== undefined) {
         resourceIdByKey.set(resource.key, existingId);
+        const archived = archivedById.get(existingId);
+        if (archived !== undefined) {
+          archivedById.delete(existingId); // report each row once, however many source rows hit it
+          unarchivedResources.push({ id: archived.id, name: archived.name, code: archived.code });
+        }
         continue;
       }
       const id = randomUUID();
@@ -443,6 +483,19 @@ export class InterchangeService {
     }
     await this.resources.createManyForImport(newResourceRows, tx);
 
+    // Auto-unarchive every matched archived resource, in ONE batched update inside the same
+    // transaction — so either the whole graph and the unarchives land, or neither does. The
+    // version is bumped like any other write; this is deliberately NOT version-gated, because the
+    // importer never read a version to gate on and an import must not fail on a concurrent edit
+    // to an unrelated library row.
+    if (unarchivedResources.length > 0) {
+      await this.resources.unarchiveManyForImport(
+        { ids: unarchivedResources.map((r) => r.id), organizationId },
+        principal.userId,
+        tx,
+      );
+    }
+
     // 6. Assignments (ADR-0039/0040) — resolve activityKey → activity id and resourceKey → resource id,
     // one batched insert. The pure pipeline already guaranteed ≤1 driver/activity, MATERIAL-never-driving
     // and (activity, resource) dedupe, so the partial-uniques won't fire; `curveType` defaults to UNIFORM.
@@ -461,7 +514,7 @@ export class InterchangeService {
     );
     await this.assignments.createManyForImport(assignmentRows, tx);
 
-    return { planId: plan.id, createdCalendarIds, createdResourceIds };
+    return { planId: plan.id, createdCalendarIds, createdResourceIds, unarchivedResources };
   }
 
   /**

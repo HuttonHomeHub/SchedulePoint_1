@@ -48,6 +48,17 @@ export class CalendarResponseDto implements CalendarSummary {
   })
   projectId!: string | null;
 
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description:
+      'When this calendar was archived (ADR-0053 §4); null = active. An archived calendar ' +
+      'stays bound to its plans, activities and resources and still schedules identically — ' +
+      'it is hidden from pickers and refused for a NEW binding (422 CALENDAR_ARCHIVED).',
+  })
+  archivedAt!: string | null;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -69,6 +80,7 @@ export class CalendarResponseDto implements CalendarSummary {
       workingWeekdays: WorkingWeekdays.fromIndices(entity.shifts.map((shift) => shift.weekday)),
       scope: entity.scope,
       projectId: entity.projectId,
+      archivedAt: entity.archivedAt === null ? null : entity.archivedAt.toISOString(),
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
