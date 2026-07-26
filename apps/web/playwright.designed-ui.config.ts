@@ -1,11 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Theme-parametrised accessibility** configuration (ADR-0055 §5,
- * `docs/specs/designed-ui/`). Unlike the other extra suites this one gates no flag — the
- * surface-scope work it covers is unflagged, because it is an accessibility fix. What makes it
- * a separate suite is the *parametrisation*: it boots the shell once per theme, and the theme
- * is chosen before first paint, which the shared `e2e` project has no way to express.
+ * **Theme-parametrised accessibility, flag OFF** (ADR-0055 §5, `docs/specs/designed-ui/`).
+ * It boots the shell once per theme — a thing the shared `e2e` project cannot express, since the
+ * theme is chosen before first paint — and scans each for WCAG violations.
+ *
+ * `VITE_DESIGNED_CHROME` is pinned **false** below. It used to be absent, because off was the
+ * default; since the S5-T4 flip it has to be explicit, and the suite's job changed with it. This
+ * is now the **rollback-parity** suite: it proves that turning the epic off still leaves an
+ * accessible app in all four themes. `playwright.designed-chrome.config.ts` is its flag-ON
+ * sibling and covers the shipped default. Both run in CI; deleting either would leave one side
+ * of the rollback contract unproven.
  *
  * Chromium only (TECH_DEBT #25a), serial (each test onboards its own org).
  */
@@ -53,6 +58,8 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
+            // Explicit since the S5-T4 flip made ON the default — this suite is the rollback side.
+            env: { VITE_DESIGNED_CHROME: 'false', VITE_CANVAS_VISUAL_LANGUAGE: 'false' },
           },
         ],
       }),

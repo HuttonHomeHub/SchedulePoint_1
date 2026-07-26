@@ -229,9 +229,14 @@ export function ToolbarPlanWorkspace({
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
   // the Comments button itself doesn't go through here (it stays mounted + focused), so no double-move.
+  //
+  // Searched from `document`, NOT from `rootRef`: with `VITE_DESIGNED_CHROME` on, the toolbar's
+  // DOM node lives in the chrome band (ADR-0055 §3) and is no longer a DOM descendant of the
+  // workspace root, so a root-scoped query silently found nothing and stranded focus. Only one
+  // plan workspace is mounted at a time, so the attribute is unambiguous document-wide.
   const closeNotes = useCallback(() => {
     setNotesOpen(false);
-    rootRef.current?.querySelector<HTMLElement>('[data-toolbar-item="comments"]')?.focus();
+    document.querySelector<HTMLElement>('[data-toolbar-item="comments"]')?.focus();
   }, [setNotesOpen]);
 
   // Canvas-first authoring makes the empty canvas an *interactive, drawable* surface, so it must not

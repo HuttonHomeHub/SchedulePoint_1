@@ -243,14 +243,15 @@ jobs:
       # axe run. This one boots the shell once per picker option — light, dark, corporate, and
       # system under dark emulation — and additionally asserts the six defect sites by name,
       # because an invisible button is not an axe rule and axe measures no hover state.
-      - name: Web end-to-end tests (all four themes, accessibility)
+      - name: Web end-to-end tests (all four themes, accessibility, flag OFF)
         run: pnpm --filter @repo/web test:e2e:designed-ui
 
       # The chrome band with VITE_DESIGNED_CHROME on (ADR-0055 S2) — the header and a plan's two
       # toolbar rows rendered as ONE surface, the tab order that follows from the new DOM order,
-      # and axe over the band itself. The sibling step above stays flag-OFF deliberately, so the
-      # shipped default surface keeps its four-theme scan while the band is still behind a flag.
-      - name: Web end-to-end tests (designed chrome band, flag on)
+      # and axe over the band itself. Since the S5-T4 flip this is the SHIPPED DEFAULT; the
+      # sibling step above pins the flags off and is now the rollback-parity side. Both are kept:
+      # dropping either would leave one half of the rollback contract unproven.
+      - name: Web end-to-end tests (designed chrome band, flag on — the shipped default)
         run: pnpm --filter @repo/web test:e2e:designed-chrome
 
       - name: Upload Playwright report

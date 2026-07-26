@@ -132,13 +132,18 @@ vi.mock('@/features/schedule/api/use-schedule', () => ({
   useScheduleSummary: () => query({ projectFinish: '2026-08-01' }),
 }));
 
+const { TestChromeHost } = await import('@/components/layout/chrome/test-chrome-host');
 const { PlanDetailScreen } = await import('@/routes/plan-detail');
 
 function renderScreen() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <PlanDetailScreen />
+      {/* The screen's toolbar portals into the chrome band, which the shell mounts and a
+          bare screen render does not — so the test supplies the portal target. */}
+      <TestChromeHost>
+        <PlanDetailScreen />
+      </TestChromeHost>
     </QueryClientProvider>,
   );
 }

@@ -784,8 +784,16 @@ export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
 );
 
 /**
- * The **designed chrome band** (ADR-0055 S2–S3, spec `docs/specs/designed-ui/`). Default **off**
- * until its S5 enablement gate — the specialist reviews and the four-theme accessibility run.
+ * The **designed chrome band** (ADR-0055 S2–S3, spec `docs/specs/designed-ui/`). Default **ON**
+ * since 2026-07-26 (S5-T4), once the deferred specialist gates ran over the whole epic diff and
+ * every blocking finding was folded — **accessibility** (the `--input` control boundary at 1.26:1
+ * sitewide, `bg-muted` resolving light-on-light inside the Corporate chrome, the account menu's
+ * theme radios with no programmatic group, and a `globals.css` comment claiming a contrast
+ * coverage the suite did not have), **ux** (the client-row accent bar ADR-0055 §3 promised but
+ * never shipped, and the unstated breadcrumb-seam decision, now named in the ADR), **component**
+ * (catalogue gaps, `ToggleChip`'s zero consumers logged as debt) and **performance** (pass, no
+ * blockers). Light's and Dark's own chrome values landed first and separately (S5-T1) so that the
+ * flag-off parity suites still meant something on the day they were most needed.
  *
  * When on, the shell stops being "a centred header above a rail" and becomes one **full-bleed
  * chrome band**: the header row and, on a plan, the two toolbar rows render as a single navy
@@ -805,11 +813,15 @@ export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
  * `column[ header ][ row(rail | main) ]`, the header re-centres at `max-w-6xl`, and the root
  * attribute is absent so every token keeps today's value (the flag-off shell parity suite).
  */
-export const DESIGNED_CHROME_ENABLED = flagDefaultOff(import.meta.env.VITE_DESIGNED_CHROME);
+export const DESIGNED_CHROME_ENABLED = flagDefaultOn(import.meta.env.VITE_DESIGNED_CHROME);
 
 /**
- * The **canvas visual language** (ADR-0055 S4, spec `docs/specs/designed-ui/`). Default **off**
- * until its S5 enablement gate — the specialist reviews and the ADR-0026 draw-budget measurement.
+ * The **canvas visual language** (ADR-0055 S4, spec `docs/specs/designed-ui/`). Default **ON**
+ * since 2026-07-26 (S5-T4), once the browser draw measurement was made and recorded: at 2,000
+ * activities the band pass sits **inside the baseline's own run-to-run spread** — several runs
+ * land below it — so its cost is smaller than the noise floor rather than merely small. Method,
+ * hardware and the caveat that this was NOT the ADR-0026 §16 device envelope are written down in
+ * `docs/specs/designed-ui/implementation-plan.md` (S5-T2).
  *
  * When on, the diagram sits on a ground of its own with **alternating month bands**: a planner can
  * count months without reading a single label, which is the one thing a time-scaled diagram should
@@ -822,9 +834,9 @@ export const DESIGNED_CHROME_ENABLED = flagDefaultOff(import.meta.env.VITE_DESIG
  * *shape* of the cost rather than milliseconds (a CI runner's absolute timings are noise).
  *
  * Frontend-only, and the painter is the only thing that changes: no API, DTO, schema or engine
- * change. Set `VITE_CANVAS_VISUAL_LANGUAGE=false` (the default) for a byte-for-byte paint — the
+ * change. Set `VITE_CANVAS_VISUAL_LANGUAGE=false` for a byte-for-byte paint — the
  * scene simply carries no `monthBands`, so the band layer is skipped entirely.
  */
-export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOff(
+export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_VISUAL_LANGUAGE,
 );

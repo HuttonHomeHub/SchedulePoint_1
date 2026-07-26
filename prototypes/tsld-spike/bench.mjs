@@ -47,8 +47,19 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
-const pageUrl = (count) => `http://127.0.0.1:${port}/index.html?count=${count}`;
+const pageUrl = (count, bands, theme) =>
+  `http://127.0.0.1:${port}/index.html?count=${count}&bands=${bands ? 1 : 0}&theme=${theme}`;
 const COUNTS = [500, 2000];
+// ADR-0055 S5-T2: the S4 month-band pass, measured in a real rasteriser rather than by the
+// call-count stub `paint.band-budget.test.ts` uses. `bands=false` is the pre-S4 baseline, so
+// the difference between the two rows IS the band cost. `system` resolves to Light, so the
+// four user-facing themes are three distinct grounds.
+const CASES = [
+  { bands: false, theme: 'light', label: 'bands off (pre-S4 baseline)' },
+  { bands: true, theme: 'light', label: 'bands on · Light' },
+  { bands: true, theme: 'dark', label: 'bands on · Dark' },
+  { bands: true, theme: 'corporate', label: 'bands on · Corporate' },
+];
 const DURATION_MS = 4000;
 const VIEWPORT = { width: 1440, height: 900 };
 
@@ -64,14 +75,16 @@ const browser = await chromium.launch({ executablePath: glob[0] });
 const results = [];
 try {
   for (const count of COUNTS) {
-    const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 2 });
-    await page.goto(pageUrl(count));
-    await page.waitForFunction('typeof window.__bench === "function"');
-    // Warm up one frame, then run the scripted continuous pan/zoom sweep.
-    const stats = await page.evaluate((ms) => window.__bench(ms), DURATION_MS);
-    const scene = await page.evaluate(() => window.__scene);
-    results.push({ count, deps: scene.deps, ...stats });
-    await page.close();
+    for (const kase of CASES) {
+      const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 2 });
+      await page.goto(pageUrl(count, kase.bands, kase.theme));
+      await page.waitForFunction('typeof window.__bench === "function"');
+      // Warm up one frame, then run the scripted continuous pan/zoom sweep.
+      const stats = await page.evaluate((ms) => window.__bench(ms), DURATION_MS);
+      const scene = await page.evaluate(() => window.__scene);
+      results.push({ count, deps: scene.deps, ...kase, ...stats });
+      await page.close();
+    }
   }
 } finally {
   await browser.close();
@@ -86,7 +99,7 @@ const DRAW_BUDGET_MS = 16; // 60fps CPU budget — stricter than the ≥45/≥30
 const line = (r) => {
   const pass = r.p95DrawMs <= DRAW_BUDGET_MS;
   return (
-    `${String(r.count).padStart(5)} act · ${String(r.deps).padStart(5)} deps · ` +
+    `${String(r.count).padStart(5)} act · ${r.label.padEnd(27)} · ` +
     `draw med ${r.medianDrawMs}ms p95 ${r.p95DrawMs}ms (budget ≤${DRAW_BUDGET_MS}ms) → ${pass ? 'PASS' : 'REVIEW'} · ` +
     `headless fps floor: median ${r.medianFps} / slow-5% ${r.p5Fps} / min ${r.minFps}`
   );

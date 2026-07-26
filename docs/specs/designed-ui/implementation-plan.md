@@ -809,6 +809,49 @@ default-on, and the rollout scaffolding is collapsed.
 - **Development steps:** 1. Extend the harness with the band pass + a theme switch. 2. Run the
   sweep. 3. Record results here. 4. Decide the flip.
 
+**Result (2026-07-26).**
+
+_Method._ `prototypes/tsld-spike/` extended with the S4 layer — an opaque ground plus alternating
+month bands, at most `visibleMonths + 1` full-height `fillRect`s beneath every other layer — and a
+`?bands=`/`?theme=` switch (`bench.mjs` `CASES`). Scripted 4 s continuous pan/zoom sweep, 1440×900
+at `deviceScaleFactor: 2`, 500 and 2,000 activities (1,653 / 6,846 dependencies), four cases per
+count: bands **off** (the pre-S4 baseline) and bands **on** in each of the three distinct theme
+grounds (`system` resolves to Light). Three full repetitions.
+
+_Hardware — read this before quoting the numbers._ Headless Chromium on the **shared cloud runner
+this work was done on**, not the ADR-0026 §16 envelope (mid-tier laptop + iPad-class Safari). No
+GPU compositor, so the reported fps is a floor, not a device signal. **The device-authoritative
+measurement on the §16 envelope has not been made** — see the decision below for why that does not
+block, and `TECH_DEBT.md` for the standing gap.
+
+_Numbers_ (per-frame CPU draw, the portable metric; median / p95 ms, range across three runs):
+
+| Case @ 2,000 activities  | median    | p95        |
+| ------------------------ | --------- | ---------- |
+| bands **off** (baseline) | 4.9 – 6.0 | 8.4 – 10.4 |
+| bands on · Light         | 5.1 – 6.1 | 8.2 – 9.5  |
+| bands on · Dark          | 5.3 – 5.8 | 8.6 – 10.5 |
+| bands on · Corporate     | 5.6 – 5.7 | 8.5 – 9.1  |
+
+At 500 activities every case sat at 1.7–1.8 median / 2.7–3.2 p95.
+
+_Reading._ **The band pass has no measurable cost.** Every bands-on row falls inside the
+baseline's own run-to-run spread, and several land _below_ it — so the effect is smaller than the
+noise floor (~±1 ms median), which bounds it rather than measuring it. That is exactly what the
+call-count gate predicts: one `fillStyle` and ≤ `visibleMonths + 1` `fillRect`s, no text, against
+a frame already drawing thousands of bars and arrows. Theme makes no difference, as expected —
+`fillRect` cost is hue-independent; the theme axis exercises the eyeball check, not the number.
+
+_What these numbers are NOT._ The spike is not the shipped painter — different code, its own
+fixture, no LOD parity — so its absolute 8–10 ms p95 **cannot** be compared against ADR-0026's
+≤ 4 ms production budget, and no such comparison is claimed here. The question S5-T2 exists to
+answer is narrower: _does S4 move the canvas's cost?_ It does not.
+
+_Decision: flip._ The residual unknown — absolute draw time on iPad-class Safari — is a property
+the canvas already had before this epic and that S4 measurably does not change. Blocking the flip
+on it would be blocking on something the change is not responsible for. Recorded as debt rather
+than resolved by assertion.
+
 ##### Task S5-T3 — Specialist reviews over the whole epic diff
 
 - **Description:** run, and fold every blocking finding: **accessibility-reviewer** (WCAG 2.2 AA

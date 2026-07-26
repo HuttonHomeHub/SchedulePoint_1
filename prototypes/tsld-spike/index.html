@@ -45,7 +45,10 @@
       const hud = document.getElementById('hud');
 
       const scene = generateScene(count);
-      const r = createRenderer(canvas, scene);
+      const r = createRenderer(canvas, scene, {
+        bands: params.get('bands') === '1',
+        theme: params.get('theme') ?? 'light',
+      });
       r.resize();
       addEventListener('resize', () => r.resize());
 
