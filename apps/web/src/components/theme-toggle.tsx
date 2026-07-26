@@ -1,16 +1,17 @@
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { Building2, Monitor, Moon, Sun } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useTheme, type Theme } from '@/hooks/use-theme';
 
-const ORDER: Theme[] = ['light', 'dark', 'system'];
+export const ORDER: Theme[] = ['light', 'dark', 'system', 'corporate'];
 const META: Record<Theme, { icon: typeof Sun; label: string }> = {
   light: { icon: Sun, label: 'Light' },
   dark: { icon: Moon, label: 'Dark' },
   system: { icon: Monitor, label: 'System' },
+  corporate: { icon: Building2, label: 'Corporate' },
 };
 
-/** Cycles the theme light → dark → system. Icon + accessible label reflect state. */
+/** Cycles the theme light → dark → system → corporate. Icon + accessible label reflect state. */
 export function ThemeToggle(): React.ReactElement {
   const { theme, setTheme } = useTheme();
   const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length]!;
