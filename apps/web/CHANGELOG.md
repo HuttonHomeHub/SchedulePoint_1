@@ -1,5 +1,20 @@
 # @repo/web
 
+## 0.50.2
+
+### Patch Changes
+
+- [#162](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/162) [`0221d71`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0221d71c9f2681b303dc2f97bed74c7dafb9f38c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): dragging a bar's end grows it by one working day per column
+
+  Resizing an existing activity had the same units bug the previous release fixed for drawing a new
+  one, one step further along. A 4-day activity that spans a weekend occupies six columns on the
+  diagram; dragging its end one column right sent seven — read as seven **working** days — and the bar
+  jumped to nine calendar days. One column of drag now means one working day of growth, on both the
+  finish and the start edge, and a start dragged onto a weekend lands on the next working day.
+
+  The duration shown in the chip while you drag is converted the same way, so it always states the
+  number the activity will actually have rather than a count of columns.
+
 ## 0.50.1
 
 ### Patch Changes
