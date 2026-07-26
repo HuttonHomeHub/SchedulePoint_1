@@ -449,8 +449,12 @@ export class CalendarRepository {
    * calendars plus every ORG-scoped one — which is exactly the set `assertCalendarUsableBy`
    * accepts for a plan/activity in that project, so a picker fed from this list can never
    * offer a calendar the write seam will reject. Same keyset cursor + shift include as the
-   * org list. The `project_id` branch is served by idx_calendars_project_created, the `ORG`
-   * branch by the org composite.
+   * org list. Index note (corrected after the M6 backend-performance review measured it): there
+   * is no `idx_calendars_project_created` composite — the M1 migration creates only the partial
+   * single-column `idx_calendars_project_id`. In practice the whole `OR` is served by the
+   * `(organization_id, created_at, id)` composite, which supplies the cursor ordering directly
+   * with the scope/project predicate applied as a cheap per-row recheck (measured: 0.56 ms at the
+   * ADR-0053 ceiling of 1,000 calendars). Do not add a composite on a guess — measure first.
    */
   findManyActiveForProject(params: {
     organizationId: string;

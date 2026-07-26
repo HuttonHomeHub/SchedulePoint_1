@@ -7,6 +7,15 @@ import { PlanCalendarPicker } from './PlanCalendarPicker';
 
 import { apiFetch } from '@/lib/api/client';
 
+// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE plan-calendar
+// picker — a flat, ungrouped native `<select>` over the org library (ADR-0024). The tier-grouped
+// `Combobox` the flag turns it into is asserted by the sibling `PlanCalendarPicker.scope.test.tsx`
+// (ADR-0053 §1/§4).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LIBRARY_SCOPING_ENABLED: false,
+}));
+
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const PLAN: PlanSummary = {

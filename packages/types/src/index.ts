@@ -989,7 +989,7 @@ export const CALENDAR_ERROR = {
     'This calendar is still used outside the project you are narrowing it to.',
   /** `scope: PROJECT` needs a `projectId`, and `scope: ORG` forbids one (→ 422). */
   CALENDAR_SCOPE_PROJECT_MISMATCH:
-    'A project calendar needs a projectId; an organisation calendar must not have one.',
+    'A project calendar must name the project it belongs to, and an organisation calendar must not name one.',
   /**
    * An **archived** calendar was bound to a plan, an activity or a resource (→ 422, ADR-0053 §4).
    * Archiving retires a calendar from pickers; every EXISTING binding stays live and keeps
@@ -1630,11 +1630,12 @@ export const RESOURCE_ERROR = {
    * parent itself (→ 422). A parent in ANOTHER organisation (or deleted/unknown) is deliberately a
    * plain 404 instead, so the tree never becomes a cross-tenant existence oracle.
    */
-  RESOURCE_PARENT_WRONG_SCOPE: 'That parent can’t be used.',
+  RESOURCE_PARENT_WRONG_SCOPE: 'That group can’t be used here. Choose a different group.',
   /** The proposed parent is the resource itself or one of its descendants (→ 409). */
   RESOURCE_PARENT_CYCLE: 'That would nest a resource inside itself.',
   /** The move would push the subtree past {@link RESOURCE_TREE_MAX_DEPTH} (→ 422). */
-  RESOURCE_TREE_TOO_DEEP: 'That group is nested too deeply.',
+  RESOURCE_TREE_TOO_DEEP:
+    'Resource groups can be nested up to 10 levels deep. Choose a group nearer the top.',
   /**
    * A `GROUP` was given a calendar, a capacity ceiling or a cost rate (→ 422). A grouping node
    * has none of those by definition — which is what makes it invisible to scheduling, levelling

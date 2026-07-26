@@ -1,5 +1,5 @@
 import { interchangeReportSchema, type InterchangeReport } from '@repo/interchange';
-import type { ApiError, ApiResponse } from '@repo/types';
+import type { ApiError, ApiResponse, CalendarScope } from '@repo/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
@@ -14,6 +14,21 @@ import { planKeys } from '@/lib/query/hierarchy-keys';
 const FILE_FIELD = 'file';
 
 /**
+ * The optional multipart field that decides where a source file's **global** calendars land
+ * (ADR-0053 §5). The server defaults it to `PROJECT` — tier the imported calendars to the plan's
+ * own project, so an import can never quietly grow the shared organisation library. `ORG` is the
+ * deliberate opt-in, and writing shared tenant state, so the UI gates it on `calendar:manage_org`.
+ */
+const GLOBAL_CALENDAR_SCOPE_FIELD = 'globalCalendarScope';
+
+/** One interchange upload: the picked file plus the import options that shape the mapping. */
+export interface InterchangeUpload {
+  file: File;
+  /** Omit for the safe default (`PROJECT`) — the field is then absent from the request. */
+  globalCalendarScope?: CalendarScope;
+}
+
+/**
  * POST a single file as `multipart/form-data` to an interchange endpoint and unwrap the standard
  * `{ data }` envelope, mapping any non-2xx to {@link ApiFetchError} exactly as {@link apiFetch} does.
  *
@@ -22,9 +37,13 @@ const FILE_FIELD = 'file';
  * header by hand omits the boundary and the server can't parse the parts). Cookies still flow
  * (`credentials: 'include'`) so the session + CSRF cookie ride along like every other write.
  */
-async function postFile<T>(path: string, file: File): Promise<T> {
+async function postFile<T>(path: string, upload: InterchangeUpload): Promise<T> {
   const form = new FormData();
-  form.append(FILE_FIELD, file);
+  form.append(FILE_FIELD, upload.file);
+  // Omitted entirely at the default, so the request stays byte-for-byte the pre-ADR-0053 one.
+  if (upload.globalCalendarScope !== undefined) {
+    form.append(GLOBAL_CALENDAR_SCOPE_FIELD, upload.globalCalendarScope);
+  }
 
   let response: Response;
   try {
@@ -78,8 +97,10 @@ function commitPath(orgSlug: string, projectId: string): string {
  */
 export function useDryRunImport(orgSlug: string, projectId: string) {
   return useMutation({
-    mutationFn: async (file: File): Promise<InterchangeReport> =>
-      interchangeReportSchema.parse(await postFile<unknown>(dryRunPath(orgSlug, projectId), file)),
+    mutationFn: async (upload: InterchangeUpload): Promise<InterchangeReport> =>
+      interchangeReportSchema.parse(
+        await postFile<unknown>(dryRunPath(orgSlug, projectId), upload),
+      ),
   });
 }
 
@@ -93,8 +114,8 @@ export function useDryRunImport(orgSlug: string, projectId: string) {
 export function useCommitImport(orgSlug: string, projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File): Promise<InterchangeCommitResult> =>
-      commitResultSchema.parse(await postFile<unknown>(commitPath(orgSlug, projectId), file)),
+    mutationFn: async (upload: InterchangeUpload): Promise<InterchangeCommitResult> =>
+      commitResultSchema.parse(await postFile<unknown>(commitPath(orgSlug, projectId), upload)),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) }),
   });

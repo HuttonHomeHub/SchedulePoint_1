@@ -15,9 +15,15 @@ import { apiFetch } from '@/lib/api/client';
  * so no calendars fetch is mocked here — only the create/update mutation hits `apiFetch`. (The
  * flag-off behaviour — no picker, value still round-trips — is covered by `ActivityFormDialog.test.tsx`.)
  */
+// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE per-activity
+// calendar picker — a flat, ungrouped native `<select>` over the org library (ADR-0037). The
+// tier-grouped `Combobox` the flag turns it into has its own suite,
+// `ActivityFormDialog.scope.test.tsx` (ADR-0053 §1/§4). Pinning both directions means neither
+// behaviour can regress unnoticed when the flag default moves.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_CALENDAR_ENABLED: true,
+  LIBRARY_SCOPING_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));

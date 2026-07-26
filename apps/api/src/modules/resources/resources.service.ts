@@ -6,7 +6,7 @@ import { RESOURCE_ERROR, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { acquireResourceWriteLock } from '../../common/db/resource-advisory-lock';
+import { acquireResourceWriteLocks } from '../../common/db/resource-advisory-lock';
 import { acquireResourceTreeWriteLock } from '../../common/db/resource-tree-advisory-lock';
 import {
   ConflictError,
@@ -412,8 +412,11 @@ export class ResourcesService {
         ? await resolveActiveSubtreeIds(tx, this.resources, resourceId, organization.id)
         : [resourceId];
       // Ascending id order — a fixed total order, so two concurrent deletes of overlapping
-      // branches acquire the shared keys in the same sequence and cannot deadlock.
-      for (const id of [...subtreeIds].sort()) await acquireResourceWriteLock(tx, id);
+      // branches acquire the shared keys in the same sequence and cannot deadlock. ONE statement,
+      // not one per descendant: a group's fan-out is unbounded (only its depth is capped), and a
+      // per-id loop would hold the org-wide tree lock for a round trip per row
+      // (backend-performance review: ~830 ms vs ~13 ms for a 2,000-row subtree).
+      await acquireResourceWriteLocks(tx, [...subtreeIds].sort());
 
       // A leaf keeps the single-resource count it has always used; only a GROUP needs the
       // subtree-wide one, so the ordinary delete path is unchanged in behaviour AND in queries.

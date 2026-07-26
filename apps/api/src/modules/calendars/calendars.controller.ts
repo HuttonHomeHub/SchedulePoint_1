@@ -63,7 +63,9 @@ export class CalendarsController {
     summary: "List an organisation's calendars (cursor-paginated).",
     description:
       'Returns the SHARED organisation library by default (`?scope=org`, ADR-0053); pass ' +
-      '`?scope=project` or `?scope=all` to include project-scoped calendars.',
+      '`?scope=project` or `?scope=all` to include project-scoped calendars. The inherited ' +
+      '`order` param is not used — rows are always returned oldest-first (`created_at, id`), ' +
+      'the order the cursor is built on.',
   })
   @ApiOkResponse({ type: CalendarResponseDto, isArray: true })
   async list(

@@ -141,13 +141,20 @@ Behaviours worth knowing before reaching for it:
 
 - **The current value always renders**, even when the page it came from is filtered
   away — `selectedLabel` supplies the text, falling back to `Loading…`/`Unavailable`.
-  A selection can therefore never silently blank.
+  A selection can therefore never silently blank. That **includes `emptyOption`**:
+  `value=''` renders its label ("None", "Inherit from plan", "Top level"), exactly as
+  the native `<select value="">` it replaces did. `''` with no `emptyOption` is the
+  only genuinely-unset state, and that is what `placeholder` is for.
 - **`badge` is part of the option's accessible name** (`"Standard, Archived"`), not a
   decorative pill — state is announced as well as seen (WCAG 1.4.1).
 - **`depth` indents** for a tree picker. Never the only cue: pair it with a badge, a
   group, or a text column elsewhere.
 - **"No matches" reflects `options`, not the reachable rows** — an `emptyOption` or a
   still-rendered selection never disguises a search that matched nothing.
+- **"Load more" is keyboard-operable** — it is a real option and the last stop in the
+  arrow-key sequence (Enter loads the next page without closing the popup or moving the
+  selection), because it is the only route to page 2+ of a server-searched library
+  (WCAG 2.1.1). Opening upwards with ArrowUp lands on the last real option, never on it.
 - **The listbox is in-flow (absolute), not portalled** — its consumers live inside the
   native `<dialog>` used by `Dialog`, where a body portal would render _behind_ the
   top layer.
@@ -158,6 +165,31 @@ Scope is intentionally minimal: single-select, list autocomplete (typing filters
 never rewrites the input), no multi-select and no free-text entry. A consumer needing
 more should extend this primitive rather than fork it. Behaviour + a11y contract:
 `components/ui/combobox.test.tsx`.
+
+## Primitive: `SearchField` (`components/ui/search-field.tsx`)
+
+The house **list search** control: a labelled input with a leading Lucide `Search`
+icon and an explicit clear button, over the shared `Input` — the `DESIGN_SYSTEM.md`
+"Search" contract made concrete.
+
+It exists because `type="search"`'s native ✕ is Chromium-only and never
+keyboard-reachable, so a bare `<Input type="search">` leaves keyboard and screen-reader
+users no way to clear a term. The clear affordance here is a real `<button>` with an
+accessible name; the native one is suppressed so there is exactly one.
+
+```tsx
+<SearchField
+  label="Search calendars" // visible label, never placeholder-only
+  placeholder="Search by name"
+  clearLabel="Clear calendar search" // the button's accessible name
+  value={term}
+  onChange={setTerm}
+/>
+```
+
+Presentational and fully controlled: the consumer owns the term, the debounce and the
+fetch. It does **not** own URL state either — a list screen's search belongs in typed
+search params, which is the route's job (`hooks/use-url-filter-state.ts`).
 
 ## Documentation requirements
 

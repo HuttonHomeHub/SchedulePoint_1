@@ -35,6 +35,10 @@ export {
 export {
   RESOURCE_KIND_LABELS,
   RESOURCE_CURVE_LABELS,
+  ANY_RESOURCE_KIND,
+  DEFAULT_RESOURCE_LIBRARY_FILTERS,
   resourceFormSchema,
   assignmentFormSchema,
+  type ResourceKindFilter,
+  type ResourceLibraryFilters,
 } from './schemas/resource-schemas';

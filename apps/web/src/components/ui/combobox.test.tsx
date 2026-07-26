@@ -264,6 +264,26 @@ describe('Combobox', () => {
       fireEvent.pointerDown(screen.getByRole('option', { name: 'Inherit from plan' }));
       expect(onChange).toHaveBeenCalledWith('');
     });
+
+    // A native `<select value="">` always showed the matching option's text. Blanking the field
+    // instead would lose the control's state (WCAG 4.1.2) — and "inherit"/"none" is the DEFAULT
+    // for most calendar pickers, so it is the most common state of all.
+    it('shows the empty option’s label when it is the selection, and keeps it selected', () => {
+      render(<Harness value="" emptyOption={{ label: 'None (all days work)' }} />);
+      expect(input()).toHaveValue('None (all days work)');
+      openWithKeyboard();
+      const empty = screen.getByRole('option', { name: 'None (all days work)' });
+      expect(empty).toHaveAttribute('aria-selected', 'true');
+      // Exactly one row — the empty option must not be duplicated by the "current value outside
+      // the page" fallback.
+      expect(screen.getAllByRole('option', { name: 'None (all days work)' })).toHaveLength(1);
+    });
+
+    it('still blanks (for the placeholder) when there is no empty option', () => {
+      render(<Harness value="" placeholder="Search calendars…" />);
+      expect(input()).toHaveValue('');
+      expect(input()).toHaveAttribute('placeholder', 'Search calendars…');
+    });
   });
 
   describe('list states', () => {
@@ -291,10 +311,32 @@ describe('Combobox', () => {
       const onChange = vi.fn();
       render(<Harness hasMore onLoadMore={onLoadMore} onChange={onChange} />);
       openWithKeyboard();
-      fireEvent.pointerDown(screen.getByRole('button', { name: 'Load more' }));
+      fireEvent.pointerDown(screen.getByRole('option', { name: 'Load more results' }));
       expect(onLoadMore).toHaveBeenCalledTimes(1);
       expect(input()).toHaveAttribute('aria-expanded', 'true');
       expect(onChange).not.toHaveBeenCalled();
+    });
+
+    // "Load more" is the ONLY route to page 2+ of a server-searched library, so a pointer-only
+    // affordance would strand keyboard users on the first page (WCAG 2.1.1 Keyboard).
+    it('reaches and activates "Load more" by keyboard alone, as the last row', () => {
+      const onLoadMore = vi.fn();
+      const onChange = vi.fn();
+      render(<Harness hasMore onLoadMore={onLoadMore} onChange={onChange} />);
+      openWithKeyboard();
+      fireEvent.keyDown(input(), { key: 'End' });
+      expect(input()).toHaveAttribute('aria-activedescendant', 'cb-load-more');
+      fireEvent.keyDown(input(), { key: 'Enter' });
+      expect(onLoadMore).toHaveBeenCalledTimes(1);
+      // Loading a page neither commits a value nor closes the popup.
+      expect(onChange).not.toHaveBeenCalled();
+      expect(input()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('opens upwards onto the last real option, never the "Load more" action', () => {
+      render(<Harness hasMore onLoadMore={vi.fn()} />);
+      fireEvent.keyDown(input(), { key: 'ArrowUp' });
+      expect(input()).toHaveAttribute('aria-activedescendant', 'cb-option-c');
     });
   });
 

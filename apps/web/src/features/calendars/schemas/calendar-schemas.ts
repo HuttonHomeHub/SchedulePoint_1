@@ -3,6 +3,7 @@ import {
   CALENDAR_SCOPES,
   STANDARD_WEEKDAYS_MASK,
   WorkingWeekdays,
+  type ArchivedFilter,
   type CalendarScope,
 } from '@repo/types';
 import { z } from 'zod';
@@ -22,6 +23,32 @@ export const CALENDAR_SCOPE_FILTER_LABELS: Record<CalendarScopeFilter, string> =
   org: 'Organisation',
   project: 'Project',
   all: 'All',
+};
+
+/**
+ * The calendar library screen's filter state — the three controls above the table, as one value.
+ * It is **URL state** (`docs/UX_STANDARDS.md`: filters are deep-linkable and reload-safe): the
+ * route owns it via `useUrlFilterState` and hands it to `CalendarsTable`, so a filtered view can
+ * be reloaded, bookmarked and pasted to a colleague.
+ *
+ * A `type` (not an `interface`) deliberately: only a type alias gets TypeScript's implicit index
+ * signature, which is what lets it satisfy the `Record<string, string>` constraint the generic
+ * URL-state hook uses.
+ */
+export type CalendarLibraryFilters = {
+  /** Free-text term, matched server-side against the calendar name (`?q=`). */
+  q: string;
+  /** Which tier(s) to list (`?scope=`). */
+  scope: CalendarScopeFilter;
+  /** Archive state to include (`?archived=`). */
+  archived: ArchivedFilter;
+};
+
+/** The untouched screen — every value here is omitted from the URL. */
+export const DEFAULT_CALENDAR_LIBRARY_FILTERS: CalendarLibraryFilters = {
+  q: '',
+  scope: 'org',
+  archived: 'exclude',
 };
 
 /**

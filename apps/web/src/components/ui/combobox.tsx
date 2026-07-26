@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -22,7 +23,11 @@ import { cn } from '@/lib/utils';
  * Behaviours worth knowing:
  * - **The current value always renders**, even when the server page it came from is filtered
  *   out — `selectedLabel` supplies its text (generalising the `missingCurrent` trick the
- *   calendar pickers each grew separately). A selection can therefore never silently blank.
+ *   calendar pickers each grew separately). A selection can therefore never silently blank, and
+ *   that includes the `emptyOption` selection (`value=''` shows "None"/"Inherit", exactly as the
+ *   native `<select>` it replaces did).
+ * - **"Load more" is keyboard-operable** — it is the last row in the arrow-key sequence, not a
+ *   pointer-only button, so page 2+ of a server-searched library is reachable without a mouse.
  * - **Grouped options** (`group`) render as `role="group"` with a visible, associated label —
  *   used for the ADR-0053 tier groups ("Organisation" / "This project").
  * - **Disabled options** are announced (`aria-disabled`) and skipped by keyboard navigation,
@@ -82,7 +87,11 @@ export interface ComboboxProps {
   loading?: boolean;
   /** The last load failed; shows an error row (the consumer surfaces the real message). */
   errored?: boolean;
-  /** More pages exist; renders a "Load more" row that calls `onLoadMore` without closing. */
+  /**
+   * More pages exist; renders a "Load more" row that calls `onLoadMore` without closing. The row
+   * is the last stop in the arrow-key sequence and activates on Enter as well as pointer, so
+   * page 2+ is reachable without a mouse (WCAG 2.1.1).
+   */
   hasMore?: boolean;
   onLoadMore?: (() => void) | undefined;
   placeholder?: string;
@@ -155,15 +164,21 @@ export function Combobox({
   // has filtered it out we synthesise a row from `selectedLabel` so the field never blanks and
   // the user can always see (and keep) what they chose — US-8's "current value outside the
   // filtered page" rule, previously re-implemented in each picker.
+  //
+  // `''` is a REAL selection whenever the consumer supplies an `emptyOption` ("None (all days
+  // work)", "Plan default (inherit)", "Top level"): a native `<select value="">` always showed
+  // that option's text, so blanking the field here would lose the control's state for sighted
+  // and AT users alike (WCAG 4.1.2 / 1.3.1). Only a `''` with NO empty option is "nothing
+  // selected" — that is the placeholder's job.
   const selectedOption = useMemo<ComboboxOption | null>(() => {
-    if (value === '') return null;
+    if (value === '') return emptyOption ? { value: '', label: emptyOption.label } : null;
     const found = options.find((option) => option.value === value);
     if (found) return found;
     return {
       value,
       label: selectedLabel ?? (loading ? PLACEHOLDER_LOADING : PLACEHOLDER_UNAVAILABLE),
     };
-  }, [value, options, selectedLabel, loading]);
+  }, [value, options, emptyOption, selectedLabel, loading]);
 
   // Rows in DOM order: the empty option, then the selected-but-missing row, then ungrouped
   // options, then each group. Selectable rows are numbered so `activeIndex` — and therefore
@@ -171,7 +186,13 @@ export function Combobox({
   const { rows, groups, selectableCount } = useMemo(() => {
     const leading: ComboboxOption[] = [];
     if (emptyOption) leading.push({ value: '', label: emptyOption.label });
-    if (selectedOption && !options.some((option) => option.value === selectedOption.value)) {
+    // The `''` selection is ALREADY the empty-option row above — re-adding it would render a
+    // duplicate. Only a real id that the current page no longer carries needs a synthesised row.
+    if (
+      selectedOption &&
+      selectedOption.value !== '' &&
+      !options.some((option) => option.value === selectedOption.value)
+    ) {
       leading.push(selectedOption);
     }
 
@@ -202,8 +223,24 @@ export function Combobox({
     () => [...rows, ...groups.flatMap((group) => group.rows)].filter((row) => row.activeIndex >= 0),
     [rows, groups],
   );
+
+  // "Load more" is the LAST row in the arrow-key sequence, not a pointer-only affordance: it is
+  // the only way to reach page 2+ of a server-searched library, so leaving it off the keyboard
+  // path stranded keyboard users on the first 20 rows (WCAG 2.1.1 Keyboard). It is a real
+  // `role="option"` so `aria-activedescendant` can address it, but activating it loads a page
+  // instead of committing a value — the popup stays open and the selection is untouched.
+  const loadMoreVisible = hasMore && !loading;
+  const loadMoreIndex = loadMoreVisible ? selectableCount : -1;
+  const navigableCount = selectableCount + (loadMoreVisible ? 1 : 0);
+  const loadMoreId = `${id}-load-more`;
+  const loadMoreActive = loadMoreIndex >= 0 && activeIndex === loadMoreIndex;
+
   const activeOption = selectable.find((row) => row.activeIndex === activeIndex)?.option;
-  const activeDescendantId = activeOption ? `${id}-option-${activeOption.value}` : undefined;
+  const activeDescendantId = loadMoreActive
+    ? loadMoreId
+    : activeOption
+      ? `${id}-option-${activeOption.value}`
+      : undefined;
 
   // Announce the result count whenever the list changes while open — a filtered listbox that
   // silently shrinks is invisible to a screen-reader user (WCAG 4.1.3 Status Messages).
@@ -277,8 +314,13 @@ export function Combobox({
     setActiveIndex(index);
   };
 
+  /** Load the next page without closing the popup or disturbing the active row (APG). */
+  const loadMore = (): void => {
+    onLoadMore?.();
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
-    const last = selectableCount - 1;
+    const last = navigableCount - 1;
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -287,7 +329,9 @@ export function Combobox({
         break;
       case 'ArrowUp':
         event.preventDefault();
-        if (!open) openList(last);
+        // Opening upwards lands on the last real OPTION, never the trailing "Load more" action —
+        // APG's "moves focus to the last option", and an action is a poor first thing to meet.
+        if (!open) openList(selectableCount - 1);
         else setActiveIndex(activeIndex <= 0 ? last : activeIndex - 1);
         break;
       case 'Home':
@@ -303,8 +347,14 @@ export function Combobox({
         setActiveIndex(last);
         break;
       case 'Enter':
-        if (!open || activeOption === undefined) break;
-        // Inside a Dialog an unhandled Enter would submit the form; a selection must not.
+        if (!open) break;
+        if (loadMoreActive) {
+          // Inside a Dialog an unhandled Enter would submit the form; loading a page must not.
+          event.preventDefault();
+          loadMore();
+          break;
+        }
+        if (activeOption === undefined) break;
         event.preventDefault();
         commit(activeOption);
         break;
@@ -423,7 +473,7 @@ export function Combobox({
           }}
           className="text-muted-foreground absolute inset-y-0 right-0 flex w-9 items-center justify-center disabled:opacity-50"
         >
-          <span aria-hidden="true">▾</span>
+          <ChevronDown aria-hidden="true" className="size-4" />
         </button>
       </div>
 
@@ -462,20 +512,26 @@ export function Combobox({
         {!loading && !errored && (noResults || selectableCount === 0)
           ? statusRow(emptyMessage)
           : null}
-        {hasMore && !loading ? (
-          <div role="presentation">
-            <button
-              type="button"
-              tabIndex={-1}
-              onPointerDown={(event) => {
-                // Loading another page must NOT close the popup or move the selection.
-                event.preventDefault();
-                onLoadMore?.();
-              }}
-              className="text-muted-foreground hover:text-foreground w-full rounded-sm px-2 py-1.5 text-left text-sm underline"
-            >
-              Load more
-            </button>
+        {loadMoreVisible ? (
+          // A real option (not a `tabIndex={-1}` button) so it sits in the arrow-key sequence and
+          // `aria-activedescendant` can address it — see `loadMoreIndex` above. `aria-selected` is
+          // false because it is an action, not a value.
+          <div
+            id={loadMoreId}
+            role="option"
+            aria-selected={false}
+            aria-label="Load more results"
+            onPointerDown={(event) => {
+              // Loading another page must NOT close the popup or move the selection.
+              event.preventDefault();
+              loadMore();
+            }}
+            className={cn(
+              'text-muted-foreground hover:text-foreground w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm underline',
+              loadMoreActive && 'bg-accent text-accent-foreground ring-ring ring-2 ring-inset',
+            )}
+          >
+            Load more
           </div>
         ) : null}
       </div>

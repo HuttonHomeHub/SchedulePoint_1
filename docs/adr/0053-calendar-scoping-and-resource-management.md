@@ -1,9 +1,11 @@
 # ADR-0053: Calendar scoping tiers & the resource management layer
 
-- **Status:** Accepted (M1 — §1 the tier, §2 the guard & lifecycle; M3 — §3 the resource
-  hierarchy; M4 — §4 archive, search & the shared combobox; M5 — §5 interchange tiering). Every
-  section is now accepted — see the acceptance-status ledger at the foot of this ADR.
-- **Date:** 2026-07-25
+- **Status:** **Accepted** — every section, and the web surface is **live** (`VITE_LIBRARY_SCOPING`
+  flipped default-ON at M6 enablement, 2026-07-26). Accepted per milestone: M1 — §1 the tier, §2 the
+  guard & lifecycle, §6 the parity gate; M3 — §3 the resource hierarchy; M4 — §4 archive, search &
+  the shared combobox; M5 — §5 interchange tiering. See the acceptance-status ledger at the foot of
+  this ADR.
+- **Date:** 2026-07-25 (M6 enablement 2026-07-26)
 - **Deciders:** Product Owner (scope, CQ-1…CQ-7), Solution Architect, Technical Lead;
   schema / CHECK / indexes / migration safety designed with the **database-architect** agent
 - **Feature spec:** [`docs/specs/library-scoping-and-manageability/feature-spec.md`](../specs/library-scoping-and-manageability/feature-spec.md)
@@ -435,6 +437,22 @@ rows loaded **by calendar id**; it never receives `organization_id`, and it will
 | §3 Resource hierarchy (`parent_id`, `GROUP`)                  | M3        | **Accepted** |
 | §4 `archived_at` on resources + calendars, search, combobox   | M4        | **Accepted** |
 | §5 Interchange tier mapping                                   | M5        | **Accepted** |
+| Web surface enabled by default (`VITE_LIBRARY_SCOPING`)       | M6        | **Live**     |
+
+**M6 enablement (2026-07-26).** The flag flipped once the deferred specialist gates ran over the
+whole epic diff and their blocking findings were folded: **ux** (library filters moved into typed
+URL search params; the shared `SearchField` with a leading icon and a real clear button; a Lucide
+chevron on the combobox; keyboard-operable "Load more"; archive badge/filter/action added to the
+project Calendars section), **accessibility** (the combobox now renders its `emptyOption` as the
+selection instead of blanking; the assignment resource error is wired to its control on both
+branches; the library tables announce their settled result count — WCAG 4.1.3), **api** (the
+missing 422/409 OpenAPI declarations on the resource create/update routes and the calendar-scope
+422 newly reachable on activity create/update) and **backend-performance** (the GROUP-delete
+per-descendant advisory-lock loop batched into one `unnest` statement — ~830 ms → ~13 ms for a
+2,000-row subtree, measured, while the org-wide tree lock is held). The flag-on Playwright journey
+`apps/web/e2e-library/library.spec.ts` proves the tier boundary and the archive/assignment
+distinction end to end and runs as its own CI step; the flag-off parity suites stay green with the
+flag explicitly pinned off, which is the rollback contract.
 
 ## References
 

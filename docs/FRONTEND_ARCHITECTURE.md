@@ -90,7 +90,18 @@ and components. Deleting a feature should mean deleting one folder.
   shell once (`_authed/` renders sidebar + header; children render into it).
 - **Typed params & search.** Path params and search params are validated with
   schemas; filters/pagination/sort live in typed search params (shareable,
-  reload-safe).
+  reload-safe). The shared helper is `hooks/use-url-filter-state.ts`
+  (`useUrlFilterState`): it reads a screen's filters out of the URL, writes them
+  back with `replace: true` (so typing in a search box never pushes one history
+  entry per keystroke), and **omits any value equal to its default**, so an
+  untouched screen keeps a clean URL. Validation is permissive — an unknown value
+  in a hand-edited URL degrades to that filter's default rather than throwing.
+- **The route owns URL state; the table takes it as props.** The hook needs a
+  router, but list components are also rendered directly by their unit tests, so
+  they stay router-free: the route calls `useUrlFilterState` and passes
+  `filters` + `onFiltersChange` down. A list component may fall back to its own
+  `useState` when neither prop is given (the controlled/uncontrolled idiom), but
+  a screen must always pass them. See `routes/calendars.tsx` / `routes/resources.tsx`.
 - **Guards.** `beforeLoad` on the `_authed` layout enforces authentication and
   redirects unauthenticated users to sign-in with a `redirect` param.
 - **Code splitting.** Routes are lazy by default (per-route chunks); the shell

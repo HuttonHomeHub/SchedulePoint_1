@@ -29,7 +29,7 @@ coverage/
 # Testing
 # ---------------------------------------------------------------------------
 playwright-report/
-playwright-report-edit/
+playwright-report-*/
 playwright/.cache/
 test-results/
 blob-report/

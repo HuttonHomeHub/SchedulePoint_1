@@ -653,6 +653,7 @@ export function ActivityResourcesDialog({
   const announce = useAnnounce();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const resourceSelectId = useId();
+  const resourceErrorId = `${resourceSelectId}-error`;
   const curveSelectId = useId();
   const curveHelpId = useId();
   // The loading-curve picker distributes units across the activity's span, so it is meaningless for a
@@ -844,6 +845,7 @@ export function ActivityResourcesDialog({
                       hasMore={search.hasMore}
                       onLoadMore={search.loadMore}
                       invalid={errors.resourceId !== undefined}
+                      {...(errors.resourceId ? { describedBy: resourceErrorId } : {})}
                       placeholder="Choose a resource…"
                       toggleLabel="Show resources"
                       emptyMessage="No resources match your search."
@@ -852,6 +854,7 @@ export function ActivityResourcesDialog({
                     <Select
                       id={resourceSelectId}
                       aria-invalid={errors.resourceId ? true : undefined}
+                      aria-describedby={errors.resourceId ? resourceErrorId : undefined}
                       {...register('resourceId')}
                     >
                       <option value="">Choose a resource…</option>
@@ -862,8 +865,16 @@ export function ActivityResourcesDialog({
                       ))}
                     </Select>
                   )}
+                  {/*
+                    The error is wired to the control on BOTH branches (`describedBy` /
+                    `aria-describedby`): a validation message a screen-reader user never hears
+                    while focused on the field fails WCAG 1.3.1 / 4.1.2 — the same idiom every
+                    other picker in this epic uses.
+                  */}
                   {errors.resourceId ? (
-                    <p className="text-destructive-text text-sm">{errors.resourceId.message}</p>
+                    <p id={resourceErrorId} className="text-destructive-text text-sm">
+                      {errors.resourceId.message}
+                    </p>
                   ) : null}
                 </div>
                 <TextField

@@ -14,7 +14,9 @@ import {
   CALENDAR_IN_USE,
   CALENDAR_SCOPE_FILTERS,
   CALENDAR_SCOPE_FILTER_LABELS,
+  DEFAULT_CALENDAR_LIBRARY_FILTERS,
   formatWorkingWeekdays,
+  type CalendarLibraryFilters,
   type CalendarScopeFilter,
 } from '../schemas/calendar-schemas';
 
@@ -26,11 +28,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
 import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { ApiFetchError } from '@/lib/api/client';
 import {
   ARCHIVED_BADGE,
@@ -79,6 +82,8 @@ export function CalendarsTable({
   orgSlug,
   canWrite,
   canManageOrg = canWrite,
+  filters,
+  onFiltersChange,
 }: {
   orgSlug: string;
   canWrite: boolean;
@@ -89,10 +94,22 @@ export function CalendarsTable({
    * unchanged; passing it explicitly lets the two diverge without touching this component.
    */
   canManageOrg?: boolean;
+  /**
+   * The filter state, owned by the ROUTE so it lives in the URL (deep-linkable, reload-safe —
+   * `docs/UX_STANDARDS.md`). Omit both to let the table manage its own (uncontrolled) — the
+   * idiom that keeps the component renderable outside a router, e.g. in its unit tests.
+   */
+  filters?: CalendarLibraryFilters;
+  onFiltersChange?: (patch: Partial<CalendarLibraryFilters>) => void;
 }): React.ReactElement {
-  const [scopeFilter, setScopeFilter] = useState<CalendarScopeFilter>('org');
-  const [search, setSearch] = useState('');
-  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>('exclude');
+  const [ownFilters, setOwnFilters] = useState<CalendarLibraryFilters>(
+    DEFAULT_CALENDAR_LIBRARY_FILTERS,
+  );
+  const { q: search, scope: scopeFilter, archived: archivedFilter } = filters ?? ownFilters;
+  const setFilters = (patch: Partial<CalendarLibraryFilters>): void => {
+    if (onFiltersChange) onFiltersChange(patch);
+    else setOwnFilters((previous) => ({ ...previous, ...patch }));
+  };
   // The request is driven by the SETTLED term, so a typing burst costs one round trip; the input
   // itself renders `search` and stays instant.
   const debouncedSearch = useDebouncedValue(search);
@@ -111,6 +128,7 @@ export function CalendarsTable({
   const searchId = useId();
   const archivedFilterId = useId();
   const explainerId = useId();
+  const scopeHintId = useId();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<CalendarSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -128,11 +146,18 @@ export function CalendarsTable({
     LIBRARY_SCOPING_ENABLED &&
     (search.trim() !== '' || archivedFilter !== 'exclude' || scopeFilter !== 'org');
 
-  const clearFilters = (): void => {
-    setSearch('');
-    setArchivedFilter('exclude');
-    setScopeFilter('org');
-  };
+  // A debounced search that silently reshapes the table is invisible to a screen-reader user
+  // (WCAG 4.1.3) — announce the settled count, exactly as the Combobox does for its listbox.
+  useResultCountAnnouncement({
+    enabled: LIBRARY_SCOPING_ENABLED,
+    pending: calendars.isPending || calendars.isFetching,
+    count: calendars.data?.length ?? 0,
+    filterKey: `${debouncedSearch}|${scopeFilter}|${archivedFilter}`,
+    noun: 'calendar',
+    emptyMessage: 'No calendars match these filters.',
+  });
+
+  const clearFilters = (): void => setFilters(DEFAULT_CALENDAR_LIBRARY_FILTERS);
 
   const toggleArchived = (calendar: CalendarSummary): void => {
     setArchiveError(null);
@@ -278,23 +303,24 @@ export function CalendarsTable({
       {LIBRARY_SCOPING_ENABLED ? (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex min-w-56 flex-1 flex-col gap-1.5">
-              <Label htmlFor={searchId}>Search calendars</Label>
-              <Input
-                id={searchId}
-                type="search"
-                autoComplete="off"
-                placeholder="Search by name"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
+            <SearchField
+              id={searchId}
+              className="min-w-56 flex-1"
+              label="Search calendars"
+              placeholder="Search by name"
+              clearLabel="Clear calendar search"
+              value={search}
+              onChange={(next) => setFilters({ q: next })}
+            />
             <div className="flex max-w-xs flex-col gap-1.5">
               <Label htmlFor={filterId}>Scope</Label>
               <Select
                 id={filterId}
                 value={scopeFilter}
-                onChange={(event) => setScopeFilter(event.target.value as CalendarScopeFilter)}
+                aria-describedby={scopeHintId}
+                onChange={(event) =>
+                  setFilters({ scope: event.target.value as CalendarScopeFilter })
+                }
               >
                 {CALENDAR_SCOPE_FILTERS.map((value) => (
                   <option key={value} value={value}>
@@ -309,7 +335,7 @@ export function CalendarsTable({
                 id={archivedFilterId}
                 value={archivedFilter}
                 aria-describedby={explainerId}
-                onChange={(event) => setArchivedFilter(event.target.value as ArchivedFilter)}
+                onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
               >
                 {ARCHIVED_FILTERS.map((value) => (
                   <option key={value} value={value}>
@@ -319,6 +345,14 @@ export function CalendarsTable({
               </Select>
             </div>
           </div>
+          {/* The screen is titled plainly "Calendars" but shows only the SHARED library by
+              default, so say so — a planner who never learns the tier exists would otherwise
+              conclude a project calendar had been lost. */}
+          <p id={scopeHintId} className="text-muted-foreground text-sm">
+            {scopeFilter === 'org'
+              ? 'Showing the shared organisation library. Switch Scope to see calendars that belong to a single project.'
+              : 'A project calendar can only be used by that project’s plans and activities.'}
+          </p>
           <p id={explainerId} className="text-muted-foreground text-sm">
             {ARCHIVE_EXPLAINER}
           </p>

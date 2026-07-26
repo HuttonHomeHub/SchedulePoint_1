@@ -157,6 +157,9 @@ describe('CalendarFormDialog — scope choice (flag on)', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Site shutdown' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create calendar' }));
 
-    expect(await screen.findByText(/A project calendar needs a projectId/)).toBeInTheDocument();
+    // Plain-language copy — the message names the CHOICE, never the wire field (`projectId`).
+    expect(
+      await screen.findByText(/A project calendar must name the project it belongs to/),
+    ).toBeInTheDocument();
   });
 });

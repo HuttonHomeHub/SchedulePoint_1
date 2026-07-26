@@ -510,8 +510,8 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   start-edge resize + lag drag → **M4/M5** the bar/link **visual refresh** (token-resolved, inside
   the Canvas-2D ≤ 4 ms p95 @ 2,000 budget) — all landed. Builds on
   ADR-0021/0022/0023/0028/0036/0048.
-- **ADR-0053** _(Accepted: M1 §1–§2 + §6; **M3: §3**; **M4: §4**; **M5: §5** — the
-  library-scoping epic, web behind `VITE_LIBRARY_SCOPING`)_ — Calendar scoping tiers & the resource
+- **ADR-0053** _(**Accepted** — every section; the library-scoping epic's web surface is **live**,
+  `VITE_LIBRARY_SCOPING` **default-on** 2026-07-26)_ — Calendar scoping tiers & the resource
   management layer: give calendars P6's missing **project tier** — a `CalendarScope { ORG, PROJECT }`
   discriminator + a nullable `calendars.project_id` (FK RESTRICT) pinned together by a **fail-closed**
   `CASE … ELSE false` CHECK (the ADR-0046 precedent), with name uniqueness split into **two partial
@@ -593,6 +593,29 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   Postgres forbids using an enum label in the transaction that added it. Web surface behind the existing
   `VITE_LIBRARY_SCOPING` (depth-first rows + a `Group` column + a "Not assignable" badge + a parent
   picker; groups excluded from the assignment picker), flag-off byte-for-byte.
+  **M6 (landed) is the enablement milestone:** `VITE_LIBRARY_SCOPING` flips **default-ON**
+  (2026-07-26) once the deferred specialist gates ran over the whole epic diff and every blocking
+  finding was folded — **ux** (the two library screens' filters moved into typed **URL search
+  params**, so a filtered view is deep-linkable and survives a reload; a shared `SearchField`
+  primitive with a leading Lucide icon and a real, keyboard-operable clear button; the combobox's
+  raw `▾` glyph replaced with `ChevronDown`; **"Load more" made keyboard-reachable** as the last row
+  in the arrow-key sequence — WCAG 2.1.1; archive badge/filter/action added to the project Calendars
+  section, which previously made an archived project calendar vanish from the one screen listing
+  it), **accessibility** (the combobox renders its `emptyOption` label as the selection instead of
+  blanking — "None"/"Inherit" is the most common state of all; the assignment resource error wired
+  to its control on both branches; the library tables **announce their settled result count** —
+  WCAG 4.1.3 Status Messages), **api** (the missing 422/409 OpenAPI declarations on the resource
+  create/update routes, and the calendar-scope 422 newly reachable on activity create/update) and
+  **backend-performance** (the GROUP-delete **per-descendant advisory-lock loop batched into one
+  `unnest` statement** — measured ~830 ms → ~13 ms for a 2,000-row subtree, all of it previously
+  spent holding the org-wide resource-tree lock). It also closes TECH_DEBT #55 by adding the
+  `globalCalendarScope` import control (a `calendar:manage_org`-gated checkbox that re-runs the
+  dry-run, so the report always describes the import being confirmed), and adds the flag-on
+  Playwright journey `apps/web/e2e-library/library.spec.ts` (`pnpm --filter @repo/web
+test:e2e:library`, its own CI step) proving the tier boundary and the archive-is-not-delete
+  distinction end to end. The flag-off parity suites are **kept and pinned** (`vi.mock` of
+  `@/config/env` with `LIBRARY_SCOPING_ENABLED: false`) rather than weakened — that is the rollback
+  contract.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

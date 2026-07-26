@@ -98,6 +98,7 @@ export function ProjectDetailScreen(): React.ReactElement {
               projectId={projectId}
               projectName={project.data.name}
               canImport={canImport}
+              canManageOrgCalendars={canManageOrgCals}
             />
             {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
           </div>

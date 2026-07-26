@@ -369,13 +369,13 @@ so **no existing call changes shape or meaning**.
 
 **New rejections** (every other calendar status code is unchanged):
 
-| Status | `details.reason`                   | When                                                                                                                                                                                  |
-| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 422    | `CALENDAR_WRONG_SCOPE`             | A PROJECT-scoped calendar was assigned to a plan or activity **outside** its owning project. `details.projectId` names the owner.                                                     |
-| 422    | `RESOURCE_REQUIRES_ORG_CALENDAR`   | A PROJECT-scoped calendar was assigned to a **resource** — the pool is org-global (ADR-0039), so a resource may only hold an org-global calendar.                                     |
-| 422    | `CALENDAR_SCOPE_PROJECT_MISMATCH`  | `scope: PROJECT` without a `projectId`, or `scope: ORG` with one.                                                                                                                     |
-| 409    | `CALENDAR_SCOPE_NARROWING_BLOCKED` | Narrowing an ORG calendar while active plans/activities outside the target project — or **any** active resource — still use it. `details` carries `{ plans, activities, resources }`. |
-| 409    | `DUPLICATE_CALENDAR`               | A name collision **within a tier**. The same name in two different projects, or in a project and the org library, is allowed by design.                                               |
+| Status | `details.reason`                   | When                                                                                                                                                                                           |
+| ------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `CALENDAR_WRONG_SCOPE`             | A PROJECT-scoped calendar was assigned to a plan or activity **outside** its owning project. `details.projectId` names the owner.                                                              |
+| 422    | `RESOURCE_REQUIRES_ORG_CALENDAR`   | A PROJECT-scoped calendar was assigned to a **resource** — the pool is org-global (ADR-0039), so a resource may only hold an org-global calendar. `details` carries the offending `projectId`. |
+| 422    | `CALENDAR_SCOPE_PROJECT_MISMATCH`  | `scope: PROJECT` without a `projectId`, or `scope: ORG` with one.                                                                                                                              |
+| 409    | `CALENDAR_SCOPE_NARROWING_BLOCKED` | Narrowing an ORG calendar while active plans/activities outside the target project — or **any** active resource — still use it. `details` carries `{ plans, activities, resources }`.          |
+| 409    | `DUPLICATE_CALENDAR`               | A name collision **within a tier**. The same name in two different projects, or in a project and the org library, is allowed by design.                                                        |
 
 A calendar id from **another organisation**, soft-deleted, or unknown remains an indistinguishable **404**
 at every seam — the tier is never a cross-tenant existence oracle. Scope-filtered listing is a **usability**
@@ -462,6 +462,12 @@ case-insensitive substring match bounded by the org filter; there is deliberatel
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses
   include `meta.nextCursor` and `meta.hasMore`.
 - Filtering via explicit query params; sorting via `?sort=field&order=asc|desc`.
+- **A list whose cursor is keyset-ordered may not honour `order`.** The shared
+  `PaginationQueryDto` accepts `order` everywhere, but a cursor built on
+  `(created_at, id)` has exactly one valid direction, so several lists (the
+  calendar, project-calendar and resource libraries; the recycle bin) return
+  oldest-first regardless. Where that is the case, **say so in the route's
+  `@ApiOperation` description** rather than silently ignoring the param.
 - Always cap `limit` server-side to a sane maximum.
 - A list that is **inherently bounded and caller-owned** (e.g.
   `GET /organizations` — only the caller's memberships, no filters) may return an

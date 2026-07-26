@@ -10,6 +10,15 @@ import { ResourcesTable } from './ResourcesTable';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
+// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE library table —
+// a flat list with no search field, no kind/archived filters, no Group column and no archive row
+// action (ADR-0039). The flag-on surface is asserted by the sibling `ResourcesTable.hierarchy` and
+// `ResourcesTable.archive` suites (ADR-0053 §3/§4).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LIBRARY_SCOPING_ENABLED: false,
+}));
+
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

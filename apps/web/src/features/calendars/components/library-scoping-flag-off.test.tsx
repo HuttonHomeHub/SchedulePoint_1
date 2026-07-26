@@ -21,15 +21,26 @@ import type * as ApiClient from '@/lib/api/client';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 /**
- * **Flag-off parity for the whole ADR-0053 §1 web surface** (library-scoping M2).
+ * **Flag-off parity for the whole ADR-0053 web surface** (library-scoping M2/M4).
  *
- * `VITE_LIBRARY_SCOPING` defaults off, so this suite deliberately does NOT mock `@/config/env` — it
- * runs against the real, shipped configuration. Every touched screen must render exactly what it
- * rendered before the milestone: no Scope column, no scope filter, no scope control, no tier
- * grouping, no project section — and the org list must still request the same URL with no `?scope=`
- * param, so even the network traffic is unchanged. One suite covering every surface, so a future
+ * This is the **rollback contract**: with `VITE_LIBRARY_SCOPING=false`, every touched screen must
+ * render exactly what it rendered before the epic — no Scope column, no scope filter, no scope
+ * control, no tier grouping, no project section, no search box, no archived filter, and every
+ * picker a flat native `<select>` — and the org list must still request the same URL with no
+ * `?scope=` param, so even the network traffic is unchanged. One suite covering every surface, so a
  * change that leaks the surface past the flag fails here regardless of which component it touched.
+ *
+ * The flag is **explicitly pinned off** below. It shipped default-off (M2–M5) and flipped
+ * default-ON at M6 enablement (2026-07-26); pinning keeps this suite asserting the rollback path
+ * rather than silently becoming a duplicate of the flag-on suites when the default moved. The
+ * flag-ON behaviour is asserted by the sibling suites (`CalendarsTable.scope`/`.archive`,
+ * `PlanCalendarPicker.scope`, `ActivityFormDialog.scope`, `ResourceFormDialog.scope`/`.hierarchy`,
+ * `ResourcesTable.hierarchy`/`.archive`, `ActivityResourcesDialog.picker`).
  */
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LIBRARY_SCOPING_ENABLED: false,
+}));
 
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),

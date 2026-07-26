@@ -708,10 +708,14 @@ export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
 );
 
 /**
- * Calendar scoping tiers — the web surface for the ORG / PROJECT calendar split (ADR-0053 §1–§2,
- * spec `docs/specs/library-scoping-and-manageability/`, library-scoping M2). **OFF by default**
- * while the milestone's quality gates (a11y / ux / component review + the Playwright journey) run;
- * set `VITE_LIBRARY_SCOPING=true` to enable it in an environment. When on:
+ * Library scoping & manageability — the web surface for the ORG / PROJECT calendar tier, the
+ * resource hierarchy, the archive lifecycle and server-side library search (ADR-0053, spec
+ * `docs/specs/library-scoping-and-manageability/`). **ON by default** (2026-07-26) now that every
+ * milestone (M1 calendar-scope API → M2 calendar-scope web → M3 resource hierarchy → M4 archive +
+ * search + the shared combobox → M5 interchange tiering) has landed and the M6 enablement gates are
+ * green — the ux / accessibility / api / backend-performance reviews are folded in and the flag-on
+ * Playwright journey (`e2e-library/library.spec.ts` via `pnpm --filter @repo/web test:e2e:library`)
+ * is wired into CI. When on:
  *
  * - the **calendar library** screen gains a `Scope` badge column (Organisation / a named project)
  *   and a scope filter (Organisation · Project · All), reading the M1 `?scope=org|project|all` list;
@@ -719,14 +723,24 @@ export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
  *   project — its own plus every organisation one — off the M1
  *   `GET …/projects/:projectId/calendars` endpoint;
  * - **creating** a calendar gains a scope choice: the shared organisation library (additionally
- *   gated on `calendar:manage_org`) or the project it was opened from;
+ *   gated on `calendar:manage_org`) or the project it was opened from, and a calendar can be moved
+ *   between tiers (narrowing is refused with a 409 while anything outside the project uses it);
  * - the **plan** and **activity** calendar pickers read that project-usable list and group their
  *   options by tier, while the **resource** picker stays organisation-only (the API hard-rejects a
- *   project calendar on a resource — the pool is org-global, ADR-0039).
+ *   project calendar on a resource — the pool is org-global, ADR-0039);
+ * - the **resource library** nests under a `parent` tree with a non-assignable `GROUP` kind;
+ * - both libraries gain **archive / restore** (an archived row keeps scheduling every assignment it
+ *   already has, but leaves every picker) and a server-side **search** field, and every picker is
+ *   the shared APG `Combobox` reading a searched, paginated list — closing the 20-row truncation
+ *   defect;
+ * - **importing** a schedule tiers its calendars to the target project by default, with an opt-in
+ *   "add global calendars to the organisation library" choice (gated on `calendar:manage_org`).
  *
- * Frontend-only: every endpoint, error code and permission behind it shipped with M1, and the CPM
- * engine is untouched. Flag-off ⇒ no scope column, filter, section or grouping renders and every
- * list still requests today's default (the shared organisation library) — byte-for-byte the prior
- * behaviour (the flag-off parity tests).
+ * Frontend-only: every endpoint, error code and permission behind it shipped with M1/M3/M4/M5, and
+ * the CPM engine is untouched (the ADR-0034 recalc parity gate is structurally trivial). Set
+ * `VITE_LIBRARY_SCOPING=false` for a byte-for-byte rollback: no scope column, filter, section,
+ * grouping, tree, archive control or search field renders, every picker falls back to its native
+ * `<select>`, and every list requests today's default (the shared organisation library) — the
+ * flag-off parity suites.
  */
-export const LIBRARY_SCOPING_ENABLED = flagDefaultOff(import.meta.env.VITE_LIBRARY_SCOPING);
+export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRARY_SCOPING);

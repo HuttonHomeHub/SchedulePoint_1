@@ -116,7 +116,9 @@ describe('ActivityResourcesDialog — resource picker (flag on)', () => {
     await waitFor(() => expect(optionNames()).toContain('Crew 00 (Labour)'));
     // Page one stops at 20 rows — the 21st is NOT silently dropped, it is behind an explicit control.
     expect(optionNames()).not.toContain('Crew 20 (Labour)');
-    const loadMore = screen.getByRole('button', { name: 'Load more' });
+    // "Load more" is a real option in the listbox (not a pointer-only button), so it is reachable
+    // by keyboard as well — the M6 a11y fold, WCAG 2.1.1.
+    const loadMore = screen.getByRole('option', { name: 'Load more results' });
 
     fireEvent.pointerDown(loadMore);
     await waitFor(() => expect(optionNames()).toContain('Crew 24 (Labour)'));

@@ -222,16 +222,20 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   (`components/ui/combobox.tsx`), WAI-ARIA APG "Combobox with List Autocomplete"
   on semantic HTML (no Radix): type-ahead filtering, `aria-activedescendant`
   keyboard operation, grouped options, trailing state/tier badges folded into the
-  accessible name, tree indentation, an explicit "Load more" page, and an
+  accessible name, tree indentation, a keyboard-operable "Load more" page (a real
+  option at the end of the arrow-key sequence, not a pointer-only button), and an
   announced result count. Fully controlled and non-fetching — the consumer owns
   the query, the debounce and the paging. Use it wherever a native `<select>`
   would truncate or hide a large library; keep `<select>` for short, fixed option
   sets. See [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) for the usage contract.
 - **Pagination** — shared control paired with the DataTable; disabled
   prev/next at bounds; announces page changes; keyboard operable.
-- **Search** — labelled input with a leading search icon, debounced, clearable;
-  results expose loading/empty/error states; query reflected in URL search
-  params where it drives a list.
+- **Search** — the `SearchField` primitive (`components/ui/search-field.tsx`):
+  a labelled input with a leading Lucide search icon and a real, keyboard-operable
+  clear button (the native `type="search"` ✕ is Chromium-only and mouse-only, so it
+  is suppressed). Debounce, loading/empty/error states and the query's home in URL
+  search params belong to the consuming screen — see
+  [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md).
 - **Loading indicators** — Spinner (in-context) and progress (determinate work);
   buttons own their pending state. Prefer skeletons for content.
 - **Empty states** — every list/table/dashboard has a designed empty state:

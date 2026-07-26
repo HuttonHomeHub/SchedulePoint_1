@@ -1,10 +1,39 @@
+import { ARCHIVED_FILTERS, RESOURCE_KINDS } from '@repo/types';
 import { useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { PICKER_CALENDAR_FILTERS, useCalendars } from '@/features/calendars';
-import { CreateResourceButton, ResourcesTable } from '@/features/resources';
+import {
+  ANY_RESOURCE_KIND,
+  CreateResourceButton,
+  DEFAULT_RESOURCE_LIBRARY_FILTERS,
+  ResourcesTable,
+  type ResourceKindFilter,
+  type ResourceLibraryFilters,
+} from '@/features/resources';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import { pickParam, pickText, useUrlFilterState } from '@/hooks/use-url-filter-state';
+
+/** The kind filter's accepted URL values: a real kind, or `''` (which is also its default). */
+const KIND_FILTERS: readonly ResourceKindFilter[] = [ANY_RESOURCE_KIND, ...RESOURCE_KINDS];
+
+/**
+ * Parse the screen's three filters out of the URL. Unknown values degrade to the default rather
+ * than throwing. Module-level so the identity is stable across renders.
+ */
+function parseResourceFilters(raw: Record<string, unknown>): ResourceLibraryFilters {
+  return {
+    q: pickText(raw, 'q'),
+    kind: pickParam(raw, 'kind', KIND_FILTERS, DEFAULT_RESOURCE_LIBRARY_FILTERS.kind),
+    archived: pickParam(
+      raw,
+      'archived',
+      ARCHIVED_FILTERS,
+      DEFAULT_RESOURCE_LIBRARY_FILTERS.archived,
+    ),
+  };
+}
 
 /**
  * The organisation's resource library screen (`/orgs/$orgSlug/resources`), behind
@@ -17,6 +46,12 @@ export function ResourcesScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));
+  // The screen owns the library filters so they live in the URL (deep-linkable, reload-safe —
+  // docs/UX_STANDARDS.md); the table takes them as props and stays router-free.
+  const [filters, setFilters] = useUrlFilterState(
+    DEFAULT_RESOURCE_LIBRARY_FILTERS,
+    parseResourceFilters,
+  );
   // ORGANISATION calendars only, deliberately: the resource pool is org-global (ADR-0039), so the
   // API hard-rejects a project-scoped calendar on a resource with a 422 (ADR-0053 §2). The default
   // `?scope=org` list IS the usable set, so the picker can never offer one that would be refused.
@@ -50,6 +85,8 @@ export function ResourcesScreen(): React.ReactElement {
           calendars={calendars.data ?? []}
           calendarsLoading={calendars.isPending}
           calendarsError={calendars.isError}
+          filters={filters}
+          onFiltersChange={setFilters}
         />
       </div>
     </div>

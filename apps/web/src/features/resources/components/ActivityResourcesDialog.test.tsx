@@ -9,6 +9,15 @@ import { ActivityResourcesDialog } from './ActivityResourcesDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
+// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE assignment
+// editor — a flat native `<select>` over the whole resource library (ADR-0039). The searched,
+// paginated `Combobox` the flag turns it into is asserted by the sibling
+// `ActivityResourcesDialog.picker.test.tsx` (ADR-0053 §4).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LIBRARY_SCOPING_ENABLED: false,
+}));
+
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const CREW: ResourceSummary = {

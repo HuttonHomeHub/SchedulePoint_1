@@ -44,7 +44,7 @@ function jsonResponse(status: number, body: unknown): Response {
   } as Response;
 }
 
-function renderDialog(onClose = vi.fn()) {
+function renderDialog(onClose = vi.fn(), canManageOrgCalendars = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
@@ -55,6 +55,7 @@ function renderDialog(onClose = vi.fn()) {
           projectName="Tower"
           open
           onClose={onClose}
+          canManageOrgCalendars={canManageOrgCalendars}
         />
       </AnnouncerProvider>
     </QueryClientProvider>,
@@ -171,5 +172,61 @@ describe('ImportScheduleDialog', () => {
     pickFile(MAX_UPLOAD_BYTES + 1);
     expect(screen.getByRole('alert')).toHaveTextContent(/16 MiB/);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The calendar-tier import option (ADR-0053 §5, closing TECH_DEBT #55). The safe default —
+   * imported calendars belong to the target project — must ride in the request as an ABSENT field,
+   * so the flag-off/unpermitted path is byte-for-byte the pre-ADR-0053 upload.
+   */
+  describe('global-calendar tier option', () => {
+    const scopeOf = (call: number): FormDataEntryValue | null =>
+      (vi.mocked(fetch).mock.calls[call]![1]!.body as FormData).get('globalCalendarScope');
+
+    it('is offered only to a holder of calendar:manage_org', () => {
+      renderDialog(vi.fn(), false);
+      expect(screen.queryByLabelText(/organisation library/i)).not.toBeInTheDocument();
+      renderDialog(vi.fn(), true);
+      expect(screen.getAllByLabelText(/organisation library/i).length).toBeGreaterThan(0);
+    });
+
+    it('omits the field entirely at the safe default', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: REPORT }));
+      renderDialog(vi.fn(), true);
+      pickFile();
+      await screen.findByText('214');
+      expect(scopeOf(0)).toBeNull();
+    });
+
+    it('sends ORG when ticked, and re-runs the dry-run so the report matches the choice', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: REPORT }));
+      renderDialog(vi.fn(), true);
+      pickFile();
+      await screen.findByText('214');
+
+      fireEvent.click(screen.getByLabelText(/organisation library/i));
+
+      // A second dry-run fires — confirming a report that described the OTHER choice would be a lie.
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBe(2));
+      expect(vi.mocked(fetch).mock.calls[1]![0]).toContain('/interchange/dry-run');
+      expect(scopeOf(1)).toBe('ORG');
+    });
+
+    it('carries the same choice through to the commit', async () => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(jsonResponse(200, { data: REPORT }))
+        .mockResolvedValueOnce(jsonResponse(200, { data: REPORT }))
+        .mockResolvedValueOnce(jsonResponse(200, { data: { planId: 'plan-9', report: REPORT } }));
+      renderDialog(vi.fn(), true);
+      pickFile();
+      await screen.findByText('214');
+      fireEvent.click(screen.getByLabelText(/organisation library/i));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBe(2));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
+      await waitFor(() => expect(h.navigate).toHaveBeenCalled());
+      expect(vi.mocked(fetch).mock.calls[2]![0]).toContain('/interchange/commit');
+      expect(scopeOf(2)).toBe('ORG');
+    });
   });
 });

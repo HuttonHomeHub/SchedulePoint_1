@@ -15,6 +15,7 @@ import { InterchangeReportTable } from './InterchangeReportTable';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { CheckboxField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -41,12 +42,19 @@ export function ImportScheduleDialog({
   projectName,
   open,
   onClose,
+  canManageOrgCalendars = false,
 }: {
   orgSlug: string;
   projectId: string;
   projectName: string;
   open: boolean;
   onClose: () => void;
+  /**
+   * The caller holds `calendar:manage_org` (ADR-0053 §2). Only then is the "add this file's global
+   * calendars to the organisation library" option offered — it writes SHARED tenant state, so a
+   * Contributor-level importer must not be able to grow the org library as a side effect.
+   */
+  canManageOrgCalendars?: boolean;
 }): React.ReactElement {
   return (
     <Dialog
@@ -56,7 +64,13 @@ export function ImportScheduleDialog({
       title="Import schedule from file"
       description={`Review what will be imported into “${projectName}” before creating the plan.`}
     >
-      <ImportFlow orgSlug={orgSlug} projectId={projectId} onClose={onClose} />
+      <ImportFlow
+        orgSlug={orgSlug}
+        projectId={projectId}
+        projectName={projectName}
+        onClose={onClose}
+        canManageOrgCalendars={canManageOrgCalendars}
+      />
     </Dialog>
   );
 }
@@ -65,11 +79,15 @@ export function ImportScheduleDialog({
 function ImportFlow({
   orgSlug,
   projectId,
+  projectName,
   onClose,
+  canManageOrgCalendars,
 }: {
   orgSlug: string;
   projectId: string;
+  projectName: string;
   onClose: () => void;
+  canManageOrgCalendars: boolean;
 }): React.ReactElement {
   const navigate = useNavigate();
   const announce = useAnnounce();
@@ -78,6 +96,25 @@ function ImportFlow({
 
   const [file, setFile] = useState<File | null>(null);
   const [clientError, setClientError] = useState<ImportError | null>(null);
+  // ADR-0053 §5: the source file's GLOBAL calendars land in this project by default. Ticking this
+  // opts them into the shared organisation library instead. It shapes the MAPPING, so changing it
+  // re-runs the dry-run — the report a planner confirms must describe the import they will get.
+  const [globalCalendarsShared, setGlobalCalendarsShared] = useState(false);
+
+  const startDryRun = (picked: File, shared: boolean): void => {
+    dryRun.mutate(
+      { file: picked, ...(shared ? { globalCalendarScope: 'ORG' as const } : {}) },
+      {
+        // Announce that the report resolved so a screen-reader user not focused on the mounting
+        // report region still hears it — the Confirm button silently enabling otherwise (WCAG 4.1.3).
+        onSuccess: (report) => {
+          announce(
+            `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.`,
+          );
+        },
+      },
+    );
+  };
 
   const onPickFile = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const picked = event.target.files?.[0] ?? null;
@@ -91,29 +128,32 @@ function ImportFlow({
       setClientError(sizeError);
       return;
     }
-    dryRun.mutate(picked, {
-      // Announce that the report resolved so a screen-reader user not focused on the mounting
-      // report region still hears it — the Confirm button silently enabling otherwise (WCAG 4.1.3).
-      onSuccess: (report) => {
-        announce(
-          `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.`,
-        );
-      },
-    });
+    startDryRun(picked, globalCalendarsShared);
+  };
+
+  const onToggleGlobalCalendars = (shared: boolean): void => {
+    setGlobalCalendarsShared(shared);
+    commit.reset();
+    // A report already on screen described the OTHER choice — re-run rather than let a planner
+    // confirm an import the report does not match.
+    if (file && !clientError) startDryRun(file, shared);
   };
 
   const onConfirm = (): void => {
     if (!file || !dryRun.isSuccess || commit.isPending) return;
-    commit.mutate(file, {
-      onSuccess: ({ planId, report }) => {
-        announce(`Imported schedule — ${report.mapped.activities} activities. Opening the plan.`);
-        onClose();
-        void navigate({
-          to: '/orgs/$orgSlug/plans/$planId',
-          params: { orgSlug, planId },
-        });
+    commit.mutate(
+      { file, ...(globalCalendarsShared ? { globalCalendarScope: 'ORG' as const } : {}) },
+      {
+        onSuccess: ({ planId, report }) => {
+          announce(`Imported schedule — ${report.mapped.activities} activities. Opening the plan.`);
+          onClose();
+          void navigate({
+            to: '/orgs/$orgSlug/plans/$planId',
+            params: { orgSlug, planId },
+          });
+        },
       },
-    });
+    );
   };
 
   const errorMessage =
@@ -145,6 +185,21 @@ function ImportFlow({
           Primavera P6 (.xer) or Microsoft Project MSPDI (.xml) files up to {MAX_UPLOAD_LABEL}.
         </p>
       </div>
+
+      {/*
+        ADR-0053 §5. Imported calendars are tiered to this project by default, so importing three
+        P6 files can no longer quietly add a dozen shared "Standard 5 Day Workweek" calendars every
+        other project has to scroll past. The opt-out writes SHARED tenant state, so it is offered
+        only to a holder of `calendar:manage_org`.
+      */}
+      {canManageOrgCalendars ? (
+        <CheckboxField
+          label="Add this file’s global calendars to the organisation library"
+          checked={globalCalendarsShared}
+          onChange={(event) => onToggleGlobalCalendars(event.target.checked)}
+          hint={`Off (recommended): the file’s calendars belong to “${projectName}” alone. On: its global calendars join the shared library every project picks from.`}
+        />
+      ) : null}
 
       {errorMessage ? (
         <p id="interchange-file-error" role="alert" className="text-destructive-text text-sm">

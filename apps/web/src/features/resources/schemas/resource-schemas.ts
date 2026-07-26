@@ -1,6 +1,7 @@
 import {
   RESOURCE_CURVE_TYPES,
   RESOURCE_KINDS,
+  type ArchivedFilter,
   type ResourceCurveType,
   type ResourceKind,
   type ResourceSummary,
@@ -28,10 +29,44 @@ export function isResourceGroup(resource: Pick<ResourceSummary, 'kind'> | undefi
   return resource?.kind === 'GROUP';
 }
 
+/** The kind filter's "no filter" sentinel — `''` so it round-trips through a `<select>` value. */
+export const ANY_RESOURCE_KIND = '';
+
+/** The resource library's kind filter: a real kind, or the "all kinds" sentinel. */
+export type ResourceKindFilter = ResourceKind | typeof ANY_RESOURCE_KIND;
+
+/**
+ * The resource library screen's filter state — the three controls above the table, as one value.
+ * It is **URL state** (`docs/UX_STANDARDS.md`: filters are deep-linkable and reload-safe): the
+ * route owns it via `useUrlFilterState` and hands it to `ResourcesTable`.
+ *
+ * A `type` (not an `interface`) deliberately: only a type alias gets TypeScript's implicit index
+ * signature, which is what lets it satisfy the generic URL-state hook's `Record<string, string>`.
+ */
+export type ResourceLibraryFilters = {
+  /** Free-text term, matched server-side against name and code (`?q=`). */
+  q: string;
+  /** Kind to narrow to, or `''` for all (`?kind=`). */
+  kind: ResourceKindFilter;
+  /** Archive state to include (`?archived=`). */
+  archived: ArchivedFilter;
+};
+
+/** The untouched screen — every value here is omitted from the URL. */
+export const DEFAULT_RESOURCE_LIBRARY_FILTERS: ResourceLibraryFilters = {
+  q: '',
+  kind: ANY_RESOURCE_KIND,
+  archived: 'exclude',
+};
+
 /** One row of the resource library flattened into display order, with its nesting depth. */
 export interface ResourceTreeRow {
   resource: ResourceSummary;
-  /** 0 for a top-level row; +1 per `parentId` hop. Drives indentation and `aria-level`. */
+  /**
+   * 0 for a top-level row; +1 per `parentId` hop. Drives the row's visual indentation. Nesting is
+   * never conveyed by indentation alone — the always-present **Group** column names each row's
+   * parent in text, which is what carries the relationship non-visually (WCAG 1.3.1).
+   */
   depth: number;
 }
 

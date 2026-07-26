@@ -27,6 +27,9 @@ export { CalendarScopeBadge } from './components/CalendarScopeBadge';
 export { ProjectCalendarsSection } from './components/ProjectCalendarsSection';
 export {
   formatWorkingWeekdays,
+  CALENDAR_SCOPE_FILTERS,
   CALENDAR_SCOPE_LABELS,
+  DEFAULT_CALENDAR_LIBRARY_FILTERS,
+  type CalendarLibraryFilters,
   type CalendarScopeFilter,
 } from './schemas/calendar-schemas';

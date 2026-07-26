@@ -21,6 +21,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
@@ -57,7 +58,9 @@ export class ResourcesController {
     description:
       'Returns the flat library by default. `?parentId=<uuid>` narrows to one group’s direct ' +
       'children and `?parentId=null` to top-level rows (ADR-0053 §3); every row carries its own ' +
-      '`parentId`, so a client that pages the whole library can nest it without a second endpoint.',
+      '`parentId`, so a client that pages the whole library can nest it without a second ' +
+      'endpoint. The inherited `order` param is not used — rows are always returned oldest-first ' +
+      '(`created_at, id`), the order the cursor is built on.',
   })
   @ApiOkResponse({ type: ResourceResponseDto, isArray: true })
   async list(
@@ -77,8 +80,21 @@ export class ResourcesController {
   @ApiOperation({ summary: 'Create a resource (Planner or Org Admin).' })
   @ApiCreatedResponse({ type: ResourceResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiNotFoundResponse({ description: 'The calendarId is not an active calendar in this org.' })
-  @ApiConflictResponse({ description: 'A resource with this name or code already exists.' })
+  @ApiNotFoundResponse({
+    description: 'The calendarId or parentId is not an active row in this org.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A GROUP carries a scheduling field (GROUP_HAS_NO_SCHEDULING_FIELDS); the parent is not a ' +
+      'GROUP (RESOURCE_PARENT_NOT_GROUP) or sits at the depth ceiling (RESOURCE_TREE_TOO_DEEP); ' +
+      'or the calendarId is a PROJECT calendar (RESOURCE_REQUIRES_ORG_CALENDAR) or archived ' +
+      '(CALENDAR_ARCHIVED).',
+  })
+  @ApiConflictResponse({
+    description:
+      'A resource with this name or code already exists, or the parent would form a cycle ' +
+      '(RESOURCE_PARENT_CYCLE).',
+  })
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -104,8 +120,22 @@ export class ResourcesController {
   @ApiOperation({ summary: 'Update a resource (Planner or Org Admin; optimistic locking).' })
   @ApiOkResponse({ type: ResourceResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiNotFoundResponse({ description: 'The calendarId is not an active calendar in this org.' })
-  @ApiConflictResponse({ description: 'Stale version, or a name/code collision.' })
+  @ApiNotFoundResponse({
+    description: 'The calendarId or parentId is not an active row in this org.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A GROUP carries a scheduling field (GROUP_HAS_NO_SCHEDULING_FIELDS); the parent is not a ' +
+      'GROUP (RESOURCE_PARENT_NOT_GROUP), is out of scope (RESOURCE_PARENT_WRONG_SCOPE) or would ' +
+      'exceed the depth ceiling (RESOURCE_TREE_TOO_DEEP); or the calendarId is a PROJECT calendar ' +
+      '(RESOURCE_REQUIRES_ORG_CALENDAR) or archived (CALENDAR_ARCHIVED).',
+  })
+  @ApiConflictResponse({
+    description:
+      'Stale version, a name/code collision, a parent cycle (RESOURCE_PARENT_CYCLE), the ' +
+      'resource is still assigned (RESOURCE_IN_USE), or a GROUP still has children ' +
+      '(RESOURCE_GROUP_HAS_CHILDREN).',
+  })
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

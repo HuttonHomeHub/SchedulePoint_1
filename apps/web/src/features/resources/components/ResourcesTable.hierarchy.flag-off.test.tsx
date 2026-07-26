@@ -16,9 +16,15 @@ import type * as ApiClient from '@/lib/api/client';
  * SERVER's order, no Group column or badge appears, and the form offers neither a `GROUP` kind nor
  * a parent picker. This is what makes turning the flag off a real rollback rather than a hope.
  *
- * The flag is left at its real default here (no `@/config/env` mock) precisely so a change to that
- * default breaks this file.
+ * The flag is **explicitly pinned off** below. It shipped default-off (M3) and flipped default-ON
+ * at M6 enablement (2026-07-26); pinning keeps this file asserting the rollback path rather than
+ * silently becoming a duplicate of `ResourcesTable.hierarchy.test.tsx` once the default moved.
  */
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LIBRARY_SCOPING_ENABLED: false,
+}));
+
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

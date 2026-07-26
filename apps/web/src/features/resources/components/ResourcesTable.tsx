@@ -3,7 +3,6 @@ import {
   RESOURCE_KINDS,
   type ArchivedFilter,
   type CalendarSummary,
-  type ResourceKind,
   type ResourceSummary,
 } from '@repo/types';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -17,10 +16,14 @@ import {
   useUnarchiveResource,
 } from '../api/use-resources';
 import {
+  ANY_RESOURCE_KIND,
+  DEFAULT_RESOURCE_LIBRARY_FILTERS,
   RESOURCE_IN_USE,
   RESOURCE_KIND_LABELS,
   isResourceGroup,
   toResourceTreeRows,
+  type ResourceKindFilter,
+  type ResourceLibraryFilters,
   type ResourceTreeRow,
 } from '../schemas/resource-schemas';
 
@@ -31,11 +34,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
 import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { ApiFetchError } from '@/lib/api/client';
 import {
   ARCHIVED_BADGE,
@@ -43,9 +47,6 @@ import {
   ARCHIVE_EXPLAINER,
   isArchivedRow,
 } from '@/lib/library-filters';
-
-/** The kind filter's "no filter" sentinel — `''` so it round-trips through a `<select>` value. */
-const ANY_KIND = '';
 
 /** Friendly message for a delete blocked because the resource is still assigned. */
 function deleteErrorMessage(error: unknown): string {
@@ -94,16 +95,29 @@ export function ResourcesTable({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
+  filters,
+  onFiltersChange,
 }: {
   orgSlug: string;
   canWrite: boolean;
   calendars?: CalendarSummary[];
   calendarsLoading?: boolean;
   calendarsError?: boolean;
+  /**
+   * The filter state, owned by the ROUTE so it lives in the URL (deep-linkable, reload-safe —
+   * `docs/UX_STANDARDS.md`). Omit both to let the table manage its own (uncontrolled).
+   */
+  filters?: ResourceLibraryFilters;
+  onFiltersChange?: (patch: Partial<ResourceLibraryFilters>) => void;
 }): React.ReactElement {
-  const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<ResourceKind | typeof ANY_KIND>(ANY_KIND);
-  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>('exclude');
+  const [ownFilters, setOwnFilters] = useState<ResourceLibraryFilters>(
+    DEFAULT_RESOURCE_LIBRARY_FILTERS,
+  );
+  const { q: search, kind: kindFilter, archived: archivedFilter } = filters ?? ownFilters;
+  const setFilters = (patch: Partial<ResourceLibraryFilters>): void => {
+    if (onFiltersChange) onFiltersChange(patch);
+    else setOwnFilters((previous) => ({ ...previous, ...patch }));
+  };
   // The request follows the SETTLED term, so a typing burst costs one round trip.
   const debouncedSearch = useDebouncedValue(search);
   // Flag-off no filter can leave its default, so this is the same query, key and URL as before.
@@ -113,7 +127,7 @@ export function ResourcesTable({
       ? {
           q: debouncedSearch,
           archived: archivedFilter,
-          ...(kindFilter === ANY_KIND ? {} : { kind: kindFilter }),
+          ...(kindFilter === ANY_RESOURCE_KIND ? {} : { kind: kindFilter }),
         }
       : {},
   );
@@ -139,13 +153,20 @@ export function ResourcesTable({
 
   const filtersActive =
     LIBRARY_SCOPING_ENABLED &&
-    (search.trim() !== '' || kindFilter !== ANY_KIND || archivedFilter !== 'exclude');
+    (search.trim() !== '' || kindFilter !== ANY_RESOURCE_KIND || archivedFilter !== 'exclude');
 
-  const clearFilters = (): void => {
-    setSearch('');
-    setKindFilter(ANY_KIND);
-    setArchivedFilter('exclude');
-  };
+  const clearFilters = (): void => setFilters(DEFAULT_RESOURCE_LIBRARY_FILTERS);
+
+  // A debounced search that silently reshapes the table is invisible to a screen-reader user
+  // (WCAG 4.1.3) — announce the settled count, exactly as the Combobox does for its listbox.
+  useResultCountAnnouncement({
+    enabled: LIBRARY_SCOPING_ENABLED,
+    pending: resources.isPending || resources.isFetching,
+    count: resources.data?.length ?? 0,
+    filterKey: `${debouncedSearch}|${kindFilter}|${archivedFilter}`,
+    noun: 'resource',
+    emptyMessage: 'No resources match these filters.',
+  });
 
   // Resource tree (ADR-0053 §3). With the flag ON the flat library is re-ordered depth-first and
   // each row carries its nesting depth; with it OFF every row is depth 0 in the server's own order
@@ -360,27 +381,23 @@ export function ResourcesTable({
       {LIBRARY_SCOPING_ENABLED ? (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex min-w-56 flex-1 flex-col gap-1.5">
-              <Label htmlFor={searchId}>Search resources</Label>
-              <Input
-                id={searchId}
-                type="search"
-                autoComplete="off"
-                placeholder="Search by name or code"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
+            <SearchField
+              id={searchId}
+              className="min-w-56 flex-1"
+              label="Search resources"
+              placeholder="Search by name or code"
+              clearLabel="Clear resource search"
+              value={search}
+              onChange={(next) => setFilters({ q: next })}
+            />
             <div className="flex max-w-xs flex-col gap-1.5">
               <Label htmlFor={kindFilterId}>Kind</Label>
               <Select
                 id={kindFilterId}
                 value={kindFilter}
-                onChange={(event) =>
-                  setKindFilter(event.target.value as ResourceKind | typeof ANY_KIND)
-                }
+                onChange={(event) => setFilters({ kind: event.target.value as ResourceKindFilter })}
               >
-                <option value={ANY_KIND}>All kinds</option>
+                <option value={ANY_RESOURCE_KIND}>All kinds</option>
                 {RESOURCE_KINDS.map((value) => (
                   <option key={value} value={value}>
                     {RESOURCE_KIND_LABELS[value]}
@@ -394,7 +411,7 @@ export function ResourcesTable({
                 id={archivedFilterId}
                 value={archivedFilter}
                 aria-describedby={explainerId}
-                onChange={(event) => setArchivedFilter(event.target.value as ArchivedFilter)}
+                onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
               >
                 {ARCHIVED_FILTERS.map((value) => (
                   <option key={value} value={value}>

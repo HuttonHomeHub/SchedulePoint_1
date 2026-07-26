@@ -152,4 +152,68 @@ describe('ProjectCalendarsSection', () => {
     renderSection({ rows: [] });
     expect(screen.getByText(/No calendars available/)).toBeInTheDocument();
   });
+
+  /**
+   * The M6 ux-review fold. Without these, archiving a project calendar removed it from the ONE
+   * screen that lists the project's calendars, with no badge, no filter and no way back — which is
+   * exactly how "archive" comes to read as "delete", this feature's named top usability risk.
+   */
+  describe('archive', () => {
+    const ARCHIVED_OWN = calendar({
+      id: 'cal-archived',
+      name: 'Winter shutdown',
+      scope: 'PROJECT',
+      projectId: 'proj-1',
+      archivedAt: '2026-02-01T00:00:00Z',
+    });
+
+    it('explains that archiving is not deleting, and offers the archived filter', () => {
+      renderSection();
+      expect(screen.getByLabelText('Show archived')).toHaveValue('exclude');
+      expect(screen.getByText(/keeps working and still schedules exactly as before/)).toBeVisible();
+    });
+
+    it('archives one of the project’s OWN calendars, never a shared organisation one', () => {
+      renderSection();
+      expect(screen.getByRole('button', { name: 'Archive Site shutdown' })).toBeInTheDocument();
+      // "Standard" is an ORG calendar: retiring shared tenant state belongs on the org library.
+      expect(screen.queryByRole('button', { name: 'Archive Standard' })).not.toBeInTheDocument();
+    });
+
+    it('badges an archived row and offers Unarchive', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, staleTime: Infinity },
+          mutations: { retry: false },
+        },
+      });
+      // The archived row only appears once the filter includes it — which is the point.
+      queryClient.setQueryData(calendarKeys.forProject('acme', 'proj-1', { archived: 'include' }), [
+        ARCHIVED_OWN,
+      ]);
+      queryClient.setQueryData(calendarKeys.forProject('acme', 'proj-1'), []);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ProjectCalendarsSection
+            orgSlug="acme"
+            projectId="proj-1"
+            projectName="Harbour Tower"
+            canWrite
+            canManageOrg
+          />
+        </QueryClientProvider>,
+      );
+
+      fireEvent.change(screen.getByLabelText('Show archived'), { target: { value: 'include' } });
+
+      expect(await screen.findByText('Winter shutdown')).toBeInTheDocument();
+      expect(screen.getByText('Archived')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Unarchive Winter shutdown' })).toBeInTheDocument();
+    });
+
+    it('hides the archive action from a reader', () => {
+      renderSection({ canWrite: false });
+      expect(screen.queryByRole('button', { name: /^Archive /i })).not.toBeInTheDocument();
+    });
+  });
 });

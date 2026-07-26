@@ -229,6 +229,15 @@ jobs:
       - name: Web end-to-end tests (guest share links flag on)
         run: pnpm --filter @repo/web test:e2e:share
 
+      # Flag-ON library scoping & manageability journey (playwright.library.config.ts) serving the app
+      # with VITE_LIBRARY_SCOPING on (layered on the canvas authoring/toolbar/workspace/editing/pen
+      # flags), so the epic's two load-bearing claims are proven end to end (ADR-0053): a PROJECT
+      # calendar is offered to its own project's plan picker and absent from a sibling project's, and
+      # archiving a resource retires it from the picker while its existing assignment survives
+      # untouched. Runs last, after the prior runs tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (library scoping flag on)
+        run: pnpm --filter @repo/web test:e2e:library
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -247,6 +256,7 @@ jobs:
             apps/web/playwright-report-resource-view/
             apps/web/playwright-report-interchange/
             apps/web/playwright-report-share/
+            apps/web/playwright-report-library/
           if-no-files-found: ignore
           retention-days: 7
 
