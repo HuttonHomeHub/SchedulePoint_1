@@ -30,7 +30,7 @@ export function RailResizer({
       label="Resize Project Explorer"
       onResize={onResize}
       pointerToSize={pointerToSize}
-      className="bg-sidebar-border/60 hover:bg-sidebar-border focus-visible:bg-sidebar-ring hidden lg:block"
+      className="bg-border/60 hover:bg-border focus-visible:bg-ring hidden lg:block"
     />
   );
 }

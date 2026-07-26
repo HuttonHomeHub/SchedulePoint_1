@@ -25,6 +25,26 @@
 - Manual keyboard + screen-reader pass for any non-trivial UI; the
   **Accessibility Reviewer** agent audits it.
 
+### Colour-contrast gates (ADR-0055 §5)
+
+The Corporate theme shipped with six verified contrast defects past a human review, a
+component review and a green axe suite. None of those could have caught it — the class
+names were correct, and the axe checks only ever scanned the **default theme in its
+default surface**. So contrast is now gated by things that _compute_ rather than read:
+
+| Gate                                            | What it catches                                                                                                                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `styles/token-architecture.test.ts`             | An incomplete surface family, a `bg-chrome`-style utility leaking into the theme, a dropped `@theme inline`, a `var()` alias.                                                                          |
+| `styles/token-contrast.test.ts`                 | Every text pair < 4.5:1 and non-text pair < 3:1, across 3 themes × 3 surfaces × 2 flag states — including the placeholder pair (`--field` vs `--field-muted-foreground`) nobody had ever checked.      |
+| `pnpm --filter @repo/web test:e2e:designed-ui`  | The rendered article: axe over **all four picker options**, plus the six named defect sites read back through `getComputedStyle` — hover and `aria-current` states included, which axe never measures. |
+| `surface-seams.structural.test.ts`              | Application code hand-writing `data-surface` or reaching for `var(--chrome-*)`.                                                                                                                        |
+| ESLint `no-restricted-syntax` (colour literals) | A raw `#666` / `rgb()` / `oklch()` in a `className` or `style` — invisible to both the scope mechanism and the contrast suite.                                                                         |
+
+Two habits go with them: **a new token pair is added to the contrast matrix in the same
+change**, and **a soft rule is written down with its reason** (the `--border` ratio is
+reported, not asserted, because WCAG 1.4.11 exempts decorative separators — an unexplained
+missing assertion is how the next defect gets in).
+
 ## Performance
 
 Targets (align with `CLAUDE.md` §15; re-baseline with real data):

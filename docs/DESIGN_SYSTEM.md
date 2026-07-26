@@ -154,22 +154,26 @@ around a light working canvas — that resolves as a light scheme. It is applied
 `.corporate` class on `<html>`, a sibling of `.dark`; exactly one theme class is ever
 stamped, and light stamps none (it is the `:root` baseline).
 
-| Role                   | Colour                 | Token                                          |
-| ---------------------- | ---------------------- | ---------------------------------------------- |
-| Chrome (top bar, rail) | Navy `#14213D`         | `--app-header`, `--sidebar`                    |
-| Primary action         | Amber `#fca311`        | `--primary` (ink: navy `--primary-foreground`) |
-| Secondary surface      | Lighter navy `#1f3661` | `--secondary`, `--info`                        |
-| Page background        | Off-white `#f8f9fa`    | `--background`                                 |
-| Body text              | `#333`                 | `--foreground`                                 |
+| Role                    | Colour                 | Token                                            |
+| ----------------------- | ---------------------- | ------------------------------------------------ |
+| Chrome (top bar, rail)  | Navy `#14213D`         | `--chrome`, `--panel` (see Surface scopes below) |
+| Primary action (page)   | Navy `#14213D`         | `--primary` (ink: off-white)                     |
+| Primary action (chrome) | Amber `#fca311`        | `--chrome-primary` (ink: navy, 7.9:1)            |
+| Secondary surface       | Lighter navy `#1f3661` | `--secondary`, `--info`, `--accent` on chrome    |
+| Page background         | Off-white `#f8f9fa`    | `--background`                                   |
+| Body text               | `#333`                 | `--foreground`                                   |
 
 Two rules make the palette work rather than merely look right on a swatch sheet:
 
-1. **Amber is a fill, never ink or a line on a light surface.** `#fca311` on `#f8f9fa`
-   is **1.9:1** — it fails both the 4.5:1 text bar and the 3:1 non-text bar, so it can
-   never be body text, an icon-only glyph or a focus ring there. It carries navy ink at
-   **7.9:1**, which is what makes it a good button. Consequently the focus ring on light
-   surfaces is **navy** (`--ring`), and the brand's amber ring lives on the navy chrome
-   (`--sidebar-ring`), where it reaches 7.9:1.
+1. **Amber is a fill on navy, never a fill on the page and never ink or a line on a light
+   surface.** `#fca311` on `#f8f9fa` is **1.9:1** — it fails the 4.5:1 text bar, the 3:1
+   non-text bar, and (the case that is easy to miss) the 3:1
+   [1.4.11](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast) bar a solid
+   button's fill must clear against the page behind it. Darkening amber far enough to reach
+   3:1 lands on the bronze `--warning` already uses. So on the page the primary action is
+   the brand **navy** (12:1), and amber is the primary on the navy chrome, where it carries
+   navy ink at **7.9:1**. Same rule for focus: the ring is navy on light surfaces (`--ring`)
+   and amber on chrome (`--chrome-ring`, 7.9:1).
 2. **Near-critical moved to bronze.** `--warning` is the TSLD's near-critical bar fill,
    and in light/dark it is essentially this same amber. With amber promoted to `--primary`
    (which is the ordinary bar fill), a normal bar and a near-critical bar would have been
@@ -186,6 +190,46 @@ off-white **12:1**; amber fill / navy ink **7.9:1**; destructive `#b91c1c` on of
 the typeface per theme would shift layout and pull a second font at runtime for no
 accessibility or brand gain that colour doesn't already deliver. Corporate is a colour
 theme.
+
+### Surface scopes (ADR-0055)
+
+A **theme** answers "what does this product look like". A **surface scope** answers "what
+does this token mean _here_". Corporate is why the second question exists: its chrome is
+navy while its page is off-white, so `--muted-foreground` cannot be one colour. The first
+attempt gave the header three bespoke tokens and no muted grey, and every piece of secondary
+text in the chrome fell back to the page's grey — invisible on navy, in six separate places.
+
+There are three scopes:
+
+| Scope    | Where                     | Applied by                 |
+| -------- | ------------------------- | -------------------------- |
+| _(page)_ | everything by default     | `:root` — nothing to apply |
+| `chrome` | the top band              | `<Surface tone="chrome">`  |
+| `panel`  | the Project Explorer rail | `<Surface tone="panel">`   |
+
+Each theme block declares a **complete 15-token family** per scope — fill, foreground,
+muted-foreground, border, accent (+ foreground), primary (+ foreground), field (+ foreground
+
+- muted-foreground), destructive/warning/info text, and ring. A `[data-surface]` rule then
+  rebinds the ordinary semantic names to that family. Inside a scope, `bg-background` **is**
+  the header's navy and `text-muted-foreground` **is** a grey validated against it — so no
+  descendant component changes at all, and none of them learn where they are.
+
+Three rules keep this honest:
+
+- **A family is complete or it is a trap.** A missing token silently falls through to the
+  page's value, which is the original bug. `styles/token-architecture.test.ts` fails, naming
+  the missing token.
+- **The families have no Tailwind utilities.** `--chrome-*` and `--panel-*` are deliberately
+  absent from `@theme inline`, so `bg-chrome` does not compile. `<Surface>` is the only route
+  in, pinned by `components/ui/surface-seams.structural.test.ts`.
+- **`@theme inline` is load-bearing.** `inline` is what makes utilities compile to
+  `var(--token)` rather than a value resolved once at `:root`. Drop it and every scope
+  silently stops working, with no error and a diff that looks like a tidy-up. Pinned by test.
+
+**A field is not a surface.** `--field` / `--field-foreground` /
+`--field-muted-foreground` are their own pair set, because an input inside the navy chrome
+is white: its ink and its placeholder belong to the field's colour system, not the band's.
 
 ---
 

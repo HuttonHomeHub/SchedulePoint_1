@@ -24,6 +24,7 @@
     "e2e-resource-view",
     "e2e-interchange",
     "e2e-share",
-    "e2e-library"
+    "e2e-library",
+    "e2e-designed-ui"
   ]
 }

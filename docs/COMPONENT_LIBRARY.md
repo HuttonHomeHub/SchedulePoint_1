@@ -191,6 +191,42 @@ Presentational and fully controlled: the consumer owns the term, the debounce an
 fetch. It does **not** own URL state either — a list screen's search belongs in typed
 search params, which is the route's job (`hooks/use-url-filter-state.ts`).
 
+## Primitive: `Surface` (`components/ui/surface.tsx`)
+
+Marks a region as a **surface scope** (ADR-0055): the semantic token names keep their
+meaning but resolve to a family validated for that surface.
+
+```tsx
+<Surface tone="chrome" as="header" className="border-border sticky top-0 border-b">
+  {/* Descendants need no change: inside this scope, `text-muted-foreground` IS a grey
+      validated against the header's fill. */}
+</Surface>
+```
+
+**A scope is a component, not a class — deliberately.** The `--chrome-*` / `--panel-*`
+families are not mapped into Tailwind's theme, so `bg-chrome` does not compile. There is no
+class to hand-apply, which is what makes the boundary structural rather than a convention
+someone has to remember. `surface-seams.structural.test.ts` pins the allowlist.
+
+Contract:
+
+- `tone` — `'chrome'` (the top band) or `'panel'` (the Project Explorer rail).
+- `as` — the element to render (`header`, `nav`, `aside`…); defaults to `div`. Use
+  `className="contents"` when the scope should be a pure colour context with no box.
+- Renders `bg-background text-foreground`, which inside the scope _are_ the surface's own
+  colours.
+- **Nesting the same tone twice throws in development** and renders in production (the
+  `defineToolbar` precedent): an inner scope rebinding names to the values they already
+  hold means its author believes they are changing surface and are not.
+- **Never branch on surface in JS.** The context exists only for that nesting check and is
+  not exported. If a component needs to know where it is, the token vocabulary is
+  incomplete — fix the family, not the component.
+
+Overlays are outside every scope by construction: `Menu`, `Dialog`, `Sheet` and the
+combobox listbox portal to `document.body`, so a menu opened from the navy toolbar paints
+on `--popover`. That is intended — an overlay belongs to the page, not to the surface that
+summoned it.
+
 ## Documentation requirements
 
 - **TSDoc** on the component and any non-obvious prop.

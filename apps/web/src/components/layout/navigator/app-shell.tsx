@@ -10,6 +10,7 @@ import { useRailPrefs } from './use-rail-prefs';
 import { AppHeader } from '@/components/layout/app-header';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
+import { Surface } from '@/components/ui/surface';
 import { NAV_TREE_CRUD_ENABLED } from '@/config/env';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
@@ -103,7 +104,12 @@ function ShellFrame(): React.ReactElement {
                     focusToggleOnMount={interacted}
                   />
                 </div>
-                <RailResizer width={rail.width} onResize={rail.setWidth} />
+                {/* The resizer sits *between* the rail and `<main>`, but it is rail chrome, so
+                    it takes the rail's colours. `contents` keeps the scope purely a colour
+                    context — custom properties still inherit, and no box is added to the row. */}
+                <Surface tone="panel" className="contents">
+                  <RailResizer width={rail.width} onResize={rail.setWidth} />
+                </Surface>
               </>
             )}
             {/* The single workspace region — the one <main> for the page; routed screens

@@ -361,10 +361,8 @@ export function HierarchyTree({
               onPointerMove={showActions ? cancelLongPress : undefined}
               onPointerCancel={showActions ? cancelLongPress : undefined}
               className={cn(
-                'focus-visible:ring-sidebar-ring group flex cursor-pointer items-center gap-1.5 pr-1 text-sm outline-none focus-visible:ring-2',
-                isSelected
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                  : 'hover:bg-sidebar-accent/50',
+                'focus-visible:ring-ring group flex cursor-pointer items-center gap-1.5 pr-1 text-sm outline-none focus-visible:ring-2',
+                isSelected ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-accent/50',
               )}
               style={rowStyle(item.start, row.level)}
             >

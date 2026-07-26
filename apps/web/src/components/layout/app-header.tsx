@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { Surface } from '@/components/ui/surface';
 import { RESOURCES_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { OrgSwitcher } from '@/features/organizations';
@@ -33,7 +34,7 @@ export function AppHeader(): React.ReactElement {
   const shell = useShell();
 
   return (
-    <header className="border-app-header-border bg-app-header text-app-header-foreground sticky top-0 z-10 border-b">
+    <Surface tone="chrome" as="header" className="border-border sticky top-0 z-10 border-b">
       {/* Stays centred at `max-w-6xl` to match the still-centred route bodies; the
           full-bleed shell alignment lands with the M3 view migration. */}
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
@@ -123,6 +124,6 @@ export function AppHeader(): React.ReactElement {
           </Button>
         </div>
       </div>
-    </header>
+    </Surface>
   );
 }

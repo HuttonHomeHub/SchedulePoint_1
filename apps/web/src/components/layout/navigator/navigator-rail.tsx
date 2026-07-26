@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SheetHeader } from '@/components/ui/sheet';
+import { Surface } from '@/components/ui/surface';
 import { HierarchyTree, useNavigatorCrud, type UseExpansionState } from '@/features/navigator';
 import { AppVersionLine } from '@/features/system';
 
@@ -40,9 +41,11 @@ export function NavigatorRail({
   }, [focusToggleOnMount]);
 
   return (
-    <nav
+    <Surface
+      tone="panel"
+      as="nav"
       aria-label="Project Explorer"
-      className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-full min-h-0 flex-col border-r"
+      className="border-border flex h-full min-h-0 flex-col border-r"
     >
       {/* Shared drawer header chrome ({@link SheetHeader}) — class overrides keep this rail's exact look
           (sidebar border, fixed h-12/no padding, semibold title, gap-1, size-`icon` buttons). The
@@ -50,7 +53,7 @@ export function NavigatorRail({
           SheetHeader's own. */}
       <SheetHeader
         title="Project Explorer"
-        className="border-sidebar-border h-12 shrink-0 gap-1 px-4 py-0"
+        className="border-border h-12 shrink-0 gap-1 px-4 py-0"
         titleClassName="font-semibold tracking-tight"
         actionsClassName="gap-1"
         actions={
@@ -96,10 +99,10 @@ export function NavigatorRail({
         )}
       </div>
       {/* A quiet footer with both service versions — subtle build metadata, not a nav item. */}
-      <div className="border-sidebar-border shrink-0 border-t px-4 py-2">
+      <div className="border-border shrink-0 border-t px-4 py-2">
         <AppVersionLine />
       </div>
-    </nav>
+    </Surface>
   );
 }
 
@@ -120,7 +123,7 @@ export function NavigatorRailCollapsed({
   }, [focusToggleOnMount]);
 
   return (
-    <div className="bg-sidebar border-sidebar-border flex h-full flex-col items-center border-r py-2">
+    <Surface tone="panel" className="border-border flex h-full flex-col items-center border-r py-2">
       <Button
         ref={toggleRef}
         variant="ghost"
@@ -130,6 +133,6 @@ export function NavigatorRailCollapsed({
       >
         <PanelLeftOpen aria-hidden="true" className="size-4" />
       </Button>
-    </div>
+    </Surface>
   );
 }

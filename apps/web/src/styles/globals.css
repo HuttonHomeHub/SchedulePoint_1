@@ -82,25 +82,68 @@
   --chart-4: oklch(0.769 0.15 80);
   --chart-5: oklch(0.627 0.2 320);
 
-  /* App header surface (the top bar — chrome, not content).
-     In light/dark these deliberately alias the page surface the header already
-     used, so naming the concept changes nothing visually here. The Corporate
-     theme is what actually needs them: it paints the chrome navy while the
-     working canvas stays light, and the header can't follow `--background`
-     to do that. */
-  --app-header: oklch(1 0 0);
-  --app-header-foreground: oklch(0.145 0 0);
-  --app-header-border: oklch(0.922 0 0);
+  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
+     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
+     `panel` the navigator rail; the page is the `:root` case.
 
-  /* Sidebar surface (navigation shell) */
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.5 0.18 255);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.55 0.18 255);
+     These families are deliberately NOT mapped into `@theme inline` below, so
+     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
+     is the `[data-surface]` rule, which is what makes the boundary structural
+     rather than a convention someone has to remember.
+
+     Each family is COMPLETE. The bug this replaces was a three-token header stub
+     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
+     text in the chrome reached for the canvas grey, which was invisible the day
+     a theme made chrome and canvas diverge. A surface family is complete or it
+     is a trap. */
+
+  /* Light: chrome and panel carry TODAY's values, so this theme is byte-identical. */
+
+  /* chrome — the top band */
+  --chrome: oklch(1 0 0);
+  --chrome-foreground: oklch(0.145 0 0);
+  --chrome-muted-foreground: oklch(0.556 0 0);
+  --chrome-border: oklch(0.922 0 0);
+  --chrome-accent: oklch(0.97 0 0);
+  --chrome-accent-foreground: oklch(0.205 0 0);
+  --chrome-primary: oklch(0.5 0.18 255);
+  --chrome-primary-foreground: oklch(0.985 0 0);
+  --chrome-field: oklch(1 0 0);
+  --chrome-field-foreground: oklch(0.145 0 0);
+  --chrome-field-muted-foreground: oklch(0.556 0 0);
+  --chrome-destructive-text: oklch(0.505 0.21 27.5);
+  --chrome-warning-text: oklch(0.48 0.13 80);
+  --chrome-info-text: oklch(0.45 0.14 250);
+  --chrome-ring: oklch(0.55 0.18 255);
+
+  /* panel — the navigator rail */
+  --panel: oklch(0.985 0 0);
+  --panel-foreground: oklch(0.145 0 0);
+  --panel-muted-foreground: oklch(0.556 0 0);
+  --panel-border: oklch(0.922 0 0);
+  --panel-accent: oklch(0.97 0 0);
+  --panel-accent-foreground: oklch(0.205 0 0);
+  --panel-primary: oklch(0.5 0.18 255);
+  --panel-primary-foreground: oklch(0.985 0 0);
+  --panel-field: oklch(1 0 0);
+  --panel-field-foreground: oklch(0.145 0 0);
+  --panel-field-muted-foreground: oklch(0.556 0 0);
+  --panel-destructive-text: oklch(0.505 0.21 27.5);
+  --panel-warning-text: oklch(0.48 0.13 80);
+  --panel-info-text: oklch(0.45 0.14 250);
+  --panel-ring: oklch(0.55 0.18 255);
+
+  /* A form field's surface has never been the same concept as the page's;
+     pretending it was is what made an outline button invisible on navy. */
+  --field: oklch(1 0 0);
+  --field-foreground: oklch(0.145 0 0);
+  --field-muted-foreground: oklch(0.556 0 0);
+
+  /* The TSLD drawing ground and its alternating month band (ADR-0055 §4).
+     `--canvas` is valued identically to `--card` here so the S4 re-point of the
+     canvas painter is a no-op until the band lands. */
+  --canvas: oklch(1 0 0);
+  --canvas-band: oklch(0.975 0 0);
 
   /* Typography */
   --font-sans:
@@ -155,18 +198,62 @@
   --chart-4: oklch(0.82 0.16 82);
   --chart-5: oklch(0.7 0.19 320);
 
-  --app-header: oklch(0.145 0 0);
-  --app-header-foreground: oklch(0.985 0 0);
-  --app-header-border: oklch(1 0 0 / 10%);
+  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
+     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
+     `panel` the navigator rail; the page is the `:root` case.
 
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.65 0.17 255);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.65 0.17 255);
+     These families are deliberately NOT mapped into `@theme inline` below, so
+     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
+     is the `[data-surface]` rule, which is what makes the boundary structural
+     rather than a convention someone has to remember.
+
+     Each family is COMPLETE. The bug this replaces was a three-token header stub
+     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
+     text in the chrome reached for the canvas grey, which was invisible the day
+     a theme made chrome and canvas diverge. A surface family is complete or it
+     is a trap. */
+
+  /* Dark: chrome and panel carry TODAY's values, so this theme is byte-identical. */
+
+  /* chrome — the top band */
+  --chrome: oklch(0.145 0 0);
+  --chrome-foreground: oklch(0.985 0 0);
+  --chrome-muted-foreground: oklch(0.708 0 0);
+  --chrome-border: oklch(1 0 0 / 10%);
+  --chrome-accent: oklch(0.269 0 0);
+  --chrome-accent-foreground: oklch(0.985 0 0);
+  --chrome-primary: oklch(0.65 0.17 255);
+  --chrome-primary-foreground: oklch(0.205 0 0);
+  --chrome-field: oklch(0.145 0 0);
+  --chrome-field-foreground: oklch(0.985 0 0);
+  --chrome-field-muted-foreground: oklch(0.708 0 0);
+  --chrome-destructive-text: oklch(0.7 0.19 22);
+  --chrome-warning-text: oklch(0.85 0.14 82);
+  --chrome-info-text: oklch(0.82 0.11 245);
+  --chrome-ring: oklch(0.65 0.17 255);
+
+  /* panel — the navigator rail */
+  --panel: oklch(0.205 0 0);
+  --panel-foreground: oklch(0.985 0 0);
+  --panel-muted-foreground: oklch(0.708 0 0);
+  --panel-border: oklch(1 0 0 / 10%);
+  --panel-accent: oklch(0.269 0 0);
+  --panel-accent-foreground: oklch(0.985 0 0);
+  --panel-primary: oklch(0.65 0.17 255);
+  --panel-primary-foreground: oklch(0.205 0 0);
+  --panel-field: oklch(0.205 0 0);
+  --panel-field-foreground: oklch(0.985 0 0);
+  --panel-field-muted-foreground: oklch(0.708 0 0);
+  --panel-destructive-text: oklch(0.7 0.19 22);
+  --panel-warning-text: oklch(0.85 0.14 82);
+  --panel-info-text: oklch(0.82 0.11 245);
+  --panel-ring: oklch(0.65 0.17 255);
+
+  --field: oklch(0.145 0 0);
+  --field-foreground: oklch(0.985 0 0);
+  --field-muted-foreground: oklch(0.708 0 0);
+  --canvas: oklch(0.205 0 0);
+  --canvas-band: oklch(0.24 0 0);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -202,9 +289,15 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.321 0 0);
 
-  /* Brand — amber fills, navy ink (7.9:1). */
-  --primary: oklch(0.786 0.167 70);
-  --primary-foreground: oklch(0.252 0.056 264);
+  /* Brand — NAVY fills on the page, amber on the chrome. Amber is the accent that
+     makes this theme recognisable, but a solid amber button on the off-white page
+     is 1.92:1 against it: WCAG 1.4.11 asks for 3:1 where a fill is what identifies
+     a control, and darkening amber far enough to reach it lands on the bronze this
+     theme already uses for `--warning`. So amber goes where it is genuinely legible
+     — `--chrome-primary` (7.9:1 on navy), `--chrome-ring`, the `--accent` row wash
+     and `--chart-1` — and the page's primary is the brand navy at 12:1. */
+  --primary: oklch(0.252 0.056 264);
+  --primary-foreground: oklch(0.985 0 0);
   /* The lighter navy, as the quiet secondary surface. */
   --secondary: oklch(0.338 0.081 262);
   --secondary-foreground: oklch(0.985 0 0);
@@ -242,22 +335,146 @@
   --chart-4: oklch(0.62 0.115 55);
   --chart-5: oklch(0.55 0.14 300);
 
-  /* The navy chrome: top bar and navigator rail. */
-  --app-header: oklch(0.252 0.056 264);
-  --app-header-foreground: oklch(0.985 0 0);
-  --app-header-border: oklch(1 0 0 / 14%);
+  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
+     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
+     `panel` the navigator rail; the page is the `:root` case.
 
-  --sidebar: oklch(0.252 0.056 264);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.786 0.167 70);
-  --sidebar-primary-foreground: oklch(0.252 0.056 264);
-  --sidebar-accent: oklch(0.338 0.081 262);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 14%);
-  /* Amber belongs here: on navy it is 7.9:1, comfortably past the 3:1 a focus
-     indicator needs. This is the "amber focus ring" of the brand, placed where
-     it is actually legible. */
-  --sidebar-ring: oklch(0.786 0.167 70);
+     These families are deliberately NOT mapped into `@theme inline` below, so
+     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
+     is the `[data-surface]` rule, which is what makes the boundary structural
+     rather than a convention someone has to remember.
+
+     Each family is COMPLETE. The bug this replaces was a three-token header stub
+     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
+     text in the chrome reached for the canvas grey, which was invisible the day
+     a theme made chrome and canvas diverge. A surface family is complete or it
+     is a trap. */
+
+  /* Corporate: the navy family, COMPLETED. Every ink measured against the navy
+     fill (#14213d): foreground 16:1, muted-foreground 8.0:1, destructive 6.5:1,
+     warning 8.4:1, info 8.6:1, ring 7.9:1 — the pairings the previous stub never
+     had, which is exactly why its greys were invisible. Amber is the ring here
+     because on navy it clears the 3:1 a focus indicator needs nearly three times
+     over; the page's ring stays navy. The panel is navy TODAY — the light rail is
+     a value change landing at S3. */
+
+  /* chrome — the top band */
+  --chrome: oklch(0.252 0.056 264);
+  --chrome-foreground: oklch(0.985 0 0);
+  --chrome-muted-foreground: oklch(0.78 0.02 264);
+  --chrome-border: oklch(1 0 0 / 14%);
+  --chrome-accent: oklch(0.338 0.081 262);
+  --chrome-accent-foreground: oklch(0.985 0 0);
+  --chrome-primary: oklch(0.786 0.167 70);
+  --chrome-primary-foreground: oklch(0.252 0.056 264);
+  --chrome-field: oklch(1 0 0);
+  --chrome-field-foreground: oklch(0.321 0 0);
+  --chrome-field-muted-foreground: oklch(0.51 0 0);
+  --chrome-destructive-text: oklch(0.74 0.15 25);
+  --chrome-warning-text: oklch(0.8 0.14 70);
+  --chrome-info-text: oklch(0.8 0.09 245);
+  --chrome-ring: oklch(0.786 0.167 70);
+
+  /* panel — the navigator rail */
+  --panel: oklch(0.252 0.056 264);
+  --panel-foreground: oklch(0.985 0 0);
+  --panel-muted-foreground: oklch(0.78 0.02 264);
+  --panel-border: oklch(1 0 0 / 14%);
+  --panel-accent: oklch(0.338 0.081 262);
+  --panel-accent-foreground: oklch(0.985 0 0);
+  --panel-primary: oklch(0.786 0.167 70);
+  --panel-primary-foreground: oklch(0.252 0.056 264);
+  --panel-field: oklch(1 0 0);
+  --panel-field-foreground: oklch(0.321 0 0);
+  --panel-field-muted-foreground: oklch(0.51 0 0);
+  --panel-destructive-text: oklch(0.74 0.15 25);
+  --panel-warning-text: oklch(0.8 0.14 70);
+  --panel-info-text: oklch(0.8 0.09 245);
+  --panel-ring: oklch(0.786 0.167 70);
+
+  /* White fields on navy — the reference's date and filter inputs. Deliberately
+     per-theme: literal white would glare on Dark's near-black chrome. */
+  --field: oklch(1 0 0);
+  --field-foreground: oklch(0.321 0 0);
+  --field-muted-foreground: oklch(0.51 0 0);
+  --canvas: oklch(1 0 0);
+  --canvas-band: oklch(0.972 0.004 90);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Surface scopes — the rebind rules (ADR-0055 §1)                            */
+/*                                                                            */
+/* A scope keeps every semantic NAME and changes what it resolves to. Because  */
+/* `@theme inline` below compiles `bg-background` to `background-color:        */
+/* var(--background)` — the referenced variable, not a `:root`-resolved value  */
+/* — redeclaring that variable on an ancestor changes every utility beneath    */
+/* it. Custom properties inherit; utilities follow.                            */
+/*                                                                            */
+/* REMOVING `inline` FROM THE @theme BLOCK BREAKS THIS ENTIRELY: the tokens    */
+/* would compute once on `:root` and inherit as fixed values, and every scope  */
+/* below would silently do nothing. `token-architecture.test.ts` pins it.      */
+/*                                                                            */
+/* This is why `text-muted-foreground` in the header needs no edit to become   */
+/* correct: the name is right, only its binding was wrong.                     */
+/* ------------------------------------------------------------------------- */
+[data-surface='chrome'] {
+  --background: var(--chrome);
+  --foreground: var(--chrome-foreground);
+  --muted-foreground: var(--chrome-muted-foreground);
+  --border: var(--chrome-border);
+  --input: var(--chrome-border);
+  --accent: var(--chrome-accent);
+  --accent-foreground: var(--chrome-accent-foreground);
+  --primary: var(--chrome-primary);
+  --primary-foreground: var(--chrome-primary-foreground);
+  --field: var(--chrome-field);
+  --field-foreground: var(--chrome-field-foreground);
+  --field-muted-foreground: var(--chrome-field-muted-foreground);
+  --destructive-text: var(--chrome-destructive-text);
+  --warning-text: var(--chrome-warning-text);
+  --info-text: var(--chrome-info-text);
+  --ring: var(--chrome-ring);
+}
+
+[data-surface='panel'] {
+  --background: var(--panel);
+  --foreground: var(--panel-foreground);
+  --muted-foreground: var(--panel-muted-foreground);
+  --border: var(--panel-border);
+  --input: var(--panel-border);
+  --accent: var(--panel-accent);
+  --accent-foreground: var(--panel-accent-foreground);
+  --primary: var(--panel-primary);
+  --primary-foreground: var(--panel-primary-foreground);
+  --field: var(--panel-field);
+  --field-foreground: var(--panel-field-foreground);
+  --field-muted-foreground: var(--panel-field-muted-foreground);
+  --destructive-text: var(--panel-destructive-text);
+  --warning-text: var(--panel-warning-text);
+  --info-text: var(--panel-info-text);
+  --ring: var(--panel-ring);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Flag-keyed value overrides (ADR-0055 §6)                                   */
+/*                                                                            */
+/* Later milestones change token VALUES, not just structure — the light        */
+/* Corporate rail (S3) and the cream canvas ground (S4). Those values live      */
+/* here, keyed on an attribute the flag stamps on <html>, so "flag-off is       */
+/* byte-for-byte" stays true for colour as well as markup and a rollback is a   */
+/* single attribute rather than a revert.                                       */
+/*                                                                            */
+/* Both blocks are deliberately empty until their milestone fills them, and     */
+/* BOTH ARE DELETED when their flag is retired — the values fold back into the  */
+/* theme blocks above. If you find these still here with no flag, that is the   */
+/* cleanup that was missed.                                                     */
+/* ------------------------------------------------------------------------- */
+[data-designed-chrome] {
+  /* S3 fills this: Corporate's rail becomes a light panel. */
+}
+
+[data-canvas-visual-language] {
+  /* S4 fills this: the cream canvas ground and its month band. */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -297,17 +514,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --color-app-header: var(--app-header);
-  --color-app-header-foreground: var(--app-header-foreground);
-  --color-app-header-border: var(--app-header-border);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  --color-field: var(--field);
+  --color-field-foreground: var(--field-foreground);
+  --color-field-muted-foreground: var(--field-muted-foreground);
+  --color-canvas: var(--canvas);
+  --color-canvas-band: var(--canvas-band);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

@@ -238,6 +238,14 @@ jobs:
       - name: Web end-to-end tests (library scoping flag on)
         run: pnpm --filter @repo/web test:e2e:library
 
+      # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
+      # theme, which is how the Corporate theme shipped with six contrast defects past a green
+      # axe run. This one boots the shell once per picker option — light, dark, corporate, and
+      # system under dark emulation — and additionally asserts the six defect sites by name,
+      # because an invisible button is not an axe rule and axe measures no hover state.
+      - name: Web end-to-end tests (all four themes, accessibility)
+        run: pnpm --filter @repo/web test:e2e:designed-ui
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -257,6 +265,7 @@ jobs:
             apps/web/playwright-report-interchange/
             apps/web/playwright-report-share/
             apps/web/playwright-report-library/
+            apps/web/playwright-report-designed-ui/
           if-no-files-found: ignore
           retention-days: 7
 

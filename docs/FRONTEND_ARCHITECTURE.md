@@ -218,9 +218,27 @@ sequenceDiagram
 - Three modes: **light**, **dark**, **system**. A `ThemeProvider` (Context)
   stores the preference in `localStorage` and applies/removes the `.dark` class
   on `<html>`; `system` follows `prefers-color-scheme` live.
+- A fourth entry, **corporate**, is a brand skin rather than a colour scheme (a
+  `.corporate` class, sibling of `.dark`). Exactly one theme class is ever stamped.
 - To avoid a flash of the wrong theme, a tiny inline script in `index.html` sets
   the class before first paint.
 - Components never branch on theme in JS — tokens flip automatically (ADR-0006).
+- **Surface scopes** (ADR-0055) are the orthogonal axis: a theme says what the product
+  looks like, a scope says what a token means _in this region_. `<Surface tone="chrome">`
+  / `<Surface tone="panel">` stamp a `data-surface` attribute; a CSS rule rebinds the
+  ordinary semantic names to that surface's family. Components stay surface-agnostic —
+  `text-muted-foreground` in the header keeps its name and starts resolving to a grey
+  validated against the header's fill. Same rule as theme: **never branch on surface in
+  JS**; the context inside `Surface` carries only the nesting invariant and is not exported.
+- ⚠️ **`@theme inline` is load-bearing.** `inline` is what makes a utility compile to
+  `background-color: var(--background)` — the referenced variable — instead of a value
+  resolved once against `:root`. Rebinding that variable on an ancestor is the entire
+  scope mechanism. Remove `inline` and every scope silently does nothing: no error, no
+  failing build, and a diff that reads like a tidy-up. `styles/token-architecture.test.ts`
+  pins it.
+- ⚠️ **Declare token values literally, never as `var()` aliases.** A `--field: var(--background)`
+  written in `:root` is substituted at computed-value time, so `.dark` and `.corporate`
+  inherit **Light's** value and never override it. Each theme block restates its own values.
 
 ## Responsive strategy
 

@@ -10,7 +10,11 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+        // `text-foreground` is not decoration: a variant that states its own fill and then
+        // inherits its ink is a bug wherever it lands (ADR-0055 §2, defect D3) — on a dark
+        // surface it inherited light ink onto a light fill and vanished.
+        outline:
+          'border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
       },
