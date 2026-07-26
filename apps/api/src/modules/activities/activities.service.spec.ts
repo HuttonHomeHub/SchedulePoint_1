@@ -200,7 +200,13 @@ describe('ActivitiesService', () => {
     };
     const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     // Activity calendars are validated in-org via this repo (ADR-0037); default: id resolves.
-    calendars = { findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: 'cal-1' }) };
+    // An ORG-tier calendar is usable by any activity in the org (ADR-0053 §2); the
+    // wrong-project reject path is covered by the guard's own truth-table spec and e2e.
+    calendars = {
+      findActiveByIdInOrg: vi
+        .fn()
+        .mockResolvedValue({ id: 'cal-1', scope: 'ORG', projectId: null, archivedAt: null }),
+    };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new ActivitiesService(
       organizations as unknown as OrganizationsService,

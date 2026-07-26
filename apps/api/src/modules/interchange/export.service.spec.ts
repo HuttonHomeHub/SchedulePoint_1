@@ -66,10 +66,12 @@ function activityRow(overrides: Partial<Record<string, unknown>> = {}): Record<s
 }
 
 /** A stored calendar-with-exceptions row (Mon–Fri, one dated holiday exception). */
-function calendarRow(): Record<string, unknown> {
+function calendarRow(scope: 'ORG' | 'PROJECT' = 'PROJECT'): Record<string, unknown> {
   return {
     id: 'cal-1',
     name: 'Site 5-Day',
+    // The ADR-0053 tier, emitted to the file as `clndr_type` so an export→import round trip keeps it.
+    scope,
     shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
     exceptions: [
       {

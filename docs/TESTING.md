@@ -112,6 +112,32 @@ pnpm --filter @repo/api test:e2e     # API HTTP e2e (Supertest)
 pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 ```
 
+### Running a Playwright suite locally
+
+Each flag-on journey is its own config and script (`pnpm --filter @repo/web
+test:e2e:library`, `…:share`, `…:interchange`, …). The suite's `webServer` starts
+the API and the dev server itself, but Postgres must already be up and migrated:
+
+```bash
+sudo service postgresql start
+pnpm --filter @repo/api exec prisma migrate deploy
+pnpm --filter @repo/web test:e2e:library
+```
+
+If the sandbox's pre-installed Chromium is a different build from the one this
+Playwright version expects, point every config at it rather than downloading a
+second copy — they all honour the same escape hatch:
+
+```bash
+PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-<build>/chrome-linux/chrome \
+  pnpm --filter @repo/web test:e2e:library
+```
+
+Shared Playwright helpers live beside the suite they came from; the APG
+`Combobox` driver (`apps/web/e2e/combobox.ts`) is imported across suites, because
+`selectOption()` does not apply to a combobox and a label match is ambiguous
+against its toggle button and listbox.
+
 ## CI
 
 `pnpm test` runs in the **quality** job (with the Prisma client generated), and

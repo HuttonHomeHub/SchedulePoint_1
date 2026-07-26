@@ -44,8 +44,10 @@ function resource(overrides: Partial<Resource> = {}): Resource {
     code: null,
     description: null,
     kind: 'LABOUR',
+    parentId: null,
     maxUnitsPerHour: null,
     costPerUnit: null,
+    archivedAt: null,
     calendarId: null,
     version: 1,
     createdAt: new Date(),
@@ -226,6 +228,20 @@ describe('ResourceAssignmentService', () => {
       expect(assignments.create).not.toHaveBeenCalled();
     });
 
+    it('rejects assigning a GROUP outright — not merely as the driver (422 GROUP_NOT_ASSIGNABLE)', async () => {
+      // Stronger than the MATERIAL rule above: a GROUP may not be an assignment endpoint AT ALL
+      // (ADR-0053 §3). This single reject is what keeps levelling / the histogram / EV free of the
+      // resource tree, since all three start from assignments.
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ kind: 'GROUP' }));
+      await expect(
+        service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          resourceId: RESOURCE_ID,
+          isDriving: false,
+        }),
+      ).rejects.toMatchObject({ details: { reason: 'GROUP_NOT_ASSIGNABLE' } });
+      expect(assignments.create).not.toHaveBeenCalled();
+    });
+
     it('setting a driver first clears any other driver on the activity (a move, not a P2002)', async () => {
       await service.create(principalWith(ALL), 'acme', ACTIVITY_ID, {
         resourceId: RESOURCE_ID,
@@ -252,6 +268,29 @@ describe('ResourceAssignmentService', () => {
       await expect(
         service.create(principalWith(ALL), 'acme', ACTIVITY_ID, { resourceId: RESOURCE_ID }),
       ).rejects.toMatchObject({ details: { reason: 'DUPLICATE_ASSIGNMENT' } });
+    });
+
+    // ADR-0053 §4: a NEW assignment to an archived resource is refused; `update` deliberately
+    // has no counterpart (see the `update` describe block below).
+    it('rejects a NEW assignment to an ARCHIVED resource (422 RESOURCE_ARCHIVED)', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ archivedAt: new Date() }));
+      await expect(
+        service.create(principalWith(ALL), 'acme', ACTIVITY_ID, { resourceId: RESOURCE_ID }),
+      ).rejects.toMatchObject({ details: { reason: 'RESOURCE_ARCHIVED' } });
+      expect(assignments.create).not.toHaveBeenCalled();
+    });
+
+    it('re-checks the archive state under the resource lock (TOCTOU: archived between the pre-check and the tx)', async () => {
+      // The pre-transaction check sees the resource active; a concurrent archive lands before the
+      // in-transaction re-check (under the resource advisory lock) runs — so the re-check must
+      // catch it too, not just the pre-check.
+      resources.findActiveByIdInOrg
+        .mockResolvedValueOnce(resource({ archivedAt: null }))
+        .mockResolvedValueOnce(resource({ archivedAt: new Date() }));
+      await expect(
+        service.create(principalWith(ALL), 'acme', ACTIVITY_ID, { resourceId: RESOURCE_ID }),
+      ).rejects.toMatchObject({ details: { reason: 'RESOURCE_ARCHIVED' } });
+      expect(assignments.create).not.toHaveBeenCalled();
     });
   });
 
@@ -327,6 +366,15 @@ describe('ResourceAssignmentService', () => {
       expect(assignments.updateIfVersionMatches).not.toHaveBeenCalled();
     });
 
+    it('rejects setting the driver on when the resource is somehow a GROUP (422, defence in depth)', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ kind: 'GROUP' }));
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'asg-1', { isDriving: true, version: 1 }),
+      ).rejects.toMatchObject({ details: { reason: 'GROUP_NOT_ASSIGNABLE' } });
+      expect(assignments.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
     it('setting the driver on clears every OTHER driver on the activity (move)', async () => {
       assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
       await service.update(principalWith(ALL), 'acme', 'asg-1', { isDriving: true, version: 1 });
@@ -336,6 +384,33 @@ describe('ResourceAssignmentService', () => {
         expect.anything(),
         'asg-1',
       );
+    });
+
+    // ADR-0053 §4: unlike `create`, `update` has NO archive guard — editing an EXISTING
+    // assignment of a now-archived resource (units, rate, cost, curve) is maintaining history,
+    // not new exposure, and forbidding it would strand every assignment the moment its resource
+    // was retired.
+    it('does NOT reject editing an existing assignment of an ARCHIVED resource (plain field patch)', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ archivedAt: new Date() }));
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'asg-1', { budgetedUnits: 12, version: 1 }),
+      ).resolves.toBeDefined();
+      expect(assignments.updateIfVersionMatches).toHaveBeenCalled();
+    });
+
+    it('does NOT reject setting the driver on an ARCHIVED (but LABOUR) resource — no archive check on update at all', async () => {
+      // This exercises the ONE path `update` actually loads the resource on (setting the
+      // driver), which is exactly where a stray archive guard would most plausibly have been
+      // added by mistake — and proves there still isn't one.
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      resources.findActiveByIdInOrg.mockResolvedValue(
+        resource({ kind: 'LABOUR', archivedAt: new Date() }),
+      );
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'asg-1', { isDriving: true, version: 1 }),
+      ).resolves.toBeDefined();
+      expect(assignments.updateIfVersionMatches).toHaveBeenCalled();
     });
 
     it('patches Earned-Value cost inputs; a null budgetedCost clears to derive-at-read (EV1, ADR-0042)', async () => {

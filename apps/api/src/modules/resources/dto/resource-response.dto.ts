@@ -20,6 +20,17 @@ export class ResourceResponseDto implements ResourceSummary {
   @ApiProperty({ enum: ResourceKind })
   kind!: ResourceKind;
 
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
+      'The parent GROUP in the resource tree (ADR-0053 §3); null = top level. Returned on every ' +
+      'resource so a client can nest the flat list itself — the tree is acyclic, same-org and at ' +
+      'most 10 deep by service invariant, so no separate tree endpoint is needed.',
+  })
+  parentId!: string | null;
+
   @ApiProperty({ format: 'uuid', nullable: true, type: String })
   calendarId!: string | null;
 
@@ -43,6 +54,18 @@ export class ResourceResponseDto implements ResourceSummary {
   })
   costPerUnit!: number | null;
 
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description:
+      'When this resource was archived (ADR-0053 §4); null = active. An archived resource ' +
+      'keeps every existing assignment — which still schedules, levels, loads the histogram ' +
+      'and earns value identically — and is hidden from pickers; only a NEW assignment is ' +
+      'refused (422 RESOURCE_ARCHIVED).',
+  })
+  archivedAt!: string | null;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -64,12 +87,14 @@ export class ResourceResponseDto implements ResourceSummary {
       code: entity.code,
       description: entity.description,
       kind: entity.kind,
+      parentId: entity.parentId,
       calendarId: entity.calendarId,
       // Decimal → number at the API boundary (the DB column is DECIMAL(18,4)); null = uncapped.
       maxUnitsPerHour: entity.maxUnitsPerHour === null ? null : entity.maxUnitsPerHour.toNumber(),
       // Cost rate is gated on `cost:read` (EV4a): null unless the caller may read cost AND it is set.
       costPerUnit:
         canReadCost && entity.costPerUnit !== null ? entity.costPerUnit.toNumber() : null,
+      archivedAt: entity.archivedAt === null ? null : entity.archivedAt.toISOString(),
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

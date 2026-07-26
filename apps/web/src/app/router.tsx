@@ -133,10 +133,29 @@ const clientsRoute = createRoute({
   component: ClientsScreen,
 });
 
+/**
+ * The library screens' filter state lives in typed search params so a filtered view is
+ * deep-linkable and reload-safe (`docs/UX_STANDARDS.md`, ADR-0053 §4). Validation is deliberately
+ * permissive — it keeps the three string params and drops everything else; the screen's own parser
+ * degrades an unknown value to that filter's default rather than throwing, because a hand-edited
+ * URL must never crash a screen.
+ */
+function libraryFilterSearch(keys: readonly string[]) {
+  return (search: Record<string, unknown>): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const key of keys) {
+      const value = search[key];
+      if (typeof value === 'string' && value !== '') out[key] = value;
+    }
+    return out;
+  };
+}
+
 /** Calendars library. */
 const calendarsRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug/calendars',
+  validateSearch: libraryFilterSearch(['q', 'scope', 'archived']),
   beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: CalendarsScreen,
 });
@@ -145,6 +164,7 @@ const calendarsRoute = createRoute({
 const resourcesRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug/resources',
+  validateSearch: libraryFilterSearch(['q', 'kind', 'archived']),
   beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: ResourcesScreen,
 });

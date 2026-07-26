@@ -37,6 +37,13 @@ export interface CascadeCounts {
    * Note precedent). Plan-scoped only — a single-activity delete never touches share links.
    */
   planShares: number;
+  /**
+   * PROJECT-scoped calendars swept with their owning project (ADR-0053 §2). Counts the CALENDARS
+   * only — their exceptions are stamped in the same batch but counted silently, the baselines /
+   * baseline-activities precedent. ORG-scoped calendars are never swept: the predicate is
+   * `project_id = :id`, which is NULL for every shared-library calendar.
+   */
+  calendars: number;
 }
 
 export interface CascadeDeleteResult {
@@ -92,6 +99,7 @@ export class HierarchyLifecycleService {
       steps: 0,
       notes: 0,
       planShares: 0,
+      calendars: 0,
     };
 
     // Soft-delete the active baselines (and their snapshot rows) under a set of plans
@@ -221,6 +229,37 @@ export class HierarchyLifecycleService {
       ).count;
     };
 
+    // Soft-delete the active PROJECT-scoped calendars of a set of projects — and their active
+    // exceptions — in the same batch (ADR-0053 §2). Children (exceptions) before parents, like
+    // every other sweep here; the two tables are the ONLY soft-deletable children of a calendar
+    // (`calendar_shifts` and `calendar_exception_windows` are owned value rows with no
+    // `deleted_at` at all, reached only through a live parent, so there is nothing to stamp).
+    // The `projectId IN …` predicate is NULL for every ORG-scoped calendar, so a shared-library
+    // calendar can NEVER be swept by a project delete — the invariant an explicit test pins down.
+    // The single-calendar CALENDAR_IN_USE guard deliberately does NOT apply here: the plans and
+    // activities referencing these calendars are being deleted in the SAME cohesive batch (the
+    // ADR-0038 subtree-cascade precedent).
+    const deleteCalendarsUnderProjects = async (projectIds: string[]): Promise<number> => {
+      if (projectIds.length === 0) return 0;
+      const calendarIds = (
+        await tx.calendar.findMany({
+          where: { projectId: { in: projectIds }, deletedAt: null },
+          select: { id: true },
+        })
+      ).map((c) => c.id);
+      if (calendarIds.length === 0) return 0;
+      await tx.calendarException.updateMany({
+        where: { calendarId: { in: calendarIds }, deletedAt: null },
+        data: stamp,
+      });
+      return (
+        await tx.calendar.updateMany({
+          where: { id: { in: calendarIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
     // Resolve an activity's active `parent_id` subtree (the row itself + every
     // active descendant), breadth-first. Only a WBS_SUMMARY can be a parent
     // (service-enforced), so a leaf activity resolves to just itself in one hop.
@@ -273,6 +312,10 @@ export class HierarchyLifecycleService {
       counts.notes = await deleteNotesUnderPlans(planIds);
       counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
+      // A client delete removes its projects, so their project calendars go too — otherwise an
+      // active calendar would sit under a soft-deleted ancestor, breaking the no-orphan invariant
+      // this service exists to keep (ADR-0053 §2).
+      counts.calendars = await deleteCalendarsUnderProjects(projectIds);
       if (planIds.length > 0) {
         counts.plans = (
           await tx.plan.updateMany({ where: { id: { in: planIds }, deletedAt: null }, data: stamp })
@@ -294,6 +337,7 @@ export class HierarchyLifecycleService {
       counts.notes = await deleteNotesUnderPlans(planIds);
       counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
+      counts.calendars = await deleteCalendarsUnderProjects([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
       ).count;
@@ -365,6 +409,7 @@ export class HierarchyLifecycleService {
       steps: 0,
       notes: 0,
       planShares: 0,
+      calendars: 0,
     };
 
     try {
@@ -414,6 +459,21 @@ export class HierarchyLifecycleService {
         counts.planShares = (
           await tx.planShare.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
+        // Restore the batch's PROJECT-scoped calendars and their exceptions (ADR-0053 §2). A
+        // calendar has exactly ONE parent (its project) and was swept in the SAME batch as it, so
+        // — like a note or a step, unlike a dependency — no endpoint guard is needed: restoring
+        // the batch reactivates each calendar with its project, and the top-down
+        // `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A
+        // calendar deleted on its own carries its own batch id and never resurrects here. If the
+        // project has meanwhile gained an active calendar of the same name, the per-tier partial
+        // unique raises P2002 and the catch below turns it into 409 NAME_TAKEN.
+        counts.calendars = (
+          await tx.calendar.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
+        await tx.calendarException.updateMany({
+          where: { deleteBatchId: batchId },
+          data: restore,
+        });
         // Restore the batch's links AFTER their activities, and only where BOTH
         // endpoints are now active — a link whose other end was deleted separately
         // stays soft-deleted (endpoint-guarded; see ADR-0021 / DECISIONS.md).

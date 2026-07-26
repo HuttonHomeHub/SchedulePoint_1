@@ -1,3 +1,4 @@
+import type { ImportCalendarScope } from './import-graph.js';
 import { importMspdi, type ImportMspdiResult } from './import-mspdi.js';
 import { importXer, type ImportXerResult } from './import-xer.js';
 import { detectMspdi } from './mspdi-parser.js';
@@ -17,6 +18,12 @@ export interface ImportScheduleInput {
   readonly filename?: string | null;
   /** The HTTP-boundary byte cap, forwarded to whichever format parser handles the file. */
   readonly maxBytes?: number;
+  /**
+   * Where a source **global** calendar should land (ADR-0053 §5); forwarded to whichever orchestrator
+   * handles the file. Omitted = `PROJECT` — an imported file never writes the shared organisation
+   * library on its own say-so.
+   */
+  readonly globalCalendarScope?: ImportCalendarScope;
 }
 
 /** Identical union to each orchestrator's result — a domain-valid graph + report, or a typed rejection. */
@@ -28,15 +35,16 @@ export type ImportScheduleResult = ImportXerResult | ImportMspdiResult;
  * leaks which format probe failed or any internals.
  */
 export function importSchedule(input: ImportScheduleInput): ImportScheduleResult {
-  const { content, filename = null, maxBytes } = input;
-  // Only attach `caps` when a byte cap was supplied (exactOptionalPropertyTypes forbids `caps: undefined`).
+  const { content, filename = null, maxBytes, globalCalendarScope } = input;
+  // Only attach the optional fields when supplied (exactOptionalPropertyTypes forbids `caps: undefined`).
   const capsField = maxBytes === undefined ? {} : { caps: { maxBytes } };
+  const scopeField = globalCalendarScope === undefined ? {} : { globalCalendarScope };
 
   if (detectXer(content).ok) {
-    return importXer({ content, filename, ...capsField });
+    return importXer({ content, filename, ...capsField, ...scopeField });
   }
   if (detectMspdi(content).ok) {
-    return importMspdi({ content, filename, ...capsField });
+    return importMspdi({ content, filename, ...capsField, ...scopeField });
   }
   return {
     ok: false,

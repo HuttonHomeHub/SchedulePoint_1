@@ -5,8 +5,10 @@ import type { Prisma } from '@prisma/client';
 import {
   containsCycle,
   importSchedule,
+  type ImportCalendarScope,
   type ImportGraph,
   type InterchangeReport,
+  type ReportFinding,
 } from '@repo/interchange';
 import { WorkingWeekdays } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -49,6 +51,30 @@ export const INTERCHANGE_ERROR = {
    * normal user path. */
   INCONSISTENT_GRAPH: 'INCONSISTENT_GRAPH',
 } as const;
+
+/** Caller-supplied import options (the optional multipart body fields). */
+export interface InterchangeImportOptions {
+  /**
+   * Where a source **global** calendar (P6 `CA_Base`) should land (ADR-0053 §5): `PROJECT` (the default)
+   * keeps a foreign file out of the shared organisation library; `ORG` is the deliberate opt-in for a
+   * planner importing their enterprise calendar set. Everything else is unaffected — a project calendar
+   * always lands in the target project, and a calendar an imported resource holds is always forced to
+   * `ORG` (a resource is org-global, so it can hold nothing else).
+   */
+  readonly globalCalendarScope?: ImportCalendarScope;
+}
+
+/**
+ * How an import disambiguates a calendar name the target tier already holds (ADR-0053 §5). An imported
+ * calendar is NEVER silently reused: two calendars can share a name and have completely different
+ * working weeks, so reusing one by name would silently reschedule every imported activity on it. The
+ * import therefore creates its own, suffixed, and says so in the report.
+ */
+const IMPORTED_NAME_SUFFIX = (date: string, ordinal: number): string =>
+  ordinal <= 1 ? `(imported ${date})` : `(imported ${date}) (${ordinal})`;
+
+/** The calendar-name ceiling the calendars API enforces (`CreateCalendarDto`), honoured by the importer. */
+const CALENDAR_NAME_MAX_LENGTH = 120;
 
 /**
  * Business logic for schedule interchange (ADR-0050, C2). This is the thin persisting layer's brain: it
@@ -94,9 +120,16 @@ export class InterchangeService {
     orgSlug: string,
     projectId: string,
     file: UploadedInterchangeFile | undefined,
+    options: InterchangeImportOptions = {},
   ): Promise<InterchangeReport> {
     const { organization, project } = await this.resolveTarget(principal, orgSlug, projectId);
-    const { report } = this.parse(file, organization.id, projectId, principal);
+    const { graph, report } = this.parse(file, organization.id, projectId, principal, options);
+
+    // Probe the calendar names the target tiers already hold, so the REVIEWED report already names any
+    // suffix-disambiguation the commit will apply (ADR-0053 §5). Read-only, outside any transaction —
+    // the commit re-probes inside its own transaction, which is the authoritative pass.
+    const { findings } = await this.resolveImportCalendarNames(this.prisma, project, graph);
+    report.repairs.push(...findings);
 
     this.logger.info(
       {
@@ -137,15 +170,41 @@ export class InterchangeService {
     orgSlug: string,
     projectId: string,
     file: UploadedInterchangeFile | undefined,
+    options: InterchangeImportOptions = {},
   ): Promise<{ planId: string; report: InterchangeReport }> {
     const { organization, project } = await this.resolveTarget(principal, orgSlug, projectId);
-    const { graph, report } = this.parse(file, organization.id, projectId, principal);
+    const { graph, report } = this.parse(file, organization.id, projectId, principal, options);
 
     // Phase 1 — persist the whole graph atomically via the existing repositories (each accepts `tx`),
     // mirroring how the domain services compose repository writes inside a single `$transaction`.
-    const { planId, createdCalendarIds, createdResourceIds } = await this.prisma.$transaction(
-      (tx) => this.persistGraph(tx, principal, project, graph),
-    );
+    const {
+      planId,
+      createdCalendarIds,
+      createdResourceIds,
+      unarchivedResources,
+      calendarFindings,
+    } = await this.prisma.$transaction((tx) => this.persistGraph(tx, principal, project, graph));
+
+    // Calendar names the target tier already held, disambiguated rather than reused (ADR-0053 §5).
+    report.repairs.push(...calendarFindings);
+
+    // CQ-4 (ADR-0053 §4): a source row that matched an ARCHIVED library row is matched and the row
+    // auto-unarchived — never silently. Recorded as a `repair` finding, the ADR-0050 class for "a
+    // structural fix that kept the graph valid": without it the import would create assignments to
+    // an archived resource, which the RESOURCE_ARCHIVED rule forbids everywhere else. Pushed onto
+    // the report the caller receives, so the post-commit report is honest about a change the
+    // importer made to shared tenant state it did not create.
+    for (const resource of unarchivedResources) {
+      report.repairs.push({
+        kind: 'repair',
+        entity: 'resource',
+        sourceRef: resource.code ?? resource.name,
+        detail: `matched the archived resource “${resource.name}” and unarchived it`,
+        reason:
+          'An archived resource keeps its name and code, so a matching import row would otherwise ' +
+          'collide with it; leaving it archived would create assignments to an archived resource.',
+      });
+    }
 
     this.logger.info(
       {
@@ -233,7 +292,15 @@ export class InterchangeService {
     principal: Principal,
     project: { id: string; organizationId: string },
     graph: ImportGraph,
-  ): Promise<{ planId: string; createdCalendarIds: string[]; createdResourceIds: string[] }> {
+  ): Promise<{
+    planId: string;
+    createdCalendarIds: string[];
+    createdResourceIds: string[];
+    /** Archived library resources this import matched and auto-unarchived (CQ-4, ADR-0053 §4). */
+    unarchivedResources: { id: string; name: string; code: string | null }[];
+    /** Calendar names the target tier already held, suffix-disambiguated (ADR-0053 §5). */
+    calendarFindings: ReportFinding[];
+  }> {
     const stamp = { createdBy: principal.userId, updatedBy: principal.userId };
     const organizationId = project.organizationId;
 
@@ -248,16 +315,33 @@ export class InterchangeService {
     }
 
     // 1. Pre-generate calendar (+ exception) ids and map source key → id, then batch-insert.
+    //
+    // TIER (ADR-0053 §5): each calendar lands where the pure mapper decided — `PROJECT`, pinned to the
+    // import's TARGET PROJECT (the default, so a foreign file no longer writes shared tenant state and
+    // its calendars are deleted with the project), or `ORG` for the shared library. Names the target
+    // tier already holds are suffixed rather than reused, so a repeat import cannot abort on the
+    // per-tier unique.
+    const { nameByKey, findings: calendarFindings } = await this.resolveImportCalendarNames(
+      tx,
+      project,
+      graph,
+    );
     const calendarIdByKey = new Map<string, string>();
+    const calendarScopeByKey = new Map<string, ImportCalendarScope>();
     const createdCalendarIds: string[] = [];
     const calendarInputs: ImportCalendarBatchInput[] = graph.calendars.map((calendar) => {
       const id = randomUUID();
       calendarIdByKey.set(calendar.key, id);
+      calendarScopeByKey.set(calendar.key, calendar.scope);
       createdCalendarIds.push(id);
       return {
         id,
         organizationId,
-        name: calendar.name,
+        name: nameByKey.get(calendar.key) ?? calendar.name,
+        scope: calendar.scope,
+        // The CHECK partner of `scope`: a PROJECT calendar belongs to the import's target project, an
+        // ORG one to no project at all (ck_calendars_scope_parent, ADR-0053 §1).
+        projectId: calendar.scope === 'PROJECT' ? project.id : null,
         workingWeekdays: this.maskFromShifts(calendar.shifts),
         exceptions: calendar.exceptions.map((exception) => ({
           id: randomUUID(),
@@ -406,7 +490,8 @@ export class InterchangeService {
                 { name: { in: importNames } },
               ],
             },
-            select: { id: true, code: true, name: true },
+            // `archivedAt` rides along so the CQ-4 unarchive-and-report path needs no second query.
+            select: { id: true, code: true, name: true, archivedAt: true },
           });
     const idByCode = new Map<string, string>();
     const idByName = new Map<string, string>();
@@ -414,12 +499,28 @@ export class InterchangeService {
       if (r.code !== null) idByCode.set(r.code, r.id);
       idByName.set(r.name, r.id);
     }
+    // An ARCHIVED row is still an ACTIVE row (archive is orthogonal to soft delete, ADR-0053 §4),
+    // so `existingResources` above already matched archived resources — and it must: an archived
+    // row keeps its name and code (the partial uniques are predicated on `deleted_at` alone), so
+    // refusing to match would hard-fail the import on a P2002 it could never resolve. CQ-4's
+    // answer is therefore MATCH + AUTO-UNARCHIVE + REPORT: leaving it archived would have the
+    // import create assignments to an archived resource, contradicting the RESOURCE_ARCHIVED rule
+    // that the very same commit enforces everywhere else.
+    const archivedById = new Map(
+      existingResources.filter((r) => r.archivedAt !== null).map((r) => [r.id, r]),
+    );
+    const unarchivedResources: { id: string; name: string; code: string | null }[] = [];
     for (const resource of graph.resources) {
       // Match an existing ACTIVE org resource by `code` (when the import carries one) else by `name`.
       const existingId =
         resource.code !== null ? idByCode.get(resource.code) : idByName.get(resource.name);
       if (existingId !== undefined) {
         resourceIdByKey.set(resource.key, existingId);
+        const archived = archivedById.get(existingId);
+        if (archived !== undefined) {
+          archivedById.delete(existingId); // report each row once, however many source rows hit it
+          unarchivedResources.push({ id: archived.id, name: archived.name, code: archived.code });
+        }
         continue;
       }
       const id = randomUUID();
@@ -428,6 +529,12 @@ export class InterchangeService {
       // Fold the new row into the match maps so a later source row with the same code/name reuses it.
       if (resource.code !== null) idByCode.set(resource.code, id);
       idByName.set(resource.name, id);
+      // A resource is ORG-GLOBAL, so it may only hold an ORG calendar (ADR-0053 §2 — the
+      // `assertCalendarUsableBy` seam rejects anything else with RESOURCE_REQUIRES_ORG_CALENDAR). The
+      // mapper guarantees this by forcing every resource-held calendar to ORG; re-assert it here so a
+      // regression FAILS THE TRANSACTION (nothing created) rather than quietly writing a row the rest
+      // of the domain would refuse — the import must never be the one path that bypasses the tier.
+      this.assertResourceCalendarIsOrgScoped(resource.calendarKey, calendarScopeByKey);
       newResourceRows.push({
         id,
         organizationId,
@@ -442,6 +549,19 @@ export class InterchangeService {
       });
     }
     await this.resources.createManyForImport(newResourceRows, tx);
+
+    // Auto-unarchive every matched archived resource, in ONE batched update inside the same
+    // transaction — so either the whole graph and the unarchives land, or neither does. The
+    // version is bumped like any other write; this is deliberately NOT version-gated, because the
+    // importer never read a version to gate on and an import must not fail on a concurrent edit
+    // to an unrelated library row.
+    if (unarchivedResources.length > 0) {
+      await this.resources.unarchiveManyForImport(
+        { ids: unarchivedResources.map((r) => r.id), organizationId },
+        principal.userId,
+        tx,
+      );
+    }
 
     // 6. Assignments (ADR-0039/0040) — resolve activityKey → activity id and resourceKey → resource id,
     // one batched insert. The pure pipeline already guaranteed ≤1 driver/activity, MATERIAL-never-driving
@@ -461,7 +581,126 @@ export class InterchangeService {
     );
     await this.assignments.createManyForImport(assignmentRows, tx);
 
-    return { planId: plan.id, createdCalendarIds, createdResourceIds };
+    return {
+      planId: plan.id,
+      createdCalendarIds,
+      createdResourceIds,
+      unarchivedResources,
+      calendarFindings,
+    };
+  }
+
+  /**
+   * Resolve the NAME each imported calendar will be created under, disambiguating any the target tier
+   * already holds (ADR-0053 §5, US-9). Returns the key → final-name map plus one `repair` finding per
+   * renamed calendar.
+   *
+   * **An import never reuses an existing calendar.** That is the deliberate decision, not an omission:
+   * two calendars can share a name and have completely different working weeks, so matching by name
+   * would silently reschedule every imported activity onto someone else's calendar — the one failure an
+   * import must never make quietly. (This is also why calendars have no unarchive-on-match rule, unlike
+   * resources' CQ-4: with no match path there is nothing to unarchive. An archived calendar still holds
+   * its name — archiving deliberately does not free it — so it is disambiguated around like any other.)
+   *
+   * Names are checked **per tier**, because uniqueness is per tier: `uq_calendars_org_name` for `ORG`,
+   * `uq_calendars_project_name` for `PROJECT`. One indexed query per tier present in the graph, plus
+   * in-memory bookkeeping — so two source calendars sharing a name inside ONE file also disambiguate
+   * against each other rather than colliding at insert time.
+   */
+  private async resolveImportCalendarNames(
+    db: Prisma.TransactionClient,
+    project: { id: string; organizationId: string },
+    graph: ImportGraph,
+  ): Promise<{ nameByKey: Map<string, string>; findings: ReportFinding[] }> {
+    const nameByKey = new Map<string, string>();
+    const findings: ReportFinding[] = [];
+    if (graph.calendars.length === 0) return { nameByKey, findings };
+
+    // The names already taken, per tier — one query per tier actually present in the graph.
+    const takenByScope = new Map<ImportCalendarScope, Set<string>>();
+    for (const scope of ['ORG', 'PROJECT'] as const) {
+      const names = graph.calendars.filter((c) => c.scope === scope).map((c) => c.name);
+      if (names.length === 0) continue;
+      takenByScope.set(
+        scope,
+        await this.calendars.findTakenNames(
+          {
+            organizationId: project.organizationId,
+            scope,
+            projectId: scope === 'PROJECT' ? project.id : null,
+            names,
+          },
+          db,
+        ),
+      );
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    for (const calendar of graph.calendars) {
+      const taken = takenByScope.get(calendar.scope) ?? new Set<string>();
+      const name = this.disambiguateCalendarName(calendar.name, taken, today);
+      // Claim it, so a second source calendar with the same name gets the next free variant.
+      taken.add(name);
+      takenByScope.set(calendar.scope, taken);
+      nameByKey.set(calendar.key, name);
+      if (name !== calendar.name) {
+        findings.push({
+          kind: 'repair',
+          entity: 'calendar',
+          sourceRef: calendar.key,
+          detail: `calendar “${calendar.name}” was created as “${name}”`,
+          reason:
+            'a calendar of that name already exists here; an import never reuses one, because two ' +
+            'calendars sharing a name can have different working weeks (ADR-0053 §5)',
+        });
+      }
+    }
+    return { nameByKey, findings };
+  }
+
+  /**
+   * The first free variant of `name` in `taken`: the name itself, else `"<name> (imported <date>)"`,
+   * else the same with an incrementing ordinal. Bounded by the candidate count, and each candidate is
+   * clipped to the calendars API's own name ceiling (the suffix is preserved — it is what makes the
+   * name unique — so the BASE is what gives way).
+   */
+  private disambiguateCalendarName(
+    name: string,
+    taken: ReadonlySet<string>,
+    today: string,
+  ): string {
+    if (!taken.has(name)) return name;
+    // One attempt per already-taken name, plus one — so a free variant is always reachable.
+    for (let ordinal = 1; ordinal <= taken.size + 1; ordinal += 1) {
+      const suffix = IMPORTED_NAME_SUFFIX(today, ordinal);
+      const room = CALENDAR_NAME_MAX_LENGTH - suffix.length - 1;
+      const base = room > 0 ? name.slice(0, room).trimEnd() : '';
+      const candidate = base.length > 0 ? `${base} ${suffix}` : suffix;
+      if (!taken.has(candidate)) return candidate;
+    }
+    // Unreachable (the loop tries more variants than there are taken names); fail loud rather than
+    // insert a name that would abort the whole transaction on the per-tier unique.
+    throw new ConflictError('Could not find a free name for an imported calendar.', {
+      reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
+    });
+  }
+
+  /**
+   * Defence-in-depth for the ADR-0053 §2 resource rule: a resource may only hold an ORG calendar. The
+   * pure mapper forces every resource-held calendar to ORG, so this can only fire on a regression —
+   * and when it does, it must roll the whole transaction back rather than create a resource bound to a
+   * project calendar (a row `assertCalendarUsableBy` would refuse at every other seam).
+   */
+  private assertResourceCalendarIsOrgScoped(
+    calendarKey: string | null,
+    calendarScopeByKey: ReadonlyMap<string, ImportCalendarScope>,
+  ): void {
+    if (calendarKey === null) return;
+    if (calendarScopeByKey.get(calendarKey) === 'ORG') return;
+    throw new ValidationError(
+      'An imported resource references a project-scoped calendar, which a resource cannot hold.',
+      { reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH },
+    );
   }
 
   /**
@@ -532,6 +771,7 @@ export class InterchangeService {
     organizationId: string,
     projectId: string,
     principal: Principal,
+    options: InterchangeImportOptions = {},
   ): { graph: ImportGraph; report: InterchangeReport } {
     if (!file || file.buffer.length === 0) {
       throw new ValidationError('No file was uploaded.', { reason: INTERCHANGE_ERROR.NO_FILE });
@@ -541,6 +781,10 @@ export class InterchangeService {
       content: new Uint8Array(file.buffer),
       filename: file.originalname,
       maxBytes: INTERCHANGE_MAX_UPLOAD_BYTES,
+      // The pure mapper decides each calendar's TIER; this is the caller's one lever over it (ADR-0053 §5).
+      ...(options.globalCalendarScope === undefined
+        ? {}
+        : { globalCalendarScope: options.globalCalendarScope }),
     });
 
     if (!result.ok) {

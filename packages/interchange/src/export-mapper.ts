@@ -70,8 +70,34 @@ function expandExceptionDates(from: string, to: string): string[] {
   return dates;
 }
 
+/**
+ * Derive what the FOREIGN format should call this calendar from its SchedulePoint tier (ADR-0053 §5) —
+ * the inverse of the import mapper's `resolveCalendarScope`, and the reason an export→import round trip
+ * preserves the tier instead of flattening every calendar into the shared library.
+ *
+ * The resource test comes FIRST, mirroring the import rule that forces a resource's calendar to `ORG`:
+ * emitting `CA_Rsrc` is what makes a re-import put it back in the shared library (where a resource can
+ * legally hold it) rather than in whichever project happened to receive the file.
+ *
+ * Note the deliberate asymmetry on the remaining ORG rows: they emit `CA_Base`, but a re-import lands a
+ * `CA_Base` calendar at PROJECT scope unless the importer explicitly passes `globalCalendarScope: 'ORG'`.
+ * That is the point — the file states the tier faithfully, and the *receiving* tenant decides whether a
+ * foreign file may write its shared library.
+ */
+function calendarSourceType(
+  calendar: ExportCalendar,
+  heldByResource: boolean,
+): CanonicalCalendar['sourceType'] {
+  if (heldByResource) return 'RESOURCE';
+  return calendar.scope === 'ORG' ? 'GLOBAL' : 'PROJECT';
+}
+
 /** Map one export calendar (weekday minute shifts + dated ranges) back to a canonical calendar. */
-function mapCalendar(calendar: ExportCalendar, findings: ReportFinding[]): CanonicalCalendar {
+function mapCalendar(
+  calendar: ExportCalendar,
+  sourceType: CanonicalCalendar['sourceType'],
+  findings: ReportFinding[],
+): CanonicalCalendar {
   const workWeek: CanonicalWorkWeek = {
     monday: [],
     tuesday: [],
@@ -106,7 +132,7 @@ function mapCalendar(calendar: ExportCalendar, findings: ReportFinding[]): Canon
     });
   }
 
-  return { id: calendar.key, name: calendar.name, workWeek, exceptions };
+  return { id: calendar.key, name: calendar.name, sourceType, workWeek, exceptions };
 }
 
 function mapPlan(plan: ExportPlan): CanonicalModel['project'] {
@@ -127,8 +153,20 @@ export interface ExportMapResult {
 export function mapExportGraphToCanonical(graph: ExportGraph): ExportMapResult {
   const findings: ReportFinding[] = [];
 
+  // Which calendars an exported resource holds — the set that must be emitted as resource calendars so
+  // the tier survives a round trip (see `calendarSourceType`). Built once, consulted per calendar.
+  const resourceHeldCalendarKeys = new Set(
+    graph.resources
+      .map((resource) => resource.calendarKey)
+      .filter((key): key is string => key !== null),
+  );
+
   const calendars: CanonicalCalendar[] = graph.calendars.map((calendar) =>
-    mapCalendar(calendar, findings),
+    mapCalendar(
+      calendar,
+      calendarSourceType(calendar, resourceHeldCalendarKeys.has(calendar.key)),
+      findings,
+    ),
   );
 
   const activities: CanonicalActivity[] = graph.activities.map((activity) => ({

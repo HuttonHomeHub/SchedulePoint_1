@@ -19,6 +19,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import type { ProgressWarning } from '@repo/types';
 
@@ -78,6 +79,12 @@ export class ActivitiesController {
     description:
       'Stale version (of the activity OR its driving assignment when a duration edit recomputes it), ' +
       'or a name/code collision within the plan.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A field-level validation failure, or `calendarId` names a calendar this activity’s project ' +
+      'may not use — a PROJECT calendar owned by another project (CALENDAR_WRONG_SCOPE, ' +
+      'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4).',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async update(

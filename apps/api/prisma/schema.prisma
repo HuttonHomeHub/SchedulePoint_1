@@ -370,10 +370,23 @@ enum ActivityType {
 // activity but may NEVER be the driving resource of dates (drive is a labour/
 // equipment concept) — a service invariant, not a DB constraint. MUST stay in
 // lock-step with the TypeScript `ResourceKind` union in @repo/types (a separate task).
+// The kind of a resource (M7.1, ADR-0039). LABOUR = a crew/trade; EQUIPMENT = plant
+// (the conformance fixture's NONLABOUR maps here); MATERIAL = a consumable quantity.
+// GROUP (ADR-0053 §3, library-scoping M3) is NOT a resource: it is a non-assignable
+// GROUPING NODE in the resource tree (resources.parent_id). A GROUP carries no calendar,
+// no capacity ceiling and no cost rate — ck_resources_group_no_scheduling_fields enforces
+// that in the row itself — and may never be an assignment endpoint (a service invariant,
+// since a CHECK cannot read another table). That is precisely what makes the parity
+// argument STRUCTURAL rather than observational: the levelling pass, the resource
+// histogram and the Earned-Value read-model all start from resource_assignments, so a
+// node that can never be assigned can never enter demand, capacity or cost. Appended LAST
+// so existing labels keep their sort ordinals. MUST stay in lock-step with the TypeScript
+// RESOURCE_KINDS union in @repo/types.
 enum ResourceKind {
   LABOUR
   EQUIPMENT
   MATERIAL
+  GROUP
 }
 
 // The P6 duration type of an activity (M7 rung 4, ADR-0040). It names which of the
@@ -482,6 +495,21 @@ enum NoteEntityType {
   ACTIVITY
 }
 
+// Which TIER a calendar belongs to (ADR-0053 §1) — SchedulePoint's answer to P6's
+// Global / Project calendar split. ORG is the shared organisation library (the only
+// tier before ADR-0053, and the constant DEFAULT, so every pre-existing row keeps
+// today's behaviour); PROJECT is local to one project, listed and selectable only
+// within it, so a one-off shutdown calendar (or an import's dozen) never pollutes
+// shared tenant state. The discriminator and the nullable `project_id` FK are pinned
+// to each other by the FAIL-CLOSED ck_calendars_scope_parent CHECK (the ADR-0046
+// `CASE … ELSE false` precedent): a future third tier (CLIENT) inserted before its
+// CHECK branch is added is rejected, never silently unconstrained. MUST stay in
+// lock-step with the TypeScript `CalendarScope` union in @repo/types.
+enum CalendarScope {
+  ORG
+  PROJECT
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -532,6 +560,12 @@ model Project {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   client       Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   plans        Plan[]
+  // PROJECT-scoped calendars owned by this project (ADR-0053 §1). ORG-scoped calendars are
+  // NOT here (their project_id is NULL), so the project cascade's `project_id = :id`
+  // predicate is exactly the set that must be swept and can never touch a shared org
+  // calendar. FK is RESTRICT; the real delete path is the service cascade
+  // (HierarchyLifecycleService), which stamps them into the project's delete_batch_id.
+  calendars    Calendar[]
 
   // Project name is unique per CLIENT among ACTIVE rows — partial unique
   // (uq_projects_client_name ON (client_id, name) WHERE deleted_at IS NULL), raw
@@ -1351,12 +1385,48 @@ model Calendar {
   name           String
   description    String?
 
+  // Which TIER this calendar belongs to (ADR-0053 §1). Constant DEFAULT ORG ⇒ every existing
+  // row is the shared-library calendar it is today (no data migration, no behaviour change);
+  // the service ALWAYS sets it explicitly on create. Filtered by the org list (`?scope=`) and
+  // by the per-tier partial uniques below. NEVER read by the CPM engine: the engine builds its
+  // WorkingTimeCalendar port from shift/exception rows loaded BY CALENDAR ID, so the tier
+  // cannot reach `computeSchedule` and the ADR-0034 parity gate is structurally untouched.
+  // MUST stay in lock-step with the `CalendarScope` union in @repo/types.
+  scope     CalendarScope @default(ORG)
+  // The owning project of a PROJECT-scoped calendar; NULL for an ORG one. Nullable with NO
+  // default, so every existing row reads NULL — the ck_calendars_scope_parent partner of
+  // `scope` (ORG ⇒ NULL, PROJECT ⇒ NOT NULL; a future tier fails closed). Because that CHECK is
+  // a ROW constraint, a promote/narrow must set BOTH columns in a single UPDATE. FK is
+  // RESTRICT: calendars only ever soft-delete, so the referential check never fires — the real
+  // path is the service-owned project cascade (HierarchyLifecycleService), which stamps this
+  // project's calendars AND their exceptions with the project's delete_batch_id; RESTRICT is
+  // defence in depth. Like activities.calendar_id and activities.parent_id, the FK does NOT
+  // enforce SAME-ORG (a cross-org project_id would satisfy it), so "the project is active and
+  // in this org" stays a SERVICE check inside the write transaction. Backed by the partial
+  // idx_calendars_project_id (raw SQL).
+  projectId String?       @map("project_id") @db.Uuid
+
   // The weekly working pattern is the child `shifts` rows (ADR-0036 §2): per weekday a
   // sorted list of [start,end) minute windows (split shifts, 24h, midnight-crossing
   // nights). NO working-time guard lives here — a window-only calendar (all weekdays
   // empty; work comes only from positive exceptions) is VALID. "Has working time within
   // the horizon" is a cross-row/temporal property enforced at the engine factory + the
   // N11/N16 iteration cap (ADR-0036 §5), not a DB CHECK (the DAG-invariant precedent).
+
+  // RETIRED from the pickers, but still entirely VALID (ADR-0053 §4). NULL = active. This is
+  // ORTHOGONAL to `deleted_at`, not a second flavour of it: an archived calendar STAYS BOUND to
+  // its plans, activities and resources and still schedules identically — only NEW bindings are
+  // refused (at the assertCalendarUsableBy seam) and it is hidden from the default list. It is
+  // therefore the only way to retire a calendar the CALENDAR_IN_USE guard — correctly — refuses
+  // to delete. SERVER-SET by POST …/archive | …/unarchive; never a PATCH field, never client
+  // input. It deliberately does NOT free the calendar's NAME: uq_calendars_org_name /
+  // uq_calendars_project_name keep `WHERE deleted_at IS NULL (+ scope)` so that UNARCHIVE — an
+  // unguarded, lock-free, version-gated UPDATE — can never fail on a name taken meanwhile (and
+  // so the M5 import's unarchive-and-match rule, CQ-4, stays well-defined). The cost, accepted:
+  // creating an ACTIVE calendar on an archived one's name is a 409 DUPLICATE_CALENDAR. Archived
+  // rows are still counted by the M1 scope-NARROWING guard (an archived referencer is live) and
+  // are still swept by the project-delete cascade. NEVER read by the CPM engine.
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1367,6 +1437,8 @@ model Calendar {
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  // The owning project of a PROJECT-scoped calendar (ADR-0053 §1); absent for an ORG one.
+  project      Project?            @relation(fields: [projectId], references: [id], onDelete: Restrict)
   shifts       CalendarShift[]
   exceptions   CalendarException[]
   // Plans defaulting to this calendar (M5 Task C1). The service in-use guard counts
@@ -1384,10 +1456,14 @@ model Calendar {
   // follow-on when the resources module lands). FK is RESTRICT as defence in depth.
   resources    Resource[]
 
-  // Calendar name is unique per organisation among ACTIVE rows — partial unique
-  // (uq_calendars_org_name ON (organization_id, name) WHERE deleted_at IS NULL),
-  // raw SQL in the migration (Prisma cannot express partial indexes). A soft-
-  // deleted name is free to reuse. Backs the create DUPLICATE_CALENDAR (409) check.
+  // Calendar name is unique per TIER among ACTIVE rows (ADR-0053 §1) — two partial
+  // uniques, raw SQL in the migration (Prisma can express neither a partial index nor a
+  // per-tier one):
+  //   uq_calendars_org_name     (organization_id, name) WHERE deleted_at IS NULL AND scope = 'ORG'
+  //   uq_calendars_project_name (project_id, name)      WHERE deleted_at IS NULL AND scope = 'PROJECT'
+  // Both back the create DUPLICATE_CALENDAR (409) check. A soft-deleted name is free to
+  // reuse. A name may be reused ACROSS tiers deliberately (a project's own "Standard" may
+  // sit beside the org's) — the UI disambiguates with a tier badge, not a name rule.
   //
   // (organization_id, created_at, id) covers the organization_id FK (leftmost
   // prefix), the org-scoped active-list query AND its deterministic cursor sort
@@ -1821,6 +1897,28 @@ model Resource {
   code            String?
   description     String?
   kind            ResourceKind
+  // The parent GROUP in the resource tree (an ADJACENCY LIST — the ADR-0038
+  // `activities.parent_id` precedent, chosen for the same reasons: a reparent is one UPDATE,
+  // and a materialised path would have to be rewritten across a whole subtree). NULL = a
+  // top-level node. The pool itself stays ONE org-global pool (ADR-0053 §3) — this is a
+  // NAVIGATION tree, not a scoping tier, which is why cross-plan over-allocation and levelling
+  // keep working unchanged.
+  //
+  // What the DB can enforce lives in the DB: ck_resources_parent_not_self (a same-row check).
+  // What it cannot — the parent must be ACTIVE, in the SAME ORG, of kind GROUP, must not be a
+  // descendant of this row (acyclicity), and the tree must stay <= RESOURCE_TREE_MAX_DEPTH
+  // deep (measured as the new parent's depth PLUS the moved subtree's height) — needs the
+  // PARENT row, so those are SERVICE invariants (the identical split ADR-0038 makes for the WBS
+  // parent-type rule). They are enforced under the ORG-SCOPED acquireResourceTreeWriteLock,
+  // because two concurrent MIRROR reparents take different per-resource keys and would
+  // otherwise each walk a tree without the other's uncommitted write and jointly form a cycle.
+  //
+  // Self-FK is RESTRICT like every other hierarchy child (resources soft-delete only, so the
+  // referential check never actually fires; the real path is the service-owned subtree cascade,
+  // which stamps a group and its descendants with one delete_batch_id). Like
+  // activities.parent_id / resources.calendar_id, the FK does NOT enforce same-org.
+  // Backed by the partial idx_resources_parent_id. NEVER read by the CPM engine.
+  parentId        String?      @map("parent_id") @db.Uuid
   // The resource's OWN working-time calendar (ADR-0039; the ADR-0037 port seam rung 2
   // rides). Nullable → the resource inherits the plan calendar at schedule time (the
   // driving-calendar fallback order: driving-resource calendar → activity calendar →
@@ -1863,6 +1961,22 @@ model Resource {
   // max_units_per_hour/N21. No index: read only on the plan-scoped EV assignment/rate load,
   // never a query predicate. MUST stay in lock-step with @repo/types. DARK until EV2 reads it.
   costPerUnit     Decimal?     @map("cost_per_unit") @db.Decimal(18, 4)
+  // RETIRED from the pickers, but still entirely VALID (ADR-0053 §4). NULL = active. ORTHOGONAL
+  // to `deleted_at`, which cannot express this: a soft-deleted resource may not be referenced by
+  // an active assignment (that is exactly what RESOURCE_IN_USE protects), whereas an ARCHIVED one
+  // keeps EVERY existing assignment — still scheduling, levelling, loading the histogram and
+  // earning value byte-identically, including as the DRIVING resource of a live activity. Only a
+  // NEW assignment is refused (422 RESOURCE_ARCHIVED — a service check; a CHECK cannot read the
+  // assignment's resource row), while EDITING an existing assignment still succeeds. Archiving is
+  // explicitly NOT blocked by use — the whole point, and the contrast with delete; deleting an
+  // archived resource still obeys the normal RESOURCE_IN_USE rules. SERVER-SET by POST …/archive
+  // | …/unarchive; never a PATCH field, never client input. Legal on a GROUP, and deliberately
+  // does NOT cascade to its subtree (archive has no cascade). It does NOT free the resource's
+  // NAME — uq_resources_org_name / uq_resources_org_code keep `WHERE deleted_at IS NULL` so
+  // unarchive can never fail on a name taken meanwhile (see Calendar.archivedAt for the full
+  // argument); creating an ACTIVE resource on an archived one's name is a 409 DUPLICATE_RESOURCE.
+  // NEVER read by the CPM engine, the levelling pass or the EV read-model.
+  archivedAt      DateTime?    @map("archived_at") @db.Timestamptz(3)
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1874,6 +1988,11 @@ model Resource {
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   calendar     Calendar?            @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  // The resource-tree self-relation (ADR-0053 §3). Prisma requires a NAME on a self-relation;
+  // "ResourceHierarchy" mirrors ADR-0038's WBS self-relation. This tree is ORTHOGONAL to every
+  // other graph in the schema — it carries no logic, no dates and no calendar resolution.
+  parent       Resource?            @relation("ResourceHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children     Resource[]           @relation("ResourceHierarchy")
   assignments  ResourceAssignment[]
 
   // Resource name is unique per org among ACTIVE rows — partial unique
@@ -1886,6 +2005,18 @@ model Resource {
   // full-composite pattern as Calendar / Client; it subsumes a standalone org index.
   // The partial idx_resources_calendar_id (the CALENDAR_IN_USE / driving-calendar load)
   // and idx_resources_delete_batch_id (batch restore) are raw SQL in the migration.
+  //
+  // The partial idx_resources_parent_id (parent_id) WHERE deleted_at IS NULL AND parent_id IS
+  // NOT NULL (raw SQL, ADR-0053 §3) backs the children-of-a-group read (?parentId=), the
+  // descendant BFS behind the GROUP subtree cascade + its subtree RESOURCE_IN_USE count, and the
+  // reparent guard's height walk. Restricted to LIVE rows that actually carry a parent so it
+  // stays tiny — most resources are top-level — mirroring idx_activities_parent_id exactly.
+  // TOP-LEVEL rows (parent_id IS NULL) get NO index of their own: they are the MAJORITY of the
+  // live table (poor selectivity, pure write cost) and the composite below already returns them
+  // in cursor order. A (parent_id, created_at, id) tail is the documented measure-first upgrade
+  // if a tenant ever nests thousands under one group. Two raw-SQL CHECKs guard the tree and the
+  // GROUP kind: ck_resources_parent_not_self and ck_resources_group_no_scheduling_fields (a
+  // fail-closed CASE … ELSE false).
   @@index([organizationId, createdAt, id])
   @@map("resources")
 }

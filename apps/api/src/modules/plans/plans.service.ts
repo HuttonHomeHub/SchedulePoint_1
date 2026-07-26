@@ -4,7 +4,6 @@ import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import {
   HIERARCHY_CONFLICT,
@@ -12,6 +11,7 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { ProjectRepository } from '../projects/project.repository';
@@ -130,9 +130,10 @@ export class PlansService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'plan:update', organization.id);
 
-    if (!(await this.plans.findActiveByIdInOrg(planId, organization.id))) {
-      throw new NotFoundError('Plan not found.');
-    }
+    // Loaded (not merely existence-checked) because the calendar-scope guard below needs the
+    // plan's own `projectId` — no extra query, the same single round-trip as before.
+    const existing = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!existing) throw new NotFoundError('Plan not found.');
 
     const patch: PlanPatch = {};
     if (dto.name !== undefined) patch.name = dto.name;
@@ -180,19 +181,20 @@ export class PlansService {
     try {
       await this.prisma.$transaction(async (tx) => {
         if (calendarId !== undefined && calendarId !== null) {
-          // Assigning a specific calendar: serialise with the delete-in-use guard on
-          // the same key so a plan can never be assigned a calendar that is being
-          // deleted (no TOCTOU dangling reference). Only an ACTIVE calendar in the
-          // plan's OWN organisation may be referenced (anti-IDOR); a foreign/deleted/
-          // unknown id is indistinguishable from missing (404), leaking nothing —
-          // matching the dependencies endpoint's cross-scope handling.
-          await acquireCalendarWriteLock(tx, calendarId);
-          const calendar = await this.calendars.findActiveByIdInOrg(
+          // Assigning a specific calendar goes through THE shared scope guard (ADR-0053 §2):
+          // it takes the same advisory lock the delete-in-use guard uses (so a plan can never
+          // be assigned a calendar that is being deleted — no TOCTOU dangling reference) AND
+          // enforces the tier — an ORG calendar anywhere in the org, a PROJECT calendar only
+          // inside its own project (422 CALENDAR_WRONG_SCOPE). A foreign / deleted / unknown
+          // id stays indistinguishable from missing (404), leaking nothing.
+          const calendar = await assertCalendarUsableBy(tx, this.calendars, {
             calendarId,
-            organization.id,
-            tx,
-          );
-          if (!calendar) throw new NotFoundError('Calendar not found.');
+            organizationId: organization.id,
+            projectId: existing.projectId,
+            // The plan's CURRENT calendar: re-submitting it is not a new binding, so a plan
+            // already on an archived calendar stays editable (ADR-0053 §4).
+            currentCalendarId: existing.calendarId,
+          });
           patch.calendarId = calendar.id;
         }
         const changed = await this.plans.updateIfVersionMatches(

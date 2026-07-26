@@ -1,6 +1,7 @@
 import {
   RESOURCE_CURVE_TYPES,
   RESOURCE_KINDS,
+  type ArchivedFilter,
   type ResourceCurveType,
   type ResourceKind,
   type ResourceSummary,
@@ -14,7 +15,100 @@ export const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
   LABOUR: 'Labour',
   EQUIPMENT: 'Equipment',
   MATERIAL: 'Material',
+  // Not a resource but a grouping node (ADR-0053 §3) — never assignable, never scheduled.
+  GROUP: 'Group',
 };
+
+/**
+ * A `GROUP` is a grouping node, not a resource (ADR-0053 §3): it can never be assigned to an
+ * activity (the API answers 422 `GROUP_NOT_ASSIGNABLE`), carries no calendar/capacity/cost, and
+ * exists only to nest the library. The single source of that predicate, so every picker and badge
+ * reads the invariant from one place rather than re-spelling `kind === 'GROUP'`.
+ */
+export function isResourceGroup(resource: Pick<ResourceSummary, 'kind'> | undefined): boolean {
+  return resource?.kind === 'GROUP';
+}
+
+/** The kind filter's "no filter" sentinel — `''` so it round-trips through a `<select>` value. */
+export const ANY_RESOURCE_KIND = '';
+
+/** The resource library's kind filter: a real kind, or the "all kinds" sentinel. */
+export type ResourceKindFilter = ResourceKind | typeof ANY_RESOURCE_KIND;
+
+/**
+ * The resource library screen's filter state — the three controls above the table, as one value.
+ * It is **URL state** (`docs/UX_STANDARDS.md`: filters are deep-linkable and reload-safe): the
+ * route owns it via `useUrlFilterState` and hands it to `ResourcesTable`.
+ *
+ * A `type` (not an `interface`) deliberately: only a type alias gets TypeScript's implicit index
+ * signature, which is what lets it satisfy the generic URL-state hook's `Record<string, string>`.
+ */
+export type ResourceLibraryFilters = {
+  /** Free-text term, matched server-side against name and code (`?q=`). */
+  q: string;
+  /** Kind to narrow to, or `''` for all (`?kind=`). */
+  kind: ResourceKindFilter;
+  /** Archive state to include (`?archived=`). */
+  archived: ArchivedFilter;
+};
+
+/** The untouched screen — every value here is omitted from the URL. */
+export const DEFAULT_RESOURCE_LIBRARY_FILTERS: ResourceLibraryFilters = {
+  q: '',
+  kind: ANY_RESOURCE_KIND,
+  archived: 'exclude',
+};
+
+/** One row of the resource library flattened into display order, with its nesting depth. */
+export interface ResourceTreeRow {
+  resource: ResourceSummary;
+  /**
+   * 0 for a top-level row; +1 per `parentId` hop. Drives the row's visual indentation. Nesting is
+   * never conveyed by indentation alone — the always-present **Group** column names each row's
+   * parent in text, which is what carries the relationship non-visually (WCAG 1.3.1).
+   */
+  depth: number;
+}
+
+/**
+ * Flatten the org's resource library into DEPTH-FIRST display order (ADR-0053 §3), so a group is
+ * immediately followed by its own contents. Built entirely client-side from the `parentId` each
+ * row already carries — the library query pages the whole library, so no second request and no
+ * tree endpoint are needed.
+ *
+ * Rows whose parent is absent from the list (soft-deleted mid-session, or filtered out) are
+ * treated as top-level rather than dropped: losing a resource from the library screen would be a
+ * far worse failure than showing it un-nested. Siblings keep the server's order (created_at, id),
+ * which is the order the flat list already used.
+ */
+export function toResourceTreeRows(resources: readonly ResourceSummary[]): ResourceTreeRow[] {
+  const ids = new Set(resources.map((r) => r.id));
+  const childrenOf = new Map<string, ResourceSummary[]>();
+  const roots: ResourceSummary[] = [];
+  for (const resource of resources) {
+    const parentId = resource.parentId;
+    if (parentId === null || !ids.has(parentId)) {
+      roots.push(resource);
+      continue;
+    }
+    const siblings = childrenOf.get(parentId);
+    if (siblings) siblings.push(resource);
+    else childrenOf.set(parentId, [resource]);
+  }
+
+  const rows: ResourceTreeRow[] = [];
+  // Iterative walk with a visited guard: the API's acyclicity + depth invariants make a cycle
+  // impossible, but the UI must never hang on unexpected data it did not create.
+  const visited = new Set<string>();
+  const walk = (resource: ResourceSummary, depth: number): void => {
+    if (visited.has(resource.id)) return;
+    visited.add(resource.id);
+    rows.push({ resource, depth });
+    for (const child of childrenOf.get(resource.id) ?? []) walk(child, depth + 1);
+  };
+  for (const root of roots) walk(root, 0);
+  return rows;
+}
 
 /**
  * Human labels for the resource loading curves (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — used by the
@@ -50,6 +144,10 @@ export const resourceFormSchema = z.object({
   kind: z.enum(RESOURCE_KINDS),
   // A blank select value is "inherit the plan calendar"; a chosen id round-trips.
   calendarId: z.string().optional(),
+  // The parent GROUP in the resource tree (ADR-0053 §3). A blank select value means "top level";
+  // a chosen id round-trips. The semantic rules (GROUP parent, acyclic, same-org, depth <= 10) are
+  // server-owned — the picker only ever offers valid groups, so a rejection is defence in depth.
+  parentId: z.string().optional(),
   // Levelling capacity — the max units/hour the resource can supply at once (ADR-0041; the reserved
   // `max_units_per_hour` the levelling pass reads as its ceiling). Optional (blank = uncapped, the
   // triad stays capless); `>= 0` (N21) with at most 4 decimal places (DECIMAL(18,4)). Registered

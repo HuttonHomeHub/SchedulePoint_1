@@ -1,7 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { MAX_WORKING_WEEKDAYS_MASK, MIN_WORKING_WEEKDAYS_MASK } from '@repo/types';
+import type { CalendarScope } from '@prisma/client';
+import { CALENDAR_SCOPES, MAX_WORKING_WEEKDAYS_MASK, MIN_WORKING_WEEKDAYS_MASK } from '@repo/types';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+
+import { IsCalendarScopePaired } from './calendar-scope-validators';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -35,4 +48,28 @@ export class CreateCalendarDto {
   @Transform(trim)
   @MaxLength(2000)
   description?: string;
+
+  @ApiPropertyOptional({
+    enum: CALENDAR_SCOPES,
+    default: 'ORG',
+    description:
+      'Which tier to create the calendar in (ADR-0053). ORG is the shared organisation ' +
+      'library and additionally requires `calendar:manage_org`; PROJECT is local to one ' +
+      'project and requires `projectId`. Omitted ⇒ ORG (today’s behaviour).',
+  })
+  @IsOptional()
+  @IsIn(CALENDAR_SCOPES)
+  @IsCalendarScopePaired()
+  scope?: CalendarScope;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'The owning project — required when `scope` is PROJECT, forbidden otherwise. Must be ' +
+      'an active project in this organisation (404 otherwise).',
+  })
+  @IsOptional()
+  @IsUUID()
+  @IsCalendarScopePaired()
+  projectId?: string;
 }

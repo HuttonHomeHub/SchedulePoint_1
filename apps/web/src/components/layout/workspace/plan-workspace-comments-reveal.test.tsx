@@ -83,6 +83,9 @@ vi.mock('@/features/projects', () => ({
 vi.mock('@/features/clients', () => ({ useClient: () => query({ name: 'Client' }) }));
 vi.mock('@/features/calendars', () => ({
   useCalendars: () => query([]),
+  // The plan/activity pickers read the PROJECT-usable list behind VITE_LIBRARY_SCOPING
+  // (ADR-0053 §1); flag-off it resolves to the same org library these tests already stub.
+  usePlanScopedCalendars: () => query([]),
   useCalendar: () => query(undefined),
 }));
 vi.mock('@/features/baselines', () => ({

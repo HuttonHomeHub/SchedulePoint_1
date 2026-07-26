@@ -85,7 +85,9 @@ export class ResourceAssignmentsController {
   @ApiUnprocessableEntityResponse({
     description:
       'Negative budgetedUnits / unitsPerHour (N14/N19), a zero unitsPerHour on a units-driven ' +
-      'duration recompute (N20, UNITS_PER_HOUR_ZERO), or a MATERIAL resource set as the driver.',
+      'duration recompute (N20, UNITS_PER_HOUR_ZERO), a MATERIAL resource set as the driver, a ' +
+      'GROUP (GROUP_NOT_ASSIGNABLE), or an ARCHIVED resource (RESOURCE_ARCHIVED, ADR-0053 §4 — ' +
+      'only a NEW assignment is refused; editing an existing one still succeeds).',
   })
   @ApiConflictResponse({
     description:

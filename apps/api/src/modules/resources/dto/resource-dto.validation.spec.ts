@@ -55,3 +55,53 @@ describe('resource DTO @Max overflow guards (TECH_DEBT #40a)', () => {
     });
   }
 });
+
+/**
+ * The resource-tree DTO surface (ADR-0053 §3): `parentId` accepts a UUID v7 or an explicit null
+ * (top level) and rejects anything else at the boundary, and `kind` now accepts `GROUP`. The
+ * semantic rules (GROUP parent, acyclicity, depth, no scheduling fields) are service-owned and
+ * covered in `resources.service.spec.ts` / `resource-tree.guard.spec.ts`.
+ */
+describe('resource-tree DTO fields (ADR-0053 §3)', () => {
+  const PARENT_ID = '0197f6b0-0000-7000-8000-00000000beef';
+
+  it('accepts a UUID parentId on create', () => {
+    const errors = errorsFor(CreateResourceDto, {
+      name: 'Crew',
+      kind: 'LABOUR',
+      parentId: PARENT_ID,
+    });
+    expect(errors.some((e) => e.property === 'parentId')).toBe(false);
+  });
+
+  it('accepts an explicit null parentId (top level) on create and update', () => {
+    expect(
+      errorsFor(CreateResourceDto, { name: 'Crew', kind: 'LABOUR', parentId: null }).some(
+        (e) => e.property === 'parentId',
+      ),
+    ).toBe(false);
+    expect(
+      errorsFor(UpdateResourceDto, { version: 1, parentId: null }).some(
+        (e) => e.property === 'parentId',
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a non-UUID parentId at the boundary', () => {
+    const errors = errorsFor(UpdateResourceDto, { version: 1, parentId: 'not-a-uuid' });
+    expect(errors.some((e) => e.property === 'parentId')).toBe(true);
+  });
+
+  it('accepts the GROUP kind on create and update', () => {
+    expect(
+      errorsFor(CreateResourceDto, { name: 'Groundworks', kind: 'GROUP' }).some(
+        (e) => e.property === 'kind',
+      ),
+    ).toBe(false);
+    expect(
+      errorsFor(UpdateResourceDto, { version: 1, kind: 'GROUP' }).some(
+        (e) => e.property === 'kind',
+      ),
+    ).toBe(false);
+  });
+});

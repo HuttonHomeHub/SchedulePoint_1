@@ -285,7 +285,13 @@ describe('PlansService', () => {
     it('assigns a same-org active calendar and clears it on explicit null', async () => {
       plans.findActiveByIdInOrg.mockResolvedValue(plan());
       plans.updateIfVersionMatches.mockResolvedValue(1);
-      calendars.findActiveByIdInOrg.mockResolvedValue({ id: 'cal-1' });
+      // An ORG-tier calendar is usable by any plan in the org (ADR-0053 §2).
+      calendars.findActiveByIdInOrg.mockResolvedValue({
+        id: 'cal-1',
+        scope: 'ORG',
+        projectId: null,
+        archivedAt: null,
+      });
 
       await service.update(principalWith(ALL), 'acme', 'pl1', { calendarId: 'cal-1', version: 1 });
       expect((plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch).calendarId).toBe(

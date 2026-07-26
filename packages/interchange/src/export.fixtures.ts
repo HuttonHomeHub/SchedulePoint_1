@@ -32,6 +32,7 @@ export function buildExportGraph(overrides: ExportGraphOverrides = {}): ExportGr
       {
         key: 'CAL1',
         name: 'Standard',
+        scope: 'PROJECT',
         // Mon–Fri 08:00–16:00 (weekday 0 = Monday … 4 = Friday; minutes from midnight).
         shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
         exceptions: [
@@ -115,6 +116,7 @@ export function buildRichExportGraph(overrides: ExportGraphOverrides = {}): Expo
       {
         key: 'CAL1',
         name: 'Standard',
+        scope: 'PROJECT',
         shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
         exceptions: [{ startDate: '2026-01-01', endDate: '2026-01-01', label: null, windows: [] }],
       },
@@ -280,6 +282,8 @@ export interface ComparableGraph {
   calendars: Array<{
     key: string;
     name: string;
+    /** The ADR-0053 §5 tier. Normalised to `PROJECT` for an MSPDI trip (MSPDI cannot carry a tier). */
+    scope: string;
     shifts: string[]; // "weekday:start-end", sorted.
     exceptions: Array<{ date: string; working: boolean; windows: string[] }>;
   }>;
@@ -346,9 +350,10 @@ function comparableProgress(
  * Project an export or re-imported graph onto the shared comparable shape. The parameter is typed
  * `ExportGraph`, which is a structural alias of the import graph, so a re-imported `ImportGraph` is
  * accepted here too (both collapse to the same normalised form). `format` scopes the tolerated loss:
- * `'MSPDI'` normalises the two assignment fields Microsoft Project cannot carry (the driving flag and the
- * per-assignment production rate) on both sides, so an MSPDI round trip still asserts full data equality
- * for everything MSP *can* represent (the loss is asserted separately as an approximation finding).
+ * `'MSPDI'` normalises the three dimensions Microsoft Project cannot carry (the driving flag, the
+ * per-assignment production rate, and the ADR-0053 §5 calendar tier) on both sides, so an MSPDI round trip
+ * still asserts full data equality for everything MSP *can* represent (each loss is asserted separately as
+ * a finding).
  */
 export function toComparable(
   graph: ExportGraph,
@@ -366,6 +371,9 @@ export function toComparable(
       .map((calendar) => ({
         key: calendar.key,
         name: calendar.name,
+        // XER carries the tier as `clndr_type`, so it round-trips exactly; MSPDI has no equivalent and
+        // every re-imported calendar lands project-local → normalise both sides for an MSPDI trip.
+        scope: mspdiLossy ? 'PROJECT' : calendar.scope,
         shifts: calendar.shifts.map((shift) => `${shift.weekday}:${windowKey(shift)}`).sort(),
         exceptions: [...calendar.exceptions]
           .flatMap((exception) => {

@@ -2,17 +2,28 @@ import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { Spinner } from '@/components/ui/spinner';
-import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
+import { LIBRARY_SCOPING_ENABLED, SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
+import { ProjectCalendarsSection } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { ImportScheduleButton } from '@/features/interchange';
 import { CreatePlanButton, PlansTable } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { canImportSchedule, canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import {
+  canImportSchedule,
+  canManageHierarchy,
+  canManageOrgCalendars,
+  useOrgRole,
+} from '@/hooks/use-org-role';
 
 /**
  * A project's plans screen (`/orgs/$orgSlug/projects/$projectId`): the project's
  * plans, with create/edit/delete for writers. Individual plan detail (and the
  * future TSLD canvas) lives at `/orgs/$orgSlug/plans/$planId`.
+ *
+ * Behind `LIBRARY_SCOPING_ENABLED` it also carries the project's **Calendars** section (ADR-0053
+ * §1). This screen is the project's only detail surface — there is no separate project-settings
+ * route — and it already owns the project's scoped children (its plans), so the project's scoped
+ * calendars belong beside them rather than behind a new route.
  */
 export function ProjectDetailScreen(): React.ReactElement {
   const params = useParams({ strict: false });
@@ -21,6 +32,7 @@ export function ProjectDetailScreen(): React.ReactElement {
   const role = useOrgRole(orgSlug);
   const canWrite = canManageHierarchy(role);
   const canImport = canImportSchedule(role);
+  const canManageOrgCals = canManageOrgCalendars(role);
   const project = useProject(orgSlug, projectId);
   // The parent client (for the breadcrumb trail); resolved once the project loads.
   const client = useClient(orgSlug, project.data?.clientId ?? '');
@@ -86,6 +98,7 @@ export function ProjectDetailScreen(): React.ReactElement {
               projectId={projectId}
               projectName={project.data.name}
               canImport={canImport}
+              canManageOrgCalendars={canManageOrgCals}
             />
             {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
           </div>
@@ -97,6 +110,18 @@ export function ProjectDetailScreen(): React.ReactElement {
       <div className="mt-3">
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
       </div>
+      {/* Flag OFF ⇒ nothing extra renders and no extra request fires — byte-for-byte the prior screen. */}
+      {LIBRARY_SCOPING_ENABLED ? (
+        <div className="mt-10">
+          <ProjectCalendarsSection
+            orgSlug={orgSlug}
+            projectId={projectId}
+            projectName={project.data.name}
+            canWrite={canWrite}
+            canManageOrg={canManageOrgCals}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -510,6 +510,112 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   start-edge resize + lag drag → **M4/M5** the bar/link **visual refresh** (token-resolved, inside
   the Canvas-2D ≤ 4 ms p95 @ 2,000 budget) — all landed. Builds on
   ADR-0021/0022/0023/0028/0036/0048.
+- **ADR-0053** _(**Accepted** — every section; the library-scoping epic's web surface is **live**,
+  `VITE_LIBRARY_SCOPING` **default-on** 2026-07-26)_ — Calendar scoping tiers & the resource
+  management layer: give calendars P6's missing **project tier** — a `CalendarScope { ORG, PROJECT }`
+  discriminator + a nullable `calendars.project_id` (FK RESTRICT) pinned together by a **fail-closed**
+  `CASE … ELSE false` CHECK (the ADR-0046 precedent), with name uniqueness split into **two partial
+  uniques** (per-org for ORG, per-project for PROJECT; cross-tier reuse deliberately allowed). Constant
+  `DEFAULT ORG` ⇒ every existing row keeps today's behaviour with **no data migration** — the M1
+  acceptance bar. The tier is an invariant, not a convention: **ONE shared guard**
+  `assertCalendarUsableBy({ calendarId, organizationId, projectId, currentCalendarId })` is called at **every** seam
+  (`plan.calendarId`, `activity.calendarId`, `resource.calendar_id` — where `projectId: null` **hard
+  rejects** any project calendar, 422 `RESOURCE_REQUIRES_ORG_CALENDAR`), under the existing calendar
+  advisory lock; cross-org stays **404** (no existence oracle), in-org wrong tier is **422
+  `CALENDAR_WRONG_SCOPE`**. The per-relationship lag calendar is a `LagCalendarSource` **enum**, not an
+  FK — **no seam**, locked in by a structural seam-set test. Scope change: **widen free, narrow guarded**
+  (409 `CALENDAR_SCOPE_NARROWING_BLOCKED` with per-class counts, under the lock); project soft-delete
+  **cascades** its calendars + exceptions in the same `delete_batch_id` (never an ORG calendar); new
+  **`calendar:manage_org`** permission (Planner + Org Admin — zero capability change) gates shared-library
+  writes. The resource pool deliberately stays **one org-global pool** (levelling/over-allocation depend
+  on it); its manageability comes later as an adjacency-list `parent_id` + a non-assignable `GROUP` kind
+  (§3, M3), `archived_at` (§4, M4) and interchange tiering (§5, M5). **The CPM engine is untouched** —
+  it resolves a calendar BY ID and never sees `scope`/`project_id`/`archived_at`, so the ADR-0034 recalc
+  parity gate is structurally trivial. Builds on ADR-0012/0016/0024/0036/0037/0038/0039/0046/0050.
+  **M4 (§4) adds the archive lifecycle, server-side search and the shared picker:** a nullable
+  `archived_at` on **both** libraries — **orthogonal to soft delete**, so an archived row stays valid,
+  keeps every existing reference live and **keeps scheduling identically**, is hidden from pickers, and
+  refuses only **NEW** usages (422 `RESOURCE_ARCHIVED` on assignment _create_ — _update_ still succeeds;
+  422 `CALENDAR_ARCHIVED` inside the same shared guard, which gains a **non-optional `currentCalendarId`**
+  so re-submitting an existing binding is not "new" and an entity on an archived calendar stays editable).
+  Archiving is deliberately **NOT blocked by use** — the whole point, and the only way to retire a calendar
+  `CALENDAR_IN_USE` refuses to delete (CQ-5); it takes no lock, no cascade (a `GROUP`'s subtree is not
+  archived) and no in-use count, and an archived referencer still **blocks** a §2 narrowing. An archived
+  row **keeps its name/`code`** (the partial uniques stay `deleted_at`-only) so **unarchive can never
+  fail** — the accepted cost is a 409 carrying the archived row's id. Server-side `q` + `kind`/`scope`/
+  `archived` filters on both list routes with cursor pagination; **no index changes** (measured: 0.21 ms
+  default page / 2.9 ms worst-case search at 5,000 rows with 40% archived — the candidate partial saved
+  0.14 ms for 1,296 kB, and narrowing `idx_calendars_project_id`/`idx_resources_parent_id` would be a
+  cascade-correctness bug), with `pg_trgm` GIN the documented measure-first escalation. Web: **one shared
+  hand-rolled APG `Combobox`** (`components/ui/combobox.tsx`, the `menu.tsx` precedent) replacing the raw
+  `<Select>` pickers — controlled server search, grouped/annotated options, `aria-activedescendant`,
+  announced result counts, and the "render the current value even when outside the filtered page" rule
+  generalised. Interchange (CQ-4) **matches + auto-unarchives + reports a finding** for resources; for calendars
+  M5 answered it **not applicable** (an import never reuses a calendar, so there is nothing to match).
+  **M5 (§5) makes interchange respect the tier:** the pure mapper (`@repo/interchange`) decides each
+  imported calendar's tier and **reports every decision** — a calendar an imported **resource** holds
+  is **forced `ORG`** (a resource is org-global; the commit re-asserts it and fails the transaction
+  otherwise), a source **global** (`CA_Base`) calendar lands `PROJECT` with a "promote it" finding
+  unless the new optional `globalCalendarScope: 'ORG'` upload field opts in, and everything else lands
+  `PROJECT` **pinned to the target project** — so a fresh import adds **zero rows to the org library**.
+  P6's `clndr_type` (previously neither read nor emitted) now round-trips: read on import to drive the
+  tier, emitted on export from `scope` + resource-reference. **MSPDI has no equivalent** (`IsBaseCalendar`
+  is inheritance, not a tier) — import is always `PROJECT`, export reports the tier as a **drop**. A name
+  the target tier already holds is **suffixed + reported, never reused** (two calendars sharing a name can
+  have different working weeks), which also fixes importing two files with a shared calendar name into one
+  project. The ADR-0050 mapping-contract table is updated in lock-step; the CPM engine is untouched.
+  **M2 (landed)** gives §1–§2 their **web surface** behind `VITE_LIBRARY_SCOPING` (default off): a `Scope`
+  badge column + an Organisation/Project/All filter on the calendar library; a **Calendars section on the
+  project-detail screen** (the project's only detail surface — no separate settings route) reading
+  `GET …/projects/:projectId/calendars`; a scope choice on **create** (the shared library disabled with an
+  explanation without `calendar:manage_org`, the project implied when created from one); confirmed
+  **promote / narrow** tier moves; **tier-grouped `<optgroup>`** plan + activity calendar pickers fed by
+  that project-usable list (so a picker can never offer a calendar the write seam would 422), with the
+  resource picker deliberately **organisation-only**; and one shared `lib/api/calendar-scope-errors` mapper
+  turning the two 422s and the narrowing 409 (**with its per-class counts**) into actionable sentences.
+  Frontend-only — no API/schema/engine change; flag-off is byte-for-byte the prior surface (a dedicated
+  flag-off parity suite pins every touched screen).
+  **M3 (landed)** accepts **§3, the resource hierarchy**: `resources.parent_id` (an adjacency-list
+  self-FK, the ADR-0038 WBS precedent) plus a new non-assignable **`GROUP` `ResourceKind`** — a grouping
+  node with **no calendar, capacity or cost** (the same-row, fail-closed `CASE … ELSE false`
+  `ck_resources_group_no_scheduling_fields`) that may **never be an assignment endpoint** (422
+  `GROUP_NOT_ASSIGNABLE`). Those two facts make the levelling / histogram / EV parity argument
+  **structural** — all three read from `resource_assignments`, so a node that cannot be assigned cannot
+  enter demand, capacity or cost; **the CPM engine is untouched** (`EngineResource` is still
+  `id`/`capacity`/`calendar`, pinned by a structural test). The pool stays **one org-global pool**: this
+  is navigation, not a tier. Acyclicity, same-org, "only a GROUP may parent" and **depth ≤ 10** (measured
+  as parent-depth **+ moved-subtree height**) are service invariants held under a new **org-scoped**
+  `resource-tree` advisory lock — a per-resource lock cannot serialise two **mirror** reparents, which
+  take different keys. Deleting a GROUP counts `RESOURCE_IN_USE` across its **whole subtree** and
+  soft-deletes that branch under **one** `delete_batch_id` (lock order: tree lock → per-resource locks
+  ascending by id). Reads add `?parentId=<uuid>|null` and a `parentId` on every row — deliberately **no
+  `tree=true`**, since the client already pages the library and nests it. Two migrations, because
+  Postgres forbids using an enum label in the transaction that added it. Web surface behind the existing
+  `VITE_LIBRARY_SCOPING` (depth-first rows + a `Group` column + a "Not assignable" badge + a parent
+  picker; groups excluded from the assignment picker), flag-off byte-for-byte.
+  **M6 (landed) is the enablement milestone:** `VITE_LIBRARY_SCOPING` flips **default-ON**
+  (2026-07-26) once the deferred specialist gates ran over the whole epic diff and every blocking
+  finding was folded — **ux** (the two library screens' filters moved into typed **URL search
+  params**, so a filtered view is deep-linkable and survives a reload; a shared `SearchField`
+  primitive with a leading Lucide icon and a real, keyboard-operable clear button; the combobox's
+  raw `▾` glyph replaced with `ChevronDown`; **"Load more" made keyboard-reachable** as the last row
+  in the arrow-key sequence — WCAG 2.1.1; archive badge/filter/action added to the project Calendars
+  section, which previously made an archived project calendar vanish from the one screen listing
+  it), **accessibility** (the combobox renders its `emptyOption` label as the selection instead of
+  blanking — "None"/"Inherit" is the most common state of all; the assignment resource error wired
+  to its control on both branches; the library tables **announce their settled result count** —
+  WCAG 4.1.3 Status Messages), **api** (the missing 422/409 OpenAPI declarations on the resource
+  create/update routes, and the calendar-scope 422 newly reachable on activity create/update) and
+  **backend-performance** (the GROUP-delete **per-descendant advisory-lock loop batched into one
+  `unnest` statement** — measured ~830 ms → ~13 ms for a 2,000-row subtree, all of it previously
+  spent holding the org-wide resource-tree lock). It also closes TECH_DEBT #55 by adding the
+  `globalCalendarScope` import control (a `calendar:manage_org`-gated checkbox that re-runs the
+  dry-run, so the report always describes the import being confirmed), and adds the flag-on
+  Playwright journey `apps/web/e2e-library/library.spec.ts` (`pnpm --filter @repo/web
+test:e2e:library`, its own CI step) proving the tier boundary and the archive-is-not-delete
+  distinction end to end. The flag-off parity suites are **kept and pinned** (`vi.mock` of
+  `@/config/env` with `LIBRARY_SCOPING_ENABLED: false`) rather than weakened — that is the rollback
+  contract.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

@@ -16,10 +16,14 @@ import { apiFetch } from '@/lib/api/client';
  * to null), and the assign form carries the cost inputs on POST. Flag-off behaviour is covered by
  * `ActivityResourcesDialog.test.tsx`.
  */
+// `LIBRARY_SCOPING_ENABLED` is pinned OFF so the assign form's resource picker stays the BASE
+// native `<select>` this suite was written against; the searched `Combobox` the flag turns it into
+// has its own suite (`ActivityResourcesDialog.picker.test.tsx`, ADR-0053 §4).
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   EARNED_VALUE_ENABLED: true,
   RESOURCES_ENABLED: true,
+  LIBRARY_SCOPING_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -30,9 +34,11 @@ const CREW: ResourceSummary = {
   code: null,
   description: null,
   kind: 'LABOUR',
+  parentId: null,
   maxUnitsPerHour: null,
   costPerUnit: null,
   calendarId: null,
+  archivedAt: null,
   version: 1,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',

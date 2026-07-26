@@ -15,6 +15,7 @@ const fixture: CanonicalModel = {
     {
       id: 'CAL-1',
       name: 'Standard 5-day',
+      sourceType: 'PROJECT',
       workWeek: {
         monday: [{ start: '08:00', end: '16:00' }],
         tuesday: [{ start: '08:00', end: '16:00' }],

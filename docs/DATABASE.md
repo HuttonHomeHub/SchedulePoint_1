@@ -95,6 +95,26 @@
 - **Hard deletes** are reserved for compliance/erasure requests and are explicit,
   audited, and rare.
 
+**Archive (`archived_at`) is _not_ soft delete** (ADR-0053 §4). Where a library row
+must be **retired without breaking its references**, add a nullable
+`archived_at timestamptz` alongside `deleted_at` — they are orthogonal, and every
+combination of the two is legal (an archived row may later be deleted):
+
+| Column        | Meaning                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `deleted_at`  | the row is **gone**; nothing active may reference it (the `*_IN_USE` guards keep that true) and it is excluded by default   |
+| `archived_at` | the row is **retired but valid**; existing references stay live and behave identically, and only **new** usages are refused |
+
+Rules for an archive column: it is **server-set** (a `POST …/archive` / `…/unarchive`
+action, never a writable PATCH field); list endpoints take a **tri-state** filter
+(`exclude` (default) / `include` / `only`); and — the non-obvious one — **an archived
+row keeps its name**. Partial uniques stay predicated on `deleted_at IS NULL` only,
+because unarchive is an unguarded, version-gated metadata write that must never be able
+to fail on a name taken meanwhile. The accepted cost is that creating an **active** row
+on an archived row's name is a 409 (the service should name the archived row in
+`details` so the UI can offer "unarchive instead"). Soft delete may free its name
+precisely because **restore** is already a guarded, conflict-capable operation.
+
 ## Auditing
 
 - Every table carries **`created_at`** and **`updated_at`** (`timestamptz`,
@@ -194,61 +214,63 @@ Managed composite indexes are declared in `schema.prisma` (`@@index`, Prisma-nam
 partial indexes are **raw SQL in the migration** because Prisma cannot express a
 `WHERE` predicate.
 
-| Index                                         | On                                     | Kind           | Serves                                                                                                                                                                                                                     |
-| --------------------------------------------- | -------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clients_organization_id_created_at_id_idx`   | `(organization_id, created_at, id)`    | full composite | `organization_id` FK (leftmost prefix) + org-scoped active list + its `(created_at, id)` cursor sort — subsumes a standalone org index                                                                                     |
-| `projects_client_id_created_at_id_idx`        | `(client_id, created_at, id)`          | full composite | `client_id` FK + list-projects-under-a-client + cursor sort — subsumes a standalone client index                                                                                                                           |
-| `projects_organization_id_idx`                | `(organization_id)`                    | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR loads (no org-wide ordered list exists, so no composite)                                                                                                                 |
-| `plans_project_id_created_at_id_idx`          | `(project_id, created_at, id)`         | full composite | `project_id` FK + list-plans-under-a-project + cursor sort — subsumes a standalone project index                                                                                                                           |
-| `plans_organization_id_idx`                   | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
-| `uq_clients_org_name`                         | `(organization_id, name)`              | partial unique | name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `NAME_TAKEN` (409) + name lookups                                                                                                                  |
-| `uq_projects_client_name`                     | `(client_id, name)`                    | partial unique | name unique per client among live rows                                                                                                                                                                                     |
-| `uq_plans_project_name`                       | `(project_id, name)`                   | partial unique | name unique per project among live rows                                                                                                                                                                                    |
-| `activities_plan_id_created_at_id_idx`        | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + list-activities-under-a-plan + cursor sort — subsumes a standalone plan index                                                                                                                               |
-| `activities_organization_id_idx`              | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
-| `uq_activities_plan_name`                     | `(plan_id, name)`                      | partial unique | name unique per plan among live rows                                                                                                                                                                                       |
-| `uq_activities_plan_code`                     | `(plan_id, code)`                      | partial unique | optional `code` unique per plan among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt                                                                                                   |
-| `idx_clients_delete_batch_id`                 | `(delete_batch_id)`                    | partial        | batch restore lookup (`WHERE delete_batch_id IS NOT NULL`); tiny — only soft-deleted rows carry a value                                                                                                                    |
-| `idx_projects_delete_batch_id`                | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `idx_plans_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `idx_plans_calendar_id`                       | `(calendar_id)`                        | partial        | the delete-in-use guard's active-plan count `WHERE calendar_id = ? AND deleted_at IS NULL` (`WHERE deleted_at IS NULL AND calendar_id IS NOT NULL`); calendars are soft-deleted only, so the FK RESTRICT check never fires |
-| `idx_activities_calendar_id`                  | `(calendar_id)`                        | partial        | the delete-in-use guard's active-**activity** count `WHERE calendar_id = ? AND deleted_at IS NULL` (`WHERE deleted_at IS NULL AND calendar_id IS NOT NULL`); the activity twin of `idx_plans_calendar_id` (M5, ADR-0037)   |
-| `idx_activities_delete_batch_id`              | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `dependencies_plan_id_created_at_id_idx`      | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + plan-level dependency list + cursor sort — subsumes a standalone plan index                                                                                                                                 |
-| `dependencies_predecessor_id_idx`             | `(predecessor_id)`                     | full           | `predecessor_id` FK + "successors of X" list (edges out of X) + the cycle-walk adjacency load                                                                                                                              |
-| `dependencies_successor_id_idx`               | `(successor_id)`                       | full           | `successor_id` FK + "predecessors of X" list (edges into X)                                                                                                                                                                |
-| `dependencies_organization_id_idx`            | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
-| `uq_dependencies_pred_succ_type`              | `(predecessor_id, successor_id, type)` | partial unique | at most one **active** link of each type per ordered pair (`WHERE deleted_at IS NULL`); backs `DUPLICATE_DEPENDENCY` (409); allows the SS+FF overlap ladder                                                                |
-| `idx_dependencies_delete_batch_id`            | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `calendars_organization_id_created_at_id_idx` | `(organization_id, created_at, id)`    | full composite | `organization_id` FK + org-scoped active calendar list + cursor sort — subsumes a standalone org index                                                                                                                     |
-| `uq_calendars_org_name`                       | `(organization_id, name)`              | partial unique | calendar name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `DUPLICATE_CALENDAR` (409)                                                                                                                |
-| `calendar_exceptions_calendar_id_date_idx`    | `(calendar_id, date)`                  | full composite | `calendar_id` FK + the editor's list-all-exceptions load (all rows) ordered by date                                                                                                                                        |
-| `calendar_exceptions_organization_id_idx`     | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
-| `uq_calendar_exceptions_cal_date`             | `(calendar_id, date)`                  | partial unique | at most one **active** exception per `(calendar, date)` (`WHERE deleted_at IS NULL`); backs `DUPLICATE_EXCEPTION` (409) **and** the engine's active-exception load                                                         |
-| `idx_calendars_delete_batch_id`               | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `idx_calendar_exceptions_delete_batch_id`     | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `resources_organization_id_created_at_id_idx` | `(organization_id, created_at, id)`    | full composite | `organization_id` FK + org-scoped active resource list + cursor sort — subsumes a standalone org index (the `Calendar` pattern)                                                                                            |
-| `uq_resources_org_name`                       | `(organization_id, name)`              | partial unique | resource name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `DUPLICATE_RESOURCE` (409)                                                                                                                |
-| `uq_resources_org_code`                       | `(organization_id, code)`              | partial unique | optional `code` unique per org among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt (the `uq_activities_plan_code` pattern)                                                            |
-| `idx_resources_calendar_id`                   | `(calendar_id)`                        | partial        | the (extended) `CALENDAR_IN_USE` guard's active-resource count + the M7.2 driving-calendar load (`WHERE calendar_id = ? AND deleted_at IS NULL`); the `idx_activities_calendar_id` twin                                    |
-| `idx_resources_delete_batch_id`               | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `resource_assignments_organization_id_idx`    | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
-| `uq_resource_assignments_activity_resource`   | `(activity_id, resource_id)`           | partial unique | one **active** assignment per (activity, resource) (`WHERE deleted_at IS NULL`); backs `DUPLICATE_ASSIGNMENT` (409); its leftmost prefix `activity_id` subsumes an active-activity assignment-list index                   |
-| `uq_resource_assignments_activity_driving`    | `(activity_id)`                        | partial unique | at most one **driving** assignment per activity (`WHERE is_driving AND deleted_at IS NULL`); the ≤1-driver backstop + the recalc "find the driving assignment" load                                                        |
-| `idx_resource_assignments_resource_id`        | `(resource_id)`                        | partial        | the `RESOURCE_IN_USE` guard's active-assignment count (`WHERE resource_id = ? AND deleted_at IS NULL`)                                                                                                                     |
-| `idx_resource_assignments_delete_batch_id`    | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `activity_steps_organization_id_idx`          | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
-| `uq_activity_steps_activity_seq`              | `(activity_id, seq)`                   | partial unique | one **active** step per `(activity, seq)` (`WHERE deleted_at IS NULL`); backs the bulk-replace dup-seq (409); its leftmost prefix `activity_id` (pre-sorted by `seq`) subsumes an active-step list index                   |
-| `idx_activity_steps_delete_batch_id`          | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `notes_plan_id_created_at_id_idx`             | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + the PLAN-notes thread list & newest-first cursor (filter `entity_type='PLAN'`, backward scan) + the plan cascade sweep by `plan_id` — subsumes a standalone `plan_id` index (ADR-0046)                      |
-| `notes_organization_id_idx`                   | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                               |
-| `idx_notes_activity_created`                  | `(activity_id, created_at, id)`        | partial        | the ACTIVITY-notes thread list & newest-first cursor (`WHERE deleted_at IS NULL AND activity_id IS NOT NULL` — excludes PLAN notes + soft-deleted)                                                                         |
-| `idx_notes_plan_activity_counts`              | `(plan_id, activity_id)`               | partial        | the badge note-counts `GROUP BY activity_id` for a plan (`WHERE deleted_at IS NULL AND entity_type='ACTIVITY'`; a grouped scan, no N+1)                                                                                    |
-| `idx_notes_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
-| `plan_shares_token_hash_key`                  | `(token_hash)`                         | full unique    | the guest bearer-token lookup; unique across ALL rows (incl. revoked/soft-deleted) so a hash resolves to at most one grant and is never reused (the `invitations.token_hash` precedent, ADR-0051)                          |
-| `plan_shares_organization_id_idx`             | `(organization_id)`                    | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR / audit loads                                                                                                                                                            |
-| `idx_plan_shares_plan_id`                     | `(plan_id)`                            | partial        | list a plan's LIVE links + the plan-cascade filter (`WHERE deleted_at IS NULL`); partial (not a full composite backing the FK) because plans soft-delete only, so the plan FK RESTRICT check never fires                   |
-| `idx_plan_shares_delete_batch_id`             | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                       |
+| Index                                         | On                                     | Kind           | Serves                                                                                                                                                                                                                         |
+| --------------------------------------------- | -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `clients_organization_id_created_at_id_idx`   | `(organization_id, created_at, id)`    | full composite | `organization_id` FK (leftmost prefix) + org-scoped active list + its `(created_at, id)` cursor sort — subsumes a standalone org index                                                                                         |
+| `projects_client_id_created_at_id_idx`        | `(client_id, created_at, id)`          | full composite | `client_id` FK + list-projects-under-a-client + cursor sort — subsumes a standalone client index                                                                                                                               |
+| `projects_organization_id_idx`                | `(organization_id)`                    | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR loads (no org-wide ordered list exists, so no composite)                                                                                                                     |
+| `plans_project_id_created_at_id_idx`          | `(project_id, created_at, id)`         | full composite | `project_id` FK + list-plans-under-a-project + cursor sort — subsumes a standalone project index                                                                                                                               |
+| `plans_organization_id_idx`                   | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                                   |
+| `uq_clients_org_name`                         | `(organization_id, name)`              | partial unique | name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `NAME_TAKEN` (409) + name lookups                                                                                                                      |
+| `uq_projects_client_name`                     | `(client_id, name)`                    | partial unique | name unique per client among live rows                                                                                                                                                                                         |
+| `uq_plans_project_name`                       | `(project_id, name)`                   | partial unique | name unique per project among live rows                                                                                                                                                                                        |
+| `activities_plan_id_created_at_id_idx`        | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + list-activities-under-a-plan + cursor sort — subsumes a standalone plan index                                                                                                                                   |
+| `activities_organization_id_idx`              | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                                   |
+| `uq_activities_plan_name`                     | `(plan_id, name)`                      | partial unique | name unique per plan among live rows                                                                                                                                                                                           |
+| `uq_activities_plan_code`                     | `(plan_id, code)`                      | partial unique | optional `code` unique per plan among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt                                                                                                       |
+| `idx_clients_delete_batch_id`                 | `(delete_batch_id)`                    | partial        | batch restore lookup (`WHERE delete_batch_id IS NOT NULL`); tiny — only soft-deleted rows carry a value                                                                                                                        |
+| `idx_projects_delete_batch_id`                | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `idx_plans_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `idx_plans_calendar_id`                       | `(calendar_id)`                        | partial        | the delete-in-use guard's active-plan count `WHERE calendar_id = ? AND deleted_at IS NULL` (`WHERE deleted_at IS NULL AND calendar_id IS NOT NULL`); calendars are soft-deleted only, so the FK RESTRICT check never fires     |
+| `idx_activities_calendar_id`                  | `(calendar_id)`                        | partial        | the delete-in-use guard's active-**activity** count `WHERE calendar_id = ? AND deleted_at IS NULL` (`WHERE deleted_at IS NULL AND calendar_id IS NOT NULL`); the activity twin of `idx_plans_calendar_id` (M5, ADR-0037)       |
+| `idx_activities_delete_batch_id`              | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `dependencies_plan_id_created_at_id_idx`      | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + plan-level dependency list + cursor sort — subsumes a standalone plan index                                                                                                                                     |
+| `dependencies_predecessor_id_idx`             | `(predecessor_id)`                     | full           | `predecessor_id` FK + "successors of X" list (edges out of X) + the cycle-walk adjacency load                                                                                                                                  |
+| `dependencies_successor_id_idx`               | `(successor_id)`                       | full           | `successor_id` FK + "predecessors of X" list (edges into X)                                                                                                                                                                    |
+| `dependencies_organization_id_idx`            | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                                   |
+| `uq_dependencies_pred_succ_type`              | `(predecessor_id, successor_id, type)` | partial unique | at most one **active** link of each type per ordered pair (`WHERE deleted_at IS NULL`); backs `DUPLICATE_DEPENDENCY` (409); allows the SS+FF overlap ladder                                                                    |
+| `idx_dependencies_delete_batch_id`            | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `calendars_organization_id_created_at_id_idx` | `(organization_id, created_at, id)`    | full composite | `organization_id` FK + org-scoped active calendar list + cursor sort — subsumes a standalone org index                                                                                                                         |
+| `uq_calendars_org_name`                       | `(organization_id, name)`              | partial unique | ORG-tier calendar name unique per org among live rows (`WHERE deleted_at IS NULL AND scope = 'ORG'`, ADR-0053); backs `DUPLICATE_CALENDAR` (409)                                                                               |
+| `uq_calendars_project_name`                   | `(project_id, name)`                   | partial unique | PROJECT-tier calendar name unique per project among live rows (`WHERE deleted_at IS NULL AND scope = 'PROJECT'`, ADR-0053); a name may be reused across tiers by design                                                        |
+| `idx_calendars_project_id`                    | `(project_id)`                         | partial        | the project-delete cascade sweep (`WHERE project_id = ? AND deleted_at IS NULL`) + the `project_id` FK; predicated on `project_id IS NOT NULL` (not `scope`) so the planner can prove implication from a `project_id` equality |
+| `calendar_exceptions_calendar_id_date_idx`    | `(calendar_id, date)`                  | full composite | `calendar_id` FK + the editor's list-all-exceptions load (all rows) ordered by date                                                                                                                                            |
+| `calendar_exceptions_organization_id_idx`     | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                                   |
+| `uq_calendar_exceptions_cal_date`             | `(calendar_id, date)`                  | partial unique | at most one **active** exception per `(calendar, date)` (`WHERE deleted_at IS NULL`); backs `DUPLICATE_EXCEPTION` (409) **and** the engine's active-exception load                                                             |
+| `idx_calendars_delete_batch_id`               | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `idx_calendar_exceptions_delete_batch_id`     | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `resources_organization_id_created_at_id_idx` | `(organization_id, created_at, id)`    | full composite | `organization_id` FK + org-scoped active resource list + cursor sort — subsumes a standalone org index (the `Calendar` pattern)                                                                                                |
+| `uq_resources_org_name`                       | `(organization_id, name)`              | partial unique | resource name unique per org among live rows (`WHERE deleted_at IS NULL`); backs `DUPLICATE_RESOURCE` (409)                                                                                                                    |
+| `uq_resources_org_code`                       | `(organization_id, code)`              | partial unique | optional `code` unique per org among live rows (`WHERE deleted_at IS NULL AND code IS NOT NULL`); NULL codes are exempt (the `uq_activities_plan_code` pattern)                                                                |
+| `idx_resources_calendar_id`                   | `(calendar_id)`                        | partial        | the (extended) `CALENDAR_IN_USE` guard's active-resource count + the M7.2 driving-calendar load (`WHERE calendar_id = ? AND deleted_at IS NULL`); the `idx_activities_calendar_id` twin                                        |
+| `idx_resources_delete_batch_id`               | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `resource_assignments_organization_id_idx`    | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                                   |
+| `uq_resource_assignments_activity_resource`   | `(activity_id, resource_id)`           | partial unique | one **active** assignment per (activity, resource) (`WHERE deleted_at IS NULL`); backs `DUPLICATE_ASSIGNMENT` (409); its leftmost prefix `activity_id` subsumes an active-activity assignment-list index                       |
+| `uq_resource_assignments_activity_driving`    | `(activity_id)`                        | partial unique | at most one **driving** assignment per activity (`WHERE is_driving AND deleted_at IS NULL`); the ≤1-driver backstop + the recalc "find the driving assignment" load                                                            |
+| `idx_resource_assignments_resource_id`        | `(resource_id)`                        | partial        | the `RESOURCE_IN_USE` guard's active-assignment count (`WHERE resource_id = ? AND deleted_at IS NULL`)                                                                                                                         |
+| `idx_resource_assignments_delete_batch_id`    | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `activity_steps_organization_id_idx`          | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                                   |
+| `uq_activity_steps_activity_seq`              | `(activity_id, seq)`                   | partial unique | one **active** step per `(activity, seq)` (`WHERE deleted_at IS NULL`); backs the bulk-replace dup-seq (409); its leftmost prefix `activity_id` (pre-sorted by `seq`) subsumes an active-step list index                       |
+| `idx_activity_steps_delete_batch_id`          | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `notes_plan_id_created_at_id_idx`             | `(plan_id, created_at, id)`            | full composite | `plan_id` FK + the PLAN-notes thread list & newest-first cursor (filter `entity_type='PLAN'`, backward scan) + the plan cascade sweep by `plan_id` — subsumes a standalone `plan_id` index (ADR-0046)                          |
+| `notes_organization_id_idx`                   | `(organization_id)`                    | full           | `organization_id` FK + org-scoped IDOR loads                                                                                                                                                                                   |
+| `idx_notes_activity_created`                  | `(activity_id, created_at, id)`        | partial        | the ACTIVITY-notes thread list & newest-first cursor (`WHERE deleted_at IS NULL AND activity_id IS NOT NULL` — excludes PLAN notes + soft-deleted)                                                                             |
+| `idx_notes_plan_activity_counts`              | `(plan_id, activity_id)`               | partial        | the badge note-counts `GROUP BY activity_id` for a plan (`WHERE deleted_at IS NULL AND entity_type='ACTIVITY'`; a grouped scan, no N+1)                                                                                        |
+| `idx_notes_delete_batch_id`                   | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
+| `plan_shares_token_hash_key`                  | `(token_hash)`                         | full unique    | the guest bearer-token lookup; unique across ALL rows (incl. revoked/soft-deleted) so a hash resolves to at most one grant and is never reused (the `invitations.token_hash` precedent, ADR-0051)                              |
+| `plan_shares_organization_id_idx`             | `(organization_id)`                    | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR / audit loads                                                                                                                                                                |
+| `idx_plan_shares_plan_id`                     | `(plan_id)`                            | partial        | list a plan's LIVE links + the plan-cascade filter (`WHERE deleted_at IS NULL`); partial (not a full composite backing the FK) because plans soft-delete only, so the plan FK RESTRICT check never fires                       |
+| `idx_plan_shares_delete_batch_id`             | `(delete_batch_id)`                    | partial        | batch restore lookup                                                                                                                                                                                                           |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -543,14 +565,41 @@ house standard (UUID v7 PK, snake_case via `@map`, timestamptz UTC, soft delete 
   only from positive exceptions) is now valid, and the "no working time in the horizon" check
   moved into the pure `buildWorkingTimeCalendar` factory (the N11 hang backstop). `weekday` is a
   `smallint` (0 = Monday … 6 = Sunday) with `ck_calendar_shifts_weekday_range` (0–6).
-- **Uniqueness & non-overlap.** `uq_calendars_org_name` (partial, `WHERE deleted_at IS NULL`)
-  keeps a calendar name unique per org among live rows (backs `DUPLICATE_CALENDAR` 409). The
+- **Scope tier (ADR-0053).** A calendar belongs to one of two **tiers**: `scope = 'ORG'` (the
+  shared organisation library — the only tier before ADR-0053 and the constant `DEFAULT`, so every
+  pre-existing row is unchanged) or `scope = 'PROJECT'` with a non-null `project_id` (local to one
+  project). The discriminator and the FK are pinned together by the **fail-closed**
+  `ck_calendars_scope_parent` (`CASE scope WHEN 'ORG' THEN project_id IS NULL WHEN 'PROJECT' THEN
+project_id IS NOT NULL ELSE false END`) — the ADR-0046 `ck_notes_exactly_one_parent` precedent, so a
+  future third tier is rejected until the CHECK and the per-tier uniques are amended. Because it is a
+  ROW constraint evaluated at statement end, a promote/narrow must set **both** columns in a single
+  `UPDATE`. The `project_id` FK is `RESTRICT` and, like `activities.calendar_id`/`activities.parent_id`,
+  does **not** enforce same-org — "the project is active and in this org" is a service check inside the
+  write transaction. Binding a `calendar_id` anywhere goes through the one shared
+  `assertCalendarUsableBy` guard; a project delete sweeps its project calendars (and their exceptions)
+  into the project's own `delete_batch_id`, and never touches an ORG calendar (`project_id` is NULL).
+- **Uniqueness & non-overlap.** Calendar names are unique **per tier** among live rows:
+  `uq_calendars_org_name` (`WHERE deleted_at IS NULL AND scope = 'ORG'`) and
+  `uq_calendars_project_name` (`WHERE deleted_at IS NULL AND scope = 'PROJECT'`), both backing
+  `DUPLICATE_CALENDAR` (409) with a tier-specific message. A name may be reused **across** tiers by
+  design (a project-local "Standard" beside the organisation's) — global uniqueness would let an
+  org-level rename break unrelated projects and would forbid the common P6 project-local override. The
   old point-key `uq_calendar_exceptions_cal_date` is **replaced** by
   `ex_calendar_exceptions_no_overlap` — a **partial GiST `EXCLUDE`** (`WHERE deleted_at IS NULL`)
   over `daterange(start_date, end_date, '[]')` guaranteeing **at most one active exception
   covers any given day** (a day cannot be both a holiday and a worked window). It backs the add
   `DUPLICATE_EXCEPTION` (409); because `23P01` (exclusion_violation) is not a Prisma `P2002`, the
   service matches it by constraint name to map it to the 409.
+- **Archive (ADR-0053 §4).** `calendars.archived_at` (nullable, no default; `NULL` = active)
+  retires a calendar **without** unbinding it: an archived calendar stays bound to its plans,
+  activities and resources and schedules identically — it is hidden from the pickers and the
+  default library list, and refused only for a **new** binding at the `assertCalendarUsableBy`
+  seam. It is therefore the only way to retire a calendar the `CALENDAR_IN_USE` guard —
+  correctly — refuses to delete. It does **not** free the calendar's name (the per-tier uniques
+  stay predicated on `deleted_at IS NULL` + the tier), it is still **counted by the
+  scope-narrowing guard** (an archived referencer is a live one), and it is still **swept by the
+  project-delete cascade** — which is why `idx_calendars_project_id` deliberately does _not_ gain
+  an `archived_at IS NULL` term. See _Soft deletes → Archive is not soft delete_ above.
 - **Ranged exceptions.** `CalendarException` carries an inclusive `[start_date, end_date]`
   **range** (single-day when `start_date = end_date`; `ck_calendar_exceptions_date_order`
   enforces `end_date ≥ start_date`), so a multi-day shutdown is one row.
@@ -720,8 +769,51 @@ deleted_at IS NULL` guarantees **≤ 1** driver per activity in the DB; **"exact
   resource `kind`). Duplicate assignments are blocked by `uq_resource_assignments_activity_resource
 (activity_id, resource_id) WHERE deleted_at IS NULL` (backs `DUPLICATE_ASSIGNMENT`
   409), whose leftmost prefix also serves the "load an activity's assignments" query.
+- **The resource tree (`parent_id` + `GROUP`, ADR-0053 §3).** `resources.parent_id` is a
+  nullable **self-FK** (RESTRICT, Prisma relation `ResourceHierarchy`) — an adjacency list,
+  the `activities.parent_id` precedent (ADR-0038). `NULL` = top level. The pool stays **one
+  org-global pool**; this is a **navigation** tree, not a scoping tier, which is why
+  cross-plan over-allocation and levelling are untouched. A new `ResourceKind` member
+  **`GROUP`** is a non-assignable grouping node: `ck_resources_group_no_scheduling_fields`
+  (a **same-row**, **fail-closed** `CASE … ELSE false`) forbids it a `calendar_id`,
+  `max_units_per_hour` or `cost_per_unit`, and the service forbids it as an assignment
+  endpoint (`GROUP_NOT_ASSIGNABLE`). Together those make the CPM/levelling/histogram/EV
+  parity argument **structural** — all four read from `resource_assignments`.
+  `ck_resources_parent_not_self` blocks the trivial 1-node cycle; **transitive acyclicity,
+  same-org, "only a GROUP may parent" and depth ≤ 10** need the _parent_ row and so are
+  **service** invariants, held under a new **org-scoped** `resource-tree` advisory lock
+  (a per-resource lock cannot serialise two mirror reparents — they take different keys).
+  Backed by the partial `idx_resources_parent_id (parent_id) WHERE deleted_at IS NULL AND
+parent_id IS NOT NULL`; top-level rows are served by the existing
+  `(organization_id, created_at, id)` composite and get no index of their own.
+  **Name uniqueness stays org-wide and shared with leaf resources** (`uq_resources_org_name`)
+  — deliberately unlike the per-tier calendar split, because a resource must have one
+  globally unambiguous handle for levelling and the histogram. Because the CHECK names the
+  `'GROUP'` literal, the enum member and everything referencing it are **two migrations**
+  (`20260725130000_resource_group_kind`, `20260725130100_resource_hierarchy`): Postgres
+  forbids using a label in the transaction that added it. Adding a future `ResourceKind`
+  costs the same split, plus a new `WHEN` branch — an e2e round-trip over every enum value
+  makes the omission a CI failure.
+- **Archive (ADR-0053 §4).** `resources.archived_at` (nullable, no default; `NULL` = active) is
+  the resource twin of `calendars.archived_at`, and is the case that shows why archive **cannot**
+  be soft delete: a soft-deleted resource may not be referenced by an active assignment (exactly
+  what `RESOURCE_IN_USE` protects), whereas an archived one **keeps every existing assignment** —
+  still scheduling, levelling, loading the histogram and earning value byte-identically, even as
+  the **driving** resource of a live activity. Only a **new** assignment is refused (422
+  `RESOURCE_ARCHIVED`, a service check — a CHECK cannot read the assignment's resource row);
+  editing an existing one still succeeds, and archiving is deliberately **not** blocked by use.
+  Legal on a `GROUP`, with **no** subtree cascade (archive never cascades). Deleting an archived
+  resource obeys the normal `RESOURCE_IN_USE` rules. `uq_resources_org_name`/`_code` keep their
+  `deleted_at IS NULL` predicate (an archived row holds its name/code), and
+  `idx_resources_parent_id` keeps its — the `GROUP` subtree cascade, the subtree in-use count and
+  the reparent height walk must all traverse archived nodes.
 - **Delete guards (service-owned).** A `RESOURCE_IN_USE` guard blocks soft-deleting a
-  resource assigned to an **active** activity (409, mirroring `CALENDAR_IN_USE`), and
+  resource assigned to an **active** activity (409, mirroring `CALENDAR_IN_USE`) — for a
+  `GROUP` the count spans its **whole active subtree**, and the delete then stamps that
+  subtree with **one** `delete_batch_id` (the ADR-0038 subtree-cascade precedent), making
+  the branch a single restore unit. A `GROUP` delete takes the tree lock as well, in the
+  fixed order **org tree lock → per-resource assign locks ascending by id**, so a
+  concurrent reparent cannot leave an active child under a deleted parent. And
   the `CALENDAR_IN_USE` guard is **extended** to also count active resources
   referencing a calendar (a third referencer, alongside active plans + activities) —
   backed by `idx_resources_calendar_id`. Soft-deleting an activity **sweeps its

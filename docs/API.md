@@ -89,7 +89,7 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 | ---- | ---------------------------------------------------------- |
 | 200  | Successful read/update                                     |
 | 201  | Resource created (include `Location`)                      |
-| 204  | Success, no body (e.g. delete)                             |
+| 204  | Success, no body (delete, or a lifecycle-flag sub-action)  |
 | 400  | Malformed request                                          |
 | 401  | Not authenticated                                          |
 | 403  | Authenticated but not authorised                           |
@@ -100,6 +100,13 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
 | 429  | Rate limited                                               |
 | 500  | Unexpected server error                                    |
+
+**`POST :id/<verb>` sub-actions: `200` + the resource, or `204`?** A sub-action that changes what
+the resource **is** returns it (`…/clients/:id/restore`, `…/baselines/:id/activate` — a restore
+brings a cascade back, an activation moves a per-plan invariant and reports a count the client
+cannot derive). A sub-action that flips an **orthogonal lifecycle flag** to a value the caller
+already knows returns `204` (`…/archive`, `…/unarchive`, ADR-0053 §4) — the body would carry only
+the incremented `version`, and the list the caller is looking at is invalidated either way.
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and
@@ -308,10 +315,10 @@ contract) **without writing anything**, then a separate **commit** creates the p
 Contributor); the authoritative org-scope check is on the **target project** (anti-IDOR). Uploads are
 multipart with a **byte cap enforced at the boundary** (→ 413 before the file is fully buffered).
 
-| Method | Path                                        | Notes                                                                                                                                                                                     |
-| ------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. 422 unrecognised/malformed/no file · 413 oversize. `interchange:import`.                          |
-| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413. |
+| Method | Path                                        | Notes                                                                                                                                                                                                                                                      |
+| ------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. Optional form field `globalCalendarScope=PROJECT\|ORG` (default `PROJECT`). 422 unrecognised/malformed/no file or bad option · 413 oversize. `interchange:import`. |
+| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. Same optional `globalCalendarScope` field. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413.                       |
 
 The dry-run is **read-only** (returns `200`, not `201` — no resource is created). A parseable file returns
 its report **even when it needed repairs** (dangling edge dropped, duplicate `(pred,succ,type)`
@@ -332,11 +339,135 @@ created**. Same authz (`interchange:import`), org-scope (anti-IDOR) and byte cap
 Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays);
 activities are laid out on a deterministic lane per source order.
 
+**Imported calendars land in the target project, not the shared library** (ADR-0053 §5). An import
+creates each calendar at **`PROJECT`** scope pinned to the target project — so a fresh import adds
+**zero rows** to the organisation library and its calendars are deleted with the project. Two
+exceptions, both **named in the report**: a calendar an imported **resource** holds is forced to
+**`ORG`** (a resource is organisation-global and can hold nothing else), and a source **global**
+calendar (P6 `clndr_type = CA_Base`) is created at `ORG` when the caller sends
+`globalCalendarScope=ORG` — otherwise it lands in the project with a "promote it if others need it"
+finding. A calendar name the target tier already holds is created afresh as
+`"<name> (imported YYYY-MM-DD)"` and reported as a repair — **never silently reused**, because two
+calendars sharing a name can have different working weeks. **Export** emits `clndr_type` from the
+stored tier, so an XER export→import round trip preserves it; MSPDI has no equivalent field and
+reports the tier as a drop.
+
+### Calendar scope tiers (ADR-0053)
+
+A calendar belongs to one of two **tiers**: **ORG** (the shared organisation library — the default, and
+what every calendar was before ADR-0053) or **PROJECT** (local to one project). Both live on the same
+`…/calendars` resource; `scope` + `projectId` are additive fields on every calendar request and response,
+so **no existing call changes shape or meaning**.
+
+| Method | Path                                                     | Notes                                                                                                                                                                                  |
+| ------ | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/organizations/:orgSlug/calendars`                     | **+ query** `scope=org\|project\|all` (**default `org`** — today's result set). **+ response fields** `scope`, `projectId`.                                                            |
+| GET    | `…/organizations/:orgSlug/projects/:projectId/calendars` | **NEW** — the calendars **usable in** this project: its own PROJECT-scoped ones **plus** every ORG-scoped one. Cursor-paginated. Foreign/unknown project → 404.                        |
+| POST   | `…/organizations/:orgSlug/calendars`                     | **+ body** `scope` (default `ORG`), `projectId`. `scope: ORG` additionally requires **`calendar:manage_org`**; `scope: PROJECT` requires an active in-org `projectId` (404 otherwise). |
+| PATCH  | `…/organizations/:orgSlug/calendars/:calendarId`         | **+ body** `scope`, `projectId` — the **promote / narrow** path, version-gated, requiring `calendar:manage_org`.                                                                       |
+| DELETE | `…/organizations/:orgSlug/calendars/:calendarId`         | Unchanged, except an **ORG**-scoped calendar additionally requires `calendar:manage_org`.                                                                                              |
+
+**New rejections** (every other calendar status code is unchanged):
+
+| Status | `details.reason`                   | When                                                                                                                                                                                           |
+| ------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `CALENDAR_WRONG_SCOPE`             | A PROJECT-scoped calendar was assigned to a plan or activity **outside** its owning project. `details.projectId` names the owner.                                                              |
+| 422    | `RESOURCE_REQUIRES_ORG_CALENDAR`   | A PROJECT-scoped calendar was assigned to a **resource** — the pool is org-global (ADR-0039), so a resource may only hold an org-global calendar. `details` carries the offending `projectId`. |
+| 422    | `CALENDAR_SCOPE_PROJECT_MISMATCH`  | `scope: PROJECT` without a `projectId`, or `scope: ORG` with one.                                                                                                                              |
+| 409    | `CALENDAR_SCOPE_NARROWING_BLOCKED` | Narrowing an ORG calendar while active plans/activities outside the target project — or **any** active resource — still use it. `details` carries `{ plans, activities, resources }`.          |
+| 409    | `DUPLICATE_CALENDAR`               | A name collision **within a tier**. The same name in two different projects, or in a project and the org library, is allowed by design.                                                        |
+
+A calendar id from **another organisation**, soft-deleted, or unknown remains an indistinguishable **404**
+at every seam — the tier is never a cross-tenant existence oracle. Scope-filtered listing is a **usability**
+filter, not an authorisation boundary: the security control is the server-side write guard, applied at
+`plan.calendarId`, `activity.calendarId` and `resource.calendarId` alike.
+
+Deleting a project soft-deletes its PROJECT-scoped calendars (and their exceptions) in the **same batch**,
+so restoring the project restores them; ORG-scoped calendars are never touched.
+
+### Resource hierarchy (ADR-0053 §3)
+
+The org resource pool stays **one flat pool** for scheduling and gains a **navigation tree**: every
+resource carries a nullable `parentId`, and a new `ResourceKind` value **`GROUP`** is a
+non-assignable grouping node. Every addition is optional and every existing field keeps its meaning,
+so **no existing call changes shape**.
+
+| Method       | Path                                             | Notes                                                                                                                                                                       |
+| ------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET          | `…/organizations/:orgSlug/resources`             | **+ query** `parentId=<uuid>` (a group's direct children) or `parentId=null` (top level); **omitted = today's flat library**. **+ response field** `parentId` on every row. |
+| POST / PATCH | `…/organizations/:orgSlug/resources[/:id]`       | **+ body** `parentId` (uuid, or `null` for top level — on PATCH, **omitted** means "unchanged"). `kind` additionally accepts `GROUP`.                                       |
+| DELETE       | `…/organizations/:orgSlug/resources/:resourceId` | Unchanged for a leaf. Deleting a **`GROUP`** soft-deletes its whole active **subtree** under one `delete_batch_id`, and its `RESOURCE_IN_USE` count spans that subtree.     |
+| POST         | `…/activities/:activityId/assignments`           | Unchanged shape; **new reject** 422 `GROUP_NOT_ASSIGNABLE`.                                                                                                                 |
+
+There is deliberately **no `?tree=true` response**: every row carries its `parentId` and the tree is
+acyclic, same-org and ≤ 10 deep by invariant, so a client that pages the library nests it itself.
+
+**New rejections:**
+
+| Status | `details.reason`                 | When                                                                                                                                                    |
+| ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `GROUP_NOT_ASSIGNABLE`           | A `GROUP` was assigned to an activity, or set as its driver. A group is never an assignment endpoint.                                                   |
+| 422    | `RESOURCE_PARENT_NOT_GROUP`      | The proposed `parentId` is an in-org resource that is not a `GROUP`.                                                                                    |
+| 422    | `RESOURCE_PARENT_WRONG_SCOPE`    | The proposed parent is in-org but unusable (the guard's fail-closed same-org re-check).                                                                 |
+| 422    | `RESOURCE_TREE_TOO_DEEP`         | The move would exceed 10 levels, measured as the new parent's depth **plus the moved subtree's height**. `details` carries `maxDepth`/`resultingDepth`. |
+| 422    | `GROUP_HAS_NO_SCHEDULING_FIELDS` | A `GROUP` was given a `calendarId`, `maxUnitsPerHour` or `costPerUnit`. `details.fields` names them.                                                    |
+| 409    | `RESOURCE_PARENT_CYCLE`          | The proposed parent is the resource itself or one of its descendants. Nothing is written.                                                               |
+| 409    | `RESOURCE_IN_USE`                | Existing code; for a `GROUP` the `count` spans the whole subtree and `details.subtreeSize` says how many rows it covers. Also raised on `kind → GROUP`. |
+| 409    | `RESOURCE_GROUP_HAS_CHILDREN`    | `kind` changed **away** from `GROUP` while it still contains rows. Reparent them first.                                                                 |
+
+A `parentId` from **another organisation**, soft-deleted, or unknown is an indistinguishable **404** —
+the tree is never a cross-tenant existence oracle.
+
+### Library archive, search & filter (ADR-0053 §4)
+
+Both shared libraries — calendars and resources — gain an **archive** lifecycle and server-side
+**search/filter**. Archive is **orthogonal to delete**: an archived row is still entirely valid, keeps
+every existing reference live and **keeps scheduling identically**; it is hidden from the default list
+and from every picker, and only a **new** usage is refused. Archiving is deliberately **not** blocked by
+use — it is the only way to retire a calendar that `CALENDAR_IN_USE` (correctly) refuses to delete.
+
+`archivedAt` (ISO instant or `null`) is an additive response field on every calendar and resource, and
+every query param below is optional with a default that reproduces today's result set — so **no existing
+call changes shape or meaning**.
+
+| Method | Path                                                     | Notes                                                                                                                                                                       |
+| ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/organizations/:orgSlug/calendars`                     | **+ query** `q` (name, case-insensitive substring, ≤ 100 chars, trimmed), `archived=exclude\|include\|only` (**default `exclude`**). **+ response field** `archivedAt`.     |
+| GET    | `…/organizations/:orgSlug/projects/:projectId/calendars` | **+ query** `q`, `archived` (same semantics). No `scope` — this route's contract is "the calendars usable here".                                                            |
+| POST   | `…/organizations/:orgSlug/calendars/:calendarId/archive` | **NEW** — `204`. Body `{ version }` (optimistic; stale → 409). An **ORG**-scoped calendar additionally requires `calendar:manage_org`.                                      |
+| POST   | `…/calendars/:calendarId/unarchive`                      | **NEW** — `204`. Same body and permissions. Cannot fail on a name collision: an archived calendar keeps its name.                                                           |
+| GET    | `…/organizations/:orgSlug/resources`                     | **+ query** `q` (matches **name OR code**), `kind` (a `ResourceKind`, incl. `GROUP`), `archived`. **+ response field** `archivedAt`. Combines with the existing `parentId`. |
+| POST   | `…/organizations/:orgSlug/resources/:resourceId/archive` | **NEW** — `204`. Body `{ version }`. `resource:update`. Archiving a `GROUP` does **not** archive its subtree.                                                               |
+| POST   | `…/resources/:resourceId/unarchive`                      | **NEW** — `204`. Same body and permission.                                                                                                                                  |
+
+**New rejections:**
+
+| Status | `details.reason`    | When                                                                                                                                                                                                                                                       |
+| ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `CALENDAR_ARCHIVED` | An archived calendar was bound to a plan, activity or resource. Only a **new** binding is refused — re-submitting the binding the holder already has still succeeds, so an entity already on an archived calendar stays editable.                          |
+| 422    | `RESOURCE_ARCHIVED` | A **new** assignment was created against an archived resource. **Editing an existing assignment** (units, rate, cost, curve) still succeeds — maintaining history is not new exposure.                                                                     |
+| 409    | `DUPLICATE_*`       | Creating an **active** row on an archived row's name (or a resource's `code`). An archived row keeps its handles, so unarchive can never fail; `details` carries `archivedCalendarId` / `archivedResourceId` so a client can offer "unarchive it instead". |
+
+Archived rows are still counted by the §2 scope-**narrowing** guard (archived ≠ deleted — the reference
+is live) and are still swept by the project-delete cascade. Deleting an archived row obeys the ordinary
+`RESOURCE_IN_USE` / `CALENDAR_IN_USE` rules — archive does not bypass the delete guard.
+
+The `archived` filter, like `scope`, is a **usability** control and never an authorisation boundary: the
+security controls are the write-time rejects above, applied server-side whatever a list returns. `q` is a
+case-insensitive substring match bounded by the org filter; there is deliberately no index for it (see
+`docs/TECH_DEBT.md` for the measured `pg_trgm` escalation).
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses
   include `meta.nextCursor` and `meta.hasMore`.
 - Filtering via explicit query params; sorting via `?sort=field&order=asc|desc`.
+- **A list whose cursor is keyset-ordered may not honour `order`.** The shared
+  `PaginationQueryDto` accepts `order` everywhere, but a cursor built on
+  `(created_at, id)` has exactly one valid direction, so several lists (the
+  calendar, project-calendar and resource libraries; the recycle bin) return
+  oldest-first regardless. Where that is the case, **say so in the route's
+  `@ApiOperation` description** rather than silently ignoring the param.
 - Always cap `limit` server-side to a sane maximum.
 - A list that is **inherently bounded and caller-owned** (e.g.
   `GET /organizations` — only the caller's memberships, no filters) may return an

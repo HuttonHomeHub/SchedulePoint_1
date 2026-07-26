@@ -1,4 +1,4 @@
-import { importGraphSchema, type ImportGraph } from './import-graph.js';
+import { importGraphSchema, type ImportCalendarScope, type ImportGraph } from './import-graph.js';
 import {
   MAX_ACTIVITIES,
   MAX_ASSIGNMENTS,
@@ -33,6 +33,12 @@ export interface ImportMspdiInput {
   readonly filename?: string | null;
   /** Optional parser safety caps (byte / node limits); defaults are applied when omitted. */
   readonly caps?: Partial<MspdiParseCaps>;
+  /**
+   * Where a source **global** calendar should land (ADR-0053 §5). Accepted for interface parity with the
+   * XER path and forwarded to the shared mapper, but MSPDI carries no organisation-vs-project tier, so
+   * no MSPDI calendar is ever a global one and this option changes nothing on this path today.
+   */
+  readonly globalCalendarScope?: ImportCalendarScope;
 }
 
 export type ImportMspdiResult =
@@ -80,7 +86,12 @@ export function importMspdi(input: ImportMspdiInput): ImportMspdiResult {
   }
 
   // 3. Map canonical → SchedulePoint import graph (the SAME mapper as the XER path).
-  const mapped = mapCanonicalToImportGraph(adapted.model);
+  const mapped = mapCanonicalToImportGraph(
+    adapted.model,
+    input.globalCalendarScope === undefined
+      ? {}
+      : { globalCalendarScope: input.globalCalendarScope },
+  );
 
   // 3a. Hard graph-size ceiling (the SAME caps as the XER path), enforced BEFORE validate/repair and any
   // commit — never hang the event loop / blow the transaction budget on a hostile file.

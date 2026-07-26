@@ -7,6 +7,15 @@ import { PlanCalendarPicker } from './PlanCalendarPicker';
 
 import { apiFetch } from '@/lib/api/client';
 
+// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE plan-calendar
+// picker — a flat, ungrouped native `<select>` over the org library (ADR-0024). The tier-grouped
+// `Combobox` the flag turns it into is asserted by the sibling `PlanCalendarPicker.scope.test.tsx`
+// (ADR-0053 §1/§4).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LIBRARY_SCOPING_ENABLED: false,
+}));
+
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const PLAN: PlanSummary = {
@@ -40,6 +49,10 @@ const CALENDARS: CalendarSummary[] = [
     name: 'Standard',
     description: null,
     workingWeekdays: 31,
+    // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
+    scope: 'ORG',
+    projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -49,6 +62,10 @@ const CALENDARS: CalendarSummary[] = [
     name: 'Seven-day',
     description: null,
     workingWeekdays: 127,
+    // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
+    scope: 'ORG',
+    projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',

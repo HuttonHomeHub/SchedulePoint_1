@@ -77,6 +77,21 @@ export const CANONICAL_RESOURCE_KINDS = ['LABOUR', 'EQUIPMENT', 'MATERIAL'] as c
 export const canonicalResourceKindSchema = z.enum(CANONICAL_RESOURCE_KINDS);
 export type CanonicalResourceKind = z.infer<typeof canonicalResourceKindSchema>;
 
+/**
+ * What the SOURCE says a calendar is — P6's `CALENDAR.clndr_type` (`CA_Base` / `CA_Project` /
+ * `CA_Rsrc`), normalised (ADR-0053 §5). This is **provenance, not a decision**: it is the input the
+ * mapper turns into a SchedulePoint `scope` (see `mapCanonicalToImportGraph`), and the value the
+ * exporter turns back into a `clndr_type`, so the tier round-trips instead of being silently flattened.
+ *
+ * - `GLOBAL` — P6 `CA_Base`: a global/enterprise calendar shared by every project in the source database.
+ * - `PROJECT` — P6 `CA_Project`: local to one project. The **default** for a source that does not say
+ *   (an XER with no `clndr_type` column, and every MSPDI file — MS Project has no tier discriminator).
+ * - `RESOURCE` — P6 `CA_Rsrc`: a resource's own calendar.
+ */
+export const CANONICAL_CALENDAR_SOURCE_TYPES = ['GLOBAL', 'PROJECT', 'RESOURCE'] as const;
+export const canonicalCalendarSourceTypeSchema = z.enum(CANONICAL_CALENDAR_SOURCE_TYPES);
+export type CanonicalCalendarSourceType = z.infer<typeof canonicalCalendarSourceTypeSchema>;
+
 /** A `"HH:MM"` clock time (24-hour; `"24:00"` allowed as an exclusive end-of-day). */
 const clockTimeSchema = z
   .string()
@@ -130,6 +145,12 @@ export const canonicalCalendarSchema = z
     /** Source-local identifier, unique within the file; the mapper resolves this to a SchedulePoint id. */
     id: z.string().min(1),
     name: z.string().min(1),
+    /**
+     * What the source called this calendar (ADR-0053 §5). Defaults to `PROJECT` — the safe tier — for
+     * a source with no equivalent field, so an older fixture or a format without the concept parses
+     * unchanged and lands project-local rather than in the shared organisation library.
+     */
+    sourceType: canonicalCalendarSourceTypeSchema.default('PROJECT'),
     workWeek: canonicalWorkWeekSchema,
     exceptions: z.array(canonicalCalendarExceptionSchema),
   })

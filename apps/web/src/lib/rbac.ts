@@ -85,6 +85,20 @@ export function canSharePlan(role: OrganizationRole | undefined): boolean {
 }
 
 /**
+ * Whether a role may write to the **shared organisation calendar library** — create/edit/delete an
+ * ORG-scoped calendar, or move one between tiers (mirrors the API's `calendar:manage_org` — Planner
+ * + Org Admin, ADR-0053 §2). A PROJECT-scoped calendar needs only the plain hierarchy-write roles;
+ * this is the *extra* code a write to shared tenant state requires. It is granted to exactly the
+ * roles that already held `calendar:*`, so today it coincides with {@link canManageHierarchy} — but
+ * it exists as its own named gate for the same reason the API gave it its own permission code:
+ * narrowing shared-library writes to Org Admin later is then a one-line change here, with no call
+ * site touched. UX only — the API still enforces the permission + org scope.
+ */
+export function canManageOrgCalendars(role: OrganizationRole | undefined): boolean {
+  return canManageHierarchy(role);
+}
+
+/**
  * Whether a role may export a plan as a foreign schedule file (mirrors the API's
  * `interchange:export` — **every member**, Viewer upward; ADR-0050 M4). Export is a read-egress of the
  * same schedule data a member already sees on-screen, so — unlike {@link canImportSchedule} (Planner +

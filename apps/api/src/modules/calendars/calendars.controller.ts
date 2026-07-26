@@ -26,11 +26,12 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CalendarsService } from './calendars.service';
+import { CalendarListQueryDto } from './dto/calendar-list-query.dto';
 import {
   CalendarDetailResponseDto,
   CalendarExceptionResponseDto,
@@ -58,12 +59,19 @@ export class CalendarsController {
   constructor(private readonly service: CalendarsService) {}
 
   @Get()
-  @ApiOperation({ summary: "List an organisation's calendars (cursor-paginated)." })
+  @ApiOperation({
+    summary: "List an organisation's calendars (cursor-paginated).",
+    description:
+      'Returns the SHARED organisation library by default (`?scope=org`, ADR-0053); pass ' +
+      '`?scope=project` or `?scope=all` to include project-scoped calendars. The inherited ' +
+      '`order` param is not used — rows are always returned oldest-first (`created_at, id`), ' +
+      'the order the cursor is built on.',
+  })
   @ApiOkResponse({ type: CalendarResponseDto, isArray: true })
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: CalendarListQueryDto,
   ): Promise<Paginated<CalendarResponseDto>> {
     const { items, meta } = await this.service.list(principal, orgSlug, query);
     return new Paginated(
@@ -74,13 +82,25 @@ export class CalendarsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a calendar (Planner or Org Admin).' })
-  @ApiCreatedResponse({ type: CalendarDetailResponseDto })
-  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiUnprocessableEntityResponse({
-    description: 'Invalid working-weekday pattern (must be 1–127).',
+  @ApiOperation({
+    summary: 'Create a calendar (Planner or Org Admin).',
+    description:
+      'Creates in the SHARED organisation library by default. `scope: PROJECT` + `projectId` ' +
+      'creates a project-local calendar instead (ADR-0053); `scope: ORG` additionally requires ' +
+      'the `calendar:manage_org` permission.',
   })
-  @ApiConflictResponse({ description: 'A calendar with this name already exists.' })
+  @ApiCreatedResponse({ type: CalendarDetailResponseDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for an ORG-scoped calendar.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'Invalid working-weekday pattern (must be 1–127), or scope/projectId disagree ' +
+      '(CALENDAR_SCOPE_PROJECT_MISMATCH).',
+  })
+  @ApiConflictResponse({
+    description: 'A calendar with this name already exists in the same tier (DUPLICATE_CALENDAR).',
+  })
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -103,13 +123,27 @@ export class CalendarsController {
   }
 
   @Patch(':calendarId')
-  @ApiOperation({ summary: 'Update a calendar (Planner or Org Admin; optimistic locking).' })
-  @ApiOkResponse({ type: CalendarDetailResponseDto })
-  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiUnprocessableEntityResponse({
-    description: 'Invalid working-weekday pattern (must be 1–127).',
+  @ApiOperation({
+    summary: 'Update a calendar (Planner or Org Admin; optimistic locking).',
+    description:
+      'Also the promote/narrow path (ADR-0053): `scope: ORG` promotes a project calendar into ' +
+      'the shared library (always allowed); `scope: PROJECT` + `projectId` narrows it, and is ' +
+      'refused while anything outside that project still uses it. Both need `calendar:manage_org`.',
   })
-  @ApiConflictResponse({ description: 'Stale version, or a name collision.' })
+  @ApiOkResponse({ type: CalendarDetailResponseDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for a shared-library write.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'Invalid working-weekday pattern (must be 1–127), or scope/projectId disagree ' +
+      '(CALENDAR_SCOPE_PROJECT_MISMATCH).',
+  })
+  @ApiConflictResponse({
+    description:
+      'Stale version, a per-tier name collision (DUPLICATE_CALENDAR), or the calendar is still ' +
+      'used outside the target project (CALENDAR_SCOPE_NARROWING_BLOCKED).',
+  })
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -123,9 +157,15 @@ export class CalendarsController {
 
   @Delete(':calendarId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a calendar and its exceptions (soft cascade).' })
+  @ApiOperation({
+    summary: 'Delete a calendar and its exceptions (soft cascade).',
+    description:
+      'Deleting an ORG-scoped calendar additionally requires `calendar:manage_org` (ADR-0053).',
+  })
   @ApiNoContentResponse()
-  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for an ORG-scoped calendar.',
+  })
   @ApiConflictResponse({
     description: 'The calendar is in use by an active plan or activity (CALENDAR_IN_USE).',
   })
@@ -135,6 +175,57 @@ export class CalendarsController {
     @Param('calendarId', ParseUuidPipe) calendarId: string,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, calendarId);
+  }
+
+  @Post(':calendarId/archive')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Archive a calendar — retire it from the pickers without deleting it.',
+    description:
+      'ADR-0053 §4. An archived calendar STAYS BOUND to its plans, activities and resources ' +
+      'and still schedules identically; it is hidden from the default list and from every ' +
+      'picker, and refused for a NEW binding (422 CALENDAR_ARCHIVED). Archiving is ' +
+      'deliberately NOT blocked by use — it is the only way to retire a calendar the ' +
+      'CALENDAR_IN_USE delete guard (correctly) refuses to delete. Archiving an ORG-scoped ' +
+      'calendar additionally requires `calendar:manage_org`.',
+  })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for an ORG-scoped calendar.',
+  })
+  @ApiNotFoundResponse({ description: 'No such calendar in this organisation.' })
+  @ApiConflictResponse({ description: 'Stale `version` — the calendar changed elsewhere.' })
+  async archive(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Body() dto: ArchiveActionDto,
+  ): Promise<void> {
+    await this.service.setArchived(principal, orgSlug, calendarId, true, dto.version);
+  }
+
+  @Post(':calendarId/unarchive')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Unarchive a calendar — return it to the library and the pickers.',
+    description:
+      'ADR-0053 §4. Clears `archivedAt`. This can never fail on a name collision: an archived ' +
+      'calendar keeps its name (the per-tier partial uniques are predicated on `deleted_at` ' +
+      'alone), so nothing can have taken it meanwhile.',
+  })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for an ORG-scoped calendar.',
+  })
+  @ApiNotFoundResponse({ description: 'No such calendar in this organisation.' })
+  @ApiConflictResponse({ description: 'Stale `version` — the calendar changed elsewhere.' })
+  async unarchive(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Body() dto: ArchiveActionDto,
+  ): Promise<void> {
+    await this.service.setArchived(principal, orgSlug, calendarId, false, dto.version);
   }
 
   @Post(':calendarId/exceptions')

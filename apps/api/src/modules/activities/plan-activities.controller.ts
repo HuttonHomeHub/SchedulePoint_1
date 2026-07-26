@@ -72,6 +72,12 @@ export class PlanActivitiesController {
   @ApiCreatedResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'An activity with this name or code already exists.' })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A field-level validation failure, or `calendarId` names a calendar this activity’s project ' +
+      'may not use — a PROJECT calendar owned by another project (CALENDAR_WRONG_SCOPE, ' +
+      'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4).',
+  })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async create(
     @CurrentUser() principal: Principal,

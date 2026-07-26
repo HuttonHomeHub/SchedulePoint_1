@@ -27,10 +27,12 @@ const RESOURCE: ResourceSummary = {
   code: 'CRW-A',
   description: null,
   kind: 'LABOUR',
+  parentId: null,
   maxUnitsPerHour: null,
   // 1250 minor units = 12.50 major units.
   costPerUnit: 1250,
   calendarId: null,
+  archivedAt: null,
   version: 4,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',

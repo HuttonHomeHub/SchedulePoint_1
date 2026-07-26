@@ -24,8 +24,10 @@ function resource(overrides: Partial<Resource> = {}): Resource {
     code: 'CREW-A',
     description: null,
     kind: 'LABOUR',
+    parentId: null,
     maxUnitsPerHour: null,
     costPerUnit: null,
+    archivedAt: null,
     calendarId: null,
     version: 1,
     createdAt: new Date(),
@@ -44,6 +46,10 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     organizationId: ORG_ID,
     name: 'Standard',
     description: null,
+    // A resource may only hold an ORG-scoped calendar (ADR-0053 §2); PROJECT is the reject case.
+    scope: 'ORG',
+    projectId: null,
+    archivedAt: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -75,10 +81,16 @@ describe('ResourcesService', () => {
   let resources: {
     create: ReturnType<typeof vi.fn>;
     findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findArchivedByNameOrCodeInOrg: ReturnType<typeof vi.fn>;
+    setArchivedIfVersionMatches: ReturnType<typeof vi.fn>;
     findManyActiveByOrg: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
     softDelete: ReturnType<typeof vi.fn>;
+    softDeleteMany: ReturnType<typeof vi.fn>;
     countActiveAssignmentsUsing: ReturnType<typeof vi.fn>;
+    countActiveAssignmentsUsingAny: ReturnType<typeof vi.fn>;
+    countActiveChildrenOf: ReturnType<typeof vi.fn>;
+    findActiveChildIdsOf: ReturnType<typeof vi.fn>;
   };
   let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
@@ -91,10 +103,16 @@ describe('ResourcesService', () => {
     resources = {
       create: vi.fn(),
       findActiveByIdInOrg: vi.fn(),
+      findArchivedByNameOrCodeInOrg: vi.fn().mockResolvedValue(null),
+      setArchivedIfVersionMatches: vi.fn().mockResolvedValue(1),
       findManyActiveByOrg: vi.fn(),
       updateIfVersionMatches: vi.fn(),
       softDelete: vi.fn(),
+      softDeleteMany: vi.fn().mockResolvedValue(1),
       countActiveAssignmentsUsing: vi.fn().mockResolvedValue(0),
+      countActiveAssignmentsUsingAny: vi.fn().mockResolvedValue(0),
+      countActiveChildrenOf: vi.fn().mockResolvedValue(0),
+      findActiveChildIdsOf: vi.fn().mockResolvedValue([]),
     };
     calendars = { findActiveByIdInOrg: vi.fn() };
     // The tx handle exposes $executeRaw (the calendar advisory lock used by create/update).
@@ -287,6 +305,157 @@ describe('ResourcesService', () => {
       await expect(
         service.remove(principalWith(['resource:read']), 'acme', 'res-1'),
       ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Resource hierarchy (ADR-0053 §3, library-scoping M3)
+  // ---------------------------------------------------------------------------
+
+  describe('the GROUP kind', () => {
+    it('creates a group with no scheduling fields', async () => {
+      resources.create.mockResolvedValue(resource({ kind: 'GROUP' }));
+      await service.create(principalWith(ALL), 'acme', { name: 'Groundworks', kind: 'GROUP' });
+      expect(resources.create).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'GROUP', calendarId: null, parentId: null }),
+        expect.anything(),
+      );
+    });
+
+    it.each([
+      ['a calendar', { calendarId: CAL_ID }],
+      ['a capacity ceiling', { maxUnitsPerHour: 4 }],
+      ['a cost rate', { costPerUnit: 1200 }],
+    ])('422s when a group is created with %s', async (_label, extra) => {
+      await expect(
+        service.create(principalWith(ALL), 'acme', { name: 'G', kind: 'GROUP', ...extra }),
+      ).rejects.toMatchObject({ details: { reason: 'GROUP_HAS_NO_SCHEDULING_FIELDS' } });
+      expect(resources.create).not.toHaveBeenCalled();
+    });
+
+    it('422s when converting to GROUP would leave a STORED calendar behind', async () => {
+      // The client sends only `kind`, so the stored calendar survives the patch — judged on the
+      // post-patch shape, which is the whole point of that check.
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ calendarId: CAL_ID }));
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'res-1', { kind: 'GROUP', version: 1 }),
+      ).rejects.toMatchObject({ details: { reason: 'GROUP_HAS_NO_SCHEDULING_FIELDS' } });
+      expect(resources.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
+    it('allows converting to GROUP when the same request clears the scheduling fields', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ calendarId: CAL_ID }));
+      resources.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'res-1', {
+        kind: 'GROUP',
+        calendarId: null,
+        version: 1,
+      });
+      expect(resources.updateIfVersionMatches).toHaveBeenCalled();
+    });
+
+    it('409s (RESOURCE_IN_USE) when converting an ASSIGNED resource into a group', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource());
+      resources.countActiveAssignmentsUsing.mockResolvedValue(2);
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'res-1', { kind: 'GROUP', version: 1 }),
+      ).rejects.toMatchObject({ details: { reason: 'RESOURCE_IN_USE', count: 2 } });
+      expect(resources.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
+    it('409s (RESOURCE_GROUP_HAS_CHILDREN) when un-grouping a group that still contains rows', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ kind: 'GROUP' }));
+      resources.countActiveChildrenOf.mockResolvedValue(3);
+      await expect(
+        service.update(principalWith(ALL), 'acme', 'res-1', { kind: 'LABOUR', version: 1 }),
+      ).rejects.toMatchObject({ details: { reason: 'RESOURCE_GROUP_HAS_CHILDREN', count: 3 } });
+      expect(resources.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the resource tree', () => {
+    it('validates a parentId on create and stores it', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ id: 'grp', kind: 'GROUP' }));
+      resources.create.mockResolvedValue(resource({ parentId: 'grp' }));
+      await service.create(principalWith(ALL), 'acme', {
+        name: 'Crew A',
+        kind: 'LABOUR',
+        parentId: 'grp',
+      });
+      expect(resources.create).toHaveBeenCalledWith(
+        expect.objectContaining({ parentId: 'grp' }),
+        expect.anything(),
+      );
+    });
+
+    it('rejects a non-GROUP parent on create (422) and writes nothing', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ id: 'crew', kind: 'LABOUR' }));
+      await expect(
+        service.create(principalWith(ALL), 'acme', {
+          name: 'Crew B',
+          kind: 'LABOUR',
+          parentId: 'crew',
+        }),
+      ).rejects.toMatchObject({ details: { reason: 'RESOURCE_PARENT_NOT_GROUP' } });
+      expect(resources.create).not.toHaveBeenCalled();
+    });
+
+    it('re-parents to null (top level) without needing a parent lookup', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ parentId: 'grp' }));
+      resources.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'res-1', { parentId: null, version: 1 });
+      const patch = resources.updateIfVersionMatches.mock.calls[0]?.[2] as {
+        parentId: string | null;
+      };
+      expect(patch.parentId).toBeNull();
+    });
+
+    it('leaves the tree position untouched when parentId is omitted', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ parentId: 'grp' }));
+      resources.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'res-1', { name: 'Renamed', version: 1 });
+      const patch = resources.updateIfVersionMatches.mock.calls[0]?.[2] as Record<string, unknown>;
+      expect(patch).not.toHaveProperty('parentId');
+    });
+
+    it('deletes a GROUP as a whole subtree under ONE batch id', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ id: 'grp', kind: 'GROUP' }));
+      resources.findActiveChildIdsOf
+        .mockResolvedValueOnce(['child-a', 'child-b'])
+        .mockResolvedValueOnce([]);
+      await service.remove(principalWith(ALL), 'acme', 'grp');
+      const [ids, batchId] = resources.softDeleteMany.mock.calls[0] as [string[], string];
+      expect([...ids].sort()).toEqual(['child-a', 'child-b', 'grp']);
+      expect(batchId).toEqual(expect.any(String));
+      // The per-row helper (which would mint a batch per row and split the branch) is never used.
+      expect(resources.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('409s with the SUBTREE count when a descendant is still assigned, and deletes nothing', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ id: 'grp', kind: 'GROUP' }));
+      resources.findActiveChildIdsOf.mockResolvedValueOnce(['child-a']).mockResolvedValueOnce([]);
+      resources.countActiveAssignmentsUsingAny.mockResolvedValue(3);
+      await expect(service.remove(principalWith(ALL), 'acme', 'grp')).rejects.toMatchObject({
+        details: { reason: 'RESOURCE_IN_USE', count: 3, subtreeSize: 2 },
+      });
+      expect(resources.softDeleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('list', () => {
+    it('passes an explicit parentId filter straight through (null = top level)', async () => {
+      resources.findManyActiveByOrg.mockResolvedValue([]);
+      await service.list(principalWith(ALL), 'acme', { limit: 20, parentId: null });
+      expect(resources.findManyActiveByOrg).toHaveBeenCalledWith(
+        expect.objectContaining({ parentId: null }),
+      );
+    });
+
+    it('omits the filter entirely when parentId is absent — the flat library, unchanged', async () => {
+      resources.findManyActiveByOrg.mockResolvedValue([]);
+      await service.list(principalWith(ALL), 'acme', { limit: 20 });
+      const params = resources.findManyActiveByOrg.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(params).not.toHaveProperty('parentId');
     });
   });
 });

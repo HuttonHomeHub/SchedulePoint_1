@@ -188,6 +188,19 @@ describe('permissionsForRole — calendar library (read vs write)', () => {
       expect(perms).toContain('calendar:delete');
     }
   });
+
+  // ADR-0053 §2: writing to the SHARED org library (create/update/delete an ORG-scoped
+  // calendar, promote, narrow) needs `calendar:manage_org` on top of the plain calendar
+  // write. Granted to exactly the roles that already held `calendar:*` — zero capability
+  // change today — but as its own revocable code (the `dependency:link_cross_plan` precedent).
+  it('grants calendar:manage_org to Planner + Org Admin only', () => {
+    for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
+      expect(permissionsForRole(role)).not.toContain('calendar:manage_org');
+    }
+    for (const role of [OrganizationRole.PLANNER, OrganizationRole.ORG_ADMIN]) {
+      expect(permissionsForRole(role)).toContain('calendar:manage_org');
+    }
+  });
 });
 
 describe('permissionsForRole — resource library + assignments (read vs write)', () => {

@@ -1,0 +1,36 @@
+-- M3 Resource hierarchy, part 1 of 2: the GROUP resource kind (ADR-0053 §3, epic
+-- "Library scoping & manageability", Task 3.1). See docs/DATABASE.md "Resource &
+-- ResourceAssignment" and docs/specs/library-scoping-and-manageability/.
+--
+-- WHY THIS IS ITS OWN FILE — and MUST stay its own file. On PostgreSQL 12+ `ALTER TYPE …
+-- ADD VALUE` is itself fully transactional (the pre-12 "cannot run inside a transaction
+-- block" restriction does NOT apply on the PG 17 this repo runs), so Prisma Migrate's
+-- per-file transaction is fine. What DOES still apply is the second half of that rule: the
+-- newly-added label CANNOT BE USED in the same transaction that added it — Postgres raises
+-- `unsafe use of new value "GROUP" of enum type ResourceKind` (check_safe_enum_use,
+-- src/backend/utils/adt/enum.c). The exception is a type CREATEd in the same transaction,
+-- which is exactly why 20260725120000_calendar_scope_tier could CREATE TYPE "CalendarScope"
+-- and use it immediately. Part 2's ck_resources_group_no_scheduling_fields NAMES the 'GROUP'
+-- literal (resolved to an OID at parse time), so it must land in a LATER, separately-
+-- committed migration. Prisma applies pending migrations one file at a time, each committed
+-- before the next, so the split is sufficient — including under the self-migrating container
+-- entrypoint (ADR-0018). 20260717010000_m5_wbs_hierarchy needed no split only because
+-- nothing in it referenced the 'WBS_SUMMARY' value it added.
+--
+-- ADDITIVE, NO DATA MIGRATION. A catalog-only insert into pg_enum: no table rewrite, no
+-- scan, no lock on `resources`. Appended LAST, so every existing label keeps its sort
+-- ordinal and no `ORDER BY kind` changes meaning. Every existing row keeps its kind.
+--
+-- NON-SCHEDULING / BYTE-PARITY. A GROUP has no calendar, capacity, cost or assignment
+-- (part 2's CHECK plus the service GROUP_NOT_ASSIGNABLE rule), so it contributes nothing to
+-- the CPM pass, the levelling pass, the histogram or the EV read-model — all of which start
+-- from resource_assignments. ADR-0034's golden + scenario suite is structurally untouched.
+
+-- AddEnumValue: the non-assignable GROUPING node of the resource tree (ADR-0053 §3). MUST
+-- stay in lock-step with RESOURCE_KINDS in @repo/types.
+ALTER TYPE "ResourceKind" ADD VALUE 'GROUP';
+
+-- Down (forward-only in production; documented for completeness). PostgreSQL has no
+-- `ALTER TYPE … DROP VALUE`; reversing would mean recreating the type and rewriting
+-- resources.kind, which is never worth it — an unused spare label is harmless:
+--   -- 'GROUP' stays on the ResourceKind enum (no in-place DROP VALUE).

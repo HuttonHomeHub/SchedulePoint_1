@@ -6,11 +6,26 @@ import {
   type Calendar,
   type CalendarException,
   type CalendarExceptionWindow,
+  type CalendarScope,
   type CalendarShift,
 } from '@prisma/client';
 import { WorkingWeekdays } from '@repo/types';
 
+import { archivedFilterWhere, type ArchivedFilter } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
+
+/**
+ * The `?q=` term for a calendar list (ADR-0053 §4 / US-8). A calendar has no `code`, so the
+ * search is `name` alone — a single case-insensitive `contains`, i.e. `name ILIKE '%q%'`, which
+ * no btree can serve (leading wildcard). Deliberately: the org composite bounds the candidate
+ * set to one tenant in cursor order and this is a recheck over that bounded set. Returned as a
+ * spreadable fragment (`{}` when there is no search) — and NOT as an `OR`, so it composes with
+ * the project list's tier `OR` without either clobbering the other.
+ */
+function calendarSearchWhere(search: string | undefined): Prisma.CalendarWhereInput {
+  if (search === undefined) return {};
+  return { name: { contains: search, mode: 'insensitive' } };
+}
 
 /**
  * Day↔minute factor (ADR-0036 §4.2). The public calendar contract stays weekday-mask +
@@ -27,6 +42,13 @@ export interface CalendarPatch {
   description?: string | null;
   /** New weekday mask; the repository replaces the calendar's full-day shift rows to match. */
   workingWeekdays?: number;
+  /**
+   * The calendar tier (ADR-0053 §1). Always written together with {@link CalendarPatch.projectId}
+   * so the pair can never disagree — the service sets both or neither, and
+   * ck_calendars_scope_parent is the DB backstop.
+   */
+  scope?: CalendarScope;
+  projectId?: string | null;
 }
 
 /** The scalar inputs plus the weekday mask a calendar create needs (shifts derived from the mask). */
@@ -35,9 +57,19 @@ export interface CreateCalendarInput {
   name: string;
   workingWeekdays: number;
   description: string | null;
+  /** The tier to create at (ADR-0053 §1); `PROJECT` requires a `projectId`, `ORG` forbids one. */
+  scope: CalendarScope;
+  projectId: string | null;
   createdBy: string;
   updatedBy: string;
 }
+
+/**
+ * Which tier(s) a calendar list should return (ADR-0053 §1). `org` is the DEFAULT on the
+ * organisation list, so the shared library keeps exactly today's result set for existing
+ * clients; `project` and `all` are opt-in.
+ */
+export type CalendarScopeFilter = 'org' | 'project' | 'all';
 
 /** The inputs a whole-day calendar exception create needs (windows derived from `isWorking`). */
 export interface CreateCalendarExceptionInput {
@@ -61,6 +93,15 @@ export interface ImportCalendarBatchInput {
   organizationId: string;
   name: string;
   workingWeekdays: number;
+  /**
+   * The tier to create the imported calendar at (ADR-0053 §5). An import defaults to `PROJECT` —
+   * pinned to the import's target project, so a foreign file stops permanently polluting the shared
+   * organisation library — and only lands `ORG` where an org-global holder (a resource) needs it, or
+   * where the caller explicitly opted its global calendars in. Written as a PAIR with `projectId`, so
+   * the columns can never disagree (`ck_calendars_scope_parent` is the DB backstop).
+   */
+  scope: CalendarScope;
+  projectId: string | null;
   createdBy: string;
   updatedBy: string;
   exceptions: readonly {
@@ -123,6 +164,10 @@ export class CalendarRepository {
         organizationId: input.organizationId,
         name: input.name,
         description: input.description,
+        // The tier + its owning project are written as a PAIR (ADR-0053 §1); the service has
+        // already validated the project is active and in-org.
+        scope: input.scope,
+        projectId: input.projectId,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
         shifts: { create: fullDayShiftsFromMask(input.workingWeekdays) },
@@ -156,6 +201,9 @@ export class CalendarRepository {
         organizationId: calendar.organizationId,
         name: calendar.name,
         description: null,
+        // The tier + its owning project, always written together (ADR-0053 §1/§5).
+        scope: calendar.scope,
+        projectId: calendar.projectId,
         createdBy: calendar.createdBy,
         updatedBy: calendar.updatedBy,
       });
@@ -190,6 +238,40 @@ export class CalendarRepository {
     if (windowRows.length > 0) {
       await db.calendarExceptionWindow.createMany({ data: windowRows });
     }
+  }
+
+  /**
+   * The names already TAKEN in one tier, out of a candidate set — the import's name-collision probe
+   * (ADR-0053 §5). A calendar name is unique per tier among non-deleted rows (`uq_calendars_org_name`
+   * for `ORG`, `uq_calendars_project_name` for `PROJECT`), so an import that blindly inserted a name the
+   * tenant already holds would abort the whole commit on a `P2002` it could never resolve. One indexed
+   * `IN` query per tier, never a query per calendar.
+   *
+   * ARCHIVED rows are deliberately included: archiving does NOT free the name (ADR-0053 §4), so an
+   * archived calendar still blocks the insert and must still be disambiguated around. That is also why
+   * calendars have no unarchive-on-match rule — an import never REUSES a calendar (see the service), so
+   * there is nothing to unarchive.
+   */
+  async findTakenNames(
+    params: {
+      organizationId: string;
+      scope: CalendarScope;
+      projectId: string | null;
+      names: readonly string[];
+    },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Set<string>> {
+    if (params.names.length === 0) return new Set();
+    const rows = await db.calendar.findMany({
+      where: this.active({
+        organizationId: params.organizationId,
+        scope: params.scope,
+        projectId: params.projectId,
+        name: { in: [...params.names] },
+      }),
+      select: { name: true },
+    });
+    return new Set(rows.map((row) => row.name));
   }
 
   /** An active calendar scoped to its organisation (anti-IDOR). */
@@ -260,6 +342,56 @@ export class CalendarRepository {
   }
 
   /**
+   * The ARCHIVED calendar holding `name` in the tier a create/rename was aiming at, if any
+   * (ADR-0053 §4). An archived row deliberately keeps its name — the partial uniques stay
+   * predicated on `deleted_at IS NULL` alone so that unarchive, an unguarded version-gated
+   * UPDATE, can never fail on a name taken meanwhile (see the M4 migration's decision (1)).
+   * The accepted cost is that creating an ACTIVE calendar on that name is a 409; this lookup
+   * runs ONLY on that 409 path, to name the archived row in `details` so the UI can offer
+   * "unarchive it instead" rather than a dead end.
+   */
+  findArchivedByNameInTier(
+    params: {
+      organizationId: string;
+      name: string;
+      scope: CalendarScope;
+      projectId: string | null;
+    },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Calendar | null> {
+    return db.calendar.findFirst({
+      where: this.active({
+        organizationId: params.organizationId,
+        name: params.name,
+        scope: params.scope,
+        ...(params.scope === 'PROJECT' ? { projectId: params.projectId } : {}),
+        archivedAt: { not: null },
+      }),
+    });
+  }
+
+  /**
+   * Set or clear `archived_at` on an active calendar, gated on the optimistic `version`
+   * (ADR-0053 §4, workflow W4). A metadata-only write: no advisory lock, no cascade and no
+   * in-use guard — archiving is explicitly NOT blocked by use, which is the entire point and
+   * the contrast with delete. Returns rows changed; `0` means a version conflict or the row is
+   * gone, which the service maps to 409 / 404 exactly as the other version-gated updates do.
+   */
+  async setArchivedIfVersionMatches(
+    id: string,
+    expectedVersion: number,
+    archivedAt: Date | null,
+    actorId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const { count } = await db.calendar.updateMany({
+      where: this.active({ id, version: expectedVersion }),
+      data: { archivedAt, updatedBy: actorId, version: { increment: 1 } },
+    });
+    return count;
+  }
+
+  /**
    * Count the ACTIVE plans whose default calendar is `calendarId` — the delete-in-use
    * guard (Task C1). A soft-deleted plan does not count (it no longer references the
    * calendar for scheduling). Backed by the partial `idx_plans_calendar_id`.
@@ -283,18 +415,99 @@ export class CalendarRepository {
     return db.activity.count({ where: { calendarId, deletedAt: null } });
   }
 
-  /** A page of an organisation's active calendars with their shift rows (keyset cursor by id). */
+  /**
+   * A page of an organisation's active calendars with their shift rows (keyset cursor by id),
+   * filtered by tier (ADR-0053 §1). `scope` defaults to `org` at the service, so an existing
+   * client that sends nothing sees exactly today's result set — project calendars are a
+   * usability filter here, never an authorisation boundary (the write-time
+   * `assertCalendarUsableBy` guard is the security control).
+   */
   findManyActiveByOrg(params: {
     organizationId: string;
+    scope: CalendarScopeFilter;
+    archived: ArchivedFilter;
+    search?: string;
     take: number;
     cursor?: string;
   }): Promise<CalendarWithShifts[]> {
     return this.prisma.calendar.findMany({
-      where: this.active({ organizationId: params.organizationId }),
+      where: this.active({
+        organizationId: params.organizationId,
+        ...(params.scope === 'all' ? {} : { scope: params.scope === 'org' ? 'ORG' : 'PROJECT' }),
+        ...archivedFilterWhere(params.archived),
+        ...calendarSearchWhere(params.search),
+      }),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: params.take,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
       include: { shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] } },
+    });
+  }
+
+  /**
+   * A page of the calendars USABLE IN a project (ADR-0053 §1) — its own PROJECT-scoped
+   * calendars plus every ORG-scoped one — which is exactly the set `assertCalendarUsableBy`
+   * accepts for a plan/activity in that project, so a picker fed from this list can never
+   * offer a calendar the write seam will reject. Same keyset cursor + shift include as the
+   * org list. Index note (corrected after the M6 backend-performance review measured it): there
+   * is no `idx_calendars_project_created` composite — the M1 migration creates only the partial
+   * single-column `idx_calendars_project_id`. In practice the whole `OR` is served by the
+   * `(organization_id, created_at, id)` composite, which supplies the cursor ordering directly
+   * with the scope/project predicate applied as a cheap per-row recheck (measured: 0.56 ms at the
+   * ADR-0053 ceiling of 1,000 calendars). Do not add a composite on a guess — measure first.
+   */
+  findManyActiveForProject(params: {
+    organizationId: string;
+    projectId: string;
+    archived: ArchivedFilter;
+    search?: string;
+    take: number;
+    cursor?: string;
+  }): Promise<CalendarWithShifts[]> {
+    return this.prisma.calendar.findMany({
+      where: this.active({
+        organizationId: params.organizationId,
+        OR: [{ scope: 'ORG' }, { scope: 'PROJECT', projectId: params.projectId }],
+        ...archivedFilterWhere(params.archived),
+        ...calendarSearchWhere(params.search),
+      }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: params.take,
+      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+      include: { shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] } },
+    });
+  }
+
+  /**
+   * Count the ACTIVE plans using `calendarId` that live OUTSIDE `projectId` — the narrowing
+   * guard (ADR-0053 §2, W2). Narrowing an ORG calendar to one project is only safe when no
+   * referencer sits outside it; plans inside the target project keep working, so they are
+   * deliberately excluded from the count. Backed by the partial `idx_plans_calendar_id`
+   * (the `project_id` filter is a cheap re-check on the few matching rows).
+   */
+  countActivePlansUsingOutsideProject(
+    calendarId: string,
+    projectId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.plan.count({
+      where: { calendarId, deletedAt: null, projectId: { not: projectId } },
+    });
+  }
+
+  /**
+   * Count the ACTIVE activities using `calendarId` whose PLAN lives outside `projectId` — the
+   * other half of the narrowing guard (ADR-0053 §2). An activity has no `project_id` of its
+   * own, so the scope is expressed through its plan (the same relation filter the step/note
+   * cascades use). Backed by the partial `idx_activities_calendar_id`.
+   */
+  countActiveActivitiesUsingOutsideProject(
+    calendarId: string,
+    projectId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.activity.count({
+      where: { calendarId, deletedAt: null, plan: { projectId: { not: projectId } } },
     });
   }
 

@@ -31,3 +31,27 @@ export async function acquireResourceWriteLock(
 ): Promise<void> {
   await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${RESOURCE_LOCK_NAMESPACE}), hashtext(${resourceId}))`;
 }
+
+/**
+ * Take the same per-resource lock for MANY resources in **one** round trip — the GROUP-delete
+ * path, whose subtree is bounded only by the org's resource pool (`RESOURCE_TREE_MAX_DEPTH` caps
+ * depth, nothing caps a group's fan-out). Looping {@link acquireResourceWriteLock} there costs one
+ * network round trip per descendant *while the org-wide resource-tree lock is held*, which
+ * measured at ~830 ms for a 2,000-row subtree on loopback alone (≈13 ms batched) — an order of
+ * magnitude past the `docs/PERFORMANCE.md` p95 budget, and every millisecond of it blocks every
+ * other tree write in the tenant.
+ *
+ * Locks are acquired in **ascending id order** — the inner `ORDER BY` sorts the rows before the
+ * target list evaluates `pg_advisory_xact_lock` per row, so the fixed total order the caller
+ * relies on to avoid deadlocks is preserved by the database, not just by the caller's `sort()`.
+ * A no-op on an empty list (never emit a statement for nothing).
+ */
+export async function acquireResourceWriteLocks(
+  db: Prisma.TransactionClient,
+  resourceIds: readonly string[],
+): Promise<void> {
+  if (resourceIds.length === 0) return;
+  await db.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext(${RESOURCE_LOCK_NAMESPACE}), hashtext(id))
+    FROM (SELECT unnest(${[...resourceIds]}::text[]) AS id ORDER BY 1) AS ordered`;
+}

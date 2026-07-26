@@ -65,3 +65,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0050](0050-schedule-interchange-canonical-model.md)            | Schedule interchange: canonical model + import | Accepted |
 | [0051](0051-external-guest-share-links.md)                      | External-Guest per-plan share links            | Accepted |
 | [0052](0052-canvas-direct-manipulation-and-visual-refresh.md)   | TSLD direct manipulation & visual refresh      | Accepted |
+| [0053](0053-calendar-scoping-and-resource-management.md)        | Calendar scoping tiers & resource management   | Accepted |

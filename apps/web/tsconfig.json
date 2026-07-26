@@ -23,6 +23,7 @@
     "e2e-loe",
     "e2e-resource-view",
     "e2e-interchange",
-    "e2e-share"
+    "e2e-share",
+    "e2e-library"
   ]
 }

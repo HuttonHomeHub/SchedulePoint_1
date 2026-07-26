@@ -10,6 +10,15 @@ import { ResourcesTable } from './ResourcesTable';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
+// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE library table —
+// a flat list with no search field, no kind/archived filters, no Group column and no archive row
+// action (ADR-0039). The flag-on surface is asserted by the sibling `ResourcesTable.hierarchy` and
+// `ResourcesTable.archive` suites (ADR-0053 §3/§4).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LIBRARY_SCOPING_ENABLED: false,
+}));
+
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),
@@ -22,9 +31,11 @@ const RESOURCES: ResourceSummary[] = [
     code: 'CRW-A',
     description: null,
     kind: 'LABOUR',
+    parentId: null,
     maxUnitsPerHour: null,
     costPerUnit: null,
     calendarId: 'cal-1',
+    archivedAt: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -35,9 +46,11 @@ const RESOURCES: ResourceSummary[] = [
     code: null,
     description: null,
     kind: 'MATERIAL',
+    parentId: null,
     maxUnitsPerHour: null,
     costPerUnit: null,
     calendarId: null,
+    archivedAt: null,
     version: 2,
     createdAt: '2026-01-02T00:00:00Z',
     updatedAt: '2026-01-02T00:00:00Z',
@@ -64,6 +77,10 @@ function renderTable(
             name: 'Standard',
             description: null,
             workingWeekdays: 31,
+            // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
+            scope: 'ORG',
+            projectId: null,
+            archivedAt: null,
             version: 1,
             createdAt: '2026-01-01T00:00:00Z',
             updatedAt: '2026-01-01T00:00:00Z',

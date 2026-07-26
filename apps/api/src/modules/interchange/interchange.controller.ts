@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   HttpCode,
   HttpStatus,
@@ -29,9 +30,10 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { InterchangeCommitResponseDto } from './dto/interchange-commit-response.dto';
+import { InterchangeImportOptionsDto } from './dto/interchange-import-options.dto';
 import { InterchangeReportResponseDto } from './dto/interchange-report-response.dto';
 import { INTERCHANGE_FILE_FIELD, INTERCHANGE_MAX_UPLOAD_BYTES } from './interchange.constants';
-import { InterchangeService } from './interchange.service';
+import { InterchangeService, type InterchangeImportOptions } from './interchange.service';
 import type { UploadedInterchangeFile } from './uploaded-file';
 
 /**
@@ -68,12 +70,14 @@ export class InterchangeController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     description:
-      'The schedule file to parse (a P6 `.xer` for M1), sent as the `file` multipart field.',
+      'The schedule file to parse (a P6 `.xer` or an MSPDI `.xml`), sent as the `file` multipart ' +
+      'field, plus the optional `globalCalendarScope` form field (ADR-0053 §5).',
     schema: {
       type: 'object',
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
+        globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
       },
     },
   })
@@ -96,9 +100,10 @@ export class InterchangeController {
     @Param('orgSlug') orgSlug: string,
     @Param('projectId', ParseUuidPipe) projectId: string,
     @UploadedFile() file: UploadedInterchangeFile | undefined,
+    @Body() options: InterchangeImportOptionsDto,
   ): Promise<InterchangeReportResponseDto> {
     return InterchangeReportResponseDto.from(
-      await this.service.dryRun(principal, orgSlug, projectId, file),
+      await this.service.dryRun(principal, orgSlug, projectId, file, toImportOptions(options)),
     );
   }
 
@@ -114,12 +119,14 @@ export class InterchangeController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     description:
-      'The schedule file to import (a P6 `.xer` for M1), sent as the `file` multipart field.',
+      'The schedule file to import (a P6 `.xer` or an MSPDI `.xml`), sent as the `file` multipart ' +
+      'field, plus the optional `globalCalendarScope` form field (ADR-0053 §5).',
     schema: {
       type: 'object',
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
+        globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
       },
     },
   })
@@ -145,8 +152,26 @@ export class InterchangeController {
     @Param('orgSlug') orgSlug: string,
     @Param('projectId', ParseUuidPipe) projectId: string,
     @UploadedFile() file: UploadedInterchangeFile | undefined,
+    @Body() options: InterchangeImportOptionsDto,
   ): Promise<InterchangeCommitResponseDto> {
-    const { planId, report } = await this.service.commit(principal, orgSlug, projectId, file);
+    const { planId, report } = await this.service.commit(
+      principal,
+      orgSlug,
+      projectId,
+      file,
+      toImportOptions(options),
+    );
     return InterchangeCommitResponseDto.from(planId, report);
   }
+}
+
+/**
+ * Narrow the validated multipart options to the service's option shape. An absent field stays ABSENT
+ * (not `undefined`) — `exactOptionalPropertyTypes` is on, and "the caller said nothing" must reach the
+ * pure pipeline as its own documented default rather than as an explicit `undefined`.
+ */
+function toImportOptions(options: InterchangeImportOptionsDto): InterchangeImportOptions {
+  return options.globalCalendarScope === undefined
+    ? {}
+    : { globalCalendarScope: options.globalCalendarScope };
 }

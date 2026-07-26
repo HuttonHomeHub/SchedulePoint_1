@@ -6,7 +6,7 @@ import {
   type ActivitySummary,
   type CalendarSummary,
 } from '@repo/types';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
@@ -27,6 +27,7 @@ import {
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField, FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
@@ -39,10 +40,19 @@ import {
   DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
+  LIBRARY_SCOPING_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
+import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
+import {
+  CALENDAR_TIER_GROUP_LABELS,
+  groupCalendarsByTier,
+  offerableCalendars,
+  toCalendarOptions,
+} from '@/lib/calendar-tiers';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 import { minorToMajorInput } from '@/lib/format-money';
+import { matchesLibraryQuery } from '@/lib/library-filters';
 
 /**
  * Create-or-edit dialog for an activity DEFINITION (Planner/Org Admin). Progress
@@ -117,6 +127,7 @@ export function ActivityFormDialog({
     handleSubmit,
     reset,
     control,
+    setValue,
     formState: { errors },
   } = useForm<ActivityFormValues>({
     resolver: zodResolver(activityFormSchema),
@@ -208,6 +219,24 @@ export function ActivityFormDialog({
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
   const missingCalendar = Boolean(calendarId) && !calendars.some((c) => c.id === calendarId);
+  // Behind `LIBRARY_SCOPING_ENABLED` the list spans two tiers (ADR-0053 §1) — the project's own
+  // calendars alongside the organisation's — so the options are grouped under named `<optgroup>`s,
+  // which a screen reader announces with the option. Not grouped when the project has none of its
+  // own: a single-group list reads better flat.
+  const calendarTiers = groupCalendarsByTier(calendars);
+  const groupCalendars = LIBRARY_SCOPING_ENABLED && calendarTiers.project.length > 0;
+  // The combobox's search term (ADR-0053 §4 / US-8). Not debounced: `calendars` is already the
+  // COMPLETE project-usable library (paged in full), so this is a client-side array pass.
+  const [calendarQuery, setCalendarQuery] = useState('');
+  // Archived calendars are offered only when one IS the current value (US-8) — a calendar retired
+  // after this activity was bound to it stays selected, badged, rather than reading as "inherit".
+  const calendarOptions = useMemo(() => {
+    if (!LIBRARY_SCOPING_ENABLED) return [];
+    const offerable = offerableCalendars(calendars, calendarId ?? '').filter((calendar) =>
+      matchesLibraryQuery(calendarQuery, calendar.name),
+    );
+    return toCalendarOptions(offerable, { grouped: groupCalendars });
+  }, [calendars, calendarId, calendarQuery, groupCalendars]);
   // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off
   // option so opening the form never coerces it (US-2). Derived from the live field value, so
   // it appears when a parked value is selected and disappears once the planner changes away.
@@ -254,7 +283,9 @@ export function ActivityFormDialog({
         <FormErrorSummary errors={errors} />
         {mutation.isError ? (
           <p role="alert" className="text-destructive-text text-sm">
-            {mutation.error.message}
+            {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
+                every other failure keeps the server's message verbatim, exactly as before. */}
+            {calendarScopeErrorMessage(mutation.error) ?? mutation.error.message}
           </p>
         ) : null}
         <TextField
@@ -392,31 +423,64 @@ export function ActivityFormDialog({
         {ACTIVITY_CALENDAR_ENABLED ? (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="activity-calendar">Calendar (optional)</Label>
-            <Select
-              id="activity-calendar"
-              disabled={calendarsLoading}
-              aria-busy={calendarsLoading}
-              aria-invalid={calendarsError ? true : undefined}
-              aria-describedby={
-                calendarsError
-                  ? 'activity-calendar-help activity-calendar-error'
-                  : 'activity-calendar-help'
-              }
-              {...register('calendarId')}
-            >
-              <option value="">{INHERIT_CALENDAR_LABEL}</option>
-              {/* The seeded calendar isn't resolvable from the list — still loading, or the list
-                  failed to load. Keep it selected under an honest label (never blank, which would
-                  read as "inherit"); "Loading…" only while pending, else "Unavailable". */}
-              {missingCalendar ? (
-                <option value={calendarId}>{calendarsLoading ? 'Loading…' : 'Unavailable'}</option>
-              ) : null}
-              {calendars.map((calendar) => (
-                <option key={calendar.id} value={calendar.id}>
-                  {calendar.name}
-                </option>
-              ))}
-            </Select>
+            {LIBRARY_SCOPING_ENABLED ? (
+              /* The shared APG combobox (ADR-0053 §4 / US-8): type-ahead over a large library, the
+                 tiers as labelled option groups, and the "" = inherit choice as `emptyOption`. */
+              <Combobox
+                id="activity-calendar"
+                value={calendarId ?? ''}
+                onChange={(value) =>
+                  setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
+                }
+                query={calendarQuery}
+                onQueryChange={setCalendarQuery}
+                options={calendarOptions}
+                // The seeded calendar isn't resolvable from the list — still loading, or the list
+                // failed to load. The combobox falls back to "Loading…"/"Unavailable" itself, so the
+                // field is never blank (which would read as "inherit").
+                selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
+                groupLabels={CALENDAR_TIER_GROUP_LABELS}
+                emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
+                loading={calendarsLoading}
+                errored={calendarsError}
+                describedBy={
+                  calendarsError
+                    ? 'activity-calendar-help activity-calendar-error'
+                    : 'activity-calendar-help'
+                }
+                invalid={calendarsError}
+                toggleLabel="Show calendars"
+                emptyMessage="No calendars match your search."
+              />
+            ) : (
+              <Select
+                id="activity-calendar"
+                disabled={calendarsLoading}
+                aria-busy={calendarsLoading}
+                aria-invalid={calendarsError ? true : undefined}
+                aria-describedby={
+                  calendarsError
+                    ? 'activity-calendar-help activity-calendar-error'
+                    : 'activity-calendar-help'
+                }
+                {...register('calendarId')}
+              >
+                <option value="">{INHERIT_CALENDAR_LABEL}</option>
+                {/* The seeded calendar isn't resolvable from the list — still loading, or the list
+                    failed to load. Keep it selected under an honest label (never blank, which would
+                    read as "inherit"); "Loading…" only while pending, else "Unavailable". */}
+                {missingCalendar ? (
+                  <option value={calendarId}>
+                    {calendarsLoading ? 'Loading…' : 'Unavailable'}
+                  </option>
+                ) : null}
+                {calendars.map((calendar) => (
+                  <option key={calendar.id} value={calendar.id}>
+                    {calendar.name}
+                  </option>
+                ))}
+              </Select>
+            )}
             <p id="activity-calendar-help" className="text-muted-foreground text-sm">
               The working-time calendar this activity is scheduled on. Inherits the plan’s calendar
               unless you pick one. Recalculate to apply the calendar to the activity’s dates.

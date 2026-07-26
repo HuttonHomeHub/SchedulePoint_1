@@ -1,4 +1,4 @@
-import { importGraphSchema, type ImportGraph } from './import-graph.js';
+import { importGraphSchema, type ImportCalendarScope, type ImportGraph } from './import-graph.js';
 import { mapCanonicalToImportGraph } from './mapper.js';
 import type { InterchangeReport, ReportFinding } from './report.js';
 import { validateAndRepair } from './validate.js';
@@ -26,6 +26,11 @@ export interface ImportXerInput {
   readonly filename?: string | null;
   /** Optional parser safety caps (byte / row / field limits); defaults are applied when omitted. */
   readonly caps?: Partial<XerParseCaps>;
+  /**
+   * Where a source **global** (`CA_Base`) calendar should land (ADR-0053 §5). Omitted = `PROJECT`: an
+   * imported file never writes the shared organisation library on its own say-so.
+   */
+  readonly globalCalendarScope?: ImportCalendarScope;
 }
 
 /**
@@ -105,8 +110,13 @@ export function importXer(input: ImportXerInput): ImportXerResult {
     };
   }
 
-  // 3. Map canonical → SchedulePoint import graph.
-  const mapped = mapCanonicalToImportGraph(adapted.model);
+  // 3. Map canonical → SchedulePoint import graph (incl. the ADR-0053 §5 calendar-tier decision).
+  const mapped = mapCanonicalToImportGraph(
+    adapted.model,
+    input.globalCalendarScope === undefined
+      ? {}
+      : { globalCalendarScope: input.globalCalendarScope },
+  );
 
   // 3a. Hard graph-size ceiling. Reject a graph past the documented cap BEFORE validate/repair (its
   // cycle repair is bounded by this, B2) and before any commit (the single persistence transaction is

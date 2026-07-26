@@ -20,12 +20,15 @@ export function ImportScheduleButton({
   projectId,
   projectName,
   canImport,
+  canManageOrgCalendars = false,
 }: {
   orgSlug: string;
   projectId: string;
   projectName: string;
   /** Whether the current user may import (mirrors `interchange:import`). */
   canImport: boolean;
+  /** Whether the current user holds `calendar:manage_org` (ADR-0053 §2) — gates the tier option. */
+  canManageOrgCalendars?: boolean;
 }): React.ReactElement | null {
   const [open, setOpen] = useState(false);
 
@@ -42,6 +45,7 @@ export function ImportScheduleButton({
         projectName={projectName}
         open={open}
         onClose={() => setOpen(false)}
+        canManageOrgCalendars={canManageOrgCalendars}
       />
     </>
   );
