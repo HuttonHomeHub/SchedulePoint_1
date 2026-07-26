@@ -6,7 +6,6 @@ import {
   contrast,
   createClient,
   onboard,
-  resolvePair,
   setTheme,
   type ThemeChoice,
 } from './support';
@@ -76,11 +75,13 @@ for (const { choice, colorScheme } of THEMES) {
       // chip's portalled menu, which paints on the page's `--popover`. What remains on the band
       // is the chip itself, so that is what has to clear the bar — and the menu's contents are
       // covered by the whole-page axe scan above once it is open.
-      const chip = await page.getByRole('button', { name: /^Account/ }).evaluate((el) => {
-        const style = getComputedStyle(el);
-        return { color: style.color, background: style.backgroundColor };
-      });
-      expect(contrast(await resolvePair(page, chip))).toBeGreaterThanOrEqual(TEXT_MIN);
+      // Measured on the INITIALS PILL, not on the button that wraps it. The trigger is a
+      // transparent flex row — the ink and the fill both live on the pill inside it — so reading
+      // `backgroundColor` off the button yields `rgba(0,0,0,0)` and a ratio against nothing.
+      // `computedPair` also walks ancestors for the first painted backdrop, which the hand-rolled
+      // read this replaces did not.
+      const chip = 'header button[aria-label^="Account"] span';
+      expect(contrast(await computedPair(page, chip))).toBeGreaterThanOrEqual(TEXT_MIN);
 
       // D5 — the rail's secondary text. Same root cause as D1, on the other surface.
       const railFooter = 'nav[aria-label="Project Explorer"] .text-muted-foreground';
