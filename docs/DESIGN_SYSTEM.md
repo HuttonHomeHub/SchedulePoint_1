@@ -146,6 +146,47 @@ on `<html>` flips every token (theme management in
 [`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)). Components must look
 correct in both — reviewers check both.
 
+### Corporate theme (navy + amber)
+
+A fourth picker entry, and a different _kind_ of thing from the three above: light,
+dark and system are colour **schemes**; Corporate is a **brand skin** — navy chrome
+around a light working canvas — that resolves as a light scheme. It is applied by a
+`.corporate` class on `<html>`, a sibling of `.dark`; exactly one theme class is ever
+stamped, and light stamps none (it is the `:root` baseline).
+
+| Role                   | Colour                 | Token                                          |
+| ---------------------- | ---------------------- | ---------------------------------------------- |
+| Chrome (top bar, rail) | Navy `#14213D`         | `--app-header`, `--sidebar`                    |
+| Primary action         | Amber `#fca311`        | `--primary` (ink: navy `--primary-foreground`) |
+| Secondary surface      | Lighter navy `#1f3661` | `--secondary`, `--info`                        |
+| Page background        | Off-white `#f8f9fa`    | `--background`                                 |
+| Body text              | `#333`                 | `--foreground`                                 |
+
+Two rules make the palette work rather than merely look right on a swatch sheet:
+
+1. **Amber is a fill, never ink or a line on a light surface.** `#fca311` on `#f8f9fa`
+   is **1.9:1** — it fails both the 4.5:1 text bar and the 3:1 non-text bar, so it can
+   never be body text, an icon-only glyph or a focus ring there. It carries navy ink at
+   **7.9:1**, which is what makes it a good button. Consequently the focus ring on light
+   surfaces is **navy** (`--ring`), and the brand's amber ring lives on the navy chrome
+   (`--sidebar-ring`), where it reaches 7.9:1.
+2. **Near-critical moved to bronze.** `--warning` is the TSLD's near-critical bar fill,
+   and in light/dark it is essentially this same amber. With amber promoted to `--primary`
+   (which is the ordinary bar fill), a normal bar and a near-critical bar would have been
+   the same colour. Corporate shifts `--warning` to a deeper bronze so the canvas keeps
+   three readable states — normal / near-critical / critical — on top of the dashed-outline
+   shape cue that carries [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color)
+   regardless of hue.
+
+Verified pairings (sRGB, WCAG 2.x): navy chrome / white text **16:1**; body `#333` on
+off-white **12:1**; amber fill / navy ink **7.9:1**; destructive `#b91c1c` on off-white
+**6.1:1**.
+
+**The type scale is unchanged.** The palette's source description named Roboto; swapping
+the typeface per theme would shift layout and pull a second font at runtime for no
+accessibility or brand gain that colour doesn't already deliver. Corporate is a colour
+theme.
+
 ---
 
 ## Accessibility requirements (WCAG 2.2 AA — enforced)
