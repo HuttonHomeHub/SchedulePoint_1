@@ -64,7 +64,18 @@ export function NavigatorRail({
               // A labelled primary button rather than a bare `+` icon: creating the first client
               // is the one action an empty Project Explorer exists to offer, and an unlabelled
               // glyph makes the entry point something you have to already know about.
-              <Button size="sm" onClick={crud.onCreateClient} className="h-7 gap-1 px-2">
+              //
+              // The visible label is shortened to "Client" to fit the rail header, so the button
+              // needs an explicit accessible name: "Client" on its own names a NOUN, not what
+              // pressing it does. WCAG 2.5.3 (Label in Name) is satisfied because the visible
+              // text is contained in the accessible name, so voice control still reaches it by
+              // the word on screen.
+              <Button
+                size="sm"
+                aria-label="New client"
+                onClick={crud.onCreateClient}
+                className="h-7 gap-1 px-2"
+              >
                 <Plus aria-hidden="true" className="size-4" />
                 Client
               </Button>
