@@ -129,7 +129,14 @@ describe('calendarBoundaries', () => {
 
   it('returns empty rows when the span contains no boundary', () => {
     // Mid-month span with no 1st-of-month: 2026-03-10 (offset 0) .. 2026-03-14 (offset 4).
-    expect(calendarBoundaries(0, 4, '2026-03-10')).toEqual({ months: [], years: [] });
+    // `startMonthIndex` is still reported — it is the absolute month ordinal of the first visible
+    // day, which the month bands derive their parity from, and is defined whether or not the span
+    // happens to contain a boundary.
+    expect(calendarBoundaries(0, 4, '2026-03-10')).toEqual({
+      months: [],
+      years: [],
+      startMonthIndex: 2026 * 12 + 2,
+    });
   });
 });
 

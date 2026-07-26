@@ -35,6 +35,7 @@ const PALETTE: TsldPalette = {
   barStroke: '#5a5a5a',
   hoverRing: '#9a9a9a',
   handleHalo: '#0b0b0b',
+  monthBand: '#111111',
 };
 
 /** All view layers on, matching the default scene. */

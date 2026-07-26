@@ -499,8 +499,13 @@
   --panel-ring: oklch(0.35 0.09 262);
 }
 
-[data-canvas-visual-language] {
-  /* S4 fills this: the cream canvas ground and its month band. */
+/* S4: Corporate's diagram gets a warm ground and a band a shade deeper than it. Warm rather
+   than the page's cool off-white so the drawing surface reads as a distinct place to work,
+   and OPAQUE rather than an alpha wash — an alpha band would tint whatever it overlaps and
+   would have to be re-checked against every layer above it. */
+[data-canvas-visual-language].corporate {
+  --canvas: oklch(0.988 0.006 90);
+  --canvas-band: oklch(0.966 0.011 90);
 }
 
 /* ------------------------------------------------------------------------- */

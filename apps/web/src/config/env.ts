@@ -806,3 +806,25 @@ export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
  * attribute is absent so every token keeps today's value (the flag-off shell parity suite).
  */
 export const DESIGNED_CHROME_ENABLED = flagDefaultOff(import.meta.env.VITE_DESIGNED_CHROME);
+
+/**
+ * The **canvas visual language** (ADR-0055 S4, spec `docs/specs/designed-ui/`). Default **off**
+ * until its S5 enablement gate — the specialist reviews and the ADR-0026 draw-budget measurement.
+ *
+ * When on, the diagram sits on a ground of its own with **alternating month bands**: a planner can
+ * count months without reading a single label, which is the one thing a time-scaled diagram should
+ * make free. Banding is *ground*, not a gridline, so it deliberately does not follow the `Month
+ * grid` toggle, and its parity comes from the absolute month ordinal — calendar-derived, so the
+ * stripes cannot invert when the viewport pans.
+ *
+ * The cost is one `fillStyle` and at most `visibleMonths + 1` `fillRect` per frame, with zero text
+ * — pinned by `render/paint.band-budget.test.ts` in the counting-stub style, which asserts the
+ * *shape* of the cost rather than milliseconds (a CI runner's absolute timings are noise).
+ *
+ * Frontend-only, and the painter is the only thing that changes: no API, DTO, schema or engine
+ * change. Set `VITE_CANVAS_VISUAL_LANGUAGE=false` (the default) for a byte-for-byte paint — the
+ * scene simply carries no `monthBands`, so the band layer is skipped entirely.
+ */
+export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_CANVAS_VISUAL_LANGUAGE,
+);

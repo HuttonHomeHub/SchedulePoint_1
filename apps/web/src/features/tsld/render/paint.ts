@@ -138,6 +138,8 @@ export interface TsldPalette {
    * criticality fill in both themes — see `palette.test.ts`). Read only by the lag handle today
    * (ADR-0052 M3 discoverability fix); flag-off it is never read. */
   handleHalo: string;
+  /** The alternating month band drawn under the diagram (ADR-0055 §4). Opaque. */
+  monthBand: string;
   // The refresh introduces NO other colour: the in-bar progress band + front divider draw in the
   // bar's own paired label ink (`labelInside*` / the lens `barInk` override), so their contrast is
   // guaranteed by the same 1:1 fill↔ink pairing labels rely on in both themes and under every
@@ -207,6 +209,12 @@ export interface TsldScene {
   isWorkingDay?: ((dayOffset: number) => boolean) | null | undefined;
   /** Day offset (from `dataDate`) of "today", or null when today is outside a schedulable range. */
   todayOffset?: number | null | undefined;
+  /**
+   * Paint the alternating month bands (ADR-0055 §4, `VITE_CANVAS_VISUAL_LANGUAGE`). Absent ⇒ the
+   * band layer is skipped entirely ⇒ the frame is byte-for-byte today's paint, which is what makes
+   * the flag-off parity claim structural rather than a promise. The budget suite flips it.
+   */
+  monthBands?: boolean | undefined;
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // ALL default-absent ⇒ byte-for-byte today's paint (the flag-off / no-active-lens parity gate).
   /** Ids of activities the active filter dimmed (non-matches). Members paint muted (reduced alpha)
@@ -767,6 +775,36 @@ export function paintScene(
   const firstDay = Math.floor((0 - view.originX) / view.pxPerDay);
   const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay);
 
+  // ONE calendar walk per frame, shared by the month bands (layer -0.5) and the month/year
+  // gridlines (layer 1). Two walks could disagree by a day; one cannot.
+  const bounds = calendarBoundaries(firstDay, lastDay, scene.dataDate);
+
+  // Layer -0.5: alternating month bands — the diagram's own ground, banded, so a planner can
+  // count months without reading a label. Beneath EVERYTHING, including the non-working wash, so
+  // a weekend still reads as a weekend on top of its band.
+  //
+  // Parity is the absolute month ordinal, not a running count of crossed boundaries: derived from
+  // the calendar, it cannot invert when the viewport pans. Banding is ground, so it deliberately
+  // does NOT follow the `Month grid` toggle — that toggle governs a line, this is a surface.
+  //
+  // Cost: one `fillStyle` and at most `visibleMonths + 1` `fillRect`, no text. Pinned by
+  // `paint.band-budget.test.ts`, because this is the tightest loop in the app.
+  if (scene.monthBands) {
+    ctx.fillStyle = palette.monthBand;
+    const edges = bounds.months.filter((d) => d > firstDay);
+    edges.push(lastDay + 1);
+    let segStart = firstDay;
+    let monthIndex = bounds.startMonthIndex;
+    for (const edge of edges) {
+      if (monthIndex % 2 !== 0) {
+        const x = screenXOfDay(segStart, view);
+        ctx.fillRect(x, 0, screenXOfDay(edge, view) - x, size.height);
+      }
+      segStart = edge;
+      monthIndex += 1;
+    }
+  }
+
   // Layer 0: non-working (weekend/holiday) column wash, beneath the grid. Only when the plan has a
   // calendar (`isWorkingDay` present) and the toggle is on, and only once columns are wide enough
   // to read — at coarse zoom the columns are sub-pixel, so it's culled (and avoids a long loop).
@@ -792,11 +830,8 @@ export function paintScene(
   if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
     for (let d = firstDay; d <= lastDay; d += 1) gridLine(d);
   }
-  if (toggles.monthGrid || toggles.yearGrid) {
-    const { months, years } = calendarBoundaries(firstDay, lastDay, scene.dataDate);
-    if (toggles.monthGrid) for (const d of months) gridLine(d);
-    if (toggles.yearGrid) for (const d of years) gridLine(d);
-  }
+  if (toggles.monthGrid) for (const d of bounds.months) gridLine(d);
+  if (toggles.yearGrid) for (const d of bounds.years) gridLine(d);
   ctx.stroke();
 
   // Layer 2: dependency edges (only when an endpoint is visible). Driving edges — the

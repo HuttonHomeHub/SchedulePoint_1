@@ -81,4 +81,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_LIVE_FEEDBACK?: string;
   /** Designed chrome band — the header row and (on a plan) the two toolbar rows rendered as ONE full-bleed band across the top, with the Project Explorer and the workspace below it; the toolbar reaches the band through a portal, so no plan state moves into the shell (ADR-0055, docs/specs/designed-ui/). Also stamps `data-designed-chrome` on <html>, activating the flagged token values. "true"/"1" enables it; off by default until the S5 enablement gate. */
   readonly VITE_DESIGNED_CHROME?: string;
+  /** Canvas visual language — the diagram on a ground of its own with alternating month bands, so months are countable without labels (ADR-0055 §4, docs/specs/designed-ui/). "true"/"1" enables it; off by default until the S5 draw-budget gate. */
+  readonly VITE_CANVAS_VISUAL_LANGUAGE?: string;
 }

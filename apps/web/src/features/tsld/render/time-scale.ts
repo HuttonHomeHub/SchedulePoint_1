@@ -163,13 +163,17 @@ export function calendarBoundaries(
   firstDay: number,
   lastDay: number,
   dataDate: string,
-): { months: number[]; years: number[] } {
+): { months: number[]; years: number[]; startMonthIndex: number } {
   const anchor = new Date(`${addCalendarDays(dataDate, firstDay)}T00:00:00Z`);
   let y = anchor.getUTCFullYear();
   let m = anchor.getUTCMonth() + 1;
   let d = anchor.getUTCDate();
   const months: number[] = [];
   const years: number[] = [];
+  // The absolute month ordinal of the FIRST visible day. Month banding derives its parity from
+  // this rather than from "how many boundaries have I crossed", so the stripes are a property of
+  // the calendar and cannot invert when the user pans (ADR-0055 §4).
+  const startMonthIndex = y * 12 + (m - 1);
   for (let off = firstDay; off <= lastDay; off += 1) {
     if (d === 1) {
       months.push(off);
@@ -185,7 +189,7 @@ export function calendarBoundaries(
       }
     }
   }
-  return { months, years };
+  return { months, years, startMonthIndex };
 }
 
 /**
