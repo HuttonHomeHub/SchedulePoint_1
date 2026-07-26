@@ -12,6 +12,7 @@ import {
   type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
+import { cursorReadout } from '../render/cursor-readout';
 import type { GhostBar } from '../render/lenses';
 import { linkLegality } from '../render/link-legality';
 import {
@@ -535,6 +536,11 @@ export function TsldCanvas({
   // and drawn as the hover ring on the interaction layer. Flag-off it is never written, so the
   // overlay stays byte-for-byte today's (the parity gate).
   const hoverRef = useRef<Rect | null>(null);
+  // The last pointer position over the surface (ADR-0054 §2), for the cursor date readout. Written
+  // per move (the readout tracks the pointer by design) but only ever read on the interaction
+  // layer, which a move already repaints — so it adds no frame the surface was not drawing.
+  // Flag-off nothing writes it and the overlay field stays null.
+  const cursorPointRef = useRef<Point | null>(null);
   // The idle-hovered bar's id (ADR-0052 M5): published from the SAME classify as the hover rect
   // above, but into the SCENE (`TsldScene.hoverId`) — the base edge layer draws that bar's
   // incident links transiently highlighted, the pointer twin of the persistent selection
@@ -989,6 +995,17 @@ export function TsldCanvas({
           ghost: CANVAS_LIVE_FEEDBACK_ENABLED
             ? gestureGhostDetail(gestureRef.current, activityById)
             : null,
+          // The cursor date readout (ADR-0054 §2). The day comes from the gesture where one is in
+          // flight — so the chip states the date that will be COMMITTED, not the pixel under the
+          // pointer — and from the pointer's own column when idle.
+          cursor: CANVAS_LIVE_FEEDBACK_ENABLED
+            ? cursorReadout({
+                state: gestureRef.current,
+                point: cursorPointRef.current,
+                view: viewRef.current,
+                dataDate: sceneRef.current.dataDate,
+              })
+            : null,
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
@@ -1278,6 +1295,16 @@ export function TsldCanvas({
           }
         }}
         onPointerMove={(e) => {
+          // Track the pointer for the cursor date readout (ADR-0054 §2). This is the one place the
+          // epic costs a frame it was not already drawing: with no gesture in flight the
+          // interaction layer previously repainted only on a hover-ring change, and a live
+          // guideline must follow every move. It is the CHEAP layer — a clear plus a rule, a chip
+          // and (when a gesture runs) one ghost — never the bar/link scene. Flag-off this whole
+          // block is dead, so the idle repaint cadence is byte-for-byte today's.
+          if (CANVAS_LIVE_FEEDBACK_ENABLED) {
+            cursorPointRef.current = localPoint(e);
+            interactionDirtyRef.current = true;
+          }
           if (gestureActiveRef.current) {
             const p = localPoint(e);
             // Only a link drag needs the hovered target + live modifiers (a per-move hit-test);
@@ -1422,6 +1449,12 @@ export function TsldCanvas({
             hoverIdRef.current = null;
             sceneRef.current = { ...sceneRef.current, hoverId: null };
             dirtyRef.current = true;
+          }
+          // …and the cursor date readout (ADR-0054 §2) — a guideline left behind by a pointer
+          // that has gone would point at nothing.
+          if (cursorPointRef.current !== null) {
+            cursorPointRef.current = null;
+            interactionDirtyRef.current = true;
           }
           // …and any emphasised lag handle with it (same no-op flag-off).
           setActiveLagId(null);

@@ -214,3 +214,36 @@ describe('ghost fidelity (ADR-0054 §1)', () => {
     expect(texts).toContain('7d'); // the ADR-0052 duration readout, unchanged
   });
 });
+
+describe('cursor date readout (ADR-0054 §2)', () => {
+  it('draws a full-height guideline at the chosen day plus a chip stating its date', () => {
+    const ctx = mockCtx();
+    paintInteractionLayer(ctx, { cursor: { x: 240, label: 'Fri 2 Jan' } }, SIZE, PALETTE);
+    // The guideline spans the surface at the day boundary…
+    expect(ctx.moveTo).toHaveBeenCalledWith(240.5, 0);
+    expect(ctx.lineTo).toHaveBeenCalledWith(240.5, SIZE.height);
+    // …and the chip states the date.
+    expect(ctx.fillText).toHaveBeenCalledWith('Fri 2 Jan', expect.any(Number), expect.any(Number));
+  });
+
+  it('keeps the chip on-surface at either edge rather than letting it run off', () => {
+    const left = mockCtx();
+    paintInteractionLayer(left, { cursor: { x: 0, label: 'Thu 1 Jan' } }, SIZE, PALETTE);
+    const right = mockCtx();
+    paintInteractionLayer(right, { cursor: { x: SIZE.width, label: 'Thu 1 Jan' } }, SIZE, PALETTE);
+    const chipX = (ctx: ReturnType<typeof mockCtx>): number => ctx.fillRect.mock.calls[0]![0]!;
+    const chipW = (ctx: ReturnType<typeof mockCtx>): number => ctx.fillRect.mock.calls[0]![2]!;
+    expect(chipX(left)).toBeGreaterThanOrEqual(0);
+    expect(chipX(right) + chipW(right)).toBeLessThanOrEqual(SIZE.width);
+  });
+
+  it('is a no-op without a cursor — the flag-off parity contract', () => {
+    const withField = mockCtx();
+    const withoutField = mockCtx();
+    paintInteractionLayer(withField, { live: GHOST, cursor: null }, SIZE, PALETTE);
+    paintInteractionLayer(withoutField, { live: GHOST }, SIZE, PALETTE);
+    expect(withField.fillRect.mock.calls).toEqual(withoutField.fillRect.mock.calls);
+    expect(withField.moveTo.mock.calls).toEqual(withoutField.moveTo.mock.calls);
+    expect(withField.fillText).not.toHaveBeenCalled();
+  });
+});

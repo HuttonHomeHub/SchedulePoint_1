@@ -1283,11 +1283,28 @@ export interface InteractionOverlay {
    * change (never the sole carrier of state — selection remains the keyboard/AT state), drawn
    * OUTSIDE the bar so it obscures no label or badge. Only read under `visualRefresh`. */
   hover?: Rect | null;
-  // ── Live feedback (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`) ─────────────────────────────
+  // ── Live feedback (ADR-0054 §1–§2, `VITE_CANVAS_LIVE_FEEDBACK`) ──────────────────────────
   /** Full-fidelity detail for the in-flight `live`/`resize` ghost, so a drag reads as the bar
    * itself moving. Absent ⇒ the ADR-0052 ghost, byte-for-byte. */
   ghost?: GhostDetail | null;
+  /** The cursor date readout (ADR-0054 §2): a full-height guideline at the day being chosen plus
+   * a chip stating its date. Computed by the pure `cursorReadout`, so the number shown is the one
+   * the gesture will commit. Absent ⇒ nothing drawn. */
+  cursor?: CursorChip | null;
 }
+
+/** The cursor date readout's screen shape (ADR-0054 §2) — see `render/cursor-readout.ts`. */
+export interface CursorChip {
+  /** Screen x of the guideline: the day boundary, not the raw pointer. */
+  x: number;
+  /** The date sentence, e.g. `Fri 2 Jan` or `2 Jan – 6 Jan · 5d`. */
+  label: string;
+}
+
+/** Height (px) of the cursor date chip. */
+const CURSOR_CHIP_H = 16;
+/** Gap (px) between the canvas top edge and the chip. */
+const CURSOR_CHIP_TOP = 4;
 
 /**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):
@@ -1308,6 +1325,37 @@ export function paintInteractionLayer(
 
   const { live, pending, link, linkPick, resize, lag } = overlay;
   const refresh = overlay.visualRefresh === true;
+
+  // The cursor date readout (ADR-0054 §2), drawn FIRST so every ghost, ring and chip paints over
+  // it — it is a reference line, not a foreground object. A full-height dashed rule marks the day
+  // boundary being chosen; the chip above it states the date. Absent ⇒ not one call ⇒ parity.
+  if (overlay.cursor) {
+    const { x, label } = overlay.cursor;
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, size.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Guarded like every other label pass so a text-less test context never throws; `measureText`
+    // sizes the chip, and the x is clamped so the chip never leaves the surface at either edge.
+    if (typeof ctx.fillText === 'function' && typeof ctx.measureText === 'function') {
+      ctx.font = LABEL_FONT;
+      const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
+      const cx = Math.max(0, Math.min(x - w / 2, size.width - w));
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(cx, CURSOR_CHIP_TOP, w, CURSOR_CHIP_H);
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx + 0.5, CURSOR_CHIP_TOP + 0.5, w - 1, CURSOR_CHIP_H - 1);
+      ctx.fillStyle = palette.labelInside;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, cx + LABEL_PAD_PX, CURSOR_CHIP_TOP + CURSOR_CHIP_H / 2);
+    }
+  }
 
   if (refresh && overlay.hover) {
     // The idle-hover ring (M4): a light rounded outline in the hover hue, drawn FIRST so every
