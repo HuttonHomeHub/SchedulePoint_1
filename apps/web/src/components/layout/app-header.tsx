@@ -1,12 +1,12 @@
-import { Link, useNavigate, useParams, useRouterState } from '@tanstack/react-router';
+import { Link, useParams, useRouterState } from '@tanstack/react-router';
 import { Menu } from 'lucide-react';
 
+import { AccountChip } from '@/components/layout/account-chip';
+import { BrandMark } from '@/components/layout/brand-mark';
 import { useShell } from '@/components/layout/navigator/shell-context';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import { RESOURCES_ENABLED } from '@/config/env';
-import { useSession, useSignOut } from '@/features/auth';
 import { OrgSwitcher } from '@/features/organizations';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { cn } from '@/lib/utils';
@@ -15,11 +15,8 @@ const NAV_LINK_CLASS =
   'text-muted-foreground hover:text-foreground [&.active]:text-foreground shrink-0 rounded-md px-2 py-1 whitespace-nowrap [&.active]:font-medium';
 const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
 
-/** The app shell header: product name, org nav, theme toggle, current user, sign-out. */
+/** The app shell header: brand mark, org nav, and the account chip (theme, identity, sign-out). */
 export function AppHeader(): React.ReactElement {
-  const { data: session } = useSession();
-  const signOut = useSignOut();
-  const navigate = useNavigate();
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -49,7 +46,7 @@ export function AppHeader(): React.ReactElement {
             <Menu aria-hidden="true" className="size-5" />
           </Button>
         ) : null}
-        <span className="shrink-0 font-semibold tracking-tight">SchedulePoint</span>
+        <BrandMark />
         <OrgSwitcher />
         {orgSlug ? (
           // Nav shrinks and scrolls horizontally on narrow viewports so it never
@@ -98,30 +95,7 @@ export function AppHeader(): React.ReactElement {
           </nav>
         ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <ThemeToggle />
-          {session?.user ? (
-            <span
-              className="text-muted-foreground hidden text-sm sm:inline"
-              data-testid="user-email"
-            >
-              {session.user.email}
-            </span>
-          ) : null}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={signOut.isPending}
-            aria-busy={signOut.isPending}
-            onClick={() =>
-              signOut.mutate(undefined, {
-                onSuccess: () => {
-                  void navigate({ to: '/sign-in' });
-                },
-              })
-            }
-          >
-            Sign out
-          </Button>
+          <AccountChip />
         </div>
       </div>
     </Surface>

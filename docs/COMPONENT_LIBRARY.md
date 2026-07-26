@@ -191,6 +191,46 @@ Presentational and fully controlled: the consumer owns the term, the debounce an
 fetch. It does **not** own URL state either — a list screen's search belongs in typed
 search params, which is the route's job (`hooks/use-url-filter-state.ts`).
 
+## Primitives: `SegmentedControl` and `ToggleChip` — and how to choose
+
+Two controls that look similar and mean different things. The choice is **semantic**, not
+visual, and getting it backwards misdescribes the control even when it renders correctly.
+
+| Use                | When                                                                                                 | Semantics                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `SegmentedControl` | A **mutually-exclusive** choice from a known set — Diagram _or_ Activities, Day _or_ Month _or_ Year | APG `radiogroup`: "one of a set of N" |
+| `ToggleChip`       | An **independent boolean** — Critical, Chain, Non-working. Each stands alone                         | `aria-pressed` button: "this is on"   |
+| `Badge`            | Output, not a control                                                                                | Plain text                            |
+
+`SegmentedControl` (`components/ui/segmented-control.tsx`) implements the APG radiogroup:
+roving `tabindex`, Arrow/Home/End with wraparound, `aria-checked`, and **focus follows
+selection** (the control is the thing being acted on, so leaving focus behind would strand the
+user on an option that is no longer current). Callers supply `label`, `value`, `onChange`,
+`options`, and may add sizing classes — never colour.
+
+`ToggleChip` (`components/ui/toggle-chip.tsx`) is a CVA `aria-pressed` button. Its pressed
+state changes **fill and border**, so it never signals state by hue alone (WCAG 1.4.1).
+**The consumer owes an announcement**: a chip that filters a list without changing an announced
+result count leaves screen-reader users with no evidence anything happened (WCAG 4.1.3) — pair
+it with `useResultCountAnnouncement` or an equivalent live region.
+
+## Layout: `BrandMark` and `AccountChip`
+
+`BrandMark` (`components/layout/brand-mark.tsx`) is the tile + wordmark. The tile is
+`bg-primary text-primary-foreground`, i.e. a token: inside chrome that is Corporate's amber on
+navy and the brand blue on a white header. A literal amber would be unreadable on Light chrome.
+The tile is `aria-hidden` — it repeats the wordmark's first letter, so exposing it would have a
+screen reader announce "S SchedulePoint".
+
+`AccountChip` (`components/layout/account-chip.tsx`) is an initials avatar opening a portalled
+`Menu` with the theme choice, the signed-in email and Sign out. It replaced a theme-cycling
+button, an always-visible email and an `outline` Sign-out button — two of which were the
+Corporate theme's worst contrast defects. Three things it must keep doing: the trigger's
+accessible name carries the email (initials identify nobody), focus returns to the trigger on
+close, and the sign-out mutation's pending state disables the item so a second press cannot
+fire a duplicate request. The theme is a **radio group** rather than a cycling button, because
+a cycle never tells the user what the other three options are.
+
 ## Primitive: `Surface` (`components/ui/surface.tsx`)
 
 Marks a region as a **surface scope** (ADR-0055): the semantic token names keep their

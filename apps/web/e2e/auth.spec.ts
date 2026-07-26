@@ -43,7 +43,10 @@ test.describe('Authentication journey', () => {
     await expect(page.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
     await expect(page.getByLabel('Active organisation')).toHaveValue(orgSlug);
 
-    await page.getByRole('button', { name: /sign out/i }).click();
+    // Sign out lives in the account chip's menu (ADR-0055 S1) — the header no longer carries a
+    // bare button, so the journey opens the chip first.
+    await page.getByRole('button', { name: /^Account/ }).click();
+    await page.getByRole('menuitem', { name: /sign out/i }).click();
     await expect(page).toHaveURL(/\/sign-in/);
 
     // Signing back in must land the user in the app — not bounce back to sign-in.

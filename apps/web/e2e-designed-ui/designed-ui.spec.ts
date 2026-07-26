@@ -71,18 +71,16 @@ for (const { choice, colorScheme } of THEMES) {
       await expect(page.locator(current)).toBeVisible();
       expect(contrast(await computedPair(page, current))).toBeGreaterThanOrEqual(TEXT_MIN);
 
-      // D4 — the account area: the signed-in email, and the "Sign out" outline button whose
-      // ink was inherited rather than stated (1.01:1 — an invisible control).
-      expect(
-        contrast(await computedPair(page, '[data-testid="user-email"]')),
-      ).toBeGreaterThanOrEqual(TEXT_MIN);
-      const signOut = await page
-        .locator('header button', { hasText: 'Sign out' })
-        .evaluate((el) => {
-          const style = getComputedStyle(el);
-          return { color: style.color, background: style.backgroundColor };
-        });
-      expect(contrast(await resolvePair(page, signOut))).toBeGreaterThanOrEqual(TEXT_MIN);
+      // D4 — the account area. The always-visible email (2.8:1 on navy) and the `outline`
+      // Sign-out button (1.01:1 — an invisible control) are GONE: both moved into the account
+      // chip's portalled menu, which paints on the page's `--popover`. What remains on the band
+      // is the chip itself, so that is what has to clear the bar — and the menu's contents are
+      // covered by the whole-page axe scan above once it is open.
+      const chip = await page.getByRole('button', { name: /^Account/ }).evaluate((el) => {
+        const style = getComputedStyle(el);
+        return { color: style.color, background: style.backgroundColor };
+      });
+      expect(contrast(await resolvePair(page, chip))).toBeGreaterThanOrEqual(TEXT_MIN);
 
       // D5 — the rail's secondary text. Same root cause as D1, on the other surface.
       const railFooter = 'nav[aria-label="Project Explorer"] .text-muted-foreground';
