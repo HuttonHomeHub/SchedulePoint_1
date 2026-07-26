@@ -24,7 +24,12 @@ and **how much room** does it have. The canvas now answers both without leaving 
   allows, so no drift tail appears — that is correct, not missing.
 - **Relationship slack** (new `Link slack` toggle) — the gap each tie leaves, shown on the
   **selected** activity's own links, answering "why is this waiting?" without papering the whole
-  network in numbers.
+  network in numbers. An SS tie's number sits between the two starts, an FF tie's between the two
+  finishes, so it always sits on the run it explains.
+
+Every new mark is in the diagram key, and every new number has a spoken equivalent: the float and
+drift tails, the per-tie slack and the drift days all read out through the keyboard listbox, so
+none of this is sighted-pointer-only.
 
 The three new `View▾` toggles ship **off**: measuring the date labels at 2,000 activities could not
 certify they stay inside the canvas's draw-time budget, and an uncertified cost should be a choice

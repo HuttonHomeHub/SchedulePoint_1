@@ -78,6 +78,48 @@ export function edgeGapDays(args: {
   }
 }
 
+/**
+ * Every relationship's {@link edgeGapDays}, keyed by dependency id — the datum behind both the
+ * on-canvas `Nd` slack chip (ADR-0054 §5) and its spoken equivalent in `summarizeLogic`.
+ *
+ * Built once from the plan's dependencies so the two surfaces cannot disagree: a number a sighted
+ * planner reads off a link and the number a screen-reader user hears for the same link are the
+ * same computation, not two similar ones (WCAG 1.1.1). Ties whose endpoints are not yet scheduled
+ * are simply absent from the map — there is no gap to state.
+ */
+export function slackByDependencyId(args: {
+  dataDate: string;
+  activities: readonly { id: string; earlyStart: string | null; earlyFinish: string | null }[];
+  dependencies: readonly {
+    id: string;
+    type: DependencyType;
+    lagDays: number;
+    predecessor: { id: string };
+    successor: { id: string };
+  }[];
+}): Map<string, number> {
+  const { dataDate, activities, dependencies } = args;
+  const byId = new Map(activities.map((a) => [a.id, a]));
+  const slack = new Map<string, number>();
+  for (const edge of dependencies) {
+    const pred = byId.get(edge.predecessor.id);
+    const succ = byId.get(edge.successor.id);
+    if (!pred?.earlyStart || !pred.earlyFinish || !succ?.earlyStart || !succ.earlyFinish) continue;
+    slack.set(
+      edge.id,
+      edgeGapDays({
+        type: edge.type,
+        predStartDay: daysBetween(dataDate, pred.earlyStart),
+        predFinishDay: daysBetween(dataDate, pred.earlyFinish),
+        succStartDay: daysBetween(dataDate, succ.earlyStart),
+        succFinishDay: daysBetween(dataDate, succ.earlyFinish),
+        lagDays: edge.lagDays,
+      }),
+    );
+  }
+  return slack;
+}
+
 /** Height (px) of a float/drift tail — thinner than the bar, so it never reads as duration. */
 export const TAIL_HEIGHT = 6;
 

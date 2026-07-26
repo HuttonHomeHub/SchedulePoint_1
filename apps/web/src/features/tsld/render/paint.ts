@@ -365,6 +365,16 @@ const GESTURE_SOURCE_ALPHA = 0.18;
 /** Spacing (px) between a float/drift tail's hatch strokes — the non-colour cue's density. */
 const TAIL_HATCH_STEP = 6;
 
+/** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
+const SLACK_CHIP_H = 13;
+
+/**
+ * Height (px) of the opaque plate drawn behind a flanking date when the float/drift tails are ALSO
+ * on — just taller than the label text, so the hatched tail passes visibly behind the date instead
+ * of striking through it. Only ever drawn with both toggles on.
+ */
+const DATE_PLATE_H = 12;
+
 /** Line dash + width of a baseline ghost's outline (thin, dashed — visibly not a live bar). */
 const GHOST_DASH: readonly number[] = [2, 2];
 
@@ -1150,6 +1160,9 @@ export function paintScene(
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.strokeStyle = palette.labelBeside;
+    // ONE batched path for every hatch line on screen (the file's established discipline — a
+    // stroke per bar would be up to 4,000 calls), traced after the outlines.
+    ctx.beginPath();
     for (const [id, rect] of rects) {
       const activity = byId.get(id)!;
       const tails = [
@@ -1159,23 +1172,33 @@ export function paintScene(
       for (const tail of tails) {
         if (!tail || tail.w < 2) continue; // sub-2px slack is not worth a shape
         ctx.strokeRect(tail.x + 0.5, tail.y + 0.5, tail.w - 1, tail.h - 1);
-        // Diagonal hatch — the non-colour cue. Stepped so a long tail costs a bounded number of
-        // lines rather than one per pixel.
-        ctx.beginPath();
-        for (let hx = tail.x + TAIL_HATCH_STEP; hx < tail.x + tail.w; hx += TAIL_HATCH_STEP) {
+        // Diagonal hatch — the non-colour cue. CLAMPED TO THE VIEWPORT, which is the difference
+        // between bounded and unbounded work: a tail's width is `float × pxPerDay`, so a routine
+        // 200-day float at day zoom is 8,000px of tail off the side of a 1,920px screen. Hatching
+        // its full length measured 320,000 line segments for a 2,000-activity plan — cost scaling
+        // with the DATA rather than with the screen. The visible span is all that can be seen, so
+        // it is all that is traced (the same clamp the day grid a few layers above applies).
+        const from = Math.max(tail.x + TAIL_HATCH_STEP, -tail.h);
+        const to = Math.min(tail.x + tail.w, size.width);
+        for (let hx = from; hx < to; hx += TAIL_HATCH_STEP) {
           ctx.moveTo(hx, tail.y + tail.h);
           ctx.lineTo(hx + tail.h, tail.y);
         }
-        ctx.stroke();
       }
     }
+    ctx.stroke();
   }
 
   // Layer 3.58: relationship SLACK on the selected activity's links (ADR-0054 §5) — the gap in
   // days each tie leaves, answering "why is this activity waiting?". Scoped to the selection: a
   // number on every edge is unreadable at real network sizes. A driving edge's gap is 0 by
   // definition and is skipped, so what remains is exactly the non-binding slack worth reading.
-  if (toggles.linkSlack === true && scene.selectedId && typeof ctx.fillText === 'function') {
+  if (
+    toggles.linkSlack === true &&
+    scene.selectedId &&
+    typeof ctx.fillText === 'function' &&
+    typeof ctx.measureText === 'function'
+  ) {
     const selected = scene.selectedId;
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'bottom';
@@ -1199,13 +1222,49 @@ export function paintScene(
         lagDays: edge.lagDays ?? 0,
       });
       if (gap <= 0) continue; // driving / binding: no slack to report
-      const midX = (predRect.x + predRect.w + succRect.x) / 2;
-      const midY = (predRect.y + succRect.y) / 2;
-      ctx.fillText(`${gap}d`, midX, midY);
+      // Anchor the annotation on the endpoints the RELATIONSHIP actually constrains, not always
+      // the predecessor's right edge: an SS tie runs start→start and an FF tie finish→finish, so a
+      // fixed right-edge midpoint would float the number away from the line it explains.
+      const predX = edge.type === 'SS' || edge.type === 'SF' ? predRect.x : predRect.x + predRect.w;
+      const succX = edge.type === 'FF' || edge.type === 'SF' ? succRect.x + succRect.w : succRect.x;
+      const midX = (predX + succX) / 2;
+      const midY = (predRect.y + predRect.h / 2 + (succRect.y + succRect.h / 2)) / 2;
+      // Drawn on the same filled+outlined chip the lag and cursor readouts use — a bare fillText
+      // lands on bars, grid lines and other links with no guaranteed contrast.
+      const text = `${gap}d`;
+      const cw = ctx.measureText(text).width + LABEL_PAD_PX * 2;
+      ctx.fillStyle = palette.bar;
+      ctx.fillRect(midX - cw / 2, midY - SLACK_CHIP_H / 2, cw, SLACK_CHIP_H);
+      ctx.strokeStyle = palette.barStroke;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.strokeRect(midX - cw / 2 + 0.5, midY - SLACK_CHIP_H / 2 + 0.5, cw - 1, SLACK_CHIP_H - 1);
+      ctx.fillStyle = palette.labelInside;
+      ctx.fillText(text, midX, midY + SLACK_CHIP_H / 2 - 3);
     }
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
   }
+
+  // The visible bars bucketed by lane and x-sorted — the shape both text passes below need, since
+  // each asks "what is my neighbour in this lane, and how much room does it leave?". Built ONCE and
+  // lazily: with the labels and dates layers both on, this was the same O(v log v) bucket-and-sort
+  // done twice per frame over the same data, which is the second-largest cost in the pass after
+  // `measureText`. A paint with both layers off never calls it.
+  let laneRowsCache: Map<number, { activity: RenderActivity; rect: Rect }[]> | null = null;
+  const laneRows = (): Map<number, { activity: RenderActivity; rect: Rect }[]> => {
+    if (laneRowsCache) return laneRowsCache;
+    const lanes = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
+    for (const [id, rect] of rects) {
+      const activity = byId.get(id)!;
+      const row = lanes.get(activity.laneIndex);
+      if (row) row.push({ activity, rect });
+      else lanes.set(activity.laneIndex, [{ activity, rect }]);
+    }
+    for (const row of lanes.values()) row.sort((a, b) => a.rect.x - b.rect.x);
+    laneRowsCache = lanes;
+    return lanes;
+  };
 
   // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting
   // (ADR-0026 D1). Gated by the toggle and a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
@@ -1224,16 +1283,7 @@ export function paintScene(
     // keyed by text alone, so a metric change would poison it across palettes (export path).
     const insidePad = LABEL_PAD_PX + (scene.visualRefresh ? 2 : 0);
 
-    const lanes = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
-    for (const [id, rect] of rects) {
-      const activity = byId.get(id)!;
-      const row = lanes.get(activity.laneIndex);
-      if (row) row.push({ activity, rect });
-      else lanes.set(activity.laneIndex, [{ activity, rect }]);
-    }
-
-    for (const row of lanes.values()) {
-      row.sort((a, b) => a.rect.x - b.rect.x);
+    for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
         const { activity, rect } = row[i]!;
         const nextLeftX = i + 1 < row.length ? row[i + 1]!.rect.x : Infinity;
@@ -1276,37 +1326,45 @@ export function paintScene(
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'middle';
     const measure = (t: string): number => labelWidths.measure(t, (x) => ctx.measureText(x).width);
-    // Lane-bucketed and x-sorted exactly like the label pass, so each bar's neighbours — and so
-    // the room its dates have — are known without a per-bar scan.
-    const laneRows = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
-    for (const [id, rect] of rects) {
-      const activity = byId.get(id)!;
-      const row = laneRows.get(activity.laneIndex);
-      if (row) row.push({ activity, rect });
-      else laneRows.set(activity.laneIndex, [{ activity, rect }]);
-    }
-    ctx.fillStyle = palette.labelBeside;
-    for (const row of laneRows.values()) {
-      row.sort((a, b) => a.rect.x - b.rect.x);
+    // With the float/drift tails ALSO on, the two layers want the same pixels: a tail runs out of
+    // the very edge the date is written beside, so the hatch strikes through the text. The date is
+    // NOT moved clear of the tail — a date printed at the far end of a 200-day tail would sit
+    // 1,200px from the bar and, on a time-scaled diagram, assert the wrong day. Instead each date
+    // gets an opaque plate in the canvas ground behind it: the date keeps the one position that is
+    // true, and the tail visibly passes behind it. One extra fillRect per drawn date, and only
+    // when both toggles are on — with tails off, the draw is byte-for-byte the M3 pass.
+    const plated = toggles.floatTails === true;
+    for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
         const { activity, rect } = row[i]!;
         if (!activity.earlyStart || !activity.earlyFinish) continue; // uncalculated ⇒ no dates
         const startText = formatCanvasDate(activity.earlyStart);
         const finishText = formatCanvasDate(activity.earlyFinish);
+        const startWidthPx = measure(startText);
+        const finishWidthPx = measure(finishText);
         const prevRight = i > 0 ? row[i - 1]!.rect.x + row[i - 1]!.rect.w : 0;
         const nextLeft = i + 1 < row.length ? row[i + 1]!.rect.x : size.width;
         const slot = dateLabelSlot({
           roomLeftPx: rect.x - prevRight,
           roomRightPx: nextLeft - (rect.x + rect.w),
-          startWidthPx: measure(startText),
-          finishWidthPx: measure(finishText),
+          startWidthPx,
+          finishWidthPx,
         });
         const cy = rect.y + rect.h / 2;
+        const plate = (x: number, w: number): void => {
+          if (!plated) return;
+          ctx.fillStyle = palette.handleHalo; // the canvas ground, so the plate reads as "behind"
+          ctx.fillRect(x, cy - DATE_PLATE_H / 2, w, DATE_PLATE_H);
+        };
         if (slot.start) {
+          plate(rect.x - LABEL_GAP_PX - startWidthPx - 1, startWidthPx + 2);
+          ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'right';
           ctx.fillText(startText, rect.x - LABEL_GAP_PX, cy);
         }
         if (slot.finish) {
+          plate(rect.x + rect.w + LABEL_GAP_PX - 1, finishWidthPx + 2);
+          ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'left';
           ctx.fillText(finishText, rect.x + rect.w + LABEL_GAP_PX, cy);
         }

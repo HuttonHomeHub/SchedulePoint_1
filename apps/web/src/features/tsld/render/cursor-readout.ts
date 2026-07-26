@@ -3,12 +3,11 @@ import type { GestureState } from '../interaction/gesture-machine';
 import {
   addCalendarDays,
   dayColumnAt,
+  formatCanvasDate,
   screenXOfDay,
   type Point,
   type Viewport,
 } from './render-model';
-
-import { formatCalendarDate } from '@/lib/format-date';
 
 /**
  * The **cursor date readout** (ADR-0054 §2, `VITE_CANVAS_LIVE_FEEDBACK`) — the pure half. Given
@@ -26,13 +25,30 @@ import { formatCalendarDate } from '@/lib/format-date';
 export interface CursorReadout {
   /** Screen x of the guideline and the chip's anchor — the day boundary, not the raw pointer. */
   x: number;
-  /** The sentence the chip states, e.g. `Fri 2 Jan` or `2 Jan – 6 Jan · 5d`. */
+  /** The sentence the chip states, e.g. `Start 2 Jan`, `Finish 6 Jan`, or `2 Jan – 6 Jan · 5d`. */
   label: string;
 }
 
-/** The label for a single day offset about the data date. */
+/**
+ * The label for a single day offset about the data date, in the SAME compact form the flanking
+ * bar dates use ({@link formatCanvasDate}, `2 Jan`).
+ *
+ * Deliberately not `formatCalendarDate` (`02 Jan 2026`): this chip follows the pointer every
+ * frame and must stay short enough to track, and §3 already established that the ruler above
+ * carries the year. Using two different date formats a few pixels apart would also read as an
+ * inconsistency rather than a distinction.
+ */
 function dayLabel(dataDate: string, dayOffset: number): string {
-  return formatCalendarDate(addCalendarDays(dataDate, dayOffset));
+  return formatCanvasDate(addCalendarDays(dataDate, dayOffset));
+}
+
+/**
+ * Name the datum in the chip. A bare date cannot say *which* date it is, and the epic's sibling
+ * readouts all self-describe (the lag chip reads `SS + 3d`, the resize readout `7d`) — so a
+ * reposition and a start-edge resize would otherwise be indistinguishable from idle hover.
+ */
+function qualified(kind: 'Start' | 'Finish' | null, label: string): string {
+  return kind ? `${kind} ${label}` : label;
 }
 
 /**
@@ -69,15 +85,21 @@ export function cursorReadout(args: {
       return at(right + 1, `${dayLabel(dataDate, left)} – ${dayLabel(dataDate, right)} · ${days}d`);
     }
     case 'repositioning':
-      return at(state.currentStartDay, dayLabel(dataDate, state.currentStartDay));
+      return at(
+        state.currentStartDay,
+        qualified('Start', dayLabel(dataDate, state.currentStartDay)),
+      );
     case 'resizing': {
       if (state.edge === 'start') {
-        return at(state.currentStartDay, dayLabel(dataDate, state.currentStartDay));
+        return at(
+          state.currentStartDay,
+          qualified('Start', dayLabel(dataDate, state.currentStartDay)),
+        );
       }
       // The inclusive finish day; the guideline sits on its right-hand boundary, which is the
       // edge the planner is physically holding.
       const finish = state.currentStartDay + state.currentDurationDays - 1;
-      return at(finish + 1, dayLabel(dataDate, finish));
+      return at(finish + 1, qualified('Finish', dayLabel(dataDate, finish)));
     }
     case 'lagDragging':
       return null; // the ADR-0052 lag chip already owns this anchor

@@ -83,7 +83,17 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
   // on a bar a manual lane drop left overlapping another in its lane (WCAG 1.1.1). Derived (not a
   // persisted field), so the caller passes it — computed at the mapping seam (`laneOverlapIds`).
   const overlapPart = opts?.overlapsInLane ? ', overlaps another activity in its lane' : '';
-  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}${overlapPart}`;
+  // POSITIVE drift — placed LATER than the pure-network early start (ADR-0054 §4). This is the
+  // ordinary Visual-mode case and the one the left-hand drift tail actually draws for, yet it had
+  // no spoken form at all: `conflictPart` above covers only the opposite, rarer sign (placed
+  // *earlier* than feasible), so the common case was a new visual mark with no text alternative
+  // (WCAG 1.1.1). Stated separately from float for the same reason the conflict clause is —
+  // float is a pure-network fact, drift is a placement fact.
+  const driftPart =
+    !a.visualConflict && a.visualDriftDays !== null && a.visualDriftDays > 0
+      ? `, drift ${days(a.visualDriftDays)} later than its earliest start`
+      : '';
+  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}${driftPart}${overlapPart}`;
 }
 
 /**
@@ -108,7 +118,17 @@ export function lagPhrase(
  * A lagged driving tie appends its {@link lagPhrase} (the spoken twin of the time-true anchor
  * offset, ADR-0052); a zero-lag tie adds nothing, keeping today's sentences verbatim.
  */
-export function summarizeLogic(id: string, dependencies: readonly DependencySummary[]): string {
+export function summarizeLogic(
+  id: string,
+  dependencies: readonly DependencySummary[],
+  /**
+   * Per-tie slack in whole days, keyed by dependency id (ADR-0054 §5) — the spoken equivalent of
+   * the `Nd` chip the canvas draws on the selected activity's links. Without it that number is
+   * sighted-pointer-only and cannot be inferred (deriving it means subtracting two dates and a
+   * lag by hand), which is a WCAG 1.1.1 gap. Absent ⇒ the sentence is exactly as before.
+   */
+  slackByDependencyId?: ReadonlyMap<string, number>,
+): string {
   const preds = dependencies.filter((d) => d.successor.id === id);
   const succs = dependencies.filter((d) => d.predecessor.id === id);
   const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`;
@@ -118,6 +138,22 @@ export function summarizeLogic(id: string, dependencies: readonly DependencySumm
   if (drivenBy) text += `; start driven by ${drivenBy.predecessor.name}${lagSuffix(drivenBy)}`;
   const drives = succs.filter((d) => d.isDriving).map((d) => `${d.successor.name}${lagSuffix(d)}`);
   if (drives.length > 0) text += `; drives ${drives.join(', ')}`;
+  // Only non-binding ties carry slack worth naming: a driving edge's gap is 0 by definition, and
+  // it is already reported above as the driver.
+  if (slackByDependencyId && slackByDependencyId.size > 0) {
+    const waits = [...preds, ...succs]
+      .filter((d) => !d.isDriving)
+      .map((d) => ({ d, gap: slackByDependencyId.get(d.id) }))
+      .filter((x): x is { d: DependencySummary; gap: number } => (x.gap ?? 0) > 0)
+      .map(({ d, gap }) => {
+        const other = d.successor.id === id ? d.predecessor.name : d.successor.name;
+        // Deliberately not the `days()` helper: that one says "float", and a tie's gap is not
+        // float — it is the room in this one relationship, which is exactly the distinction the
+        // canvas chip makes by sitting on the link rather than on the bar.
+        return `${other} ${gap} ${gap === 1 ? 'day' : 'days'}`;
+      });
+    if (waits.length > 0) text += `; slack to ${waits.join(', ')}`;
+  }
   return text;
 }
 

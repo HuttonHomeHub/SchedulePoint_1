@@ -1301,7 +1301,12 @@ export function TsldCanvas({
           // guideline must follow every move. It is the CHEAP layer — a clear plus a rule, a chip
           // and (when a gesture runs) one ghost — never the bar/link scene. Flag-off this whole
           // block is dead, so the idle repaint cadence is byte-for-byte today's.
-          if (CANVAS_LIVE_FEEDBACK_ENABLED) {
+          // Gated on `editing` as well as the flag: the interaction canvas only exists while
+          // editing (`ictx` is null otherwise), so on a read-only surface — a Viewer, or the
+          // ADR-0051 guest share view — this would force a `getBoundingClientRect()` on every
+          // raw pointer move for a chip that can never be painted. Per-EVENT layout reads are
+          // exactly what ADR-0026 D3 avoids.
+          if (CANVAS_LIVE_FEEDBACK_ENABLED && editing) {
             cursorPointRef.current = localPoint(e);
             interactionDirtyRef.current = true;
           }
