@@ -15,7 +15,10 @@ const toggleChipVariants = cva(
         // Pressed state is carried by fill AND border, never by colour alone — a chip that
         // only changed hue would be invisible to a user who cannot distinguish it.
         true: 'border-primary bg-primary text-primary-foreground',
-        false: 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+        // `border-input`, not `border-border`: unpressed the chip has NO fill, so this line is
+        // the only thing that says a control is here — the control-boundary case 1.4.11 covers,
+        // not the decorative-divider case it exempts.
+        false: 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground',
       },
     },
     defaultVariants: { size: 'default', pressed: false },

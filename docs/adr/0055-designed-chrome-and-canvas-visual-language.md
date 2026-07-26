@@ -227,6 +227,26 @@ eye three competing regions; a single dark band with two light working surfaces 
 one. The `sidebar ⇄ drawer at lg` contract (ADR-0029, `DESIGN_SYSTEM.md`) is unchanged —
 only the token family and its values move.
 
+**The plan's breadcrumb row stays OUT of the band, and that is a decision, not a leftover.**
+With a plan open and the flag on, the stack reads: band row 1 (header) · band row 2 (View and
+navigate) · band row 3 (Build and manage) · then, on the page surface, the plan's breadcrumb +
+status + pen row. A reviewer reasonably asked whether that fourth, differently-coloured strip
+undermines the "one designed surface" claim. Three reasons it belongs where it is:
+
+1. **It names the content, not the app.** The band answers "what product am I in, and what can I
+   do to a plan"; the breadcrumb answers "which plan am I looking at". Those are different
+   questions, and a user scanning for the second one should not have to find it inside chrome.
+2. **The plan name deserves page ink.** Inside the band it would render at chrome contrast on
+   navy; on the page it is the same near-black as every other heading in the product. A plan's
+   name is the most-read string on the screen.
+3. **It caps the band at three rows.** A fourth row of chrome above the canvas is the "thicker
+   wall" failure the band exists to avoid, and the band's height is already the thing this ADR's
+   consequences flag as the change most likely to annoy a planner.
+
+The seam is therefore intentional: dark chrome, then a light identity row, then the canvas. If it
+reads as a wall in practice rather than as a hierarchy, the answer is to make the breadcrumb row
+quieter (drop its bottom rule, tighten it) — **not** to move it into the band.
+
 ### §3 — Primitives
 
 | Need              | Status             | Decision                                                                                                                           |

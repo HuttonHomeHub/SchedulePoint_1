@@ -22,12 +22,20 @@ import {
  * machine that resolves the token and computes the ratio catches it.
  */
 
-/** The 15 tokens a surface family must supply, per ADR-0055 §1. */
+/** The 17 tokens a surface family must supply, per ADR-0055 §1. */
 const FAMILY_TOKENS = [
   '',
   '-foreground',
+  /* A family that supplies `-muted-foreground` but no `-muted` for it to sit on is the same
+     incompleteness trap in a new place: inside the Corporate chrome, `bg-muted` kept the PAGE's
+     pale grey while its text followed the scope's light grey — 1.81:1. */
+  '-muted',
   '-muted-foreground',
   '-border',
+  /* `-input` is a SEPARATE token from `-border`, not a synonym for it: a divider is decoration
+     (WCAG 1.4.11 exempts it), a control's outline identifies the control and must clear 3:1.
+     They shared a value once, and every text field in every theme had a 1.26:1 outline. */
+  '-input',
   '-accent',
   '-accent-foreground',
   '-primary',
@@ -47,6 +55,7 @@ const FAMILIES = ['chrome', 'panel'] as const;
 const REBOUND_NAMES = [
   '--background',
   '--foreground',
+  '--muted',
   '--muted-foreground',
   '--border',
   '--input',
@@ -99,7 +108,7 @@ describe('@theme inline is load-bearing', () => {
 describe.each(THEME_SELECTORS)('%s declares complete surface families', (selector) => {
   const tokens = themeTokens(selector);
 
-  it.each(FAMILIES)('the %s family has all 15 tokens', (family) => {
+  it.each(FAMILIES)('the %s family has all 17 tokens', (family) => {
     const missing = FAMILY_TOKENS.map((suffix) => `--${family}${suffix}`).filter(
       (name) => !tokens.has(name),
     );

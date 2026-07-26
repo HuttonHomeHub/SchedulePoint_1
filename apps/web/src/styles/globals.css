@@ -46,7 +46,7 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.545 0 0);
 
   /* Status */
   --destructive: oklch(0.577 0.245 27.325);
@@ -72,7 +72,13 @@
 
   /* Lines & focus */
   --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  /* A CONTROL BOUNDARY, not a divider — and the reason it no longer shares `--border`'s value.
+     `--field` is valued identically to the surface it sits on in every theme, so this line is the
+     only thing that says "a text field is here". WCAG 1.4.11 asks for 3:1 where a visual is what
+     identifies a component, and the inherited `0.922` grey was 1.26:1 against white: an input
+     outline nobody could see, in every theme, on every surface. A divider may stay a hairline
+     (1.4.11 exempts decoration); this may not. See `token-contrast.test.ts`, which now gates it. */
+  --input: oklch(0.64 0 0);
   --ring: oklch(0.55 0.18 255);
 
   /* Data visualisation (see dataviz standards in DESIGN_SYSTEM.md) */
@@ -102,15 +108,17 @@
   /* chrome — the top band */
   --chrome: oklch(1 0 0);
   --chrome-foreground: oklch(0.145 0 0);
-  --chrome-muted-foreground: oklch(0.556 0 0);
+  --chrome-muted-foreground: oklch(0.545 0 0);
+  --chrome-muted: oklch(0.97 0 0);
   --chrome-border: oklch(0.922 0 0);
+  --chrome-input: oklch(0.64 0 0);
   --chrome-accent: oklch(0.97 0 0);
   --chrome-accent-foreground: oklch(0.205 0 0);
   --chrome-primary: oklch(0.5 0.18 255);
   --chrome-primary-foreground: oklch(0.985 0 0);
   --chrome-field: oklch(1 0 0);
   --chrome-field-foreground: oklch(0.145 0 0);
-  --chrome-field-muted-foreground: oklch(0.556 0 0);
+  --chrome-field-muted-foreground: oklch(0.545 0 0);
   --chrome-destructive-text: oklch(0.505 0.21 27.5);
   --chrome-warning-text: oklch(0.48 0.13 80);
   --chrome-info-text: oklch(0.45 0.14 250);
@@ -119,15 +127,17 @@
   /* panel — the navigator rail */
   --panel: oklch(0.985 0 0);
   --panel-foreground: oklch(0.145 0 0);
-  --panel-muted-foreground: oklch(0.556 0 0);
+  --panel-muted-foreground: oklch(0.545 0 0);
+  --panel-muted: oklch(0.97 0 0);
   --panel-border: oklch(0.922 0 0);
+  --panel-input: oklch(0.64 0 0);
   --panel-accent: oklch(0.97 0 0);
   --panel-accent-foreground: oklch(0.205 0 0);
   --panel-primary: oklch(0.5 0.18 255);
   --panel-primary-foreground: oklch(0.985 0 0);
   --panel-field: oklch(1 0 0);
   --panel-field-foreground: oklch(0.145 0 0);
-  --panel-field-muted-foreground: oklch(0.556 0 0);
+  --panel-field-muted-foreground: oklch(0.545 0 0);
   --panel-destructive-text: oklch(0.505 0.21 27.5);
   --panel-warning-text: oklch(0.48 0.13 80);
   --panel-info-text: oklch(0.45 0.14 250);
@@ -137,7 +147,7 @@
      pretending it was is what made an outline button invisible on navy. */
   --field: oklch(1 0 0);
   --field-foreground: oklch(0.145 0 0);
-  --field-muted-foreground: oklch(0.556 0 0);
+  --field-muted-foreground: oklch(0.545 0 0);
 
   /* The TSLD drawing ground and its alternating month band (ADR-0055 §4).
      `--canvas` is valued identically to `--card` here so the S4 re-point of the
@@ -189,7 +199,7 @@
   --info-text: oklch(0.82 0.11 245);
 
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --input: oklch(1 0 0 / 38%);
   --ring: oklch(0.65 0.17 255);
 
   --chart-1: oklch(0.65 0.17 255);
@@ -219,7 +229,9 @@
   --chrome: oklch(0.145 0 0);
   --chrome-foreground: oklch(0.985 0 0);
   --chrome-muted-foreground: oklch(0.708 0 0);
+  --chrome-muted: oklch(0.269 0 0);
   --chrome-border: oklch(1 0 0 / 10%);
+  --chrome-input: oklch(1 0 0 / 38%);
   --chrome-accent: oklch(0.269 0 0);
   --chrome-accent-foreground: oklch(0.985 0 0);
   --chrome-primary: oklch(0.65 0.17 255);
@@ -236,7 +248,9 @@
   --panel: oklch(0.205 0 0);
   --panel-foreground: oklch(0.985 0 0);
   --panel-muted-foreground: oklch(0.708 0 0);
+  --panel-muted: oklch(0.269 0 0);
   --panel-border: oklch(1 0 0 / 10%);
+  --panel-input: oklch(1 0 0 / 38%);
   --panel-accent: oklch(0.269 0 0);
   --panel-accent-foreground: oklch(0.985 0 0);
   --panel-primary: oklch(0.65 0.17 255);
@@ -315,7 +329,7 @@
   --success: oklch(0.52 0.15 143);
   --success-foreground: oklch(0.985 0 0);
   /* Bronze, not amber — see note 2 above. */
-  --warning: oklch(0.62 0.115 55);
+  --warning: oklch(0.56 0.115 55);
   --warning-foreground: oklch(0.985 0 0);
   --warning-text: oklch(0.47 0.11 55);
   --info: oklch(0.338 0.081 262);
@@ -324,7 +338,7 @@
 
   /* Lines & focus — the ring is NAVY on light surfaces (note 1). */
   --border: oklch(0.907 0 0);
-  --input: oklch(0.907 0 0);
+  --input: oklch(0.62 0.02 264);
   --ring: oklch(0.35 0.09 262);
 
   /* Data visualisation — the brand pair first, then hues that stay apart from
@@ -362,7 +376,9 @@
   --chrome: oklch(0.252 0.056 264);
   --chrome-foreground: oklch(0.985 0 0);
   --chrome-muted-foreground: oklch(0.78 0.02 264);
+  --chrome-muted: oklch(0.32 0.05 264);
   --chrome-border: oklch(1 0 0 / 14%);
+  --chrome-input: oklch(0.62 0.02 264);
   --chrome-accent: oklch(0.338 0.081 262);
   --chrome-accent-foreground: oklch(0.985 0 0);
   --chrome-primary: oklch(0.786 0.167 70);
@@ -379,7 +395,9 @@
   --panel: oklch(0.252 0.056 264);
   --panel-foreground: oklch(0.985 0 0);
   --panel-muted-foreground: oklch(0.78 0.02 264);
+  --panel-muted: oklch(0.32 0.05 264);
   --panel-border: oklch(1 0 0 / 14%);
+  --panel-input: oklch(0.62 0.02 264);
   --panel-accent: oklch(0.338 0.081 262);
   --panel-accent-foreground: oklch(0.985 0 0);
   --panel-primary: oklch(0.786 0.167 70);
@@ -420,9 +438,10 @@
 [data-surface='chrome'] {
   --background: var(--chrome);
   --foreground: var(--chrome-foreground);
+  --muted: var(--chrome-muted);
   --muted-foreground: var(--chrome-muted-foreground);
   --border: var(--chrome-border);
-  --input: var(--chrome-border);
+  --input: var(--chrome-input);
   --accent: var(--chrome-accent);
   --accent-foreground: var(--chrome-accent-foreground);
   --primary: var(--chrome-primary);
@@ -439,9 +458,10 @@
 [data-surface='panel'] {
   --background: var(--panel);
   --foreground: var(--panel-foreground);
+  --muted: var(--panel-muted);
   --muted-foreground: var(--panel-muted-foreground);
   --border: var(--panel-border);
-  --input: var(--panel-border);
+  --input: var(--panel-input);
   --accent: var(--panel-accent);
   --accent-foreground: var(--panel-accent-foreground);
   --primary: var(--panel-primary);
@@ -474,15 +494,20 @@
    dark/light regions does not. Scoped to `.corporate` because Light and Dark already have a
    light rail — their chrome values land at S5.
 
-   The rail sits at 1.09:1 against the page. That is deliberately a *preference*, not a WCAG
-   rule (1.4.11 exempts a decorative surface boundary), which is why it is reported by the
-   contrast suite rather than gated — and why the rail keeps a real `border-r` rather than
-   relying on the fill difference alone. */
+   The rail sits at ~1.09:1 against the page. That is deliberately a *preference*, not a WCAG
+   rule (1.4.11 exempts a decorative surface boundary), which is why the "adjacent surfaces"
+   block of `token-contrast.test.ts` RECOMPUTES and prints this number every run rather than
+   asserting a threshold on it — and why the rail keeps a real `border-r` rather than relying
+   on the fill difference alone. (It was quoted here as a hand-computed figure with nothing
+   recomputing it, which is the same trap one level up: a later edit to `--panel` or
+   `--background` would have drifted it silently and this comment would still say 1.09.) */
 [data-designed-chrome].corporate {
   --panel: oklch(0.955 0.004 248);
   --panel-foreground: oklch(0.321 0 0);
   --panel-muted-foreground: oklch(0.51 0 0);
+  --panel-muted: oklch(0.92 0.004 248);
   --panel-border: oklch(0.895 0.005 248);
+  --panel-input: oklch(0.62 0.02 264);
   /* The pale amber wash the page already uses for a selected row — the brand accent where
      ordinary dark text still sits on top of it at full contrast. */
   --panel-accent: oklch(0.955 0.04 78);

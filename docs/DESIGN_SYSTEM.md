@@ -50,7 +50,9 @@ automatically. Full values (light + dark) are in `globals.css`.
 | `warning` / `*-fg`           | Caution status                                        |
 | `warning-text`               | Caution **text** on page surfaces (e.g. status chips) |
 | `info` / `*-fg`              | Informational status                                  |
-| `border` / `input` / `ring`  | Lines, field borders, focus ring                      |
+| `border`                     | Decorative dividers/hairlines (1.4.11-exempt)         |
+| `input`                      | **Control** boundaries — its own value, ≥ 3:1         |
+| `ring`                       | Focus indicator                                       |
 | `chart-1…5`                  | Categorical data-visualisation series                 |
 | `sidebar*`                   | Navigation shell surface + states                     |
 
@@ -207,10 +209,11 @@ There are three scopes:
 | `chrome` | the top band              | `<Surface tone="chrome">`  |
 | `panel`  | the Project Explorer rail | `<Surface tone="panel">`   |
 
-Each theme block declares a **complete 15-token family** per scope — fill, foreground,
+Each theme block declares a **complete 17-token family** per scope — fill, foreground,
 muted-foreground, border, accent (+ foreground), primary (+ foreground), field (+ foreground
 
-- muted-foreground), destructive/warning/info text, and ring. A `[data-surface]` rule then
+- muted-foreground), muted, input, destructive/warning/info text, and ring. A `[data-surface]`
+  rule then
   rebinds the ordinary semantic names to that family. Inside a scope, `bg-background` **is**
   the header's navy and `text-muted-foreground` **is** a grey validated against it — so no
   descendant component changes at all, and none of them learn where they are.
@@ -230,6 +233,14 @@ Three rules keep this honest:
 **A field is not a surface.** `--field` / `--field-foreground` /
 `--field-muted-foreground` are their own pair set, because an input inside the navy chrome
 is white: its ink and its placeholder belong to the field's colour system, not the band's.
+
+**A control boundary is not a divider.** `--input` and `--border` once shared a value, and
+because `--field` is deliberately identical to the surface it sits on, that made a text
+field's outline — the only thing saying a field is there — 1.26:1 in every theme. WCAG 1.4.11
+exempts a decorative separator and does **not** exempt this, so `--input` is now its own
+per-surface token held at ≥ 3:1 by `styles/token-contrast.test.ts`. Reach for `border-input`
+on anything whose edge identifies a control (fields, `outline` buttons, an unfilled chip);
+`border-border` is for dividers only.
 
 ---
 
@@ -297,6 +308,22 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   collapse middle items on small screens.
 - **Tabs** — Radix tabs; roving focus; arrow-key navigation; panels labelled by
   their tab. Don't use tabs to hide critical primary actions.
+- **Surface scopes** — `Surface` (`components/ui/surface.tsx`) marks a region as `chrome`
+  (the top band) or `panel` (the Project Explorer). Inside a scope the ordinary semantic
+  names resolve to that surface's own validated family, so descendants need no change. A
+  scope is a component, not a class — the families have no Tailwind utilities, so `bg-chrome`
+  does not compile. See "Surface scopes (ADR-0055)" above.
+- **Segmented control** — `SegmentedControl` (`components/ui/segmented-control.tsx`), the APG
+  `radiogroup`: a **mutually-exclusive** choice from a known set (Diagram _or_ Activities),
+  roving tabindex, Arrow/Home/End, focus follows selection.
+- **Toggle chip** — `ToggleChip` (`components/ui/toggle-chip.tsx`), an `aria-pressed` button for
+  an **independent boolean** ("also show this"). Pressed state changes fill **and** border, never
+  hue alone. Pair it with an announced result count — a chip that filters silently is a WCAG 4.1.3
+  miss. Choosing between this and a segmented control is semantic, not visual: see
+  [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md).
+- **Account chip** — `AccountChip` (`components/layout/account-chip.tsx`), the initials avatar +
+  caret opening the account menu (theme radio group, signed-in email, sign out). The caret is
+  required, not decoration: a bare circle of initials is indistinguishable from an avatar.
 - **Menus (dropdown/context)** — the hand-rolled `Menu`/`MenuItem` primitive
   (`components/ui/menu.tsx`), WAI-ARIA APG "Menu Button" on semantic HTML (no
   Radix): portal-rendered and anchored to a trigger or pointer point, roving

@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Building2, Check, Monitor, Moon, Sun } from 'lucide-react';
+import { Building2, Check, ChevronDown, Monitor, Moon, Sun } from 'lucide-react';
+import { useId } from 'react';
 
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import { useSession, useSignOut } from '@/features/auth';
@@ -44,6 +45,7 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const themeLabelId = useId();
 
   const email = session?.user?.email;
   const name = session?.user?.name;
@@ -62,11 +64,17 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
         aria-label={email ? `Account: ${email}` : 'Account'}
         onClick={toggle}
         className={cn(
-          'focus-visible:ring-ring bg-accent text-accent-foreground hover:bg-accent/80 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+          'focus-visible:ring-ring hover:bg-accent flex shrink-0 items-center gap-1 rounded-full py-0.5 pr-1 pl-0.5 outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
           className,
         )}
       >
-        {initials}
+        <span className="bg-accent text-accent-foreground flex size-7 items-center justify-center rounded-full text-xs font-semibold">
+          {initials}
+        </span>
+        {/* A caret, not decoration: a bare circle of initials is indistinguishable from an
+            avatar, so without it the account menu is something you have to already know is
+            there. The email is still only in the accessible name — this is the sighted cue. */}
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
         open={open}
@@ -83,20 +91,29 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             {email}
           </p>
         ) : null}
-        <p className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium">Theme</p>
-        {THEMES.map((option) => {
-          const { icon: Icon, label } = THEME_META[option];
-          return (
-            <MenuItem key={option} selected={theme === option} onSelect={() => setTheme(option)}>
-              <Check
-                aria-hidden="true"
-                className={cn('size-4', theme === option ? 'opacity-100' : 'opacity-0')}
-              />
-              <Icon aria-hidden="true" className="size-4" />
-              {label}
-            </MenuItem>
-          );
-        })}
+        <p className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium" id={themeLabelId}>
+          Theme
+        </p>
+        {/* The heading above relates to these four options visually and ONLY visually without
+            this group — a screen-reader user arrowing through the menu would meet four radios
+            with no idea what they choose between (WCAG 1.3.1). `role="group"` is transparent to
+            the APG menu's roving focus, which queries `[role="menuitemradio"]` across all
+            DESCENDANTS of the menu container, not its direct children. */}
+        <div role="group" aria-labelledby={themeLabelId}>
+          {THEMES.map((option) => {
+            const { icon: Icon, label } = THEME_META[option];
+            return (
+              <MenuItem key={option} selected={theme === option} onSelect={() => setTheme(option)}>
+                <Check
+                  aria-hidden="true"
+                  className={cn('size-4', theme === option ? 'opacity-100' : 'opacity-0')}
+                />
+                <Icon aria-hidden="true" className="size-4" />
+                {label}
+              </MenuItem>
+            );
+          })}
+        </div>
         <div className="border-border my-1 border-t" />
         <MenuItem
           // The sign-out mutation's pending state has to survive the move into a menu: a second

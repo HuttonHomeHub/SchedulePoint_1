@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { paintScene, type TsldPalette, type TsldScene } from './paint';
-import type { RenderActivity, Viewport } from './render-model';
+import { MIN_PX_PER_DAY, type RenderActivity, type Viewport } from './render-model';
 import { calendarBoundaries } from './time-scale';
 
 /**
@@ -73,7 +73,12 @@ function countingCtx() {
   };
 }
 
-/** 2,000 activities across 50 lanes, spread over ten years so a year-zoom viewport is full. */
+/**
+ * 2,000 activities across 50 lanes, spread over ~2.1 years (40 columns × 20 days). That span is
+ * deliberately not matched to the widest viewport: band cost is driven by the **viewport**, not by
+ * the plan's date range, so a fixture stretched to fill a decade would measure nothing extra. What
+ * this fixture is for is the 2,000-activity draw the bands share a frame with.
+ */
 function bigPlan(): RenderActivity[] {
   return Array.from({ length: COUNT }, (_, i) => {
     const startDay = Math.floor(i / 50) * 20;
@@ -111,8 +116,9 @@ function paint(monthBands: boolean, view: Viewport) {
     view: TOGGLES,
     ...(monthBands ? { monthBands: true } : {}),
   };
+  const started = performance.now();
   paintScene(ctx, scene, view, SIZE, PALETTE, 1);
-  return ctx.calls;
+  return { ...ctx.calls, ms: performance.now() - started };
 }
 
 /** How many months the viewport spans — the band layer's own upper bound. */
@@ -123,13 +129,19 @@ function visibleMonths(view: Viewport): number {
 }
 
 const DAY_ZOOM: Viewport = { pxPerDay: 40, originX: 0, originY: 0 };
-/** ~0.7 px/day over 1920px ≈ 2,700 days ≈ 7.5 years — the case a per-day loop would blow up on. */
+/** The `year` preset: ~0.7 px/day over 1920px ≈ 2,700 days ≈ 7.5 years. */
 const YEAR_ZOOM: Viewport = { pxPerDay: 0.7, originX: 0, originY: 0 };
+/**
+ * The **reachable** worst case, not merely the coarsest preset: `MIN_PX_PER_DAY` is where the zoom
+ * clamp stops, ≈ 4,800 days ≈ 13 years in one viewport. A per-day band loop would blow up here.
+ */
+const MIN_ZOOM: Viewport = { pxPerDay: MIN_PX_PER_DAY, originX: 0, originY: 0 };
 
 describe('month bands — draw-budget gate at 2,000 activities (ADR-0055 §4)', () => {
   it.each([
     ['day zoom', DAY_ZOOM],
     ['year zoom over a multi-year span', YEAR_ZOOM],
+    ['the MIN_PX_PER_DAY clamp — the widest span reachable', MIN_ZOOM],
   ])('at %s, adds at most visibleMonths + 1 fillRect and no text at all', (_name, view) => {
     // Warm the label-measurement memo first. It is module-level and shared across paints, so
     // whichever run goes first pays for every `measureText` and the second sees none — comparing
@@ -146,10 +158,35 @@ describe('month bands — draw-budget gate at 2,000 activities (ADR-0055 §4)', 
   });
 
   it('costs exactly nothing when the flag is off — the paint-parity claim, structurally', () => {
-    for (const view of [DAY_ZOOM, YEAR_ZOOM]) {
+    for (const view of [DAY_ZOOM, YEAR_ZOOM, MIN_ZOOM]) {
       // `monthBands` absent ⇒ the layer is skipped entirely, so every counter is identical to a
       // scene that never heard of bands. This is what "flag-off paints byte-for-byte" means.
-      expect(paint(false, view)).toEqual(paint(false, view));
+      // `ms` is wall-clock and therefore never equal — compare the draw calls, which are the claim.
+      const { ms: _a, ...first } = paint(false, view);
+      const { ms: _b, ...second } = paint(false, view);
+      expect(first).toEqual(second);
+    }
+  });
+
+  it('reports its measurement, so the default-on decision is made on a number', () => {
+    // Printed, not asserted — the ADR-0054 dates-gate precedent. A CI runner's absolute timings are
+    // noise and this stub cannot measure GPU rasterisation, so the assertions above stay call-count
+    // based; what this gives the eventual flip is an evidence trail rather than only a bound.
+    for (const [name, view] of [
+      ['day', DAY_ZOOM],
+      ['year', YEAR_ZOOM],
+      ['min', MIN_ZOOM],
+    ] as const) {
+      paint(true, view); // warm the label memo so neither run below pays for it
+      const off = paint(false, view);
+      const on = paint(true, view);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ADR-0055 S4] ${COUNT} activities @ ${view.pxPerDay}px/day (${name}) — ` +
+          `bands off ${off.ms.toFixed(2)}ms, on ${on.ms.toFixed(2)}ms ` +
+          `(+${(on.ms - off.ms).toFixed(2)}ms, ${on.fillRect - off.fillRect} extra fills)`,
+      );
+      expect(on.ms).toBeGreaterThan(0);
     }
   });
 

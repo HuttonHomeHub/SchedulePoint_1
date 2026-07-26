@@ -97,12 +97,28 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   // is light (validated against navy) and the field is white — 2:1, invisible. A placeholder
   // belongs to the field's colour system, so it gets its own token per surface.
   ['--field', '--field-muted-foreground', 'placeholder text inside an input'],
+  // The solid status fills. Nothing pairs them as a fill+label TODAY — `badge.tsx` uses an alpha
+  // wash plus the `-text` variant, and documents why. But `@theme inline` compiles
+  // `bg-warning text-warning-foreground`, so the pairing is one autocomplete away, and an
+  // unasserted-but-available token pair is exactly the trap this suite exists to remove.
+  ['--muted', '--muted-foreground', 'secondary text on a muted block'],
+  ['--success', '--success-foreground', 'the label of a solid success fill'],
+  ['--warning', '--warning-foreground', 'the label of a solid warning fill'],
+  ['--info', '--info-foreground', 'the label of a solid info fill'],
 ];
 
 /** Non-text pairs — WCAG 1.4.11 Non-text Contrast, 3:1. */
 const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
   ['--background', '--ring', 'the focus indicator against the surface it sits on'],
   ['--background', '--primary', 'a primary button against the surface'],
+  // `--input` is NOT covered by the decorative-border exemption below, and conflating the two
+  // is how it went unnoticed at 1.26:1 in every theme. `--field` is valued identically to the
+  // surface it sits on by design, so this outline is the ONLY thing that says a text field is
+  // there — 1.4.11's central example. Both directions are checked because the token draws the
+  // boundary of a filled control (`input`, `textarea`, `select`) and of an `outline` Button,
+  // which sits on the page fill rather than a field fill.
+  ['--field', '--input', 'the outline of a text field against its own fill'],
+  ['--background', '--input', 'the outline of an outline-variant control on the surface'],
 ];
 
 describe.each(THEME_SELECTORS)('%s', (theme) => {
@@ -135,6 +151,32 @@ describe.each(THEME_SELECTORS)('%s', (theme) => {
         const value = ratio(tokens, '--background', '--border');
         expect(value).toBeGreaterThan(1);
       });
+    });
+  });
+});
+
+describe.each(THEME_SELECTORS)('%s — adjacent surfaces', (theme) => {
+  describe.each([false, true])('flag layers applied: %s', (flagsOn) => {
+    /**
+     * How far a surface stands off the page it sits beside — a number `globals.css` quotes in
+     * prose ("the rail sits at 1.09:1 against the page") and, until now, nothing computed. A
+     * comment asserting a ratio no test recomputes is the same failure this epic exists to
+     * close, one level up: the next edit to `--panel` or `--background` could drift it silently
+     * and the file would still claim the old figure.
+     *
+     * Reported, not asserted, and deliberately: 1.4.11 exempts a decorative surface boundary,
+     * every scope keeps a real `border-r`/`border-b` rather than relying on the fill difference,
+     * and the design WANTS these close. What the suite owes is the number, not a threshold.
+     */
+    it.each(['chrome', 'panel'] as const)('%s vs the page fill', (scope) => {
+      const page = fillOf(resolve(theme, 'page', flagsOn));
+      const surface = fillOf(resolve(theme, scope, flagsOn));
+      const a = relativeLuminance(page);
+      const b = relativeLuminance(surface);
+      const value = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      // eslint-disable-next-line no-console
+      console.log(`[ADR-0055 §2] ${theme} flags=${flagsOn} — ${scope} vs page: ${fmtRatio(value)}`);
+      expect(value).toBeGreaterThanOrEqual(1);
     });
   });
 });

@@ -366,6 +366,16 @@ export function HierarchyTree({
               )}
               style={rowStyle(item.start, row.level)}
             >
+              {/* A client is the top of the hierarchy; the accent bar marks where each branch
+                  begins so the tree reads as grouped rather than as one long list. Drawn
+                  ABSOLUTELY inside the row's existing box — a border would change the row's
+                  geometry, and these rows are virtualized at a fixed height. */}
+              {row.level === 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="bg-primary absolute inset-y-0.5 left-0 w-0.5 rounded-full"
+                />
+              ) : null}
               <ChevronRight
                 aria-hidden="true"
                 className={cn(

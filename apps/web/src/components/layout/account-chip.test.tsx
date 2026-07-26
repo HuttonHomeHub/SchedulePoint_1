@@ -1,5 +1,5 @@
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AccountChip } from '@/components/layout/account-chip';
@@ -76,6 +76,16 @@ describe('AccountChip', () => {
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(4);
     fireEvent.click(screen.getByRole('menuitemradio', { name: /Corporate/ }));
     await waitFor(() => expect(document.documentElement.classList).toContain('corporate'));
+  });
+
+  it('names the theme options as a group, not four loose radios', () => {
+    renderChip();
+    fireEvent.click(screen.getByRole('button', { name: /Account:/ }));
+    // The visible "Theme" heading sits above the options; without this group its relationship to
+    // them is conveyed by proximity alone, so a screen-reader user arrowing the menu meets four
+    // radios choosing between nothing they were told about (WCAG 1.3.1).
+    const group = screen.getByRole('group', { name: 'Theme' });
+    expect(within(group).getAllByRole('menuitemradio')).toHaveLength(4);
   });
 
   it('returns focus to the trigger when the menu closes', async () => {

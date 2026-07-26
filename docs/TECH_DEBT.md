@@ -91,3 +91,28 @@ Keep this honest and current — undocumented debt is the expensive kind.
 - Prefer paying debt down opportunistically while touching nearby code.
 - Never add **undocumented** debt: if you take a shortcut, add a row here.
 - Security- and data-integrity-related debt is prioritised above convenience.
+
+### 57. `ToggleChip` has no consumers yet (ADR-0055 S1)
+
+`components/ui/toggle-chip.tsx` ships fully built, documented and tested with **zero call sites**.
+That is deliberate — S1 extracted the epic's repeated patterns before the surfaces that consume
+them, so "no one-off styling" survives the later slices — but CLAUDE.md §5 is "no dead code", and
+an unconsumed primitive is a standing risk if its intended consumer slips or changes shape.
+
+**Its consumer is named:** the Project Explorer's `All / Clients / Projects / Plans` filter chips,
+which ADR-0055 §3 and the designed-UI spec (CQ-2) deferred because the tree loads lazily — one
+query per expanded node — so client-side filtering is not buildable. Those chips need an org-scoped
+hierarchy **search endpoint** and belong to their own feature spec.
+
+**Expiry:** if that spec has not landed by the time the next UI epic closes, either build the first
+consumer or delete the primitive. An unconsumed primitive with no dated owner becomes permanent.
+
+### 58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
+
+S4 landed the canvas month bands — the diagram on its own banded ground — but deliberately stopped
+short of the tiered ruler redesign (year centred / month names / day numbers) and the TODAY chip.
+Both are DOM work over the canvas, both were specified (`docs/specs/designed-ui/`, S4-F2), and both
+were held back rather than rushed alongside a change to the painter's hot path in the same slice.
+
+They are additive and behind the same `VITE_CANVAS_VISUAL_LANGUAGE` flag, so they can land as their
+own slice without re-opening anything S4 shipped.
