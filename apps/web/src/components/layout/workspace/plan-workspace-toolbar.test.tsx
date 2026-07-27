@@ -98,6 +98,19 @@ vi.mock('@/features/plans', async (importOriginal) => ({
       status: 'ACTIVE',
       plannedStart: h.plannedStart,
       description: null,
+      version: 1,
+      // Read by (real, unmocked) PlanScheduleSettings once the Calendar dialog mounts it.
+      criticalPathDefinition: 'TOTAL_FLOAT',
+      totalFloatMode: 'FINISH',
+      makeOpenEndsCritical: false,
+      // Read by the other (real, unmocked) Calendar-dialog sibling settings sections — their flags
+      // default on, so opening the dialog renders them too.
+      useExpectedFinishDates: false,
+      levelResources: false,
+      levelWithinFloatOnly: false,
+      ignoreExternalRelationships: false,
+      eacMethod: 'CPI',
+      currencyCode: null,
     }),
   PlanCalendarPicker: () => <div data-testid="calendar-picker" />,
   PlanRecalcModePicker: () => <div data-testid="recalc-mode-picker" />,
@@ -201,6 +214,12 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
   });
 
+  it('gives each row a visible purpose cue (ux review: the split otherwise lived only in aria-label)', () => {
+    renderScreen();
+    expect(screen.getByText('Navigate')).toBeInTheDocument();
+    expect(screen.getByText('Build')).toBeInTheDocument();
+  });
+
   it('pins the Project-finish chip inline in the toolbar (decision #1)', () => {
     renderScreen();
     expect(screen.getByText('Finish')).toBeInTheDocument();
@@ -225,6 +244,16 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
     expect(screen.getByRole('dialog', { name: 'Baselines' })).toBeInTheDocument();
     expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
+  });
+
+  it('surfaces the critical-path definition settings in the Calendar dialog (regression: they were dropped from the ADR-0031 toolbar migration and unreachable in the default flag-on UI)', () => {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Calendar…' }));
+    expect(screen.getByRole('dialog', { name: 'Working-day calendar' })).toBeInTheDocument();
+    expect(screen.getByTestId('calendar-picker')).toBeInTheDocument();
+    expect(screen.getByText('Critical-path definition')).toBeInTheDocument();
+    expect(screen.getByText('Total-float measure')).toBeInTheDocument();
+    expect(screen.getByText('Open-ends criticality')).toBeInTheDocument();
   });
 
   it('toggles the floating Legend panel on the canvas from the Row-1 control', () => {

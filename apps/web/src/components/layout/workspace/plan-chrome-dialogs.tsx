@@ -4,6 +4,7 @@ import { Dialog } from '@/components/ui/dialog';
 import {
   ADVANCED_CONSTRAINTS_ENABLED,
   EARNED_VALUE_ENABLED,
+  FLOAT_CRITICAL_SETTINGS_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   PROGRESS_INGESTION_ENABLED,
@@ -20,6 +21,7 @@ import {
   PlanExternalRelationshipsSettings,
   PlanLevellingSettings,
   PlanRecalcModePicker,
+  PlanScheduleSettings,
 } from '@/features/plans';
 import { ResourceHistogram } from '@/features/resources';
 import { ShareLinksDialog } from '@/features/share';
@@ -88,6 +90,9 @@ export function PlanChromeDialogs({
             calendarsLoading={model.calendars.isPending}
             canEdit={model.canWrite}
           />
+          {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
+            <PlanScheduleSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          ) : null}
           {PROGRESS_INGESTION_ENABLED ? (
             <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
           ) : null}

@@ -105,7 +105,7 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
 
   it('opens the Colour-by picker and switches mode', () => {
     renderRows(ctx());
-    const trigger = screen.getByRole('button', { name: 'Colour by: Criticality' });
+    const trigger = screen.getByRole('button', { name: 'Colour · Criticality' });
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Total float' }));
     expect(spies.setColourMode).toHaveBeenCalledWith('totalFloat');
@@ -113,7 +113,7 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
 
   it('reflects the active Colour-by mode on the trigger', () => {
     renderRows(ctx({ colourMode: 'wbs' }));
-    expect(screen.getByRole('button', { name: 'Colour by: WBS group' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Colour · WBS group' })).toBeInTheDocument();
   });
 
   it('toggles the Baseline overlay when an active baseline exists', () => {
