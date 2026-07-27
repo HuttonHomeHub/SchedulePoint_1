@@ -161,3 +161,26 @@ Each migration was individually the right call — an unreachable setting beats 
 settings") with a description covering all seven areas, or add a visible subsection heading above
 each section (a deliberate, scoped a11y/IA pass — not a drive-by rename, since the toolbar item that
 opens it is itself labelled "Calendar…" and would need to change in step).
+
+### 61. `Toolbar`'s `showLabel={r.item.tier === 1}` conflates priority with presentation
+
+`apps/web/src/components/ui/toolbar/Toolbar.tsx:284` decides whether an item shows a visible
+text label purely from its declared `tier` — a static, width-independent property. `tier` is
+meant to answer one question ("what demotes into `⋯` first when the row runs out of room"), but
+this line makes it answer a second, orthogonal question too ("does this item get a label"). The
+two only coincide by convention, not by anything the type system enforces.
+
+This was measured concretely (`docs/specs/tsld-toolbar-canvas-refinements/feature-spec.md` §4.10,
+M0): at 1 280 px, with every Row-2 flag at its real default and the pen held, there is 361.9 px of
+slack and only a razor-thin (0.1 px) margin for promoting even the four cheapest icon-only items
+to labelled — nowhere near enough to promote a meaningful subset safely, yet Row 2 already has
+761.9–1 001.9 px of unused slack at 1 680–1 920 px. A user on a wide monitor sees exactly as many
+icon-only controls as a user at 1 280 px, because nothing in the primitive ever asks "could this
+item afford a label at the width we actually have."
+
+**What would close it:** give `Toolbar`/`ToolbarButton` a width-responsive `showLabel` — computed
+from live measured slack the same way overflow demotion already is (`Toolbar.tsx:80-131`'s width
+cache is the precedent to reuse, not duplicate) — rather than a fixed per-item property. Splitting
+`tier` (priority) from an explicit `showLabel?: boolean` (presentation) on the registry item is
+the type-level fix; the width-responsive computation is the behavioural fix. Both are needed —
+one without the other still leaves either a static label set or an untyped conflation.

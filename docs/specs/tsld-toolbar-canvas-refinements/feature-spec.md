@@ -961,6 +961,69 @@ item). New **TECH_DEBT #57**.
 permanent e2e assertion that `⋯` is empty on Row 2 at 1 280 px with all flags on — so a
 future registry addition cannot silently push the row into overflow again.
 
+#### Result (M0, measured)
+
+Measured via a temporary Playwright spec (`e2e-toolbar/row2-measure.spec.ts` +
+`playwright.row2-measure.config.ts`, both deleted after this run — real defaults left
+`VITE_CANVAS_AUTHORING` etc. at their `flagDefaultOn` value, giving the widest possible
+Row-2 registry with no explicit overrides needed):
+
+| Width | Toolbar width | Inline summed | Slack      | `⋯` present |
+| ----- | ------------- | ------------- | ---------- | ----------- |
+| 1 280 | 1 213.5 px    | 851.6 px      | 361.9 px   | no          |
+| 1 366 | 1 299.5 px    | 851.6 px      | 447.9 px   | no          |
+| 1 440 | 1 373.5 px    | 851.6 px      | 521.9 px   | no          |
+| 1 680 | 1 613.5 px    | 851.6 px      | 761.9 px   | no          |
+| 1 920 | 1 853.5 px    | 851.6 px      | 1 001.9 px | no          |
+
+18 items on Row 2; 4 already carry labels (Add activity, Link, Recalculate, Export — all
+tier-1 today). 14 are icon-only. Per-item `labelWidthIfShown` (measured via a real offscreen
+DOM probe using the button's own computed font, not an estimate), cheapest to most
+expensive: Print 58.8 · Share 68.2 · Add note 78.1 · Comments 92.7 · Calendar 94.0 ·
+Baselines 98.2 · Snap to grid 103.8 · Earned value 127.1 · Update progress 149.2 ·
+Auto-arrange 159.5 · Resource histogram 181.6 · Clear visual placement 189.5 · Redo 197.5 ·
+Undo 203.3.
+
+**Promoting all 14 at once: NO-GO**, and not close — at 1 280 px it would cost 1 801.6 px
+against 361.9 px of slack (−1 439.7 px). That was expected; the real question is the
+maximum feasible _subset_.
+
+**Greedy cheapest-first subset, respecting the ≥ 64 px gate at each width:**
+
+| Width | Promotable subset                          | Cost     | Remaining slack |
+| ----- | ------------------------------------------ | -------- | --------------- |
+| 1 280 | Print, Share, Add note, Comments           | 297.8 px | **64.1 px**     |
+| 1 366 | Print, Share, Add note, Comments           | 297.8 px | 150.1 px        |
+| 1 440 | Print, Share, Add note, Comments, Calendar | 391.8 px | 130.1 px        |
+| 1 680 | + Baselines, Snap to grid                  | 593.8 px | 168.1 px        |
+| 1 920 | + Earned value, Update progress            | 870.1 px | 131.8 px        |
+
+The binding constraint is 1 280 px, and the 4-item subset (Print/Share/Add note/Comments)
+technically clears the stated gate there — by **64.1 px against a 64 px floor: a 0.1 px
+margin.** That is not a real margin; it is inside the noise of font hinting, sub-pixel
+rounding, and cross-platform font-metric variance (this measurement was taken in headless
+Chromium on a Linux CI-class runner, not the range of devices/OSes a planner actually uses).
+A gate designed to prevent overflow churn should not be satisfied by a result indistinguishable
+from a tie.
+
+**Verdict: NO-GO**, on the practical (not literal) reading of the gate. Per §3.10 / this
+section's own contingency, this is exactly the "passes only outside the safety margin"
+case: **the correct answer is not a static tier change.** No plan line-item promotes any
+Row-2 icon to a labelled tier.
+
+**Recorded regardless of outcome:** `showLabel={r.item.tier === 1}` conflates _priority_
+(what demotes first) with _presentation_ (icon vs. icon + label) — confirmed unconditionally
+by this measurement (this is a design finding independent of the gate result). New
+**TECH_DEBT #57**, filed in `docs/TECH_DEBT.md`.
+
+**Follow-up recorded, not built:** a width-responsive `showLabel` in the `Toolbar` primitive
+— computed from live slack the same way overflow demotion already is, rather than a fixed
+per-item property — is the change that would actually let Print/Share/Add note/Comments (and
+more, at wider viewports) show labels safely at every width without hard-coding a fragile
+1 280 px-specific subset. Out of scope for this batch; not milestone M8 (which does not run).
+
+**M8 does not run.** No implementation-plan line-item follows from this milestone.
+
 ### 4.11 ADR-0056 (proposed) — outline
 
 Items 1, 2, 4, 8 (toolbar DOM/copy) and 9 (header) are refinements inside existing ADRs
