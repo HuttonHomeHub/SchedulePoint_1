@@ -65,6 +65,12 @@ import { cn } from '@/lib/utils';
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
 const MD_QUERY = '(min-width: 48rem)';
 
+/** The visible row-purpose eyebrow (ux review) — kept as one constant so the two rows can't drift
+ * apart on a future edit. `text-xs` is the design system's smallest type-scale step
+ * (`docs/DESIGN_SYSTEM.md` "Captions, meta"), not an arbitrary size. */
+const ROW_LABEL_CLASSNAME =
+  'text-muted-foreground shrink-0 text-xs font-semibold tracking-wide uppercase';
+
 /**
  * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — the `VITE_CANVAS_TOOLBAR`
  * evolution of {@link PlanWorkspace}. It collapses the ADR-0030 chrome bands into a **one-line header**
@@ -474,15 +480,15 @@ export function ToolbarPlanWorkspace({
           untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
       <ChromePortal>
         <div className="border-border flex flex-col border-b">
-          {/* Visible row-purpose cues (ux review): the Look/Do split otherwise lives only in each
-              row's `aria-label`, invisible to sighted users. `aria-hidden` avoids a redundant/out-of-
-              context "Look"/"Do" announcement — the toolbar's own `aria-label` already names it for AT. */}
+          {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise
+              lived only in each row's `aria-label`, invisible to sighted users. Plain words rather than
+              those internal ADR-0031 codenames — "Look"/"Do" read as jargon to a first-time user — and
+              each is a literal word from its row's own `aria-label` below, so it isn't a wholly separate
+              caption. `aria-hidden` avoids a redundant/out-of-context announcement — the toolbar's own
+              `aria-label` already names the row for AT. */}
           <div className="border-border flex items-center gap-2 border-b px-2 py-1">
-            <span
-              aria-hidden="true"
-              className="text-muted-foreground shrink-0 text-[11px] font-semibold tracking-wide uppercase"
-            >
-              Look
+            <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
+              Navigate
             </span>
             <Toolbar
               items={rows.look}
@@ -494,11 +500,8 @@ export function ToolbarPlanWorkspace({
             />
           </div>
           <div className="flex items-center gap-2 px-2 py-1">
-            <span
-              aria-hidden="true"
-              className="text-muted-foreground shrink-0 text-[11px] font-semibold tracking-wide uppercase"
-            >
-              Do
+            <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
+              Build
             </span>
             <Toolbar
               items={rows.do}

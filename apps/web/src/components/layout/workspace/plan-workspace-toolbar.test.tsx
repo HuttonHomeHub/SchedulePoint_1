@@ -214,6 +214,12 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
   });
 
+  it('gives each row a visible purpose cue (ux review: the split otherwise lived only in aria-label)', () => {
+    renderScreen();
+    expect(screen.getByText('Navigate')).toBeInTheDocument();
+    expect(screen.getByText('Build')).toBeInTheDocument();
+  });
+
   it('pins the Project-finish chip inline in the toolbar (decision #1)', () => {
     renderScreen();
     expect(screen.getByText('Finish')).toBeInTheDocument();

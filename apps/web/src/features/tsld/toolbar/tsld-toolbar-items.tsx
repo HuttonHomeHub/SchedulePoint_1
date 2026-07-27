@@ -677,8 +677,10 @@ function ColourByControl({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
-        aria-label={`Colour by: ${activeLabel}`}
-        title={disabled ? (api.disabledReason ?? 'Colour by…') : `Colour by: ${activeLabel}`}
+        // The accessible name matches the visible text verbatim (WCAG 2.5.3 Label in Name) — a11y
+        // review caught "Colour by: {mode}" drifting from the new "Colour · {mode}" visible text.
+        aria-label={`Colour · ${activeLabel}`}
+        title={disabled ? (api.disabledReason ?? 'Colour by…') : `Colour · ${activeLabel}`}
         onClick={() => {
           if (!disabled) toggle();
         }}
