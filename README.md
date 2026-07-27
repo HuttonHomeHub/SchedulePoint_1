@@ -11,16 +11,24 @@
 
 </div>
 
-> **Project status: base repository (no application features).** This is a clean,
-> domain-neutral foundation — structure, tooling, CI/CD, containers,
-> documentation, standards, a delivery process, and a canonical feature template.
-> Fork it, replace this README with your app's, and build features from the
-> template. See the [roadmap](docs/ROADMAP.md).
+> **Project status: SchedulePoint is substantially built.** 19 API modules, 25
+> Prisma models across 41 migrations, a React client with 15 flag-scoped
+> Playwright suites, and 56 ADRs. The CPM/GPM engine is real and its conformance
+> matrix is closed (ADR-0034). The main gap is the Gantt view; the deployment
+> target is still undecided. See the [roadmap](docs/ROADMAP.md) and
+> [project brief](docs/PROJECT_BRIEF.md).
 
-Blank App gives a new application a solid, opinionated starting point: a
-TypeScript monorepo with a React web client and a NestJS API, strict tooling,
-tests, CI/CD, and documented engineering standards — so teams start building
-features on day one instead of wiring up foundations.
+SchedulePoint is a browser-based **construction scheduling** application built
+around a **Time-Scaled Logic Diagram** as its primary editing surface: planners
+draw activities directly on a timeline and connect them with logic, rather than
+filling in a Gantt grid. It delivers the CPM/GPM feature set construction
+planners actually use — four dependency types with lag, calendars, constraints,
+progress, floats, baselines and resources — with a live critical path and
+collaborative, browser-native team use.
+
+It grew out of a domain-neutral base repository, and the engineering foundation
+that came with it (TypeScript monorepo, strict tooling, CI/CD, containers,
+documented standards) is still the substrate.
 
 ### Using this as your base
 

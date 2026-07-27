@@ -19,12 +19,19 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: foundation in place, application features not yet built.** The
-> engineering foundation (tooling, structure, CI/CD, containers, docs, standards,
-> delivery process, reference template) exists; SchedulePoint's domain/business
-> code does **not** yet. Build features from the reference template (§12,
-> ADR-0015) via the delivery process (§21). Do not assume domain code exists —
-> check before referencing it.
+> **Current stage: the application is substantially built.** 19 API modules
+> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~570 web
+> source files with 15 flag-scoped Playwright suites, and 56 ADRs. The CPM/GPM
+> engine is real and its conformance matrix is closed (ADR-0034). Read the code
+> before assuming anything is missing — this banner said the opposite for months
+> after it stopped being true, which is exactly the failure it now warns against.
+>
+> What is **not** built: the Gantt view (the one remaining Must-have in
+> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8), and the deployment target
+> is still undecided. New work still follows the delivery process (§21) and the
+> reference template (§12, ADR-0015) — though whether that template still earns
+> its keep against 19 real modules is itself an open question
+> ([`docs/TECH_DEBT.md`](docs/TECH_DEBT.md) #6).
 >
 > SchedulePoint is **multi-tenant**: users belong to one or more
 > **organisations**; clients, projects, plans and their activities are
@@ -678,12 +685,15 @@ A lighter-weight running log of smaller decisions is in
 
 ## 17. Known limitations & assumptions
 
-- No application/domain code exists yet; docs describe intent and conventions.
-- The web app has no entry point yet, so CI builds only the API and runs e2e
-  with the dev server skipped until the walking skeleton lands (see
-  `docs/TECH_DEBT.md`).
 - Deployment target (managed host vs. self-hosted Kubernetes) is **not yet
   decided**; the container/registry foundation is deliberately platform-neutral.
+  Auto-deploy exists but ships dormant, so a release does not reach users until
+  an operator acts (ADR-0047, `docs/TECH_DEBT.md` #5/#29).
+- Cross-browser e2e coverage is Chromium-first: the Playwright config defines
+  firefox/webkit projects but the journeys are exercised mainly on Chromium.
+- The engine's draw-performance budget (ADR-0026 §16) has never been measured on
+  the hardware envelope it names — a mid-tier laptop and iPad-class Safari. CI
+  runners cannot stand in for that (`docs/TECH_DEBT.md` #59).
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 

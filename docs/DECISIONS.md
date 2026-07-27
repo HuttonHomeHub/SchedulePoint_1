@@ -10,6 +10,44 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — Tech-debt register reconciled against the code
+
+**What happened.** Every row in `docs/TECH_DEBT.md` was checked against the repository rather than
+against memory. Nine rows were deleted as fully resolved, four rewritten to describe only what is
+left, one corrected outright, and the file gained a rule about how it is meant to be maintained.
+49 rows → 40.
+
+**The worst finding was not in the register.** `CLAUDE.md` — the operating manual, which the system
+prompt tells every assistant overrides its defaults — opened with **"Current stage: foundation in
+place, application features not yet built … Do not assume domain code exists."** At the time it said
+that, the repository held 19 API modules, 25 Prisma models across 41 migrations, ~570 web source
+files, 15 Playwright suites and 56 ADRs. §17 repeated it ("No application/domain code exists yet")
+and added a second false claim: that the web app has no entry point so CI builds only the API. CI
+has built both and run Playwright for months. An instruction to distrust the code, in the one file
+guaranteed to be read first, is the most expensive possible place for a stale sentence.
+
+**Why the register rotted.** Two mechanics, both visible in the diff. First, rows were annotated
+`**RESOLVED**` instead of deleted — nine had accumulated, and several were resolved in the title
+while the remediation column still described the work as outstanding, so the row disagreed with
+itself. Second, partial completion was recorded by prefixing "(a) RESOLVED" rather than rewriting
+the row, so a row's title stopped describing its contents. Both make the register longer and less
+true at the same time, which is the failure mode that matters: a backlog nobody trusts is not read,
+and a backlog that is not read rots faster.
+
+**The rule now written into the file.** Delete resolved rows; the commit and this log are the
+history. When part of an item lands, rewrite the row to be about the remainder and rename it to
+match. Reconcile after each epic while the context is fresh, verifying against the codebase — most
+rows name a file or a flag, so checking costs a grep.
+
+**Sampled and confirmed still accurate**, so the register is not wholesale unreliable: the four
+dependency-pin rows (ESLint 9, Prisma 6, TypeScript 5, CodeQL public-only) all match
+`dependabot.yml` and the workflow gate; #15 (no `Location` header, no envelope decorator helper),
+#18 (no buildx layer cache), #20 (keyset cursor resolved before the scope filter), #21 (no
+required-field indicator, no route focus/title manager, no `EmptyState`, no `DateField`), #43, #49,
+#53 and #56 were each verified open by inspection.
+
+---
+
 ### 2026-07-27 — `SelectField` lands, and stops at the sites that are genuinely different
 
 **Decision.** `components/ui/form.tsx` gains `SelectField`, the enumerated sibling of `TextField`.
