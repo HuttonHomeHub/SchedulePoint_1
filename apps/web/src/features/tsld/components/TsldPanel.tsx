@@ -256,6 +256,10 @@ export interface TsldPanelProps {
   /** Today as a calendar day (`YYYY-MM-DD`), for the TODAY marker. The route passes it (floored
    * to the local day) so the component does no wall-clock math. */
   todayIso?: string;
+  /** The viewer-local time-of-day fraction (0…1) for a fractional Today line + pill (F6a/F6b,
+   * `VITE_CANVAS_TIME_AXIS`) — undefined/null when the flag is off, keeping the plain integer
+   * marker byte-for-byte. The route derives it (`todayDayFraction` off its own `useNow` tick). */
+  todayFraction?: number | null | undefined;
   /** Fill the available height instead of the default fixed 480px box. When set, the canvas
    * container is `h-full` (with a min-height floor) so the diagram fills the workspace region —
    * used by the canvas-first `PlanWorkspace` (ADR-0030). Default (unset) keeps today's boxed look. */
@@ -347,6 +351,7 @@ export function TsldPanel({
   onRefresh,
   calendar = null,
   todayIso,
+  todayFraction = null,
   fill = false,
   chromeless = false,
   canvasUi,
@@ -1441,6 +1446,7 @@ export function TsldPanel({
               view={viewToggles}
               isWorkingDay={workingDayPredicate}
               todayOffset={todayOffset}
+              todayFraction={todayFraction}
               dimmedIds={dimmedIds}
               barFill={barFill}
               barInk={barInk}

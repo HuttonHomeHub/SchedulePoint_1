@@ -110,6 +110,11 @@ export interface TsldPalette {
   nonWorking: string;
   /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
   today: string;
+  /** Ink for the Today pill's `Today` text (F6b) — paired with `today` the same way every other
+   * fill pairs with its `*-foreground` token, so contrast is guaranteed by the same 1:1 pairing.
+   * Deliberately not `selection`: that is the cursor chip's hue, and the two markers must never
+   * read as the same thing. */
+  todayInk: string;
   /** Visual-Planning conflict cue (ADR-0033): a placement earlier than its feasible start. The
    * warning hue, drawn as a distinct **triangle badge** (shape, not colour-only) at the bar's start. */
   conflict: string;
@@ -219,6 +224,13 @@ export interface TsldScene {
   isWorkingDay?: ((dayOffset: number) => boolean) | null | undefined;
   /** Day offset (from `dataDate`) of "today", or null when today is outside a schedulable range. */
   todayOffset?: number | null | undefined;
+  /**
+   * The viewer-local time-of-day fraction (0…1, `todayDayFraction`) added to `todayOffset` for a
+   * fractional Today line + pill (F6a/F6b, `VITE_CANVAS_TIME_AXIS`). Absent/null ⇒ the line draws
+   * at the plain integer offset and no pill draws ⇒ byte-for-byte today's paint (the flag-off
+   * parity claim is structural, not a promise).
+   */
+  todayFraction?: number | null | undefined;
   /**
    * Paint the alternating month bands (ADR-0055 §4, `VITE_CANVAS_VISUAL_LANGUAGE`). Absent ⇒ the
    * band layer is skipped entirely ⇒ the frame is byte-for-byte today's paint, which is what makes
@@ -1216,8 +1228,17 @@ export function paintScene(
   // below the labels + selection ring. Dashed (not colour alone) and named in the panel legend.
   // Drawn only when the toggle is on, today maps to a day offset, and that column is on-screen.
   // Painted before the labels so label text stays legible over the dashed line, not under it.
+  //
+  // `todayFraction` (F6a, `VITE_CANVAS_TIME_AXIS`) interpolates the line to the actual
+  // time-of-day rather than the midnight boundary; absent/null keeps the plain integer offset,
+  // which is what makes the flag-off parity claim structural. The `Today` pill (F6b) mirrors the
+  // cursor date chip's geometry in the Today hue — TODAY_CHIP_TOP sits 4px below the cursor
+  // chip's own footprint (CURSOR_CHIP_TOP + CURSOR_CHIP_H), so a drag's cursor chip and the Today
+  // pill can never overlap even though they live on separate canvases. It only draws alongside
+  // the fractional line (both gated on `todayFraction` being present), not the flag-off line.
   if (toggles.today && scene.todayOffset != null) {
-    const x = Math.round(screenXOfDay(scene.todayOffset, view)) + 0.5;
+    const dayOffset = scene.todayOffset + (scene.todayFraction ?? 0);
+    const x = Math.round(screenXOfDay(dayOffset, view)) + 0.5;
     if (x >= 0 && x <= size.width) {
       ctx.strokeStyle = palette.today;
       ctx.lineWidth = 1.5;
@@ -1227,6 +1248,23 @@ export function paintScene(
       ctx.lineTo(x, size.height);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      if (
+        scene.todayFraction != null &&
+        typeof ctx.fillText === 'function' &&
+        typeof ctx.measureText === 'function'
+      ) {
+        ctx.font = LABEL_FONT;
+        const label = 'Today';
+        const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
+        const cx = Math.max(0, Math.min(x - w / 2, size.width - w));
+        ctx.fillStyle = palette.today;
+        ctx.fillRect(cx, TODAY_CHIP_TOP, w, TODAY_CHIP_H);
+        ctx.fillStyle = palette.todayInk;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, cx + LABEL_PAD_PX, TODAY_CHIP_TOP + TODAY_CHIP_H / 2);
+      }
     }
   }
 
@@ -1594,9 +1632,20 @@ export interface CursorChip {
 }
 
 /** Height (px) of the cursor date chip. */
-const CURSOR_CHIP_H = 16;
+export const CURSOR_CHIP_H = 16;
 /** Gap (px) between the canvas top edge and the chip. */
-const CURSOR_CHIP_TOP = 4;
+export const CURSOR_CHIP_TOP = 4;
+
+/** Height (px) of the Today pill (F6b) — matches the cursor chip's. */
+export const TODAY_CHIP_H = 16;
+/**
+ * Gap (px) between the canvas top edge and the Today pill — deliberately `CURSOR_CHIP_TOP +
+ * CURSOR_CHIP_H + 4` (a 4px gap below the cursor chip's own footprint), not an independent
+ * number: the two chips live on separate canvases (interaction vs base), so nothing else stops
+ * them overlapping during a drag. Expressing this one as a function of the other is what keeps a
+ * future edit to either from silently reintroducing the collision (asserted in `paint.test.ts`).
+ */
+export const TODAY_CHIP_TOP = CURSOR_CHIP_TOP + CURSOR_CHIP_H + 4;
 
 /**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):

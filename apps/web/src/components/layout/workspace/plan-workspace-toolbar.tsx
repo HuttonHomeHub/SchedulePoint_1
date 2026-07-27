@@ -333,6 +333,7 @@ export function ToolbarPlanWorkspace({
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
+      todayFraction={model.todayFraction}
       // Baseline overlay lens (VITE_CANVAS_LENSES): reuse the shipped variance rows (route-composed for
       // the activities table) — no new fetch. Absent when the flag is off ⇒ no ghost layer.
       {...(CANVAS_LENSES_ENABLED ? { varianceRows: model.variance.data?.rows } : {})}

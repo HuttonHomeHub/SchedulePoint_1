@@ -173,6 +173,10 @@ export interface TsldCanvasProps {
   isWorkingDay?: ((dayOffset: number) => boolean) | null;
   /** Day offset (from `dataDate`) of "today", or null when it isn't placeable. */
   todayOffset?: number | null;
+  /** The viewer-local time-of-day fraction (0…1) added to `todayOffset` for a fractional (not
+   * midnight-boundary) Today line + pill (F6a/F6b, `VITE_CANVAS_TIME_AXIS`). Absent/null ⇒ the
+   * plain integer offset ⇒ byte-for-byte today's paint (the flag-off parity claim). */
+  todayFraction?: number | null;
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // All default-absent ⇒ byte-for-byte today's paint. `TsldPanel` derives these (memoised).
   /** Ids of activities the active filter dimmed (non-matches); they paint muted, keeping the outline. */
@@ -496,6 +500,7 @@ export function TsldCanvas({
   view,
   isWorkingDay = null,
   todayOffset = null,
+  todayFraction = null,
   dimmedIds,
   barFill,
   barInk,
@@ -610,6 +615,7 @@ export function TsldCanvas({
     view,
     isWorkingDay,
     todayOffset,
+    todayFraction,
     // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the
     // scene carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4).
     monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
@@ -696,6 +702,7 @@ export function TsldCanvas({
       view,
       isWorkingDay,
       todayOffset,
+      todayFraction,
       monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
       // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
       // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
@@ -731,6 +738,7 @@ export function TsldCanvas({
     view,
     isWorkingDay,
     todayOffset,
+    todayFraction,
     dimmedIds,
     barFill,
     barInk,

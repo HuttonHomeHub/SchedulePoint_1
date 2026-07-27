@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  CURSOR_CHIP_H,
+  CURSOR_CHIP_TOP,
   edgeFanOutFor,
   paintInteractionLayer,
   paintScene,
+  TODAY_CHIP_H,
+  TODAY_CHIP_TOP,
   type TsldPalette,
   type TsldScene,
 } from './paint';
@@ -28,6 +32,7 @@ const PALETTE: TsldPalette = {
   selection: '#0af',
   nonWorking: '#222',
   today: '#f00',
+  todayInk: '#fff',
   conflict: '#fa0',
   laneOverlap: '#fa0',
   labelInside: '#fff',
@@ -400,6 +405,68 @@ describe('paintScene', () => {
     const none = mockCtx();
     paintScene(none, base, VIEW, SIZE, PALETTE);
     expect(none.setLineDash).not.toHaveBeenCalledWith([4, 3]);
+  });
+
+  // Isolates the TODAY marker from the grid layers (which also draw vertical moveTo/lineTo
+  // strokes at 12px/day), so its own moveTo x can be read back unambiguously.
+  const TODAY_ONLY = {
+    dayGrid: false,
+    monthGrid: false,
+    yearGrid: false,
+    today: true,
+    nonWorking: false,
+    labels: false,
+    lateOverlay: false,
+  } as const;
+
+  it('interpolates the TODAY line by todayFraction (F6a) — a fractional day shifts x by that fraction of a day-column', () => {
+    const base: TsldScene = { activities: [], edges: [], dataDate: DATA_DATE, view: TODAY_ONLY };
+    const integer = mockCtx();
+    paintScene(integer, { ...base, todayOffset: 5 }, VIEW, SIZE, PALETTE);
+    const half = mockCtx();
+    paintScene(half, { ...base, todayOffset: 5, todayFraction: 0.5 }, VIEW, SIZE, PALETTE);
+    const integerX = (integer.moveTo as ReturnType<typeof vi.fn>).mock.calls[0]![0] as number;
+    const halfX = (half.moveTo as ReturnType<typeof vi.fn>).mock.calls[0]![0] as number;
+    // Half a day at 12px/day (VIEW.pxPerDay) is a 6px shift.
+    expect(halfX - integerX).toBeCloseTo(6, 0);
+  });
+
+  it('draws the Today pill only when todayFraction is present (F6b) — flag-off keeps the plain line', () => {
+    const base: TsldScene = { activities: [], edges: [], dataDate: DATA_DATE, view: TODAY_ONLY };
+    // Flag-off: todayFraction absent → no pill fillRect/fillText, just the dashed line.
+    const flagOff = mockCtx();
+    paintScene(flagOff, { ...base, todayOffset: 5 }, VIEW, SIZE, PALETTE);
+    expect(flagOff.fillRect).not.toHaveBeenCalled();
+    expect(flagOff.fillText).not.toHaveBeenCalled();
+
+    // Flag-on: todayFraction present → the pill draws in the today hue, ink text on top.
+    const flagOn = mockCtx();
+    paintScene(flagOn, { ...base, todayOffset: 5, todayFraction: 0.25 }, VIEW, SIZE, PALETTE);
+    expect(flagOn.fillRect).toHaveBeenCalledWith(
+      expect.any(Number),
+      TODAY_CHIP_TOP,
+      expect.any(Number),
+      TODAY_CHIP_H,
+    );
+    expect(flagOn.fillText).toHaveBeenCalledWith('Today', expect.any(Number), expect.any(Number));
+  });
+
+  it('skips the pill when the ctx has no fillText/measureText (still draws the line)', () => {
+    const base: TsldScene = { activities: [], edges: [], dataDate: DATA_DATE, view: TODAY_ONLY };
+    const ctx = mockCtx();
+    // @ts-expect-error — simulate an environment without text support.
+    ctx.fillText = undefined;
+    // @ts-expect-error — simulate an environment without text support.
+    ctx.measureText = undefined;
+    paintScene(ctx, { ...base, todayOffset: 5, todayFraction: 0.25 }, VIEW, SIZE, PALETTE);
+    expect(ctx.stroke).toHaveBeenCalled();
+    expect(ctx.fillRect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Today pill and cursor chip geometrically disjoint (no future overlap)', () => {
+    // A future edit to either constant cannot silently reintroduce the collision this asserts.
+    expect(TODAY_CHIP_TOP).toBeGreaterThanOrEqual(CURSOR_CHIP_TOP + CURSOR_CHIP_H);
+    expect(TODAY_CHIP_TOP + TODAY_CHIP_H).toBeLessThanOrEqual(1000);
   });
 
   it('culls per-day gridlines at coarse zoom but keeps month/year lines', () => {

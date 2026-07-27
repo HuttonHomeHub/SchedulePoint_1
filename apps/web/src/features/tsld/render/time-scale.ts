@@ -279,3 +279,24 @@ export function isWorkingDay(
 ): boolean {
   return makeWorkingDayPredicate(dataDate, calendar)(dayOffset);
 }
+
+const MINUTE_MS = 60_000;
+const DAY_MS = 24 * 60 * 60_000;
+
+/**
+ * The viewer-**local** time-of-day fraction (0…1) for `nowMs` (a UTC epoch ms), for the Today
+ * marker's fractional x (F6a, `VITE_CANVAS_TIME_AXIS`). `tzOffsetMin` follows
+ * `Date.prototype.getTimezoneOffset()`'s convention (UTC = local + offset), so pass the live
+ * value at call time — it already reflects any DST transition. Quantised to a 60s step (so the
+ * result is stable across unrelated re-renders within the same minute); a non-finite input or an
+ * out-of-range result returns `undefined`, which the caller (and the painter) treats as "no
+ * fraction" — draw the whole-day integer offset instead, never a shifted line.
+ */
+export function todayDayFraction(nowMs: number, tzOffsetMin: number): number | undefined {
+  if (!Number.isFinite(nowMs) || !Number.isFinite(tzOffsetMin)) return undefined;
+  const quantised = Math.floor(nowMs / MINUTE_MS) * MINUTE_MS;
+  const localMs = quantised - tzOffsetMin * MINUTE_MS;
+  const fraction = (((localMs % DAY_MS) + DAY_MS) % DAY_MS) / DAY_MS;
+  if (!Number.isFinite(fraction) || fraction < 0 || fraction >= 1) return undefined;
+  return fraction;
+}

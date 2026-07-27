@@ -33,6 +33,9 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // A muted wash for non-working columns and the destructive hue for the today marker.
     nonWorking: token('--color-muted', '#20242d'),
     today: token('--color-destructive', '#c83c3c'),
+    // Today pill ink (F6b, `VITE_CANVAS_TIME_AXIS`) — paired with `today` the same way every other
+    // fill pairs with its `*-foreground` token.
+    todayInk: token('--color-destructive-foreground', '#ffffff'),
     // Visual-Planning conflict cue — the warning hue, drawn as a distinct triangle shape so it never
     // relies on colour alone (WCAG 1.4.1); shares the token with near-critical but a different shape.
     conflict: token('--color-warning', '#d29628'),
@@ -123,6 +126,7 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       selection: token('--color-ring', '#3b6fbf'),
       nonWorking: token('--color-muted', '#f0f0f0'),
       today: token('--color-destructive', '#c2331f'),
+      todayInk: token('--color-destructive-foreground', '#ffffff'),
       conflict: token('--color-warning', '#b58900'),
       laneOverlap: token('--color-warning', '#b58900'),
       labelInside: token('--color-primary-foreground', '#ffffff'),

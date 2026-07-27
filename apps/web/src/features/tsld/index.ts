@@ -25,3 +25,7 @@ export { barDateSourceFor, type BarDateSource } from './render/to-render-model';
 /** Coalesced keyboard lag nudge (ADR-0052 M3) — composed by the route into the Logic panel's
  * dependency rows (the dependencies keyboard surface), mirroring the duration nudge. */
 export { useCoalescedLagNudge } from './interaction/use-coalesced-lag-nudge';
+/** The Today marker's staleness tick (F6c, `VITE_CANVAS_TIME_AXIS`) + the pure fraction it drives
+ * the workspace model composes both so the marker never goes stale across a session. */
+export { useNow } from './render/use-now';
+export { todayDayFraction } from './render/time-scale';

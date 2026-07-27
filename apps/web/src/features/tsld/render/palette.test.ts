@@ -98,6 +98,19 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
   });
 });
 
+// ── Today pill ink palette entry (F6b, `VITE_CANVAS_TIME_AXIS`) ─────────────────────────
+describe('today marker pill ink (todayInk)', () => {
+  it('resolveTsldPalette pairs todayInk with today the same way labelInsideCritical pairs with critical', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.todayInk).toBe('#ffffff'); // --color-destructive-foreground fallback
+    expect(palette.todayInk).toBe(palette.labelInsideCritical);
+  });
+
+  it('resolvePrintPalette carries the same LIGHT fallback (total contract)', () => {
+    expect(resolvePrintPalette().todayInk).toBe('#ffffff');
+  });
+});
+
 // Self-contained oklch→luminance/contrast helpers shared by the token-mirror contrast suites
 // below (mirrors lenses.test.ts; token values mirror `styles/globals.css`).
 const oklchToLuminance = (L: number, C: number, H: number): number => {

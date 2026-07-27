@@ -164,6 +164,8 @@ vi.mock('@/features/tsld', () => ({
   },
   barDateSourceFor: () => 'early',
   useCoalescedLagNudge: () => vi.fn(),
+  useNow: () => 0,
+  todayDayFraction: () => undefined,
 }));
 
 // Schedule: stub the summary strip + the recalc/summary hooks the toolbar builder reads.

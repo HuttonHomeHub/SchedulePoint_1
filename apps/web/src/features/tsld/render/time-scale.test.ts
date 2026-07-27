@@ -20,6 +20,7 @@ import {
   pxPerDayForPreset,
   rulerTicks,
   stepZoom,
+  todayDayFraction,
   zoomToPreset,
   ZOOM_LEVELS,
   type WorkingDayCalendar,
@@ -249,5 +250,48 @@ describe('isWorkingDay', () => {
       exceptions: new Map([[addCalendarDays(DATA_DATE, firstOff), true]]),
     };
     expect(isWorkingDay(firstOff, DATA_DATE, worked)).toBe(true);
+  });
+});
+
+describe('todayDayFraction', () => {
+  it('is 0.5 at local noon (UTC, no offset)', () => {
+    const noonUtc = Date.UTC(2026, 2, 16, 12, 0, 0);
+    expect(todayDayFraction(noonUtc, 0)).toBeCloseTo(0.5, 6);
+  });
+
+  it('is 0 at local midnight (UTC, no offset)', () => {
+    const midnightUtc = Date.UTC(2026, 2, 16, 0, 0, 0);
+    expect(todayDayFraction(midnightUtc, 0)).toBe(0);
+  });
+
+  it('is just under 1 one minute before local midnight', () => {
+    const almostMidnight = Date.UTC(2026, 2, 16, 23, 59, 0);
+    expect(todayDayFraction(almostMidnight, 0)).toBeCloseTo(1439 / 1440, 6);
+  });
+
+  it('crosses the day boundary forward for a negative tz offset (UTC+1)', () => {
+    // tzOffsetMin follows getTimezoneOffset()'s convention: UTC = local + offset, so a negative
+    // offset means local is AHEAD of UTC. At UTC midnight, UTC+1 local time is 01:00.
+    const utcMidnight = Date.UTC(2026, 2, 16, 0, 0, 0);
+    expect(todayDayFraction(utcMidnight, -60)).toBeCloseTo(1 / 24, 6);
+  });
+
+  it('crosses the day boundary backward for a positive tz offset (UTC-5)', () => {
+    // A positive offset means local is BEHIND UTC. At UTC 00:30, UTC-5 local time is 19:30 the
+    // previous day — the modulo wrap must land on the previous day's fraction, not go negative.
+    const utcHalfPastMidnight = Date.UTC(2026, 2, 16, 0, 30, 0);
+    expect(todayDayFraction(utcHalfPastMidnight, 300)).toBeCloseTo(1170 / 1440, 6);
+  });
+
+  it('quantises to a 60s step — two instants in the same minute agree', () => {
+    const base = Date.UTC(2026, 2, 16, 10, 15, 0);
+    expect(todayDayFraction(base, 0)).toBe(todayDayFraction(base + 45_000, 0));
+  });
+
+  it('returns undefined for non-finite nowMs or tzOffsetMin', () => {
+    expect(todayDayFraction(NaN, 0)).toBeUndefined();
+    expect(todayDayFraction(Infinity, 0)).toBeUndefined();
+    expect(todayDayFraction(Date.now(), NaN)).toBeUndefined();
+    expect(todayDayFraction(Date.now(), Infinity)).toBeUndefined();
   });
 });
