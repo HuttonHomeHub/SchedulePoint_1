@@ -56,7 +56,13 @@ describe('RecycleBinService', () => {
     expect(repo.findDeletedPage).not.toHaveBeenCalled();
   });
 
-  it('merges the three tables newest-deleted first and maps canRestore from parent state', async () => {
+  /**
+   * The service no longer sorts: the repository's `UNION ALL … ORDER BY … LIMIT` returns the page
+   * already in total order (TECH_DEBT #22). So what matters here is that the service PRESERVES that
+   * order rather than imposing its own — a re-sort would be invisible on correctly-ordered input,
+   * which is why the fixture is deliberately NOT in `deletedAt` order.
+   */
+  it('preserves the repository order and maps canRestore from parent state', async () => {
     repo.findDeletedPage.mockResolvedValue([
       row({
         kind: 'plan',
@@ -85,9 +91,9 @@ describe('RecycleBinService', () => {
       limit: 20,
     });
 
-    expect(items.map((i) => i.id)).toEqual(['c1', 'pr1', 'p1']); // deletedAt desc
-    expect(items[0]).toMatchObject({ kind: 'client', name: 'Acme', canRestore: true });
-    expect(items[2]).toMatchObject({ kind: 'plan', canRestore: false });
+    expect(items.map((i) => i.id)).toEqual(['p1', 'c1', 'pr1']);
+    expect(items[1]).toMatchObject({ kind: 'client', name: 'Acme', canRestore: true });
+    expect(items[0]).toMatchObject({ kind: 'plan', canRestore: false });
     expect(meta).toEqual({ nextCursor: null, hasMore: false });
   });
 

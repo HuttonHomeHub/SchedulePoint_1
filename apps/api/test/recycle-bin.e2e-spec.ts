@@ -184,6 +184,46 @@ describe.skipIf(!hasDatabase)('Recycle bin API (e2e)', () => {
     expect(new Set(seen)).toEqual(new Set(ids));
   });
 
+  /**
+   * The union's hard case, and the reason the merge moved into one `UNION ALL` query
+   * (TECH_DEBT #22). A cascade stamps the client, its project and its plan with ONE
+   * `deleted_at`, so ordering falls entirely to the id tiebreaker — and every page
+   * boundary lands mid-batch, across three different tables. Page one row at a time
+   * so the `deleted_at = cursor AND id > cursorId` branch is exercised on each.
+   */
+  it('pages one row at a time through a same-instant cascade spanning all three tables', async () => {
+    const { actor } = await adminWithOrg();
+    const clientId = await createClient(actor, 'Northgate');
+    const projectId = await createProject(actor, clientId, 'Riverside');
+    const planId = await createPlan(actor, projectId, 'Baseline');
+    await actor.agent.delete(`/api/v1/organizations/acme/clients/${clientId}`).expect(204);
+
+    const seen: DeletedItem[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 5; page += 1) {
+      const suffix: string = cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+      const res = await actor.agent
+        .get(`/api/v1/organizations/acme/deleted?limit=1${suffix}`)
+        .expect(200);
+      // Exactly the page size asked for — never a partial page while more remain.
+      expect(res.body.data).toHaveLength(1);
+      seen.push(res.body.data[0] as DeletedItem);
+      if (!res.body.meta.hasMore) break;
+      cursor = res.body.meta.nextCursor as string;
+    }
+
+    // All three rows, each exactly once, in the same total order the unpaged read gives.
+    const whole = await actor.agent.get('/api/v1/organizations/acme/deleted').expect(200);
+    expect(seen.map((i) => i.id)).toEqual((whole.body.data as DeletedItem[]).map((i) => i.id));
+    expect(new Set(seen.map((i) => i.id))).toEqual(new Set([clientId, projectId, planId]));
+
+    // The restorability join survives the union: only the cascade root can come back.
+    const byId = Object.fromEntries(seen.map((i) => [i.id, i]));
+    expect(byId[clientId]?.canRestore).toBe(true);
+    expect(byId[projectId]?.canRestore).toBe(false);
+    expect(byId[planId]?.canRestore).toBe(false);
+  });
+
   it('scopes the bin to the caller — outsiders and non-members see nothing/404', async () => {
     const { actor } = await adminWithOrg();
     const clientId = await createClient(actor, 'Northgate');
