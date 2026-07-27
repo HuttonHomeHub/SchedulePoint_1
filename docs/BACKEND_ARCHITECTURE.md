@@ -4,8 +4,10 @@
 > architecture the API (`apps/api`) follows. The reusable infrastructure (config,
 > Prisma, guards, filters, interceptors, health, bootstrap) is live in
 > `apps/api/src/`; the **feature** patterns are demonstrated by the non-shipping
-> template in [`apps/api/examples/reference-feature/`](../apps/api/examples/reference-feature/)
-> (ADR-0014). Backed by ADRs [0008](adr/0008-backend-modular-monolith.md)–[0014](adr/0014-reference-feature-as-non-shipping-template.md)
+> real exemplars — [`modules/clients`](../apps/api/src/modules/clients/),
+> [`modules/notes`](../apps/api/src/modules/notes/),
+> [`modules/share`](../apps/api/src/modules/share/) (ADR-0057). Backed by ADRs
+> [0008](adr/0008-backend-modular-monolith.md)–[0014](adr/0014-reference-feature-as-non-shipping-template.md)
 > and [0003](adr/0003-authentication-with-better-auth.md).
 
 ## Guiding principles

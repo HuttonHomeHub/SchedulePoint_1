@@ -22,7 +22,7 @@ criteria) and, if it shapes the product, reflect it in [ROADMAP.md](ROADMAP.md).
   scaffolder) to create a feature from the template automatically, instead of
   copy-and-adapt (ADR-0015 alternative).
 - `S` Add a runnable **frontend** feature template (once the web app boots) that
-  mirrors the backend template, so `docs/REFERENCE_FEATURE.md`'s frontend section
+  mirrors the backend standard, so `docs/REFERENCE_FEATURE.md`'s frontend section
   is CI-verified too.
 - `M` Centralise the soft-delete filter via a Prisma client extension (so it's
   enforced globally, not per-repository) once a second model exists.

@@ -29,9 +29,8 @@ browser-native team use. See the full product context in
 > What is **not** built: the Gantt view (the one remaining Must-have in
 > [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8), and the deployment target
 > is still undecided. New work still follows the delivery process (§21) and the
-> reference template (§12, ADR-0015) — though whether that template still earns
-> its keep against 19 real modules is itself an open question
-> ([`docs/TECH_DEBT.md`](docs/TECH_DEBT.md) #6).
+> implementation standard (§12), which is now demonstrated by real modules
+> rather than by a template to copy (ADR-0057).
 >
 > SchedulePoint is **multi-tenant**: users belong to one or more
 > **organisations**; clients, projects, plans and their activities are
@@ -214,15 +213,16 @@ The backend is designed to last a decade. Governing documents:
   health/readiness, metrics, tracing.
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — caching, async, query
   optimisation, scalability.
-- [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md) — the non-shipping
-  feature **template** (`apps/api/examples/reference-feature/`, ADR-0014).
+- [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md) — the implementation
+  standard, and the real modules that exemplify it (ADR-0057).
 
 Essentials: NestJS modular monolith; **thin controllers → services → Prisma**;
 **deny-by-default** auth with **RBAC + resource (organisation) scoping**; validated
 DTOs; standard `{ data, meta }` / `{ error }` envelopes; **soft deletes,
 auditing, optimistic locking**; structured logs with correlation IDs. When
-building a feature, copy the non-shipping reference template in
-`apps/api/examples/reference-feature/` (ADR-0014). **Security is on by default.**
+building a feature, start from the nearest exemplar — `modules/clients` for the
+canonical shape, `modules/notes` for cascades, `modules/share` for an auth
+boundary (ADR-0057). **Security is on by default.**
 
 ## 13. Accessibility requirements
 
@@ -680,6 +680,17 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   raised zoom ceiling through a required `maxPxPerDay` parameter (so it can never leak into the
   flag-off path — a component-review finding), then flipped the flag default-on.
 
+- **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
+  `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
+  template job, superseding ADR-0014/0015. With 19 real modules built to the
+  standard, a synthetic `ReferenceItem` taught less than the code it modelled while
+  costing a standing "keep it in step" obligation and a working-tree-mutating verify
+  script (which destroyed uncommitted work once, TECH_DEBT #52). `docs/REFERENCE_FEATURE.md`
+  keeps the standard and now names three exemplars — `modules/clients` (canonical
+  shape), `modules/notes` (cascade + polymorphic parent), `modules/share` (auth
+  boundary). "Must copy the template" becomes "must match the standard"; divergence
+  still needs an ADR.
+
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -711,14 +722,14 @@ When operating in this repo, Claude Code should:
    follow the delivery process (§21, [`docs/PROCESS.md`](docs/PROCESS.md)):
    understand → design → plan → **get approval** → build. Use the
    **feature-analyst** agent to produce the spec + plan.
-2. **Build features from the reference template.** New features are created by
-   copying the canonical template (`apps/api/examples/reference-feature/`) and
-   adapting it — see [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md).
-   **Do not diverge from its cross-cutting patterns** (layering
-   controller→service→repository, deny-by-default auth + permission/scope checks,
-   standard envelopes, DB standards, tests) **without a documented architectural
-   reason — an ADR** (ADR-0015). Keep the template in step when you change a
-   cross-cutting standard (`scripts/verify-template.sh` enforces it in CI).
+2. **Build features to the implementation standard.** Match the layering
+   (controller → service → repository), deny-by-default auth with permission and
+   org-scope checks, standard envelopes, DB standards and tests described in
+   [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md), starting from the
+   nearest real exemplar (`modules/clients`, `modules/notes`, `modules/share`).
+   **Do not diverge from those cross-cutting patterns without a documented
+   architectural reason — an ADR** (ADR-0057, superseding ADR-0015). There is no
+   template to keep in step: the exemplars are real modules under real tests.
 3. **Prefer the smallest change that fully solves the task.** Do not scaffold
    application features unless explicitly asked.
 4. **Match existing conventions** (this file + `docs/`). If a convention is

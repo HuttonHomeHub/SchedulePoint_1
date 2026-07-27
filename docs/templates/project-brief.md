@@ -95,7 +95,7 @@ baseline. Anything that deviates from the base stack/architecture needs an ADR.
 
 <!-- The key nouns and their relationships — a rough data-model sketch (a bullet
      list or a small Mermaid ERD). Drives the database-architect agent and which
-     copies of the reference-feature template you make. Snake_case DB columns,
+     features you build to the implementation standard. Snake_case DB columns,
      UUID v7, timestamptz, soft delete + audit + optimistic locking come from
      the base (docs/DATABASE.md) — you don't need to restate those here. -->
 

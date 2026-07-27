@@ -154,9 +154,10 @@ Every implementation must:
 - **Update documentation** touched by the change (docs/, READMEs).
 - **Update relevant ADRs**; add a new ADR for architectural change.
 - **Update `CLAUDE.md`** if project knowledge/standards change.
-- **Build from the reference template.** New features are created by copying the
-  canonical template (`docs/REFERENCE_FEATURE.md`,
-  `apps/api/examples/reference-feature/`); diverging from its cross-cutting
+- **Build to the implementation standard.** New features match the layering,
+  auth, envelopes, DB standards and tests in `docs/REFERENCE_FEATURE.md`,
+  starting from the nearest real exemplar (`modules/clients`, `modules/notes`,
+  `modules/share` — ADR-0057); diverging from those cross-cutting
   patterns requires a documented ADR (ADR-0015). Use the specialised **agents**
   to design and review (see below).
 

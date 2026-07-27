@@ -40,7 +40,7 @@ documented standards) is still the substrate.
 3. Optionally rename the `@repo/*` package scope to your own.
 4. Replace this README, `CLAUDE.md` §1, `docs/ROADMAP.md`, and `docs/BACKLOG.md`
    with your application's content.
-5. Build your first feature from the reference template
+5. Build features to the implementation standard
    ([`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md)) via the delivery
    process ([`docs/PROCESS.md`](docs/PROCESS.md)).
 
@@ -117,7 +117,7 @@ docker compose up -d
 | [`docs/SECURITY_STANDARDS.md`](docs/SECURITY_STANDARDS.md)       | Security engineering standards             |
 | [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)                 | Logging, metrics, tracing, health          |
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)                     | Performance & scalability standards        |
-| [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md)         | The canonical backend feature template     |
+| [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md)         | The backend implementation standard        |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md)                 | Design tokens, theming, components         |
 | [`docs/UX_STANDARDS.md`](docs/UX_STANDARDS.md)                   | Project-wide UX principles                 |
 | [`docs/COMPONENT_LIBRARY.md`](docs/COMPONENT_LIBRARY.md)         | Component guidelines & lifecycle           |

@@ -1,8 +1,8 @@
 # API conventions
 
 > The conventions every endpoint must follow. Demonstrated by the reference
-> template ([`docs/REFERENCE_FEATURE.md`](REFERENCE_FEATURE.md),
-> `apps/api/examples/reference-feature/`) and wired globally per
+> implementation standard ([`docs/REFERENCE_FEATURE.md`](REFERENCE_FEATURE.md))
+> and wired globally per
 > [`BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md). Keep this in step with
 > the OpenAPI document (`@nestjs/swagger`, served at `/api/docs` outside prod).
 > Request models are `class-validator` DTOs; response models are explicit DTOs

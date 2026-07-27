@@ -54,29 +54,6 @@ jobs:
       - name: Build (api + web)
         run: pnpm build
 
-  template:
-    name: Verify feature template
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Materialise, type-check, and unit-test the canonical reference template
-      # so it can never silently rot (see docs/REFERENCE_FEATURE.md, ADR-0015).
-      - name: Verify reference template
-        run: bash scripts/verify-template.sh
-
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest

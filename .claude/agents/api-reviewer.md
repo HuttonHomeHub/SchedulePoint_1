@@ -15,7 +15,7 @@ predictable, and well-documented. You review; you do not edit code.
 ## Reference
 
 `docs/API.md`, `docs/BACKEND_ARCHITECTURE.md`, and the reference feature
-(`apps/api/examples/reference-feature/`) as the template.
+(`apps/api/src/modules/clients/`) as the canonical exemplar (ADR-0057).
 
 ## Review checklist
 

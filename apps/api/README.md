@@ -1,36 +1,34 @@
 # @repo/api
 
-The Blank App REST API: **NestJS 11 + TypeScript**, **Prisma** ORM over **PostgreSQL**,
+The SchedulePoint REST API: **NestJS 11 + TypeScript**, **Prisma** ORM over **PostgreSQL**,
 authentication via **Better Auth**, and an **OpenAPI** contract generated with
 `@nestjs/swagger`.
 
-> **Status:** the architecture and cross-cutting infrastructure are implemented
-> and the API boots (health/readiness, OpenAPI, Prisma, logging). **No
-> business/domain features exist yet**, and the schema has **no models** — the
-> first feature writes the first migration. Build features by copying the
-> **non-shipping reference template** in
-> [`examples/reference-feature/`](examples/reference-feature/) — see
-> [`docs/REFERENCE_FEATURE.md`](../../docs/REFERENCE_FEATURE.md) and ADR-0014.
-> Authentication is a seam that denies by default (401) until Better Auth is
-> wired (when you add authentication).
+> **Status:** built and shipping. 19 feature modules under `src/modules/`, 25
+> Prisma models across 41 migrations, 28 Supertest e2e specs, and a CPM/GPM
+> scheduling engine whose conformance matrix is closed (ADR-0034).
+> Authentication is wired (Better Auth, cookie sessions) and every route denies
+> by default. Build features to the implementation standard in
+> [`docs/REFERENCE_FEATURE.md`](../../docs/REFERENCE_FEATURE.md), starting from
+> the nearest exemplar — `modules/clients` for the canonical shape (ADR-0057).
 
 ## Structure
 
 ```text
 src/
   main.ts             # Nest bootstrap (Helmet, versioning, Swagger, CORS, logging)
+  app-setup.ts        # Shared HTTP app configuration (reused by e2e specs)
   app.module.ts       # Root module: global logging, rate limit, validation, guards
-  common/             # Cross-cutting: auth, guards, filters, interceptors, decorators, errors
+  common/             # Cross-cutting: auth, guards, filters, interceptors, db locks, hierarchy
   config/             # Typed, Zod-validated configuration
   prisma/             # PrismaService + module
   health/             # Liveness/readiness probes (@nestjs/terminus)
-  modules/            # Feature modules (empty until the first real feature)
+  version/            # Build/version endpoint
+  modules/            # 19 feature modules — see docs/REFERENCE_FEATURE.md for the exemplars
 prisma/
-  schema.prisma       # Datasource + generator (no models yet)
-  migrations/         # SQL migrations (none yet — first feature adds the first)
-test/                 # Supertest end-to-end specs (*.e2e-spec.ts)
-examples/
-  reference-feature/  # Non-shipping TEMPLATE to copy (not compiled or shipped)
+  schema.prisma       # Datasource, generator, 25 models
+  migrations/         # 41 SQL migrations
+test/                 # 28 Supertest end-to-end specs (*.e2e-spec.ts)
 ```
 
 ## Scripts
