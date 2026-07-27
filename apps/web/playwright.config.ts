@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// End-to-end test configuration for the Blank App web client.
+// End-to-end test configuration for the SchedulePoint web client.
 // The dev server is started automatically when running locally; in CI the
 // preview build is served instead.
 export default defineConfig({

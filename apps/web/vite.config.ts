@@ -12,7 +12,7 @@ const { version: appVersion } = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
-// Vite configuration for the Blank App web client.
+// Vite configuration for the SchedulePoint web client.
 // Tailwind CSS v4 is wired in via its first-party Vite plugin (no PostCSS config needed).
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(appVersion) },

@@ -1,11 +1,11 @@
 <div align="center">
 
-# 🧱 Blank App
+# 📐 SchedulePoint
 
-**A production-grade monorepo starter for building applications.**
+**Browser-based construction scheduling, built around a Time-Scaled Logic Diagram.**
 
-[![CI](https://github.com/HuttonHomeHub/blank-app/actions/workflows/ci.yml/badge.svg)](https://github.com/HuttonHomeHub/blank-app/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/HuttonHomeHub/blank-app/actions/workflows/codeql.yml/badge.svg)](https://github.com/HuttonHomeHub/blank-app/actions/workflows/codeql.yml)
+[![CI](https://github.com/HuttonHomeHub/SchedulePoint_1/actions/workflows/ci.yml/badge.svg)](https://github.com/HuttonHomeHub/SchedulePoint_1/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/HuttonHomeHub/SchedulePoint_1/actions/workflows/codeql.yml/badge.svg)](https://github.com/HuttonHomeHub/SchedulePoint_1/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Conventional Commits](https://img.shields.io/badge/Commits-Conventional-fe5196.svg)](https://www.conventionalcommits.org)
 
@@ -13,7 +13,7 @@
 
 > **Project status: SchedulePoint is substantially built.** 19 API modules, 25
 > Prisma models across 41 migrations, a React client with 15 flag-scoped
-> Playwright suites, and 56 ADRs. The CPM/GPM engine is real and its conformance
+> Playwright suites, and 57 ADRs. The CPM/GPM engine is real and its conformance
 > matrix is closed (ADR-0034). The main gap is the Gantt view; the deployment
 > target is still undecided. See the [roadmap](docs/ROADMAP.md) and
 > [project brief](docs/PROJECT_BRIEF.md).
@@ -26,23 +26,16 @@ planners actually use — four dependency types with lag, calendars, constraints
 progress, floats, baselines and resources — with a live critical path and
 collaborative, browser-native team use.
 
-It grew out of a domain-neutral base repository, and the engineering foundation
-that came with it (TypeScript monorepo, strict tooling, CI/CD, containers,
-documented standards) is still the substrate.
+It grew out of a domain-neutral base repository, which is why packages are still
+scoped `@repo/*`; the engineering foundation that came with it (TypeScript
+monorepo, strict tooling, CI/CD, containers, documented standards) is still the
+substrate.
 
-### Using this as your base
-
-1. Fork/clone and rename the repo and the root `package.json` name.
-2. Replace the `HuttonHomeHub/blank-app` placeholders with your GitHub org/repo — they
-   appear in the README badges, [`CODEOWNERS`](.github/CODEOWNERS),
-   [`.changeset/config.json`](.changeset/config.json),
-   [`SECURITY.md`](SECURITY.md), and [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-3. Optionally rename the `@repo/*` package scope to your own.
-4. Replace this README, `CLAUDE.md` §1, `docs/ROADMAP.md`, and `docs/BACKLOG.md`
-   with your application's content.
-5. Build features to the implementation standard
-   ([`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md)) via the delivery
-   process ([`docs/PROCESS.md`](docs/PROCESS.md)).
+New here? Start with the [project brief](docs/PROJECT_BRIEF.md) for what the
+product is, [`CLAUDE.md`](CLAUDE.md) for how we work, and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the system is put
+together — including an explicit list of the things it deliberately does not
+have yet.
 
 ## ✨ Tech stack
 
@@ -59,13 +52,16 @@ documented standards) is still the substrate.
 
 ```text
 apps/
-  web/        React + Vite client        (@repo/web)
-  api/        NestJS REST API            (@repo/api)
+  web/                  React + Vite client              (@repo/web)
+  api/                  NestJS REST API                  (@repo/api)
+    src/modules/schedule/engine/   The pure CPM/GPM engine
 packages/
-  config/     Shared ESLint + tsconfig   (@repo/config)
-  types/      Shared cross-boundary types (@repo/types)
-docs/         Architecture, guides, ADRs, roadmap
-scripts/      Repository automation
+  config/               Shared ESLint + tsconfig         (@repo/config)
+  types/                Shared cross-boundary types      (@repo/types)
+  interchange/          XER/MSPDI canonical model        (@repo/interchange)
+  engine-conformance/   Engine-free conformance fixture  (@repo/engine-conformance)
+docs/                   Architecture, guides, ADRs, roadmap
+scripts/                Repository automation
 ```
 
 ## 🚀 Quick start
@@ -75,7 +71,7 @@ scripts/      Repository automation
 
 ```bash
 # 1. Clone and enter
-git clone https://github.com/HuttonHomeHub/blank-app.git && cd blank-app
+git clone https://github.com/HuttonHomeHub/SchedulePoint_1.git && cd SchedulePoint_1
 
 # 2. Bootstrap (installs deps, creates .env, starts Postgres)
 ./scripts/setup.sh
@@ -108,6 +104,7 @@ docker compose up -d
 
 | Document                                                         | Purpose                                    |
 | ---------------------------------------------------------------- | ------------------------------------------ |
+| [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md)                 | What SchedulePoint is: vision and scope    |
 | [`CLAUDE.md`](CLAUDE.md)                                         | Project operating manual (source of truth) |
 | [`docs/PROCESS.md`](docs/PROCESS.md)                             | How features go from idea to shipped       |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)                   | System design and boundaries               |
@@ -140,4 +137,4 @@ our [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) first. All commits follow
 
 ## 📄 License
 
-[MIT](LICENSE) © The Blank App authors
+[MIT](LICENSE) © The SchedulePoint authors

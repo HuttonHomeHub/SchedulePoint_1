@@ -1,8 +1,8 @@
 {
-  "name": "blank-app",
+  "name": "schedulepoint",
   "version": "0.1.0",
   "private": true,
-  "description": "Blank App — a production-grade monorepo starter (Turborepo + pnpm) for building applications.",
+  "description": "SchedulePoint \u2014 browser-based construction scheduling built around a Time-Scaled Logic Diagram.",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.4.1",

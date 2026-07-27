@@ -1,6 +1,6 @@
 # @repo/web
 
-The Blank App web client: **React 19 + TypeScript + Vite**, styled with **Tailwind CSS v4**
+The SchedulePoint web client: **React 19 + TypeScript + Vite**, styled with **Tailwind CSS v4**
 and **shadcn/ui** components, using **Lucide** icons.
 
 > **Status:** foundation only. No application features are implemented yet.
