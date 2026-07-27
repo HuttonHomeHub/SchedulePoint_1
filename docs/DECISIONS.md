@@ -10,6 +10,29 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — A dialog closes only on its own close event
+
+**Decision.** The `Dialog` primitive compares `event.target` to its own element before calling
+`onClose`, for both `close` and `cancel`. TECH_DEBT #50 closed; the reopen-the-parent workaround
+comes out of the share-links e2e, and a new `dialog.test.tsx` pins the nesting.
+
+**Why it happened.** `close` does not bubble, so the nesting looked safe. But React listens at the
+root in the **capture** phase, and capture reaches every ancestor on the way _down_ — bubbling or
+not. The inner dialog's close was therefore delivered to the outer dialog's handler, and confirming
+a share-link revoke or a baseline delete tore down the dialog that had launched the confirmation.
+
+**Why in the primitive.** The alternative on the register was portalling `ConfirmDialog` outside the
+parent's subtree. Comparing the target is smaller, needs no portal target or focus-restoration
+rework, and fixes every nesting — including ones nobody has written yet — rather than the two that
+had been noticed. `ConfirmDialog` is built on `Dialog`, so one guard covers both.
+
+**Consequence.** A dialog's `onClose` now means "this dialog closed", which is what every call site
+already assumed. The regression test asserts the parent survives **and** that `onOuterClose` was
+never called — the second half matters, because a parent that merely re-renders open would pass a
+visual check while still firing its host's close side effects.
+
+---
+
 ### 2026-07-27 — A list declares `order` only if it honours it
 
 **Decision.** `order` comes off the shared `PaginationQueryDto` and moves onto `ListBaselinesQueryDto`,

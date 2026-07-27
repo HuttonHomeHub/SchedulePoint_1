@@ -95,20 +95,17 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
       .violations,
   ).toEqual([]);
 
-  // (4) Back in the member context, revoke the link. NOTE: confirming the nested `ConfirmDialog` closes
-  // the whole `Share links` dialog too (both are native `<dialog>` elements, and the inner one's
-  // non-bubbling "close" event is still observed by the outer dialog's `onClose` during the capture
-  // phase — a pre-existing pattern shared with `BaselinesPanel`'s own nested delete-confirm, not
-  // something specific to this suite) — so reopen Share… afterwards to see the row's revoked state.
+  // (4) Back in the member context, revoke the link. Confirming the nested `ConfirmDialog` leaves the
+  // `Share links` dialog standing — the `Dialog` primitive ignores a `close` event whose target is a
+  // descendant dialog (TECH_DEBT #50, fixed) — so the revoked state is visible without reopening.
   await dialog.getByRole('button', { name: 'Revoke Client review' }).click();
   const confirmDialog = page.getByRole('alertdialog', { name: 'Revoke share link' });
   await expect(confirmDialog).toBeVisible();
   await confirmDialog.getByRole('button', { name: 'Revoke' }).click();
-  await expect(page.getByRole('dialog', { name: 'Share links' })).toBeHidden();
+  await expect(confirmDialog).toBeHidden();
 
-  await toolbar.getByRole('button', { name: 'Share…' }).click();
-  const reopenedDialog = page.getByRole('dialog', { name: 'Share links' });
-  await expect(reopenedDialog.getByText('Revoked').first()).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('Revoked').first()).toBeVisible();
 
   // Revocation is immediate: reloading the guest context's exact same URL now shows the uniform
   // "no longer available" message (no existence oracle for a dead token).
