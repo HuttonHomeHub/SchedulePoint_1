@@ -70,6 +70,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
+  CANVAS_TIME_AXIS_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
 } from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -734,7 +735,11 @@ export function TsldCanvas({
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
   // sites only). Kept off the per-frame path since pan never changes pxPerDay.
   const reportZoomStop = (): void => {
-    const level = presetOf(viewRef.current.pxPerDay);
+    const level = presetOf(
+      viewRef.current.pxPerDay,
+      sizeRef.current.width,
+      CANVAS_TIME_AXIS_ENABLED,
+    );
     if (level !== lastStopRef.current) {
       lastStopRef.current = level;
       onZoomStopChangeRef.current?.(level);
@@ -745,7 +750,12 @@ export function TsldCanvas({
     controlRef,
     () => ({
       zoomToPreset: (level: ZoomLevel) => {
-        viewRef.current = zoomToPreset(viewRef.current, sizeRef.current, level);
+        viewRef.current = zoomToPreset(
+          viewRef.current,
+          sizeRef.current,
+          level,
+          CANVAS_TIME_AXIS_ENABLED,
+        );
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();

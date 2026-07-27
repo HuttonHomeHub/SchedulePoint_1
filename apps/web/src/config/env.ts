@@ -840,3 +840,17 @@ export const DESIGNED_CHROME_ENABLED = flagDefaultOn(import.meta.env.VITE_DESIGN
 export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_VISUAL_LANGUAGE,
 );
+
+/**
+ * TSLD time-axis legibility (spec `docs/specs/tsld-toolbar-canvas-refinements/`, M2–M5).
+ * **OFF by default** — gates range-anchored zoom presets (M2), tiered gridlines (M3), the
+ * interpolated Today marker + pill (M4) and ground-vs-non-working shading (M5) while those
+ * milestones land; flips on at M7 once the whole diff has cleared its specialist review
+ * pass. Set `VITE_CANVAS_TIME_AXIS=true` to opt in ahead of that flip.
+ *
+ * Frontend-only: every input (zoom scale, calendar boundaries, `todayIso`) is already on the
+ * wire — no API, DTO, schema or engine change, and no path back into `computeSchedule`. Flag-off
+ * is byte-for-byte today's zoom/grid/today/non-working surface (`ZOOM_STOPS`, the single grid
+ * pass, whole-day today, the flat non-working fill).
+ */
+export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOff(import.meta.env.VITE_CANVAS_TIME_AXIS);

@@ -250,9 +250,46 @@ export const ZOOM_STOPS = {
 
 export type ZoomLevel = keyof typeof ZOOM_STOPS;
 
+/**
+ * Range-anchored zoom presets (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F3): the
+ * **nominal** visible-range target each preset frames, independent of canvas width. "Nominal"
+ * because the viewport is a continuous px-per-day scale — "one month visible" is a duration, not
+ * a calendar-exact span (a real month is 28–31 days; this uses 30 for all twelve). Consumed by
+ * `time-scale.ts#pxPerDayForPreset`; flag-off keeps the fixed `ZOOM_STOPS` table above.
+ */
+export const ZOOM_TARGET_DAYS = {
+  day: 14,
+  week: 30,
+  month: 91,
+  quarter: 365,
+  year: 1095,
+} as const satisfies Record<ZoomLevel, number>;
+
+/**
+ * Human-readable range label for each preset, kept **beside** {@link ZOOM_TARGET_DAYS} (not
+ * hand-typed at the toolbar call site) so the two can't drift apart. Used only in the `View▾`
+ * zoom menu's row copy ("Day — 2 weeks"); the toolbar trigger keeps the short preset name alone
+ * (it is width-constrained).
+ */
+export const ZOOM_RANGE_LABELS = {
+  day: '2 weeks',
+  week: '1 month',
+  month: '3 months',
+  quarter: '1 year',
+  year: '3 years',
+} as const satisfies Record<ZoomLevel, string>;
+
 /** Inclusive px-per-day bounds (a day column never narrower/wider than this). */
 export const MIN_PX_PER_DAY = 0.4;
-export const MAX_PX_PER_DAY = 60;
+/**
+ * Raised 60 → 200 for `VITE_CANVAS_TIME_AXIS`'s Day preset (2 weeks visible): a 1 600 px canvas
+ * needs 114 px/day, a 2 560 px canvas needs 183 — both above the old bound, which would make the
+ * headline preset silently miss its own contract at ordinary desktop widths. 200 covers 2 560 px
+ * with headroom. Safe to raise: every LOD threshold gated on `pxPerDay` (`DAY_GRID_MIN_PX`,
+ * `NON_WORKING_MIN_PX`, `DAY_ROW_MIN_PX_PER_DAY`, …) is a **lower** bound, so widening the top of
+ * the range destabilises nothing below it.
+ */
+export const MAX_PX_PER_DAY = 200;
 
 /**
  * The viewport transform. `pxPerDay` is the zoom; `originX`/`originY` are the screen

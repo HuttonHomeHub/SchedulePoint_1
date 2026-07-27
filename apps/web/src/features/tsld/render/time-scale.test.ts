@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addCalendarDays,
+  MAX_PX_PER_DAY,
   screenXOfDay,
   ZOOM_STOPS,
+  ZOOM_TARGET_DAYS,
   type Size,
   type Viewport,
+  type ZoomLevel,
 } from './render-model';
 import {
   calendarBoundaries,
@@ -14,38 +17,108 @@ import {
   isAtPreset,
   isWorkingDay,
   presetOf,
+  pxPerDayForPreset,
   rulerTicks,
   stepZoom,
   zoomToPreset,
+  ZOOM_LEVELS,
   type WorkingDayCalendar,
 } from './time-scale';
 
 const SIZE: Size = { width: 800, height: 400 };
 const DATA_DATE = '2026-03-16';
 
-describe('presetOf', () => {
-  it('maps each stop to itself', () => {
-    expect(presetOf(ZOOM_STOPS.day)).toBe('day');
-    expect(presetOf(ZOOM_STOPS.week)).toBe('week');
-    expect(presetOf(ZOOM_STOPS.month)).toBe('month');
-    expect(presetOf(ZOOM_STOPS.quarter)).toBe('quarter');
-    expect(presetOf(ZOOM_STOPS.year)).toBe('year');
+describe('presetOf — flag-off (width-independent, ZOOM_STOPS)', () => {
+  it('maps each stop to itself, regardless of the width passed in', () => {
+    for (const width of [320, 800, 2560]) {
+      expect(presetOf(ZOOM_STOPS.day, width, false)).toBe('day');
+      expect(presetOf(ZOOM_STOPS.week, width, false)).toBe('week');
+      expect(presetOf(ZOOM_STOPS.month, width, false)).toBe('month');
+      expect(presetOf(ZOOM_STOPS.quarter, width, false)).toBe('quarter');
+      expect(presetOf(ZOOM_STOPS.year, width, false)).toBe('year');
+    }
   });
 
   it('picks the nearest stop for an in-between scale (log distance)', () => {
-    expect(presetOf(30)).toBe('day'); // between week(14) and day(40), closer to day
-    expect(presetOf(1)).toBe('year'); // between quarter(2) and year(0.7), closer to year
+    expect(presetOf(30, SIZE.width, false)).toBe('day'); // between week(14) and day(40), closer to day
+    expect(presetOf(1, SIZE.width, false)).toBe('year'); // between quarter(2) and year(0.7), closer to year
+  });
+});
+
+describe('pxPerDayForPreset', () => {
+  it('round-trips through presetOf for every preset × a range of widths (the F3 gate)', () => {
+    for (const width of [800, 1280, 1366, 1440, 1600, 1920, 2560]) {
+      for (const level of ZOOM_LEVELS) {
+        const px = pxPerDayForPreset(level, width);
+        expect(presetOf(px, width, true)).toBe(level);
+      }
+    }
+  });
+
+  it('frames within ±10% of the nominal target range at ordinary widths (800-2560px)', () => {
+    for (const width of [800, 1280, 1600, 1920, 2560]) {
+      for (const level of ZOOM_LEVELS) {
+        const px = pxPerDayForPreset(level, width);
+        // Only meaningful where the clamp doesn't bind — Year clamps below ~440px (documented
+        // residual), and these widths are all above that.
+        const visibleDays = width / px;
+        expect(visibleDays).toBeGreaterThanOrEqual(ZOOM_TARGET_DAYS[level] * 0.9);
+        expect(visibleDays).toBeLessThanOrEqual(ZOOM_TARGET_DAYS[level] * 1.1);
+      }
+    }
+  });
+
+  it('clamps at both ends rather than exceeding the legal scale bounds', () => {
+    // Day (14d target) on a 2560px canvas would need ~183px/day — comfortably under the 200 cap.
+    expect(pxPerDayForPreset('day', 2560)).toBeLessThanOrEqual(MAX_PX_PER_DAY);
+    // Year (1095d target) on a narrow canvas clamps to MIN_PX_PER_DAY rather than going negative.
+    expect(pxPerDayForPreset('year', 320)).toBeGreaterThanOrEqual(0.4);
+  });
+
+  it('documents the residual clamp below ~440px: Year frames less than its 3-year target', () => {
+    const px = pxPerDayForPreset('year', 320);
+    const visibleDays = 320 / px;
+    expect(visibleDays).toBeLessThan(ZOOM_TARGET_DAYS.year);
+  });
+});
+
+describe('presetOf — flag-on (range-anchored, width-aware)', () => {
+  it('maps pxPerDayForPreset(level, width) back to that level, at a narrow and a wide canvas', () => {
+    for (const width of [1600, 2560]) {
+      for (const level of ZOOM_LEVELS) {
+        expect(presetOf(pxPerDayForPreset(level, width), width, true)).toBe(level);
+      }
+    }
+  });
+
+  it('reports a different preset than flag-off would for the same pxPerDay at a real width', () => {
+    // At 1600px, Week's range-anchored scale (1600/30 ≈ 53.3 px/day) is far from ZOOM_STOPS.week
+    // (14) — proving `presetOf` actually branches on `rangeAnchored` rather than ignoring it.
+    const level: ZoomLevel = 'week';
+    const px = pxPerDayForPreset(level, 1600);
+    expect(presetOf(px, 1600, true)).toBe('week');
+    expect(presetOf(px, 1600, false)).not.toBe('week');
   });
 });
 
 describe('zoomToPreset', () => {
-  it('sets the scale to the preset and keeps the centre day centred', () => {
+  it('flag-off: sets the scale to ZOOM_STOPS and keeps the centre day centred', () => {
     const view: Viewport = { pxPerDay: 12, originX: 100, originY: 0 };
     const dayAtCentre = (SIZE.width / 2 - view.originX) / view.pxPerDay;
-    const next = zoomToPreset(view, SIZE, 'day');
+    const next = zoomToPreset(view, SIZE, 'day', false);
     expect(next.pxPerDay).toBe(ZOOM_STOPS.day);
     // The day that was under the viewport centre is still under the centre after the reframe.
     expect(screenXOfDay(dayAtCentre, next)).toBeCloseTo(SIZE.width / 2);
+  });
+
+  it('flag-on: sets the scale to the width-derived preset scale, centre still centred', () => {
+    const view: Viewport = { pxPerDay: 12, originX: 100, originY: 0 };
+    const wideSize: Size = { width: 1600, height: 400 };
+    const dayAtCentre = (wideSize.width / 2 - view.originX) / view.pxPerDay;
+    const next = zoomToPreset(view, wideSize, 'day', true);
+    expect(next.pxPerDay).toBeCloseTo(pxPerDayForPreset('day', wideSize.width));
+    expect(next.pxPerDay).not.toBe(ZOOM_STOPS.day);
+    expect(screenXOfDay(dayAtCentre, next)).toBeCloseTo(wideSize.width / 2);
   });
 });
 
@@ -59,14 +132,20 @@ describe('stepZoom / canZoom', () => {
     expect(canZoom(10, 2)).toBe(true);
     expect(canZoom(ZOOM_STOPS.year, 1 / 1.1)).toBe(true); // year(0.7) can still zoom out a bit
     expect(canZoom(0.4, 1 / 2)).toBe(false); // already at MIN_PX_PER_DAY
-    expect(canZoom(60, 2)).toBe(false); // already at MAX_PX_PER_DAY
+    expect(canZoom(MAX_PX_PER_DAY, 2)).toBe(false); // already at MAX_PX_PER_DAY
   });
 });
 
 describe('isAtPreset', () => {
-  it('is true only for the nearest preset', () => {
-    expect(isAtPreset(ZOOM_STOPS.month, 'month')).toBe(true);
-    expect(isAtPreset(ZOOM_STOPS.month, 'day')).toBe(false);
+  it('is true only for the nearest preset (flag-off)', () => {
+    expect(isAtPreset(ZOOM_STOPS.month, 'month', SIZE.width, false)).toBe(true);
+    expect(isAtPreset(ZOOM_STOPS.month, 'day', SIZE.width, false)).toBe(false);
+  });
+
+  it('is true only for the nearest preset (flag-on, width-aware)', () => {
+    const px = pxPerDayForPreset('month', 1600);
+    expect(isAtPreset(px, 'month', 1600, true)).toBe(true);
+    expect(isAtPreset(px, 'day', 1600, true)).toBe(false);
   });
 });
 

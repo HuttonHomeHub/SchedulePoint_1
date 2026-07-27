@@ -5,6 +5,7 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
+  CANVAS_TIME_AXIS_ENABLED,
   EXPORT_PRINT_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
@@ -127,5 +128,15 @@ describe('CANVAS_ACTIVITY_TYPES_ENABLED', () => {
     // keeps the Add menu's disabled "Soon" placeholders byte-for-byte and leaves the LOE endpoint-pick
     // tool unreachable — the rollback path / parity gate.
     expect(CANVAS_ACTIVITY_TYPES_ENABLED).toBe(true);
+  });
+});
+
+describe('CANVAS_TIME_AXIS_ENABLED', () => {
+  it('is off by default (in progress; no VITE_CANVAS_TIME_AXIS set)', () => {
+    // Range-anchored zoom presets, tiered gridlines, the interpolated Today marker/pill and
+    // ground-vs-non-working shading (M2-M5) land dark until the M7 enablement gate flips this
+    // default-on. Flag-off keeps ZOOM_STOPS, the single grid pass, whole-day Today, and the flat
+    // non-working fill byte-for-byte.
+    expect(CANVAS_TIME_AXIS_ENABLED).toBe(false);
   });
 });

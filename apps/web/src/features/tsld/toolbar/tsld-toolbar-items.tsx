@@ -52,6 +52,7 @@ import { useRef } from 'react';
 import { FILTER_ATTRS, type ColourMode } from '../render/lenses';
 import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
+import { ZOOM_RANGE_LABELS } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
@@ -73,6 +74,7 @@ import {
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
+  CANVAS_TIME_AXIS_ENABLED,
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   EXPORT_PRINT_ENABLED,
@@ -529,7 +531,14 @@ function ZoomPresetControl({
               aria-hidden="true"
               className={cn('size-4', ctx.zoomPreset === level ? 'opacity-100' : 'opacity-0')}
             />
-            {ZOOM_LABELS[level] ?? level}
+            {/* Range-anchored zoom presets (VITE_CANVAS_TIME_AXIS, F3): each row states the target
+                visible range so the preset names stop being ambiguous about what they frame. The
+                trigger keeps the short name alone — it is width-constrained. A single template
+                string (not a separate styled span) keeps this one text node, so the accessible
+                name is never at the mercy of JSX inter-element whitespace trimming. */}
+            {CANVAS_TIME_AXIS_ENABLED
+              ? `${ZOOM_LABELS[level] ?? level} — ${ZOOM_RANGE_LABELS[level]}`
+              : (ZOOM_LABELS[level] ?? level)}
           </MenuItem>
         ))}
       </Menu>
