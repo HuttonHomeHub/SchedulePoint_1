@@ -29,7 +29,13 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
-import { CheckboxField, FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
+import {
+  CheckboxField,
+  FormErrorSummary,
+  SelectField,
+  TextField,
+  TextareaField,
+} from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import {
@@ -300,26 +306,18 @@ export function ActivityFormDialog({
           error={errors.code?.message}
           {...register('code')}
         />
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="activity-type">Type</Label>
-          <Select
-            id="activity-type"
-            aria-invalid={errors.type ? true : undefined}
-            aria-describedby={errors.type ? 'activity-type-error' : undefined}
-            {...register('type')}
-          >
-            {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
-              <option key={value} value={value}>
-                {ACTIVITY_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </Select>
-          {errors.type?.message ? (
-            <p id="activity-type-error" className="text-destructive-text text-sm">
-              {errors.type.message}
-            </p>
-          ) : null}
-        </div>
+        <SelectField
+          label="Type"
+          id="activity-type"
+          error={errors.type?.message}
+          {...register('type')}
+        >
+          {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
+            <option key={value} value={value}>
+              {ACTIVITY_TYPE_LABELS[value]}
+            </option>
+          ))}
+        </SelectField>
         {isDurationDerivedType(type) ? (
           type === 'LEVEL_OF_EFFORT' ? (
             <p className="text-muted-foreground text-sm">
@@ -348,77 +346,65 @@ export function ActivityFormDialog({
             with no entered duration/units (a milestone, LOE or WBS summary) — hidden for those, mirroring
             the Duration field. */}
         {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="activity-duration-type">Duration type</Label>
-            <Select
-              id="activity-duration-type"
-              aria-describedby="activity-duration-type-help"
-              {...register('durationType')}
-            >
-              {DURATION_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {DURATION_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </Select>
-            <p id="activity-duration-type-help" className="text-muted-foreground text-sm">
-              Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or
-              units/time recomputes the others so units = duration × units/time stays true — e.g. a
-              crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or
-              “Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s
-              duration; with the two fixed-duration types, editing the duration here also updates
-              the driving resource’s units or rate.
-            </p>
-          </div>
+          <SelectField
+            label="Duration type"
+            id="activity-duration-type"
+            hint={
+              'Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or ' +
+              'units/time recomputes the others so units = duration × units/time stays true — e.g. a ' +
+              'crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or ' +
+              '“Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s ' +
+              'duration; with the two fixed-duration types, editing the duration here also updates ' +
+              'the driving resource’s units or rate.'
+            }
+            {...register('durationType')}
+          >
+            {DURATION_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {DURATION_TYPE_LABELS[value]}
+              </option>
+            ))}
+          </SelectField>
         ) : null}
+        {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it never asserts a
+            false state while the plan activities are still resolving. The "no summaries yet"
+            guidance is a distinct, appended clause shown only once the list has resolved empty —
+            not conflated with loading or a load failure. */}
         {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="activity-parent">WBS summary (optional)</Label>
-            <Select
-              id="activity-parent"
-              disabled={planActivitiesLoading}
-              aria-busy={planActivitiesLoading}
-              aria-invalid={planActivitiesError ? true : undefined}
-              aria-describedby={
-                planActivitiesError
-                  ? 'activity-parent-help activity-parent-error'
-                  : 'activity-parent-help'
-              }
-              {...register('parentId')}
-            >
-              <option value="">None (top-level)</option>
-              {/* A seeded parent not in the list stays selected under an honest label so the form
-                  never silently un-nests the activity (never blank, which reads as "top-level"). */}
-              {missingParent ? (
-                <option value={parentId}>
-                  {planActivitiesLoading ? 'Loading…' : 'Unavailable'}
-                </option>
-              ) : null}
-              {parentOptions.map((summary) => (
-                <option key={summary.id} value={summary.id}>
-                  {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
-                </option>
-              ))}
-            </Select>
-            {/* Primary help is invariant to loading (mirrors the calendar picker), so it never
-                asserts a false state while the plan activities are still resolving. The
-                "no summaries yet" guidance is a distinct, appended clause shown only once the list
-                has resolved empty — not conflated with loading or a load failure. */}
-            <p id="activity-parent-help" className="text-muted-foreground text-sm">
-              Groups this activity under a WBS summary, whose dates roll up from its members.
-              {!planActivitiesLoading &&
+          <SelectField
+            label="WBS summary (optional)"
+            id="activity-parent"
+            disabled={planActivitiesLoading}
+            aria-busy={planActivitiesLoading}
+            errorRole="alert"
+            error={
+              planActivitiesError
+                ? 'Couldn’t load the plan’s activities, so no WBS summaries are available to choose.'
+                : undefined
+            }
+            hint={
+              'Groups this activity under a WBS summary, whose dates roll up from its members.' +
+              (!planActivitiesLoading &&
               !planActivitiesError &&
               parentOptions.length === 0 &&
               !missingParent
                 ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
-                : ''}
-            </p>
-            {planActivitiesError ? (
-              <p id="activity-parent-error" role="alert" className="text-destructive-text text-sm">
-                Couldn’t load the plan’s activities, so no WBS summaries are available to choose.
-              </p>
+                : '')
+            }
+            {...register('parentId')}
+          >
+            <option value="">None (top-level)</option>
+            {/* A seeded parent not in the list stays selected under an honest label so the form
+                  never silently un-nests the activity (never blank, which reads as "top-level"). */}
+            {missingParent ? (
+              <option value={parentId}>{planActivitiesLoading ? 'Loading…' : 'Unavailable'}</option>
             ) : null}
-          </div>
+            {parentOptions.map((summary) => (
+              <option key={summary.id} value={summary.id}>
+                {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
+              </option>
+            ))}
+          </SelectField>
         ) : null}
         {ACTIVITY_CALENDAR_ENABLED ? (
           <div className="flex flex-col gap-1.5">
@@ -526,27 +512,18 @@ export function ActivityFormDialog({
             </p>
             {EARNED_VALUE_ENABLED ? (
               <>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="activity-percent-complete-type">% complete type</Label>
-                  <Select
-                    id="activity-percent-complete-type"
-                    aria-describedby="activity-percent-complete-type-help"
-                    {...register('percentCompleteType')}
-                  >
-                    {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-                      <option key={value} value={value}>
-                        {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-                      </option>
-                    ))}
-                  </Select>
-                  <p
-                    id="activity-percent-complete-type-help"
-                    className="text-muted-foreground text-sm"
-                  >
-                    {PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no
-                    dates — only how Earned value measures progress.
-                  </p>
-                </div>
+                <SelectField
+                  label="% complete type"
+                  id="activity-percent-complete-type"
+                  hint={`${PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates — only how Earned value measures progress.`}
+                  {...register('percentCompleteType')}
+                >
+                  {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {PERCENT_COMPLETE_TYPE_LABELS[value].label}
+                    </option>
+                  ))}
+                </SelectField>
                 {percentCompleteType === 'PHYSICAL' ? (
                   <TextField
                     label="Physical % complete (optional)"
@@ -591,66 +568,51 @@ export function ActivityFormDialog({
             {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the Earned-Value
                 Planned-Value curve, never a date. Its own flag, mirroring the %-complete-type picker. */}
             {COST_ACCRUAL_ENABLED ? (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="activity-accrual-type">Cost accrual</Label>
-                <Select
-                  id="activity-accrual-type"
-                  aria-describedby="activity-accrual-type-help"
-                  {...register('accrualType')}
-                >
-                  {ACCRUAL_TYPE_OPTIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {ACCRUAL_TYPE_LABELS[value]}
-                    </option>
-                  ))}
-                </Select>
-                <p id="activity-accrual-type-help" className="text-muted-foreground text-sm">
-                  Sets when this activity’s cost is recognised: Start (all at the start), Uniform
-                  (spread evenly), or End (all at the finish). It changes only when cost is
-                  recognised in Earned value — never a date.
-                </p>
-              </div>
+              <SelectField
+                label="Cost accrual"
+                id="activity-accrual-type"
+                hint={
+                  'Sets when this activity’s cost is recognised: Start (all at the start), Uniform ' +
+                  '(spread evenly), or End (all at the finish). It changes only when cost is ' +
+                  'recognised in Earned value — never a date.'
+                }
+                {...register('accrualType')}
+              >
+                {ACCRUAL_TYPE_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {ACCRUAL_TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </SelectField>
             ) : null}
           </fieldset>
         ) : null}
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="activity-constraint-type">Constraint (optional)</Label>
-          <Select
-            id="activity-constraint-type"
-            aria-invalid={errors.constraintType ? true : undefined}
-            aria-describedby={
-              errors.constraintType
-                ? 'activity-constraint-help activity-constraint-type-error'
-                : 'activity-constraint-help'
-            }
-            {...register('constraintType')}
-          >
-            <option value="">None</option>
-            {/* Only the six kinds the scheduler applies exactly as labelled (the engine parks
+        <SelectField
+          label="Constraint (optional)"
+          id="activity-constraint-type"
+          error={errors.constraintType?.message}
+          hint={
+            'Pins the activity’s start or finish to a date. Only constraints the scheduler applies ' +
+            'exactly as named are listed (an existing value keeps its own label).'
+          }
+          {...register('constraintType')}
+        >
+          <option value="">None</option>
+          {/* Only the six kinds the scheduler applies exactly as labelled (the engine parks
                 MANDATORY_* — see @repo/types SELECTABLE_CONSTRAINT_TYPES), so a planner never
                 sets a constraint that behaves differently than it reads. */}
-            {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-              <option key={value} value={value}>
-                {CONSTRAINT_TYPE_LABELS[value]}
-              </option>
-            ))}
-            {/* An activity that already carries a parked value keeps it as an honest, labelled
+          {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+            <option key={value} value={value}>
+              {CONSTRAINT_TYPE_LABELS[value]}
+            </option>
+          ))}
+          {/* An activity that already carries a parked value keeps it as an honest, labelled
                 option so opening the form never silently changes it; it drops out once the
                 planner picks something else. Driven by the live field value, not the original. */}
-            {parkedValue ? (
-              <option value={parkedValue}>{PARKED_CONSTRAINT_LABELS[parkedValue]}</option>
-            ) : null}
-          </Select>
-          <p id="activity-constraint-help" className="text-muted-foreground text-sm">
-            Pins the activity’s start or finish to a date. Only constraints the scheduler applies
-            exactly as named are listed (an existing value keeps its own label).
-          </p>
-          {errors.constraintType?.message ? (
-            <p id="activity-constraint-type-error" className="text-destructive-text text-sm">
-              {errors.constraintType.message}
-            </p>
+          {parkedValue ? (
+            <option value={parkedValue}>{PARKED_CONSTRAINT_LABELS[parkedValue]}</option>
           ) : null}
-        </div>
+        </SelectField>
         {constraintType ? (
           <TextField
             label="Constraint date"
@@ -668,44 +630,29 @@ export function ActivityFormDialog({
             <p className="text-sm font-medium" aria-hidden="true">
               Advanced scheduling
             </p>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="activity-secondary-constraint-type">Secondary constraint</Label>
-              <Select
-                id="activity-secondary-constraint-type"
-                aria-invalid={errors.secondaryConstraintType ? true : undefined}
-                aria-describedby={
-                  errors.secondaryConstraintType
-                    ? 'activity-secondary-constraint-help activity-secondary-constraint-type-error'
-                    : 'activity-secondary-constraint-help'
-                }
-                {...register('secondaryConstraintType')}
-              >
-                <option value="">None</option>
-                {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                  <option key={value} value={value}>
-                    {CONSTRAINT_TYPE_LABELS[value]}
-                  </option>
-                ))}
-                {secondaryParkedValue ? (
-                  <option value={secondaryParkedValue}>
-                    {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
-                  </option>
-                ) : null}
-              </Select>
-              <p id="activity-secondary-constraint-help" className="text-muted-foreground text-sm">
-                A second date constraint that drives the activity’s late dates — e.g. a primary
-                “start no earlier than” with a secondary “finish no later than”. The primary
-                constraint drives its early dates.
-              </p>
-              {errors.secondaryConstraintType?.message ? (
-                <p
-                  id="activity-secondary-constraint-type-error"
-                  className="text-destructive-text text-sm"
-                >
-                  {errors.secondaryConstraintType.message}
-                </p>
+            <SelectField
+              label="Secondary constraint"
+              id="activity-secondary-constraint-type"
+              error={errors.secondaryConstraintType?.message}
+              hint={
+                'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
+                '“start no earlier than” with a secondary “finish no later than”. The primary ' +
+                'constraint drives its early dates.'
+              }
+              {...register('secondaryConstraintType')}
+            >
+              <option value="">None</option>
+              {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {CONSTRAINT_TYPE_LABELS[value]}
+                </option>
+              ))}
+              {secondaryParkedValue ? (
+                <option value={secondaryParkedValue}>
+                  {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
+                </option>
               ) : null}
-            </div>
+            </SelectField>
             {secondaryConstraintType ? (
               <TextField
                 label="Secondary constraint date"

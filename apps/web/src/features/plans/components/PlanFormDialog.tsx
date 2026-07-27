@@ -14,9 +14,7 @@ import {
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { FormErrorSummary, SelectField, TextField, TextareaField } from '@/components/ui/form';
 
 /**
  * Create-or-edit dialog for a plan under a project. Adds a status select and an
@@ -110,16 +108,13 @@ export function PlanFormDialog({
           error={errors.name?.message}
           {...register('name')}
         />
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="plan-status">Status</Label>
-          <Select id="plan-status" {...register('status')}>
-            {PLAN_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {PLAN_STATUS_LABELS[status]}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <SelectField label="Status" id="plan-status" {...register('status')}>
+          {PLAN_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {PLAN_STATUS_LABELS[status]}
+            </option>
+          ))}
+        </SelectField>
         <TextField
           label="Planned start (optional)"
           type="date"

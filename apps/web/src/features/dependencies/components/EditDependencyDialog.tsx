@@ -18,9 +18,7 @@ import {
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 
 /**
  * Edit a dependency's type and lag (the endpoints are immutable — re-pointing a
@@ -110,33 +108,25 @@ export function EditDependencyDialog({
           The linked activities are fixed. To connect different activities, remove this link and add
           a new one.
         </p>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="edit-dependency-type">Type</Label>
-          <Select id="edit-dependency-type" {...register('type')}>
-            {DEPENDENCY_TYPES.map((value) => (
-              <option key={value} value={value}>
-                {DEPENDENCY_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="edit-dependency-lag-calendar">Lag calendar</Label>
-          <Select
-            id="edit-dependency-lag-calendar"
-            aria-describedby="edit-dependency-lag-calendar-hint"
-            {...register('lagCalendar')}
-          >
-            {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
-              <option key={value} value={value}>
-                {LAG_CALENDAR_LABELS[value]}
-              </option>
-            ))}
-          </Select>
-          <p id="edit-dependency-lag-calendar-hint" className="text-muted-foreground text-sm">
-            {LAG_CALENDAR_HINT}
-          </p>
-        </div>
+        <SelectField label="Type" id="edit-dependency-type" {...register('type')}>
+          {DEPENDENCY_TYPES.map((value) => (
+            <option key={value} value={value}>
+              {DEPENDENCY_TYPE_LABELS[value]}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="Lag calendar"
+          id="edit-dependency-lag-calendar"
+          hint={LAG_CALENDAR_HINT}
+          {...register('lagCalendar')}
+        >
+          {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+            <option key={value} value={value}>
+              {LAG_CALENDAR_LABELS[value]}
+            </option>
+          ))}
+        </SelectField>
         <TextField
           label={lagFieldLabel(lagCalendar)}
           type="number"

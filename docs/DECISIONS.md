@@ -10,6 +10,59 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — `SelectField` lands, and stops at the sites that are genuinely different
+
+**Decision.** `components/ui/form.tsx` gains `SelectField`, the enumerated sibling of `TextField`.
+Sixteen hand-assembled call sites move onto it. Five groups deliberately do not, each named in
+TECH_DEBT #42 with its reason. The register row is rewritten from "not extracted" to the residue.
+
+**What the survey found.** The row said the idiom was hand-assembled "~6×". It was **33×** across 15
+files — and two local helpers (`PlanScheduleOptionSelect`, `BucketSizeSelect`) had already been
+extracted independently, which is itself the symptom. More usefully, the copies had drifted: some
+error paragraphs carried `role="alert"` and some didn't, one hint was rendered but never linked to
+its control, and one screen put the same id on two mutually-exclusive paragraphs. Duplication is not
+the cost of a repeated idiom — divergence is, and it only shows up when you line the copies up.
+
+**Two API decisions.** `errorRole` is opt-in rather than always-on, because the two kinds of error
+differ: a validation message revealed on submit is already announced by `FormErrorSummary`, while a
+failed options query appears with no user action and needs a live region. Making both announce would
+double up the common case. And unlike `TextField`, a hint and an error render **together** — several
+call sites already did that, and the hint (what the control does) stays useful while the error (why
+this value won't do) is showing.
+
+**Why it stops where it does.** The unmigrated sites are not leftovers. The flag-forked pickers carry
+their own busy/optimistic state, so moving them changes behaviour rather than lifting markup. The
+optimistic-select family is _richer_ than `SelectField`, not a degenerate copy of it — the right move
+is to rebuild that helper on the primitive, not flatten it. Two more are latent defects (a duplicated
+id, a raw `<select>` whose hand-copied chrome has drifted from the primitive) that deserve their own
+change rather than being smuggled into a refactor where nobody would review them.
+
+---
+
+### 2026-07-27 — The recycle bin merges in the database, not the service
+
+**Decision.** `RecycleBinRepository` replaces three `findMany`s and a service-side merge-sort with one
+`UNION ALL … ORDER BY (deleted_at DESC, id ASC) LIMIT`. TECH_DEBT #22's over-fetch half closed; its
+other half — "the web shows only the first page" — was already fixed and the row was stale.
+
+**Why now, given the row said "if it ever gets hot".** Because the one consumer pages the whole thing.
+The recycle-bin screen uses `apiFetchAllPages`, following the cursor to the end, so reading
+`3 × (limit + 1)` rows to return `limit` was not a cost paid once — it was paid per page, every time
+the screen opened. That is a different calculation from the one the register recorded.
+
+**Deliberately not done: indexes.** A partial `(organization_id, deleted_at DESC, id) WHERE deleted_at
+IS NOT NULL` on all three tables would make this genuinely cheap, and it is the obvious next step —
+but deleted rows are a small minority of each table and nobody has profiled this screen. Shipping
+three indexes on reasoning alone, inside a refactor, is what CLAUDE.md §15 means by premature. It is
+documented in the repository as the measure-first escalation.
+
+**Consequence.** The hand-written keyset is now ours to keep correct, so the e2e gained the case that
+would break it: a cascade stamps a client, its project and its plan with **one** `deleted_at`, so
+ordering falls entirely to the id tiebreaker and every page boundary lands mid-batch across three
+different tables. It pages that one row at a time and checks the result matches the unpaged read.
+
+---
+
 ### 2026-07-27 — A dialog closes only on its own close event
 
 **Decision.** The `Dialog` primitive compares `event.target` to its own element before calling

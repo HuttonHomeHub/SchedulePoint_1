@@ -117,19 +117,17 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
 
     // Now give every item a real width and the container almost none: the pinned controls alone
     // exceed it, so `computeOverflow` gets zero budget and demotes all it is allowed to demote.
-    const rect = vi
-      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-      .mockReturnValue({
-        width: 100,
-        height: 32,
-        top: 0,
-        left: 0,
-        right: 100,
-        bottom: 32,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      });
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 100,
+      height: 32,
+      top: 0,
+      left: 0,
+      right: 100,
+      bottom: 32,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(120);
 
     try {

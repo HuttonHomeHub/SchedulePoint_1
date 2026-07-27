@@ -19,7 +19,7 @@ import {
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiFetchError } from '@/lib/api/client';
@@ -311,34 +311,26 @@ export function AddCrossPlanLinkDialog({
           </div>
         </fieldset>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cross-plan-type">Type</Label>
-          <Select id="cross-plan-type" {...register('type')}>
-            {CROSS_PLAN_TYPES.map((value) => (
-              <option key={value} value={value}>
-                {CROSS_PLAN_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <SelectField label="Type" id="cross-plan-type" {...register('type')}>
+          {CROSS_PLAN_TYPES.map((value) => (
+            <option key={value} value={value}>
+              {CROSS_PLAN_TYPE_LABELS[value]}
+            </option>
+          ))}
+        </SelectField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cross-plan-lag-calendar">Lag calendar</Label>
-          <Select
-            id="cross-plan-lag-calendar"
-            aria-describedby="cross-plan-lag-calendar-hint"
-            {...register('lagCalendar')}
-          >
-            {CROSS_PLAN_LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
-              <option key={value} value={value}>
-                {CROSS_PLAN_LAG_CALENDAR_LABELS[value]}
-              </option>
-            ))}
-          </Select>
-          <p id="cross-plan-lag-calendar-hint" className="text-muted-foreground text-sm">
-            {CROSS_PLAN_LAG_CALENDAR_HINT}
-          </p>
-        </div>
+        <SelectField
+          label="Lag calendar"
+          id="cross-plan-lag-calendar"
+          hint={CROSS_PLAN_LAG_CALENDAR_HINT}
+          {...register('lagCalendar')}
+        >
+          {CROSS_PLAN_LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+            <option key={value} value={value}>
+              {CROSS_PLAN_LAG_CALENDAR_LABELS[value]}
+            </option>
+          ))}
+        </SelectField>
 
         <TextField
           label={crossPlanLagFieldLabel(lagCalendar)}
