@@ -1,9 +1,13 @@
 # Frontend Architecture
 
-> **Status:** design. This document defines the architecture the web client
-> (`apps/web`) will follow. No application features are implemented yet; this is
-> the blueprint every future frontend change must respect. Decisions here are
-> backed by ADRs [0004](adr/0004-frontend-state-management.md)–[0007](adr/0007-forms-and-validation.md).
+> **Status:** built and in use. This document defines the architecture the web
+> client (`apps/web`) follows — 23 feature modules inside a persistent app shell
+> — and every frontend change must respect it. Decisions here are backed by ADRs
+> [0004](adr/0004-frontend-state-management.md)–[0007](adr/0007-forms-and-validation.md),
+> with the shell and workspace shaped by
+> [0029](adr/0029-persistent-hierarchy-navigator.md)–[0031](adr/0031-tsld-toolbar-registry-and-taxonomy.md)
+> and the token/surface model by
+> [0055](adr/0055-designed-chrome-and-canvas-visual-language.md).
 
 ## Guiding principles
 
@@ -13,16 +17,16 @@ maintainability over short-term convenience.**
 
 ## Technology summary
 
-| Concern      | Choice                                            | ADR  |
-| ------------ | ------------------------------------------------- | ---- |
-| Framework    | React 19 + TypeScript (Vite)                      | —    |
-| Styling      | Tailwind CSS v4 + design tokens + shadcn/ui + CVA | 0006 |
-| Routing      | TanStack Router (file-based, type-safe)           | 0005 |
-| Server state | TanStack Query                                    | 0004 |
-| Client state | React local state · Context · Zustand (as needed) | 0004 |
-| Forms        | React Hook Form + Zod                             | 0007 |
-| Icons        | Lucide (`lucide-react`)                           | —    |
-| Testing      | Vitest + Testing Library; Playwright (e2e)        | —    |
+| Concern      | Choice                                           | ADR  |
+| ------------ | ------------------------------------------------ | ---- |
+| Framework    | React 19 + TypeScript (Vite)                     | —    |
+| Styling      | Tailwind CSS v4 + design tokens + CVA (no Radix) | 0006 |
+| Routing      | TanStack Router (file-based, type-safe)          | 0005 |
+| Server state | TanStack Query                                   | 0004 |
+| Client state | React local state · Context (no store installed) | 0004 |
+| Forms        | React Hook Form + Zod                            | 0007 |
+| Icons        | Lucide (`lucide-react`)                          | —    |
+| Testing      | Vitest + Testing Library; Playwright (e2e)       | —    |
 
 ## Folder structure
 
@@ -47,8 +51,8 @@ apps/web/src/
 │       ├── schemas/        #   Zod schemas for this feature
 │       └── index.ts        #   Public surface of the feature
 ├── components/             # SHARED, app-agnostic components
-│   ├── ui/                 #   Design-system primitives (shadcn/ui, generated)
-│   └── layout/             #   App shell: sidebar, header, page scaffolds
+│   ├── ui/                 #   Design-system primitives (hand-rolled, APG)
+│   └── layout/             #   App shell: chrome band, navigator rail, workspace
 ├── hooks/                  # Shared hooks (useMediaQuery, useTheme, …)
 ├── lib/                    # Framework-agnostic helpers
 │   ├── api/                #   Typed API client, fetch wrapper, error mapping
@@ -58,7 +62,7 @@ apps/web/src/
 ├── config/                 # Runtime config (env access, constants)
 ├── styles/                 # globals.css (design tokens) + any base styles
 └── test/                   # Test setup and utilities
-e2e/                        # Playwright specs
+e2e*/                       # Playwright specs (one directory per feature flag)
 ```
 
 **Why:** feature-first modules keep related code together, make ownership and
@@ -74,7 +78,7 @@ Three tiers (details in [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md)):
 1. **Primitives** (`components/ui/`) — design-system building blocks (Button,
    Input, Dialog…). Accessible, themeable, no business logic. Owned as source.
 2. **Composites / layout** (`components/layout/`, feature `components/`) —
-   assemble primitives into meaningful UI (PageHeader, DataTable, BillCard).
+   assemble primitives into meaningful UI (PageHeader, DataTable, AppShell).
 3. **Route/page components** (`routes/`) — compose data + composites for a
    screen; contain no reusable logic.
 
@@ -87,7 +91,8 @@ and components. Deleting a feature should mean deleting one folder.
 ## Routing strategy (ADR-0005)
 
 - **File-based routes** under `routes/`. Nested **layout routes** model the app
-  shell once (`_authed/` renders sidebar + header; children render into it).
+  shell once: `_authed/` renders the mounted-once chrome band + Project Explorer
+  rail, and children render into its single workspace region (ADR-0029).
 - **Typed params & search.** Path params and search params are validated with
   schemas; filters/pagination/sort live in typed search params (shareable,
   reload-safe). The shared helper is `hooks/use-url-filter-state.ts`
@@ -113,7 +118,7 @@ and components. Deleting a feature should mean deleting one folder.
 **All server data goes through TanStack Query.** Components never fetch in
 `useEffect` or store server data in `useState`.
 
-- **Query hooks** live in each feature's `api/` folder (e.g. `useBills()`),
+- **Query hooks** live in each feature's `api/` folder (e.g. `useActivities()`),
   wrapping a typed API client. UI imports hooks, not `fetch`.
 - **Query keys** use a per-feature factory for consistency and safe
   invalidation:
@@ -132,14 +137,14 @@ and components. Deleting a feature should mean deleting one folder.
   `gcTime` 5m; `refetchOnWindowFocus` on for freshness; retry with backoff on
   transient errors only (never on 4xx).
 - **Mutations** invalidate or optimistically update affected keys; on error
-  they roll back and surface a toast (see error handling).
+  they roll back and surface the failure in place (see error handling).
 - **Prefetching** via route loaders warms the cache before render for a snappy
   perceived experience.
 - **The API client** is a thin typed wrapper over `fetch` in `lib/api/`. It
   attaches credentials (cookies), sets headers, parses the standard response
   envelope, and maps errors to a typed `ApiError` (from `@repo/types`). A
   typed client generated from the API's OpenAPI spec (e.g. `openapi-typescript`)
-  is the intended evolution once endpoints exist.
+  remains the intended evolution; the client is still hand-written.
 
 ## Form handling (ADR-0007)
 
@@ -167,7 +172,8 @@ flowchart TD
   friendly fallback with a retry and report to telemetry. See
   [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md).
 - **Query errors** render inline (empty/error states) with a retry; mutation
-  errors also raise a toast. 4xx are treated as expected domain outcomes and
+  errors surface on the control that raised them — there is no toaster (see
+  `DESIGN_SYSTEM.md`). 4xx are treated as expected domain outcomes and
   mapped to user-facing messages; 5xx are treated as incidents (reported).
 - **Never** swallow errors or show raw messages/stack traces to users.
 
@@ -269,8 +275,8 @@ sequenceDiagram
 - `features → shared`, never the reverse; no `feature → feature` imports.
 - Use the `@/` alias for intra-app imports and `@repo/types` for shared
   contracts. Import order and grouping are enforced by ESLint.
-- The design system is imported from `components/ui`; app code never reaches
-  into Radix/shadcn internals directly.
+- The design system is imported from `components/ui`; app code never
+  reimplements a primitive's behaviour at a call site.
 
 ## Testing
 

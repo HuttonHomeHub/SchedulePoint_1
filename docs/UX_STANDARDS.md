@@ -3,7 +3,9 @@
 > Project-wide UX principles every screen must uphold. These complement the
 > visual rules in [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) and the technical
 > patterns in [`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md). The goal:
-> Blank App should feel like a polished, trustworthy commercial SaaS product.
+> SchedulePoint should feel like a polished, trustworthy commercial planning
+> tool — the kind of software a planner trusts with a programme they are
+> accountable for.
 
 ## Core principles
 
@@ -18,17 +20,27 @@
 5. **Accessible to everyone.** Keyboard and screen-reader users are first-class,
    not an afterthought.
 6. **Trustworthy with data.** Numbers, amounts, and dates are precise,
-   unambiguous, and never surprising (this matters most for money — see below).
+   unambiguous, and never surprising. A planner is accountable for these dates:
+   a computed value must never look hand-entered, and a hand-entered one must
+   never look computed.
+7. **Never move a planner's work silently.** Where the engine disagrees with a
+   hand placement, flag it — highlight the conflict, do not auto-correct it
+   (ADR-0033). Trust is lost the first time the tool "helpfully" moves something.
 
 ## Every page must have
 
-- **A consistent layout** built from the shared app shell (sidebar + header +
-  page scaffold). No bespoke page chrome.
+- **A consistent layout** built from the shared, mounted-once app shell — the
+  chrome band, the Project Explorer rail, and one workspace region (ADR-0029).
+  No bespoke page chrome.
 - **A page header** with a title (single `<h1>`), optional breadcrumb for depth,
   and a right-aligned primary action slot.
 - **Clear hierarchy** using the type and spacing scales — not ad-hoc sizes.
-- **Intuitive navigation:** current location reflected in the sidebar and
-  breadcrumbs; back/forward and deep links always work (URL-driven state).
+- **The right surface scope.** Anything inside the chrome band or a panel wraps
+  in `<Surface>` so its semantic tokens rebind to that surface's palette
+  (ADR-0055). A component must never learn where it is; it must never reach for
+  a colour literal to compensate.
+- **Intuitive navigation:** current location reflected in the Project Explorer
+  and breadcrumbs; back/forward and deep links always work (URL-driven state).
 - **Full keyboard support:** logical tab order, visible focus, shortcuts where
   they help (documented, discoverable).
 - **Accessibility compliance** to WCAG 2.2 AA (see design system).
@@ -87,8 +99,10 @@ a bug:
 
 ## Navigation & information architecture
 
-- Primary navigation in the sidebar; secondary via tabs within a page; tertiary
-  via in-context menus. Don't exceed this depth without review.
+- Primary navigation in the Project Explorer rail (Client → Project → Plan);
+  secondary via the workspace's own chrome (the plan toolbar's grouped command
+  rows, ADR-0031); tertiary via in-context menus. Don't exceed this depth
+  without review.
 - Breadcrumbs for anything two or more levels deep.
 - Deep-linkable everything: filters, tabs, and pagination live in the URL so a
   view can be shared and restored.
@@ -97,11 +111,15 @@ a bug:
 
 - **Mobile-first.** Design the small-screen experience first; it is not a
   degraded desktop.
-- Sidebar collapses to a drawer below `lg`; tables scroll horizontally within a
-  bordered container; dialogs become full-height sheets on small screens where
-  appropriate.
+- The Project Explorer rail collapses to a drawer below `lg` (64rem); the plan
+  workspace swaps from split panes to a single-pane toggle below `md` (48rem);
+  tables scroll horizontally within a bordered container; dialogs become
+  full-height sheets on small screens where appropriate.
 - Touch targets ≥ 44px; hover-only affordances always have a non-hover
   equivalent.
+- **The canvas is not exempt.** The TSLD surface must stay usable at every
+  breakpoint the shell supports, and every canvas affordance needs a keyboard
+  and screen-reader equivalent in the parallel DOM layer (ADR-0026).
 
 ## Perceived performance playbook
 

@@ -58,7 +58,7 @@ performance**. Concretely:
 | Monorepo       | Turborepo + pnpm workspaces                         |
 | Language       | TypeScript (strict) on Node.js 22 LTS               |
 | Frontend       | React 19 + Vite                                     |
-| Styling / UI   | Tailwind CSS v4, shadcn/ui, Lucide icons            |
+| Styling / UI   | Tailwind CSS v4, hand-rolled APG primitives, Lucide |
 | Backend        | NestJS 11                                           |
 | Database / ORM | PostgreSQL 17 + Prisma                              |
 | API            | REST, documented with OpenAPI (`@nestjs/swagger`)   |
@@ -74,20 +74,30 @@ The rationale for the big decisions lives in [`docs/adr/`](docs/adr/).
 ## 4. Repository layout
 
 ```text
-Blank App/
+SchedulePoint/
 ├── apps/
-│   ├── web/          # React + Vite client (@repo/web)
-│   └── api/          # NestJS REST API (@repo/api)
+│   ├── web/                  # React + Vite client (@repo/web)
+│   │   ├── src/features/     #   Feature-first app code
+│   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
+│   │   └── e2e*/             #   Playwright suites — one per feature flag
+│   └── api/                  # NestJS REST API (@repo/api)
+│       ├── src/modules/      #   19 feature modules
+│       ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
+│       ├── src/common/       #   Auth, guards, filters, locks, lifecycle
+│       ├── prisma/           #   Schema (25 models) + 41 migrations
+│       └── test/             #   Supertest API e2e specs
 ├── packages/
-│   ├── config/       # Shared ESLint + tsconfig presets (@repo/config)
-│   ├── interchange/  # Pure schedule-interchange model/parsers (@repo/interchange, ADR-0050)
-│   └── types/        # Shared cross-boundary types/DTOs (@repo/types)
-├── docs/             # Architecture, guides, ADRs, roadmap, decisions
-├── scripts/          # Repo automation (bootstrap, etc.)
-├── .github/          # CI/CD workflows, issue/PR templates, CODEOWNERS
-├── .changeset/       # Release/versioning state
-├── CLAUDE.md         # ← you are here
-└── (root configs)    # turbo, tsconfig.base, eslint, prettier, docker-compose…
+│   ├── config/               # Shared ESLint + tsconfig presets (@repo/config)
+│   ├── interchange/          # Pure schedule-interchange model/parsers (ADR-0050)
+│   ├── engine-conformance/   # Engine-free conformance fixture + loaders (ADR-0034)
+│   └── types/                # Shared cross-boundary types/DTOs (@repo/types)
+├── docs/                     # Architecture, guides, ADRs, roadmap, decisions
+├── scripts/                  # Repo automation (bootstrap, etc.)
+├── .claude/agents/           # Specialised review/design subagents
+├── .github/                  # CI/CD workflows, issue/PR templates, CODEOWNERS
+├── .changeset/               # Release/versioning state
+├── CLAUDE.md                 # ← you are here
+└── (root configs)            # turbo, tsconfig.base, eslint, prettier, docker-compose…
 ```
 
 ## 5. Coding standards
@@ -106,8 +116,10 @@ Blank App/
   production, and always log with context.
 - **Comments explain _why_, not _what_.** Match the density of surrounding code.
 - **Frontend:** function components + hooks only. Co-locate state with the
-  feature. Shared primitives live in `components/`, generated shadcn/ui parts in
-  `components/ui/`.
+  feature. Shared app-level components live in `components/layout/`;
+  design-system primitives live in `components/ui/` and are **hand-rolled on
+  semantic HTML + the WAI-ARIA APG** — there is no Radix dependency, and adding
+  a component library is an ADR-level decision.
 - **Backend:** thin controllers, logic in services, validation via DTOs
   (`class-validator`). One feature per Nest module. Prisma access is wrapped in
   a `PrismaService`.
@@ -191,7 +203,8 @@ documents (keep them authoritative):
 
 Essentials: feature-first structure; server state in TanStack Query; URL state
 in the router (TanStack Router); minimal client state; forms via RHF + Zod;
-styling via semantic tokens + Tailwind v4 + shadcn/ui + CVA. **Mobile-first,
+styling via semantic tokens + Tailwind v4 + CVA, rebound per **surface scope**
+(ADR-0055). **Mobile-first,
 theme-aware (light/dark/system), and no one-off component styling — ever.** The
 authenticated app is a **persistent app-shell** with a Client → Project → Plan
 **Project Explorer** navigator (ADR-0029); row actions use the hand-rolled APG
@@ -696,6 +709,15 @@ A lighter-weight running log of smaller decisions is in
 
 ## 17. Known limitations & assumptions
 
+- **Four accepted ADRs have no implementation** — background jobs + Redis
+  (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
+  tracing (0013, of which only Pino is wired). Nothing in the running system
+  depends on them and none of their dependencies are installed. Do not cite
+  them as existing capability; see `docs/ARCHITECTURE.md` §10. The mail port is
+  a **logging** stub — invitation emails are logged, not sent.
+- **No append-only audit log** exists; row attribution plus structured logs are
+  not an audit trail (`docs/TECH_DEBT.md` #14). There is likewise no hard-delete
+  or data-export path — every deletion is a soft delete.
 - Deployment target (managed host vs. self-hosted Kubernetes) is **not yet
   decided**; the container/registry foundation is deliberately platform-neutral.
   Auto-deploy exists but ships dormant, so a release does not reach users until

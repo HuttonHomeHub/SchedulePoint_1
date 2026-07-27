@@ -1,7 +1,7 @@
 # Delivery Process — from idea to shipped feature
 
 > The single, repeatable method for introducing **any** new requirement or
-> feature into Blank App. It exists so every change is understood, designed,
+> feature into SchedulePoint. It exists so every change is understood, designed,
 > reviewed, and shipped to the same high bar — and so we **never jump from an
 > idea straight to code**.
 >

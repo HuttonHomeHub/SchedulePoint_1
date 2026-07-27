@@ -1,6 +1,6 @@
 # Design System
 
-> The single source of truth for Blank App' visual language and component
+> The single source of truth for SchedulePoint's visual language and component
 > standards. The token _implementation_ lives in
 > [`apps/web/src/styles/globals.css`](../apps/web/src/styles/globals.css); this
 > document is the spec and rationale. **No one-off component styling may ever
@@ -21,8 +21,13 @@
 - **Styling:** Tailwind CSS v4 (CSS-first) with semantic design tokens
   (ADR-0006). Components use semantic utilities (`bg-primary`,
   `text-muted-foreground`) — never raw palette values or magic hex.
-- **Primitives:** [shadcn/ui](https://ui.shadcn.com) on Radix, owned as source
-  in `components/ui/`. Variants via `class-variance-authority` + `cn()`.
+- **Primitives:** owned as source in `components/ui/`, in the
+  [shadcn/ui](https://ui.shadcn.com) tradition — but **hand-rolled on semantic
+  HTML and the WAI-ARIA APG patterns. There is no Radix dependency, and adding
+  one is an ADR-level decision, not a convenience.** `Dialog`/`Sheet` sit on the
+  native `<dialog>` element; `Menu`, `Combobox`, `Toolbar` and
+  `SegmentedControl` implement their APG pattern directly. Variants via
+  `class-variance-authority` + `cn()`.
 - **Icons:** [Lucide](https://lucide.dev) (`lucide-react`).
 
 ---
@@ -275,6 +280,11 @@ and reused. Each must ship: typed props, all interaction states
 screen-reader support, and a test. Detailed authoring rules are in
 [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md).
 
+Entries marked **_(not built)_** are the standard for that pattern **when we
+first need it** — no such primitive exists in `components/ui/` today. Don't cite
+one as though it were available; build it to the entry, then drop the marker.
+`ls apps/web/src/components/ui/` is the authoritative inventory.
+
 - **Buttons** — variants `primary | secondary | outline | ghost | destructive |
 link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   `aria-busy`); icon buttons require `aria-label`. One primary action per view.
@@ -289,25 +299,34 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   bordered container; never break the page layout.
 - **Cards** — `card` surface, `radius-lg`, `shadow-sm`, standard padding;
   slots for header/title, content, footer/actions.
-- **Navigation** — top-level via the sidebar; consistent active/hover states
-  from tokens; current item marked `aria-current="page"`.
-- **Sidebars** — persistent on `lg+`, collapsible to a drawer/sheet below;
-  keyboard navigable; remembers collapsed state.
+- **Navigation** — top-level via the Project Explorer rail (a hand-rolled ARIA
+  `tree`, ADR-0029); consistent active/hover states from tokens; current item
+  marked `aria-current="page"`.
+- **The rail** — persistent on `lg+` (64rem), collapsible to a drawer below;
+  keyboard navigable; resizable via the shared `PanelResizer`; remembers its
+  collapsed and sized state.
 - **Dialogs / sheets** — the hand-rolled `Dialog`/`Sheet` primitives on the
   native `<dialog>` element (no Radix): focus trap, `Esc` to close, focus return,
   labelled by title, inert backdrop. Sheets for side panels; dialogs centered.
   Destructive confirmations use `ConfirmDialog` (`role="alertdialog"`), whose
   busy confirm button uses `aria-disabled` (not native `disabled`) so it keeps
   focus during the mutation.
-- **Notifications (toasts)** — single toaster; variants
-  `info | success | warning | error`; polite live region; auto-dismiss
-  (persist errors); optional action; never the sole channel for critical info.
+- **Notifications (toasts)** — **_(not built)_**. Today, feedback is inline and
+  in place: the mutating control owns its pending/error state, and asynchronous
+  results are announced through the shared `Announcer` live region. When a
+  toaster is introduced: a single toaster; variants
+  `info | success | warning | error`; polite live region; auto-dismiss (persist
+  errors); optional action; never the sole channel for critical info.
 - **Badges** — status/label chips using status tokens; text/icon in addition to
   colour; sizes `sm | md`.
 - **Breadcrumbs** — for depth ≥ 2; last item is current page (`aria-current`);
   collapse middle items on small screens.
-- **Tabs** — Radix tabs; roving focus; arrow-key navigation; panels labelled by
-  their tab. Don't use tabs to hide critical primary actions.
+- **Tabs** — **_(not built)_**. The app has deliberately avoided tabs so far:
+  the workspace uses `SegmentedControl` for a mutually-exclusive pane choice and
+  the toolbar's grouped rows for command surfacing. If a genuine tab pattern is
+  needed, hand-roll the APG `tablist` (roving focus, arrow-key navigation,
+  panels labelled by their tab) — do not reach for a component library. Never
+  use tabs to hide critical primary actions.
 - **Surface scopes** — `Surface` (`components/ui/surface.tsx`) marks a region as `chrome`
   (the top band) or `panel` (the Project Explorer). Inside a scope the ordinary semantic
   names resolve to that surface's own validated family, so descendants need no change. A
@@ -340,8 +359,10 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   the query, the debounce and the paging. Use it wherever a native `<select>`
   would truncate or hide a large library; keep `<select>` for short, fixed option
   sets. See [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) for the usage contract.
-- **Pagination** — shared control paired with the DataTable; disabled
-  prev/next at bounds; announces page changes; keyboard operable.
+- **Pagination** — **_(no shared control)_**. The API paginates by **cursor**,
+  so screens surface a keyboard-reachable "Load more" as the last row in the
+  arrow-key sequence rather than numbered pages, and announce the settled result
+  count. A shared control only makes sense if offset paging is ever introduced.
 - **Search** — the `SearchField` primitive (`components/ui/search-field.tsx`):
   a labelled input with a leading Lucide search icon and a real, keyboard-operable
   clear button (the native `type="search"` ✕ is Chromium-only and mouse-only, so it
@@ -352,14 +373,21 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   buttons own their pending state. Prefer skeletons for content.
 - **Empty states** — every list/table/dashboard has a designed empty state:
   icon, one-line explanation, and a primary action to move forward.
-- **Skeletons** — mirror the final layout to prevent layout shift; used for
-  first loads, not for quick refetches.
-- **Charts** — one chart wrapper on a single library; use `chart-1…5` tokens in
-  order; always provide axis labels, legend, accessible summary/table
-  alternative, and empty/loading states. Follow the repo's dataviz guidance.
-- **Dashboards** — a responsive grid of cards/KPIs/charts with consistent
-  spacing and a clear scan order (most important top-left); each widget handles
-  its own loading/empty/error state independently.
+- **Skeletons** — **_(no shared primitive)_**. The standard stands — mirror the
+  final layout to prevent layout shift, first loads only, not quick refetches —
+  but each screen currently hand-writes its own. Extract a primitive the third
+  time it is written, not the first.
+- **Charts** — **_(not built; no chart library is a dependency)_**. The two
+  graphical surfaces in the app — the TSLD canvas and the resource demand strip
+  — are hand-drawn Canvas 2D, which is why no charting dependency exists. If a
+  conventional chart is ever needed: one wrapper on one library; `chart-1…5`
+  tokens in order; always axis labels, legend, an accessible summary/table
+  alternative, and empty/loading states. Adding the library is an ADR-level
+  decision (bundle cost, ADR-0026's draw budget).
+- **Dashboards** — **_(not built)_**. When one lands: a responsive grid of
+  cards/KPIs with consistent spacing and a clear scan order (most important
+  top-left); each widget handles its own loading/empty/error state
+  independently.
 - **TSLD canvas text (labels)** — the Canvas 2D painter resolves its label
   colours from existing semantic tokens (no new CSS variables): text **inside** a
   bar uses that fill's paired `*-foreground` token (`--color-primary-foreground`

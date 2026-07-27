@@ -55,7 +55,9 @@ Dependencies point **down** the tiers only. Primitives never import feature code
 - **Variants via CVA.** Declare the variant matrix once; the component's type is
   derived from it. Call sites pick variants, never hand-write class strings.
 - **Controlled/uncontrolled:** support both where it matters (inputs), following
-  Radix conventions (`value`/`defaultValue`, `onValueChange`).
+  the conventional prop shape (`value`/`defaultValue`, `onValueChange`). Some
+  primitives are deliberately **controlled-only** — `Combobox` is, because the
+  consumer owns the query, the debounce and the paging.
 - **No business logic or data fetching** inside reusable components — pass data
   and callbacks in. Fetching lives in feature `api/` hooks.
 - **No hard-coded user-facing copy** in primitives/composites.

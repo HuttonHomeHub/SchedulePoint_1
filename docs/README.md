@@ -1,6 +1,6 @@
-# Blank App documentation
+# SchedulePoint documentation
 
-This directory is the deep reference for the Blank App project. The
+This directory is the deep reference for SchedulePoint. The
 [`CLAUDE.md`](../CLAUDE.md) operating manual at the repository root is the
 source of truth for standards; these documents expand on specific areas.
 
@@ -8,6 +8,7 @@ source of truth for standards; these documents expand on specific areas.
 
 | Document                                             | What it covers                                           |
 | ---------------------------------------------------- | -------------------------------------------------------- |
+| [PROJECT_BRIEF.md](PROJECT_BRIEF.md)                 | What SchedulePoint is: vision, users, MoSCoW scope       |
 | [PROCESS.md](PROCESS.md)                             | Delivery process: idea → spec → design → plan → build    |
 | [templates/](templates/)                             | Feature-spec & implementation-plan templates             |
 | [examples/](examples/)                               | Worked example of the process (no code)                  |
@@ -31,7 +32,10 @@ source of truth for standards; these documents expand on specific areas.
 | [BACKLOG.md](BACKLOG.md)                             | Candidate work, not yet scheduled                        |
 | [DECISIONS.md](DECISIONS.md)                         | Lightweight running decision log                         |
 | [TECH_DEBT.md](TECH_DEBT.md)                         | Known debt and remediation intent                        |
+| [TOOLBAR_ROADMAP.md](TOOLBAR_ROADMAP.md)             | Which plan-toolbar controls are still placeholders       |
 | [adr/](adr/)                                         | Formal Architecture Decision Records                     |
+| [specs/](specs/)                                     | Per-feature specs & implementation plans (live work)     |
+| [runbooks/](runbooks/)                               | Operational procedures (e.g. feature-flag enablement)    |
 
 ## Conventions
 
@@ -39,3 +43,8 @@ source of truth for standards; these documents expand on specific areas.
   render on GitHub and stay diffable.
 - Keep docs in lock-step with code — update them in the same PR as the change.
 - Prefer linking to a single canonical explanation over duplicating it.
+- **Say what is true, and mark what isn't yet.** Several of these documents
+  describe standards for capabilities we have decided on but not built. Where
+  that is the case it is stated inline, because a standard read as a
+  description is how drift starts. If you find a claim that is no longer true,
+  fix it in the pull request that finds it.

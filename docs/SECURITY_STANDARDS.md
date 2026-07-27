@@ -1,15 +1,19 @@
 # Security Standards
 
-> Engineering security standards for Blank App — **security is enabled by default**,
-> not opt-in. This complements the vulnerability-reporting policy in
+> Engineering security standards for SchedulePoint — **security is enabled by
+> default**, not opt-in. This complements the vulnerability-reporting policy in
 > [`SECURITY.md`](../SECURITY.md) and `CLAUDE.md` §14. Backed by ADR-0003
-> (auth) and ADR-0012 (authorisation).
+> (auth), ADR-0012 (authorisation) and ADR-0051 (guest share links).
+>
+> Sections marked **_not yet implemented_** are standards we hold ourselves to
+> when the work is done. They are not descriptions of the running system, and
+> must not be cited as though they were.
 
 ## Principles
 
 - **Secure by default, deny by default.** Every endpoint is authenticated and
   authorised unless explicitly public; every input is validated.
-- **Least privilege** everywhere (DB roles, tokens, containers, buckets).
+- **Least privilege** everywhere (DB roles, tokens, containers, CI scopes).
 - **Defence in depth** — no single control is trusted alone.
 - **The server never trusts the client.** All authorisation is re-checked
   server-side.
@@ -19,21 +23,37 @@
 - **Better Auth** (ADR-0003): sessions in **secure, http-only, same-site
   cookies**; credentials hashed with a strong adaptive algorithm; no tokens in
   JS-accessible storage.
-- A global authentication guard establishes the principal; unauthenticated
+- A global `AuthenticationGuard` establishes the principal; unauthenticated
   requests get **401**. Sessions expire and can be revoked.
-- Sensitive actions (password/email change, etc.) require re-authentication.
+- Re-authentication for sensitive account actions (password/email change) is a
+  standard we intend to hold — **not yet implemented**.
 
 ## Authorisation — RBAC & permissions (ADR-0012)
 
-- **RBAC with organisation (resource) scoping.** Roles are per-membership;
-  capabilities depend on the principal's role **in the organisation owning the
-  resource**.
-- Code checks **permissions** (`item:delete`), not role names, via a
-  `PermissionsGuard` + `@RequirePermissions()`; a policy layer (CASL) handles
-  object-level rules.
-- **Always pair a permission check with a resource-scope check** (verify
-  membership for the specific id) — this is the primary defence against **IDOR**.
-- **Deny by default:** endpoints are protected unless `@Public()`.
+- **RBAC with organisation (resource) scoping.** Roles are per-membership
+  (`ORG_ADMIN` / `PLANNER` / `CONTRIBUTOR` / `VIEWER`, ADR-0016); capabilities
+  depend on the principal's role **in the organisation owning the resource**.
+- Code checks **permissions** (`activity:delete`), never role names, via a
+  `PermissionsGuard` + `@RequirePermissions()` at the boundary and
+  `principal.can(permission, organizationId)` in the service. Object-level rules
+  (e.g. note author-ownership) are explicit service-layer checks; there is no
+  policy-engine dependency.
+- **Always pair a permission check with a resource-scope check.** Services call
+  `resolveScope(principal, orgSlug)` and then `can(...)` against the resolved
+  organisation id. A permission check without a scope check **is** the IDOR bug.
+- **Cross-organisation access returns 404, not 403.** A 403 confirms the
+  resource exists; the uniform 404 gives no existence oracle. The same rule
+  governs guest share-link resolution (ADR-0051).
+- **Deny by default:** endpoints are protected unless `@Public()`. That list is
+  short and reviewed — health, version, invitation acceptance, and the guest
+  share surface — and every addition needs a written justification.
+- **External guests are a separate principal type.** `GuestPrincipal` has no
+  memberships and no `can()`; member service methods take `Principal`, so
+  passing a guest into one is a **compile error**. Keep it that way: a runtime
+  `if (isGuest)` check inside a member method is a regression, not a shortcut.
+- **The pen is not authorisation.** `assertHoldsPen` (ADR-0028) returns **423**
+  and answers "is anyone else editing?", not "may you edit?". It never replaces
+  a permission check, and a permission check never replaces it.
 
 ## Secret management
 
@@ -47,6 +67,10 @@
 - **Validate all input at the boundary** with `class-validator` DTOs and a
   global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`).
   Reject unknown fields; enforce types, ranges, lengths, and formats.
+- **Bound every numeric field, not just the obviously dangerous ones.** Money is
+  stored as `BIGINT` minor units and its DTOs carry an explicit `@Max` ceiling;
+  durations, lags and rates carry ranges. An unbounded number is an overflow or
+  a denial-of-service waiting to be found.
 - Validate config at startup (Zod) — fail fast on bad config.
 - **Output encoding / XSS:** the API returns JSON (no HTML rendering); the SPA
   escapes by default and must never inject unsanitised HTML
@@ -65,20 +89,45 @@
   (Better Auth CSRF tokens + same-site cookies). Safe methods (GET/HEAD) are
   side-effect-free.
 
+## Tokens
+
+Two token families exist, and both follow the same rule: **mint high-entropy,
+store only a hash**.
+
+- Invitation tokens and guest share tokens are minted at 256 bits and stored as
+  SHA-256 digests (`common/tokens/`). The plaintext is returned **once**, at
+  creation, and is never recoverable afterwards.
+- A guest share token travels in the URL **fragment** so it never reaches a
+  referrer header or a server access log, and is presented as
+  `Authorization: Bearer`.
+- Every grant is **revocable**, optionally expiring, and cascades with its
+  parent's soft delete. Resolution of an unknown, revoked or expired token is a
+  uniform **404**.
+
 ## Rate limiting & abuse protection
 
 - **Global rate limiting** (`@nestjs/throttler`), with **stricter limits on
-  auth and other sensitive endpoints**. Return **429** with `Retry-After`.
-- Guard against enumeration (uniform responses/timing on auth), and cap payload
-  sizes and pagination limits server-side.
+  unauthenticated and sensitive endpoints** — the guest share routes carry their
+  own tighter per-IP `@Throttle`. Return **429**.
+- Guard against enumeration (uniform responses on auth and on share-token
+  resolution), and cap payload sizes and pagination limits server-side.
 
-## Audit logging
+## Audit logging — _not yet implemented_
+
+The standard we intend to meet:
 
 - **Append-only audit log** for security- and sensitive events
   (authentication events, permission changes, sensitive mutations,
   deletions/exports): who, what, when, and before→after where relevant.
 - Audit entries are **never mutated or deleted** and are separate from
   operational logs. **No secrets or full PII** in audit payloads.
+
+Today there is no audit table. What exists instead: every row carries
+`created_by`/`updated_by` and timestamps, soft deletes are correlated by
+`delete_batch_id`, and sensitive operations emit structured logs
+([`OBSERVABILITY.md`](OBSERVABILITY.md)). That is attribution, not an audit
+trail — logs are rotated and mutable at the sink. Tracked as
+[`TECH_DEBT.md`](TECH_DEBT.md) #14.
 
 ## Dependency security
 
@@ -99,18 +148,26 @@
 
 ## Data protection & privacy
 
-- Encrypt in transit (TLS) and at rest (managed DB/bucket encryption).
-- Minimise collected PII; never log secrets, tokens, full card/sensitive values,
-  or PII (redaction in the logger — see [`OBSERVABILITY.md`](OBSERVABILITY.md)).
-- Support erasure/export for privacy requests (hard delete path is explicit and
-  audited).
+- Encrypt in transit (TLS) and at rest (managed DB encryption).
+- Minimise collected PII; never log secrets, tokens, or PII (redaction in the
+  logger — see [`OBSERVABILITY.md`](OBSERVABILITY.md)). The application stores
+  little personal data: an account's name and email, and authorship attribution
+  on the rows a user creates.
+- **Erasure/export for privacy requests is _not yet implemented_.** Deletion
+  throughout the app is a **soft** delete (recoverable by design — see
+  [`DATABASE.md`](DATABASE.md)); there is no hard-delete path and no export
+  endpoint. Both are needed before the product handles a subject-access or
+  erasure request, and neither should be bolted on without an explicit,
+  audited path.
 
 ## Secure-by-default checklist (per endpoint/feature)
 
 - [ ] Authenticated (or explicitly `@Public()` with justification)
-- [ ] Permission check **and** resource-scope check
-- [ ] DTO validation; unknown fields rejected; limits enforced
+- [ ] Permission check **and** resource-scope check, in the service
+- [ ] Cross-organisation access returns **404**, not 403 — with a test proving it
+- [ ] DTO validation; unknown fields rejected; numeric bounds enforced
+- [ ] Structural plan writes assert the pen (**423**) where ADR-0028 applies
 - [ ] Rate limiting appropriate to sensitivity
-- [ ] No secrets/PII in logs; audit entry for sensitive mutations
+- [ ] No secrets/PII in logs
 - [ ] Errors return safe messages (no internals/stack traces)
 - [ ] Parameterised queries only

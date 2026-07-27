@@ -14,9 +14,10 @@ keep `main` releasable.
 ## Delivered
 
 - **M0 — Engineering foundation.** Turborepo + pnpm monorepo, strict TypeScript,
-  lint/format, CI/CD (quality + template-verify + API/web e2e + CodeQL + release +
-  GHCR image publishing), Docker, docs, ADRs, delivery process, agents, reference
-  template.
+  lint/format, CI/CD (quality + API/web e2e + CodeQL + release + GHCR image
+  publishing), Docker, docs, ADRs, delivery process, agents. (The reference
+  template that seeded the backend standard was retired once real modules
+  superseded it — ADR-0057.)
 - **Identity & tenancy.** Better Auth, `User`/`Organization`/`OrgMember`, org-scoped
   RBAC (Viewer/Contributor/Planner/Org Admin), members + invitations, onboarding +
   org switcher (ADR-0003/0012/0016).

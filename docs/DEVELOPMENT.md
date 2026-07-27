@@ -63,11 +63,31 @@ backward-compatible (expand/contract).
 | `pnpm lint` / `pnpm lint:fix`       | Lint (and auto-fix) the workspace        |
 | `pnpm format` / `pnpm format:check` | Format / check formatting                |
 | `pnpm typecheck`                    | Type-check all packages                  |
-| `pnpm test` / `pnpm test:e2e`       | Run tests                                |
+| `pnpm test` / `pnpm test:e2e`       | Run unit tests / the default e2e suites  |
 | `pnpm build`                        | Build everything                         |
 | `pnpm commit`                       | Guided Conventional Commit               |
 | `pnpm changeset`                    | Record a user-visible change for release |
 | `pnpm clean`                        | Remove build output and caches           |
+
+## Flag-scoped end-to-end suites
+
+Large frontend changes ship behind a feature flag (see
+[ARCHITECTURE.md](ARCHITECTURE.md) §8), and each carries its **own** Playwright
+directory that runs with that flag forced on — `pnpm test:e2e` alone does not
+cover them. Each has a matching CI step, and each is run with its own filter:
+
+```bash
+pnpm --filter @repo/web test:e2e            # the default (flag-off) journeys
+pnpm --filter @repo/web test:e2e:library    # e.g. the library-scoping journey
+```
+
+`ls apps/web/e2e*` is the authoritative list of suites; `apps/web/package.json`
+maps each directory to its script and the flags it forces. When you add a flag,
+add its suite and its CI step in the same pull request — a flag with no flag-on
+journey is untested in the state users will actually see.
+
+The flag-**off** unit suites are equally load-bearing: they are the rollback
+contract, and are never weakened to make a change pass.
 
 ## Monorepo notes
 
