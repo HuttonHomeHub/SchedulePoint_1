@@ -40,13 +40,34 @@ number of high-value end-to-end journeys.
 
 ## Coverage
 
-- Target **≥ 80% line coverage on changed code**; overall coverage must not
-  regress. Coverage is a signal, not a goal — don't write assertion-free tests
-  to game it.
-- **This is not currently enforced.** Vitest is configured with the v8 provider
-  in both apps, so `--coverage` works on demand, but no threshold is set and CI
-  does not collect it. Treat the bar as a review expectation, not a gate, until
-  that changes.
+Two different things, and confusing them is how the old claim went unnoticed
+for so long:
+
+**The review expectation** — target **≥ 80% line coverage on changed code**.
+This is judgement, applied in review; nothing computes it. Coverage is a signal,
+not a goal — don't write assertion-free tests to game it.
+
+**The enforced floor** — `pnpm test:coverage` fails below a per-app threshold
+set at the level measured on 2026-07-27:
+
+| App         | Lines  | Statements | Branches | Functions |
+| ----------- | ------ | ---------- | -------- | --------- |
+| `@repo/web` | 87.36% | 85.59%     | 79.33%   | 81.38%    |
+| `@repo/api` | 74.17% | 73.37%     | 70.92%   | 51.57%    |
+
+These are **ratchets, not targets**: floors that stop coverage sliding, rounded
+down from the measured figures so an unrelated refactor cannot redden CI. A
+global 80% would fail the API suite today, and a gate that fails on day one gets
+deleted rather than fixed. **Ratchet them up as coverage rises; never down
+without saying why in the pull request.**
+
+The API figures are unit-only — the Supertest suite exercises controllers and
+guards but runs separately — so real exercised-code coverage is higher than the
+table shows. The low `functions` figure is largely DTO classes and decorators.
+
+> Until 2026-07-27 none of this worked at all: `@vitest/coverage-v8` was never
+> installed, so `--coverage` failed outright even though both configs declared
+> the provider and three documents plus a PR checkbox asserted an 80% bar.
 
 ## Backend unit tests
 
@@ -184,8 +205,11 @@ pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 
 Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 
-- **quality** — format check, lint, typecheck, `pnpm test`, then build. This is
-  where the unit suites and the whole engine-conformance harness run.
+- **quality** — format check, lint, typecheck, **doc-link check**, `pnpm test`,
+  then build. This is where the unit suites and the whole engine-conformance
+  harness run. `pnpm check:doc-links` walks every Markdown file and fails on a
+  relative link that does not resolve; it deliberately ignores external URLs, so
+  the gate never goes red for a reason outside the repository.
 - **e2e** — provisions a Postgres service, generates the Prisma client, applies
   migrations (`prisma migrate deploy`), checks for schema/migration drift, runs
   the API Supertest suite, then runs each Playwright suite as its own step

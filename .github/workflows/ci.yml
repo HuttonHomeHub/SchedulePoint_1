@@ -48,6 +48,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # A dead link in an ADR is worse than a typo: the decision record is what
+      # you reach for when nobody remembers why, and it has to still resolve.
+      # The 2026-07-27 reconcile found five by hand, two of which that same pass
+      # had created by deleting a directory an ADR pointed at.
+      - name: Check documentation links
+        run: pnpm check:doc-links
+
       - name: Unit tests
         run: pnpm test
 

@@ -45,6 +45,10 @@ source of truth for standards; these documents expand on specific areas.
   render on GitHub and stay diffable.
 - Keep docs in lock-step with code — update them in the same PR as the change.
 - Prefer linking to a single canonical explanation over duplicating it.
+- **Relative links are gated.** `pnpm check:doc-links` runs in CI and fails on a
+  relative link that does not resolve. If you delete something an ADR points at,
+  unlink the reference to inline code rather than repointing it — the ADR should
+  still read as written.
 - **Say what is true, and mark what isn't yet.** Several of these documents
   describe standards for capabilities we have decided on but not built. Where
   that is the case it is stated inline, because a standard read as a
