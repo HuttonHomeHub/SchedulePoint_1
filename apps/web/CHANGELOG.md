@@ -1,5 +1,63 @@
 # @repo/web
 
+## 0.53.0
+
+### Minor Changes
+
+- [#178](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/178) [`07ba0dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/07ba0dd99515b6fcb45b58f9b6f305b623791c3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Header centring (tsld-toolbar-canvas-refinements M6, unflagged). The org switcher and nav now sit
+  at the true centre point between the brand and the account chip via a `1fr auto 1fr` grid, instead
+  of a flex row that merely absorbed leftover space. Centred while it fits, filling when it does
+  not: a long org name or a crowded nav scrolls internally (`min-w-0` + `overflow-x-auto`) rather
+  than pushing the account chip off-screen. The org switcher gains a bounded `max-w-[12rem]`
+  truncating width. DOM order and tab order are unchanged — no behavioural change, only the layout
+  mechanism.
+
+- [#178](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/178) [`07ba0dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/07ba0dd99515b6fcb45b58f9b6f305b623791c3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Flip `VITE_CANVAS_TIME_AXIS` default-on (tsld-toolbar-canvas-refinements M7, ADR-0056 Accepted):
+  range-anchored zoom presets, tiered gridlines, the interpolated Today marker + pill, and
+  ground-vs-non-working shading are now on by default. Folds two fixes found by the pre-flip
+  specialist review pass: the day/month gridline colours widen their contrast (WCAG 1.4.1 — the
+  original values measured ~1.1:1, imperceptible) across all three themes, and the raised zoom
+  ceiling (`MAX_PX_PER_DAY` 60 → 200) now threads through every zoom-scale clamp as a required
+  parameter so it can never leak into the flag-off zoom range. Set `VITE_CANVAS_TIME_AXIS=false` for
+  a byte-for-byte rollback to the pre-epic time axis.
+
+- [#178](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/178) [`07ba0dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/07ba0dd99515b6fcb45b58f9b6f305b623791c3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - TSLD time-axis gridline tiers on the web, behind `VITE_CANVAS_TIME_AXIS` (default off,
+  tsld-toolbar-canvas-refinements M3). The single batched grid stroke splits into three tiers —
+  day, month, year — each with its own colour token (`--canvas-grid-day`/`-month`/`-year`) and, for
+  year, a heavier `lineWidth` (2 vs 1), drawn in day → month → year order so a coarser boundary wins
+  at a coincident x. Two cues (weight and colour), so the hierarchy survives monochrome print and
+  colour-blind reading. Set `VITE_CANVAS_TIME_AXIS=false` (the default) for a byte-for-byte rollback
+  to today's single `gridLine` pass.
+
+- [#178](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/178) [`07ba0dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/07ba0dd99515b6fcb45b58f9b6f305b623791c3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - TSLD ground-vs-non-working differentiation on the web, behind `VITE_CANVAS_TIME_AXIS` (default
+  off, tsld-toolbar-canvas-refinements M5). The non-working (weekend/holiday) column wash gains a
+  diagonal hatch stripe — the same rhythm as the shipped float-tail hatch — so a weekend reads as a
+  distinct kind of surface, not just a darker shade of the month band; guarded to fall back to the
+  existing flat fill when an offscreen 2D context can't be built (older browsers, minimal test
+  contexts), keeping the `fillRect` cost identical either way. The month-band ground also gains its
+  own `View▾ → Structure → Month bands` switch (gated on `VITE_CANVAS_VISUAL_LANGUAGE`, which still
+  decides whether the layer exists at all) so a user can turn the ground off for the session. Set
+  `VITE_CANVAS_TIME_AXIS=false` (the default) for a byte-for-byte rollback to today's flat wash.
+
+- [#178](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/178) [`07ba0dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/07ba0dd99515b6fcb45b58f9b6f305b623791c3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - TSLD Today marker refinement on the web, behind `VITE_CANVAS_TIME_AXIS` (default off,
+  tsld-toolbar-canvas-refinements M4). The dashed vertical interpolates to the viewer-local
+  time-of-day (`todayDayFraction`) instead of snapping to the midnight boundary, and carries a
+  "Today" pill (mirroring the cursor date chip's geometry, offset 4px below it so the two never
+  collide during a drag). A new `useNow` hook re-derives the marker every 60s while the tab is
+  visible — pausing while hidden and re-syncing immediately on `visibilitychange` — which also
+  repairs a pre-existing defect where a plan left open across midnight kept showing yesterday's
+  line. Set `VITE_CANVAS_TIME_AXIS=false` (the default) for a byte-for-byte rollback to today's
+  plain integer-offset dashed line.
+
+- [#178](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/178) [`07ba0dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/07ba0dd99515b6fcb45b58f9b6f305b623791c3c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Range-anchored zoom presets on the web, behind `VITE_CANVAS_TIME_AXIS` (default off,
+  tsld-toolbar-canvas-refinements M2). Each `View▾` zoom preset now targets a fixed **visible
+  range** (Day → 2 weeks, Week → 1 month, Month → 3 months, Quarter → 1 year, Year → 3 years)
+  independent of canvas width, and the zoom menu states each preset's range so the names stop
+  being ambiguous about what they frame; the trigger keeps its short name. `MAX_PX_PER_DAY` rises
+  60 → 200 so the Day preset can actually reach 2 weeks visible at ordinary desktop widths. Set
+  `VITE_CANVAS_TIME_AXIS=false` (the default) for a byte-for-byte rollback to today's fixed
+  `ZOOM_STOPS` scale.
+
 ## 0.52.1
 
 ### Patch Changes
