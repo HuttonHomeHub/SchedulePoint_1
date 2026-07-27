@@ -10,7 +10,7 @@
 - **Governing decisions:** ADR-0026 (canvas rendering/coordinate/state/interaction/a11y — esp.
   **D7** "parallel focusable DOM a11y layer" and **D3** state ownership), ADR-0021 (DAG),
   ADR-0022/0023 (recalc + date convention), ADR-0024 (server-only calendars). Prior art:
-  `docs/design/tsld-m2-editing.md` §5, `docs/design/tsld-m4-layout.md` §6, and the
+  `docs/archive/design/tsld-m2-editing.md` §5, `docs/archive/design/tsld-m4-layout.md` §6, and the
   `docs/DECISIONS.md` M3 entry (driving-edge definition, which deferred a driving cue in
   `describeActivity` to M5). Plan: `docs/plans/tsld-canvas.md` §M5.
 - **Not in scope:** delete/undo on the canvas (deletion stays in the activities table — the

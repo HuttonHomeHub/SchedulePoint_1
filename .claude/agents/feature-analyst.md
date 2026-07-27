@@ -76,8 +76,11 @@ Constraints that shape almost every spec here:
 
 ## Output
 
-Write the spec and plan to files (e.g. `docs/specs/<slug>.md`,
-`docs/plans/<slug>.md`) from the templates, and return a concise summary: the
+Write the spec and plan from the templates into **one directory for the
+feature** — `docs/specs/<slug>/feature-spec.md` and
+`docs/specs/<slug>/implementation-plan.md`. (Never `docs/plans/`: that is where
+early features put their plan and it is now historical.) Return a concise
+summary: the
 problem, the recommended design (with the key diagram), the plan's shape, the
 critical questions, and an explicit "**awaiting approval before implementation**".
 Recommend which specialised agents to involve during build (database-architect

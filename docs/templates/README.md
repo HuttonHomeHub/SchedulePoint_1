@@ -1,8 +1,10 @@
 # Templates
 
-Reusable templates for the [delivery process](../PROCESS.md). Copy a template,
-fill it in, and store the filled copy where the team can review it (a
-`docs/specs/` or `docs/plans/` file, or attached to the tracking issue).
+Reusable templates for the [delivery process](../PROCESS.md). Copy a template
+and fill it in. **A feature gets one directory** —
+`docs/specs/<feature-slug>/` — holding `feature-spec.md` and
+`implementation-plan.md` side by side. (`docs/plans/` is where early features
+put their plan; it is historical and nothing new goes there.)
 
 | Template                                         | Purpose                                                                                         | Process stage     |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ----------------- |

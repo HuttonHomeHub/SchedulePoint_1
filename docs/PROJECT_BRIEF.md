@@ -299,7 +299,7 @@ Deliberately postponed — become backlog items when a real signal picks them up
 ## 23. Related Documentation
 
 - Operating manual: [`CLAUDE.md`](../CLAUDE.md)
-- Delivery process: [`docs/PROCESS.md`](PROCESS.md) · templates: [`feature-spec.md`](feature-spec.md), [`implementation-plan.md`](implementation-plan.md)
+- Delivery process: [`docs/PROCESS.md`](PROCESS.md) · templates: [`feature-spec.md`](templates/feature-spec.md), [`implementation-plan.md`](templates/implementation-plan.md)
 - Architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md), [`docs/FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)
 - Standards: [`docs/DATABASE.md`](DATABASE.md), [`docs/SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md), [`docs/PERFORMANCE.md`](PERFORMANCE.md), [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md), [`docs/API.md`](API.md)
 - Decisions: [`docs/adr/`](adr/) · [`docs/DECISIONS.md`](DECISIONS.md)

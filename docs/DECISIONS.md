@@ -801,7 +801,7 @@ dependency-draw, click → select. Only create-by-drag genuinely competes with p
 so only it gets a mode toggle.
 
 **Why.** Smallest mode surface, zero regression to the M1 pan/zoom path, and
-discoverable affordances — see `docs/design/tsld-m2-editing.md` §1 and ADR-0026 D5.
+discoverable affordances — see `docs/archive/design/tsld-m2-editing.md` §1 and ADR-0026 D5.
 
 **Consequences.** Hit classification is a pure `classifyHit` helper shared by paint
 and pointer so they can't diverge; the gesture machine is a pure reducer. Revisit
@@ -815,7 +815,7 @@ if a fuller tool palette proves more discoverable.
 overwrite.
 
 **Why.** No edit-lock yet; the flag + version-409 banner is the safe interim path
-(`docs/design/tsld-m2-editing.md` §3; plan risk "Editing ships before the edit-lock").
+(`docs/archive/design/tsld-m2-editing.md` §3; plan risk "Editing ships before the edit-lock").
 
 **Consequences.** Editing is dark in the default build. The lock (or hardened
 concurrency) is the prerequisite to enabling the flag; tracked on the TSLD roadmap.
@@ -959,7 +959,7 @@ sign-off (plan §M5).
 write-gate (inert behind `PLAN_EDIT_LOCK_ENFORCED`), and the peer hand-off model. M2 is its
 front-end realisation — the `features/plan-lock/` "pen" that acquires/holds the lock and gates the
 on-canvas schedule editing. Three front-end choices needed settling; all confirmed against the M1
-staged-rollout discipline (design: `docs/design/plan-edit-lock-web.md`).
+staged-rollout discipline (design: `docs/archive/design/plan-edit-lock-web.md`).
 
 **Decisions.**
 

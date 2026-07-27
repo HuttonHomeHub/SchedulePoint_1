@@ -235,6 +235,12 @@ read-only advisors; the architect/analyst agents help design — use them.
 
 ## Artifacts & templates
 
+**Where they live.** A feature gets **one directory**:
+`docs/specs/<feature-slug>/`, holding `feature-spec.md` and
+`implementation-plan.md` side by side. It stays there after the feature ships —
+it is the record of what was agreed, and ADRs cite it.
+(`docs/plans/` and `docs/archive/` are historical; nothing new goes in either.)
+
 | Artifact                      | Template                                                             | When                 |
 | ----------------------------- | -------------------------------------------------------------------- | -------------------- |
 | Feature Spec (Stages 1–4)     | [templates/feature-spec.md](templates/feature-spec.md)               | Every feature        |

@@ -31,7 +31,7 @@ future developers should follow; remove if it adds complexity or confusion_):
 ## Decision
 
 **Option 3.** The reference feature is retained as a **non-shipping template** at
-[`apps/api/examples/reference-feature/`](../../apps/api/examples/reference-feature/):
+`apps/api/examples/reference-feature/`:
 
 - **Not shipped:** it is not registered in `AppModule`, not compiled into the
   build (it lives outside `src/`), and excluded from lint/type-check
@@ -67,5 +67,5 @@ future developers should follow; remove if it adds complexity or confusion_):
 ## References
 
 - [`docs/REFERENCE_FEATURE.md`](../REFERENCE_FEATURE.md),
-  [`apps/api/examples/reference-feature/README.md`](../../apps/api/examples/reference-feature/README.md),
+  `apps/api/examples/reference-feature/README.md`,
   ADR-0008 (modular monolith), ADR-0012 (RBAC)

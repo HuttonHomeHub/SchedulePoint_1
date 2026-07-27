@@ -14,7 +14,7 @@
 > consumes the [ADR-0040](0040-duration-types-and-resource-units.md) units backbone (`budgeted_units` +
 > the driving rate) as the quantity EV cost rides on, **amends** [ADR-0025](0025-baselines-snapshot-and-variance.md)
 > to snapshot a **cost baseline** (the committed PV/BCWS curve), and reads the
-> [ADR-0023](0023-cpm-scheduling-date-convention.md)/[ADR-0033](0033-scheduling-modes-and-data-date.md)
+> [ADR-0023](0023-cpm-scheduling-date-convention.md)/[ADR-0033](0033-scheduling-modes-and-canvas-planning.md)
 > **data date** as the EV status date. The two load-bearing decisions are: **(1)** the per-activity
 > **`percentCompleteType`** (Duration / Units / Physical) that separates **schedule %-complete** (drives
 > the CPM remaining work — already present) from **performance / physical %-complete** (earns value,

@@ -34,8 +34,10 @@ source of truth for standards; these documents expand on specific areas.
 | [TECH_DEBT.md](TECH_DEBT.md)                         | Known debt and remediation intent                        |
 | [TOOLBAR_ROADMAP.md](TOOLBAR_ROADMAP.md)             | Which plan-toolbar controls are still placeholders       |
 | [adr/](adr/)                                         | Formal Architecture Decision Records                     |
-| [specs/](specs/)                                     | Per-feature specs & implementation plans (live work)     |
+| [specs/](specs/)                                     | Per-feature specs & implementation plans — one dir each  |
 | [runbooks/](runbooks/)                               | Operational procedures (e.g. feature-flag enablement)    |
+| [archive/](archive/)                                 | Superseded documents, kept for the record only           |
+| [plans/](plans/README.md)                            | Early features' plans — historical, ADR-cited, frozen    |
 
 ## Conventions
 

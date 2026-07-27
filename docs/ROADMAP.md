@@ -2,8 +2,9 @@
 
 > Product direction for **SchedulePoint** (see [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md)
 > for the full vision and MoSCoW scope). This tracks milestones at a coarse grain;
-> per-feature specs/plans live in [`specs/`](specs/) and [`plans/`](plans/), produced
-> via the delivery process ([`PROCESS.md`](PROCESS.md)).
+> per-feature specs and plans live in [`specs/`](specs/), produced via the delivery
+> process ([`PROCESS.md`](PROCESS.md)). Early features split their plan into
+> [`plans/`](plans/README.md) — historical, and not where new work goes.
 
 ## Purpose
 
