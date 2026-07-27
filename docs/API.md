@@ -1,8 +1,8 @@
 # API conventions
 
-> The conventions every endpoint must follow. Demonstrated by the reference
-> implementation standard ([`docs/REFERENCE_FEATURE.md`](REFERENCE_FEATURE.md))
-> and wired globally per
+> The conventions every endpoint must follow. The implementation standard is in
+> [`docs/REFERENCE_FEATURE.md`](REFERENCE_FEATURE.md) (exemplars:
+> `modules/clients`, `modules/notes`, `modules/share`), wired globally per
 > [`BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md). Keep this in step with
 > the OpenAPI document (`@nestjs/swagger`, served at `/api/docs` outside prod).
 > Request models are `class-validator` DTOs; response models are explicit DTOs
@@ -11,7 +11,9 @@
 ## Style
 
 - **REST over HTTPS**, JSON request/response bodies (`application/json`).
-- Resource-oriented, plural nouns: `/items`, `/organisations`, `/documents`.
+- Resource-oriented, plural nouns: `/clients`, `/projects`, `/plans`,
+  `/activities`. Note the **US spelling** on the wire — `/organizations`, not
+  `/organisations` — even though prose in these docs uses British spelling.
 - Use HTTP verbs correctly: `GET` (read, safe), `POST` (create), `PATCH`
   (partial update), `PUT` (full replace), `DELETE` (remove).
 - All routes are served under the `/api` prefix and a version segment (below).
@@ -65,23 +67,50 @@ carries a rate, so it never surprises a plan that doesn't use resource units.
 
 ## Errors
 
-A single, predictable error shape (`ApiError` in `@repo/types`):
+A single, predictable error shape (`ApiError` in `@repo/types`), produced for
+every failure by `AllExceptionsFilter`:
 
 ```jsonc
-// 4xx / 5xx
+// 404
 {
   "error": {
-    "code": "BILL_NOT_FOUND",
-    "message": "No item exists with that id.",
+    "code": "NOT_FOUND",
+    "message": "No plan exists with that id.",
     "details": null,
   },
 }
 ```
 
-- `code` is a stable, machine-readable `SCREAMING_SNAKE_CASE` string.
+- **`code` is the _class_ of failure, not the specific one.** It comes from the
+  thrown `DomainError` subclass (`common/errors/domain-errors.ts`) or, for
+  framework errors, from the status: `NOT_FOUND`, `CONFLICT`, `FORBIDDEN`,
+  `VALIDATION_FAILED`, `GONE`, `LOCKED`, `UNAUTHENTICATED`, `BAD_REQUEST`,
+  `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`, `INTERNAL_ERROR`. That is the whole set —
+  do not expect a per-resource code like `PLAN_NOT_FOUND` on the wire.
+- **The specific condition lives in `details.reason`.** This is the field a
+  client branches on. Every named code elsewhere in this document —
+  `CALENDAR_WRONG_SCOPE`, `RESOURCE_IN_USE`, `GROUP_NOT_ASSIGNABLE`,
+  `CALENDAR_ARCHIVED`, `PLAN_EDIT_LOCK_REQUIRED`, … — is a `details.reason`
+  value carried by a generic top-level `code`, not a top-level `code` itself:
+
+  ```jsonc
+  // 422 — an activity pointed at another project's calendar
+  {
+    "error": {
+      "code": "VALIDATION_FAILED",
+      "message": "That calendar belongs to another project.",
+      "details": { "reason": "CALENDAR_WRONG_SCOPE", "projectId": "…" },
+    },
+  }
+  ```
+
+  When adding an error, put the branchable discriminator in `details.reason` and
+  give it a test — the top-level `code` is too coarse for a client to act on.
+
 - `message` is human-readable and safe to surface; never leak internals or
-  stack traces.
-- Validation failures return `422` with field-level `details`.
+  stack traces. A 5xx is always the generic `INTERNAL_ERROR` message.
+- Validation failures return `422` with field-level `details` from the global
+  `ValidationPipe`.
 
 ### Status codes
 
@@ -95,6 +124,7 @@ A single, predictable error shape (`ApiError` in `@repo/types`):
 | 403  | Authenticated but not authorised                           |
 | 404  | Resource not found                                         |
 | 409  | Conflict (e.g. duplicate, optimistic-lock version clash)   |
+| 410  | Gone — the resource existed but has expired (e.g. a token) |
 | 413  | Payload too large — upload exceeds the boundary cap        |
 | 422  | Validation failed                                          |
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
@@ -492,8 +522,9 @@ case-insensitive substring match bounded by the org filter; there is deliberatel
 ## Validation & data types
 
 - Requests validated with `class-validator` DTOs; unknown properties rejected.
-- If the app represents money, use **minor units (integer)** with an explicit
-  currency code — never floating point. Timestamps are **ISO 8601 UTC** strings.
+- Money is **`BIGINT` minor units** with a per-plan `currencyCode` — never
+  floating point — and every money DTO carries an explicit `@Max` ceiling.
+  Timestamps are **ISO 8601 UTC** strings.
 - **Calendar-day fields** (a date with no time/timezone) are strict `YYYY-MM-DD`
   strings — e.g. an activity's `constraintDate`/`expectedFinish` and its
   **external / inter-project dates** `externalEarlyStart`/`externalLateFinish`

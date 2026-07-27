@@ -11,8 +11,10 @@
 - **Hooks** tested in isolation; **data hooks** tested with a mocked API layer.
 - **End-to-end** (Playwright) for critical journeys, including automated
   accessibility assertions.
-- **Coverage:** ≥ 80% on changed code; no regressions; every bug fix ships a
-  failing-first regression test.
+- **Coverage:** ≥ 80% on changed code, no regressions — a **review expectation,
+  not a gate**: no threshold is configured and CI does not collect coverage (see
+  [`TESTING.md`](TESTING.md)). Every bug fix ships a regression test **verified
+  to fail without the fix**.
 - No `.only`, no skipped tests committed; tests are deterministic (no real time,
   network, or randomness without control).
 
@@ -69,8 +71,10 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 ## Bundle size
 
 - **Budgets:** initial (critical-path) JS ≤ ~200KB gzipped; per lazy route chunk
-  ≤ ~150KB gzipped. Budgets are advisory now and become CI-enforced with the
-  walking skeleton (roadmap M1).
+  ≤ ~150KB gzipped. **These are advisory and unmeasured** — nothing in CI checks
+  a bundle size, and no baseline has been recorded. Enforcing them is a backlog
+  item ([`BACKLOG.md`](BACKLOG.md)); until then, do not claim a change is within
+  budget without measuring it.
 - Prefer platform APIs and small libraries; **justify every new dependency**
   (size, maintenance, tree-shakeability) in the PR.
 - Import icons and utilities by name (tree-shakeable); never import whole
@@ -88,9 +92,11 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 ## Error boundaries
 
-- An error boundary wraps the **app root** (last-resort fallback + report) and
-  **each route segment** (localised recovery so one screen's failure doesn't
-  blank the app).
+- `AppErrorBoundary` (`components/error-boundary.tsx`) wraps the **app root** in
+  `app/providers.tsx` — the last-resort fallback.
+- **Per-route boundaries are the standard but are not yet in place**: no route
+  declares an `errorComponent`, so a render fault in one screen still blanks the
+  app. Add one when touching a route that can realistically throw.
 - Fallbacks are friendly, on-brand, and offer a retry / route home. They report
   to telemetry with context (route, user-safe error id) — never a raw stack to
   the user.
@@ -98,22 +104,26 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
   catch render/runtime faults (see error handling in
   [`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)).
 
-## Telemetry
+## Telemetry — _not yet built_
 
-- A thin **telemetry facade** (`lib/telemetry.ts`) wraps whatever backend we
-  choose, so product code depends on our API, not a vendor SDK.
+There is **no telemetry**: no provider, and no facade (`lib/telemetry.ts` does
+not exist, despite having been referenced here and in
+[`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)). Nothing reports an
+error-boundary catch anywhere. The standard for when it lands:
+
+- A thin **telemetry facade** wrapping whatever backend we choose, so product
+  code depends on our API, not a vendor SDK.
 - Capture: unhandled errors + error-boundary reports, route/page views, Core Web
   Vitals, and key funnel/interaction events — **named consistently**.
 - **Privacy first:** no PII or sensitive values in telemetry payloads; respect
   Do-Not-Track and consent. Sampling for high-volume events.
-- The concrete provider is deferred (see [`TECH_DEBT.md`](TECH_DEBT.md)); the
-  facade lets us adopt one without touching product code.
 
 ## Logging
 
-- Client logging goes through a small logger (not scattered `console.*`).
-  `console.log` is disallowed by lint; `warn`/`error` are permitted
-  deliberately.
+- `console.log` is disallowed by lint (`no-console` allows `warn`/`error`
+  deliberately — `packages/config/eslint/base.js`). There is **no client logger
+  abstraction**; `console.warn`/`console.error` go straight to the browser
+  console and nowhere else, which is the same gap as Telemetry above.
 - **Levels:** `error` (report), `warn` (recoverable/degraded), `debug`
   (dev-only, stripped in production builds).
 - Never log secrets, tokens, or sensitive values. Include correlation context
@@ -126,6 +136,7 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 - [ ] Accessible in light + dark, keyboard, and screen reader
 - [ ] Loading/empty/error/success states covered (no layout shift)
 - [ ] Route lazy-loaded; heavy deps split; no unjustified bundle growth
-- [ ] Errors caught by a boundary and reported; no raw errors shown to users
+- [ ] Errors caught by a boundary; no raw errors shown to users (reporting is
+      not yet wired — see Telemetry)
 - [ ] No secrets/PII in logs or telemetry
 - [ ] Relevant docs updated

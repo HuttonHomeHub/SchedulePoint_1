@@ -57,8 +57,7 @@ apps/web/src/
 ├── lib/                    # Framework-agnostic helpers
 │   ├── api/                #   Typed API client, fetch wrapper, error mapping
 │   ├── query/              #   Query client factory, key helpers, defaults
-│   ├── utils.ts            #   cn() and small pure helpers
-│   └── telemetry.ts        #   Logging / telemetry facade
+│   └── utils.ts            #   cn(), formatters, rbac helpers
 ├── config/                 # Runtime config (env access, constants)
 ├── styles/                 # globals.css (design tokens) + any base styles
 └── test/                   # Test setup and utilities
@@ -169,7 +168,10 @@ flowchart TD
 ```
 
 - **Error boundaries** wrap the app root and each route segment; they show a
-  friendly fallback with a retry and report to telemetry. See
+  friendly fallback with a retry. (**Reporting is not wired** — there is no
+  telemetry facade; see [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md).) Today
+  only the app root is wrapped, in `app/providers.tsx`; per-route
+  `errorComponent`s are the standard but are not yet in place. See
   [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md).
 - **Query errors** render inline (empty/error states) with a retry; mutation
   errors surface on the control that raised them — there is no toaster (see

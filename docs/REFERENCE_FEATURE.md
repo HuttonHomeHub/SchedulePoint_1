@@ -70,14 +70,17 @@ The API-level (integration/e2e) test lives in `apps/api/test/<feature>.e2e-spec.
 
 ### File & symbol naming conventions
 
-- Files: `kebab-case` (`create-reference-item.dto.ts`). Classes/types:
-  `PascalCase`. Providers: `‹Feature›Controller|Service|Repository`. DTOs:
-  `‹Action›‹Entity›Dto` / `‹Entity›ResponseDto`. Permission codes:
-  `‹resource›:‹action›` (`reference:create`). See `CLAUDE.md §5`.
+- Files: `kebab-case` (`create-client.dto.ts`). Classes/types: `PascalCase`.
+  Providers: `‹Feature›Controller` / `‹Feature›Service` / `‹Entity›Repository`
+  — note the repository is singular after its entity (`client.repository.ts`,
+  `note.repository.ts`), the controller and service plural after the feature
+  (`clients.controller.ts`). DTOs: `‹Action›‹Entity›Dto` / `‹Entity›ResponseDto`
+  (`create-client.dto.ts`, `client-response.dto.ts`). Permission codes:
+  `‹resource›:‹action›` (`client:create`). See `CLAUDE.md §5`.
 
 ### Controller pattern (thin)
 
-`reference.controller.ts` — HTTP only: routing, versioned path
+`clients.controller.ts` — HTTP only: routing, versioned path
 (`@Controller({ path, version: '1' })`), DTO binding, `@RequirePermissions(...)`,
 status codes (`@HttpCode`), OpenAPI decorators, and mapping entities to
 **response DTOs**. **No business logic.** Injects the authenticated principal via
@@ -86,14 +89,14 @@ items return the resource (wrapped as `{ data }`) by the global interceptor.
 
 ### Service pattern (business logic)
 
-`reference.service.ts` — orchestrates the use case: **authorise → apply rules →
+`clients.service.ts` — orchestrates the use case: **authorise → apply rules →
 delegate persistence to the repository → log**. Owns transaction boundaries when
 a use case spans multiple writes. Throws typed **domain errors** (never HTTP
 exceptions). Contains no raw Prisma and no HTTP concerns.
 
 ### Repository / data-access pattern
 
-`reference.repository.ts` — the **only** Prisma consumer for the feature. It
+`client.repository.ts` — the **only** Prisma consumer for the feature. It
 encapsulates queries and **centralises the soft-delete filter** (`deletedAt:
 null`) so no caller can forget it, exposes an optimistic-locked update
 (`updateIfVersionMatches` → row count), and keeps pagination query shape in one
