@@ -23,11 +23,42 @@ E2E_DEST=$API/test/reference.e2e-spec.ts
 SCHEMA=$API/prisma/schema.prisma
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
+fail() { printf '\033[1;31m==>\033[0m %s\n' "$1" >&2; exit 1; }
+
+# This script writes into the working tree, so everything it will later delete
+# or overwrite must be provably its own. Refuse to start otherwise: a developer
+# who has genuinely built `src/modules/reference` should not lose it to a
+# verification run's cleanup.
+if [ -e "$MODULE_DEST" ]; then
+  fail "$MODULE_DEST already exists — refusing to overwrite it. Remove or rename it first."
+fi
+if [ -e "$E2E_DEST" ]; then
+  fail "$E2E_DEST already exists — refusing to overwrite it. Remove or rename it first."
+fi
+
+# Back the schema up byte-for-byte rather than reverting it with
+# `git checkout --`, which restores the *committed* file and so silently
+# discards any uncommitted migration work in progress — it did exactly that
+# once (TECH_DEBT #52). A copy restores what was actually there, which also
+# means the script stays usable while a schema change is in flight: verifying
+# the template against an in-progress model is precisely when you want it.
+SCHEMA_BACKUP=$(mktemp)
 
 cleanup() {
   info 'Reverting materialised template'
   rm -rf "$MODULE_DEST" "$E2E_DEST"
-  git checkout -- "$SCHEMA" 2>/dev/null || true
+  if [ -s "$SCHEMA_BACKUP" ]; then
+    cp "$SCHEMA_BACKUP" "$SCHEMA"
+    # A restore that didn't restore is worse than no restore, because nothing
+    # would say so. Check it, and if it failed, keep the backup and name it.
+    if cmp -s "$SCHEMA_BACKUP" "$SCHEMA"; then
+      rm -f "$SCHEMA_BACKUP"
+    else
+      printf '\033[1;31m==>\033[0m Failed to restore %s — your original is at %s\n' "$SCHEMA" "$SCHEMA_BACKUP" >&2
+    fi
+  else
+    rm -f "$SCHEMA_BACKUP"
+  fi
   # Restore the model-less Prisma client so local dev isn't left confused.
   pnpm --filter @repo/api exec prisma generate >/dev/null 2>&1 || true
 }
@@ -37,6 +68,8 @@ info 'Materialising the reference template into the app'
 mkdir -p "$API/src/modules"
 cp -r "$TEMPLATE/module" "$MODULE_DEST"
 cp "$TEMPLATE/reference.e2e-spec.ts" "$E2E_DEST"
+# Snapshot before the append — cleanup restores from this, not from git.
+cp "$SCHEMA" "$SCHEMA_BACKUP"
 # Add the reference model to the schema (as `prisma migrate dev` copying would).
 cat "$TEMPLATE/schema.reference.prisma" >>"$SCHEMA"
 

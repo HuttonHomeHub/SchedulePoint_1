@@ -10,6 +10,28 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — `verify-template.sh` restores what was there, not what was committed
+
+**Decision.** The template verifier no longer cleans up with `git checkout -- schema.prisma`. It
+copies the schema to a temp file before appending the reference model, restores from that copy, and
+verifies the restore with `cmp` — keeping the backup and naming its path if the restore ever fails.
+It also refuses to start if `src/modules/reference` or `test/reference.e2e-spec.ts` already exists,
+since cleanup deletes both unconditionally. TECH_DEBT #52 closed.
+
+**Why.** `git checkout --` restores the _committed_ file, so running the verifier while a migration
+was in progress silently discarded the uncommitted schema work — it did exactly that once during
+ADR-0053 M1. CI never saw it because CI's tree is always committed, which is precisely what makes
+this class of bug survive: the environment that would catch it is the one environment where it
+cannot happen.
+
+**Consequence.** The script is now safe on a dirty tree, which also makes it _useful_ on one —
+checking that the template still compiles against an in-progress model is exactly when you want to
+run it, and the old behaviour punished you for trying. Deliberately **not** taken: the alternative
+of refusing to run while the schema is dirty. It would have prevented the data loss, but by
+removing the capability rather than fixing it.
+
+---
+
 ### 2026-07-27 — The Prisma datamodel stops describing indexes it cannot describe
 
 **Decision.** `Activity` drops its `@@index([parentId])`. The database's index on that column has
