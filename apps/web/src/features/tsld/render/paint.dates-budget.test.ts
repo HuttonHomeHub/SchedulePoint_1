@@ -21,6 +21,9 @@ import { DATE_LABEL_MIN_PX_PER_DAY, type RenderActivity, type Viewport } from '.
  */
 const PALETTE: TsldPalette = {
   gridLine: '#111',
+  gridLineDay: '#3a3a3a',
+  gridLineMonth: '#111111',
+  gridLineYear: '#565656',
   edge: '#333',
   bar: '#44f',
   critical: '#f00',

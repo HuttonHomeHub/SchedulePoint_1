@@ -186,6 +186,32 @@ describe('a theme-scoped flag layer restates its global layer in full', () => {
   );
 });
 
+describe('the time-axis gridline tiers (tsld-toolbar-canvas-refinements F5)', () => {
+  it.each(THEME_SELECTORS)('%s declares all three grid tokens, literally', (selector) => {
+    const tokens = themeTokens(selector);
+    for (const name of ['--canvas-grid-day', '--canvas-grid-month', '--canvas-grid-year']) {
+      const value = tokens.get(name);
+      expect(value, `${selector} does not declare ${name}`).toBeDefined();
+      // Same reasoning as --field/--canvas: a var() alias here would resolve once against the
+      // block it's declared in, and .dark/.corporate would silently inherit Light's grid.
+      expect(value, `${selector} ${name} must be a literal colour, not ${value}`).not.toMatch(
+        /var\(/,
+      );
+    }
+  });
+
+  it('maps all three into @theme inline, so the painter-facing tokens compile', () => {
+    const theme = declarations(blockBody('@theme inline'));
+    for (const name of [
+      '--color-canvas-grid-day',
+      '--color-canvas-grid-month',
+      '--color-canvas-grid-year',
+    ]) {
+      expect(theme.has(name), `${name} is missing from @theme inline`).toBe(true);
+    }
+  });
+});
+
 describe('the retired token families are gone', () => {
   it.each(['--app-header', '--sidebar'])('%s has no declarations left', (prefix) => {
     // Both were replaced by a complete surface family. Leaving them declared invites a

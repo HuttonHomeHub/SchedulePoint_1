@@ -386,6 +386,14 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   hover/selection highlight reuses the `--color-ring` selection colour at the
   next line-weight step up, keeping each pass's dash state — the highlight and
   the driving cue are weight + dash changes, never colour alone.
+- **TSLD time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5)** —
+  three new tokens, `--canvas-grid-day` / `--canvas-grid-month` / `--canvas-grid-year`, authored per
+  theme block beside `--canvas` / `--canvas-band` (mapped in `@theme inline` as
+  `--color-canvas-grid-*`) and added to **both** `resolveTsldPalette` and `resolvePrintPalette` (the
+  painter palette contract is total). Day is a step **lighter** than `--border`, month sits
+  approximately **at** `--border`, year is a step **stronger** — two cues (weight _and_ colour), so
+  the day → month → year hierarchy survives monochrome print and colour-blind reading. The existing
+  `gridLine` field (`--color-border`) is kept unchanged as the flag-off value.
 
 ---
 

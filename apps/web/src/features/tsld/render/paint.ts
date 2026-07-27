@@ -145,6 +145,16 @@ export interface TsldPalette {
   // guaranteed by the same 1:1 fill↔ink pairing labels rely on in both themes and under every
   // lens; the LOE bracket caps + WBS-summary tabs draw in the bar's own resolved fill, so the
   // Colour-by lenses recolour the whole glyph as one shape (the lens owns colour, M4 owns shape).
+  // ── Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5) ──
+  // `gridLine` above is kept and still resolves `--color-border` — it is the value the flag-off
+  // path strokes, which is what makes the parity claim structural. Read only when
+  // `TsldScene.gridTiers` is on.
+  /** The finest tier (day boundaries) — a step lighter than `gridLine`. */
+  gridLineDay: string;
+  /** The mid tier (month boundaries) — approximately `gridLine`. */
+  gridLineMonth: string;
+  /** The coarsest tier (year boundaries) — a step stronger than `gridLine`, drawn at `lineWidth 2`. */
+  gridLineYear: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -215,6 +225,13 @@ export interface TsldScene {
    * the flag-off parity claim structural rather than a promise. The budget suite flips it.
    */
   monthBands?: boolean | undefined;
+  /**
+   * Draw the time-axis grid as three tiers — day / month / year, each its own colour + weight
+   * (ADR-0055 token rule; day/month tier F5, `VITE_CANVAS_TIME_AXIS`) — instead of the single
+   * `gridLine` pass. Absent ⇒ the one flag-off pass, byte-for-byte today's paint (the flag-off
+   * parity claim structural, not a promise). The budget suite (`paint.grid-budget.test.ts`) flips it.
+   */
+  gridTiers?: boolean | undefined;
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // ALL default-absent ⇒ byte-for-byte today's paint (the flag-off / no-active-lens parity gate).
   /** Ids of activities the active filter dimmed (non-matches). Members paint muted (reduced alpha)
@@ -816,23 +833,56 @@ export function paintScene(
     }
   }
 
-  // Layer 1: time-axis gridlines — day / month / year variants, each gated by its toggle. Batched
-  // into one stroke. Day lines are culled below `DAY_GRID_MIN_PX` (else a solid block); month/year
-  // boundaries come from the cheap integer-rollover `calendarBoundaries` (no per-day Date parsing).
-  ctx.strokeStyle = palette.gridLine;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  const gridLine = (d: number): void => {
-    const x = Math.round(screenXOfDay(d, view)) + 0.5;
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, size.height);
-  };
-  if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
-    for (let d = firstDay; d <= lastDay; d += 1) gridLine(d);
+  // Layer 1: time-axis gridlines — day / month / year variants, each gated by its toggle. Day
+  // lines are culled below `DAY_GRID_MIN_PX` (else a solid block); month/year boundaries come
+  // from the cheap integer-rollover `calendarBoundaries` (no per-day Date parsing).
+  if (scene.gridTiers) {
+    // Three tiers (F5, `VITE_CANVAS_TIME_AXIS`): each its own batched pass, drawn in order
+    // day → month → year so a heavier tier overwrites a coincident lighter one (a month start is
+    // also a day; a year start is also both). Day/month sit on a HALF-pixel x (odd lineWidth 1);
+    // year sits on an INTEGER x (even lineWidth 2) — mixing the two crispness rules on one width
+    // is what makes a 2px line render as two blurry grey pixels instead of one crisp one.
+    const strokeTier = (
+      days: Iterable<number>,
+      colour: string,
+      width: number,
+      half: boolean,
+    ): void => {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (const d of days) {
+        const raw = Math.round(screenXOfDay(d, view));
+        const x = half ? raw + 0.5 : raw;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, size.height);
+      }
+      ctx.stroke();
+    };
+    if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
+      const days: number[] = [];
+      for (let d = firstDay; d <= lastDay; d += 1) days.push(d);
+      strokeTier(days, palette.gridLineDay, 1, true);
+    }
+    if (toggles.monthGrid) strokeTier(bounds.months, palette.gridLineMonth, 1, true);
+    if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, 2, false);
+  } else {
+    // Flag-off: the single `gridLine` pass, byte-for-byte today's paint. Batched into one stroke.
+    ctx.strokeStyle = palette.gridLine;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const gridLine = (d: number): void => {
+      const x = Math.round(screenXOfDay(d, view)) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, size.height);
+    };
+    if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
+      for (let d = firstDay; d <= lastDay; d += 1) gridLine(d);
+    }
+    if (toggles.monthGrid) for (const d of bounds.months) gridLine(d);
+    if (toggles.yearGrid) for (const d of bounds.years) gridLine(d);
+    ctx.stroke();
   }
-  if (toggles.monthGrid) for (const d of bounds.months) gridLine(d);
-  if (toggles.yearGrid) for (const d of bounds.years) gridLine(d);
-  ctx.stroke();
 
   // Layer 2: dependency edges (only when an endpoint is visible). Driving edges — the
   // ties that set their successor's start (M3) — are drawn emphasised: a heavier SOLID

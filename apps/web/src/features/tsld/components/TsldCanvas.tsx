@@ -613,6 +613,9 @@ export function TsldCanvas({
     // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the
     // scene carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4).
     monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
+    // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
+    // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
+    gridTiers: CANVAS_TIME_AXIS_ENABLED,
     dimmedIds,
     barFill,
     barInk,
@@ -694,6 +697,9 @@ export function TsldCanvas({
       isWorkingDay,
       todayOffset,
       monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
+      // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
+      // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
+      gridTiers: CANVAS_TIME_AXIS_ENABLED,
       dimmedIds,
       barFill,
       barInk,

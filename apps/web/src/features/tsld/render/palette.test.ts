@@ -75,6 +75,29 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   });
 });
 
+// ── Time-axis gridline tier palette entries (F5, `VITE_CANVAS_TIME_AXIS`) ────────────────
+describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineYear)', () => {
+  it('resolveTsldPalette resolves all three tiers (documented jsdom fallbacks), distinct from each other', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.gridLineDay).toBe('#3a3f4a');
+    expect(palette.gridLineMonth).toBe('#2a2f3a');
+    expect(palette.gridLineYear).toBe('#565c6a');
+    // The whole point is a visible hierarchy — three distinct colours, not one repeated.
+    expect(new Set([palette.gridLineDay, palette.gridLineMonth, palette.gridLineYear]).size).toBe(
+      3,
+    );
+    // The flag-off value is unchanged by this addition (total contract, kept separate).
+    expect(palette.gridLine).toBe('#2a2f3a');
+  });
+
+  it('resolvePrintPalette carries LIGHT fallbacks for the same three tiers (total contract)', () => {
+    const palette = resolvePrintPalette();
+    expect(palette.gridLineDay).toBe('#eff1f4');
+    expect(palette.gridLineMonth).toBe('#e5e7eb');
+    expect(palette.gridLineYear).toBe('#9ca3af');
+  });
+});
+
 // Self-contained oklch→luminance/contrast helpers shared by the token-mirror contrast suites
 // below (mirrors lenses.test.ts; token values mirror `styles/globals.css`).
 const oklchToLuminance = (L: number, C: number, H: number): number => {
