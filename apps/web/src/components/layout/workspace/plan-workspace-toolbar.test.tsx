@@ -220,6 +220,16 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByText('Build')).toBeInTheDocument();
   });
 
+  it('reads the row cue as a true label — a fixed-width gutter with a divider, not free-floating eyebrow text', () => {
+    renderScreen();
+    // F1 (tsld-toolbar-canvas-refinements): the row word sits inside a bordered gutter that shares
+    // the toolbar's own divider treatment, rather than sitting loose above the controls.
+    for (const word of ['Navigate', 'Build']) {
+      const gutter = screen.getByText(word).parentElement;
+      expect(gutter).toHaveClass('border-r', 'w-16', 'shrink-0');
+    }
+  });
+
   it('pins the Project-finish chip inline in the toolbar (decision #1)', () => {
     renderScreen();
     expect(screen.getByText('Finish')).toBeInTheDocument();

@@ -55,6 +55,7 @@ import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
+import { useFirstUseHint } from './use-first-use-hint';
 
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
@@ -94,36 +95,53 @@ const ZOOM_LABELS: Record<string, string> = {
   year: 'Year',
 };
 
-/**
- * The view-layer toggles, in the order the `View▾` popover lists them (mirrors TsldViewControls).
- *
- * The three ADR-0054 insight layers — **Dates** (§3), **Float & drift** (§4) and **Link slack**
- * (§5) — are appended only under `VITE_CANVAS_LIVE_FEEDBACK`, so flag-off the popover lists
- * exactly the six it always did (the byte-for-byte rollback contract). `TSLD_VIEW_TOGGLE_KEYS`
- * below pins this list in a test: two of these three were once silently dropped by a bad
- * search-and-replace, leaving their paint passes unreachable while the release notes claimed
- * they shipped. A registry that can rot silently gets a test.
- */
-const VIEW_TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }> = [
-  { key: 'dayGrid', label: 'Day grid' },
-  { key: 'monthGrid', label: 'Month grid' },
-  { key: 'yearGrid', label: 'Year grid' },
-  { key: 'today', label: 'Today line' },
-  { key: 'nonWorking', label: 'Non-working' },
-  { key: 'labels', label: 'Labels' },
-  ...(CANVAS_LIVE_FEEDBACK_ENABLED
-    ? ([
-        { key: 'dates', label: 'Dates' },
-        { key: 'floatTails', label: 'Float & drift' },
-        { key: 'linkSlack', label: 'Link slack' },
-      ] as const)
-    : ([] as const)),
+/** The three `View▾` groups (feature-spec.md §4.8): structure (grid tiers), markers (on-canvas
+ * indicators), and insight overlays (the flag-gated ADR-0054 lenses + the Late-start overlay,
+ * which stops being a special case set apart by an incidental border and becomes an ordinary
+ * member here). */
+type ViewToggleGroupId = 'structure' | 'markers' | 'insight';
+
+const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: string }> = [
+  { id: 'structure', label: 'Structure' },
+  { id: 'markers', label: 'Markers' },
+  { id: 'insight', label: 'Insight overlays' },
 ];
 
-/** The keys `View▾` actually offers, exported so a test can pin the registry against drift. */
-export const TSLD_VIEW_TOGGLE_KEYS: ReadonlyArray<keyof TsldViewToggles> = VIEW_TOGGLES.map(
-  (t) => t.key,
-);
+/**
+ * **Single source of truth** for every `View▾` toggle: its group, its label, and (for a flag-gated
+ * item) whether it is currently offered. `Record<keyof TsldViewToggles, …>` makes this a **compile
+ * error**, not a silent gap, if `TsldViewToggles` ever gains a key nobody assigned here — the
+ * direct strengthening of the guard whose absence let two ADR-0054 toggles get silently dropped by
+ * a bad search-and-replace while the release notes claimed they shipped. Object key order is
+ * insertion order (guaranteed for non-integer string keys), which is also the order `View▾` lists
+ * within each group — one ordering, not two structures that can drift apart.
+ */
+const VIEW_TOGGLE_META: Record<
+  keyof TsldViewToggles,
+  { group: ViewToggleGroupId; label: string; enabled?: boolean }
+> = {
+  dayGrid: { group: 'structure', label: 'Day grid' },
+  monthGrid: { group: 'structure', label: 'Month grid' },
+  yearGrid: { group: 'structure', label: 'Year grid' },
+  today: { group: 'markers', label: 'Today line' },
+  nonWorking: { group: 'markers', label: 'Non-working' },
+  labels: { group: 'markers', label: 'Labels' },
+  dates: { group: 'insight', label: 'Dates', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  floatTails: { group: 'insight', label: 'Float & drift', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  linkSlack: { group: 'insight', label: 'Link slack', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  lateOverlay: { group: 'insight', label: 'Late-start overlay', enabled: SCHEDULING_MODES_ENABLED },
+};
+
+function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof TsldViewToggles> {
+  return (Object.keys(VIEW_TOGGLE_META) as Array<keyof TsldViewToggles>).filter(
+    (key) => VIEW_TOGGLE_META[key].group === group && VIEW_TOGGLE_META[key].enabled !== false,
+  );
+}
+
+/** The keys `View▾` actually offers (every group, flag-off-gated members excluded), exported so a
+ * test can pin the registry against drift. */
+export const TSLD_VIEW_TOGGLE_KEYS: ReadonlyArray<keyof TsldViewToggles> =
+  VIEW_TOGGLE_GROUP_ORDER.flatMap(({ id }) => visibleViewToggleKeysIn(id));
 
 /**
  * The **Go to date** navigation control (ADR-0033 M2) — a labelled disclosure that opens a small date
@@ -145,6 +163,10 @@ function GoToDateControl({
   ctx: TsldToolbarContext;
   itemProps: ToolbarItemRenderApi['itemProps'];
 }): React.ReactElement {
+  // First-use-only disclosure (feature-spec.md §4.2): marked seen on the first successful PICK
+  // (not the first open) — opening and closing without reading proves nothing. The sentence never
+  // leaves the accessibility tree: seen ⇒ `sr-only`, `aria-describedby` stays wired throughout.
+  const hint = useFirstUseHint('go-to-date');
   return (
     <ToolbarPopover
       label="Go to date"
@@ -162,13 +184,35 @@ function GoToDateControl({
           type="date"
           aria-describedby={GOTO_HINT_ID}
           onChange={(event) => {
-            if (event.target.value) ctx.goToDate(event.target.value);
+            if (event.target.value) {
+              ctx.goToDate(event.target.value);
+              hint.markSeen();
+            }
           }}
           className="h-9"
         />
-        <span id={GOTO_HINT_ID} className="text-muted-foreground text-xs">
+        <span
+          id={GOTO_HINT_ID}
+          className={cn('text-muted-foreground text-xs', hint.unseen ? '' : 'sr-only')}
+        >
           Pans the timeline only — nothing is saved.
         </span>
+        {/* Today shortcut (feature-spec.md §4.4) — the same `goToDate` command the standalone
+            toolbar button drives, pre-filled with today's date. Not `hasDiagram`-gated (unlike its
+            sibling toolbar button): panning an empty canvas is harmless, and this field is gated
+            only on `plannedStart !== null`, same as the date input above. Does not close the
+            popover, consistent with picking a date. */}
+        <button
+          type="button"
+          onClick={() => {
+            ctx.goToDate(ctx.todayIso);
+            hint.markSeen();
+          }}
+          className="hover:bg-accent/60 -mx-1 flex items-center gap-1.5 rounded-md px-1 py-1 text-left"
+        >
+          <LocateFixed aria-hidden="true" className="size-4" />
+          Today
+        </button>
       </div>
     </ToolbarPopover>
   );
@@ -1034,36 +1078,37 @@ function CurrentConflictStatus({
   );
 }
 
-/** The checkbox body of the `View▾` popover — the display toggles, driven off the context. */
+/** The checkbox body of the `View▾` popover — grouped into Structure / Markers / Insight overlays
+ * (feature-spec.md §4.8), one `<fieldset>` + `<legend>` per non-empty group. `max-h-[60vh]
+ * overflow-y-auto` is fixed locally here (not in `ToolbarPopover`, whose `ESTIMATED_HEIGHT` anchor
+ * assumed a shorter, ungrouped panel) since the primitive is shared with `Summary` and `Legend`
+ * and has no reason to change for this panel's height alone. */
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 text-sm font-medium">Display</legend>
-      {VIEW_TOGGLES.map(({ key, label }) => (
-        <label key={key} className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={ctx.viewToggles[key]}
-            onChange={() => ctx.toggleView(key)}
-            className="accent-primary size-4"
-          />
-          {label}
-        </label>
-      ))}
-      {/* Late-Start analysis overlay (ADR-0033 M4, flag-on only): a read-only view that renders bars
-          from the late dates for float analysis; while on, editing is suppressed by the host. */}
-      {SCHEDULING_MODES_ENABLED ? (
-        <label className="border-border mt-1 flex items-center gap-2 border-t pt-2 text-sm">
-          <input
-            type="checkbox"
-            checked={ctx.viewToggles.lateOverlay}
-            onChange={() => ctx.toggleView('lateOverlay')}
-            className="accent-primary size-4"
-          />
-          Late-start overlay
-        </label>
-      ) : null}
-    </fieldset>
+    <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
+      {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
+        const keys = visibleViewToggleKeysIn(id);
+        if (keys.length === 0) return null;
+        return (
+          <fieldset key={id} className="flex flex-col gap-2">
+            <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+              {label}
+            </legend>
+            {keys.map((key) => (
+              <label key={key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={ctx.viewToggles[key]}
+                  onChange={() => ctx.toggleView(key)}
+                  className="accent-primary size-4"
+                />
+                {VIEW_TOGGLE_META[key].label}
+              </label>
+            ))}
+          </fieldset>
+        );
+      })}
+    </div>
   );
 }
 

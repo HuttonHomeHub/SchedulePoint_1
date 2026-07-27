@@ -64,6 +64,28 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
     expect(screen.queryByRole('button', { name: 'Go to date' })).not.toBeInTheDocument();
   });
 
+  it('offers a Today shortcut inside the Go-to-date popover that jumps without closing it', () => {
+    const goToDate = vi.fn();
+    renderToolbar(ctx({ goToDate, todayIso: '2026-07-27' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Go to date' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(goToDate).toHaveBeenCalledWith('2026-07-27');
+    // Still open — picking Today behaves like picking a date, it doesn't dismiss the popover.
+    expect(screen.getByLabelText('Date')).toBeInTheDocument();
+  });
+
+  it('shows the "nothing is saved" hint on first use, then hides it (visually) once seen', () => {
+    localStorage.clear();
+    renderToolbar(ctx({ goToDate: vi.fn() }));
+    fireEvent.click(screen.getByRole('button', { name: 'Go to date' }));
+    const hint = screen.getByText('Pans the timeline only — nothing is saved.');
+    expect(hint).not.toHaveClass('sr-only');
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-06-15' } });
+    expect(hint).toHaveClass('sr-only');
+    localStorage.clear();
+  });
+
   it('offers an Early | Visual mode selector (labelled), marks the active mode, and switches', () => {
     const setSchedulingMode = vi.fn();
     renderToolbar(ctx({ schedulingMode: 'EARLY', setSchedulingMode }));
@@ -99,5 +121,22 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
     const panel = screen.getByRole('dialog', { name: 'View' });
     fireEvent.click(within(panel).getByLabelText('Late-start overlay'));
     expect(toggleView).toHaveBeenCalledWith('lateOverlay');
+  });
+
+  it('groups the View popover into Structure / Markers / Insight overlays, Late-start overlay as an ordinary insight member', () => {
+    renderToolbar(ctx({ hasDiagram: true }));
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    const groups = ['Structure', 'Markers', 'Insight overlays'];
+    for (const label of groups) {
+      expect(within(panel).getByText(label)).toBeInTheDocument();
+    }
+    // Late-start overlay lives under the same Insight overlays <fieldset> as the ADR-0054 lenses —
+    // no separate border-t treatment setting it apart.
+    const insightLegend = within(panel).getByText('Insight overlays');
+    const insightFieldset = insightLegend.closest('fieldset');
+    expect(insightFieldset).not.toBeNull();
+    expect(within(insightFieldset!).getByLabelText('Late-start overlay')).toBeInTheDocument();
+    expect(within(insightFieldset!).getByLabelText('Float & drift')).toBeInTheDocument();
   });
 });
