@@ -32,11 +32,41 @@ export type PlanChromeDialog =
   'details' | 'baselines' | 'calendar' | 'earned-value' | 'resource-histogram' | 'share';
 
 /**
- * The three **plan-chrome dialogs** — Plan details, Baselines, and the working-day Calendar — shared
- * by both plan layouts: the ADR-0030 header overflow ({@link PlanActionsMenu}) and the ADR-0031
- * toolbar overflow ({@link ToolbarPlanWorkspace}). Both open them from a single `PlanChromeDialog`
- * state and drive them off the same {@link PlanWorkspaceModel}, so the copy and behaviour can't drift
- * between the two paths (TECH_DEBT #31b). Only one dialog is open at a time; `null` closes all.
+ * One titled subsection of the **Schedule settings** dialog.
+ *
+ * That dialog accumulated seven independent settings groups one migration at a time, and every one
+ * of them renders its own controls with no visible heading — so a planner opening it scrolled from
+ * working-day configuration straight into critical-path and earned-value options with nothing
+ * marking the boundary (TECH_DEBT #60). This supplies the missing signpost.
+ *
+ * The heading is an `<h3>` because `Dialog` renders its own `title` as the `<h2>` these sit under,
+ * so the dialog reads as one properly-nested outline to a screen reader's heading navigation rather
+ * than a flat wall of controls. Kept local: the seven section components are shared with the legacy
+ * `plan-detail` page, which already groups them under its own "Schedule" heading and would end up
+ * with two levels of heading for one group if the title moved inside them.
+ */
+function SettingsSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-base font-medium">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * The **plan-chrome dialogs** — Plan details, Baselines, Schedule settings, and the flag-gated
+ * Earned value / Resource histogram / Share links — shared by both plan layouts: the ADR-0030
+ * header overflow ({@link PlanActionsMenu}) and the ADR-0031 toolbar overflow
+ * ({@link ToolbarPlanWorkspace}). Both open them from a single `PlanChromeDialog` state and drive
+ * them off the same {@link PlanWorkspaceModel}, so the copy and behaviour can't drift between the
+ * two paths (TECH_DEBT #31b). Only one dialog is open at a time; `null` closes all.
  */
 export function PlanChromeDialogs({
   dialog,
@@ -79,42 +109,60 @@ export function PlanChromeDialogs({
       <Dialog
         open={dialog === 'calendar'}
         onClose={onClose}
-        title="Working-day calendar"
-        description="The calendar that sets which days are working days (and holidays) for this plan's schedule."
+        title="Schedule settings"
+        description="Everything that changes how this plan's dates are calculated — its working-day calendar, how the critical path and float are measured, and how progress, resources and external dates are treated."
       >
         <div className="flex flex-col gap-6">
-          <PlanCalendarPicker
-            orgSlug={model.orgSlug}
-            plan={plan}
-            calendars={model.calendars.data ?? []}
-            calendarsLoading={model.calendars.isPending}
-            canEdit={model.canWrite}
-          />
+          <SettingsSection title="Working-day calendar">
+            <PlanCalendarPicker
+              orgSlug={model.orgSlug}
+              plan={plan}
+              calendars={model.calendars.data ?? []}
+              calendarsLoading={model.calendars.isPending}
+              canEdit={model.canWrite}
+            />
+          </SettingsSection>
           {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
-            <PlanScheduleSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+            <SettingsSection title="Critical path & float">
+              <PlanScheduleSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+            </SettingsSection>
           ) : null}
           {PROGRESS_INGESTION_ENABLED ? (
-            <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+            <SettingsSection title="Progress & recalculation">
+              <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+            </SettingsSection>
           ) : null}
           {ADVANCED_CONSTRAINTS_ENABLED ? (
-            <PlanExpectedFinishToggle
-              orgSlug={model.orgSlug}
-              plan={plan}
-              canEdit={model.canWrite}
-            />
+            <SettingsSection title="Expected finish">
+              <PlanExpectedFinishToggle
+                orgSlug={model.orgSlug}
+                plan={plan}
+                canEdit={model.canWrite}
+              />
+            </SettingsSection>
           ) : null}
           {RESOURCE_LEVELLING_ENABLED ? (
-            <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+            <SettingsSection title="Resource levelling">
+              <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+            </SettingsSection>
           ) : null}
           {INTER_PROJECT_DATES_ENABLED ? (
-            <PlanExternalRelationshipsSettings
-              orgSlug={model.orgSlug}
-              plan={plan}
-              canEdit={model.canWrite}
-            />
+            <SettingsSection title="External relationships">
+              <PlanExternalRelationshipsSettings
+                orgSlug={model.orgSlug}
+                plan={plan}
+                canEdit={model.canWrite}
+              />
+            </SettingsSection>
           ) : null}
           {EARNED_VALUE_ENABLED ? (
-            <PlanEarnedValueSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+            <SettingsSection title="Earned value">
+              <PlanEarnedValueSettings
+                orgSlug={model.orgSlug}
+                plan={plan}
+                canEdit={model.canWrite}
+              />
+            </SettingsSection>
           ) : null}
         </div>
       </Dialog>

@@ -260,8 +260,11 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
 
   it('surfaces the critical-path definition settings in the Calendar dialog (regression: they were dropped from the ADR-0031 toolbar migration and unreachable in the default flag-on UI)', () => {
     renderScreen();
-    fireEvent.click(screen.getByRole('button', { name: 'Calendar…' }));
-    expect(screen.getByRole('dialog', { name: 'Working-day calendar' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule settings…' }));
+    expect(screen.getByRole('dialog', { name: 'Schedule settings' })).toBeInTheDocument();
+    // The working-day calendar is now one titled subsection of that dialog, not its whole scope
+    // (TECH_DEBT #60) — so the heading, not the dialog name, is what identifies it.
+    expect(screen.getByRole('heading', { name: 'Working-day calendar' })).toBeInTheDocument();
     expect(screen.getByTestId('calendar-picker')).toBeInTheDocument();
     expect(screen.getByText('Critical-path definition')).toBeInTheDocument();
     expect(screen.getByText('Total-float measure')).toBeInTheDocument();

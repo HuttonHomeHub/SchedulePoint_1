@@ -791,9 +791,10 @@ export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
  * theme radios with no programmatic group, and a `globals.css` comment claiming a contrast
  * coverage the suite did not have), **ux** (the client-row accent bar ADR-0055 §3 promised but
  * never shipped, and the unstated breadcrumb-seam decision, now named in the ADR), **component**
- * (catalogue gaps, `ToggleChip`'s zero consumers logged as debt) and **performance** (pass, no
- * blockers). Light's and Dark's own chrome values landed first and separately (S5-T1) so that the
- * flag-off parity suites still meant something on the day they were most needed.
+ * (catalogue gaps, `ToggleChip`'s zero consumers logged as debt — since closed: it is now the
+ * calendar dialog's working-days picker) and **performance** (pass, no blockers). Light's and
+ * Dark's own chrome values landed first and separately (S5-T1) so that the flag-off parity suites
+ * still meant something on the day they were most needed.
  *
  * When on, the shell stops being "a centred header above a rail" and becomes one **full-bleed
  * chrome band**: the header row and, on a plan, the two toolbar rows render as a single navy

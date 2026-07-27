@@ -80,17 +80,18 @@ export async function drawActivity(
 }
 
 /**
- * Open the plan's **Calendar…** toolbar dialog, open the tier-grouped calendar `Combobox`, and
- * return the OPTION NAMES it offers. This is the picker the tier must actually govern: a project
- * calendar has to be offered inside its own project and nowhere else.
+ * Open the plan's **Schedule settings…** toolbar dialog (which holds the working-day calendar as
+ * one of its sections — TECH_DEBT #60), open the tier-grouped calendar `Combobox`, and return the
+ * OPTION NAMES it offers. This is the picker the tier must actually govern: a project calendar has
+ * to be offered inside its own project and nowhere else.
  *
  * The listbox is looked up INSIDE the dialog on purpose — the plan workspace also carries the
  * canvas's parallel activity listbox, so a page-wide `getByRole('listbox')` would be ambiguous.
  */
 export async function calendarPickerOptions(page: Page): Promise<string[]> {
   const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
-  await toolbar.getByRole('button', { name: 'Calendar…' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Working-day calendar' });
+  await toolbar.getByRole('button', { name: 'Schedule settings…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Schedule settings' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('combobox', { name: 'Calendar' }).press('ArrowDown');
   const listbox = dialog.getByRole('listbox');

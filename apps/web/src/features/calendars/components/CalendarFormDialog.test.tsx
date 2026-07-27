@@ -126,4 +126,22 @@ describe('CalendarFormDialog', () => {
     expect(mask & (1 << 5)).not.toBe(0);
     expect(mask).toBe(63);
   });
+
+  it('builds the weekday group from the shared ToggleChip, not a one-off button', () => {
+    // The weekday picker is `ToggleChip`'s reference consumer (TECH_DEBT #57, since closed). It
+    // was previously a hand-rolled `<Button variant={pressed ? 'default' : 'outline'}>`, which is
+    // exactly the one-off styling CLAUDE.md §12 forbids — and a silent revert to it would still
+    // pass every behavioural test above, since `aria-pressed` and the bitmask round-trip are
+    // identical either way. So assert the chrome only the primitive supplies: the pill radius, and
+    // a pressed state carried by fill AND border rather than by colour alone (WCAG 1.4.1).
+    renderDialog();
+    const saturday = screen.getByRole('button', { name: 'Saturday' });
+    const monday = screen.getByRole('button', { name: 'Monday' });
+
+    expect(saturday).toHaveClass('rounded-full');
+    expect(saturday).toHaveAttribute('aria-pressed', 'false');
+    expect(saturday).toHaveClass('border-input');
+    expect(monday).toHaveAttribute('aria-pressed', 'true');
+    expect(monday).toHaveClass('border-primary', 'bg-primary');
+  });
 });

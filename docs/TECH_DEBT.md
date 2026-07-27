@@ -92,21 +92,6 @@ Keep this honest and current — undocumented debt is the expensive kind.
 - Never add **undocumented** debt: if you take a shortcut, add a row here.
 - Security- and data-integrity-related debt is prioritised above convenience.
 
-### 57. `ToggleChip` has no consumers yet (ADR-0055 S1)
-
-`components/ui/toggle-chip.tsx` ships fully built, documented and tested with **zero call sites**.
-That is deliberate — S1 extracted the epic's repeated patterns before the surfaces that consume
-them, so "no one-off styling" survives the later slices — but CLAUDE.md §5 is "no dead code", and
-an unconsumed primitive is a standing risk if its intended consumer slips or changes shape.
-
-**Its consumer is named:** the Project Explorer's `All / Clients / Projects / Plans` filter chips,
-which ADR-0055 §3 and the designed-UI spec (CQ-2) deferred because the tree loads lazily — one
-query per expanded node — so client-side filtering is not buildable. Those chips need an org-scoped
-hierarchy **search endpoint** and belong to their own feature spec.
-
-**Expiry:** if that spec has not landed by the time the next UI epic closes, either build the first
-consumer or delete the primitive. An unconsumed primitive with no dated owner becomes permanent.
-
 ### 58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
 
 S4 landed the canvas month bands — the diagram on its own banded ground — but deliberately stopped
@@ -139,28 +124,6 @@ hardware.
 under DevTools) at 500 and 2,000 activities on the §16 envelope, and record the numbers in
 ADR-0026 the way the flag-flip measurements are recorded in their plans. Until then, treat the
 ≤ 4 ms figure as a design target rather than a verified property.
-
-### 60. The toolbar's "Calendar…" dialog now holds 7 unrelated settings sections
-
-`apps/web/src/components/layout/workspace/plan-chrome-dialogs.tsx`'s `dialog === 'calendar'`
-`<Dialog>` is titled **"Working-day calendar"** and described as "The calendar that sets which days
-are working days (and holidays) for this plan's schedule." One-by-one migrations off the ADR-0030
-layout have each added their settings section here rather than build a new surface — it now stacks
-`PlanCalendarPicker`, `PlanScheduleSettings` (critical-path definition / total-float measure /
-open-ends criticality), `PlanRecalcModePicker`, `PlanExpectedFinishToggle`, `PlanLevellingSettings`,
-`PlanExternalRelationshipsSettings` and `PlanEarnedValueSettings` — none of the six added after the
-calendar picker are about calendars. `PlanScheduleSettings.tsx:68-70` even notes its own heading is
-deliberately omitted "to match the sibling settings above," i.e. every section in the dialog already
-renders with no visible sub-heading, so a user opening "Calendar…" scrolls from working-day config
-straight into unrelated CPM/EVM settings with no signposting between them at all.
-
-Each migration was individually the right call — an unreachable setting beats a mislabelled dialog
-— but the dialog's title and single-paragraph description no longer describe 6 of its 7 sections.
-
-**What would close it:** either rename the dialog to something scope-accurate (e.g. "Schedule
-settings") with a description covering all seven areas, or add a visible subsection heading above
-each section (a deliberate, scoped a11y/IA pass — not a drive-by rename, since the toolbar item that
-opens it is itself labelled "Calendar…" and would need to change in step).
 
 ### 61. `Toolbar`'s `showLabel={r.item.tier === 1}` conflates priority with presentation
 

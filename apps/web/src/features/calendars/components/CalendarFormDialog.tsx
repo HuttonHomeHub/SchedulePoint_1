@@ -22,18 +22,20 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { ToggleChip } from '@/components/ui/toggle-chip';
 import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { calendarErrorMessage } from '@/lib/api/calendar-scope-errors';
 
 /**
  * Accessible weekday toggle group bound to a {@link WorkingWeekdays} bitmask.
- * A `<fieldset>`/`<legend>` names the group; each day is a real `<button>` with
- * `aria-pressed` carrying its on/off state (so meaning is not colour-only and the
- * control is fully keyboard operable). The group-level validation error is linked
- * via `aria-describedby`, and the fieldset is programmatically focusable
- * (`tabIndex={-1}`) with React Hook Form's `field.ref` attached — so a failed
- * submit moves focus here and the screen reader announces the group + its error
- * (a plain, non-focusable fieldset would never surface that description).
+ * A `<fieldset>`/`<legend>` names the group; each day is a {@link ToggleChip} — the shared
+ * `aria-pressed` primitive for an **independent boolean**, which is exactly what a weekday is
+ * (turning Monday on says nothing about Tuesday). Its pressed state is carried by fill *and*
+ * border, so meaning is never colour-only, and it is a real `<button>`, so the group stays fully
+ * keyboard operable. The group-level validation error is linked via `aria-describedby`, and the
+ * fieldset is programmatically focusable (`tabIndex={-1}`) with React Hook Form's `field.ref`
+ * attached — so a failed submit moves focus here and the screen reader announces the group + its
+ * error (a plain, non-focusable fieldset would never surface that description).
  */
 function WeekdayToggleGroup({
   value,
@@ -61,23 +63,17 @@ function WeekdayToggleGroup({
         The weekly pattern this calendar repeats.
       </p>
       <div className="flex flex-wrap gap-1.5">
-        {WEEKDAY_SHORT_LABELS.map((label, index) => {
-          const pressed = WorkingWeekdays.has(value, index);
-          return (
-            <Button
-              key={label}
-              type="button"
-              size="sm"
-              variant={pressed ? 'default' : 'outline'}
-              disabled={disabled}
-              aria-pressed={pressed}
-              aria-label={WEEKDAY_LONG_LABELS[index]}
-              onClick={() => onChange(WorkingWeekdays.toggle(value, index))}
-            >
-              {label}
-            </Button>
-          );
-        })}
+        {WEEKDAY_SHORT_LABELS.map((label, index) => (
+          <ToggleChip
+            key={label}
+            pressed={WorkingWeekdays.has(value, index)}
+            disabled={disabled}
+            aria-label={WEEKDAY_LONG_LABELS[index]}
+            onPressedChange={() => onChange(WorkingWeekdays.toggle(value, index))}
+          >
+            {label}
+          </ToggleChip>
+        ))}
       </div>
       {error ? (
         <p id={errorId} className="text-destructive-text text-sm">
