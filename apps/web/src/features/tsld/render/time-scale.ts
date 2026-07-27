@@ -4,6 +4,7 @@ import {
   addCalendarDays,
   clampPxPerDay,
   daysBetween,
+  MAX_PX_PER_DAY,
   screenXOfDay,
   ZOOM_STOPS,
   ZOOM_TARGET_DAYS,
@@ -30,12 +31,14 @@ export const MONTH_ROW_MIN_PX_PER_DAY = 1.3;
 
 /**
  * The px-per-day scale that frames a preset's **nominal** target visible range (feature-spec.md
- * §4.3, `VITE_CANVAS_TIME_AXIS`) at the given canvas width, clamped to the legal scale bounds. A
- * preset therefore frames its target range wherever the bounds allow, and clamps to the nearest
- * legal scale otherwise (documented residual: below ~440px, Year frames less than 3 years).
+ * §4.3, `VITE_CANVAS_TIME_AXIS`) at the given canvas width, clamped to the legal scale bounds. Only
+ * ever reached through the `rangeAnchored=true` path (already flag-gated by its callers), so it
+ * clamps against {@link MAX_PX_PER_DAY} directly rather than taking a ceiling parameter. A preset
+ * therefore frames its target range wherever the bounds allow, and clamps to the nearest legal scale
+ * otherwise (documented residual: below ~440px, Year frames less than 3 years).
  */
 export function pxPerDayForPreset(level: ZoomLevel, width: number): number {
-  return clampPxPerDay(width / ZOOM_TARGET_DAYS[level]);
+  return clampPxPerDay(width / ZOOM_TARGET_DAYS[level], MAX_PX_PER_DAY);
 }
 
 /**
@@ -69,20 +72,34 @@ export function presetOf(pxPerDay: number, width: number, rangeAnchored: boolean
  * resize; that is honest, since it reports the scale actually framed (`presetOf`, width-aware).
  * Re-deriving the scale on every resize was rejected: it would rescale a planner's diagram under
  * them while they dragged a window edge.
+ *
+ * `maxPxPerDay` is required so the caller resolves the flag-aware zoom ceiling (`MAX_PX_PER_DAY`
+ * vs `LEGACY_MAX_PX_PER_DAY`) rather than this function reading either off the module — a
+ * component-review finding caught the ceiling itself leaking into the flag-off path when it
+ * wasn't threaded explicitly.
  */
 export function zoomToPreset(
   view: Viewport,
   size: Size,
   level: ZoomLevel,
   rangeAnchored: boolean,
+  maxPxPerDay: number,
 ): Viewport {
   const target = rangeAnchored ? pxPerDayForPreset(level, size.width) : ZOOM_STOPS[level];
-  return zoomAt(view, size.width / 2, target / view.pxPerDay);
+  return zoomAt(view, size.width / 2, target / view.pxPerDay, maxPxPerDay);
 }
 
-/** Zoom in/out by a factor about the viewport centre (the keyboard/button equivalent of wheel zoom). */
-export function stepZoom(view: Viewport, size: Size, factor: number): Viewport {
-  return zoomAt(view, size.width / 2, factor);
+/**
+ * Zoom in/out by a factor about the viewport centre (the keyboard/button equivalent of wheel
+ * zoom). `maxPxPerDay` required for the same reason as {@link zoomToPreset}.
+ */
+export function stepZoom(
+  view: Viewport,
+  size: Size,
+  factor: number,
+  maxPxPerDay: number,
+): Viewport {
+  return zoomAt(view, size.width / 2, factor, maxPxPerDay);
 }
 
 /** True when the viewport is already at (or clamped to) the given preset — for `aria-pressed`. */
@@ -95,9 +112,12 @@ export function isAtPreset(
   return presetOf(pxPerDay, width, rangeAnchored) === level;
 }
 
-/** Whether zooming in/out any further is possible (to disable the −/+ buttons at the bounds). */
-export function canZoom(pxPerDay: number, factor: number): boolean {
-  return clampPxPerDay(pxPerDay * factor) !== pxPerDay;
+/**
+ * Whether zooming in/out any further is possible (to disable the −/+ buttons at the bounds).
+ * `maxPxPerDay` required for the same reason as {@link zoomToPreset}.
+ */
+export function canZoom(pxPerDay: number, factor: number, maxPxPerDay: number): boolean {
+  return clampPxPerDay(pxPerDay * factor, maxPxPerDay) !== pxPerDay;
 }
 
 /** A single ruler cell: its left screen-x and the label to show (bands run to the next tick). */

@@ -156,12 +156,15 @@
   --canvas-band: oklch(0.975 0 0);
 
   /* Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5):
-     day a step LIGHTER than --border (fainter, so it recedes), month approximately at
-     --border, year a step STRONGER (darker on this light ground, so it reads as the
-     dominant boundary). Flag-off strokes still use --border alone (`gridLine`). */
-  --canvas-grid-day: oklch(0.955 0 0);
-  --canvas-grid-month: oklch(0.922 0 0);
-  --canvas-grid-year: oklch(0.75 0 0);
+     day fainter (so it recedes), month mid-strength, year strongest (darker on this light
+     ground, so it reads as the dominant boundary). Flag-off strokes still use --border alone
+     (`gridLine`). The three steps are spaced widely enough (not merely a hair off --border)
+     that day vs month is reliably distinguishable by lightness alone — accessibility-review
+     finding: the original day/month pair sat ~1.1:1 apart, which read as one shade under
+     colour-vision deficiency or on a low-quality display (WCAG 1.4.1). */
+  --canvas-grid-day: oklch(0.97 0 0);
+  --canvas-grid-month: oklch(0.78 0 0);
+  --canvas-grid-year: oklch(0.58 0 0);
 
   /* Non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than --muted (the
      wash it draws over), so a weekend/holiday differs by kind, not just a darker shade of grey. */
@@ -281,12 +284,13 @@
   --canvas: oklch(0.205 0 0);
   --canvas-band: oklch(0.24 0 0);
 
-  /* Time-axis gridline tiers — day a lower-alpha step than --border (fainter), month
-     approximately at --border, year a higher-alpha step (stronger). Same white-at-alpha
-     family as --border so all three stay legible against the near-black canvas. */
-  --canvas-grid-day: oklch(1 0 0 / 6%);
-  --canvas-grid-month: oklch(1 0 0 / 10%);
-  --canvas-grid-year: oklch(1 0 0 / 20%);
+  /* Time-axis gridline tiers — day the faintest alpha step, month mid-strength, year the
+     strongest. Same white-at-alpha family as --border so all three stay legible against the
+     near-black canvas, spaced widely enough that day vs month is reliably distinguishable
+     (WCAG 1.4.1 — the original 6%/10% pair read as one shade). */
+  --canvas-grid-day: oklch(1 0 0 / 4%);
+  --canvas-grid-month: oklch(1 0 0 / 17%);
+  --canvas-grid-year: oklch(1 0 0 / 30%);
 
   /* Non-working hatch stripe (F7a) — a lighter alpha-white step over the muted wash, the same
      family as the grid tiers above, so it reads against the near-black canvas without a new hue. */
@@ -441,11 +445,11 @@
   --canvas: oklch(1 0 0);
   --canvas-band: oklch(0.972 0.004 90);
 
-  /* Time-axis gridline tiers — same day-lighter/month-≈border/year-stronger step pattern as
-     Light, tuned against Corporate's own --border (0.907 vs Light's 0.922). */
-  --canvas-grid-day: oklch(0.94 0 0);
-  --canvas-grid-month: oklch(0.907 0 0);
-  --canvas-grid-year: oklch(0.72 0 0);
+  /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
+     day vs month must be reliably distinguishable, not merely a hair off --border). */
+  --canvas-grid-day: oklch(0.965 0 0);
+  --canvas-grid-month: oklch(0.76 0 0);
+  --canvas-grid-year: oklch(0.58 0 0);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */

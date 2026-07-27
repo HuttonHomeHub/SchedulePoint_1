@@ -205,6 +205,22 @@ describe('TsldCanvas', () => {
   });
 
   it('exposes an imperative zoom handle that reports the active preset only on a stop change', () => {
+    // jsdom reports every element's `getBoundingClientRect` as all-zero, and range-anchored preset
+    // scales (VITE_CANVAS_TIME_AXIS, on by default — F3) are WIDTH-derived: at the container's
+    // otherwise-clamped 1px floor every preset's target scale coincides at MIN_PX_PER_DAY, so
+    // `presetOf` can no longer tell day from year apart. Give the container a realistic width so
+    // this exercises the same math a real layout would.
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 1200,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     const controlRef = createRef<TsldCanvasHandle>();
     const onZoomStopChange = vi.fn();
     render(
@@ -227,6 +243,7 @@ describe('TsldCanvas', () => {
     const callsBefore = onZoomStopChange.mock.calls.length;
     act(() => controlRef.current!.zoomToPreset('year'));
     expect(onZoomStopChange.mock.calls.length).toBe(callsBefore);
+    rectSpy.mockRestore();
   });
 });
 

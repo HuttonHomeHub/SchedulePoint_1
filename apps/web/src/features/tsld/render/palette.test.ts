@@ -79,9 +79,9 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
 describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineYear)', () => {
   it('resolveTsldPalette resolves all three tiers (documented jsdom fallbacks), distinct from each other', () => {
     const palette = resolveTsldPalette();
-    expect(palette.gridLineDay).toBe('#3a3f4a');
+    expect(palette.gridLineDay).toBe('#565c6a');
     expect(palette.gridLineMonth).toBe('#2a2f3a');
-    expect(palette.gridLineYear).toBe('#565c6a');
+    expect(palette.gridLineYear).toBe('#9098ab');
     // The whole point is a visible hierarchy — three distinct colours, not one repeated.
     expect(new Set([palette.gridLineDay, palette.gridLineMonth, palette.gridLineYear]).size).toBe(
       3,
@@ -92,9 +92,33 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
 
   it('resolvePrintPalette carries LIGHT fallbacks for the same three tiers (total contract)', () => {
     const palette = resolvePrintPalette();
-    expect(palette.gridLineDay).toBe('#eff1f4');
-    expect(palette.gridLineMonth).toBe('#e5e7eb');
-    expect(palette.gridLineYear).toBe('#9ca3af');
+    expect(palette.gridLineDay).toBe('#f5f6f8');
+    expect(palette.gridLineMonth).toBe('#bcc2ca');
+    expect(palette.gridLineYear).toBe('#8b93a1');
+  });
+
+  it('day vs month is reliably distinguishable by lightness alone, not a hair apart (WCAG 1.4.1 — a11y-review fix)', () => {
+    // The original day/month pair sat ~1.1:1 apart, which reads as one shade under colour-vision
+    // deficiency or on a low-quality display. Assert a real gap in both fallback sets, using the
+    // channel sum as a cheap proxy for lightness (all fixtures here are near-achromatic greys).
+    const channelSum = (hex: string): number => {
+      const clean = hex.replace('#', '');
+      return (
+        parseInt(clean.slice(0, 2), 16) +
+        parseInt(clean.slice(2, 4), 16) +
+        parseInt(clean.slice(4, 6), 16)
+      );
+    };
+    const dark = resolveTsldPalette();
+    const print = resolvePrintPalette();
+    // A gap that reads clearly on screen — comfortably above the old ~1.1:1 case (channel-sum
+    // delta of roughly 16 there vs. the much larger gaps asserted below).
+    expect(Math.abs(channelSum(dark.gridLineDay) - channelSum(dark.gridLineMonth))).toBeGreaterThan(
+      100,
+    );
+    expect(
+      Math.abs(channelSum(print.gridLineDay) - channelSum(print.gridLineMonth)),
+    ).toBeGreaterThan(100);
   });
 });
 

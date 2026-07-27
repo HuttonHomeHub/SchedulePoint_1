@@ -651,7 +651,7 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   because every defect it fixes had shipped past a human reviewer, a component reviewer and an axe
   suite: the class names were right.
 
-- **ADR-0056** _(Proposed; M2–M5 landed — behind `VITE_CANVAS_TIME_AXIS`, default off)_ — TSLD
+- **ADR-0056** _(Accepted; M7 flipped `VITE_CANVAS_TIME_AXIS` default-on, 2026-07-27)_ — TSLD
   time-axis legibility & preset framing: **range-anchored zoom presets**
   (`pxPerDayForPreset(level, width)` derives `pxPerDay` at pick time from a target visible range,
   not a fixed constant; `presetOf`/`isAtPreset` take the canvas width as a **required**,
@@ -668,8 +668,10 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   flat fill when the offscreen 2D context is unavailable; the month-band ground gains its own
   `View▾ → Structure → Month bands` switch, **amending ADR-0055 §4**, while
   `VITE_CANVAS_VISUAL_LANGUAGE` stays the gate and default). Frontend-only; the ADR-0034 recalc
-  parity gate is structurally untouched. M7 runs the deferred specialist reviews over the combined
-  M2–M5 diff, flips the flag default-on, and moves this ADR to Accepted.
+  parity gate is structurally untouched. **M7** ran the deferred specialist reviews over the
+  combined M2–M5 diff, folding a day/month gridline-contrast fix (WCAG 1.4.1) and threading the
+  raised zoom ceiling through a required `maxPxPerDay` parameter (so it can never leak into the
+  flag-off path — a component-review finding), then flipped the flag default-on.
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

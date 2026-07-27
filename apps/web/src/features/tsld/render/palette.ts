@@ -19,9 +19,9 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     gridLine: token('--color-border', '#2a2f3a'),
     // Time-axis gridline tiers (F5, `VITE_CANVAS_TIME_AXIS`) — `gridLine` above stays the
     // flag-off value; these three are read only when `TsldScene.gridTiers` is on.
-    gridLineDay: token('--color-canvas-grid-day', '#3a3f4a'),
+    gridLineDay: token('--color-canvas-grid-day', '#565c6a'),
     gridLineMonth: token('--color-canvas-grid-month', '#2a2f3a'),
-    gridLineYear: token('--color-canvas-grid-year', '#565c6a'),
+    gridLineYear: token('--color-canvas-grid-year', '#9098ab'),
     edge: token('--color-muted-foreground', '#7a8090'),
     bar: token('--color-primary', '#3b6fbf'),
     critical: token('--color-destructive', '#c83c3c'),
@@ -118,9 +118,9 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       // ink near-black) so the diagram reads on white even when the tokens can't be read.
       gridLine: token('--color-border', '#e5e7eb'),
       // Time-axis gridline tiers, LIGHT-forced fallbacks (mirrors resolveTsldPalette's fields).
-      gridLineDay: token('--color-canvas-grid-day', '#eff1f4'),
-      gridLineMonth: token('--color-canvas-grid-month', '#e5e7eb'),
-      gridLineYear: token('--color-canvas-grid-year', '#9ca3af'),
+      gridLineDay: token('--color-canvas-grid-day', '#f5f6f8'),
+      gridLineMonth: token('--color-canvas-grid-month', '#bcc2ca'),
+      gridLineYear: token('--color-canvas-grid-year', '#8b93a1'),
       edge: token('--color-muted-foreground', '#6b7280'),
       bar: token('--color-primary', '#2f62c4'),
       critical: token('--color-destructive', '#c2331f'),

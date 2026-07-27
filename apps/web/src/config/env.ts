@@ -842,15 +842,18 @@ export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
 );
 
 /**
- * TSLD time-axis legibility (spec `docs/specs/tsld-toolbar-canvas-refinements/`, M2–M5).
- * **OFF by default** — gates range-anchored zoom presets (M2), tiered gridlines (M3), the
- * interpolated Today marker + pill (M4) and ground-vs-non-working shading (M5) while those
- * milestones land; flips on at M7 once the whole diff has cleared its specialist review
- * pass. Set `VITE_CANVAS_TIME_AXIS=true` to opt in ahead of that flip.
+ * TSLD time-axis legibility (ADR-0056, spec `docs/specs/tsld-toolbar-canvas-refinements/`, M2–M5).
+ * **ON by default** since 2026-07-27 (M7) — gates range-anchored zoom presets (M2), tiered
+ * gridlines (M3), the interpolated Today marker + pill (M4) and ground-vs-non-working shading
+ * (M5); flipped once the whole diff cleared its specialist review pass (ux/accessibility/
+ * component/performance), including the day/month gridline-contrast fix (WCAG 1.4.1) and
+ * threading the raised zoom ceiling through a required `maxPxPerDay` parameter so it can never
+ * leak into the flag-off zoom range. Set `VITE_CANVAS_TIME_AXIS=false` for a byte-for-byte
+ * rollback to the pre-epic zoom/grid/today/non-working surface.
  *
  * Frontend-only: every input (zoom scale, calendar boundaries, `todayIso`) is already on the
  * wire — no API, DTO, schema or engine change, and no path back into `computeSchedule`. Flag-off
  * is byte-for-byte today's zoom/grid/today/non-working surface (`ZOOM_STOPS`, the single grid
  * pass, whole-day today, the flat non-working fill).
  */
-export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOff(import.meta.env.VITE_CANVAS_TIME_AXIS);
+export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TIME_AXIS);

@@ -106,7 +106,7 @@ describe('zoomToPreset', () => {
   it('flag-off: sets the scale to ZOOM_STOPS and keeps the centre day centred', () => {
     const view: Viewport = { pxPerDay: 12, originX: 100, originY: 0 };
     const dayAtCentre = (SIZE.width / 2 - view.originX) / view.pxPerDay;
-    const next = zoomToPreset(view, SIZE, 'day', false);
+    const next = zoomToPreset(view, SIZE, 'day', false, MAX_PX_PER_DAY);
     expect(next.pxPerDay).toBe(ZOOM_STOPS.day);
     // The day that was under the viewport centre is still under the centre after the reframe.
     expect(screenXOfDay(dayAtCentre, next)).toBeCloseTo(SIZE.width / 2);
@@ -116,7 +116,7 @@ describe('zoomToPreset', () => {
     const view: Viewport = { pxPerDay: 12, originX: 100, originY: 0 };
     const wideSize: Size = { width: 1600, height: 400 };
     const dayAtCentre = (wideSize.width / 2 - view.originX) / view.pxPerDay;
-    const next = zoomToPreset(view, wideSize, 'day', true);
+    const next = zoomToPreset(view, wideSize, 'day', true, MAX_PX_PER_DAY);
     expect(next.pxPerDay).toBeCloseTo(pxPerDayForPreset('day', wideSize.width));
     expect(next.pxPerDay).not.toBe(ZOOM_STOPS.day);
     expect(screenXOfDay(dayAtCentre, next)).toBeCloseTo(wideSize.width / 2);
@@ -126,14 +126,14 @@ describe('zoomToPreset', () => {
 describe('stepZoom / canZoom', () => {
   it('multiplies the scale about the centre', () => {
     const view: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
-    expect(stepZoom(view, SIZE, 2).pxPerDay).toBe(20);
+    expect(stepZoom(view, SIZE, 2, MAX_PX_PER_DAY).pxPerDay).toBe(20);
   });
 
   it('reports when a further zoom is (im)possible at the clamp bounds', () => {
-    expect(canZoom(10, 2)).toBe(true);
-    expect(canZoom(ZOOM_STOPS.year, 1 / 1.1)).toBe(true); // year(0.7) can still zoom out a bit
-    expect(canZoom(0.4, 1 / 2)).toBe(false); // already at MIN_PX_PER_DAY
-    expect(canZoom(MAX_PX_PER_DAY, 2)).toBe(false); // already at MAX_PX_PER_DAY
+    expect(canZoom(10, 2, MAX_PX_PER_DAY)).toBe(true);
+    expect(canZoom(ZOOM_STOPS.year, 1 / 1.1, MAX_PX_PER_DAY)).toBe(true); // year(0.7) can still zoom out a bit
+    expect(canZoom(0.4, 1 / 2, MAX_PX_PER_DAY)).toBe(false); // already at MIN_PX_PER_DAY
+    expect(canZoom(MAX_PX_PER_DAY, 2, MAX_PX_PER_DAY)).toBe(false); // already at MAX_PX_PER_DAY
   });
 });
 

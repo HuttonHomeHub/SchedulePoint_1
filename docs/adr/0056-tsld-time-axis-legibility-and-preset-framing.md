@@ -1,8 +1,10 @@
 # ADR-0056: TSLD time-axis legibility & preset framing
 
-- **Status:** Proposed — M2–M5 landed behind `VITE_CANVAS_TIME_AXIS` (default off). M6 (header
-  centring) is unflagged and independent of this ADR. M7 runs the deferred specialist reviews over
-  the combined diff, flips the flag **default-on**, and moves this ADR to Accepted.
+- **Status:** Accepted — M2–M5 landed behind `VITE_CANVAS_TIME_AXIS`; M7 ran the deferred
+  specialist reviews (ux/accessibility/component/performance) over the combined M2–M5 diff, folded
+  the two blocking findings (the day/month gridline contrast fix, §7 below; the `MAX_PX_PER_DAY`
+  flag-off leak, §8 below), and flipped the flag **default-on** (2026-07-27). M6 (header centring)
+  is unflagged and independent of this ADR.
 - **Date:** 2026-07-27
 - **Deciders:** Frontend architecture, UX, Product
 - **Related:** ADR-0026 (TSLD canvas rendering — **amended**: viewport preset contract, an
@@ -96,6 +98,32 @@ grid` line toggle — a surface and a line are different layers. The flag is rea
 `TsldCanvas` (where every other flag composition already lives), so the pure painter module never
 imports `@/config/env`.
 
+### 5 — Day/month gridline contrast fix (M7, accessibility review)
+
+The M3 shipped `--canvas-grid-day`/`-month` values (`0.955`/`0.922` light-theme lightness, and
+their `.dark`/`.corporate` counterparts) measured roughly **1.1:1–1.3:1** contrast against each
+other — imperceptible, failing WCAG 1.4.1 (two adjacent elements distinguishable by more than hue
+alone must actually read as distinct). Rejected a line-weight fix (mirroring year's `lineWidth: 2`)
+because the crispness invariant pairs odd `lineWidth` with half-pixel x and even `lineWidth` with
+integer x (`paint.grid-budget.test.ts`); a month weight between day (1) and year (2) would have
+made month read thicker than year, inverting the coarse-to-fine hierarchy. Instead, all three
+themes' day/month/year lightness (or alpha, for the dark theme) values were widened so day and
+month sit roughly 2–4× further apart while all three tiers stay achromatic (the fix is a lightness
+delta, not a hue introduction — colour-blind reading is unaffected either way).
+
+### 6 — `MAX_PX_PER_DAY` flag-off leak (M7, component review)
+
+`MAX_PX_PER_DAY` rising 60 → 200 (§1) was originally read directly by `clampPxPerDay`, so the
+raised zoom ceiling was reachable via wheel/pinch/button zoom **even with the flag off** —
+contradicting the flag's documented byte-for-byte parity contract. Fixed by making every zoom-scale
+clamp (`clampPxPerDay`, `zoomAt`, `fitToContent`, `stepZoom`, `zoomToPreset`) take the ceiling as a
+**required** parameter rather than reading the module constant directly — the same pattern already
+used for `presetOf`/`isAtPreset`'s `width`/`rangeAnchored`. A new `LEGACY_MAX_PX_PER_DAY = 60`
+constant preserves the pre-epic ceiling; `TsldCanvas` resolves
+`CANVAS_TIME_AXIS_ENABLED ? MAX_PX_PER_DAY : LEGACY_MAX_PX_PER_DAY` once and threads it through all
+four call sites, so the compiler — not a reviewer — catches any future call site that forgets to
+resolve the flag-aware ceiling.
+
 ## Rejected
 
 - **Dashed gridline tiers** instead of colour+weight — rasterisation cost, and it collides with
@@ -111,8 +139,10 @@ imports `@/config/env`.
 ## Consequences
 
 **Positive.** Every change is frontend-only: no endpoint, DTO, schema, or engine change, so the
-ADR-0034 recalculation parity gate is structurally untouched. Flag-off (`VITE_CANVAS_TIME_AXIS`
-default) paints byte-for-byte today's surface, pinned by counting-stub budget suites per layer.
+ADR-0034 recalculation parity gate is structurally untouched. `VITE_CANVAS_TIME_AXIS=false` still
+paints byte-for-byte the pre-epic surface, pinned by counting-stub budget suites per layer and the
+required-parameter `maxPxPerDay` seam (§6) — the rollback path stays live even though the flag now
+defaults on.
 
 **Negative / risks.**
 

@@ -46,6 +46,12 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       fill: noop,
       setTransform: noop,
       setLineDash: noop,
+      fillText: noop,
+      // A real browser always has these; jsdom doesn't. Return a plausible width (proportional to
+      // string length) rather than 0 so callers that size a chip/label to the measured text (the
+      // Today pill, cursor/slack/lag chips, activity labels) get a non-degenerate layout instead of
+      // a zero-width box — closer to what an integration test would actually see.
+      measureText: (text: string) => ({ width: text.length * 6 }) as TextMetrics,
       fillStyle: '',
       strokeStyle: '',
       lineWidth: 1,

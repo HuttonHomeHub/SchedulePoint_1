@@ -10,6 +10,32 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — `VITE_CANVAS_TIME_AXIS` enablement: fold the review findings, then flip default-on
+
+**Decision.** M7 (tsld-toolbar-canvas-refinements, ADR-0056) ran the deferred specialist review
+pass (ux/accessibility/component/performance) over the M2–M5 diff and folded its two blocking
+findings before flipping the flag: (1) the M3 day/month gridline tokens measured ~1.1:1 contrast
+against each other across all three themes — imperceptible, failing WCAG 1.4.1 — fixed by widening
+the lightness/alpha separation (not introducing hue, so colour-blind reading is unaffected) rather
+than a line-weight change, which would have inverted the day→month→year crispness/weight
+hierarchy; (2) the M2 zoom ceiling (`MAX_PX_PER_DAY` 60 → 200) was reachable via wheel/pinch/button
+zoom even with the flag off, contradicting the documented byte-for-byte parity contract — fixed by
+threading the ceiling through every zoom-scale clamp (`clampPxPerDay`/`zoomAt`/`fitToContent`/
+`stepZoom`/`zoomToPreset`) as a **required** parameter (mirroring the existing `presetOf`/
+`isAtPreset` `width` pattern), with a new `LEGACY_MAX_PX_PER_DAY = 60` constant preserving the
+pre-epic ceiling for the flag-off path. `VITE_CANVAS_TIME_AXIS` then flipped default-on and
+ADR-0056 moved to Accepted.
+
+**Consequences.** The flag-off rollback (`VITE_CANVAS_TIME_AXIS=false`) stays byte-for-byte the
+pre-epic surface — confirmed by the full unit suite plus the existing counting-stub budget tests.
+Two pre-existing test suites (`tsld-toolbar.test.tsx`'s flag-off registry, which now explicitly
+pins `CANVAS_TIME_AXIS_ENABLED: false`; `TsldCanvas.test.tsx`/`TsldPanel.test.tsx`'s zoom-handle
+round-trips) needed a realistic mocked container width, since jsdom's all-zero
+`getBoundingClientRect` had let every range-anchored preset collapse to the same clamped scale — a
+latent test-environment gap the default-on flip surfaced, not a product regression.
+
+---
+
 ### 2026-07-27 — Header three-column grid: centred while it fits, filling when it does not
 
 **Decision.** `HeaderContents` (feature-spec.md §4.9, tsld-toolbar-canvas-refinements M6, ADR-0056)
