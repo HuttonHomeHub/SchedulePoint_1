@@ -250,9 +250,59 @@ export const ZOOM_STOPS = {
 
 export type ZoomLevel = keyof typeof ZOOM_STOPS;
 
+/**
+ * Range-anchored zoom presets (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F3): the
+ * **nominal** visible-range target each preset frames, independent of canvas width. "Nominal"
+ * because the viewport is a continuous px-per-day scale — "one month visible" is a duration, not
+ * a calendar-exact span (a real month is 28–31 days; this uses 30 for all twelve). Consumed by
+ * `time-scale.ts#pxPerDayForPreset`; flag-off keeps the fixed `ZOOM_STOPS` table above.
+ */
+export const ZOOM_TARGET_DAYS = {
+  day: 14,
+  week: 30,
+  month: 91,
+  quarter: 365,
+  year: 1095,
+} as const satisfies Record<ZoomLevel, number>;
+
+/**
+ * Human-readable range label for each preset, kept **beside** {@link ZOOM_TARGET_DAYS} (not
+ * hand-typed at the toolbar call site) so the two can't drift apart. Used only in the `View▾`
+ * zoom menu's row copy ("Day — 2 weeks"); the toolbar trigger keeps the short preset name alone
+ * (it is width-constrained).
+ */
+export const ZOOM_RANGE_LABELS = {
+  day: '2 weeks',
+  week: '1 month',
+  month: '3 months',
+  quarter: '1 year',
+  year: '3 years',
+} as const satisfies Record<ZoomLevel, string>;
+
 /** Inclusive px-per-day bounds (a day column never narrower/wider than this). */
 export const MIN_PX_PER_DAY = 0.4;
-export const MAX_PX_PER_DAY = 60;
+/**
+ * Today's ceiling, kept as its own named constant (not just "the old `MAX_PX_PER_DAY`") so the
+ * flag-off callers below can pass it explicitly — `clampPxPerDay`/`zoomAt`/`stepZoom`/
+ * `fitToContent` all take the ceiling as a **required** parameter rather than reading
+ * `MAX_PX_PER_DAY` off the module directly, precisely so that raising it for
+ * `VITE_CANVAS_TIME_AXIS` (below) can't silently widen the flag-off zoom range too — an earlier
+ * draft of this feature did exactly that (a component-review finding), leaving wheel/pinch/button
+ * zoom reachable at 200 px/day even with the flag off, contradicting the flag's own
+ * byte-for-byte-parity contract.
+ */
+export const LEGACY_MAX_PX_PER_DAY = 60;
+/**
+ * Raised 60 → 200 for `VITE_CANVAS_TIME_AXIS`'s Day preset (2 weeks visible): a 1 600 px canvas
+ * needs 114 px/day, a 2 560 px canvas needs 183 — both above the old bound, which would make the
+ * headline preset silently miss its own contract at ordinary desktop widths. 200 covers 2 560 px
+ * with headroom. Safe to raise: every LOD threshold gated on `pxPerDay` (`DAY_GRID_MIN_PX`,
+ * `NON_WORKING_MIN_PX`, `DAY_ROW_MIN_PX_PER_DAY`, …) is a **lower** bound, so widening the top of
+ * the range destabilises nothing below it. Only reaches a viewport when the caller resolves the
+ * flag-aware ceiling (`TsldCanvas`) and passes it as `maxPxPerDay` — flag-off call sites pass
+ * {@link LEGACY_MAX_PX_PER_DAY} instead, so this constant alone never widens flag-off behaviour.
+ */
+export const MAX_PX_PER_DAY = 200;
 
 /**
  * The viewport transform. `pxPerDay` is the zoom; `originX`/`originY` are the screen
@@ -1267,18 +1317,28 @@ export function laneRowAt(y: number, view: Viewport): number {
   return Math.max(0, Math.floor(laneAtScreenY(y, view)));
 }
 
-/** Clamp a px-per-day value to the allowed zoom range. */
-export function clampPxPerDay(pxPerDay: number): number {
-  return Math.max(MIN_PX_PER_DAY, Math.min(MAX_PX_PER_DAY, pxPerDay));
+/**
+ * Clamp a px-per-day value to the allowed zoom range. `maxPxPerDay` is a **required** parameter
+ * (not read off the `MAX_PX_PER_DAY` module constant directly) so a flag-off caller can pass
+ * {@link LEGACY_MAX_PX_PER_DAY} instead — the compiler, not a reviewer, catches a call site that
+ * forgets to resolve the flag-aware ceiling.
+ */
+export function clampPxPerDay(pxPerDay: number, maxPxPerDay: number): number {
+  return Math.max(MIN_PX_PER_DAY, Math.min(maxPxPerDay, pxPerDay));
 }
 
 /**
  * Zoom by `factor` about a screen x anchor (cursor-anchored zoom, ADR-0026): the world
  * day under `anchorX` stays under `anchorX` after the zoom. Returns a new viewport.
  */
-export function zoomAt(view: Viewport, anchorX: number, factor: number): Viewport {
+export function zoomAt(
+  view: Viewport,
+  anchorX: number,
+  factor: number,
+  maxPxPerDay: number,
+): Viewport {
   const dayUnderAnchor = dayAtScreenX(anchorX, view);
-  const pxPerDay = clampPxPerDay(view.pxPerDay * factor);
+  const pxPerDay = clampPxPerDay(view.pxPerDay * factor, maxPxPerDay);
   return { ...view, pxPerDay, originX: anchorX - dayUnderAnchor * pxPerDay };
 }
 
@@ -1308,14 +1368,16 @@ export const DEFAULT_VIEWPORT: Viewport = { pxPerDay: ZOOM_STOPS.week, originX: 
 
 /**
  * A viewport that frames every computed activity within `size`, with padding. Chooses a
- * `pxPerDay` so the full day span fits horizontally (clamped to the zoom range) and pans
- * so the earliest day / topmost lane sit just inside the top-left padding. Falls back to
- * {@link DEFAULT_VIEWPORT} when nothing is computed yet.
+ * `pxPerDay` so the full day span fits horizontally (clamped to `[MIN_PX_PER_DAY, maxPxPerDay]`)
+ * and pans so the earliest day / topmost lane sit just inside the top-left padding. Falls back to
+ * {@link DEFAULT_VIEWPORT} when nothing is computed yet. `maxPxPerDay` is required, not defaulted,
+ * so the caller must resolve the flag-aware ceiling (`MAX_PX_PER_DAY` vs {@link LEGACY_MAX_PX_PER_DAY}).
  */
 export function fitToContent(
   activities: readonly RenderActivity[],
   size: Size,
   dataDateIso: string,
+  maxPxPerDay: number,
   paddingPx = 32,
 ): Viewport {
   let minDay = Infinity;
@@ -1333,7 +1395,7 @@ export function fitToContent(
 
   const usableW = Math.max(1, size.width - paddingPx * 2);
   const spanDays = Math.max(1, maxDay - minDay);
-  const pxPerDay = clampPxPerDay(usableW / spanDays);
+  const pxPerDay = clampPxPerDay(usableW / spanDays, maxPxPerDay);
   return {
     pxPerDay,
     originX: paddingPx - minDay * pxPerDay,

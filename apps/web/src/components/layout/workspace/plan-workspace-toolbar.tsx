@@ -65,11 +65,17 @@ import { cn } from '@/lib/utils';
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
 const MD_QUERY = '(min-width: 48rem)';
 
-/** The visible row-purpose eyebrow (ux review) — kept as one constant so the two rows can't drift
- * apart on a future edit. `text-xs` is the design system's smallest type-scale step
+/** The visible row-purpose eyebrow's type treatment — kept as one constant so the two rows can't
+ * drift apart on a future edit. `text-xs` is the design system's smallest type-scale step
  * (`docs/DESIGN_SYSTEM.md` "Captions, meta"), not an arbitrary size. */
-const ROW_LABEL_CLASSNAME =
-  'text-muted-foreground shrink-0 text-xs font-semibold tracking-wide uppercase';
+const ROW_LABEL_CLASSNAME = 'text-muted-foreground text-xs font-semibold tracking-wide uppercase';
+
+/** The eyebrow's **gutter**, not just its type (feature-spec.md §4.1): a fixed-width, right-ruled
+ * column so the label reads as the row's gutter rather than a control sitting in the row's own
+ * button rhythm — the defect a first pass left was rhythm, not weight. Both rows share one fixed
+ * width so their toolbars begin at the same x; the rule is the row's leftmost rule, so `<Toolbar>`'s
+ * own between-group hairlines (`i > 0`) never double up against it. */
+const ROW_LABEL_GUTTER_CLASSNAME = 'border-border flex w-16 shrink-0 items-center border-r pr-2';
 
 /**
  * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — the `VITE_CANVAS_TOOLBAR`
@@ -327,6 +333,7 @@ export function ToolbarPlanWorkspace({
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
+      todayFraction={model.todayFraction}
       // Baseline overlay lens (VITE_CANVAS_LENSES): reuse the shipped variance rows (route-composed for
       // the activities table) — no new fetch. Absent when the flag is off ⇒ no ghost layer.
       {...(CANVAS_LENSES_ENABLED ? { varianceRows: model.variance.data?.rows } : {})}
@@ -487,9 +494,11 @@ export function ToolbarPlanWorkspace({
               caption. `aria-hidden` avoids a redundant/out-of-context announcement — the toolbar's own
               `aria-label` already names the row for AT. */}
           <div className="border-border flex items-center gap-2 border-b px-2 py-1">
-            <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
-              Navigate
-            </span>
+            <div className={ROW_LABEL_GUTTER_CLASSNAME}>
+              <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
+                Navigate
+              </span>
+            </div>
             <Toolbar
               items={rows.look}
               context={ctx}
@@ -500,9 +509,11 @@ export function ToolbarPlanWorkspace({
             />
           </div>
           <div className="flex items-center gap-2 px-2 py-1">
-            <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
-              Build
-            </span>
+            <div className={ROW_LABEL_GUTTER_CLASSNAME}>
+              <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
+                Build
+              </span>
+            </div>
             <Toolbar
               items={rows.do}
               context={ctx}

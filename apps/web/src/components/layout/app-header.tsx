@@ -23,6 +23,15 @@ const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
  * flag-on it is one row inside a full-bleed band that already owns the scope, the sticky
  * behaviour and the border. Keeping the split explicit means neither path branches on a flag
  * inside its own markup.
+ *
+ * A `1fr auto 1fr` grid (feature-spec.md §4.9, ADR-0056) — not a flex row with `flex-1`/`ml-auto`
+ * — so the centre cell (org switcher + nav) sits at the true midpoint between the brand and the
+ * account chip rather than merely absorbing whatever space the edges don't claim. **Centred while
+ * it fits, filling when it does not**: `min-w-0` on every cell plus the nav's own
+ * `overflow-x-auto` means a long org name or a crowded nav scrolls internally rather than pushing
+ * the account chip off-screen or breaking the grid. DOM order (drawer → brand → org switcher →
+ * nav → account) is unchanged from the previous flex markup, so the pinned tab order holds by
+ * construction — no `order-*`, no absolute positioning.
  */
 function HeaderContents(): React.ReactElement {
   const params = useParams({ strict: false });
@@ -39,70 +48,74 @@ function HeaderContents(): React.ReactElement {
   const shell = useShell();
 
   return (
-    <>
-      {shell && orgSlug ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="-ml-2 lg:hidden"
-          aria-label="Show Project Explorer"
-          onClick={shell.openDrawer}
-        >
-          <Menu aria-hidden="true" className="size-5" />
-        </Button>
-      ) : null}
-      <BrandMark />
-      <OrgSwitcher />
-      {orgSlug ? (
-        // Nav shrinks and scrolls horizontally on narrow viewports so it never
-        // pushes the header (or page) into overflow. A proper drawer-below-lg
-        // shell is still owed — see TECH_DEBT.md.
-        <nav
-          aria-label="Organisation"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm"
-        >
-          <Link
-            to="/orgs/$orgSlug"
-            params={{ orgSlug }}
-            activeOptions={{ exact: true }}
-            className={NAV_LINK_CLASS}
+    <div className="grid h-full w-full grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,1fr)] items-center gap-4">
+      <div className="flex min-w-0 shrink-0 items-center gap-2 justify-self-start">
+        {shell && orgSlug ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-ml-2 lg:hidden"
+            aria-label="Show Project Explorer"
+            onClick={shell.openDrawer}
           >
-            Overview
-          </Link>
-          <Link
-            to="/orgs/$orgSlug/clients"
-            params={{ orgSlug }}
-            aria-current={onHierarchy ? 'page' : undefined}
-            className={cn(NAV_LINK_CLASS, onHierarchy && NAV_LINK_ACTIVE_CLASS)}
+            <Menu aria-hidden="true" className="size-5" />
+          </Button>
+        ) : null}
+        <BrandMark />
+      </div>
+      <div className="flex min-w-0 items-center gap-2 justify-self-center">
+        <OrgSwitcher className="max-w-[12rem] truncate" />
+        {orgSlug ? (
+          // Nav shrinks and scrolls horizontally on narrow viewports so it never
+          // pushes the header (or page) into overflow. A proper drawer-below-lg
+          // shell is still owed — see TECH_DEBT.md.
+          <nav
+            aria-label="Organisation"
+            className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm"
           >
-            Clients
-          </Link>
-          <Link to="/orgs/$orgSlug/calendars" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-            Calendars
-          </Link>
-          {RESOURCES_ENABLED ? (
-            <Link to="/orgs/$orgSlug/resources" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-              Resources
-            </Link>
-          ) : null}
-          <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-            Members
-          </Link>
-          {canWrite ? (
             <Link
-              to="/orgs/$orgSlug/recently-deleted"
+              to="/orgs/$orgSlug"
               params={{ orgSlug }}
+              activeOptions={{ exact: true }}
               className={NAV_LINK_CLASS}
             >
-              Recently deleted
+              Overview
             </Link>
-          ) : null}
-        </nav>
-      ) : null}
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Link
+              to="/orgs/$orgSlug/clients"
+              params={{ orgSlug }}
+              aria-current={onHierarchy ? 'page' : undefined}
+              className={cn(NAV_LINK_CLASS, onHierarchy && NAV_LINK_ACTIVE_CLASS)}
+            >
+              Clients
+            </Link>
+            <Link to="/orgs/$orgSlug/calendars" params={{ orgSlug }} className={NAV_LINK_CLASS}>
+              Calendars
+            </Link>
+            {RESOURCES_ENABLED ? (
+              <Link to="/orgs/$orgSlug/resources" params={{ orgSlug }} className={NAV_LINK_CLASS}>
+                Resources
+              </Link>
+            ) : null}
+            <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
+              Members
+            </Link>
+            {canWrite ? (
+              <Link
+                to="/orgs/$orgSlug/recently-deleted"
+                params={{ orgSlug }}
+                className={NAV_LINK_CLASS}
+              >
+                Recently deleted
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2 justify-self-end">
         <AccountChip />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -113,7 +126,7 @@ function HeaderContents(): React.ReactElement {
 export function AppHeader(): React.ReactElement {
   return (
     <Surface tone="chrome" as="header" className="border-border sticky top-0 z-10 border-b">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
+      <div className="mx-auto h-14 max-w-6xl px-4">
         <HeaderContents />
       </div>
     </Surface>
@@ -128,7 +141,7 @@ export function AppHeader(): React.ReactElement {
  */
 export function AppHeaderRow(): React.ReactElement {
   return (
-    <header className="flex h-14 items-center gap-4 px-4">
+    <header className="h-14 px-4">
       <HeaderContents />
     </header>
   );

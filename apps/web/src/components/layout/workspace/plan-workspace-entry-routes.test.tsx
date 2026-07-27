@@ -119,6 +119,8 @@ vi.mock('@/features/tsld', () => ({
   TsldPanel: () => <div data-testid="tsld-panel" />,
   barDateSourceFor: () => 'early',
   useCoalescedLagNudge: () => vi.fn(),
+  useNow: () => 0,
+  todayDayFraction: () => undefined,
 }));
 vi.mock('@/features/schedule', () => ({
   ScheduleSummaryStrip: () => <div data-testid="summary-strip" />,

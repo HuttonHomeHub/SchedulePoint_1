@@ -13,6 +13,9 @@ import type { RenderActivity, Rect, Viewport } from './render-model';
  */
 const PALETTE: TsldPalette = {
   gridLine: '#111',
+  gridLineDay: '#3a3a3a',
+  gridLineMonth: '#111111',
+  gridLineYear: '#565656',
   edge: '#333',
   bar: '#44f',
   critical: '#f00',
@@ -20,7 +23,9 @@ const PALETTE: TsldPalette = {
   outline: '#fff',
   selection: '#0af',
   nonWorking: '#222',
+  nonWorkingHatch: '#444',
   today: '#f00',
+  todayInk: '#fff',
   conflict: '#fa0',
   laneOverlap: '#fa0',
   labelInside: '#fff',

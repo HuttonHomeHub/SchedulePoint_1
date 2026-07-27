@@ -49,6 +49,8 @@ import {
   zoomAt,
   ELAPSED_DAY_WALK,
   LANE_HEIGHT,
+  LEGACY_MAX_PX_PER_DAY,
+  MAX_PX_PER_DAY,
   type ClassifyHitOptions,
   type DayWalk,
   type HitZone,
@@ -70,6 +72,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
+  CANVAS_TIME_AXIS_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
 } from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -108,6 +111,15 @@ export const RULER_HEIGHT = 40;
 export const RESOURCE_STRIP_HEIGHT = 72;
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
+
+/**
+ * The zoom-scale ceiling this build actually allows: the raised {@link MAX_PX_PER_DAY} once
+ * `VITE_CANVAS_TIME_AXIS` is on, else the pre-epic {@link LEGACY_MAX_PX_PER_DAY} — resolved once
+ * here (the flag is a build-time constant) rather than at each of the four call sites below, so a
+ * flag-off build's wheel/pinch/button/preset zoom stays byte-for-byte within the old ceiling
+ * (a component-review finding on an earlier draft that read `MAX_PX_PER_DAY` unconditionally).
+ */
+const RESOLVED_MAX_PX_PER_DAY = CANVAS_TIME_AXIS_ENABLED ? MAX_PX_PER_DAY : LEGACY_MAX_PX_PER_DAY;
 
 /** The pending create ghost (day/lane geometry) held open under the name popover. */
 export interface PendingGhost {
@@ -172,6 +184,10 @@ export interface TsldCanvasProps {
   isWorkingDay?: ((dayOffset: number) => boolean) | null;
   /** Day offset (from `dataDate`) of "today", or null when it isn't placeable. */
   todayOffset?: number | null;
+  /** The viewer-local time-of-day fraction (0…1) added to `todayOffset` for a fractional (not
+   * midnight-boundary) Today line + pill (F6a/F6b, `VITE_CANVAS_TIME_AXIS`). Absent/null ⇒ the
+   * plain integer offset ⇒ byte-for-byte today's paint (the flag-off parity claim). */
+  todayFraction?: number | null;
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // All default-absent ⇒ byte-for-byte today's paint. `TsldPanel` derives these (memoised).
   /** Ids of activities the active filter dimmed (non-matches); they paint muted, keeping the outline. */
@@ -495,6 +511,7 @@ export function TsldCanvas({
   view,
   isWorkingDay = null,
   todayOffset = null,
+  todayFraction = null,
   dimmedIds,
   barFill,
   barInk,
@@ -600,6 +617,13 @@ export function TsldCanvas({
   const resizeArmed =
     CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canResize;
   const lagArmed = CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canLag;
+  // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the scene
+  // carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4). The user's own
+  // `view?.monthBands` preference (F7b, `VITE_CANVAS_TIME_AXIS`) only narrows the flag-on case — it
+  // never widens flag-off, which is what keeps the parity claim structural. Hoisted to one
+  // expression (component-review finding) so the initial scene ref and the resync effect below
+  // can't drift out of step.
+  const monthBandsEnabled = CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? true);
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -609,9 +633,11 @@ export function TsldCanvas({
     view,
     isWorkingDay,
     todayOffset,
-    // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the
-    // scene carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4).
-    monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
+    todayFraction,
+    monthBands: monthBandsEnabled,
+    // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
+    // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
+    gridTiers: CANVAS_TIME_AXIS_ENABLED,
     dimmedIds,
     barFill,
     barInk,
@@ -692,7 +718,11 @@ export function TsldCanvas({
       view,
       isWorkingDay,
       todayOffset,
-      monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
+      todayFraction,
+      monthBands: monthBandsEnabled,
+      // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
+      // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
+      gridTiers: CANVAS_TIME_AXIS_ENABLED,
       dimmedIds,
       barFill,
       barInk,
@@ -722,8 +752,10 @@ export function TsldCanvas({
     showEdgeHandles,
     lagArmed,
     view,
+    monthBandsEnabled,
     isWorkingDay,
     todayOffset,
+    todayFraction,
     dimmedIds,
     barFill,
     barInk,
@@ -734,7 +766,11 @@ export function TsldCanvas({
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
   // sites only). Kept off the per-frame path since pan never changes pxPerDay.
   const reportZoomStop = (): void => {
-    const level = presetOf(viewRef.current.pxPerDay);
+    const level = presetOf(
+      viewRef.current.pxPerDay,
+      sizeRef.current.width,
+      CANVAS_TIME_AXIS_ENABLED,
+    );
     if (level !== lastStopRef.current) {
       lastStopRef.current = level;
       onZoomStopChangeRef.current?.(level);
@@ -745,13 +781,24 @@ export function TsldCanvas({
     controlRef,
     () => ({
       zoomToPreset: (level: ZoomLevel) => {
-        viewRef.current = zoomToPreset(viewRef.current, sizeRef.current, level);
+        viewRef.current = zoomToPreset(
+          viewRef.current,
+          sizeRef.current,
+          level,
+          CANVAS_TIME_AXIS_ENABLED,
+          RESOLVED_MAX_PX_PER_DAY,
+        );
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();
       },
       stepZoom: (factor: number) => {
-        viewRef.current = stepZoom(viewRef.current, sizeRef.current, factor);
+        viewRef.current = stepZoom(
+          viewRef.current,
+          sizeRef.current,
+          factor,
+          RESOLVED_MAX_PX_PER_DAY,
+        );
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();
@@ -970,7 +1017,12 @@ export function TsldCanvas({
       if (!fittedRef.current && size.width > 1) {
         const withDates = sceneRef.current.activities.some((a) => a.earlyStart !== null);
         viewRef.current = withDates
-          ? fitToContent(sceneRef.current.activities, size, sceneRef.current.dataDate)
+          ? fitToContent(
+              sceneRef.current.activities,
+              size,
+              sceneRef.current.dataDate,
+              RESOLVED_MAX_PX_PER_DAY,
+            )
           : DEFAULT_VIEWPORT;
         fittedRef.current = true;
         dirtyRef.current = true;
@@ -1122,6 +1174,7 @@ export function TsldCanvas({
         viewRef.current,
         e.clientX - rect.left,
         e.deltaY < 0 ? 1.1 : 1 / 1.1,
+        RESOLVED_MAX_PX_PER_DAY,
       );
       dirtyRef.current = true;
       interactionDirtyRef.current = true;

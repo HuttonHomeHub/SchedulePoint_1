@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
  * changing the selection navigates to `/orgs/$orgSlug`. Rendered as a native
  * select for full keyboard/screen-reader support. Hidden until the user has orgs.
  */
-export function OrgSwitcher(): React.ReactElement | null {
+export function OrgSwitcher({ className }: { className?: string } = {}): React.ReactElement | null {
   const { data: organizations } = useOrganizations();
   const params = useParams({ strict: false });
   const navigate = useNavigate();
@@ -32,8 +32,9 @@ export function OrgSwitcher(): React.ReactElement | null {
           void navigate({ to: '/orgs/$orgSlug', params: { orgSlug: event.target.value } })
         }
         className={cn(
-          'border-input bg-background h-9 rounded-md border px-2 text-sm',
+          'border-input bg-background h-9 min-w-0 rounded-md border px-2 text-sm',
           'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+          className,
         )}
       >
         {current === '' ? (

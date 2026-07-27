@@ -83,4 +83,6 @@ interface ImportMetaEnv {
   readonly VITE_DESIGNED_CHROME?: string;
   /** Canvas visual language — the diagram on a ground of its own with alternating month bands, so months are countable without labels (ADR-0055 §4, docs/specs/designed-ui/). "true"/"1" enables it; off by default until the S5 draw-budget gate. */
   readonly VITE_CANVAS_VISUAL_LANGUAGE?: string;
+  /** TSLD time-axis legibility — range-anchored zoom presets, tiered gridlines, an interpolated Today marker + pill, and ground-vs-non-working shading (docs/specs/tsld-toolbar-canvas-refinements/). "true"/"1" enables it; off by default until the M7 enablement gate. */
+  readonly VITE_CANVAS_TIME_AXIS?: string;
 }

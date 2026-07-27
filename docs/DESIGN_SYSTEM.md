@@ -386,6 +386,35 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
   hover/selection highlight reuses the `--color-ring` selection colour at the
   next line-weight step up, keeping each pass's dash state — the highlight and
   the driving cue are weight + dash changes, never colour alone.
+- **TSLD Today pill (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F6b, ADR-0056)** — one
+  new token, `--color-destructive-foreground` reused as `todayInk` (no new CSS variable — every
+  theme already defines it for its destructive-hue text), added to both palette resolvers as the
+  pill's label colour against the existing `palette.today` (destructive-hue) fill. The pill
+  deliberately mirrors the ADR-0054 cursor date chip's geometry (`TODAY_CHIP_TOP` sits 4px below
+  the cursor chip's own footprint, `TODAY_CHIP_H` matches `CURSOR_CHIP_H`) but stays in the **Today
+  hue**, never the cursor's neutral chip colour — the two chips can never collide (different rows)
+  and are never mistaken for each other (different hue). It draws only alongside the fractional
+  line (`scene.todayFraction` present, from `todayDayFraction`/`useNow`), never on the flag-off
+  midnight-boundary line, so the flag-off canvas gains no new draw calls.
+- **TSLD time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5)** —
+  three new tokens, `--canvas-grid-day` / `--canvas-grid-month` / `--canvas-grid-year`, authored per
+  theme block beside `--canvas` / `--canvas-band` (mapped in `@theme inline` as
+  `--color-canvas-grid-*`) and added to **both** `resolveTsldPalette` and `resolvePrintPalette` (the
+  painter palette contract is total). Day is a step **lighter** than `--border`, month sits
+  approximately **at** `--border`, year is a step **stronger** — two cues (weight _and_ colour), so
+  the day → month → year hierarchy survives monochrome print and colour-blind reading. The existing
+  `gridLine` field (`--color-border`) is kept unchanged as the flag-off value.
+- **TSLD non-working hatch (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F7a,
+  ADR-0056)** — one new token, `--canvas-nonworking-hatch`, authored per theme block beside
+  `--canvas-band` (mapped as `--color-canvas-nonworking-hatch`) and added to both palette
+  resolvers. A step **stronger** than the `--color-muted` wash it draws over, so a weekend/holiday
+  differs from the month band by **kind** (a diagonal `CanvasPattern` stripe), not just a darker
+  shade of grey. Reuses the ADR-0054 float-tail hatch's 6px rhythm — one hatch language, not two.
+  Guarded: an offscreen 2D context that can't be created (older browsers, minimal test contexts)
+  falls back to the existing flat fill, so the `fillRect` count never changes either way. The
+  month-band ground (ADR-0055 §4) gains its own `View▾ → Structure → Month bands` switch in the
+  same milestone — `VITE_CANVAS_VISUAL_LANGUAGE` stays the gate and default; the switch only lets
+  a user turn an existing layer off for the session.
 
 ---
 

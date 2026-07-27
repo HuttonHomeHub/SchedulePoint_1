@@ -38,6 +38,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // `over-allocation` highlight stay their "Coming soon" placeholders (the flag-on toggles are covered
   // in tsld-toolbar-resource-view.test.tsx).
   CANVAS_RESOURCE_VIEW_ENABLED: false,
+  // Pin the time-axis legibility epic OFF here too (now ON by default, M7): the zoom-preset menu rows
+  // stay their plain "Month" labels, not the range-anchored "Month — 3 months" copy. The real flag-on
+  // labels are covered in tsld-toolbar-time-axis.test.tsx.
+  CANVAS_TIME_AXIS_ENABLED: false,
 }));
 
 const spies = {

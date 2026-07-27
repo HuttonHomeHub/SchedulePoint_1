@@ -152,6 +152,22 @@ describe('TsldPanel', () => {
   });
 
   it('round-trips a zoom-preset click through the canvas back to the control (aria-pressed)', () => {
+    // jsdom reports every element's `getBoundingClientRect` as all-zero, and range-anchored preset
+    // scales (VITE_CANVAS_TIME_AXIS, on by default — F3) are WIDTH-derived: at the container's
+    // otherwise-clamped 1px floor every preset's target scale coincides at MIN_PX_PER_DAY, so the
+    // canvas can no longer tell Week from Year apart. Give the container a realistic width so this
+    // exercises the same math a real layout would.
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 1200,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     render(
       <TsldPanel
         activities={[activity(), activity({ id: 'a2', code: 'A200', name: 'Pour slab' })]}
@@ -160,13 +176,14 @@ describe('TsldPanel', () => {
       />,
     );
     // Week is the default preset; clicking Year commands the real canvas, whose rAF loop reports
-    // the new stop back via onZoomStopChange → the control re-renders with Year pressed. No mocks:
-    // this exercises the whole viewport/command seam (TsldViewControls → TsldCanvas → back).
+    // the new stop back via onZoomStopChange → the control re-renders with Year pressed. This
+    // exercises the whole viewport/command seam (TsldViewControls → TsldCanvas → back).
     const year = screen.getByRole('button', { name: 'Year' });
     expect(year).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(year);
     expect(screen.getByRole('button', { name: 'Year' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'false');
+    rectSpy.mockRestore();
   });
 
   it('selects an activity via keyboard (arrow keys) and marks it in the listbox', () => {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_TIME_AXIS_ENABLED,
   NOTES_ENABLED,
   SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
@@ -36,6 +37,8 @@ import { useProject } from '@/features/projects';
 import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
 import {
   addCalendarDays,
+  todayDayFraction,
+  useNow,
   type TsldCreateInput,
   type TsldCreateOutcome,
   type TsldLinkInput,
@@ -216,9 +219,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     return { workingWeekdays: mask, exceptions };
   }, [calendars.data, calendarDetail.data, planCalendarId]);
   // Today as a local calendar day (`YYYY-MM-DD`), for the TSLD's "today" marker — resolved here so
-  // the diagram does no wall-clock math.
+  // the diagram does no wall-clock math. `useNow` (F6c, `VITE_CANVAS_TIME_AXIS`) bumps a counter
+  // every 60s (paused while the tab is hidden) so this — and `todayFraction` below — re-derive
+  // instead of freezing at whatever instant the plan happened to mount, which is what made the
+  // pre-existing integer marker go stale across a session left open past midnight.
+  useNow(60_000);
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  // The viewer-local time-of-day fraction (F6a) — undefined when the flag is off, which is what
+  // keeps the Today marker at its plain integer offset (byte-for-byte parity) downstream.
+  const todayFraction = CANVAS_TIME_AXIS_ENABLED
+    ? todayDayFraction(now.getTime(), now.getTimezoneOffset())
+    : undefined;
   // Variance vs the plan's active baseline (M7). The route composes it and passes a
   // per-activity map into the activities table, so that feature imports no baseline code.
   const variance = useBaselineVariance(orgSlug, planId);
@@ -1081,6 +1093,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Derived
     tsldCalendar,
     todayIso,
+    todayFraction,
     varianceByActivityId,
     // Per-activity note counts for the row badge (ADR-0046) — undefined when `VITE_NOTES` is off.
     noteCountByActivityId,

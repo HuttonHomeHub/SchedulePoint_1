@@ -75,6 +75,81 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   });
 });
 
+// ── Time-axis gridline tier palette entries (F5, `VITE_CANVAS_TIME_AXIS`) ────────────────
+describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineYear)', () => {
+  it('resolveTsldPalette resolves all three tiers (documented jsdom fallbacks), distinct from each other', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.gridLineDay).toBe('#565c6a');
+    expect(palette.gridLineMonth).toBe('#2a2f3a');
+    expect(palette.gridLineYear).toBe('#9098ab');
+    // The whole point is a visible hierarchy — three distinct colours, not one repeated.
+    expect(new Set([palette.gridLineDay, palette.gridLineMonth, palette.gridLineYear]).size).toBe(
+      3,
+    );
+    // The flag-off value is unchanged by this addition (total contract, kept separate).
+    expect(palette.gridLine).toBe('#2a2f3a');
+  });
+
+  it('resolvePrintPalette carries LIGHT fallbacks for the same three tiers (total contract)', () => {
+    const palette = resolvePrintPalette();
+    expect(palette.gridLineDay).toBe('#f5f6f8');
+    expect(palette.gridLineMonth).toBe('#bcc2ca');
+    expect(palette.gridLineYear).toBe('#8b93a1');
+  });
+
+  it('day vs month is reliably distinguishable by lightness alone, not a hair apart (WCAG 1.4.1 — a11y-review fix)', () => {
+    // The original day/month pair sat ~1.1:1 apart, which reads as one shade under colour-vision
+    // deficiency or on a low-quality display. Assert a real gap in both fallback sets, using the
+    // channel sum as a cheap proxy for lightness (all fixtures here are near-achromatic greys).
+    const channelSum = (hex: string): number => {
+      const clean = hex.replace('#', '');
+      return (
+        parseInt(clean.slice(0, 2), 16) +
+        parseInt(clean.slice(2, 4), 16) +
+        parseInt(clean.slice(4, 6), 16)
+      );
+    };
+    const dark = resolveTsldPalette();
+    const print = resolvePrintPalette();
+    // A gap that reads clearly on screen — comfortably above the old ~1.1:1 case (channel-sum
+    // delta of roughly 16 there vs. the much larger gaps asserted below).
+    expect(Math.abs(channelSum(dark.gridLineDay) - channelSum(dark.gridLineMonth))).toBeGreaterThan(
+      100,
+    );
+    expect(
+      Math.abs(channelSum(print.gridLineDay) - channelSum(print.gridLineMonth)),
+    ).toBeGreaterThan(100);
+  });
+});
+
+// ── Non-working hatch palette entry (F7a, `VITE_CANVAS_TIME_AXIS`) ──────────────────────
+describe('non-working hatch stripe ink (nonWorkingHatch)', () => {
+  it('resolveTsldPalette resolves a distinct hatch colour from the wash it draws over (documented jsdom fallback)', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.nonWorkingHatch).toBe('#454b58');
+    expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
+  });
+
+  it('resolvePrintPalette carries a LIGHT fallback for the same entry, also distinct from its wash', () => {
+    const palette = resolvePrintPalette();
+    expect(palette.nonWorkingHatch).toBe('#c7c7c7');
+    expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
+  });
+});
+
+// ── Today pill ink palette entry (F6b, `VITE_CANVAS_TIME_AXIS`) ─────────────────────────
+describe('today marker pill ink (todayInk)', () => {
+  it('resolveTsldPalette pairs todayInk with today the same way labelInsideCritical pairs with critical', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.todayInk).toBe('#ffffff'); // --color-destructive-foreground fallback
+    expect(palette.todayInk).toBe(palette.labelInsideCritical);
+  });
+
+  it('resolvePrintPalette carries the same LIGHT fallback (total contract)', () => {
+    expect(resolvePrintPalette().todayInk).toBe('#ffffff');
+  });
+});
+
 // Self-contained oklch→luminance/contrast helpers shared by the token-mirror contrast suites
 // below (mirrors lenses.test.ts; token values mirror `styles/globals.css`).
 const oklchToLuminance = (L: number, C: number, H: number): number => {

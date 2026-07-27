@@ -10,6 +10,58 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — `VITE_CANVAS_TIME_AXIS` enablement: fold the review findings, then flip default-on
+
+**Decision.** M7 (tsld-toolbar-canvas-refinements, ADR-0056) ran the deferred specialist review
+pass (ux/accessibility/component/performance) over the M2–M5 diff and folded its two blocking
+findings before flipping the flag: (1) the M3 day/month gridline tokens measured ~1.1:1 contrast
+against each other across all three themes — imperceptible, failing WCAG 1.4.1 — fixed by widening
+the lightness/alpha separation (not introducing hue, so colour-blind reading is unaffected) rather
+than a line-weight change, which would have inverted the day→month→year crispness/weight
+hierarchy; (2) the M2 zoom ceiling (`MAX_PX_PER_DAY` 60 → 200) was reachable via wheel/pinch/button
+zoom even with the flag off, contradicting the documented byte-for-byte parity contract — fixed by
+threading the ceiling through every zoom-scale clamp (`clampPxPerDay`/`zoomAt`/`fitToContent`/
+`stepZoom`/`zoomToPreset`) as a **required** parameter (mirroring the existing `presetOf`/
+`isAtPreset` `width` pattern), with a new `LEGACY_MAX_PX_PER_DAY = 60` constant preserving the
+pre-epic ceiling for the flag-off path. `VITE_CANVAS_TIME_AXIS` then flipped default-on and
+ADR-0056 moved to Accepted.
+
+**Consequences.** The flag-off rollback (`VITE_CANVAS_TIME_AXIS=false`) stays byte-for-byte the
+pre-epic surface — confirmed by the full unit suite plus the existing counting-stub budget tests.
+Two pre-existing test suites (`tsld-toolbar.test.tsx`'s flag-off registry, which now explicitly
+pins `CANVAS_TIME_AXIS_ENABLED: false`; `TsldCanvas.test.tsx`/`TsldPanel.test.tsx`'s zoom-handle
+round-trips) needed a realistic mocked container width, since jsdom's all-zero
+`getBoundingClientRect` had let every range-anchored preset collapse to the same clamped scale — a
+latent test-environment gap the default-on flip surfaced, not a product regression.
+
+---
+
+### 2026-07-27 — Header three-column grid: centred while it fits, filling when it does not
+
+**Decision.** `HeaderContents` (feature-spec.md §4.9, tsld-toolbar-canvas-refinements M6, ADR-0056)
+became a `grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,1fr)]` grid instead of a flex row with
+`flex-1`/`ml-auto`, so the org switcher + nav sit at the true midpoint between the brand and the
+account chip rather than merely absorbing whatever space the edges leave. The contract: **centred
+while it fits, filling when it does not** — `min-w-0` on every cell plus the nav's own
+`overflow-x-auto` means a long org name or a crowded nav scrolls internally rather than pushing the
+account chip off-screen or breaking the grid layout. The org switcher itself gained a
+`max-w-[12rem]` + `truncate` cap (a new optional `className` prop) so an unusually long
+organisation name shifts the centre point by a bounded amount rather than an unbounded one.
+
+DOM order (drawer → brand → org switcher → nav → account) is unchanged from the previous flex
+markup — no `order-*`, no absolute positioning — so the pinned tab order (`e2e-designed-chrome`'s
+tab-order journey) holds by construction; both `AppHeader` (flag-off shell) and `AppHeaderRow`
+(the `VITE_DESIGNED_CHROME` band row) render the identical inner grid, with only their own
+height/measure-cap wrapper classes differing. Verified visually at 1280/1440/1920px, with and
+without the drawer button, and with a deliberately long org name, in both flag states of
+`VITE_DESIGNED_CHROME`.
+
+**Consequences.** Unflagged, independent of `VITE_CANVAS_TIME_AXIS` and every other milestone in
+the epic. No behavioural change — same links, same roles, same tab order — only the layout
+mechanism moved from flex-grow/margin-auto to a grid.
+
+---
+
 ### 2026-07-20 — TSLD canvas nav (Stage B review): Isolate split-button + visible conflict chip
 
 **Decision.** Folding the Stage-B specialist-review findings for the canvas-nav slice (spec

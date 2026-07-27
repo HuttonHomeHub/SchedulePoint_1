@@ -482,15 +482,15 @@ describe('zoomAt', () => {
   it('keeps the world day under the anchor fixed (cursor-anchored)', () => {
     const anchorX = 200;
     const dayBefore = dayAtScreenX(anchorX, VIEW);
-    const zoomed = zoomAt(VIEW, anchorX, 2);
+    const zoomed = zoomAt(VIEW, anchorX, 2, MAX_PX_PER_DAY);
     expect(zoomed.pxPerDay).toBe(20);
     expect(dayAtScreenX(anchorX, zoomed)).toBeCloseTo(dayBefore);
   });
 
   it('clamps to the zoom bounds', () => {
-    expect(clampPxPerDay(0.01)).toBe(MIN_PX_PER_DAY);
-    expect(clampPxPerDay(9999)).toBe(MAX_PX_PER_DAY);
-    expect(zoomAt(VIEW, 0, 1000).pxPerDay).toBe(MAX_PX_PER_DAY);
+    expect(clampPxPerDay(0.01, MAX_PX_PER_DAY)).toBe(MIN_PX_PER_DAY);
+    expect(clampPxPerDay(9999, MAX_PX_PER_DAY)).toBe(MAX_PX_PER_DAY);
+    expect(zoomAt(VIEW, 0, 1000, MAX_PX_PER_DAY).pxPerDay).toBe(MAX_PX_PER_DAY);
   });
 });
 
@@ -806,14 +806,14 @@ describe('fitToContent', () => {
 
   it('returns the default viewport when nothing is computed', () => {
     const uncomputed = activity({ earlyStart: null, earlyFinish: null });
-    expect(fitToContent([uncomputed], SIZE, DATA_DATE)).toEqual(DEFAULT_VIEWPORT);
-    expect(fitToContent([], SIZE, DATA_DATE)).toEqual(DEFAULT_VIEWPORT);
+    expect(fitToContent([uncomputed], SIZE, DATA_DATE, MAX_PX_PER_DAY)).toEqual(DEFAULT_VIEWPORT);
+    expect(fitToContent([], SIZE, DATA_DATE, MAX_PX_PER_DAY)).toEqual(DEFAULT_VIEWPORT);
   });
 
   it('frames content within the padding, clamping pxPerDay to the max zoom', () => {
     // The default activity spans days 0–5; a generous surface would exceed the max zoom,
     // so pxPerDay clamps and the earliest day (0) pins to the left padding.
-    const view = fitToContent([activity()], SIZE, DATA_DATE, 32);
+    const view = fitToContent([activity()], SIZE, DATA_DATE, MAX_PX_PER_DAY, 32);
     expect(view.originY).toBe(32);
     expect(view.pxPerDay).toBeLessThanOrEqual(MAX_PX_PER_DAY);
     expect(view.originX).toBeCloseTo(32);
@@ -824,6 +824,7 @@ describe('fitToContent', () => {
       [activity({ earlyStart: '2026-01-11', earlyFinish: '2026-01-15' })],
       SIZE,
       DATA_DATE,
+      MAX_PX_PER_DAY,
       32,
     );
     // 2026-01-11 is day 10 from the data date, so the origin shifts left by 10 days.
@@ -832,7 +833,7 @@ describe('fitToContent', () => {
 
   it('clamps pxPerDay to the minimum when content is far wider than the surface', () => {
     const narrow: Size = { width: 65, height: 400 };
-    const view = fitToContent([activity()], narrow, DATA_DATE, 32);
+    const view = fitToContent([activity()], narrow, DATA_DATE, MAX_PX_PER_DAY, 32);
     expect(view.pxPerDay).toBe(MIN_PX_PER_DAY);
   });
 });

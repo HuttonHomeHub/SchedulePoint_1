@@ -17,6 +17,11 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
   };
   return {
     gridLine: token('--color-border', '#2a2f3a'),
+    // Time-axis gridline tiers (F5, `VITE_CANVAS_TIME_AXIS`) — `gridLine` above stays the
+    // flag-off value; these three are read only when `TsldScene.gridTiers` is on.
+    gridLineDay: token('--color-canvas-grid-day', '#565c6a'),
+    gridLineMonth: token('--color-canvas-grid-month', '#2a2f3a'),
+    gridLineYear: token('--color-canvas-grid-year', '#9098ab'),
     edge: token('--color-muted-foreground', '#7a8090'),
     bar: token('--color-primary', '#3b6fbf'),
     critical: token('--color-destructive', '#c83c3c'),
@@ -27,7 +32,13 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     selection: token('--color-ring', '#6ea8fe'),
     // A muted wash for non-working columns and the destructive hue for the today marker.
     nonWorking: token('--color-muted', '#20242d'),
+    // The non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than the wash
+    // it draws over, so a weekend/holiday differs by KIND, not just a darker shade of grey.
+    nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#454b58'),
     today: token('--color-destructive', '#c83c3c'),
+    // Today pill ink (F6b, `VITE_CANVAS_TIME_AXIS`) — paired with `today` the same way every other
+    // fill pairs with its `*-foreground` token.
+    todayInk: token('--color-destructive-foreground', '#ffffff'),
     // Visual-Planning conflict cue — the warning hue, drawn as a distinct triangle shape so it never
     // relies on colour alone (WCAG 1.4.1); shares the token with near-critical but a different shape.
     conflict: token('--color-warning', '#d29628'),
@@ -106,6 +117,10 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       // The painter fields, mirroring `resolveTsldPalette` but with LIGHT fallbacks (grid a light grey,
       // ink near-black) so the diagram reads on white even when the tokens can't be read.
       gridLine: token('--color-border', '#e5e7eb'),
+      // Time-axis gridline tiers, LIGHT-forced fallbacks (mirrors resolveTsldPalette's fields).
+      gridLineDay: token('--color-canvas-grid-day', '#f5f6f8'),
+      gridLineMonth: token('--color-canvas-grid-month', '#bcc2ca'),
+      gridLineYear: token('--color-canvas-grid-year', '#8b93a1'),
       edge: token('--color-muted-foreground', '#6b7280'),
       bar: token('--color-primary', '#2f62c4'),
       critical: token('--color-destructive', '#c2331f'),
@@ -113,7 +128,10 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       outline: token('--color-foreground', '#1a1a1a'),
       selection: token('--color-ring', '#3b6fbf'),
       nonWorking: token('--color-muted', '#f0f0f0'),
+      // LIGHT fallback for the same F7a stripe (mirrors `resolveTsldPalette`).
+      nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#c7c7c7'),
       today: token('--color-destructive', '#c2331f'),
+      todayInk: token('--color-destructive-foreground', '#ffffff'),
       conflict: token('--color-warning', '#b58900'),
       laneOverlap: token('--color-warning', '#b58900'),
       labelInside: token('--color-primary-foreground', '#ffffff'),

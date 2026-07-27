@@ -108,8 +108,18 @@ export interface TsldPalette {
   selection: string;
   /** Muted wash over non-working (weekend/holiday) day columns. */
   nonWorking: string;
+  /** Diagonal-stripe ink drawn over the non-working wash (F7a, `VITE_CANVAS_TIME_AXIS`) — a step
+   * stronger than `nonWorking`, so a weekend/holiday reads as a distinct KIND of surface, not just
+   * a darker shade of the month band. Read only by the hatch-pattern builder; the flat `nonWorking`
+   * fill remains the fallback when a pattern can't be built (jsdom, or a minimal test context). */
+  nonWorkingHatch: string;
   /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
   today: string;
+  /** Ink for the Today pill's `Today` text (F6b) — paired with `today` the same way every other
+   * fill pairs with its `*-foreground` token, so contrast is guaranteed by the same 1:1 pairing.
+   * Deliberately not `selection`: that is the cursor chip's hue, and the two markers must never
+   * read as the same thing. */
+  todayInk: string;
   /** Visual-Planning conflict cue (ADR-0033): a placement earlier than its feasible start. The
    * warning hue, drawn as a distinct **triangle badge** (shape, not colour-only) at the bar's start. */
   conflict: string;
@@ -145,6 +155,16 @@ export interface TsldPalette {
   // guaranteed by the same 1:1 fill↔ink pairing labels rely on in both themes and under every
   // lens; the LOE bracket caps + WBS-summary tabs draw in the bar's own resolved fill, so the
   // Colour-by lenses recolour the whole glyph as one shape (the lens owns colour, M4 owns shape).
+  // ── Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5) ──
+  // `gridLine` above is kept and still resolves `--color-border` — it is the value the flag-off
+  // path strokes, which is what makes the parity claim structural. Read only when
+  // `TsldScene.gridTiers` is on.
+  /** The finest tier (day boundaries) — a step lighter than `gridLine`. */
+  gridLineDay: string;
+  /** The mid tier (month boundaries) — approximately `gridLine`. */
+  gridLineMonth: string;
+  /** The coarsest tier (year boundaries) — a step stronger than `gridLine`, drawn at `lineWidth 2`. */
+  gridLineYear: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -180,6 +200,13 @@ export interface TsldViewToggles {
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
   lateOverlay: boolean;
+  /** User preference for the alternating month-band ground (F7b, `VITE_CANVAS_TIME_AXIS` +
+   * `VITE_CANVAS_VISUAL_LANGUAGE`) — a plain boolean here so the pure painter module never imports
+   * a flag; `TsldCanvas` composes the actual gate (`CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands
+   * ?? true)`) into `TsldScene.monthBands`, which is what the painter actually reads. Optional so
+   * every existing caller/fixture stays valid; the default below is a plain literal, not a flag
+   * read, so this module stays flag-free. */
+  monthBands?: boolean;
 }
 
 /** All view layers on — the default before the user toggles anything (the Late overlay starts off). */
@@ -191,6 +218,7 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   nonWorking: true,
   labels: true,
   lateOverlay: false,
+  monthBands: true,
 };
 
 export interface TsldScene {
@@ -210,11 +238,25 @@ export interface TsldScene {
   /** Day offset (from `dataDate`) of "today", or null when today is outside a schedulable range. */
   todayOffset?: number | null | undefined;
   /**
+   * The viewer-local time-of-day fraction (0…1, `todayDayFraction`) added to `todayOffset` for a
+   * fractional Today line + pill (F6a/F6b, `VITE_CANVAS_TIME_AXIS`). Absent/null ⇒ the line draws
+   * at the plain integer offset and no pill draws ⇒ byte-for-byte today's paint (the flag-off
+   * parity claim is structural, not a promise).
+   */
+  todayFraction?: number | null | undefined;
+  /**
    * Paint the alternating month bands (ADR-0055 §4, `VITE_CANVAS_VISUAL_LANGUAGE`). Absent ⇒ the
    * band layer is skipped entirely ⇒ the frame is byte-for-byte today's paint, which is what makes
    * the flag-off parity claim structural rather than a promise. The budget suite flips it.
    */
   monthBands?: boolean | undefined;
+  /**
+   * Draw the time-axis grid as three tiers — day / month / year, each its own colour + weight
+   * (ADR-0055 token rule; day/month tier F5, `VITE_CANVAS_TIME_AXIS`) — instead of the single
+   * `gridLine` pass. Absent ⇒ the one flag-off pass, byte-for-byte today's paint (the flag-off
+   * parity claim structural, not a promise). The budget suite (`paint.grid-budget.test.ts`) flips it.
+   */
+  gridTiers?: boolean | undefined;
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // ALL default-absent ⇒ byte-for-byte today's paint (the flag-off / no-active-lens parity gate).
   /** Ids of activities the active filter dimmed (non-matches). Members paint muted (reduced alpha)
@@ -328,6 +370,11 @@ export type Ctx2D = Pick<
    * (ADR-0052 M5) and falls back to hard `lineTo` corners when not — an arc, not a shadow/blur,
    * so the draw budget holds; a minimal test context never throws. */
   arcTo?: (x1: number, y1: number, x2: number, y2: number, radius: number) => void;
+  /** Optional like `roundRect`/`arcTo`: builds a repeating fill pattern from an offscreen tile —
+   * used only for the non-working hatch (F7a, `VITE_CANVAS_TIME_AXIS`). Absent ⇒ the flat-fill
+   * fallback, which is also the path every existing painter unit suite exercises (jsdom serves no
+   * `canvas` package, so the offscreen tile itself never builds). */
+  createPattern?: (image: CanvasImageSource, repetition: string | null) => CanvasPattern | null;
 };
 
 /**
@@ -372,6 +419,58 @@ const GESTURE_SOURCE_ALPHA = 0.18;
 
 /** Spacing (px) between a float/drift tail's hatch strokes — the non-colour cue's density. */
 const TAIL_HATCH_STEP = 6;
+
+/**
+ * Cache of the last-built non-working hatch tile (F7a, `VITE_CANVAS_TIME_AXIS`), keyed on the
+ * resolved colour pair — so the offscreen tile is rebuilt only on a theme switch, never per frame.
+ */
+let nonWorkingHatchCache: { fill: string; hatch: string; tile: HTMLCanvasElement | null } | null =
+  null;
+
+/**
+ * Build (and memoise) a small offscreen diagonal-stripe tile for the non-working column wash
+ * (F7a): the same `TAIL_HATCH_STEP` rhythm as the shipped float-tail hatch, so the canvas speaks
+ * one hatch language, not two. `ctx.createPattern(tile, 'repeat')` turns this into the actual fill
+ * pattern; screen-anchored (not `DOMMatrix`-corrected to pan with the columns), matching the
+ * float-tail hatch's own screen-space `hx` — accepted, not corrected.
+ *
+ * Returns null when the offscreen 2D context can't be created (jsdom without the `canvas`
+ * package): that single guard is what keeps every existing painter unit suite on the deterministic
+ * flat-fill fallback, and gives the budget gate its clean assertion — the `fillRect` count is
+ * identical; only `fillStyle` differs.
+ */
+function nonWorkingHatchTile(fill: string, hatch: string): HTMLCanvasElement | null {
+  if (
+    nonWorkingHatchCache &&
+    nonWorkingHatchCache.fill === fill &&
+    nonWorkingHatchCache.hatch === hatch
+  ) {
+    return nonWorkingHatchCache.tile;
+  }
+  const size = TAIL_HATCH_STEP;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const tileCtx = canvas.getContext('2d');
+  if (!tileCtx) {
+    nonWorkingHatchCache = { fill, hatch, tile: null };
+    return null;
+  }
+  tileCtx.fillStyle = fill;
+  tileCtx.fillRect(0, 0, size, size);
+  tileCtx.strokeStyle = hatch;
+  tileCtx.lineWidth = 1;
+  tileCtx.beginPath();
+  // The same diagonal, drawn three times offset by ±`size`, so the 45° stripe wraps seamlessly
+  // across a tiled `repeat` fill instead of breaking at the tile edge.
+  for (const dx of [-size, 0, size]) {
+    tileCtx.moveTo(dx, size);
+    tileCtx.lineTo(dx + size, 0);
+  }
+  tileCtx.stroke();
+  nonWorkingHatchCache = { fill, hatch, tile: canvas };
+  return canvas;
+}
 
 /** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
 const SLACK_CHIP_H = 13;
@@ -809,30 +908,69 @@ export function paintScene(
   // calendar (`isWorkingDay` present) and the toggle is on, and only once columns are wide enough
   // to read — at coarse zoom the columns are sub-pixel, so it's culled (and avoids a long loop).
   if (toggles.nonWorking && scene.isWorkingDay && view.pxPerDay >= NON_WORKING_MIN_PX) {
-    ctx.fillStyle = palette.nonWorking;
+    // The hatch (F7a) is a pattern of the SAME flat fill, not an extra layer: a weekend still
+    // reads as its wash even where the pattern can't build, so this is one `fillStyle` choice,
+    // never a second pass — the fillRect count below is identical either way.
+    const tile = nonWorkingHatchTile(palette.nonWorking, palette.nonWorkingHatch);
+    const pattern =
+      tile && typeof ctx.createPattern === 'function' ? ctx.createPattern(tile, 'repeat') : null;
+    ctx.fillStyle = pattern ?? palette.nonWorking;
     for (let d = firstDay; d <= lastDay; d += 1) {
       if (scene.isWorkingDay(d)) continue;
       ctx.fillRect(screenXOfDay(d, view), 0, view.pxPerDay, size.height);
     }
   }
 
-  // Layer 1: time-axis gridlines — day / month / year variants, each gated by its toggle. Batched
-  // into one stroke. Day lines are culled below `DAY_GRID_MIN_PX` (else a solid block); month/year
-  // boundaries come from the cheap integer-rollover `calendarBoundaries` (no per-day Date parsing).
-  ctx.strokeStyle = palette.gridLine;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  const gridLine = (d: number): void => {
-    const x = Math.round(screenXOfDay(d, view)) + 0.5;
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, size.height);
-  };
-  if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
-    for (let d = firstDay; d <= lastDay; d += 1) gridLine(d);
+  // Layer 1: time-axis gridlines — day / month / year variants, each gated by its toggle. Day
+  // lines are culled below `DAY_GRID_MIN_PX` (else a solid block); month/year boundaries come
+  // from the cheap integer-rollover `calendarBoundaries` (no per-day Date parsing).
+  if (scene.gridTiers) {
+    // Three tiers (F5, `VITE_CANVAS_TIME_AXIS`): each its own batched pass, drawn in order
+    // day → month → year so a heavier tier overwrites a coincident lighter one (a month start is
+    // also a day; a year start is also both). Day/month sit on a HALF-pixel x (odd lineWidth 1);
+    // year sits on an INTEGER x (even lineWidth 2) — mixing the two crispness rules on one width
+    // is what makes a 2px line render as two blurry grey pixels instead of one crisp one.
+    const strokeTier = (
+      days: Iterable<number>,
+      colour: string,
+      width: number,
+      half: boolean,
+    ): void => {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (const d of days) {
+        const raw = Math.round(screenXOfDay(d, view));
+        const x = half ? raw + 0.5 : raw;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, size.height);
+      }
+      ctx.stroke();
+    };
+    if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
+      const days: number[] = [];
+      for (let d = firstDay; d <= lastDay; d += 1) days.push(d);
+      strokeTier(days, palette.gridLineDay, 1, true);
+    }
+    if (toggles.monthGrid) strokeTier(bounds.months, palette.gridLineMonth, 1, true);
+    if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, 2, false);
+  } else {
+    // Flag-off: the single `gridLine` pass, byte-for-byte today's paint. Batched into one stroke.
+    ctx.strokeStyle = palette.gridLine;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const gridLine = (d: number): void => {
+      const x = Math.round(screenXOfDay(d, view)) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, size.height);
+    };
+    if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
+      for (let d = firstDay; d <= lastDay; d += 1) gridLine(d);
+    }
+    if (toggles.monthGrid) for (const d of bounds.months) gridLine(d);
+    if (toggles.yearGrid) for (const d of bounds.years) gridLine(d);
+    ctx.stroke();
   }
-  if (toggles.monthGrid) for (const d of bounds.months) gridLine(d);
-  if (toggles.yearGrid) for (const d of bounds.years) gridLine(d);
-  ctx.stroke();
 
   // Layer 2: dependency edges (only when an endpoint is visible). Driving edges — the
   // ties that set their successor's start (M3) — are drawn emphasised: a heavier SOLID
@@ -1166,8 +1304,17 @@ export function paintScene(
   // below the labels + selection ring. Dashed (not colour alone) and named in the panel legend.
   // Drawn only when the toggle is on, today maps to a day offset, and that column is on-screen.
   // Painted before the labels so label text stays legible over the dashed line, not under it.
+  //
+  // `todayFraction` (F6a, `VITE_CANVAS_TIME_AXIS`) interpolates the line to the actual
+  // time-of-day rather than the midnight boundary; absent/null keeps the plain integer offset,
+  // which is what makes the flag-off parity claim structural. The `Today` pill (F6b) mirrors the
+  // cursor date chip's geometry in the Today hue — TODAY_CHIP_TOP sits 4px below the cursor
+  // chip's own footprint (CURSOR_CHIP_TOP + CURSOR_CHIP_H), so a drag's cursor chip and the Today
+  // pill can never overlap even though they live on separate canvases. It only draws alongside
+  // the fractional line (both gated on `todayFraction` being present), not the flag-off line.
   if (toggles.today && scene.todayOffset != null) {
-    const x = Math.round(screenXOfDay(scene.todayOffset, view)) + 0.5;
+    const dayOffset = scene.todayOffset + (scene.todayFraction ?? 0);
+    const x = Math.round(screenXOfDay(dayOffset, view)) + 0.5;
     if (x >= 0 && x <= size.width) {
       ctx.strokeStyle = palette.today;
       ctx.lineWidth = 1.5;
@@ -1177,6 +1324,23 @@ export function paintScene(
       ctx.lineTo(x, size.height);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      if (
+        scene.todayFraction != null &&
+        typeof ctx.fillText === 'function' &&
+        typeof ctx.measureText === 'function'
+      ) {
+        ctx.font = LABEL_FONT;
+        const label = 'Today';
+        const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
+        const cx = Math.max(0, Math.min(x - w / 2, size.width - w));
+        ctx.fillStyle = palette.today;
+        ctx.fillRect(cx, TODAY_CHIP_TOP, w, TODAY_CHIP_H);
+        ctx.fillStyle = palette.todayInk;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, cx + LABEL_PAD_PX, TODAY_CHIP_TOP + TODAY_CHIP_H / 2);
+      }
     }
   }
 
@@ -1544,9 +1708,20 @@ export interface CursorChip {
 }
 
 /** Height (px) of the cursor date chip. */
-const CURSOR_CHIP_H = 16;
+export const CURSOR_CHIP_H = 16;
 /** Gap (px) between the canvas top edge and the chip. */
-const CURSOR_CHIP_TOP = 4;
+export const CURSOR_CHIP_TOP = 4;
+
+/** Height (px) of the Today pill (F6b) — matches the cursor chip's. */
+export const TODAY_CHIP_H = 16;
+/**
+ * Gap (px) between the canvas top edge and the Today pill — deliberately `CURSOR_CHIP_TOP +
+ * CURSOR_CHIP_H + 4` (a 4px gap below the cursor chip's own footprint), not an independent
+ * number: the two chips live on separate canvases (interaction vs base), so nothing else stops
+ * them overlapping during a drag. Expressing this one as a function of the other is what keeps a
+ * future edit to either from silently reintroducing the collision (asserted in `paint.test.ts`).
+ */
+export const TODAY_CHIP_TOP = CURSOR_CHIP_TOP + CURSOR_CHIP_H + 4;
 
 /**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):

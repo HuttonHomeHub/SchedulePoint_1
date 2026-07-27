@@ -651,6 +651,28 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   because every defect it fixes had shipped past a human reviewer, a component reviewer and an axe
   suite: the class names were right.
 
+- **ADR-0056** _(Accepted; M7 flipped `VITE_CANVAS_TIME_AXIS` default-on, 2026-07-27)_ — TSLD
+  time-axis legibility & preset framing: **range-anchored zoom presets**
+  (`pxPerDayForPreset(level, width)` derives `pxPerDay` at pick time from a target visible range,
+  not a fixed constant; `presetOf`/`isAtPreset` take the canvas width as a **required**,
+  compiler-enforced parameter, and a preset is a command — resizing preserves the chosen scale,
+  never re-derives it); **three gridline tiers** (day/month/year, each its own colour + weight,
+  drawn day→month→year so a coarser boundary wins at a coincident x — never dash, since that
+  channel is already the Today line's and the ADR-0054 cursor guideline's); a **fractional,
+  self-refreshing Today marker** (`todayDayFraction` interpolates the dashed line to the actual
+  time of day; a `useNow(60_000)` hook — the render path's **first timer**, pausing while the tab
+  is hidden — repairs the pre-existing midnight-staleness defect; a `Today` pill mirrors the
+  ADR-0054 cursor chip's geometry, offset so the two never collide); and **ground vs. non-working
+  by kind** (a `CanvasPattern` diagonal hatch over the non-working wash, O(1) per column via a
+  memoised offscreen tile reusing the ADR-0054 float-tail hatch's rhythm, guarded to the existing
+  flat fill when the offscreen 2D context is unavailable; the month-band ground gains its own
+  `View▾ → Structure → Month bands` switch, **amending ADR-0055 §4**, while
+  `VITE_CANVAS_VISUAL_LANGUAGE` stays the gate and default). Frontend-only; the ADR-0034 recalc
+  parity gate is structurally untouched. **M7** ran the deferred specialist reviews over the
+  combined M2–M5 diff, folding a day/month gridline-contrast fix (WCAG 1.4.1) and threading the
+  raised zoom ceiling through a required `maxPxPerDay` parameter (so it can never leak into the
+  flag-off path — a component-review finding), then flipped the flag default-on.
+
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
