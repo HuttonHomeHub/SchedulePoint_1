@@ -2,6 +2,7 @@ import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   BarChart3,
+  ChartArea,
   ChartColumnIncreasing,
   CalendarDays,
   CalendarRange,
@@ -684,7 +685,10 @@ function ColourByControl({
         className={cn(toolbarControlVariants({ active: api.active || open, disabled }))}
       >
         <Palette aria-hidden="true" className="size-4" />
-        <span className="truncate">{activeLabel}</span>
+        {/* Visible "Colour ·" prefix (mirrors IsolateControl's "Isolating · {mode}" idiom) so the bar
+            reads as a picker showing its active mode, not a fixed setting named e.g. "Criticality"
+            (ux review: the sighted-user affordance previously lived only in the aria-label/title). */}
+        <span className="truncate">Colour · {activeLabel}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
@@ -1969,7 +1973,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 2,
       order: 5,
       label: 'Resource histogram…',
-      icon: <BarChart3 className="size-4" />,
+      // Distinct from the Row-1 "Resource view" toggle's `BarChart3` (icon audit, ux review) — the
+      // two are easy to conflate (both are "resource" + "chart") when they appear together across the
+      // two toolbar rows.
+      icon: <ChartArea className="size-4" />,
       isVisible: () => RESOURCE_CURVES_ENABLED,
       onActivate: (ctx) => ctx.openResourceHistogram(),
     },

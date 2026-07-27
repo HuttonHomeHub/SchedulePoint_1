@@ -73,6 +73,11 @@ vi.mock('@/features/plans', async (importOriginal) => ({
       ignoreExternalRelationships: false,
       eacMethod: 'CPI',
       currencyCode: null,
+      // Float & critical-path settings (M6, ADR-0035 §17/§18/§20) — now also reachable from the
+      // Calendar dialog (previously dropped from the ADR-0031 toolbar migration).
+      criticalPathDefinition: 'TOTAL_FLOAT',
+      totalFloatMode: 'FINISH',
+      makeOpenEndsCritical: false,
     }),
   PlanCalendarPicker: () => <div data-testid="calendar-picker" />,
   PlanRecalcModePicker: () => <div data-testid="recalc-mode-picker" />,

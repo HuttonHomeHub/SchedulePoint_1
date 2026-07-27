@@ -474,21 +474,38 @@ export function ToolbarPlanWorkspace({
           untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
       <ChromePortal>
         <div className="border-border flex flex-col border-b">
-          <div className="border-border border-b px-2 py-1">
+          {/* Visible row-purpose cues (ux review): the Look/Do split otherwise lives only in each
+              row's `aria-label`, invisible to sighted users. `aria-hidden` avoids a redundant/out-of-
+              context "Look"/"Do" announcement — the toolbar's own `aria-label` already names it for AT. */}
+          <div className="border-border flex items-center gap-2 border-b px-2 py-1">
+            <span
+              aria-hidden="true"
+              className="text-muted-foreground shrink-0 text-[11px] font-semibold tracking-wide uppercase"
+            >
+              Look
+            </span>
             <Toolbar
               items={rows.look}
               context={ctx}
               label="View and navigate"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               alignEndGroup="object"
+              className="flex-1"
             />
           </div>
-          <div className="px-2 py-1">
+          <div className="flex items-center gap-2 px-2 py-1">
+            <span
+              aria-hidden="true"
+              className="text-muted-foreground shrink-0 text-[11px] font-semibold tracking-wide uppercase"
+            >
+              Do
+            </span>
             <Toolbar
               items={rows.do}
               context={ctx}
               label="Build and manage"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+              className="flex-1"
             />
           </div>
         </div>
