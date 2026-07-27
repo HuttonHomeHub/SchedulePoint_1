@@ -59,10 +59,17 @@ canvas UI state. Commands are _data_; `<Toolbar>` is generic. Built behind a new
 A `ToolbarItem` is a plain object:
 
 ```
-ToolbarItem = { id, group, tier, order, icon, label, penGated,
+ToolbarItem = { id, group, tier, showLabel, order, icon, label, penGated,
                 isVisible(ctx), isEnabled(ctx), isActive(ctx),
                 onActivate(ctx) | render(ctx) }
 ```
+
+`tier` and `showLabel` are separate on purpose (added 2026-07-27, TECH_DEBT #61): `tier` is
+**priority** — what demotes into `⋯` first — and `showLabel` (`'always' | 'auto' | 'never'`,
+default `'auto'`) is **presentation**. They were originally one property, with the primitive
+deriving the label from `tier === 1`, which meant a static per-item flag decided a question that is
+really about the width available at render time. `'auto'` now resolves from measured container
+width, so a wide monitor shows labels a narrow one cannot afford.
 
 A single `components/ui/toolbar/` primitive partitions items by group → sorts by `order`
 → splits by tier → measures → gates → renders. Adding a future capability is **registering

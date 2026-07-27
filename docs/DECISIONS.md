@@ -10,7 +10,30 @@ get an ADR instead (and may be linked from here).
 
 ---
 
-### 2026-07-27 — `VITE_CANVAS_TIME_AXIS` enablement: fold the review findings, then flip default-on
+### 2026-07-27 — Toolbar labels are a policy, not a side-effect of priority
+
+**Decision.** `ToolbarItem` gains `showLabel?: 'always' | 'auto' | 'never'` (default `'auto'`), and
+the `Toolbar` primitive's render path reads **only** that — never `tier` (TECH_DEBT #61, now
+closed). `tier` goes back to answering exactly one question: what demotes into `⋯` first.
+
+`'auto'` is the behavioural half: the row labels its auto items only when it measurably has room,
+recomputed from the container width on every resize. The measurement is deliberately taken **off
+the layout tree** — a canvas `measureText`, memoised per font+string — because the obvious
+implementation (render labels, measure, retract if they don't fit) is a feedback loop that a
+`ResizeObserver` turns into a per-frame flip-flop. Costing labels against the container's width,
+which does not change with what we render inside it, removes the cycle rather than damping it. A
+32px promotion margin absorbs the estimate's error and stops labels toggling as a user drags a
+window edge; where no 2D context exists the row stays icon-only, which is the pre-existing
+behaviour. Promotion is all-or-nothing per row: a partially-labelled group reads as inconsistency
+rather than as a response to width, and the M0 measurement found the rows sit decisively on one
+side or the other (~0.1px of slack at 1280px, 760–1000px at 1680–1920px).
+
+**Consequences.** Two registries now declare their intent explicitly: the TSLD bar's four primary
+buttons (Early/Visual mode, Add, Recalculate) and every item in the floating selection-actions bar
+pin `'always'`, since their names are the affordance. Everything else is `'auto'` and gains a label
+on wide monitors that it never had before — the ~1000px of Row-2 slack at 1920px that M0 measured
+and nothing consumed. `selection-actions.tsx`'s own comment used to gloss `tier: 1` as "(visible
+labels)", which is the conflation stated out loud; it now says which property does which job.
 
 **Decision.** M7 (tsld-toolbar-canvas-refinements, ADR-0056) ran the deferred specialist review
 pass (ux/accessibility/component/performance) over the M2–M5 diff and folded its two blocking

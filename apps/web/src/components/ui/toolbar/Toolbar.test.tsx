@@ -15,13 +15,18 @@ interface Handlers {
   add?: () => void;
 }
 
-/** A registry exercising groups 1/2/4/5, a pen-gated item, a toggle, and a render escape-hatch. */
+/**
+ * A registry exercising groups 1/2/4/5, a pen-gated item, a toggle, and a render escape-hatch.
+ * Its buttons pin `showLabel: 'always'` so these tests exercise the labelled chrome regardless of
+ * the container width jsdom reports (0) — the width-responsive `'auto'` policy has its own tests.
+ */
 function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
   return defineToolbar<Ctx>([
     {
       id: 'fit',
       group: 'frame',
       tier: 1,
+      showLabel: 'always',
       order: 0,
       label: 'fit',
       onActivate: handlers.fit ?? (() => {}),
@@ -30,6 +35,7 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
       id: 'grid',
       group: 'lens',
       tier: 1,
+      showLabel: 'always',
       order: 0,
       label: 'grid',
       isActive: (c) => c.count % 2 === 0,
@@ -39,6 +45,7 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
       id: 'add',
       group: 'tools',
       tier: 1,
+      showLabel: 'always',
       order: 0,
       label: 'add',
       penGated: true,
@@ -69,20 +76,31 @@ describe('Toolbar (APG primitive)', () => {
     expect(within(tb).getByRole('group', { name: 'Author' })).toBeInTheDocument();
   });
 
-  it('a Tier-1 (labelled) button with a description keeps its label in the title', () => {
-    // Regression: the tooltip helper used to drop the label for a Tier-1 item with a description,
+  it('a labelled button with a description keeps its label in the title', () => {
+    // Regression: the tooltip helper used to drop the label for a labelled item with a description,
     // showing just the bare description. It must read "<label> — <description>".
+    // `showLabel` is declared, not inferred from `tier` — the two are separate concerns
+    // (TECH_DEBT #61), so a test about labelling says so rather than leaning on the tier.
     const items = defineToolbar<Ctx>([
       {
         id: 'fit',
         group: 'frame',
         tier: 1,
+        showLabel: 'always',
         order: 0,
         label: 'Fit',
         description: 'Fit the diagram to the window',
         onActivate: () => {},
       },
-      { id: 'plain', group: 'frame', tier: 1, order: 1, label: 'Plain', onActivate: () => {} },
+      {
+        id: 'plain',
+        group: 'frame',
+        tier: 1,
+        showLabel: 'always',
+        order: 1,
+        label: 'Plain',
+        onActivate: () => {},
+      },
     ]);
     render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
     expect(screen.getByRole('button', { name: 'Fit' })).toHaveAttribute(
@@ -91,6 +109,68 @@ describe('Toolbar (APG primitive)', () => {
     );
     // A labelled button with no description gets no redundant title (its name is already visible).
     expect(screen.getByRole('button', { name: 'Plain' })).not.toHaveAttribute('title');
+  });
+
+  describe('label policy — `showLabel` is presentation, `tier` is priority (TECH_DEBT #61)', () => {
+    /** Render with a stubbed container width; jsdom lays nothing out, so this is the only input. */
+    function renderAtWidth(width: number, items: ToolbarItem<Ctx>[]) {
+      const spy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
+      const utils = render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
+      return { ...utils, restore: () => spy.mockRestore() };
+    }
+
+    const autoItems = defineToolbar<Ctx>([
+      { id: 'a', group: 'frame', tier: 1, order: 0, label: 'Alpha', onActivate: () => {} },
+      { id: 'b', group: 'frame', tier: 2, order: 1, label: 'Beta', onActivate: () => {} },
+    ]);
+
+    it('labels `auto` items when the row measurably has room', () => {
+      const { restore } = renderAtWidth(1200, autoItems);
+      // A labelled button carries its name as text, so it needs no `aria-label` to be reachable.
+      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-label');
+      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-label');
+      restore();
+    });
+
+    it('keeps `auto` items icon-only when the row does not', () => {
+      const { restore } = renderAtWidth(40, autoItems);
+      // Icon-only: the name reaches AT through `aria-label` + the hover `title` instead.
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-label', 'Alpha');
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('title', 'Alpha');
+      restore();
+    });
+
+    it('honours `always` / `never` regardless of width — tier never decides', () => {
+      // Both items are tier 1. Under the old `showLabel={tier === 1}` rule they were forced to
+      // agree; the policy is what separates them now.
+      const pinned = defineToolbar<Ctx>([
+        {
+          id: 'shown',
+          group: 'frame',
+          tier: 1,
+          showLabel: 'always',
+          order: 0,
+          label: 'Shown',
+          onActivate: () => {},
+        },
+        {
+          id: 'hidden',
+          group: 'frame',
+          tier: 1,
+          showLabel: 'never',
+          order: 1,
+          label: 'Hidden',
+          onActivate: () => {},
+        },
+      ]);
+      const { restore } = renderAtWidth(20, pinned);
+      expect(screen.getByRole('button', { name: 'Shown' })).not.toHaveAttribute('aria-label');
+      expect(screen.getByRole('button', { name: 'Hidden' })).toHaveAttribute(
+        'aria-label',
+        'Hidden',
+      );
+      restore();
+    });
   });
 
   it('gives exactly one control tabindex 0 (roving), the rest -1', () => {
