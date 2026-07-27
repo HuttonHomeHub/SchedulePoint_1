@@ -31,7 +31,7 @@
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.4.0",
+    "@hookform/resolvers": "^5.5.7",
     "@repo/interchange": "workspace:*",
     "@repo/types": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
