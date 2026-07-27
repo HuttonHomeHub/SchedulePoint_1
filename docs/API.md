@@ -462,12 +462,18 @@ case-insensitive substring match bounded by the org filter; there is deliberatel
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses
   include `meta.nextCursor` and `meta.hasMore`.
 - Filtering via explicit query params; sorting via `?sort=field&order=asc|desc`.
-- **A list whose cursor is keyset-ordered may not honour `order`.** The shared
-  `PaginationQueryDto` accepts `order` everywhere, but a cursor built on
-  `(created_at, id)` has exactly one valid direction, so several lists (the
-  calendar, project-calendar and resource libraries; the recycle bin) return
-  oldest-first regardless. Where that is the case, **say so in the route's
-  `@ApiOperation` description** rather than silently ignoring the param.
+- **A list declares `order` only if it honours it.** The shared
+  `PaginationQueryDto` deliberately does **not** carry `order`: it used to, which
+  meant every list advertised a sort-direction param in its OpenAPI while all but
+  one ignored it. A documented no-op is worse than an absent feature — the client
+  sends `order=desc`, gets a `200`, and reads the wrong page with nothing to
+  suggest anything went wrong. Most lists have a fixed direction that is a
+  product decision (a member roster reads oldest-first; a note thread reads
+  newest-first), and that is fine; it is advertising the opposite that is not.
+  To make a list's direction caller-controllable, declare `order` in **that
+  list's** query DTO and thread it into the `orderBy` — a `(created_at, id)`
+  keyset is direction-agnostic provided both terms flip together. See
+  `ListBaselinesQueryDto`, the one list that does.
 - Always cap `limit` server-side to a sane maximum.
 - A list that is **inherently bounded and caller-owned** (e.g.
   `GET /organizations` — only the caller's memberships, no filters) may return an

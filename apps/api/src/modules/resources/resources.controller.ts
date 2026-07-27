@@ -59,8 +59,8 @@ export class ResourcesController {
       'Returns the flat library by default. `?parentId=<uuid>` narrows to one group’s direct ' +
       'children and `?parentId=null` to top-level rows (ADR-0053 §3); every row carries its own ' +
       '`parentId`, so a client that pages the whole library can nest it without a second ' +
-      'endpoint. The inherited `order` param is not used — rows are always returned oldest-first ' +
-      '(`created_at, id`), the order the cursor is built on.',
+      'endpoint. Rows are always returned oldest-first (`created_at, id`), the order the cursor ' +
+      'is built on; there is no sort-direction param.',
   })
   @ApiOkResponse({ type: ResourceResponseDto, isArray: true })
   async list(

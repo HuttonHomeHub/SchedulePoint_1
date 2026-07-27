@@ -10,6 +10,31 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — A list declares `order` only if it honours it
+
+**Decision.** `order` comes off the shared `PaginationQueryDto` and moves onto `ListBaselinesQueryDto`,
+the single list that actually reads it. Every other list keeps its fixed direction and stops
+advertising a param it discards. `docs/API.md`'s pagination section and the three `@ApiOperation`
+descriptions that apologised for the ignored param are updated to match. TECH_DEBT #19 closed.
+
+**Why.** The param was in the base DTO, so it appeared in every list's OpenAPI while one endpoint
+implemented it. A client sending `order=desc` got a `200` and the wrong page — the failure mode of a
+documented no-op is that it looks exactly like success. The fixed directions themselves were never
+the problem: a member roster reading oldest-first and a note thread reading newest-first are product
+decisions, and both are right. Advertising the opposite is what was wrong.
+
+The alternative — implementing `order` across all ~15 lists — was rejected as scope invented by the
+bug rather than requested by anyone. A `(created_at, id)` keyset does reverse correctly when both
+terms flip together (baselines proves it), so any list can opt in later by declaring `order` in its
+own DTO. None currently needs to.
+
+**Consequence.** Because the API rejects unknown query params (`forbidNonWhitelisted`), sending
+`order` to a list that does not declare it is now a `422` instead of being ignored — accepted, and
+the point: a wrong answer becomes a visible error. No SchedulePoint client sends it. The rule is
+now enforceable by reading one DTO rather than by remembering a caveat.
+
+---
+
 ### 2026-07-27 — `verify-template.sh` restores what was there, not what was committed
 
 **Decision.** The template verifier no longer cleans up with `git checkout -- schema.prisma`. It

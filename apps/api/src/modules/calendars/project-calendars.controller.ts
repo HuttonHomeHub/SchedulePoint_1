@@ -43,8 +43,8 @@ export class ProjectCalendarsController {
   @ApiOperation({
     summary: "List the calendars usable in a project (the project's own + all org ones).",
     description:
-      'The inherited `order` param is not used — rows are always returned oldest-first ' +
-      '(`created_at, id`), the order the cursor is built on.',
+      'Rows are always returned oldest-first (`created_at, id`), the order the cursor is built ' +
+      'on; there is no sort-direction param.',
   })
   @ApiOkResponse({ type: CalendarResponseDto, isArray: true })
   async list(
