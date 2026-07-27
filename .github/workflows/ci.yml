@@ -126,6 +126,19 @@ jobs:
       - name: Apply database migrations
         run: pnpm --filter @repo/api prisma:deploy
 
+      # Schema ↔ migration lock-step. The migrations have just been applied to
+      # a pristine database, so diffing that database against the datamodel
+      # answers one question: does `schema.prisma` describe what the migrations
+      # actually build? A non-empty diff means someone edited the model without
+      # writing the matching migration (or wrote one that drifted) — caught here
+      # rather than at `prisma migrate dev` on the next contributor's machine.
+      # Objects Prisma cannot express (partial indexes/uniques, CHECK and
+      # EXCLUDE constraints — this repo has many, by convention in raw SQL) are
+      # invisible to both sides of the diff, so they neither pass nor trip it;
+      # they stay documented in the model comments instead (TECH_DEBT #54).
+      - name: Check schema/migration drift
+        run: pnpm --filter @repo/api prisma:check-drift
+
       # API e2e (Supertest) and web e2e (Playwright) run sequentially — they
       # share the test database, so running them in parallel could race.
       - name: API end-to-end tests

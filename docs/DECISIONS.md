@@ -10,6 +10,33 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-27 — The Prisma datamodel stops describing indexes it cannot describe
+
+**Decision.** `Activity` drops its `@@index([parentId])`. The database's index on that column has
+always been the **partial** `idx_activities_parent_id … WHERE deleted_at IS NULL AND parent_id IS
+NOT NULL`, created in raw SQL by the ADR-0038 migration. Prisma has no syntax for a partial index,
+so the model-level declaration was never describing that object — it was declaring a **second,
+full** index that no migration builds and no query needs. It is now documented in the model's
+comment block only, which is what the later partial-index siblings (`resources.parent_id`,
+`calendars.project_id`) already do. No runtime effect: the database is unchanged, and the index the
+queries use was always the migrated one.
+
+**Why now.** The drift was cosmetic in isolation but it cost us a gate. `prisma migrate diff
+--exit-code` was non-zero on `main`, so the one command that can tell you "the datamodel and the
+migrations have parted company" could not be trusted to mean anything. With the false positive gone
+the check is wired into CI (`prisma:check-drift`, in the `e2e` job — it already has a freshly
+migrated Postgres, so the check costs one command and no new service). TECH_DEBT #54 closed.
+
+**Consequence.** Editing a model without writing the matching migration now fails CI instead of
+surfacing as a surprise `prisma migrate dev` on the next contributor's machine. The check is blind
+to everything Prisma cannot express — partial indexes and uniques, CHECK constraints, GiST EXCLUDE
+constraints — which this repo uses heavily and by convention keeps in raw SQL. Those objects are
+absent from **both** sides of the diff, so the gate neither validates nor trips on them; they stay
+governed by review and the documenting model comments. The gate covers columns, types, tables,
+relations and full indexes, which is where silent drift actually happens.
+
+---
+
 ### 2026-07-27 — Toolbar labels are a policy, not a side-effect of priority
 
 **Decision.** `ToolbarItem` gains `showLabel?: 'always' | 'auto' | 'never'` (default `'auto'`), and
