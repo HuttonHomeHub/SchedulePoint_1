@@ -31,6 +31,7 @@ const PALETTE: TsldPalette = {
   outline: '#fff',
   selection: '#0af',
   nonWorking: '#222',
+  nonWorkingHatch: '#444',
   today: '#f00',
   todayInk: '#fff',
   conflict: '#fa0',
@@ -378,6 +379,94 @@ describe('paintScene', () => {
     const coarse = mockCtx();
     paintScene(coarse, scene({ isWorkingDay }), { ...VIEW, pxPerDay: 1 }, SIZE, PALETTE);
     expect(coarse.fillRect).not.toHaveBeenCalled();
+  });
+
+  describe('non-working hatch (F7a)', () => {
+    const nonWorkingScene: TsldScene = {
+      activities: [],
+      edges: [],
+      dataDate: DATA_DATE,
+      view: ALL_ON,
+      isWorkingDay: (d) => ((d % 7) + 7) % 7 < 5,
+    };
+
+    // Each test below uses its OWN never-reused colour pair: the tile builder memoises on
+    // (fill, hatch), and that cache is module-level (persists across `it`s in this file), so a
+    // shared colour pair would let an earlier test's cached result silently decide this one.
+
+    it('falls back to the flat wash when the offscreen 2D context is unavailable (jsdom)', () => {
+      // jsdom serves no `canvas` package, so `document.createElement('canvas').getContext('2d')`
+      // returns null — the guarded path every existing painter unit suite exercises.
+      const palette: TsldPalette = {
+        ...PALETTE,
+        nonWorking: '#a1a1a1',
+        nonWorkingHatch: '#b2b2b2',
+      };
+      const ctx = mockCtx();
+      paintScene(ctx, nonWorkingScene, VIEW, SIZE, palette);
+      expect(ctx.fillRect).toHaveBeenCalled();
+      // The flat fill is the fillStyle at the moment each non-working fillRect fires — never a
+      // CanvasPattern object, since the offscreen tile never built.
+      expect(ctx.fillStyle).toBe(palette.nonWorking);
+    });
+
+    it('the fillRect COUNT is unchanged whether or not the ctx supports createPattern (the budget claim)', () => {
+      const palette: TsldPalette = {
+        ...PALETTE,
+        nonWorking: '#c3c3c3',
+        nonWorkingHatch: '#d4d4d4',
+      };
+      const flat = mockCtx();
+      paintScene(flat, nonWorkingScene, VIEW, SIZE, palette);
+      const flatCalls = (flat.fillRect as ReturnType<typeof vi.fn>).mock.calls.length;
+      expect(flatCalls).toBeGreaterThan(0);
+
+      const palette2: TsldPalette = {
+        ...PALETTE,
+        nonWorking: '#e5e5e5',
+        nonWorkingHatch: '#f6f6f6',
+      };
+      const patternCapable = { ...mockCtx(), createPattern: vi.fn(() => null) };
+      paintScene(patternCapable, nonWorkingScene, VIEW, SIZE, palette2);
+      const patternCalls = (patternCapable.fillRect as ReturnType<typeof vi.fn>).mock.calls.length;
+      expect(patternCalls).toBe(flatCalls);
+    });
+
+    it('builds a repeating pattern from an offscreen tile and uses it as fillStyle when a 2D context is available', () => {
+      const palette: TsldPalette = {
+        ...PALETTE,
+        nonWorking: '#111213',
+        nonWorkingHatch: '#141516',
+      };
+      const fakePattern = {} as CanvasPattern;
+      const createPattern = vi.fn(() => fakePattern);
+      const tileCtx = {
+        fillStyle: '',
+        strokeStyle: '',
+        lineWidth: 1,
+        fillRect: vi.fn(),
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        stroke: vi.fn(),
+      };
+      const fakeTileCanvas = { width: 0, height: 0, getContext: () => tileCtx };
+      const createElementSpy = vi
+        .spyOn(document, 'createElement')
+        .mockReturnValue(fakeTileCanvas as unknown as HTMLCanvasElement);
+      try {
+        const ctx = { ...mockCtx(), createPattern };
+        paintScene(ctx, nonWorkingScene, VIEW, SIZE, palette);
+        expect(createElementSpy).toHaveBeenCalledWith('canvas');
+        expect(createPattern).toHaveBeenCalledWith(fakeTileCanvas, 'repeat');
+        expect(ctx.fillStyle).toBe(fakePattern);
+        // The tile itself drew a flat fill + a diagonal stroke in the two distinct palette hues.
+        expect(tileCtx.fillRect).toHaveBeenCalled();
+        expect(tileCtx.stroke).toHaveBeenCalled();
+      } finally {
+        createElementSpy.mockRestore();
+      }
+    });
   });
 
   it('draws the TODAY marker (dashed) only when on, mapped, and on-screen', () => {

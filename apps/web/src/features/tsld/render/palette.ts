@@ -32,6 +32,9 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     selection: token('--color-ring', '#6ea8fe'),
     // A muted wash for non-working columns and the destructive hue for the today marker.
     nonWorking: token('--color-muted', '#20242d'),
+    // The non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than the wash
+    // it draws over, so a weekend/holiday differs by KIND, not just a darker shade of grey.
+    nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#454b58'),
     today: token('--color-destructive', '#c83c3c'),
     // Today pill ink (F6b, `VITE_CANVAS_TIME_AXIS`) — paired with `today` the same way every other
     // fill pairs with its `*-foreground` token.
@@ -125,6 +128,8 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       outline: token('--color-foreground', '#1a1a1a'),
       selection: token('--color-ring', '#3b6fbf'),
       nonWorking: token('--color-muted', '#f0f0f0'),
+      // LIGHT fallback for the same F7a stripe (mirrors `resolveTsldPalette`).
+      nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#c7c7c7'),
       today: token('--color-destructive', '#c2331f'),
       todayInk: token('--color-destructive-foreground', '#ffffff'),
       conflict: token('--color-warning', '#b58900'),

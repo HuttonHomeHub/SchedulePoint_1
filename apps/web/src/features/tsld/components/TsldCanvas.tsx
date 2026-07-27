@@ -617,8 +617,10 @@ export function TsldCanvas({
     todayOffset,
     todayFraction,
     // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the
-    // scene carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4).
-    monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
+    // scene carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4). The
+    // user's own `view?.monthBands` preference (F7b, `VITE_CANVAS_TIME_AXIS`) only narrows the
+    // flag-on case — it never widens flag-off, which is what keeps the parity claim structural.
+    monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? true),
     // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
     // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
     gridTiers: CANVAS_TIME_AXIS_ENABLED,
@@ -703,7 +705,7 @@ export function TsldCanvas({
       isWorkingDay,
       todayOffset,
       todayFraction,
-      monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED,
+      monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? true),
       // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
       // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
       gridTiers: CANVAS_TIME_AXIS_ENABLED,

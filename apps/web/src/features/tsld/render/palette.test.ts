@@ -98,6 +98,21 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
   });
 });
 
+// ── Non-working hatch palette entry (F7a, `VITE_CANVAS_TIME_AXIS`) ──────────────────────
+describe('non-working hatch stripe ink (nonWorkingHatch)', () => {
+  it('resolveTsldPalette resolves a distinct hatch colour from the wash it draws over (documented jsdom fallback)', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.nonWorkingHatch).toBe('#454b58');
+    expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
+  });
+
+  it('resolvePrintPalette carries a LIGHT fallback for the same entry, also distinct from its wash', () => {
+    const palette = resolvePrintPalette();
+    expect(palette.nonWorkingHatch).toBe('#c7c7c7');
+    expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
+  });
+});
+
 // ── Today pill ink palette entry (F6b, `VITE_CANVAS_TIME_AXIS`) ─────────────────────────
 describe('today marker pill ink (todayInk)', () => {
   it('resolveTsldPalette pairs todayInk with today the same way labelInsideCritical pairs with critical', () => {

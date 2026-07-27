@@ -108,6 +108,11 @@ export interface TsldPalette {
   selection: string;
   /** Muted wash over non-working (weekend/holiday) day columns. */
   nonWorking: string;
+  /** Diagonal-stripe ink drawn over the non-working wash (F7a, `VITE_CANVAS_TIME_AXIS`) — a step
+   * stronger than `nonWorking`, so a weekend/holiday reads as a distinct KIND of surface, not just
+   * a darker shade of the month band. Read only by the hatch-pattern builder; the flat `nonWorking`
+   * fill remains the fallback when a pattern can't be built (jsdom, or a minimal test context). */
+  nonWorkingHatch: string;
   /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
   today: string;
   /** Ink for the Today pill's `Today` text (F6b) — paired with `today` the same way every other
@@ -195,6 +200,13 @@ export interface TsldViewToggles {
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
   lateOverlay: boolean;
+  /** User preference for the alternating month-band ground (F7b, `VITE_CANVAS_TIME_AXIS` +
+   * `VITE_CANVAS_VISUAL_LANGUAGE`) — a plain boolean here so the pure painter module never imports
+   * a flag; `TsldCanvas` composes the actual gate (`CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands
+   * ?? true)`) into `TsldScene.monthBands`, which is what the painter actually reads. Optional so
+   * every existing caller/fixture stays valid; the default below is a plain literal, not a flag
+   * read, so this module stays flag-free. */
+  monthBands?: boolean;
 }
 
 /** All view layers on — the default before the user toggles anything (the Late overlay starts off). */
@@ -206,6 +218,7 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   nonWorking: true,
   labels: true,
   lateOverlay: false,
+  monthBands: true,
 };
 
 export interface TsldScene {
@@ -357,6 +370,11 @@ export type Ctx2D = Pick<
    * (ADR-0052 M5) and falls back to hard `lineTo` corners when not — an arc, not a shadow/blur,
    * so the draw budget holds; a minimal test context never throws. */
   arcTo?: (x1: number, y1: number, x2: number, y2: number, radius: number) => void;
+  /** Optional like `roundRect`/`arcTo`: builds a repeating fill pattern from an offscreen tile —
+   * used only for the non-working hatch (F7a, `VITE_CANVAS_TIME_AXIS`). Absent ⇒ the flat-fill
+   * fallback, which is also the path every existing painter unit suite exercises (jsdom serves no
+   * `canvas` package, so the offscreen tile itself never builds). */
+  createPattern?: (image: CanvasImageSource, repetition: string | null) => CanvasPattern | null;
 };
 
 /**
@@ -401,6 +419,58 @@ const GESTURE_SOURCE_ALPHA = 0.18;
 
 /** Spacing (px) between a float/drift tail's hatch strokes — the non-colour cue's density. */
 const TAIL_HATCH_STEP = 6;
+
+/**
+ * Cache of the last-built non-working hatch tile (F7a, `VITE_CANVAS_TIME_AXIS`), keyed on the
+ * resolved colour pair — so the offscreen tile is rebuilt only on a theme switch, never per frame.
+ */
+let nonWorkingHatchCache: { fill: string; hatch: string; tile: HTMLCanvasElement | null } | null =
+  null;
+
+/**
+ * Build (and memoise) a small offscreen diagonal-stripe tile for the non-working column wash
+ * (F7a): the same `TAIL_HATCH_STEP` rhythm as the shipped float-tail hatch, so the canvas speaks
+ * one hatch language, not two. `ctx.createPattern(tile, 'repeat')` turns this into the actual fill
+ * pattern; screen-anchored (not `DOMMatrix`-corrected to pan with the columns), matching the
+ * float-tail hatch's own screen-space `hx` — accepted, not corrected.
+ *
+ * Returns null when the offscreen 2D context can't be created (jsdom without the `canvas`
+ * package): that single guard is what keeps every existing painter unit suite on the deterministic
+ * flat-fill fallback, and gives the budget gate its clean assertion — the `fillRect` count is
+ * identical; only `fillStyle` differs.
+ */
+function nonWorkingHatchTile(fill: string, hatch: string): HTMLCanvasElement | null {
+  if (
+    nonWorkingHatchCache &&
+    nonWorkingHatchCache.fill === fill &&
+    nonWorkingHatchCache.hatch === hatch
+  ) {
+    return nonWorkingHatchCache.tile;
+  }
+  const size = TAIL_HATCH_STEP;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const tileCtx = canvas.getContext('2d');
+  if (!tileCtx) {
+    nonWorkingHatchCache = { fill, hatch, tile: null };
+    return null;
+  }
+  tileCtx.fillStyle = fill;
+  tileCtx.fillRect(0, 0, size, size);
+  tileCtx.strokeStyle = hatch;
+  tileCtx.lineWidth = 1;
+  tileCtx.beginPath();
+  // The same diagonal, drawn three times offset by ±`size`, so the 45° stripe wraps seamlessly
+  // across a tiled `repeat` fill instead of breaking at the tile edge.
+  for (const dx of [-size, 0, size]) {
+    tileCtx.moveTo(dx, size);
+    tileCtx.lineTo(dx + size, 0);
+  }
+  tileCtx.stroke();
+  nonWorkingHatchCache = { fill, hatch, tile: canvas };
+  return canvas;
+}
 
 /** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
 const SLACK_CHIP_H = 13;
@@ -838,7 +908,13 @@ export function paintScene(
   // calendar (`isWorkingDay` present) and the toggle is on, and only once columns are wide enough
   // to read — at coarse zoom the columns are sub-pixel, so it's culled (and avoids a long loop).
   if (toggles.nonWorking && scene.isWorkingDay && view.pxPerDay >= NON_WORKING_MIN_PX) {
-    ctx.fillStyle = palette.nonWorking;
+    // The hatch (F7a) is a pattern of the SAME flat fill, not an extra layer: a weekend still
+    // reads as its wash even where the pattern can't build, so this is one `fillStyle` choice,
+    // never a second pass — the fillRect count below is identical either way.
+    const tile = nonWorkingHatchTile(palette.nonWorking, palette.nonWorkingHatch);
+    const pattern =
+      tile && typeof ctx.createPattern === 'function' ? ctx.createPattern(tile, 'repeat') : null;
+    ctx.fillStyle = pattern ?? palette.nonWorking;
     for (let d = firstDay; d <= lastDay; d += 1) {
       if (scene.isWorkingDay(d)) continue;
       ctx.fillRect(screenXOfDay(d, view), 0, view.pxPerDay, size.height);
