@@ -280,6 +280,35 @@ describe.skipIf(!hasDatabase)('Plan edit-lock write-gate (e2e, enforced)', () =>
     await admin.agent.delete(assignmentUrl).expect(204);
   });
 
+  it('gates the weighted-steps replace on the pen, but never the steps read (ADR-0060 §5)', async () => {
+    const { actor: admin, orgId } = await adminWithOrg();
+    const planner = await addMember(orgId, 'steps-planner@example.com', 'PLANNER');
+    const planId = await makePlan(admin);
+    await acquire(admin, planId);
+    const a = await makeActivity(admin, planId, 'A', 3);
+    const stepsUrl = `/api/v1/organizations/acme/activities/${a.id}/steps`;
+    const body = { version: a.version, steps: [{ name: 'Rebar', weight: 1, percentComplete: 0 }] };
+
+    // Non-holder (has activity:update, no pen) → 423. A replace bumps the parent activity's
+    // `version` and moves the ADR-0044 §33 physical-% rollup, so it is a structural write.
+    const denied = await planner.agent.put(stepsUrl).send(body).expect(423);
+    expect(denied.body.error).toMatchObject({
+      code: 'LOCKED',
+      details: { reason: 'PLAN_EDIT_LOCK_REQUIRED' },
+    });
+
+    // Nothing was written — the gate precedes the transaction.
+    const afterDenied = await planner.agent.get(stepsUrl).expect(200);
+    expect(afterDenied.body.data).toHaveLength(0);
+
+    // Reads stay member-level (`activity:read`): a non-holder can list steps.
+    await planner.agent.get(stepsUrl).expect(200);
+
+    // Holder → 200, and the row lands.
+    const saved = await admin.agent.put(stepsUrl).send(body).expect(200);
+    expect(saved.body.data).toHaveLength(1);
+  });
+
   it('never gates the Contributor progress path, even without the pen', async () => {
     const { actor: admin, orgId } = await adminWithOrg();
     const contributor = await addMember(orgId, 'contributor@example.com', 'CONTRIBUTOR');

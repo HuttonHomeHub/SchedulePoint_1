@@ -138,3 +138,26 @@ envelope (a mid-tier laptop, iPad-class Safari), record dropped frames while scr
 the numbers in ADR-0059. Deliberately **not** turned into a CI gate: a millisecond threshold
 measured on a runner would be noise dressed as a guarantee.
 | 57 | **Recycle-bin list has no index for its filter or its sort, and the screen pages it to exhaustion** | The `deleted_at IS NOT NULL` filter and the `ORDER BY deleted_at DESC, id ASC` on all three `UNION ALL` branches are unindexed: `clients`/`projects`/`plans` each index `(organization_id, created_at, id)`, none carry `deleted_at`. So Postgres filters and top-N sorts over **every** row for the org in that table, live rows included. That predates TECH_DEBT #22 and was deliberately deferred there as measure-first. What #22 did not weigh: the screen fetches via `apiFetchAllPages` (`use-deleted-items.ts`), which walks `?limit=100` to exhaustion — so the scan is re-run **per page**, making one screen-open cost `O(pages x org rows)` rather than `O(org rows)`. #22's own commit used that same pagination-amplification argument to justify fixing the row over-fetch immediately; it applies with more force here, and I did not apply it consistently. | Grows with an org's total row count, not its deleted-row count, and multiplies by page count. Harmless on a small org; an org that has ever created and deleted a lot of plans pays it on every visit to Recently deleted. | **Measure first — this is still unmeasured** (the reviewing agent had no database either). Get an `EXPLAIN ANALYZE` at realistic row counts; if it confirms the scan, add the partial index already named in `recycle-bin.repository.ts` — `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` per table. Also worth asking whether the screen should page to exhaustion at all. Raised by the backend-performance-reviewer agent, 2026-07-27. |
+
+### 61. The resource-assignment routes assert the plan edit-lock but never declare it
+
+`ResourceAssignmentService` calls `assertHoldsPen` on create, update and delete
+(`resource-assignment.service.ts:115`, `:245`, `:353`), and the behaviour is pinned by an e2e case
+in `plan-lock-write-gate.e2e-spec.ts`. None of the three routes carries `@ApiLockedResponse`, so
+the OpenAPI document does not mention the 423 they can return — verified by grep: there is no match
+for that decorator anywhere under `modules/resources/`.
+
+Found while reading those routes as the precedent for ADR-0060 M0, which gave the weighted-steps
+`PUT` the same gate **and** the missing declaration. Fixing the steps route and leaving its own
+model undeclared would be an odd place to stop, but it is a different module and belongs in its own
+diff rather than widening an API-only PR.
+
+The cost is narrow and real: a client generated from the spec has no 423 branch for assignment
+writes, so the first time an operator enables `PLAN_EDIT_LOCK_ENFORCED` an integrator meets an
+undocumented status code. The dependency, cross-plan-dependency and plan-lock controllers all
+declare theirs, so this is an outlier rather than a convention.
+
+**What would close it:** add `@ApiLockedResponse('You do not hold the plan edit-lock (when
+enforcement is on).')` to the three assignment routes and regenerate the OpenAPI document. Worth
+pairing with a structural test that every route whose service calls `assertHoldsPen` declares the
+response, so the pair cannot drift again.

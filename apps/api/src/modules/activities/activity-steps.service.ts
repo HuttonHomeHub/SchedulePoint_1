@@ -8,6 +8,7 @@ import type { Permission, Principal } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 
 import { ActivityStepRepository } from './activity-step.repository';
 import type { ReplaceStepsDto } from './dto/replace-steps.dto';
@@ -18,7 +19,8 @@ import type { ReplaceStepsDto } from './dto/replace-steps.dto';
  * ADR-0035 §33). A reference-template child sub-resource: every action re-resolves the org scope from
  * the caller's own memberships (anti-IDOR) paired with a permission check, and the `organization_id` is
  * COPIED from the parent activity, never client input. Reading needs `activity:read`; the bulk replace
- * is an activity-write (`activity:update`, no new permission — a step IS activity data). The **N28**
+ * is an activity-write (`activity:update`, no new permission — a step IS activity data) and holds the
+ * plan edit-lock like every sibling structural write (ADR-0028, ADR-0060 §5). The **N28**
  * out-of-range and negative-`weight` rejects are DTO-boundary (422); the DB CHECKs backstop them.
  */
 @Injectable()
@@ -27,6 +29,7 @@ export class ActivityStepsService {
     private readonly organizations: OrganizationsService,
     private readonly steps: ActivityStepRepository,
     private readonly prisma: PrismaService,
+    private readonly editLock: PlanEditLockService,
     @InjectPinoLogger(ActivityStepsService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -60,6 +63,14 @@ export class ActivityStepsService {
     this.assertCan(principal, 'activity:update', organization.id);
 
     const activity = await this.loadActiveActivity(activityId, organization.id);
+
+    // Single-editor write-gate (ADR-0028, ADR-0060 §5): a steps replace BUMPS THE PARENT ACTIVITY'S
+    // `version` below, so it is an activity write by any reading — and it moves the ADR-0044 §33
+    // physical-% rollup. It belongs under the same lock as every sibling structural write; until now
+    // the client required the pen and the server did not, and only the client's discipline hid it.
+    // Placed after the 403/404 checks so a non-member still gets 404 and learns nothing from the
+    // lock's existence (inert unless PLAN_EDIT_LOCK_ENFORCED).
+    await this.editLock.assertHoldsPen(principal, activity.planId, organization.id);
 
     await this.prisma.$transaction(async (tx) => {
       // Optimistic lock the parent activity FIRST: a stale version rolls the whole replace back (409),
