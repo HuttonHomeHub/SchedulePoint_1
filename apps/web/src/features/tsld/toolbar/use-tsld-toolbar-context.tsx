@@ -33,6 +33,7 @@ import {
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
+import { usePlanViewMode } from '@/features/gantt';
 import {
   EXPORT_FORMAT_LABELS,
   exportErrorMessage,
@@ -122,6 +123,9 @@ export function useTsldToolbarContext({
   const canInterchangeExport = model.canExportSchedule;
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setPlanMode = useSetPlanSchedulingMode(orgSlug);
+  // Which projection the workspace shows (ADR-0059). URL-backed, so it deep-links and survives a
+  // reload; hard-wired to the diagram when `VITE_GANTT_VIEW` is off.
+  const [planView, setPlanView] = usePlanViewMode();
   // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
   // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
   // client state; nothing persists.
@@ -437,6 +441,11 @@ export function useTsldToolbarContext({
       // Lens
       viewToggles,
       toggleView,
+      // Which projection the workspace shows (ADR-0059). Sourced from the URL, so a switch is
+      // deep-linkable and Back returns to the diagram. Offered to every role — reading the schedule
+      // as bars is not an edit — and hard-wired to `'tsld'` when `VITE_GANTT_VIEW` is off.
+      planView,
+      setPlanView,
       // Scheduling mode (ADR-0033 M3): read the plan's mode + a pen-gated switch. Read-only viewers
       // get a null setter so the selector renders inert. Announces the switch (the bars re-source on
       // the next recalc).
@@ -793,6 +802,8 @@ export function useTsldToolbarContext({
     canvasControlRef,
     requestFit,
     plan.plannedStart,
+    planView,
+    setPlanView,
     plan.schedulingMode,
     plan.version,
     setPlanMode,

@@ -8,6 +8,7 @@ import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
+import type { PlanViewMode } from '@/features/gantt';
 import type { InterchangeExportFormat } from '@/features/interchange';
 
 /**
@@ -44,6 +45,14 @@ export interface TsldToolbarContext {
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
   toggleView: (key: keyof TsldViewToggles) => void;
+  /** Which projection the workspace is showing — `'tsld'` or `'gantt'` (ADR-0059). Drives the
+   * view-mode segment's pressed state. Always `'tsld'` when `VITE_GANTT_VIEW` is off, because the
+   * hook that supplies it is hard-wired to the diagram in that build. */
+  planView: PlanViewMode;
+  /** Switch the workspace's projection. View-only and offered to **every** role — reading the
+   * schedule as bars is not an edit, so unlike the scheduling-mode selector this is never shaded
+   * for a viewer. Registered but not surfaced when `VITE_GANTT_VIEW` is off. */
+  setPlanView: (view: PlanViewMode) => void;
   /** The plan's scheduling mode (ADR-0033) — EARLY or VISUAL. Drives the Mode selector's pressed
    * state. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
   schedulingMode: SchedulingMode;

@@ -1,0 +1,100 @@
+import type { ActivitySummary } from '@repo/types';
+
+import { daysBetween, isMilestone } from '@/features/tsld/render/render-model';
+
+/**
+ * How a row's bar is drawn. All values are pixels in the bar region's own coordinate space, where
+ * x = 0 is `anchorIso` — the chart's left edge. The region scrolls horizontally; the caller
+ * translates, so nothing here needs to know the scroll offset.
+ */
+export interface BarGeometry {
+  /** Left edge of the activity bar. */
+  x: number;
+  /** Width of the activity bar. Never below {@link MIN_BAR_WIDTH_PX} for a non-milestone. */
+  width: number;
+  /** A zero-duration milestone renders as a diamond centred on `x`, not a bar. */
+  milestone: boolean;
+  /** 0–1 of the bar filled to show progress. */
+  progress: number;
+  /**
+   * Width of the total-float tail trailing the bar, or 0. Negative float produces **no tail**:
+   * there is no slack to draw, and a tail would read as the opposite of what it means.
+   */
+  floatWidth: number;
+}
+
+/**
+ * The smallest a bar may be drawn.
+ *
+ * A one-day activity at year zoom is a fraction of a pixel wide. Rounding it away would make a
+ * real activity invisible on the chart while its row still occupies space in the grid — a row
+ * with no bar reads as "not scheduled", which is a different and wrong statement. Clamping keeps
+ * every scheduled activity visible at every zoom; the cost is that adjacent short bars merge
+ * visually when zoomed far out, which the date columns disambiguate.
+ */
+export const MIN_BAR_WIDTH_PX = 2;
+
+/**
+ * Geometry for one activity.
+ *
+ * Returns null when the activity has no computed dates — the plan has not been calculated, or this
+ * activity was added since. The caller renders its "not calculated" row treatment rather than a
+ * bar at an arbitrary date; a bar drawn at epoch zero is a lie with a rectangle around it.
+ *
+ * Dates are **inclusive** per ADR-0023 (a one-day activity starts and finishes the same day), so
+ * the span is `finish - start + 1` days.
+ */
+export function barGeometry(
+  activity: ActivitySummary,
+  anchorIso: string,
+  pxPerDay: number,
+): BarGeometry | null {
+  const { earlyStart, earlyFinish } = activity;
+  if (earlyStart === null || earlyFinish === null) return null;
+
+  const startOffset = daysBetween(anchorIso, earlyStart);
+  const x = startOffset * pxPerDay;
+
+  if (isMilestone(activity.type)) {
+    return { x, width: 0, milestone: true, progress: 0, floatWidth: 0 };
+  }
+
+  const spanDays = daysBetween(earlyStart, earlyFinish) + 1;
+  const width = Math.max(spanDays * pxPerDay, MIN_BAR_WIDTH_PX);
+
+  // Total float is measured in the activity's own calendar (ADR-0037) and stored in whole days;
+  // the tail is drawn on the same calendar-day axis as the bar, which is an approximation the
+  // TSLD's float tails already make (ADR-0054) — consistent between the two views by construction.
+  const floatDays = activity.totalFloat ?? 0;
+  const floatWidth = floatDays > 0 ? floatDays * pxPerDay : 0;
+
+  return {
+    x,
+    width,
+    milestone: false,
+    progress: clamp01(activity.percentComplete / 100),
+    floatWidth,
+  };
+}
+
+function clamp01(value: number): number {
+  if (Number.isNaN(value)) return 0;
+  return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+/**
+ * Total width of the chart for a date span, in pixels, with a day of padding each side so the
+ * first and last bars do not sit flush against the edges.
+ */
+export function chartWidth(span: { start: string; finish: string }, pxPerDay: number): number {
+  return (daysBetween(span.start, span.finish) + 1 + CHART_PADDING_DAYS * 2) * pxPerDay;
+}
+
+/** Days of breathing room either side of the data. */
+export const CHART_PADDING_DAYS = 1;
+
+/** The chart's x = 0 date: one padding day before the earliest activity. */
+export function chartAnchor(span: { start: string }): string {
+  const ms = Date.parse(`${span.start}T00:00:00Z`) - CHART_PADDING_DAYS * 86_400_000;
+  return new Date(ms).toISOString().slice(0, 10);
+}

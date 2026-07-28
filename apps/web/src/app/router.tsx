@@ -185,10 +185,17 @@ const projectDetailRoute = createRoute({
   component: ProjectDetailScreen,
 });
 
-/** A single plan (metadata + the future TSLD canvas). */
+/**
+ * A single plan — the TSLD canvas, and (behind `VITE_GANTT_VIEW`) the Gantt projection of the
+ * same model. Which view is showing lives in `?view=` so it is deep-linkable and survives a
+ * reload (ADR-0059 §3). Validation keeps the raw string and lets `parsePlanViewMode` degrade an
+ * unrecognised value to the TSLD — a hand-edited URL must never crash a screen.
+ */
 const planDetailRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug/plans/$planId',
+  validateSearch: (search: Record<string, unknown>): { view?: string } =>
+    typeof search.view === 'string' && search.view !== '' ? { view: search.view } : {},
   beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: PlanDetailScreen,
 });

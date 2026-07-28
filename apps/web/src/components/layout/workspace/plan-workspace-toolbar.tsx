@@ -42,6 +42,7 @@ import {
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities';
+import { GanttPanel } from '@/features/gantt';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -362,6 +363,26 @@ export function ToolbarPlanWorkspace({
       />
     ) : null;
 
+  // The workspace's primary surface: the TSLD canvas, or the Gantt when the view switch says so
+  // (ADR-0059 §3). One view at a time, full width — two time-scaled surfaces sharing a screen is
+  // worse than either alone. Flag-off `ctx.planView` is hard-wired to `'tsld'`, so this
+  // expression is byte-for-byte the canvas and the Gantt subtree never mounts.
+  //
+  // Selection is workspace state, not view state, so choosing a row here opens the same Logic panel
+  // the canvas opens — switching views keeps the activity you were looking at.
+  const surface =
+    ctx.planView === 'gantt' ? (
+      <GanttPanel
+        key={`${model.planId}-gantt`}
+        activities={model.activities.data ?? []}
+        loading={model.activities.isPending}
+        onSelectActivity={model.setLogicActivity}
+        selectedActivityId={model.logicActivity?.id}
+      />
+    ) : (
+      canvas
+    );
+
   // The floating Legend panel is overlaid on whichever canvas region is active (its container is
   // `relative`); it renders null when closed, so dropping it in both layout branches is cheap. Under
   // VITE_CANVAS_LENSES it renders the ACTIVE Colour-by mode's key + the baseline-overlay entry. The band
@@ -597,7 +618,7 @@ export function ToolbarPlanWorkspace({
               {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
               <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
-                {canvas}
+                {surface}
                 {legendPanel}
                 {resourceStripPanel}
               </div>
@@ -666,7 +687,7 @@ export function ToolbarPlanWorkspace({
                 pane === 'diagram' ? 'flex' : 'hidden',
               )}
             >
-              {canvas}
+              {surface}
               {legendPanel}
               {/* Below `md` the strip rides the Diagram pane (no third pane) — Q3 / ADR-0049. */}
               {resourceStripPanel}
