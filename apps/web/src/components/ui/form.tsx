@@ -81,19 +81,24 @@ export interface SelectFieldProps extends SelectProps {
    * second live region would double up. Defaults to no role, matching {@link TextField}.
    */
   errorRole?: 'alert';
-  /**
-   * Rendered under the label INSTEAD of the `<Select>`. The escape hatch for the sites where the
-   * control itself is flag-forked (a `Combobox` when `VITE_LIBRARY_SCOPING` is on, the native
-   * select when it is off) but the label, hint and error wiring are identical either way — the
-   * fork belongs to the caller, the accessible plumbing belongs here. The caller is responsible
-   * for spreading the ids this component computes, which it receives as the render argument.
-   */
-  renderControl?: (ids: {
-    id: string;
-    describedBy: string | undefined;
-    invalid: boolean;
-  }) => React.ReactNode;
 }
+
+/*
+ * NO `renderControl` ESCAPE HATCH — deliberately.
+ *
+ * One was added here for the flag-forked pickers (a `Combobox` when
+ * `VITE_LIBRARY_SCOPING` is on, a native select when it is off) and removed
+ * again the same day: it passed only `{ id, describedBy, invalid }` to the
+ * render function, never the `ref` or the rest props. Since the whole point was
+ * to host a `register()`-bound control, and `register()` supplies exactly a ref
+ * plus `onChange`/`onBlur`/`name`, it could not do the job it existed for — and
+ * it shipped with no consumer and no test, so nothing caught that.
+ *
+ * If a fork genuinely needs this plumbing, design the signature against the
+ * first real caller (thread `ref` and the rest props through the render
+ * argument) and test it then. An untested escape hatch with no consumer is a
+ * trap: the first adopter inherits a breaking change, not a feature.
+ */
 
 /**
  * Accessible labelled select — the enumerated sibling of {@link TextField}, with the same contract:
@@ -112,7 +117,6 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
     error,
     hint,
     errorRole,
-    renderControl,
     id,
     className,
     children,
@@ -134,20 +138,16 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={fieldId}>{label}</Label>
-      {renderControl ? (
-        renderControl({ id: fieldId, describedBy, invalid: Boolean(error) })
-      ) : (
-        <Select
-          ref={ref}
-          id={fieldId}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy}
-          className={className}
-          {...props}
-        >
-          {children}
-        </Select>
-      )}
+      <Select
+        ref={ref}
+        id={fieldId}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        className={className}
+        {...props}
+      >
+        {children}
+      </Select>
       {hint ? (
         <p id={hintId} className="text-muted-foreground text-sm">
           {hint}

@@ -53,7 +53,9 @@ export function Dialog({
    * `Dialog`, e.g. revoking a share link or deleting a baseline) used to fire
    * the OUTER dialog's `onClose` too, tearing down the whole parent behind the
    * confirmation the user just answered (TECH_DEBT #50). Comparing the target
-   * fixes every nesting at once rather than the two that had been noticed.
+   * fixes every nesting inside a `Dialog` at once, rather than the two that had
+   * been noticed. `Sheet` is a separate primitive and carries its own copy of
+   * this guard.
    */
   const closeIfSelf = (event: React.SyntheticEvent<HTMLDialogElement>): void => {
     if (event.target !== ref.current) return;

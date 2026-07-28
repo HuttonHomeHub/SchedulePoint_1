@@ -114,8 +114,18 @@ a share-link revoke or a baseline delete tore down the dialog that had launched 
 
 **Why in the primitive.** The alternative on the register was portalling `ConfirmDialog` outside the
 parent's subtree. Comparing the target is smaller, needs no portal target or focus-restoration
-rework, and fixes every nesting — including ones nobody has written yet — rather than the two that
-had been noticed. `ConfirmDialog` is built on `Dialog`, so one guard covers both.
+rework, and fixes every nesting **inside `Dialog`** — including ones nobody has written yet — rather
+than the two that had been noticed. `ConfirmDialog` is built on `Dialog`, so one guard covers both.
+
+**Correction (same day).** That paragraph originally claimed the guard fixed "every nesting", full
+stop. It did not: `Sheet` is a **second**, structurally identical native-`<dialog>` primitive, and it
+did not get the guard. No consumer nests a dialog inside a `Sheet` today — the Project Explorer
+drawer renders its dialogs as siblings of `{children}` — so the bug was latent rather than live, but
+that avoidance is a convention, not a property of the primitive. Caught by the
+accessibility-reviewer agent, which traced the claim instead of taking it. `Sheet` now carries the
+same guard and a regression test **verified to fail without it**. The general lesson: "one guard
+covers both" was true of the two components I was looking at, and the word "every" quietly extended
+it to a third I had not.
 
 **Consequence.** A dialog's `onClose` now means "this dialog closed", which is what every call site
 already assumed. The regression test asserts the parent survives **and** that `onOuterClose` was
