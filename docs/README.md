@@ -32,6 +32,7 @@ source of truth for standards; these documents expand on specific areas.
 | [BACKLOG.md](BACKLOG.md)                             | Candidate work, not yet scheduled                        |
 | [DECISIONS.md](DECISIONS.md)                         | Lightweight running decision log                         |
 | [TECH_DEBT.md](TECH_DEBT.md)                         | Known debt and remediation intent                        |
+| [RECONCILE.md](RECONCILE.md)                         | The periodic drift check — trigger, checklist, findings  |
 | [TOOLBAR_ROADMAP.md](TOOLBAR_ROADMAP.md)             | Which plan-toolbar controls are still placeholders       |
 | [adr/](adr/)                                         | Formal Architecture Decision Records                     |
 | [specs/](specs/)                                     | Per-feature specs & implementation plans — one dir each  |

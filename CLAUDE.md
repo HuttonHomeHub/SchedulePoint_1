@@ -21,7 +21,7 @@ browser-native team use. See the full product context in
 
 > **Current stage: the application is substantially built.** 19 API modules
 > (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~570 web
-> source files with 15 flag-scoped Playwright suites, and 56 ADRs. The CPM/GPM
+> source files with 15 flag-scoped Playwright suites, and 58 ADRs. The CPM/GPM
 > engine is real and its conformance matrix is closed (ADR-0034). Read the code
 > before assuming anything is missing — this banner said the opposite for months
 > after it stopped being true, which is exactly the failure it now warns against.
@@ -693,6 +693,22 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   raised zoom ceiling through a required `maxPxPerDay` parameter (so it can never leak into the
   flag-off path — a component-review finding), then flipped the flag default-on.
 
+- **ADR-0058** _(Accepted)_ — Drift control — computed gates and the reconciliation
+  pass: documentation drift is a defect class with its own gates. Adds a doc-link
+  checker (`pnpm check:doc-links`), coverage **ratchets** set at the measured floor
+  (API 74% / web 87%, not the aspirational 80% — a gate that fails on day one gets
+  deleted rather than fixed), and `passWithNoTests: false`; these join the
+  schema-drift check, the token-contrast matrix, the structural seam test and the
+  flag-off parity suites. What cannot be gated — "does this prose still describe the
+  system?" — goes to a **reconciliation pass** at each epic boundary with a
+  three-month floor ([`docs/RECONCILE.md`](docs/RECONCILE.md)). Written after four
+  passes found: this file describing a repo with no domain code beside 19 modules; a
+  coverage bar asserted in four places that had never been collectable (the provider
+  was not installed); docs specifying Radix, CASL, OpenTelemetry, BullMQ and a
+  `lib/telemetry.ts` that do not exist; and README badges pointing at a repository
+  that does not exist. Rule: **verify the claim; do not trust the document** — the
+  ADR count in the banner above drifted again while this ADR was being written.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -826,6 +842,10 @@ review, performance, accessibility, Docker build, CI green, changelog/changeset,
 and version-impact assessed — mirrored in the PR template.
 
 **Change management:** architectural changes require an ADR (problem, options,
-choice, trade-offs, consequences). **Repository maintenance:** periodically
-review architecture, dependencies, security, performance, tech debt, docs, and
-UI consistency, and recommend improvements.
+choice, trade-offs, consequences). **Repository maintenance:** run the
+**reconciliation pass** ([`docs/RECONCILE.md`](docs/RECONCILE.md), ADR-0058) at
+each epic boundary, with a three-month hard floor — architecture, dependencies,
+security, performance, tech debt, docs and UI consistency. Its rule is _verify
+the claim; do not trust the document_: "review periodically" produced months of
+drift, including a stage banner in this file that described a repository with no
+domain code while nineteen modules were shipping.

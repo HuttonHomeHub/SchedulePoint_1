@@ -81,3 +81,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0055](0055-designed-chrome-and-canvas-visual-language.md)      | Surface scopes, designed chrome & canvas UI    | Accepted           |
 | [0056](0056-tsld-time-axis-legibility-and-preset-framing.md)    | TSLD time-axis legibility & preset framing     | Accepted           |
 | [0057](0057-real-modules-replace-the-reference-template.md)     | Real modules replace the reference template    | Accepted           |
+| [0058](0058-drift-control-and-the-reconciliation-pass.md)       | Drift control & the reconciliation pass        | Accepted           |
