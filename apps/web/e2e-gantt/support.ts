@@ -58,6 +58,19 @@ export async function startEditing(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
 }
 
+/**
+ * Hold the pen, whether or not this session already does.
+ *
+ * Writes are pen-gated (ADR-0028) — including the API seeding below, which would 423 without it —
+ * but a reload may leave the lease already held, in which case the toolbar reads "Stop editing" and
+ * clicking "Start editing" would hang. Checking beats assuming either state.
+ */
+export async function ensurePen(page: Page): Promise<void> {
+  const stop = page.getByRole('button', { name: 'Stop editing' });
+  if (await stop.isVisible().catch(() => false)) return;
+  await startEditing(page);
+}
+
 /** The interactive base canvas of the TSLD diagram region (aria-hidden, so located by element). */
 export function canvas(page: Page): ReturnType<Page['locator']> {
   return page.locator('section[aria-label="Time-scaled logic diagram"] canvas').first();
@@ -81,4 +94,77 @@ export async function drawActivity(
 /** The Gantt's treegrid — the surface every assertion in this journey reads. */
 export function ganttGrid(page: Page): ReturnType<Page['getByRole']> {
   return page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
+}
+
+/**
+ * The open plan's id, read from the route (`/orgs/$orgSlug/plans/$planId`). Deliberately NOT "the
+ * first plan the list endpoint returns" — that depends on the API's ordering, and would silently
+ * address the wrong plan.
+ */
+export function openPlanId(page: Page): string {
+  const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());
+  if (!match?.[1]) throw new Error(`no plan id in ${page.url()}`);
+  return match[1];
+}
+
+/**
+ * Seed activities into the open plan through the API, then recalculate.
+ *
+ * The canvas is exercised by `drawActivity` — once, exactly as every other flag-on suite does. Bulk
+ * seeding goes through the API on purpose: authoring hundreds of bars by click would measure the
+ * canvas, take minutes, and make a Gantt assertion fail for reasons that have nothing to do with
+ * the Gantt. The session cookie rides along because the request is issued from the page's origin.
+ *
+ * `startIndex` keeps names and codes unique when a plan is topped up in more than one call.
+ */
+export async function seedActivities(
+  page: Page,
+  orgSlug: string,
+  count: number,
+  startIndex = 0,
+): Promise<void> {
+  const planId = openPlanId(page);
+
+  await page.evaluate(
+    async ({ org, id, n, from }: { org: string; id: string; n: number; from: number }) => {
+      // Small concurrent batches: 400 strictly-sequential round trips is minutes of wall clock on
+      // a shared runner, and the point of the seed is to arrive at a row count, not to measure the
+      // API. Batched rather than all-at-once so the pool is not swamped.
+      const BATCH = 20;
+      for (let start = 0; start < n; start += BATCH) {
+        await Promise.all(
+          Array.from({ length: Math.min(BATCH, n - start) }, (_, k) => {
+            const i = from + start + k;
+            return fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                name: `Seeded ${i}`,
+                code: `S${String(i).padStart(4, '0')}`,
+                durationDays: 5,
+              }),
+            });
+          }),
+        );
+      }
+    },
+    { org: orgSlug, id: planId, n: count, from: startIndex },
+  );
+
+  await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      await fetch(`/api/v1/organizations/${org}/plans/${id}/schedule/recalculate`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    },
+    { org: orgSlug, id: planId },
+  );
+}
+
+/** Switch the workspace to the Gantt and wait for the grid. */
+export async function showGantt(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Gantt', exact: true }).click();
+  await expect(ganttGrid(page)).toBeVisible();
 }
