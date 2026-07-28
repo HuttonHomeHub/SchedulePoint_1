@@ -1410,3 +1410,21 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   Held by `e2e-gantt/gantt-scale.spec.ts` (the row count) and `e2e-workspace/workspace.spec.ts` (the
   collision). **No unit test can hold either**, because jsdom has no layout: it cannot tell a bounded
   scroller from an unbounded one, nor a panel from the element painted over it.
+
+- **Resource-dependent activities reach the product (ADR-0035 §23 web surface, 2026-07-28).** §23 was
+  Accepted and built in M7.2 — the engine schedules a `RESOURCE_DEPENDENT` activity on its driving
+  resource's calendar (ADR-0039), the service resolves that calendar, the conformance slice covers it —
+  and **none of it was reachable**: the type was missing from `ADVANCED_ACTIVITY_TYPES`, so the picker
+  never offered it, and `resourceDriverMissing` (the produce-and-flag signal for "no driving
+  assignment") had no renderer at all. Its only non-test references were a guest-API default and a test
+  fixture. A plan could therefore schedule work on the wrong working time and look entirely normal.
+  This slice adds the three missing surfaces: the type in the picker, the row badge, and the plan-level
+  count (`resourceDriverMissingCount`, which the API had returned unconsumed since M7.2). The
+  per-activity calendar picker is **shaded with its reason** for this type rather than left live,
+  because the service overrides it — a live control that saves an ignored value is the same
+  lit-but-inert defect the Gantt's zoom preset had a week earlier. No schema, API or engine change, so
+  the recalc parity gate is untouched. The membership rule for the advanced-types list is now stated
+  where it lives: **the engine honours it as labelled** — the bar the constraint selector already held.
+  Found by checking the roadmap's "still pending" claim against the code instead of believing it
+  (ADR-0058); the same pass corrected the Gantt's "closed the last Must-have" claim, which the brief
+  words "read-primary; **edit supported**".

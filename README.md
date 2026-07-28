@@ -15,8 +15,9 @@
 > Prisma models across 41 migrations, a React client with 16 flag-scoped
 > Playwright suites, and 59 ADRs. The CPM/GPM engine is real and its conformance
 > matrix is closed (ADR-0034). The **Gantt view shipped** on 2026-07-28
-> (ADR-0059) — the brief's last outstanding Must-have — so the remaining open
-> question is the deployment target. See the [roadmap](docs/ROADMAP.md) and
+> (ADR-0059), substantially delivering the brief's last outstanding Must-have —
+> §8 words it "read-primary; edit supported", and Gantt editing stays deferred
+> (ADR-0059 M5). The other open question is the deployment target. See the [roadmap](docs/ROADMAP.md) and
 > [project brief](docs/PROJECT_BRIEF.md).
 
 SchedulePoint is a browser-based **construction scheduling** application built
