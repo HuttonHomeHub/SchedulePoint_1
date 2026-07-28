@@ -188,7 +188,12 @@ discriminators. Each becomes a spec/plan before build:
   conflict handling, and announcements. Chromium Back/Forward suppression is asserted by the flag-on
   Playwright journey; the Firefox/Safari/Edge manual sweep is the operator gate (TECH_DEBT #25).
   Id-stable cascade/WBS delete-undo is a deferred M4.
-- **Gantt view** — the secondary tabular projection of the same model.
+- **Gantt view** — **shipped** (ADR-0059, `VITE_GANTT_VIEW` default-on 2026-07-28): a
+  grid-and-bar projection of the same model behind a TSLD | Gantt switch, with WBS summary rows,
+  the baseline variance bar ADR-0025 deferred "until a Gantt exists", and a printed programme.
+  Read-only by design — the brief says read-primary, and editing stays in the TSLD. Rendered as
+  virtualized DOM rows rather than Canvas 2D, because virtualization removes the premise ADR-0026
+  chose canvas for. Dependency arrows and Gantt editing are the deliberate next candidates.
 - **Export** (PDF/CSV) and **resources** (library + assignments) —
   Must/Should-have per the brief. (Resources have since shipped — M7.)
 

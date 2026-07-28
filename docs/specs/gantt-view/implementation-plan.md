@@ -3,7 +3,7 @@
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
 - **Status:** **Approved** (2026-07-28) — unchanged by the Q1–Q3 answers, which came back as the defaults this plan assumes
 - **Owner:** Technical Lead
-- **Flag:** `VITE_GANTT_VIEW` (default off until M6)
+- **Flag:** `VITE_GANTT_VIEW` — **default ON since 2026-07-28 (M6)**
 
 ## Breakdown
 
@@ -166,14 +166,14 @@ flowchart LR
 
 ---
 
-### Milestone M6 — Enablement
+### Milestone M6 — Enablement — **landed**
 
-**Outcome:** `VITE_GANTT_VIEW` default-on.
+**Outcome:** `VITE_GANTT_VIEW` default-on (2026-07-28).
 
-- **6.1** Specialist reviews over the whole epic diff — ux, accessibility, component, performance. _(the ADR-0053 M6 / ADR-0056 M7 pattern: defer them to one pass over the combined diff, fold every blocking finding)_
-- **6.2** Flag-on Playwright journey + its own CI step.
-- **6.3** Measure at 2,000 activities on the ADR-0026 hardware envelope — **in a browser, not on a CI runner** (`TECH_DEBT #59` exists because that distinction was previously fudged).
-- **6.4** Flip the flag; keep the flag-off parity suites as the rollback contract.
+- **6.1** ✅ Review pass over the combined diff — run **inline, not by the specialist subagents** (`.claude/agents/`), which the session that built this had not been asked to invoke. Worth naming: the ADR-0053 M6 / ADR-0056 M7 passes used the agents, and their value was independent eyes. This pass had one pair. The blocking finding was a **lit-but-inert control**: `setZoomPreset` delegated only to the canvas handle, which is null while the Gantt is mounted, so the zoom presets were enabled and silently did nothing — indistinguishable to a user from a slow feature. The preset is shared state both views read, so it now sets that first and commands the canvas second; stepping, fitting and go-to-date have no Gantt equivalent and shade with a reason (`canvasActive`). Pinned by `features/gantt/toolbar-in-gantt.test.tsx`.
+- **6.2** ✅ Flag-on journey `apps/web/e2e-gantt/` + its own CI step (`pnpm --filter @repo/web test:e2e:gantt`).
+- **6.3** ⚠️ **Partly.** The claim the substrate decision rests on — live node count bounded by the viewport, not the plan — **is** measured in a real browser with the real virtualizer (`e2e-gantt/gantt-scale.spec.ts` seeds two plans an order of magnitude apart and asserts an identical row window). What is **not** measured is frame timing on the ADR-0026 §16 hardware envelope: the only browser CI has is a headless Chromium on a shared runner. Recorded as `TECH_DEBT #60` rather than claimed — the distinction `TECH_DEBT #59` exists to protect.
+- **6.4** ✅ Flag flipped; the flag-off parity suites are kept and pinned, not weakened. That is the rollback contract.
 
 ## Sequencing & slices
 

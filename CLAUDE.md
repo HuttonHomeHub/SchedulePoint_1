@@ -20,17 +20,19 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 19 API modules
-> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~570 web
-> source files with 15 flag-scoped Playwright suites, and 58 ADRs. The CPM/GPM
+> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~590 web
+> source files with 16 flag-scoped Playwright suites, and 59 ADRs. The CPM/GPM
 > engine is real and its conformance matrix is closed (ADR-0034). Read the code
 > before assuming anything is missing — this banner said the opposite for months
 > after it stopped being true, which is exactly the failure it now warns against.
 >
-> What is **not** built: the Gantt view (the one remaining Must-have in
-> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8), and the deployment target
-> is still undecided. New work still follows the delivery process (§21) and the
-> implementation standard (§12), which is now demonstrated by real modules
-> rather than by a template to copy (ADR-0057).
+> The **Gantt view shipped** on 2026-07-28 (ADR-0059, `VITE_GANTT_VIEW`
+> default-on), closing the last outstanding Must-have in
+> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8 — read-only by design, with
+> WBS rows, the baseline variance bar and a printed programme. What remains
+> undecided is the **deployment target**. New work still follows the delivery
+> process (§21) and the implementation standard (§12), which is demonstrated by
+> real modules rather than by a template to copy (ADR-0057).
 >
 > SchedulePoint is **multi-tenant**: users belong to one or more
 > **organisations**; clients, projects, plans and their activities are
@@ -709,7 +711,7 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   that does not exist. Rule: **verify the claim; do not trust the document** — the
   ADR count in the banner above drifted again while this ADR was being written.
 
-- **ADR-0059** _(Accepted; M0 landed, behind `VITE_GANTT_VIEW` default-off)_ — The
+- **ADR-0059** _(Accepted; M0–M4 + M6 landed, `VITE_GANTT_VIEW` **default-on** 2026-07-28)_ — The
   Gantt view's rendering substrate and the view seam. The brief's last outstanding
   Must-have (§8), built because **the people a planner reports to do not read logic
   diagrams** — today the only way to hand a QS something they recognise is to export
@@ -727,9 +729,22 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   First ship is **read-only with no dependency arrows** (arrows would drag the
   rejected substrate back in through the side door). **No backend work at all** — every
   field is already computed, persisted and exposed; the CPM engine is not imported,
-  so the ADR-0034 recalc parity gate is untouched by construction. Unblocks the
-  WBS summary bar (ADR-0038, `TECH_DEBT #37`) and the baseline variance bar ADR-0025
-  deferred "until a Gantt exists".
+  so the ADR-0034 recalc parity gate is untouched by construction. **Unblocked and
+  shipped** the WBS summary bar (ADR-0038, `TECH_DEBT #37`) and the baseline variance
+  bar ADR-0025 deferred "until a Gantt exists". **M4** adds a **printed programme**
+  (§6): a detached print document rather than a print stylesheet, because printing a
+  virtualized list prints only the rows on screen — a programme cropped to a scroll
+  position, which looks authoritative and omits work. It renders every row, fits the
+  span to the page, and delegates pagination to a native `<thead>` so the headings and
+  the ruler repeat per page; the container/lifecycle convention is extracted to
+  `lib/print-document.ts` and shared with the TSLD image path. The in-app **PDF**
+  button stays canvas-only and is deliberately not wired to the Gantt. **M6** flipped
+  the flag once the deferred review pass over the combined diff was folded — which
+  caught a **lit-but-inert** zoom control (the preset delegated only to the canvas
+  handle, null with no canvas mounted; canvas-only viewport commands now shade with a
+  reason) — and added the flag-on journey `apps/web/e2e-gantt/` with its own CI step,
+  including the browser-measured proof that the live row count is bounded by the
+  viewport and not the plan. **M5 (editing) stays deferred by design.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

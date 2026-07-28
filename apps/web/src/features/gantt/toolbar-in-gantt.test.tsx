@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { makeTsldToolbarContext } from '@/features/tsld/toolbar/test-helpers';
+import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 
 /**
  * What the plan toolbar does while the **Gantt** is the mounted surface (ADR-0059).
@@ -63,7 +63,7 @@ describe('the view switch', () => {
 
   // Reading the schedule as bars is not an edit, so no role is shaded out of it.
   it('is never gated on write permission', () => {
-    const viewer = makeTsldToolbarContext({ canEditSchedule: false, canWrite: false });
+    const viewer = makeTsldToolbarContext({ canEditSchedule: false });
     for (const id of ['view-tsld', 'view-gantt']) {
       expect(item(id).isEnabled?.(viewer)).not.toBe(false);
     }

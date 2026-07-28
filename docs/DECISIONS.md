@@ -10,6 +10,63 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-28 — Printing the Gantt: a print document, not a print stylesheet
+
+**What was decided.** `Print` mounts a purpose-built `GanttPrintSurface` into a detached container
+on `document.body` rather than styling the live view for paper. Recorded in
+[ADR-0059 §6](adr/0059-gantt-view-rendering-substrate-and-the-view-seam.md).
+
+**Why, and what turned it up.** M4 was planned as "a print stylesheet that paginates rows and
+repeats the ruler per page". Building it surfaced the reason that could not work: **the live panel
+virtualizes**, so a print stylesheet would emit a programme cropped to whichever ~40 rows happened
+to be scrolled into view — and the app shell's clipped panes (ADR-0029/0030) would crop it further.
+A document that looks authoritative and silently omits work is worse than no print at all, and it
+is the exact failure a view built for people who don't read logic diagrams exists to avoid.
+
+The detached-container pattern was already in the codebase — the TSLD Browser-Print path used it —
+so this was less an invention than noticing an existing convention and extracting it
+(`lib/print-document.ts`, `styles/print-document.css`). Three things fell out for free once the
+document was ours to shape: every row renders, the span fits the page (`fitPxPerDay`, the inverse
+of `chartWidth` — paper cannot be panned), and a real `<thead>` makes the browser repeat the
+headings **and the time ruler** on every page with no pagination code at all.
+
+**What was deliberately not done.** The in-app **PDF** button is not wired to the Gantt. It embeds
+a raster from `renderExportImage`; a DOM Gantt cannot be rasterised by it. That was verified by
+reading `export/pdf.ts`, not assumed. Browser print-to-PDF covers the need today, so a native Gantt
+PDF is its own spec rather than a task smuggled into this one.
+
+**A first attempt that was wrong.** The first fix was a `usePrintExpansion` hook that un-virtualized
+the live panel on `beforeprint`. It was written, then deleted: it would have fought the shell's
+clipping ancestors with `!important` overrides, and left the print output dependent on the live
+DOM's layout. The detached surface makes the whole class of problem not exist.
+
+---
+
+### 2026-07-28 — The Gantt's review pass, and the control that was lit but did nothing
+
+**What was found.** Reviewing the Gantt epic before flipping `VITE_GANTT_VIEW` default-on turned up
+one blocking defect, and it was not in the Gantt: `setZoomPreset` in the toolbar context delegated
+**only** to the canvas control handle (`canvasControlRef.current?.zoomToPreset(level)`). That handle
+is null while the Gantt is mounted. So in the Gantt the zoom presets were **enabled and silently
+inert** — a user clicking "Quarter" and seeing nothing change has no way to tell a broken feature
+from a slow one.
+
+**Why it was there.** The Gantt consumes the zoom preset (ADR-0059 §2 — the time axis is shared,
+not reimplemented), so the control genuinely should work in both views. But the preset is _state_
+that lives in `useTsldCanvasUiState`, while the toolbar had only ever needed to _command the
+canvas_, which then reported back. Adding a second consumer of that state exposed the asymmetry.
+
+**The fix, and the line drawn.** `setZoomPreset` now sets the shared state first and commands the
+canvas second. Stepping, fitting and go-to-date are canvas **viewport** commands with no Gantt
+meaning — the Gantt's chart already spans the plan — so they shade with a reason (`canvasActive`)
+rather than sitting enabled. Pinned by `features/gantt/toolbar-in-gantt.test.tsx`.
+
+**Worth recording about the pass itself.** It ran **inline** rather than through the specialist
+subagents the ADR-0053 M6 and ADR-0056 M7 passes used. Those passes' value was independent eyes;
+this one had one pair, and the plan says so rather than implying otherwise.
+
+---
+
 ### 2026-07-28 — The documentation rebaseline pass, and what it found
 
 **What ran.** The first full reconciliation pass under

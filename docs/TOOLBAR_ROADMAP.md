@@ -65,11 +65,13 @@ tooltip copy differentiates them.
   `externalDriven`, `levelingWindowExceeded`, negative total float) occur in **Early** mode too — only
   `visualConflict` is Visual-specific. It is view-only (every role) with no scheduling-mode gate; it
   shades only when there are no flagged activities ("No conflicts to review") or no diagram.
-- `resource-view` is now a **wired lens** (the canvas demand strip, Stage E / ADR-0049); the `view-mode`
-  slot remains a genuinely-reserved **hidden** stub (`isVisible: () => false`) that becomes the real lens
-  **switch** (TSLD / Gantt / Resource) once more than one _view_ exists — the strip is an overlay on the
-  TSLD view, not a separate view, so it does not fold into `view-mode`. The Gantt/Resource view switch is
-  intentionally **not** surfaced as a visible control until then.
+- `resource-view` is a **wired lens** (the canvas demand strip, Stage E / ADR-0049). The `view-mode`
+  slot is now **filled**: since ADR-0059 it is the real **Diagram | Gantt** switch (two registry items,
+  `view-tsld`/`view-gantt`, following the `mode-early`/`mode-visual` idiom), default-on 2026-07-28. Its
+  promotion condition — "once more than one _view_ exists" — was met by the Gantt and by nothing before
+  it: the resource strip is an overlay on the TSLD, not a separate view, so it never folded in here.
+  `Network` remains unbuilt and stays out of the control rather than shipping as an inert half, which is
+  the concern ADR-0055 §8.4 raised and ADR-0059 §3 answers.
 - Several placeholders become **`View▾` toggles** rather than toolbar buttons when built (e.g.
   `baseline-overlay`); the button is a stand-in for the affordance, not a commitment to its final shape.
   (`add-note` is now wired to open the selected activity's Logic-panel Notes section rather than becoming

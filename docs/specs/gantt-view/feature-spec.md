@@ -247,7 +247,7 @@ Rejected alternatives:
 - **A third-party Gantt component.** Rejected on the standing argument in `docs/specs/engine-conformance-framework/feature-spec.md` §49: we own the scheduling semantics precisely so we are not bound to a vendor's interpretation of them. A component that renders bars from its own model would need our CPM outputs marshalled into its shape, and would fight the design system on every token.
 - **A separate `/gantt` route rather than a view switch.** Rejected: the workspace shell (ADR-0029/0030) mounts once and owns selection; a sibling route would duplicate that and lose selection on switch.
 
-**Feature flag:** `VITE_GANTT_VIEW`, default off, with a flag-off parity suite pinning the workspace — the rollback contract that ADR-0053 M6 established and deliberately kept.
+**Feature flag:** `VITE_GANTT_VIEW` — default off through M0–M4, **default ON since 2026-07-28 (M6)**. The flag-off parity suite pinning the workspace is kept and pinned rather than weakened: that is the rollback contract ADR-0053 M6 established.
 
 ## 5. Links
 

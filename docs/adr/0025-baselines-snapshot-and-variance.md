@@ -83,8 +83,11 @@ performance NFRs: capture < 5s, variance < 300ms p95 at 2,000).
   per capture) — mitigated by a single batched `createMany` and the modest scale target.
   `source_activity_id` has no referential integrity by design, so an orphan snapshot
   (source purged) is expected and handled as a "removed" variance row, not an error.
-- **Follow-ups / deferred.** The TSLD/Gantt variance **overlays** wait for the canvas
-  milestone (M7 ships the data + table columns + management panel). Baseline **rename**
+- **Follow-ups / deferred.** The TSLD/Gantt variance **overlays** waited for the canvas
+  milestone (M7 shipped the data + table columns + management panel). The TSLD overlay
+  landed with the canvas lenses; the **Gantt ghost bar** landed 2026-07-28 with the Gantt
+  view itself (ADR-0059 M3) — a dashed baselined span beneath each live bar, plus a signed
+  `vs baseline` column, because a ghost alone says "different", not "later". Baseline **rename**
   (the `version` column is present to make it additive) and **baseline-vs-baseline**
   compare are out of scope for v1. Cross-plan/program baselines remain out (§20). The
   `HierarchyLifecycleService` gains a `'baseline'` cascade level so a plan/project/client
