@@ -103,5 +103,9 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   await page.getByRole('button', { name: 'Diagram', exact: true }).click();
   await expect(page.locator('section[aria-label="Time-scaled logic diagram"]')).toBeVisible();
   await expect(ganttGrid(page)).toBeHidden();
-  await expect(page).toHaveURL(/[?&]view=tsld/);
+  // Back on the diagram the parameter is GONE, not `view=tsld`. The default is deliberately not
+  // serialised (`use-plan-view-mode.ts`), so an untouched plan keeps a clean URL and a shared link
+  // never pins a choice the sharer did not make. Asserting `view=tsld` here would have pinned the
+  // opposite contract into a test.
+  await expect(page).not.toHaveURL(/[?&]view=/);
 });

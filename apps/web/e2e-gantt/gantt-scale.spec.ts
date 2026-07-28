@@ -33,10 +33,14 @@ import {
  */
 
 /**
- * Two plan sizes far enough apart that "the DOM did not grow" is a real statement. CI measured 100
- * activities rendering 101 rows on the runner's window, which is why the assertion below is about
- * **growth** rather than an absolute ceiling — how many rows a viewport holds is not a constant, and
- * pinning one would make this test fail for reasons unrelated to virtualization.
+ * Two plan sizes far enough apart that "the DOM did not grow" is a real statement.
+ *
+ * This test earned its keep on the first run: it measured **101 rows at 100 activities and 301 at
+ * 300** — every row live, the window bounded by the plan. The cause was not the virtualizer but the
+ * app shell, whose root box was `min-h-dvh` (a *minimum*), leaving its height `auto` so no
+ * `flex-1 min-h-0` beneath it was bounded by the viewport. The canvas had shared that container for
+ * months without exposing it, because a canvas fills whatever it is handed and cannot report that
+ * the container was wrong. A virtualizer can, and did.
  */
 const FIRST_FILL = 100;
 const TOPPED_UP = 300;
@@ -70,11 +74,13 @@ test.describe('the Gantt at plan scale', () => {
     // **The invariant, stated as growth rather than size.** Three times the plan must not mean three
     // times the DOM. Asserting an absolute ceiling instead would need a guess at how many rows a
     // viewport holds — which varies with chrome, zoom and the runner's window — and would fail for
-    // reasons that say nothing about virtualization. Growth is the property ADR-0026's premise turns
-    // on, and it is exact.
+    // reasons that say nothing about virtualization. Growth is the property ADR-0059 §1 turns on,
+    // and it is exact: the window is the same size at both plan sizes, so the count is identical.
     //
-    // The measurements ride in the message: if this ever fails, the numbers say immediately whether
-    // the window merely shifted or virtualization stopped windowing altogether.
+    // This doubles as the regression gate for the unbounded-shell defect above, which no unit test
+    // can hold: jsdom has no layout, so a component test cannot tell a bounded scroller from an
+    // unbounded one. The measurements ride in the failure message, because the numbers alone say
+    // whether the window merely shifted or the container stopped bounding it.
     const measured = `rows at ${FIRST_FILL} activities: ${small}; at ${TOPPED_UP}: ${large}`;
     expect(large, measured).toBe(small);
     expect(large, measured).toBeLessThan(TOPPED_UP);

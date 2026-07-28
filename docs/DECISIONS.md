@@ -1377,3 +1377,19 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   are untouched** (commit reuses services + calls the unchanged recalculate). Flag-off ⇒ the plan-create
   surface is byte-for-byte today's (no entry, no dialog). See ADR-0050; M2 adds WBS/constraints/progress/
   resources mapping, M3 adds MSPDI, M4 (optional) export.
+- **The app shell's root was a minimum, not a height (`min-h-dvh` → `h-dvh`; found by ADR-0059's Gantt
+  scale journey, 2026-07-28).** `app-shell.tsx`'s outermost box was `min-h-dvh`, which leaves its
+  computed height `auto` — so every `flex-1 min-h-0` beneath it (the shell row, `<main>`, the plan
+  workspace, the workspace body) resolved against **content**, not the viewport, and the plan
+  workspace region was silently unbounded. The TSLD canvas had shared that container since ADR-0029
+  without exposing it: a canvas sizes itself from a `ResizeObserver` and fills whatever it is handed,
+  so it cannot report that the box it was handed was wrong. The Gantt's virtualizer measured the same
+  container, found its scroller exactly as tall as its own content, and rendered **every** row —
+  `clientHeight === scrollHeight`, 101 live rows at 100 activities and 301 at 300, measured in a
+  browser. That is precisely the premise ADR-0059 §1 rejected canvas on, so the scale journey was the
+  right test and it worked as intended on its first real run. The fix is one word in each of the two
+  shell roots (`AppShell` and the `VITE_NAV_TREE=false` fallback in `authed-layout.tsx`, which has to
+  carry it too or a rollback resurrects the bug). Ordinary long screens are unaffected — they overflow
+  the root box and the document still scrolls, which is the behaviour the minimum was reaching for.
+  Held by `e2e-gantt/gantt-scale.spec.ts`: **no unit test can hold this**, because jsdom has no layout
+  and cannot tell a bounded scroller from an unbounded one.

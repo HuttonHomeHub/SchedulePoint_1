@@ -16,7 +16,11 @@ export function AuthedLayout(): React.ReactElement {
 
   return (
     <AnnouncerProvider>
-      <div className="flex min-h-dvh flex-col">
+      {/* `h-dvh` for the same reason as {@link AppShell}: a minimum leaves the height `auto` and
+          every `flex-1 min-h-0` below it stops being bounded by the viewport. This is the
+          `VITE_NAV_TREE=false` rollback path, so it has to carry the fix too — otherwise rolling
+          the navigator back would resurrect the bug. */}
+      <div className="flex h-dvh flex-col">
         <AppHeader />
         <main className="flex flex-1 flex-col">
           <Outlet />

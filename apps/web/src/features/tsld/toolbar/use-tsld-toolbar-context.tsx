@@ -839,6 +839,10 @@ export function useTsldToolbarContext({
     };
   }, [
     zoomPreset,
+    // A `useState` setter, so its identity is stable and this cannot change how often the memo
+    // recomputes — listed because the rule is right that an omitted dependency is unverifiable by
+    // inspection, and a silenced warning is a worse record than a redundant entry.
+    setCanvasZoomPreset,
     canvasControlRef,
     requestFit,
     plan.plannedStart,

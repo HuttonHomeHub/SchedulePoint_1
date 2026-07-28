@@ -87,7 +87,15 @@ function ShellFrame(): React.ReactElement {
   return (
     <ShellContext.Provider value={shell}>
       <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
-        <div className="flex min-h-dvh flex-col">
+        {/* `h-dvh`, NOT `min-h-dvh`. A minimum leaves this box's height `auto`, so every
+            `flex-1 min-h-0` descendant resolves against content instead of the viewport and the
+            workspace region silently becomes unbounded. The canvas could never reveal that — it
+            sizes itself from a ResizeObserver and simply fills whatever it is given — but the
+            Gantt's virtualizer measures its scroller, found it as tall as its own content, and
+            rendered every row (ADR-0059 §1's premise, falsified by a layout bug rather than by
+            the substrate choice). Ordinary long screens still scroll the document: they overflow
+            this box, which is the behaviour a minimum was reaching for. */}
+        <div className="flex h-dvh flex-col">
           {/* The chrome band owns the header and (flag-on) the slot a plan's toolbar portals
               into — so the top of the app reads as one designed surface without the shell ever
               learning what a plan is (ADR-0029 / ADR-0055 §3). Flag-off it is just the header. */}
