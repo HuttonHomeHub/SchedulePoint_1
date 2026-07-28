@@ -4,6 +4,7 @@ import {
   CHART_PADDING_DAYS,
   MIN_BAR_WIDTH_PX,
   barGeometry,
+  baselineGeometry,
   chartAnchor,
   chartWidth,
 } from './bar-geometry';
@@ -202,5 +203,38 @@ describe('chart framing', () => {
 
   it('gives a single-day plan a non-zero width', () => {
     expect(chartWidth({ start: '2026-02-02', finish: '2026-02-02' }, 10)).toBeGreaterThan(0);
+  });
+});
+
+describe('baselineGeometry', () => {
+  const row = (over: Partial<Parameters<typeof baselineGeometry>[0]> = {}) => ({
+    inBaseline: true,
+    baselineStart: '2026-02-02',
+    baselineFinish: '2026-02-06',
+    ...over,
+  });
+
+  it('places the ghost at its baselined start', () => {
+    expect(baselineGeometry(row(), ANCHOR, 10)?.x).toBe(10);
+  });
+
+  // A ghost a day short of the bar it is compared against reads as drift that does not exist.
+  it('is inclusive, exactly like the live bar', () => {
+    expect(baselineGeometry(row(), ANCHOR, 10)?.width).toBe(50);
+    expect(baselineGeometry(row({ baselineFinish: '2026-02-02' }), ANCHOR, 10)?.width).toBe(10);
+  });
+
+  it('clamps a sub-pixel ghost so it stays visible', () => {
+    expect(baselineGeometry(row({ baselineFinish: '2026-02-02' }), ANCHOR, 0.05)?.width).toBe(
+      MIN_BAR_WIDTH_PX,
+    );
+  });
+
+  it.each([
+    ['the activity was added after the baseline', { inBaseline: false }],
+    ['the baseline has no start', { baselineStart: null }],
+    ['the baseline has no finish', { baselineFinish: null }],
+  ])('draws nothing when %s', (_label, over) => {
+    expect(baselineGeometry(row(over), ANCHOR, 10)).toBeNull();
   });
 });

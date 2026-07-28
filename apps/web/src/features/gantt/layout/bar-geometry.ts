@@ -98,3 +98,24 @@ export function chartAnchor(span: { start: string }): string {
   const ms = Date.parse(`${span.start}T00:00:00Z`) - CHART_PADDING_DAYS * 86_400_000;
   return new Date(ms).toISOString().slice(0, 10);
 }
+
+/**
+ * Where the baseline ghost bar sits for a row, or null when there is nothing to compare.
+ *
+ * The ghost is drawn from the ACTIVE baseline's snapshot dates (ADR-0025), which are already
+ * computed and exposed — this reads them, it does not re-derive a comparison. Null covers the
+ * three honest "no comparison" cases: no baseline captured, an activity added since the baseline
+ * was taken, or a baselined activity with no snapshot dates.
+ */
+export function baselineGeometry(
+  row: { inBaseline: boolean; baselineStart: string | null; baselineFinish: string | null },
+  anchorIso: string,
+  pxPerDay: number,
+): { x: number; width: number } | null {
+  if (!row.inBaseline || row.baselineStart === null || row.baselineFinish === null) return null;
+  const x = daysBetween(anchorIso, row.baselineStart) * pxPerDay;
+  // Inclusive, exactly like the live bar (ADR-0023) — a ghost a day short of the bar it is
+  // compared against would read as drift that does not exist.
+  const spanDays = daysBetween(row.baselineStart, row.baselineFinish) + 1;
+  return { x, width: Math.max(spanDays * pxPerDay, MIN_BAR_WIDTH_PX) };
+}

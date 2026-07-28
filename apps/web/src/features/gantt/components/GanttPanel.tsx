@@ -1,9 +1,9 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { barGeometry, chartAnchor, chartWidth } from '../layout/bar-geometry';
+import { barGeometry, baselineGeometry, chartAnchor, chartWidth } from '../layout/bar-geometry';
 import {
   DEFAULT_GANTT_SORT,
   buildRows,
@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 /** Row height in pixels. Fixed, so the virtualizer needs no measurement pass. */
 export const GANTT_ROW_HEIGHT = 32;
 
-/** Width of the pinned identity/date grid. */
+/** Width of the pinned identity/date grid, without the optional variance column. */
 const GRID_WIDTH = 420;
 
 /**
@@ -77,8 +77,37 @@ const COLUMNS: readonly Column[] = [
 
 const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
 
+/**
+ * The variance readout, shown only when a baseline is active. Signed and unit-suffixed so the
+ * direction is unambiguous in text — a ghost bar alone says "different", not "later" (spec GV-3:
+ * every visual encoding needs a text equivalent).
+ */
+const VARIANCE_COLUMN_WIDTH = 72;
+
+function varianceText(row: BaselineVarianceRow | undefined): string {
+  // No row at all is NOT the same fact as "added since the baseline". The API returns a row per
+  // activity when a baseline is active, so an absent one means we were not told — and claiming
+  // "New" for it would invent a comparison we do not have.
+  if (row === undefined) return '—';
+  if (!row.inBaseline) return 'New';
+  const days = row.startVarianceDays;
+  if (days === null) return '—';
+  if (days === 0) return 'On plan';
+  return days > 0 ? `+${days}d late` : `${days}d early`;
+}
+
 export interface GanttPanelProps {
   activities: readonly ActivitySummary[];
+  /**
+   * Active-baseline variance rows, keyed by activity id (ADR-0025). When present the chart draws a
+   * ghost bar beneath each live bar and the grid gains a variance column — the comparison ADR-0025
+   * deferred "until a Gantt exists".
+   *
+   * Absent (no baseline captured, or the flag/lens is off) ⇒ no ghost, no column, and the chart is
+   * byte-for-byte what it was. Reuses the variance rows the activities table already fetches — this
+   * adds no query.
+   */
+  varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow> | undefined;
   /**
    * The shared zoom preset (ADR-0056). Passed from the workspace so ONE control drives both
    * projections — a Gantt with its own private zoom would disagree with the diagram about how
@@ -113,6 +142,7 @@ export interface GanttPanelProps {
  */
 export function GanttPanel({
   activities,
+  varianceByActivityId,
   zoomLevel = DEFAULT_ZOOM,
   loading = false,
   error,
@@ -139,6 +169,9 @@ export function GanttPanel({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+
+  const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
+  const gridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
 
   const pxPerDay =
     barRegionWidth > 0 ? pxPerDayForPreset(zoomLevel, barRegionWidth) : FALLBACK_PX_PER_DAY;
@@ -284,7 +317,7 @@ export function GanttPanel({
     );
   }
 
-  const contentWidth = GRID_WIDTH + chartPx;
+  const contentWidth = gridWidth + chartPx;
 
   return (
     <div
@@ -296,7 +329,7 @@ export function GanttPanel({
         role="treegrid"
         aria-label="Schedule as a bar chart"
         aria-rowcount={rows.length + 1}
-        aria-colcount={COLUMNS.length + 1}
+        aria-colcount={COLUMNS.length + (showVariance ? 2 : 1)}
         // Rows carry the roving tab stop, so the grid itself is never tabbed to — but an
         // interactive role must still be focusable, so it stays a programmatic focus target.
         tabIndex={-1}
@@ -311,7 +344,7 @@ export function GanttPanel({
         >
           <div
             className="bg-background border-border sticky left-0 z-10 flex shrink-0 items-end border-r border-b"
-            style={{ width: GRID_WIDTH }}
+            style={{ width: gridWidth }}
           >
             {COLUMNS.map((column, i) => {
               const active = sort.key === column.key;
@@ -343,10 +376,21 @@ export function GanttPanel({
                 </div>
               );
             })}
+            {showVariance ? (
+              <div
+                role="columnheader"
+                aria-colindex={COLUMNS.length + 1}
+                aria-sort="none"
+                className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs font-medium"
+                style={{ width: VARIANCE_COLUMN_WIDTH }}
+              >
+                vs baseline
+              </div>
+            ) : null}
           </div>
           <div
             role="columnheader"
-            aria-colindex={COLUMNS.length + 1}
+            aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
             aria-sort="none"
             className="border-border shrink-0 border-b"
             style={{ width: chartPx }}
@@ -369,6 +413,9 @@ export function GanttPanel({
                 anchorIso={anchor}
                 chartPx={chartPx}
                 pxPerDay={pxPerDay}
+                gridWidth={gridWidth}
+                variance={varianceByActivityId?.get(row.activity.id)}
+                showVariance={showVariance}
                 isTabStop={item.index === tabStopIndex}
                 isSelected={row.activity.id === selectedActivityId}
                 registerRef={(element) => {
@@ -411,6 +458,9 @@ interface GanttRowViewProps {
   anchorIso: string;
   chartPx: number;
   pxPerDay: number;
+  gridWidth: number;
+  variance: BaselineVarianceRow | undefined;
+  showVariance: boolean;
   isTabStop: boolean;
   isSelected: boolean;
   registerRef: (element: HTMLDivElement | null) => void;
@@ -426,6 +476,9 @@ function GanttRowView({
   anchorIso,
   chartPx,
   pxPerDay,
+  gridWidth,
+  variance,
+  showVariance,
   isTabStop,
   isSelected,
   registerRef,
@@ -435,6 +488,8 @@ function GanttRowView({
 }: GanttRowViewProps): React.ReactElement {
   const { activity, depth, hasChildren, expanded } = row;
   const geometry = barGeometry(activity, anchorIso, pxPerDay);
+  const ghost =
+    showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 
   return (
     <div
@@ -463,14 +518,14 @@ function GanttRowView({
         'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset',
         isSelected ? 'bg-accent' : 'hover:bg-muted/50',
       )}
-      style={{ top, height: GANTT_ROW_HEIGHT, width: GRID_WIDTH + chartPx }}
+      style={{ top, height: GANTT_ROW_HEIGHT, width: gridWidth + chartPx }}
     >
       <div
         className={cn(
           'border-border sticky left-0 z-10 flex h-full shrink-0 items-center border-r',
           isSelected ? 'bg-accent' : 'bg-background',
         )}
-        style={{ width: GRID_WIDTH }}
+        style={{ width: gridWidth }}
       >
         {COLUMNS.map((column, i) => (
           <div
@@ -514,14 +569,36 @@ function GanttRowView({
             </span>
           </div>
         ))}
+        {showVariance ? (
+          <div
+            role="gridcell"
+            aria-colindex={COLUMNS.length + 1}
+            className={cn(
+              'shrink-0 truncate px-2 text-right text-xs',
+              // Direction is carried by the WORD, not the colour — "late"/"early" reads the same
+              // to a colour-blind user and in a black-and-white print (WCAG 1.4.1).
+              (variance?.startVarianceDays ?? 0) > 0 && 'text-destructive',
+            )}
+            style={{ width: VARIANCE_COLUMN_WIDTH }}
+          >
+            {varianceText(variance)}
+          </div>
+        ) : null}
       </div>
 
       <div
         role="gridcell"
-        aria-colindex={COLUMNS.length + 1}
+        aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
         className="relative h-full shrink-0"
         style={{ width: chartPx }}
       >
+        {ghost === null ? null : (
+          <span
+            aria-hidden="true"
+            className="border-muted-foreground/50 absolute bottom-0.5 h-1.5 rounded-sm border border-dashed"
+            style={{ left: ghost.x, width: ghost.width }}
+          />
+        )}
         {geometry === null ? null : geometry.milestone ? (
           <span
             aria-hidden="true"

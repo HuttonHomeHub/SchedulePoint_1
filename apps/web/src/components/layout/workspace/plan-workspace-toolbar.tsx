@@ -385,6 +385,10 @@ export function ToolbarPlanWorkspace({
         // One zoom control for both projections (ADR-0056 presets, ADR-0059 §2): the toolbar's
         // preset drives the diagram and the chart alike, so switching view keeps the scale.
         zoomLevel={ctx.zoomPreset}
+        // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
+        // variance rows the activities table already fetches — no extra query. Undefined when no
+        // baseline is active, and the chart is then byte-for-byte what it was.
+        varianceByActivityId={model.varianceByActivityId}
         loading={model.activities.isPending}
         onSelectActivity={model.setLogicActivity}
         selectedActivityId={model.logicActivity?.id}

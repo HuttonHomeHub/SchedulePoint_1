@@ -1,3 +1,4 @@
+import type { BaselineVarianceRow } from '@repo/types';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -355,5 +356,105 @@ describe('GanttPanel — the shared time axis', () => {
     const explicit = render(<GanttPanel activities={TWO} zoomLevel="month" />);
     const implicit = render(<GanttPanel activities={TWO} />);
     expect(chartScale(implicit.container)).toBe(chartScale(explicit.container));
+  });
+});
+
+describe('GanttPanel — baseline variance (ADR-0025)', () => {
+  const varianceRow = (over: Partial<BaselineVarianceRow> = {}): BaselineVarianceRow => ({
+    activityId: 'a',
+    code: 'A10',
+    name: 'Excavate',
+    inBaseline: true,
+    removed: false,
+    currentStart: '2026-02-04',
+    currentFinish: '2026-02-08',
+    currentTotalFloat: null,
+    baselineStart: '2026-02-02',
+    baselineFinish: '2026-02-06',
+    baselineTotalFloat: null,
+    startVarianceDays: 2,
+    finishVarianceDays: 2,
+    ...over,
+  });
+
+  const withVariance = (rows: BaselineVarianceRow[]) =>
+    render(
+      <GanttPanel
+        activities={TWO}
+        varianceByActivityId={new Map(rows.map((r) => [r.activityId, r]))}
+      />,
+    );
+
+  it('adds the variance column only when a baseline is active', () => {
+    render(<GanttPanel activities={TWO} />);
+    expect(screen.queryByText('vs baseline')).not.toBeInTheDocument();
+  });
+
+  it('shows the column when variance rows are supplied', () => {
+    withVariance([varianceRow()]);
+    expect(screen.getByText('vs baseline')).toBeInTheDocument();
+  });
+
+  // Direction must be carried by the WORD, not by colour alone (WCAG 1.4.1) — and it has to
+  // survive a black-and-white print, which is the whole point of this view.
+  it.each([
+    [2, '+2d late'],
+    [-3, '-3d early'],
+    [0, 'On plan'],
+  ])('states a %d-day variance in words', (days, expected) => {
+    withVariance([varianceRow({ startVarianceDays: days })]);
+    expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+
+  it('marks an activity added since the baseline as New', () => {
+    withVariance([varianceRow({ inBaseline: false })]);
+    expect(screen.getByText('New')).toBeInTheDocument();
+  });
+
+  it('shows an em dash when the two are not comparable', () => {
+    withVariance([varianceRow({ startVarianceDays: null })]);
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('draws a ghost bar for a baselined activity', () => {
+    const { container } = withVariance([varianceRow()]);
+    expect(container.querySelector('.border-dashed')).not.toBeNull();
+  });
+
+  it('draws no ghost for an activity that was not in the baseline', () => {
+    const { container } = withVariance([varianceRow({ inBaseline: false })]);
+    expect(container.querySelector('.border-dashed')).toBeNull();
+  });
+
+  it('keeps the chart column index correct when the variance column is present', () => {
+    withVariance([varianceRow()]);
+    const grid = screen.getByRole('treegrid');
+    // Five sortable columns + variance + the chart.
+    expect(grid).toHaveAttribute('aria-colcount', '7');
+  });
+});
+
+describe('GanttPanel — variance honesty', () => {
+  // "Not compared" and "added since the baseline" are different facts. Collapsing them would
+  // report a comparison the API never made.
+  it('does not claim an un-compared activity is New', () => {
+    const row: BaselineVarianceRow = {
+      activityId: 'a',
+      code: 'A10',
+      name: 'Excavate',
+      inBaseline: false,
+      removed: false,
+      currentStart: null,
+      currentFinish: null,
+      currentTotalFloat: null,
+      baselineStart: null,
+      baselineFinish: null,
+      baselineTotalFloat: null,
+      startVarianceDays: null,
+      finishVarianceDays: null,
+    };
+    render(<GanttPanel activities={TWO} varianceByActivityId={new Map([['a', row]])} />);
+    // Activity 'a' is genuinely new; 'b' has no row and must not borrow that label.
+    expect(screen.getAllByText('New')).toHaveLength(1);
   });
 });
