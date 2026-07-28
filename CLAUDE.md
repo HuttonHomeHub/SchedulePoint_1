@@ -709,6 +709,28 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   that does not exist. Rule: **verify the claim; do not trust the document** — the
   ADR count in the banner above drifted again while this ADR was being written.
 
+- **ADR-0059** _(Accepted; M0 landed, behind `VITE_GANTT_VIEW` default-off)_ — The
+  Gantt view's rendering substrate and the view seam. The brief's last outstanding
+  Must-have (§8), built because **the people a planner reports to do not read logic
+  diagrams** — today the only way to hand a QS something they recognise is to export
+  to XER and open it in the tool we exist to replace. The load-bearing call is that
+  the Gantt renders as **virtualized DOM rows, not Canvas 2D**: ADR-0026 chose canvas
+  for thousands of simultaneously-visible items at arbitrary 2-D positions with routed
+  links, and virtualization removes that premise for a vertical list of one bar per
+  row — so choosing canvas would import ADR-0026's hand-built parallel a11y layer to
+  solve a problem the DOM solves natively. The time axis is **shared, not
+  reimplemented** (`render/time-scale.ts` + ADR-0056 presets — a second date→pixel
+  implementation is how two views drift about where a Monday is). The view is a
+  **peer** behind the `view-mode` slot ADR-0031 §296 reserved, URL-backed
+  (`?view=tsld|gantt`), which **amends ADR-0055 §8.4** — that decision's stated
+  condition (an inert half) no longer holds for Gantt, though `Network` stays out.
+  First ship is **read-only with no dependency arrows** (arrows would drag the
+  rejected substrate back in through the side door). **No backend work at all** — every
+  field is already computed, persisted and exposed; the CPM engine is not imported,
+  so the ADR-0034 recalc parity gate is untouched by construction. Unblocks the
+  WBS summary bar (ADR-0038, `TECH_DEBT #37`) and the baseline variance bar ADR-0025
+  deferred "until a Gantt exists".
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

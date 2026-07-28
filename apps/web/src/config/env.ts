@@ -858,3 +858,20 @@ export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
  * pass, whole-day today, the flat non-working fill).
  */
 export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TIME_AXIS);
+
+/**
+ * Gantt view (ADR-0059, spec `docs/specs/gantt-view/`). **OFF by default** — the epic is being
+ * built in slices (M0 seam → M1 grid + bars → M2 WBS → M3 baseline → M4 print → M5 editing), and
+ * the flag flips at M6 once the whole diff has cleared its specialist review pass.
+ *
+ * Gates the `view-mode` toolbar switch (TSLD | Gantt — the slot ADR-0031 §296 reserved and
+ * ADR-0055 §8.4 declined to ship while only one view existed) and the Gantt surface itself.
+ * Flag-off, no switch renders and no `?view=` value is honoured: the workspace is byte-for-byte
+ * today's TSLD, which is the rollback contract the parity suites pin.
+ *
+ * Frontend-only. The view reads persisted computed columns (`earlyStart`…`totalFloat`,
+ * `isCritical`, `parentId`, `percentComplete`) that are already on the wire — no API, DTO, schema
+ * or permission change, and **no path back into `computeSchedule`**, so the ADR-0034 recalc
+ * parity gate is untouched by construction.
+ */
+export const GANTT_VIEW_ENABLED = flagDefaultOff(import.meta.env.VITE_GANTT_VIEW);

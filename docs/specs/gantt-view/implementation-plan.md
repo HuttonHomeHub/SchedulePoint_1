@@ -1,7 +1,7 @@
 # Implementation Plan: Gantt view
 
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
-- **Status:** Draft — awaiting approval
+- **Status:** **Approved** (2026-07-28) — unchanged by the Q1–Q3 answers, which came back as the defaults this plan assumes
 - **Owner:** Technical Lead
 - **Flag:** `VITE_GANTT_VIEW` (default off until M6)
 

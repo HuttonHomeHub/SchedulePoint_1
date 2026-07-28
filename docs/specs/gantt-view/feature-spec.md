@@ -1,6 +1,6 @@
 # Feature Spec: Gantt view
 
-- **Status:** Draft — awaiting approval
+- **Status:** **Approved** (2026-07-28 — Q1–Q3 answered by the Product Owner, all three as recommended; the plan is unchanged, having been built around those defaults)
 - **Author(s):** Technical Lead (with the Product Owner)
 - **Date:** 2026-07-28
 - **Tracking issue / epic:** —
@@ -62,16 +62,16 @@ That is a live commercial gap, not a cosmetic one:
 
 ### Open questions
 
-Numbered; **Q1–Q3 are the ones that change the design** and are the only ones I would block on.
+**Q1–Q3 were the design-changing ones and are now answered** (2026-07-28, Product Owner) — each as recommended, so the implementation plan stands as written. Q4–Q6 were stated defaults, not blockers.
 
-| #      | Question                                                                                   | Recommended default                                                                                                                                                             |
-| ------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Q1** | Is the first ship **read-only**, or editable?                                              | **Read-only.** The brief says "read-primary". Editing pulls in the pen (ADR-0028), undo/redo (ADR-0048) and drag semantics (ADR-0033 Early vs Visual) — a milestone of its own. |
-| **Q2** | Do **dependency arrows** appear in the Gantt?                                              | **No, not in M1.** They are the TSLD's job, and arbitrary routing is what forced Canvas-2D there. Offer them later as an opt-in overlay for the selected activity only.         |
-| **Q3** | Is the Gantt a **peer view** (switch, one at a time) or a **second pane** beside the TSLD? | **Peer view**, via the `view-mode` slot ADR-0031 already reserved. Two time-scaled surfaces side by side on one screen is a worse experience than either alone.                 |
-| Q4     | WBS summary rows in M1?                                                                    | **No** — M1 is a flat, sorted list; hierarchy is M2. Keeps the first slice thin and the rollup risk isolated.                                                                   |
-| Q5     | Does the share link (ADR-0051) open on the Gantt?                                          | Yes, but **later** — needs a per-share default-view field. Not M1.                                                                                                              |
-| Q6     | Does the Gantt get its own zoom presets?                                                   | **Reuse ADR-0056's** `pxPerDayForPreset(level, width)` verbatim. A second time-axis implementation is how the two views drift apart.                                            |
+| #      | Question                                                                                   | Decision                                                                                                                                                                                               |
+| ------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Q1** | Is the first ship **read-only**, or editable?                                              | ✅ **Read-only.** The brief says "read-primary". Editing pulls in the pen (ADR-0028), undo/redo (ADR-0048) and drag semantics (ADR-0033 Early vs Visual) — it is **M5**, gated on M1 having been used. |
+| **Q2** | Do **dependency arrows** appear in the Gantt?                                              | ✅ **No arrows in M1.** Logic stays the TSLD's job; arbitrary routing is exactly what forced Canvas-2D there. A selected-activity-only overlay stays available as a later option.                      |
+| **Q3** | Is the Gantt a **peer view** (switch, one at a time) or a **second pane** beside the TSLD? | ✅ **Peer view**, through the `view-mode` slot ADR-0031 already reserved, with the choice in the URL. One view at a time, full width.                                                                  |
+| Q4     | WBS summary rows in M1?                                                                    | **No** — M1 is a flat, sorted list; hierarchy is M2. Keeps the first slice thin and the rollup risk isolated.                                                                                          |
+| Q5     | Does the share link (ADR-0051) open on the Gantt?                                          | Yes, but **later** — needs a per-share default-view field. Not M1.                                                                                                                                     |
+| Q6     | Does the Gantt get its own zoom presets?                                                   | **Reuse ADR-0056's** `pxPerDayForPreset(level, width)` verbatim. A second time-axis implementation is how the two views drift apart.                                                                   |
 
 ## 2. Functional requirements
 
