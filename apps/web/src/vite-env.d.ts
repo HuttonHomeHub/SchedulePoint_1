@@ -85,4 +85,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_VISUAL_LANGUAGE?: string;
   /** TSLD time-axis legibility — range-anchored zoom presets, tiered gridlines, an interpolated Today marker + pill, and ground-vs-non-working shading (docs/specs/tsld-toolbar-canvas-refinements/). "true"/"1" enables it; off by default until the M7 enablement gate. */
   readonly VITE_CANVAS_TIME_AXIS?: string;
+  /** Gantt view — a grid-and-bar projection of the same model, reached through the TSLD | Gantt view switch, for the audience that does not read logic diagrams (ADR-0059, docs/specs/gantt-view/). Read-only in the first slices. "true"/"1" enables it; off by default until the M6 enablement gate. */
+  readonly VITE_GANTT_VIEW?: string;
 }

@@ -8,6 +8,7 @@ import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
+import type { PlanViewMode } from '@/features/gantt';
 import type { InterchangeExportFormat } from '@/features/interchange';
 
 /**
@@ -26,6 +27,12 @@ export interface TsldToolbarContext {
   /** The active zoom preset (drives the segmented control's pressed state). */
   zoomPreset: ZoomLevel;
   setZoomPreset: (level: ZoomLevel) => void;
+  /**
+   * True when the TSLD canvas is the mounted surface. The zoom **preset** is shared state that both
+   * views read (ADR-0059 §2), but stepping, fitting and go-to-date are canvas *viewport* commands
+   * with no Gantt equivalent — they shade with a reason there rather than sitting enabled and inert.
+   */
+  canvasActive: boolean;
   stepZoom: (factor: number) => void;
   fit: () => void;
   /** The plan's data date (`plannedStart`) — the canvas day-zero origin; null when unset. The registry
@@ -44,6 +51,14 @@ export interface TsldToolbarContext {
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
   toggleView: (key: keyof TsldViewToggles) => void;
+  /** Which projection the workspace is showing — `'tsld'` or `'gantt'` (ADR-0059). Drives the
+   * view-mode segment's pressed state. Always `'tsld'` when `VITE_GANTT_VIEW` is off, because the
+   * hook that supplies it is hard-wired to the diagram in that build. */
+  planView: PlanViewMode;
+  /** Switch the workspace's projection. View-only and offered to **every** role — reading the
+   * schedule as bars is not an edit, so unlike the scheduling-mode selector this is never shaded
+   * for a viewer. Registered but not surfaced when `VITE_GANTT_VIEW` is off. */
+  setPlanView: (view: PlanViewMode) => void;
   /** The plan's scheduling mode (ADR-0033) — EARLY or VISUAL. Drives the Mode selector's pressed
    * state. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
   schedulingMode: SchedulingMode;

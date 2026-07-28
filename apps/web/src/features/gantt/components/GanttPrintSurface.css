@@ -1,0 +1,236 @@
+/*
+ * The printed programme (ADR-0059 M4). Companion to `GanttPrintSurface.tsx`.
+ *
+ * The container/reveal mechanics are shared — see `src/styles/print-document.css`. This file styles
+ * only this surface's own markup.
+ *
+ * Colours are hard-coded and forced LIGHT: this is the documented print exception to the "no
+ * hard-coded colours" rule (a `@media print` sheet cannot read a runtime token, and the app may be
+ * in dark theme while the paper is white). The greys are pinned to the same light-token fallbacks
+ * `PrintSurface.css` uses — ink #1a1a1a (light --color-foreground), muted #6b7280 (light
+ * --color-muted-foreground) — so the two printed artefacts look like one product.
+ *
+ * Every mark is distinguishable WITHOUT colour: critical is a darker fill AND a solid outline,
+ * baseline is a dashed outline with no fill, float is a dashed line. A greyscale photocopy of a
+ * programme is the normal case, not the edge case.
+ */
+
+.gantt-print-root {
+  display: none;
+}
+
+@media print {
+  /* Landscape: a bar chart is wider than it is tall, and portrait would spend the page on margins.
+     12mm keeps the 980px document inside the printable area of both A4 and Letter. */
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+
+  .gantt-print-root {
+    display: block !important;
+    margin: 0;
+    background: #ffffff;
+    color: #1a1a1a;
+    color-scheme: light;
+    font-family:
+      'Inter',
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      Roboto,
+      Helvetica,
+      Arial,
+      sans-serif;
+  }
+
+  .gantt-print-title {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .gantt-print-subtitle {
+    margin: 0 0 10px;
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.2;
+  }
+
+  .gantt-print-empty {
+    margin: 0;
+    font-size: 11px;
+    color: #6b7280;
+  }
+
+  .gantt-print-table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 9px;
+  }
+
+  .gantt-print-table th {
+    padding: 0 4px 3px;
+    border-bottom: 1px solid #1a1a1a;
+    font-weight: 600;
+    text-align: left;
+    vertical-align: bottom;
+  }
+
+  .gantt-print-table td {
+    padding: 0 4px;
+    border-bottom: 1px solid #e5e7eb;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+  }
+
+  /* A bar must never be split across a page fold — half a bar reads as a shorter activity. */
+  .gantt-print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .gantt-print-right {
+    text-align: right;
+  }
+
+  .gantt-print-summary {
+    font-weight: 600;
+  }
+
+  /* ----- the time ruler, repeated per page inside `thead` ----- */
+
+  .gantt-print-ruler {
+    position: relative;
+  }
+
+  .gantt-print-tick-major {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid #9ca3af;
+  }
+
+  .gantt-print-tick-day {
+    position: absolute;
+    bottom: 0;
+    height: 5px;
+    border-left: 1px solid #d1d5db;
+  }
+
+  .gantt-print-tick-label {
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    font-size: 8px;
+    font-weight: 400;
+    white-space: nowrap;
+    color: #6b7280;
+  }
+
+  /* ----- the bars ----- */
+
+  .gantt-print-chart {
+    position: relative;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .gantt-print-bar {
+    position: absolute;
+    top: 50%;
+    height: 8px;
+    margin-top: -4px;
+    background: #d1d5db;
+    border: 1px solid #6b7280;
+    overflow: hidden;
+  }
+
+  /* Criticality is carried by BOTH a darker fill and a heavier outline, so it survives greyscale. */
+  .gantt-print-critical {
+    background: #9ca3af;
+    border: 1.5px solid #1a1a1a;
+  }
+
+  .gantt-print-summary-bar {
+    background: #6b7280;
+    border-color: #1a1a1a;
+  }
+
+  .gantt-print-progress {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    background: #4b5563;
+  }
+
+  .gantt-print-float {
+    position: absolute;
+    top: 50%;
+    height: 0;
+    margin-top: -1px;
+    border-top: 1px dashed #9ca3af;
+  }
+
+  .gantt-print-ghost {
+    position: absolute;
+    bottom: 1px;
+    height: 4px;
+    border: 1px dashed #6b7280;
+  }
+
+  .gantt-print-diamond {
+    position: absolute;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    margin-top: -3.5px;
+    margin-left: -3.5px;
+    background: #1a1a1a;
+    transform: rotate(45deg);
+  }
+
+  /* ----- legend ----- */
+
+  .gantt-print-legend {
+    margin: 8px 0 0;
+    font-size: 9px;
+    color: #6b7280;
+  }
+
+  .gantt-print-swatch {
+    position: relative;
+    display: inline-block;
+    width: 16px;
+    height: 8px;
+    margin: 0 4px 0 12px;
+    vertical-align: middle;
+  }
+
+  .gantt-print-legend .gantt-print-swatch:first-of-type {
+    margin-left: 0;
+  }
+
+  /* The legend swatches reuse the bar/ghost/diamond rules above; these reset the absolute
+     positioning those carry for use inside a chart cell. */
+  .gantt-print-legend .gantt-print-bar,
+  .gantt-print-legend .gantt-print-ghost,
+  .gantt-print-legend .gantt-print-diamond {
+    position: relative;
+    top: auto;
+    bottom: auto;
+    left: auto;
+    margin-top: 0;
+  }
+
+  .gantt-print-legend .gantt-print-diamond {
+    width: 7px;
+    height: 7px;
+    margin-left: 12px;
+  }
+}

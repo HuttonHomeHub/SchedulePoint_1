@@ -251,6 +251,14 @@ jobs:
       - name: Web end-to-end tests (designed chrome band, flag on — the shipped default)
         run: pnpm --filter @repo/web test:e2e:designed-chrome
 
+      # Flag-ON Gantt view journey (playwright.gantt.config.ts) serving the app with VITE_GANTT_VIEW
+      # on (layered on the canvas authoring/toolbar/workspace/editing/pen flags), proving ADR-0059's
+      # claims end to end: an activity authored on the diagram is the same row in the Gantt with the
+      # dates the engine computed, `?view=gantt` survives a reload, and the grid is arrow-navigable
+      # and axe-clean. Runs after the prior suites tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (Gantt view flag on)
+        run: pnpm --filter @repo/web test:e2e:gantt
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -272,6 +280,7 @@ jobs:
             apps/web/playwright-report-library/
             apps/web/playwright-report-designed-ui/
             apps/web/playwright-report-designed-chrome/
+            apps/web/playwright-report-gantt/
           if-no-files-found: ignore
           retention-days: 7
 

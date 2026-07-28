@@ -26,6 +26,7 @@
     "e2e-share",
     "e2e-library",
     "e2e-designed-ui",
-    "e2e-designed-chrome"
+    "e2e-designed-chrome",
+    "e2e-gantt"
   ]
 }

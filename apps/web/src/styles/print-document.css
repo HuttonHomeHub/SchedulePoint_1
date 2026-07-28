@@ -1,0 +1,32 @@
+/*
+ * The shared print-document convention (see `src/lib/print-document.ts` for the rationale and the
+ * mount/teardown lifecycle).
+ *
+ * A print surface is mounted into a detached `.tsld-print-container` on `document.body`. That
+ * container is `display:none` on screen — the live app is visually unchanged — and revealed ONLY in
+ * `@media print`, where the live application (React mounts the app shell into `#root`) and every
+ * other body-level node (portalled menus and dialogs) are hidden, so the browser print dialog shows
+ * only the injected document.
+ *
+ * Printed pages are deliberately forced LIGHT (white paper, dark ink) regardless of the app's
+ * light/dark/system theme: reports and paper want light. That forcing, and the small set of hex
+ * constants the surfaces use for it, is the documented exception to the "no hard-coded colours"
+ * rule — a `@media print` stylesheet cannot read a runtime token value.
+ */
+
+.tsld-print-container {
+  display: none;
+}
+
+@media print {
+  /* Hide the live application (`#root`) and every other body-level node (portalled menus/dialogs),
+     so only the injected print container is sent to the printer. */
+  #root,
+  body > *:not(.tsld-print-container) {
+    display: none !important;
+  }
+
+  .tsld-print-container {
+    display: block !important;
+  }
+}

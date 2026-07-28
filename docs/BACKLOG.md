@@ -21,9 +21,12 @@ Product direction lives in [ROADMAP.md](ROADMAP.md) and
 the ADR-0034 capability matrix. Listed here only when a candidate is neither —
 a product idea that has not yet earned a roadmap line:
 
-- `L` **Gantt view.** The brief's one substantial unbuilt surface: a
-  conventional grid/bar view alongside the TSLD, for stakeholders who read
-  schedules that way and for printed issue.
+- `M` **Gantt dependency arrows and Gantt editing.** The view itself shipped
+  (ADR-0059, default-on 2026-07-28) deliberately read-only and arrow-free:
+  arbitrary link routing is the one thing that forced canvas on the TSLD, so
+  drawing arrows would drag the rejected substrate back in through the side
+  door, and the brief says read-primary. Both are worth revisiting **on
+  evidence of use**, not before — that gate is the point.
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.

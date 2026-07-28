@@ -42,6 +42,7 @@ import {
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities';
+import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -133,6 +134,11 @@ export function ToolbarPlanWorkspace({
     el?.scrollIntoView({ block: 'start' });
     el?.focus();
   }, [setNotesOpen]);
+  // The view switch is router-backed, so the workspace (which is inside the router) owns it and
+  // passes it down — exactly like `legend` and `revealComments`. Keeping `useNavigate` out of the
+  // toolbar-context builder means the six spec files that render that builder standalone need no
+  // router of their own.
+  const [planView, setPlanView] = usePlanViewMode();
   const ctx = useTsldToolbarContext({
     model,
     plan,
@@ -140,6 +146,8 @@ export function ToolbarPlanWorkspace({
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     revealComments,
+    planView,
+    setPlanView,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
@@ -361,6 +369,33 @@ export function ToolbarPlanWorkspace({
         focusOnMount
       />
     ) : null;
+
+  // The workspace's primary surface: the TSLD canvas, or the Gantt when the view switch says so
+  // (ADR-0059 §3). One view at a time, full width — two time-scaled surfaces sharing a screen is
+  // worse than either alone. Flag-off `ctx.planView` is hard-wired to `'tsld'`, so this
+  // expression is byte-for-byte the canvas and the Gantt subtree never mounts.
+  //
+  // Selection is workspace state, not view state, so choosing a row here opens the same Logic panel
+  // the canvas opens — switching views keeps the activity you were looking at.
+  const surface =
+    ctx.planView === 'gantt' ? (
+      <GanttPanel
+        key={`${model.planId}-gantt`}
+        activities={model.activities.data ?? []}
+        // One zoom control for both projections (ADR-0056 presets, ADR-0059 §2): the toolbar's
+        // preset drives the diagram and the chart alike, so switching view keeps the scale.
+        zoomLevel={ctx.zoomPreset}
+        // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
+        // variance rows the activities table already fetches — no extra query. Undefined when no
+        // baseline is active, and the chart is then byte-for-byte what it was.
+        varianceByActivityId={model.varianceByActivityId}
+        loading={model.activities.isPending}
+        onSelectActivity={model.setLogicActivity}
+        selectedActivityId={model.logicActivity?.id}
+      />
+    ) : (
+      canvas
+    );
 
   // The floating Legend panel is overlaid on whichever canvas region is active (its container is
   // `relative`); it renders null when closed, so dropping it in both layout branches is cheap. Under
@@ -597,7 +632,7 @@ export function ToolbarPlanWorkspace({
               {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
               <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
-                {canvas}
+                {surface}
                 {legendPanel}
                 {resourceStripPanel}
               </div>
@@ -666,7 +701,7 @@ export function ToolbarPlanWorkspace({
                 pane === 'diagram' ? 'flex' : 'hidden',
               )}
             >
-              {canvas}
+              {surface}
               {legendPanel}
               {/* Below `md` the strip rides the Diagram pane (no third pane) — Q3 / ADR-0049. */}
               {resourceStripPanel}

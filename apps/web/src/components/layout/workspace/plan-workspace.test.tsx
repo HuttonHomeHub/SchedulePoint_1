@@ -34,6 +34,10 @@ vi.mock('@/config/env', async (importOriginal) => ({
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme', planId: 'p1' }),
+  // The workspace reads/writes the `?view=` projection (ADR-0059); these two keep the mock a
+  // complete stand-in rather than a partial one that throws the moment the view switch renders.
+  useSearch: () => ({}),
+  useNavigate: () => vi.fn(),
   Link: ({ children }: { children: ReactNode }) => <a href="/">{children}</a>,
 }));
 

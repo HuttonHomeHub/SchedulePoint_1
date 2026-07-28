@@ -79,6 +79,7 @@ import {
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   EXPORT_PRINT_ENABLED,
+  GANTT_VIEW_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
@@ -472,6 +473,12 @@ function LinkControl({
   );
 }
 
+/**
+ * Why a canvas viewport command is shaded in the Gantt. The zoom *preset* still works in both views
+ * (ADR-0059 §2) — panning, stepping and fitting are the canvas's own, and the Gantt's chart already
+ * spans the plan, so there is nothing to fit it to.
+ */
+const CANVAS_ONLY_REASON = 'Only in the diagram view';
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
 /** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
@@ -1509,8 +1516,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 10,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
-      isEnabled: (ctx) => ctx.hasDiagram,
-      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : ZOOM_DISABLED_REASON),
+      isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+      disabledReason: (ctx) =>
+        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.stepZoom(0.5),
     },
     {
@@ -1521,8 +1529,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 11,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
-      isEnabled: (ctx) => ctx.hasDiagram,
-      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : ZOOM_DISABLED_REASON),
+      isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+      disabledReason: (ctx) =>
+        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.stepZoom(2),
     },
     {
@@ -1533,8 +1542,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 12,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
-      isEnabled: (ctx) => ctx.hasDiagram,
-      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to fit the view'),
+      isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+      disabledReason: (ctx) =>
+        !ctx.hasDiagram
+          ? 'Add an activity to fit the view'
+          : ctx.canvasActive
+            ? undefined
+            : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.fit(),
     },
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
@@ -1545,8 +1559,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to go to today'),
+          isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+          disabledReason: (ctx) =>
+            !ctx.hasDiagram
+              ? 'Add an activity to go to today'
+              : ctx.canvasActive
+                ? undefined
+                : CANVAS_ONLY_REASON,
           onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
         }
       : placeholderItem(todayShape),
@@ -1609,18 +1628,41 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
       onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
     },
-    // view-mode switch slot — reserved (TSLD is lens #1). Registered hidden; promotable later. The
-    // Gantt/Resource lens switch isn't surfaced until a second view exists (product call), so the seam
-    // stays in the code but paints nothing.
+    // View-mode switch — the slot ADR-0031 §296 reserved, now filled (ADR-0059 §3). It follows the
+    // `mode-early`/`mode-visual` idiom: a segment is TWO registry items whose `isActive` reads the
+    // same state, not one item rendering a control, so overflow and the label policy treat each half
+    // like every other button.
+    //
+    // ADR-0055 §8.4 declined to ship this control while only one view existed, on the grounds that
+    // half of it would be inert. That condition no longer holds for Gantt (`Network` remains unbuilt
+    // and stays out). Flag-off both halves are invisible and the toolbar is byte-for-byte today's.
+    //
+    // View-only and offered to EVERY role: reading the schedule as bars is not an edit, so unlike
+    // the scheduling-mode selector these are never shaded for a viewer.
     {
-      id: 'view-mode',
+      id: 'view-tsld',
       group: 'lens',
       row: 'look',
       tier: 1,
+      // Its name is the affordance — a nameless view switch is a coin toss (TECH_DEBT #61).
+      showLabel: 'always',
       order: 10,
-      label: 'View mode',
-      isVisible: () => false,
-      onActivate: () => {},
+      label: 'Diagram',
+      isVisible: () => GANTT_VIEW_ENABLED,
+      isActive: (ctx) => ctx.planView === 'tsld',
+      onActivate: (ctx) => ctx.setPlanView('tsld'),
+    },
+    {
+      id: 'view-gantt',
+      group: 'lens',
+      row: 'look',
+      tier: 1,
+      showLabel: 'always',
+      order: 11,
+      label: 'Gantt',
+      isVisible: () => GANTT_VIEW_ENABLED,
+      isActive: (ctx) => ctx.planView === 'gantt',
+      onActivate: (ctx) => ctx.setPlanView('gantt'),
     },
     // Analyse placeholders (Row 1) — shown **inline** (tier 2 icon buttons) rather than parked in `⋯`,
     // so the intended lenses read at a glance beside the search field (ADR-0031 two-row amendment).

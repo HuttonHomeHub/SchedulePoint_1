@@ -28,6 +28,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 const announce = vi.fn();
+// The shared zoom-preset setter (`useTsldCanvasUiState`'s own state). The Gantt reads the preset,
+// so the toolbar must reach this even when the canvas handle is null.
+const setCanvasZoomPreset = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announce }));
 
 // Mock the off-screen renderer + the render-model projection so the wiring runs without a real canvas.
@@ -44,6 +47,14 @@ vi.mock('../render/to-render-model', () => ({
 // factory (itself hoisted above the imports) can reference it without a TDZ error.
 const printDiagramImage = vi.hoisted(() => vi.fn());
 vi.mock('../export/PrintSurface', () => ({ printDiagramImage }));
+
+// The Gantt print document (ADR-0059 M4). Mocked so this file proves the ROUTING — which surface
+// Print reaches for in each view — without rendering a whole programme.
+const printGanttSchedule = vi.hoisted(() => vi.fn());
+vi.mock('@/features/gantt', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  printGanttSchedule,
+}));
 
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
@@ -93,17 +104,29 @@ function makeModel(): PlanWorkspaceModel {
   } as unknown as PlanWorkspaceModel;
 }
 
+/**
+ * The imperative canvas handle. In the app it is either a COMPLETE control or `null` (the canvas is
+ * unmounted) — never a partial object, which is why the context calls its methods behind `?.` on
+ * the ref rather than on each method.
+ */
+const canvasHandle = {
+  getViewport: () => ({
+    view: { pxPerDay: 20, originX: 0, originY: 0 },
+    size: { width: 800, height: 600 },
+  }),
+  zoomToPreset: vi.fn(),
+  stepZoom: vi.fn(),
+  goToDate: vi.fn(),
+  centerOnDate: vi.fn(),
+};
+
 function makeCanvasUi(): TsldCanvasUiState {
   return {
     zoomPreset: 'week',
+    setZoomPreset: setCanvasZoomPreset,
     // A live viewport the export reads (never mutates) via the control handle.
     canvasControlRef: {
-      current: {
-        getViewport: () => ({
-          view: { pxPerDay: 20, originX: 0, originY: 0 },
-          size: { width: 800, height: 600 },
-        }),
-      },
+      current: canvasHandle,
     } as unknown as TsldCanvasUiState['canvasControlRef'],
     requestFit: vi.fn(),
     viewToggles: DEFAULT_VIEW_TOGGLES,
@@ -149,15 +172,20 @@ const PLAN = {
   version: 1,
 } as unknown as LoadedPlan;
 
-function build() {
+function build(planView: 'tsld' | 'gantt' = 'tsld', { canvas = true } = {}) {
+  const canvasUi = makeCanvasUi();
+  if (!canvas) {
+    (canvasUi.canvasControlRef as { current: unknown }).current = null;
+  }
   return renderHook(() =>
     useTsldToolbarContext({
       model: makeModel(),
       plan: PLAN,
-      canvasUi: makeCanvasUi(),
+      canvasUi,
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
       revealComments: vi.fn(),
+      planView,
     }),
   );
 }
@@ -232,5 +260,91 @@ describe('useTsldToolbarContext — Browser Print (M4)', () => {
       await Promise.resolve();
     });
     expect(printDiagramImage).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Print follows the active view. The diagram path rasterises a canvas; the Gantt is DOM and prints
+ * as a document (ADR-0059 M4). Reaching for the wrong one produces a plausible-looking artefact of
+ * the *other* view, which a user would not notice until the meeting.
+ */
+describe('useTsldToolbarContext — Print follows the active view', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    printDiagramImage.mockImplementation(() => undefined);
+  });
+
+  it('prints the programme document, not a canvas raster, when the Gantt is showing', () => {
+    const { result } = build('gantt');
+    act(() => {
+      result.current.printDiagram();
+    });
+
+    expect(printGanttSchedule).toHaveBeenCalledTimes(1);
+    expect(printDiagramImage).not.toHaveBeenCalled();
+
+    const [arg] = printGanttSchedule.mock.calls[0] as unknown as [
+      { title: string; subtitle: string; activities: readonly unknown[] },
+    ];
+    expect(arg.title).toBe('North Tower');
+    expect(arg.subtitle).toBe('As of 01 Jan 2026');
+    expect(arg.activities).toHaveLength(1);
+    expect(announce).toHaveBeenCalledWith('Printing North Tower.');
+  });
+
+  // Synchronous: there is no image to build, so it must not announce a preparation step that never
+  // happens, and it must not leave the re-entry guard latched.
+  it('does not announce an image-build step, and stays repeatable', () => {
+    const { result } = build('gantt');
+    act(() => {
+      result.current.printDiagram();
+      result.current.printDiagram();
+    });
+    expect(announce).not.toHaveBeenCalledWith('Preparing the diagram to print…');
+    expect(printGanttSchedule).toHaveBeenCalledTimes(2);
+  });
+
+  it('still rasterises the diagram when the TSLD is showing', async () => {
+    const { result } = build('tsld');
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    expect(printDiagramImage).toHaveBeenCalledTimes(1);
+    expect(printGanttSchedule).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The zoom PRESET is shared state both views read (ADR-0059 §2), not a canvas property. It has to
+ * be settable with the canvas unmounted, or the control sits lit and inert in the Gantt — the
+ * failure mode a user cannot distinguish from a slow one.
+ */
+describe('useTsldToolbarContext — the zoom preset without a canvas', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('sets the shared preset with no canvas mounted, and does not throw', () => {
+    const { result } = build('gantt', { canvas: false });
+    act(() => {
+      result.current.setZoomPreset('quarter');
+    });
+    expect(setCanvasZoomPreset).toHaveBeenCalledWith('quarter');
+    expect(canvasHandle.zoomToPreset).not.toHaveBeenCalled();
+  });
+
+  it('sets it in the diagram too, and still commands the canvas', () => {
+    const { result } = build('tsld');
+    act(() => {
+      result.current.setZoomPreset('year');
+    });
+    expect(setCanvasZoomPreset).toHaveBeenCalledWith('year');
+    expect(canvasHandle.zoomToPreset).toHaveBeenCalledWith('year');
+  });
+
+  it('reports the canvas as inactive in the Gantt and active in the diagram', () => {
+    expect(build('gantt').result.current.canvasActive).toBe(false);
+    expect(build('tsld').result.current.canvasActive).toBe(true);
   });
 });

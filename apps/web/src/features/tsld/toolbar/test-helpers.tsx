@@ -21,6 +21,7 @@ export function makeTsldToolbarContext(
     // Frame / navigate
     zoomPreset: 'week',
     setZoomPreset: vi.fn(),
+    canvasActive: true,
     stepZoom: vi.fn(),
     fit: vi.fn(),
     plannedStart: '2026-01-01',
@@ -29,6 +30,8 @@ export function makeTsldToolbarContext(
     // Lens / display
     viewToggles: DEFAULT_VIEW_TOGGLES,
     toggleView: vi.fn(),
+    planView: 'tsld',
+    setPlanView: vi.fn(),
     schedulingMode: 'EARLY',
     setSchedulingMode: vi.fn(),
     // Tools / author (pen-gated)

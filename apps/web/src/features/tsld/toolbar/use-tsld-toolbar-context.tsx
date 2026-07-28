@@ -33,6 +33,7 @@ import {
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
+import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
 import {
   EXPORT_FORMAT_LABELS,
   exportErrorMessage,
@@ -99,6 +100,8 @@ export function useTsldToolbarContext({
   openDialog,
   legend,
   revealComments,
+  planView = DEFAULT_PLAN_VIEW_MODE,
+  setPlanView = () => {},
 }: {
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
@@ -110,6 +113,18 @@ export function useTsldToolbarContext({
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
+  /**
+   * Which projection the workspace is showing, and how to switch it (ADR-0059 §3).
+   *
+   * Passed IN rather than read here, for the same reason `legend` and `revealComments` are: the
+   * state belongs to the workspace, not the toolbar. It is also router-backed, and this builder is
+   * rendered standalone by six spec files — a `useNavigate()` inside it would make every one of
+   * them need a router they have no other use for.
+   *
+   * Defaults describe a build with no Gantt: the diagram, and switching is a no-op.
+   */
+  planView?: PlanViewMode;
+  setPlanView?: (view: PlanViewMode) => void;
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
@@ -216,6 +231,7 @@ export function useTsldToolbarContext({
 
   const {
     zoomPreset,
+    setZoomPreset: setCanvasZoomPreset,
     canvasControlRef,
     requestFit,
     viewToggles,
@@ -419,7 +435,18 @@ export function useTsldToolbarContext({
     return {
       // Frame — the canvas is commanded imperatively via the shared control handle.
       zoomPreset,
-      setZoomPreset: (level) => canvasControlRef.current?.zoomToPreset(level),
+      // The zoom PRESET is shared state, not a canvas property: the Gantt derives its scale from it
+      // directly (ADR-0059 §2). So it is set here first and the canvas is commanded second —
+      // delegating only to the handle would leave the control enabled and silently inert whenever
+      // the canvas is unmounted, which is every moment the Gantt is showing.
+      setZoomPreset: (level) => {
+        setCanvasZoomPreset(level);
+        canvasControlRef.current?.zoomToPreset(level);
+      },
+      // Stepping, fitting and go-to-date are canvas VIEWPORT commands with no Gantt equivalent (its
+      // scale comes from the preset and its chart already spans the plan). `canvasActive` shades
+      // them with a reason in the Gantt rather than leaving dead buttons.
+      canvasActive: planView === 'tsld',
       stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
       fit: requestFit,
       // The plan's data date (`plannedStart`) is read-only here: it gates Go-to-date visibility and is
@@ -437,6 +464,11 @@ export function useTsldToolbarContext({
       // Lens
       viewToggles,
       toggleView,
+      // Which projection the workspace shows (ADR-0059). Sourced from the URL, so a switch is
+      // deep-linkable and Back returns to the diagram. Offered to every role — reading the schedule
+      // as bars is not an edit — and hard-wired to `'tsld'` when `VITE_GANTT_VIEW` is off.
+      planView,
+      setPlanView,
       // Scheduling mode (ADR-0033 M3): read the plan's mode + a pen-gated switch. Read-only viewers
       // get a null setter so the selector renders inert. Announces the switch (the bars re-source on
       // the next recalc).
@@ -700,6 +732,23 @@ export function useTsldToolbarContext({
       // canvas is never touched — only its viewport is READ by `buildDiagramImage`.
       printDiagram: () => {
         if (!EXPORT_PRINT_ENABLED || printing) return;
+
+        // The Gantt is DOM, so it prints as a document — no rasterisation, nothing async, and no
+        // `printing` flag to reset (ADR-0059 M4). Branching on `planView` is enough to keep the
+        // flag-off path byte-identical: with `VITE_GANTT_VIEW` off it is hard-wired to `tsld`.
+        if (planView === 'gantt') {
+          printGanttSchedule({
+            title: plan.name,
+            subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)}`,
+            activities,
+            ...(model.varianceByActivityId
+              ? { varianceByActivityId: model.varianceByActivityId }
+              : {}),
+          });
+          announce(`Printing ${plan.name}.`);
+          return;
+        }
+
         const built = buildDiagramImage('whole');
         if (!built) return;
         setPrinting(true);
@@ -790,9 +839,15 @@ export function useTsldToolbarContext({
     };
   }, [
     zoomPreset,
+    // A `useState` setter, so its identity is stable and this cannot change how often the memo
+    // recomputes — listed because the rule is right that an omitted dependency is unverifiable by
+    // inspection, and a silenced warning is a worse record than a redundant entry.
+    setCanvasZoomPreset,
     canvasControlRef,
     requestFit,
     plan.plannedStart,
+    planView,
+    setPlanView,
     plan.schedulingMode,
     plan.version,
     setPlanMode,
@@ -857,6 +912,9 @@ export function useTsldToolbarContext({
     hasActiveBaseline,
     varianceLoading,
     varianceError,
+    // The printed programme reads the variance map directly (ADR-0059 M4). Omitting it here would
+    // print last refetch's comparison — a stale document that looks current.
+    model.varianceByActivityId,
     // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
     // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
     navState.isolateActive,
