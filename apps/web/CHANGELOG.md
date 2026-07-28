@@ -1,5 +1,60 @@
 # @repo/web
 
+## 0.55.0
+
+### Minor Changes
+
+- [#183](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/183) [`ad3e1f9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ad3e1f9bcc2e37499b5db52062a63eb679831c5f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the printed programme for the Gantt view (ADR-0059 M4, behind `VITE_GANTT_VIEW`).
+
+  `Print` now follows the active view. With the Gantt showing it mounts a purpose-built print
+  document rather than styling the live view for paper — because the live panel virtualizes, and
+  printing it would emit a programme cropped to whichever rows happened to be scrolled into view.
+  The printed document renders every row, fits the whole span to the page, repeats the column
+  headings and the time ruler on each page via a native `<thead>`, forces the light palette, and
+  carries a legend so a greyscale photocopy is still readable.
+
+  The detached-container print convention the TSLD's image path already used is extracted to a
+  shared module and both surfaces now use it. Column text and ruler tick placement are likewise
+  shared, so the screen and the page cannot disagree about a date.
+
+  Flag-off is unchanged: `Print` still rasterises the diagram.
+
+- [#183](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/183) [`ad3e1f9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ad3e1f9bcc2e37499b5db52062a63eb679831c5f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Turn the Gantt view on by default (ADR-0059 M6, `VITE_GANTT_VIEW`).
+
+  The plan workspace now carries a **Diagram | Gantt** switch. The Gantt is a grid-and-bar
+  projection of the same schedule — WBS summary rows, criticality, float tails, progress, the
+  baseline variance bar, and a printed programme — for the audience that does not read logic
+  diagrams. The view choice lives in the URL, so it is deep-linkable and survives a reload.
+
+  Read-only by design: editing stays in the diagram. Rendered as virtualized DOM rows rather than
+  canvas, so the grid is keyboard-navigable and screen-reader-readable natively, and the live row
+  count stays bounded by the viewport whatever the plan holds.
+
+  The enablement pass fixed a control that was lit but did nothing: the zoom presets delegated only
+  to the canvas, which is not mounted while the Gantt is showing. They now drive both views. Zoom
+  in/out, Fit and Go-to-date are canvas-only and say so rather than sitting enabled and inert.
+
+  Set `VITE_GANTT_VIEW=false` to roll back to the diagram-only workspace.
+
+### Patch Changes
+
+- [#183](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/183) [`ad3e1f9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ad3e1f9bcc2e37499b5db52062a63eb679831c5f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix the authenticated app shell's height, which was a minimum rather than a height.
+
+  The shell's outermost box was `min-h-dvh`, leaving its computed height `auto` — so every
+  `flex-1 min-h-0` region beneath it sized itself against its own content instead of the viewport,
+  and the plan workspace was silently unbounded. The diagram never showed it (a canvas fills whatever
+  container it is given and cannot report that the container was wrong); the Gantt did, rendering
+  every row of a plan instead of a viewport's worth.
+
+  The shell is now exactly the viewport and the workspace region scrolls, so the header and Project
+  Explorer stay put while long screens scroll their content — rather than the whole page moving the
+  chrome off-screen.
+
+  Also gives the plan workspace's canvas region the minimum height it was already documented to keep.
+  Without it, a short viewport squeezed the region to nothing while the content inside it could not
+  shrink, so it overlapped the docked activities panel: the panel stayed visible and enabled, but
+  clicks landed on the canvas instead.
+
 ## 0.54.0
 
 ### Minor Changes
