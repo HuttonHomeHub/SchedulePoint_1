@@ -10,7 +10,228 @@ get an ADR instead (and may be linked from here).
 
 ---
 
-### 2026-07-27 — `VITE_CANVAS_TIME_AXIS` enablement: fold the review findings, then flip default-on
+### 2026-07-27 — Tech-debt register reconciled against the code
+
+**What happened.** Every row in `docs/TECH_DEBT.md` was checked against the repository rather than
+against memory. Nine rows were deleted as fully resolved, four rewritten to describe only what is
+left, one corrected outright, and the file gained a rule about how it is meant to be maintained.
+49 rows → 40.
+
+**The worst finding was not in the register.** `CLAUDE.md` — the operating manual, which the system
+prompt tells every assistant overrides its defaults — opened with **"Current stage: foundation in
+place, application features not yet built … Do not assume domain code exists."** At the time it said
+that, the repository held 19 API modules, 25 Prisma models across 41 migrations, ~570 web source
+files, 15 Playwright suites and 56 ADRs. §17 repeated it ("No application/domain code exists yet")
+and added a second false claim: that the web app has no entry point so CI builds only the API. CI
+has built both and run Playwright for months. An instruction to distrust the code, in the one file
+guaranteed to be read first, is the most expensive possible place for a stale sentence.
+
+**Why the register rotted.** Two mechanics, both visible in the diff. First, rows were annotated
+`**RESOLVED**` instead of deleted — nine had accumulated, and several were resolved in the title
+while the remediation column still described the work as outstanding, so the row disagreed with
+itself. Second, partial completion was recorded by prefixing "(a) RESOLVED" rather than rewriting
+the row, so a row's title stopped describing its contents. Both make the register longer and less
+true at the same time, which is the failure mode that matters: a backlog nobody trusts is not read,
+and a backlog that is not read rots faster.
+
+**The rule now written into the file.** Delete resolved rows; the commit and this log are the
+history. When part of an item lands, rewrite the row to be about the remainder and rename it to
+match. Reconcile after each epic while the context is fresh, verifying against the codebase — most
+rows name a file or a flag, so checking costs a grep.
+
+**Sampled and confirmed still accurate**, so the register is not wholesale unreliable: the four
+dependency-pin rows (ESLint 9, Prisma 6, TypeScript 5, CodeQL public-only) all match
+`dependabot.yml` and the workflow gate; #15 (no `Location` header, no envelope decorator helper),
+#18 (no buildx layer cache), #20 (keyset cursor resolved before the scope filter), #21 (no
+required-field indicator, no route focus/title manager, no `EmptyState`, no `DateField`), #43, #49,
+#53 and #56 were each verified open by inspection.
+
+---
+
+### 2026-07-27 — `SelectField` lands, and stops at the sites that are genuinely different
+
+**Decision.** `components/ui/form.tsx` gains `SelectField`, the enumerated sibling of `TextField`.
+Sixteen hand-assembled call sites move onto it. Five groups deliberately do not, each named in
+TECH_DEBT #42 with its reason. The register row is rewritten from "not extracted" to the residue.
+
+**What the survey found.** The row said the idiom was hand-assembled "~6×". It was **33×** across 15
+files — and two local helpers (`PlanScheduleOptionSelect`, `BucketSizeSelect`) had already been
+extracted independently, which is itself the symptom. More usefully, the copies had drifted: some
+error paragraphs carried `role="alert"` and some didn't, one hint was rendered but never linked to
+its control, and one screen put the same id on two mutually-exclusive paragraphs. Duplication is not
+the cost of a repeated idiom — divergence is, and it only shows up when you line the copies up.
+
+**Two API decisions.** `errorRole` is opt-in rather than always-on, because the two kinds of error
+differ: a validation message revealed on submit is already announced by `FormErrorSummary`, while a
+failed options query appears with no user action and needs a live region. Making both announce would
+double up the common case. And unlike `TextField`, a hint and an error render **together** — several
+call sites already did that, and the hint (what the control does) stays useful while the error (why
+this value won't do) is showing.
+
+**Why it stops where it does.** The unmigrated sites are not leftovers. The flag-forked pickers carry
+their own busy/optimistic state, so moving them changes behaviour rather than lifting markup. The
+optimistic-select family is _richer_ than `SelectField`, not a degenerate copy of it — the right move
+is to rebuild that helper on the primitive, not flatten it. Two more are latent defects (a duplicated
+id, a raw `<select>` whose hand-copied chrome has drifted from the primitive) that deserve their own
+change rather than being smuggled into a refactor where nobody would review them.
+
+---
+
+### 2026-07-27 — The recycle bin merges in the database, not the service
+
+**Decision.** `RecycleBinRepository` replaces three `findMany`s and a service-side merge-sort with one
+`UNION ALL … ORDER BY (deleted_at DESC, id ASC) LIMIT`. TECH_DEBT #22's over-fetch half closed; its
+other half — "the web shows only the first page" — was already fixed and the row was stale.
+
+**Why now, given the row said "if it ever gets hot".** Because the one consumer pages the whole thing.
+The recycle-bin screen uses `apiFetchAllPages`, following the cursor to the end, so reading
+`3 × (limit + 1)` rows to return `limit` was not a cost paid once — it was paid per page, every time
+the screen opened. That is a different calculation from the one the register recorded.
+
+**Deliberately not done: indexes.** A partial `(organization_id, deleted_at DESC, id) WHERE deleted_at
+IS NOT NULL` on all three tables would make this genuinely cheap, and it is the obvious next step —
+but deleted rows are a small minority of each table and nobody has profiled this screen. Shipping
+three indexes on reasoning alone, inside a refactor, is what CLAUDE.md §15 means by premature. It is
+documented in the repository as the measure-first escalation.
+
+**Consequence.** The hand-written keyset is now ours to keep correct, so the e2e gained the case that
+would break it: a cascade stamps a client, its project and its plan with **one** `deleted_at`, so
+ordering falls entirely to the id tiebreaker and every page boundary lands mid-batch across three
+different tables. It pages that one row at a time and checks the result matches the unpaged read.
+
+---
+
+### 2026-07-27 — A dialog closes only on its own close event
+
+**Decision.** The `Dialog` primitive compares `event.target` to its own element before calling
+`onClose`, for both `close` and `cancel`. TECH_DEBT #50 closed; the reopen-the-parent workaround
+comes out of the share-links e2e, and a new `dialog.test.tsx` pins the nesting.
+
+**Why it happened.** `close` does not bubble, so the nesting looked safe. But React listens at the
+root in the **capture** phase, and capture reaches every ancestor on the way _down_ — bubbling or
+not. The inner dialog's close was therefore delivered to the outer dialog's handler, and confirming
+a share-link revoke or a baseline delete tore down the dialog that had launched the confirmation.
+
+**Why in the primitive.** The alternative on the register was portalling `ConfirmDialog` outside the
+parent's subtree. Comparing the target is smaller, needs no portal target or focus-restoration
+rework, and fixes every nesting **inside `Dialog`** — including ones nobody has written yet — rather
+than the two that had been noticed. `ConfirmDialog` is built on `Dialog`, so one guard covers both.
+
+**Correction (same day).** That paragraph originally claimed the guard fixed "every nesting", full
+stop. It did not: `Sheet` is a **second**, structurally identical native-`<dialog>` primitive, and it
+did not get the guard. No consumer nests a dialog inside a `Sheet` today — the Project Explorer
+drawer renders its dialogs as siblings of `{children}` — so the bug was latent rather than live, but
+that avoidance is a convention, not a property of the primitive. Caught by the
+accessibility-reviewer agent, which traced the claim instead of taking it. `Sheet` now carries the
+same guard and a regression test **verified to fail without it**. The general lesson: "one guard
+covers both" was true of the two components I was looking at, and the word "every" quietly extended
+it to a third I had not.
+
+**Consequence.** A dialog's `onClose` now means "this dialog closed", which is what every call site
+already assumed. The regression test asserts the parent survives **and** that `onOuterClose` was
+never called — the second half matters, because a parent that merely re-renders open would pass a
+visual check while still firing its host's close side effects.
+
+---
+
+### 2026-07-27 — A list declares `order` only if it honours it
+
+**Decision.** `order` comes off the shared `PaginationQueryDto` and moves onto `ListBaselinesQueryDto`,
+the single list that actually reads it. Every other list keeps its fixed direction and stops
+advertising a param it discards. `docs/API.md`'s pagination section and the three `@ApiOperation`
+descriptions that apologised for the ignored param are updated to match. TECH_DEBT #19 closed.
+
+**Why.** The param was in the base DTO, so it appeared in every list's OpenAPI while one endpoint
+implemented it. A client sending `order=desc` got a `200` and the wrong page — the failure mode of a
+documented no-op is that it looks exactly like success. The fixed directions themselves were never
+the problem: a member roster reading oldest-first and a note thread reading newest-first are product
+decisions, and both are right. Advertising the opposite is what was wrong.
+
+The alternative — implementing `order` across all ~15 lists — was rejected as scope invented by the
+bug rather than requested by anyone. A `(created_at, id)` keyset does reverse correctly when both
+terms flip together (baselines proves it), so any list can opt in later by declaring `order` in its
+own DTO. None currently needs to.
+
+**Consequence.** Because the API rejects unknown query params (`forbidNonWhitelisted`), sending
+`order` to a list that does not declare it is now a `422` instead of being ignored — accepted, and
+the point: a wrong answer becomes a visible error. No SchedulePoint client sends it. The rule is
+now enforceable by reading one DTO rather than by remembering a caveat.
+
+---
+
+### 2026-07-27 — `verify-template.sh` restores what was there, not what was committed
+
+**Decision.** The template verifier no longer cleans up with `git checkout -- schema.prisma`. It
+copies the schema to a temp file before appending the reference model, restores from that copy, and
+verifies the restore with `cmp` — keeping the backup and naming its path if the restore ever fails.
+It also refuses to start if `src/modules/reference` or `test/reference.e2e-spec.ts` already exists,
+since cleanup deletes both unconditionally. TECH_DEBT #52 closed.
+
+**Why.** `git checkout --` restores the _committed_ file, so running the verifier while a migration
+was in progress silently discarded the uncommitted schema work — it did exactly that once during
+ADR-0053 M1. CI never saw it because CI's tree is always committed, which is precisely what makes
+this class of bug survive: the environment that would catch it is the one environment where it
+cannot happen.
+
+**Consequence.** The script is now safe on a dirty tree, which also makes it _useful_ on one —
+checking that the template still compiles against an in-progress model is exactly when you want to
+run it, and the old behaviour punished you for trying. Deliberately **not** taken: the alternative
+of refusing to run while the schema is dirty. It would have prevented the data loss, but by
+removing the capability rather than fixing it.
+
+---
+
+### 2026-07-27 — The Prisma datamodel stops describing indexes it cannot describe
+
+**Decision.** `Activity` drops its `@@index([parentId])`. The database's index on that column has
+always been the **partial** `idx_activities_parent_id … WHERE deleted_at IS NULL AND parent_id IS
+NOT NULL`, created in raw SQL by the ADR-0038 migration. Prisma has no syntax for a partial index,
+so the model-level declaration was never describing that object — it was declaring a **second,
+full** index that no migration builds and no query needs. It is now documented in the model's
+comment block only, which is what the later partial-index siblings (`resources.parent_id`,
+`calendars.project_id`) already do. No runtime effect: the database is unchanged, and the index the
+queries use was always the migrated one.
+
+**Why now.** The drift was cosmetic in isolation but it cost us a gate. `prisma migrate diff
+--exit-code` was non-zero on `main`, so the one command that can tell you "the datamodel and the
+migrations have parted company" could not be trusted to mean anything. With the false positive gone
+the check is wired into CI (`prisma:check-drift`, in the `e2e` job — it already has a freshly
+migrated Postgres, so the check costs one command and no new service). TECH_DEBT #54 closed.
+
+**Consequence.** Editing a model without writing the matching migration now fails CI instead of
+surfacing as a surprise `prisma migrate dev` on the next contributor's machine. The check is blind
+to everything Prisma cannot express — partial indexes and uniques, CHECK constraints, GiST EXCLUDE
+constraints — which this repo uses heavily and by convention keeps in raw SQL. Those objects are
+absent from **both** sides of the diff, so the gate neither validates nor trips on them; they stay
+governed by review and the documenting model comments. The gate covers columns, types, tables,
+relations and full indexes, which is where silent drift actually happens.
+
+---
+
+### 2026-07-27 — Toolbar labels are a policy, not a side-effect of priority
+
+**Decision.** `ToolbarItem` gains `showLabel?: 'always' | 'auto' | 'never'` (default `'auto'`), and
+the `Toolbar` primitive's render path reads **only** that — never `tier` (TECH_DEBT #61, now
+closed). `tier` goes back to answering exactly one question: what demotes into `⋯` first.
+
+`'auto'` is the behavioural half: the row labels its auto items only when it measurably has room,
+recomputed from the container width on every resize. The measurement is deliberately taken **off
+the layout tree** — a canvas `measureText`, memoised per font+string — because the obvious
+implementation (render labels, measure, retract if they don't fit) is a feedback loop that a
+`ResizeObserver` turns into a per-frame flip-flop. Costing labels against the container's width,
+which does not change with what we render inside it, removes the cycle rather than damping it. A
+32px promotion margin absorbs the estimate's error and stops labels toggling as a user drags a
+window edge; where no 2D context exists the row stays icon-only, which is the pre-existing
+behaviour. Promotion is all-or-nothing per row: a partially-labelled group reads as inconsistency
+rather than as a response to width, and the M0 measurement found the rows sit decisively on one
+side or the other (~0.1px of slack at 1280px, 760–1000px at 1680–1920px).
+
+**Consequences.** Two registries now declare their intent explicitly: the TSLD bar's four primary
+buttons (Early/Visual mode, Add, Recalculate) and every item in the floating selection-actions bar
+pin `'always'`, since their names are the affordance. Everything else is `'auto'` and gains a label
+on wide monitors that it never had before — the ~1000px of Row-2 slack at 1920px that M0 measured
+and nothing consumed. `selection-actions.tsx`'s own comment used to gloss `tier: 1` as "(visible
+labels)", which is the conflation stated out loud; it now says which property does which job.
 
 **Decision.** M7 (tsld-toolbar-canvas-refinements, ADR-0056) ran the deferred specialist review
 pass (ux/accessibility/component/performance) over the M2–M5 diff and folded its two blocking
@@ -590,7 +811,7 @@ dependency-draw, click → select. Only create-by-drag genuinely competes with p
 so only it gets a mode toggle.
 
 **Why.** Smallest mode surface, zero regression to the M1 pan/zoom path, and
-discoverable affordances — see `docs/design/tsld-m2-editing.md` §1 and ADR-0026 D5.
+discoverable affordances — see `docs/archive/design/tsld-m2-editing.md` §1 and ADR-0026 D5.
 
 **Consequences.** Hit classification is a pure `classifyHit` helper shared by paint
 and pointer so they can't diverge; the gesture machine is a pure reducer. Revisit
@@ -604,7 +825,7 @@ if a fuller tool palette proves more discoverable.
 overwrite.
 
 **Why.** No edit-lock yet; the flag + version-409 banner is the safe interim path
-(`docs/design/tsld-m2-editing.md` §3; plan risk "Editing ships before the edit-lock").
+(`docs/archive/design/tsld-m2-editing.md` §3; plan risk "Editing ships before the edit-lock").
 
 **Consequences.** Editing is dark in the default build. The lock (or hardened
 concurrency) is the prerequisite to enabling the flag; tracked on the TSLD roadmap.
@@ -748,7 +969,7 @@ sign-off (plan §M5).
 write-gate (inert behind `PLAN_EDIT_LOCK_ENFORCED`), and the peer hand-off model. M2 is its
 front-end realisation — the `features/plan-lock/` "pen" that acquires/holds the lock and gates the
 on-canvas schedule editing. Three front-end choices needed settling; all confirmed against the M1
-staged-rollout discipline (design: `docs/design/plan-edit-lock-web.md`).
+staged-rollout discipline (design: `docs/archive/design/plan-edit-lock-web.md`).
 
 **Decisions.**
 

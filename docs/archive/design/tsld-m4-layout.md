@@ -12,7 +12,7 @@
 - **Governing decisions:** ADR-0026 (canvas rendering/coordinate/state/interaction/a11y — esp.
   **D5** "Lane drag + optional auto-pack" and **D6** "Layout vs schedule"), ADR-0022 (synchronous
   recalc + plan lock; its engine-owned batched write is a deliberate **contrast** — §4/§8), ADR-0023
-  (date convention). Plan: `docs/plans/tsld-canvas.md` §M4. Prior art: `docs/design/tsld-m2-editing.md`.
+  (date convention). Plan: `docs/plans/tsld-canvas.md` §M4. Prior art: `docs/archive/design/tsld-m2-editing.md`.
 - **Not in scope:** multi-select group drag (deferred — §2), undo of auto-pack (not built; the
   confirm dialog is the mitigation — §5), driving-arrow styling (M3), the full native in-canvas
   keymap and screen-reader hardening (M5).

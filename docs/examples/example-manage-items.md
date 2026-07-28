@@ -3,6 +3,11 @@ WORKED EXAMPLE — illustrates the delivery process (docs/PROCESS.md) end to end
 for a GENERIC feature. It is NOT an approved spec and NO code has been written.
 It shows how the feature-spec + implementation-plan templates are filled in,
 including diagrams. Replace "Item" with your real entity when you build.
+
+Its subject feature never existed, and the reference template whose vocabulary it
+borrows was deleted on 2026-07-27 (ADR-0057). It is retained for what it actually
+demonstrates — the SHAPE of a spec and a plan — not as a model of the codebase.
+For that, read a real module: docs/REFERENCE_FEATURE.md names three.
 -->
 
 # Feature Spec (EXAMPLE): Manage items

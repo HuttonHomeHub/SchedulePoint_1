@@ -1,7 +1,7 @@
 # Delivery Process — from idea to shipped feature
 
 > The single, repeatable method for introducing **any** new requirement or
-> feature into Blank App. It exists so every change is understood, designed,
+> feature into SchedulePoint. It exists so every change is understood, designed,
 > reviewed, and shipped to the same high bar — and so we **never jump from an
 > idea straight to code**.
 >
@@ -154,9 +154,10 @@ Every implementation must:
 - **Update documentation** touched by the change (docs/, READMEs).
 - **Update relevant ADRs**; add a new ADR for architectural change.
 - **Update `CLAUDE.md`** if project knowledge/standards change.
-- **Build from the reference template.** New features are created by copying the
-  canonical template (`docs/REFERENCE_FEATURE.md`,
-  `apps/api/examples/reference-feature/`); diverging from its cross-cutting
+- **Build to the implementation standard.** New features match the layering,
+  auth, envelopes, DB standards and tests in `docs/REFERENCE_FEATURE.md`,
+  starting from the nearest real exemplar (`modules/clients`, `modules/notes`,
+  `modules/share` — ADR-0057); diverging from those cross-cutting
   patterns requires a documented ADR (ADR-0015). Use the specialised **agents**
   to design and review (see below).
 
@@ -201,21 +202,25 @@ SemVer bump (patch/minor/major; pre-1.0 breaking → minor). Breaking API/contra
 changes require an ADR and a migration note. See
 [`docs/DEPLOYMENT.md`](DEPLOYMENT.md).
 
-## Repository maintenance (periodic)
+## Repository maintenance — the reconciliation pass
 
-On a regular cadence (e.g. each milestone boundary), review and recommend
-improvements to:
+**Trigger: each epic boundary, with a three-month hard floor.** The procedure is
+[`docs/RECONCILE.md`](RECONCILE.md); the reasoning is
+[ADR-0058](adr/0058-drift-control-and-the-reconciliation-pass.md).
 
-- **Architecture** — is it still fit for purpose? drift from the docs?
-- **Dependencies** — updates, security advisories, unused packages.
-- **Security** — new surfaces, CodeQL/secret-scanning findings.
-- **Performance** — real metrics vs. targets; hot paths.
-- **Technical debt** — [`docs/TECH_DEBT.md`](TECH_DEBT.md): pay down or re-justify.
-- **Documentation quality** — accuracy, gaps, dead links.
-- **UI consistency** — one-off styling, pattern drift.
+This used to read "on a regular cadence (e.g. each milestone boundary)". That
+produced months of drift — the operating manual described a repository with no
+domain code while nineteen modules were shipping — so the trigger is now
+specific and the checklist is derived from findings rather than imagination.
+
+The pass covers architecture, dependencies, security, performance, the debt
+register, documentation accuracy and UI consistency. Its governing rule:
+**verify the claim; do not trust the document.** Every drift found so far was a
+confident sentence nobody had re-checked.
 
 Record outcomes as issues/backlog items, ADRs, or `TECH_DEBT.md`/`DECISIONS.md`
-entries.
+entries — and record **what was found wrong**, not just what changed. Those
+findings are the evidence that the next pass is worth running.
 
 ## Working method (especially for AI assistants)
 
@@ -233,6 +238,12 @@ When given a new application idea:
 read-only advisors; the architect/analyst agents help design — use them.
 
 ## Artifacts & templates
+
+**Where they live.** A feature gets **one directory**:
+`docs/specs/<feature-slug>/`, holding `feature-spec.md` and
+`implementation-plan.md` side by side. It stays there after the feature ships —
+it is the record of what was agreed, and ADRs cite it.
+(`docs/plans/` and `docs/archive/` are historical; nothing new goes in either.)
 
 | Artifact                      | Template                                                             | When                 |
 | ----------------------------- | -------------------------------------------------------------------- | -------------------- |

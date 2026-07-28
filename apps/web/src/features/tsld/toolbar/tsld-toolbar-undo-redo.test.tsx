@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -99,6 +99,50 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
       'aria-keyshortcuts',
       'Control+Shift+Z',
     );
+  });
+
+  /**
+   * TECH_DEBT #47. Undo must always be one reachable click, so the controls are `render` items,
+   * which the primitive never demotes. That is a structural property — but "structural" is how a
+   * regression gets in unnoticed, and nothing asserted it for undo/redo specifically. Squeeze the
+   * bar until every demotable button is pushed into `⋯` and check the two survive.
+   */
+  it('keeps Undo/Redo on the bar at a width that overflows their demotable neighbours', () => {
+    // The control: jsdom reports every width as 0, so unsqueezed the row overflows nothing. If this
+    // ever stopped holding, the squeezed assertions below would pass without proving anything.
+    expect(
+      within(doRow(ctx())).queryByRole('button', { name: 'More toolbar actions' }),
+    ).not.toBeInTheDocument();
+    cleanup();
+
+    // Now give every item a real width and the container almost none: the pinned controls alone
+    // exceed it, so `computeOverflow` gets zero budget and demotes all it is allowed to demote.
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 100,
+      height: 32,
+      top: 0,
+      left: 0,
+      right: 100,
+      bottom: 32,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(120);
+
+    try {
+      const bar = doRow(ctx());
+
+      expect(within(bar).getByRole('button', { name: 'Undo move activity' })).toBeInTheDocument();
+      expect(within(bar).getByRole('button', { name: 'Redo add link' })).toBeInTheDocument();
+
+      // And the squeeze was real — the `⋯` trigger is present, so something did demote. Without
+      // this the assertions above would pass on a bar that simply never overflowed.
+      expect(within(bar).getByRole('button', { name: 'More toolbar actions' })).toBeInTheDocument();
+    } finally {
+      rect.mockRestore();
+      width.mockRestore();
+    }
   });
 
   it('shades the controls (pen-gated) when authoring is not enabled — the whole cluster is off', () => {

@@ -36,12 +36,31 @@ export function Sheet({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
+  /**
+   * Only this sheet's own close counts as this sheet closing — the same guard,
+   * and the same reason, as `dialog.tsx`. `close`/`cancel` do not bubble, but
+   * React listens at the root in the CAPTURE phase, which reaches every
+   * ancestor on the way down regardless. So a `<dialog>` nested inside a
+   * `<Sheet>` would close the sheet out from under it (TECH_DEBT #50).
+   *
+   * No consumer nests one today — the Project Explorer drawer renders its
+   * dialogs as siblings of `{children}` — so this is latent rather than live.
+   * It is fixed anyway because that avoidance is a convention, not a property
+   * of the primitive, and `Sheet` is a general-purpose drawer: the next
+   * feature to put a confirmation inside one would reintroduce exactly the bug
+   * that was just removed from `Dialog`.
+   */
+  const closeIfSelf = (event: React.SyntheticEvent<HTMLDialogElement>): void => {
+    if (event.target !== ref.current) return;
+    onClose();
+  };
+
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onClose={onClose}
-      onCancel={onClose}
+      onClose={closeIfSelf}
+      onCancel={closeIfSelf}
       // `!m-0` beats the UA `margin:auto` that would otherwise centre a modal dialog; `fixed inset-y-0`
       // + the side edge anchors it full-height to the inline-start (default) or inline-end edge.
       className={cn(

@@ -3,6 +3,7 @@ import type { FieldErrors } from 'react-hook-form';
 
 import { Input, type InputProps } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, type SelectProps } from '@/components/ui/select';
 import { Textarea, type TextareaProps } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +62,104 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       ) : hint ? (
         <p id={hintId} className="text-muted-foreground text-sm">
           {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+});
+
+export interface SelectFieldProps extends SelectProps {
+  label: string;
+  /** Validation message for this field, if any (from React Hook Form or a failed load). */
+  error?: string | undefined;
+  /** Optional helper text rendered under the control when there is no error. */
+  hint?: string | undefined;
+  /**
+   * Set to `'alert'` when the error can appear **without** the user having just acted — a failed
+   * options query, a rejected save. Those need announcing the moment they render. A validation
+   * message revealed on submit does not: {@link FormErrorSummary} already announces those, and a
+   * second live region would double up. Defaults to no role, matching {@link TextField}.
+   */
+  errorRole?: 'alert';
+}
+
+/*
+ * NO `renderControl` ESCAPE HATCH — deliberately.
+ *
+ * One was added here for the flag-forked pickers (a `Combobox` when
+ * `VITE_LIBRARY_SCOPING` is on, a native select when it is off) and removed
+ * again the same day: it passed only `{ id, describedBy, invalid }` to the
+ * render function, never the `ref` or the rest props. Since the whole point was
+ * to host a `register()`-bound control, and `register()` supplies exactly a ref
+ * plus `onChange`/`onBlur`/`name`, it could not do the job it existed for — and
+ * it shipped with no consumer and no test, so nothing caught that.
+ *
+ * If a fork genuinely needs this plumbing, design the signature against the
+ * first real caller (thread `ref` and the rest props through the render
+ * argument) and test it then. An untested escape hatch with no consumer is a
+ * trap: the first adopter inherits a breaking change, not a feature.
+ */
+
+/**
+ * Accessible labelled select — the enumerated sibling of {@link TextField}, with the same contract:
+ * binds the label, exposes validation state via `aria-invalid`, and links the error/hint with
+ * `aria-describedby` (merging any the caller supplies, so a select can point at a shared explainer
+ * paragraph rendered elsewhere on the screen). Forwards its ref so `register()` spreads directly.
+ *
+ * Extracted because this idiom had been hand-assembled 30+ times across the app, each repeating the
+ * id wiring — and drifting: some errors carried `role="alert"` and some didn't, some hints were
+ * rendered but never linked, one screen reused a single id on two different paragraphs. Those are
+ * exactly the bugs a shared primitive stops recurring (TECH_DEBT #42).
+ */
+export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(function SelectField(
+  {
+    label,
+    error,
+    hint,
+    errorRole,
+    id,
+    className,
+    children,
+    'aria-describedby': ariaDescribedBy,
+    ...props
+  },
+  ref,
+) {
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
+  const errorId = `${fieldId}-error`;
+  const hintId = `${fieldId}-hint`;
+  // Both when there is both: a hint stays useful while an error is showing (it says what the
+  // control does; the error says why this value won't do), and losing it mid-correction is the
+  // moment it is most wanted. Hint first — context before the complaint.
+  const own = [hint ? hintId : undefined, error ? errorId : undefined].filter(Boolean).join(' ');
+  const describedBy = mergeDescribedBy(own || undefined, ariaDescribedBy);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={fieldId}>{label}</Label>
+      <Select
+        ref={ref}
+        id={fieldId}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        className={className}
+        {...props}
+      >
+        {children}
+      </Select>
+      {hint ? (
+        <p id={hintId} className="text-muted-foreground text-sm">
+          {hint}
+        </p>
+      ) : null}
+      {error ? (
+        <p
+          id={errorId}
+          {...(errorRole ? { role: errorRole } : {})}
+          className="text-destructive-text text-sm"
+        >
+          {error}
         </p>
       ) : null}
     </div>

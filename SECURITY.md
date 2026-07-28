@@ -1,6 +1,6 @@
 # Security Policy
 
-We take the security of Blank App and its users' sensitive data seriously.
+We take the security of SchedulePoint and its users' sensitive data seriously.
 
 ## Supported versions
 
@@ -17,7 +17,7 @@ security fixes. This table will be maintained as versions are released.
 **Please do not open a public issue for security vulnerabilities.**
 
 Report privately via GitHub's
-[**Report a vulnerability**](https://github.com/HuttonHomeHub/blank-app/security/advisories/new)
+[**Report a vulnerability**](https://github.com/HuttonHomeHub/SchedulePoint_1/security/advisories/new)
 (Security → Advisories). If you cannot use that channel, contact a maintainer
 directly.
 

@@ -2,8 +2,9 @@
 
 > Product direction for **SchedulePoint** (see [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md)
 > for the full vision and MoSCoW scope). This tracks milestones at a coarse grain;
-> per-feature specs/plans live in [`specs/`](specs/) and [`plans/`](plans/), produced
-> via the delivery process ([`PROCESS.md`](PROCESS.md)).
+> per-feature specs and plans live in [`specs/`](specs/), produced via the delivery
+> process ([`PROCESS.md`](PROCESS.md)). Early features split their plan into
+> [`plans/`](plans/README.md) — historical, and not where new work goes.
 
 ## Purpose
 
@@ -14,9 +15,10 @@ keep `main` releasable.
 ## Delivered
 
 - **M0 — Engineering foundation.** Turborepo + pnpm monorepo, strict TypeScript,
-  lint/format, CI/CD (quality + template-verify + API/web e2e + CodeQL + release +
-  GHCR image publishing), Docker, docs, ADRs, delivery process, agents, reference
-  template.
+  lint/format, CI/CD (quality + API/web e2e + CodeQL + release + GHCR image
+  publishing), Docker, docs, ADRs, delivery process, agents. (The reference
+  template that seeded the backend standard was retired once real modules
+  superseded it — ADR-0057.)
 - **Identity & tenancy.** Better Auth, `User`/`Organization`/`OrgMember`, org-scoped
   RBAC (Viewer/Contributor/Planner/Org Admin), members + invitations, onboarding +
   org switcher (ADR-0003/0012/0016).

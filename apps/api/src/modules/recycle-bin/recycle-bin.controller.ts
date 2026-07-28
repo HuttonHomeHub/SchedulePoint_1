@@ -33,7 +33,9 @@ export class RecycleBinController {
   @Get()
   @ApiOperation({
     summary: "List an organisation's recently-deleted clients, projects and plans.",
-    description: 'Newest-deleted first, cursor-paginated. The `order` param is not used.',
+    description:
+      'Newest-deleted first, cursor-paginated. The direction is fixed — this list ' +
+      'does not accept an `order` param, and sending one is a 422 (see docs/API.md).',
   })
   @ApiOkResponse({ type: DeletedItemResponseDto, isArray: true })
   async list(

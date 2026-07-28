@@ -24,7 +24,7 @@
   a11y pre-enablement gate (TECH_DEBT #25).
 
 This is a design + interaction spec. **No application code is written here.** Hook/type/keymap
-sketches are illustrative (as in `docs/design/tsld-m5-a11y.md`), not files; they record the
+sketches are illustrative (as in `docs/archive/design/tsld-m5-a11y.md`), not files; they record the
 architecture the implementer builds against and flag the decisions that need your input.
 
 ---

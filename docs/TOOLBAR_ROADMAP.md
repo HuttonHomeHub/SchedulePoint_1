@@ -16,13 +16,14 @@ to fit (e.g. below `md`), at which point tier-2 items demote into it.
 `onActivate`/`render`, `isEnabled`, `disabledReason`, and a context seam), add tests, and remove the
 row from the table below. No taxonomy or primitive change is required — the slot already exists.
 
-**Wired behind a flag (in-progress).** The **TSLD toolbar quick-wins** slice
-(`docs/specs/toolbar-quick-wins/`) wires five of the ids below — `today`, `comments`,
+**Wired (quick-wins) — now the default.** The **TSLD toolbar quick-wins** slice
+(`docs/specs/toolbar-quick-wins/`) wired five of the ids below — `today`, `comments`,
 `update-progress`, `add-note`, `clear-visual-placement` — to already-shipped features. Each resolves at
-build time to its **real** `ToolbarItem` when `VITE_TOOLBAR_QUICK_WINS` is on, and to its existing
-`placeholderItem()` "Coming soon" stub when off. So while the flag is off (its build default) the table
-below still describes today's bar exactly; the rows are annotated _Wired (quick-wins)_ and their
-descriptions updated to what they actually do.
+build time to its **real** `ToolbarItem` when `VITE_TOOLBAR_QUICK_WINS` is on — which is now its build
+**default** — and to its `placeholderItem()` "Coming soon" stub when explicitly disabled. So the table
+below describes the bar a user sees only for rows **not** annotated _Wired (quick-wins)_; those five are
+live, and their descriptions say what they actually do. Setting `VITE_TOOLBAR_QUICK_WINS=false` restores
+the all-placeholder bar (the rollback path).
 
 **Placeholder vs. capability-unavailable.** A disabled placeholder ("Coming soon") is distinct from a
 control that is merely _temporarily_ unavailable (e.g. zoom before a diagram is computed, which reads

@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ConfirmDialog } from './confirm-dialog';
 import { Sheet, SheetHeader } from './sheet';
 
 describe('Sheet', () => {
@@ -66,6 +68,42 @@ describe('Sheet', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveClass('right-0');
     expect(dialog).not.toHaveClass('left-0');
+  });
+
+  /**
+   * The same nested-close defect `Dialog` was fixed for (TECH_DEBT #50), pinned here
+   * because `Sheet` is a second, structurally identical native-`<dialog>` primitive that
+   * did not receive the guard at the time.
+   *
+   * No consumer nests a dialog inside a `Sheet` today — the Project Explorer drawer
+   * renders its dialogs as siblings of `{children}` — so this guards a latent bug, not a
+   * live one. That is the point: the avoidance is a convention, and `Sheet` is a
+   * general-purpose drawer, so the next feature to put a confirmation inside one would
+   * otherwise reintroduce exactly the bug just removed from `Dialog`.
+   */
+  it('ignores a close that came from a nested dialog', () => {
+    const onSheetClose = vi.fn();
+
+    function Host(): React.ReactElement {
+      const [confirming, setConfirming] = useState(true);
+      return (
+        <Sheet open onClose={onSheetClose} title="Project Explorer">
+          <ConfirmDialog
+            open={confirming}
+            onClose={() => setConfirming(false)}
+            onConfirm={() => setConfirming(false)}
+            title="Delete client"
+            confirmLabel="Delete"
+          />
+        </Sheet>
+      );
+    }
+
+    render(<Host />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(screen.queryByRole('alertdialog', { name: 'Delete client' })).not.toBeInTheDocument();
+    expect(onSheetClose).not.toHaveBeenCalled();
   });
 });
 

@@ -1,8 +1,9 @@
 <!--
 Implementation Plan template — Stage 5 of docs/PROCESS.md.
-Produced AFTER the Feature Spec is approved. Copy to docs/plans/<feature-slug>.md
-or attach to the tracking issue. Sequence work as thin vertical slices that keep
-`main` releasable.
+Produced AFTER the Feature Spec is approved. Copy to
+docs/specs/<feature-slug>/implementation-plan.md, beside the approved spec —
+not to docs/plans/, which is historical. Sequence work as thin vertical slices
+that keep `main` releasable.
 -->
 
 # Implementation Plan: <Feature name>

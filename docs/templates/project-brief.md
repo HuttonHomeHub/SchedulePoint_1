@@ -8,6 +8,10 @@ How to use:
      to the docs/README.md index.
   3. Hand the filled-in brief to the delivery process (docs/PROCESS.md): the
      feature-analyst agent turns it into per-feature specs + plans for approval
+
+NOTE for anyone running a link checker: the relative links below resolve from
+`docs/`, where the FILLED copy lives — not from `docs/templates/`. They are
+supposed to look broken here. Do not "fix" them.
      BEFORE any code (see CLAUDE.md §21).
 
 Framing: this brief is PRODUCT context, not a standards document. This repo
@@ -95,7 +99,7 @@ baseline. Anything that deviates from the base stack/architecture needs an ADR.
 
 <!-- The key nouns and their relationships — a rough data-model sketch (a bullet
      list or a small Mermaid ERD). Drives the database-architect agent and which
-     copies of the reference-feature template you make. Snake_case DB columns,
+     features you build to the implementation standard. Snake_case DB columns,
      UUID v7, timestamptz, soft delete + audit + optimistic locking come from
      the base (docs/DATABASE.md) — you don't need to restate those here. -->
 

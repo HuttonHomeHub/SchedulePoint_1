@@ -3,6 +3,10 @@
 > Backend and system performance standards. Frontend performance lives in
 > [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md). Guiding rule: **measure before
 > optimising; no un-measured claims.**
+>
+> Sections marked **_not yet built_** describe how we will do something when we
+> need it. There is no cache, queue or tracing in the running system
+> ([`ARCHITECTURE.md`](ARCHITECTURE.md) §10) — do not cite them as available.
 
 ## Targets
 
@@ -21,7 +25,11 @@
 - Keep transactions short; do no network I/O inside them.
 - Select only needed columns; avoid over-fetching wide rows.
 
-## Caching (ADR-0010)
+## Caching (ADR-0010) — _not yet built_
+
+No cache layer exists; every read goes to Postgres. **This has not been a
+problem**, which is the point of the second bullet: the standard for when we do
+add one is —
 
 - **Cache-aside via Redis** for hot, expensive, staleness-tolerant reads;
   **invalidate on write**; explicit TTLs; namespaced/versioned keys.
@@ -29,7 +37,10 @@
   correctness risk. Never cache authoritative computed results beyond safe
   bounds. Guard very hot keys against stampedes.
 
-## Async processing & queueing (ADR-0009)
+## Async processing & queueing (ADR-0009) — _not yet built_
+
+There is no queue and no worker; all work is synchronous. The candidate first
+consumer is schedule-interchange import. The standard for when it lands:
 
 - **Move slow / retriable / scheduled work off the request path** into BullMQ
   jobs (notifications, exports, recurring generation). Requests stay fast.
@@ -103,9 +114,13 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
 
 ## Profiling & measurement
 
-- Use OpenTelemetry traces/metrics (see [`OBSERVABILITY.md`](OBSERVABILITY.md))
-  to find real hot spots; profile the database with `EXPLAIN ANALYZE` and slow-
-  query logs.
+- Profile the database with `EXPLAIN ANALYZE` and slow-query logs — this is the
+  tool that is actually available, and it is the one that has found every
+  measured win so far (e.g. the GROUP-delete advisory-lock loop, ~830 ms → ~13 ms
+  by batching into one `unnest`).
+- OpenTelemetry traces/metrics (see [`OBSERVABILITY.md`](OBSERVABILITY.md)) are
+  **not wired**, so there is no production hot-spot data. Until they are,
+  measure locally against realistic row counts and put the numbers in the PR.
 - **Establish a baseline, change one thing, measure again.** Optimisations land
   with before/after numbers in the PR. No speculative micro-optimisation.
 - Load-test critical endpoints before claiming a capacity number.
@@ -113,7 +128,10 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
 ## Scalability expectations
 
 - **Stateless API:** no in-process session/state, so instances scale
-  horizontally behind a load balancer. Shared state lives in Postgres/Redis.
+  horizontally behind a load balancer. Shared state lives in Postgres today.
+  **One caveat:** Better Auth's rate-limit store is in-process memory, so it
+  becomes per-replica the moment a second instance runs (TECH_DEBT #14) — back
+  it with Redis before scaling out.
 - **Connection management:** a bounded Prisma/DB connection pool sized to the
   DB; a pooler (e.g. PgBouncer) in front when instance count grows.
 - **Read scaling:** read replicas for read-heavy load when needed (routed
@@ -121,8 +139,8 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
   offload before considering partitioning.
 - **Backpressure:** enforce timeouts, payload caps, pagination limits, and rate
   limits so load sheds gracefully rather than collapsing.
-- **Graceful degradation:** a slow/absent cache or queue degrades performance,
-  not correctness.
+- **Graceful degradation:** when a cache or queue exists, a slow or absent one
+  must degrade performance, not correctness.
 
 ## Anti-patterns (flagged in review)
 
@@ -136,7 +154,8 @@ unnest($1::uuid[], …)`** — no per-row round trip, no N+1.
 ## Definition of done (performance)
 
 - [ ] List endpoints paginated; queries indexed and N+1-free
-- [ ] Slow/retriable work offloaded to jobs where appropriate
+- [ ] Slow/retriable work identified (no queue exists yet — say so rather than
+      hiding a slow synchronous path)
 - [ ] Any caching has explicit TTL + invalidation and is justified by profiling
 - [ ] Perf-sensitive changes include before/after measurements
 - [ ] No unbounded queries or payloads

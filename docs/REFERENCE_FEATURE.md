@@ -1,27 +1,37 @@
-# Implementation Standard — the reference feature
+# Implementation Standard — how a feature is shaped
 
-> **This is the canonical implementation standard for the project.** New
-> features are built by copying the reference template unless a documented
-> architectural reason (an ADR) says otherwise (ADR-0015). It demonstrates every
-> engineering standard in one small feature, with **no business logic**.
+> **This is the canonical implementation standard for the project.** Every
+> backend feature follows the layering, envelopes, authorisation, validation,
+> logging and testing described here. Diverging from these cross-cutting patterns
+> requires a documented architectural reason — an ADR.
 >
-> The template lives at
-> [`apps/api/examples/reference-feature/`](../apps/api/examples/reference-feature/)
-> and is **CI-verified** (materialised, type-checked, and unit-tested by
-> `scripts/verify-template.sh`), so it cannot silently rot. It is not shipped:
-> excluded from the app module, build, and migrations (ADR-0014). The live Prisma
-> schema has no models — the first real feature writes the first migration.
+> There is no longer a template to copy. Until 2026-07-27 this document described
+> a synthetic `ReferenceItem` feature kept under CI as the mandatory starting
+> point (ADR-0014/0015). With 19 real modules built to this standard, that
+> scaffold taught less than the code it modelled and cost more to maintain, so it
+> was deleted — see [ADR-0057](adr/0057-real-modules-replace-the-reference-template.md).
+> **Read a real module instead.**
 
-## When to use it
+## The exemplars
+
+Three modules, in the order you are likely to need them:
+
+| Read                                                  | For                                                                                                                                                              |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`modules/clients`](../apps/api/src/modules/clients/) | **The canonical shape.** Controller → service → repository, DTOs, org scoping, soft delete, optimistic locking. The smallest complete instance of this standard. |
+| [`modules/notes`](../apps/api/src/modules/notes/)     | **The richer instance.** A polymorphic parent with a fail-closed CHECK, a plan-cascade sweep, author-ownership checks (ADR-0046).                                |
+| [`modules/share`](../apps/api/src/modules/share/)     | **The auth boundary.** A parallel principal type, a token guard, uniform-404 resolution, rate limiting (ADR-0051).                                               |
+
+## When to use this document
 
 - **Every new backend feature** (a new resource/capability with endpoints and/or
-  persistence) starts by copying this template.
-- Use it for the shape (layers, naming, error/response envelopes, authz, tests),
-  not the content. `ReferenceItem` is a stand-in — replace it entirely.
-- For **frontend features**, follow the [frontend feature template](#frontend-feature-template)
+  persistence) matches the anatomy below. Start from the nearest exemplar.
+- Use the exemplars for the shape — layers, naming, error/response envelopes,
+  authz, tests — not the domain content.
+- For **frontend features**, follow the [frontend feature anatomy](#frontend-feature-template)
   section below plus [`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md) and
   [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md).
-- Don't use it for one-off scripts, infra, or pure refactors.
+- Don't apply it to one-off scripts, infra, or pure refactors.
 
 ---
 
@@ -60,14 +70,17 @@ The API-level (integration/e2e) test lives in `apps/api/test/<feature>.e2e-spec.
 
 ### File & symbol naming conventions
 
-- Files: `kebab-case` (`create-reference-item.dto.ts`). Classes/types:
-  `PascalCase`. Providers: `‹Feature›Controller|Service|Repository`. DTOs:
-  `‹Action›‹Entity›Dto` / `‹Entity›ResponseDto`. Permission codes:
-  `‹resource›:‹action›` (`reference:create`). See `CLAUDE.md §5`.
+- Files: `kebab-case` (`create-client.dto.ts`). Classes/types: `PascalCase`.
+  Providers: `‹Feature›Controller` / `‹Feature›Service` / `‹Entity›Repository`
+  — note the repository is singular after its entity (`client.repository.ts`,
+  `note.repository.ts`), the controller and service plural after the feature
+  (`clients.controller.ts`). DTOs: `‹Action›‹Entity›Dto` / `‹Entity›ResponseDto`
+  (`create-client.dto.ts`, `client-response.dto.ts`). Permission codes:
+  `‹resource›:‹action›` (`client:create`). See `CLAUDE.md §5`.
 
 ### Controller pattern (thin)
 
-`reference.controller.ts` — HTTP only: routing, versioned path
+`clients.controller.ts` — HTTP only: routing, versioned path
 (`@Controller({ path, version: '1' })`), DTO binding, `@RequirePermissions(...)`,
 status codes (`@HttpCode`), OpenAPI decorators, and mapping entities to
 **response DTOs**. **No business logic.** Injects the authenticated principal via
@@ -76,14 +89,14 @@ items return the resource (wrapped as `{ data }`) by the global interceptor.
 
 ### Service pattern (business logic)
 
-`reference.service.ts` — orchestrates the use case: **authorise → apply rules →
+`clients.service.ts` — orchestrates the use case: **authorise → apply rules →
 delegate persistence to the repository → log**. Owns transaction boundaries when
 a use case spans multiple writes. Throws typed **domain errors** (never HTTP
 exceptions). Contains no raw Prisma and no HTTP concerns.
 
 ### Repository / data-access pattern
 
-`reference.repository.ts` — the **only** Prisma consumer for the feature. It
+`client.repository.ts` — the **only** Prisma consumer for the feature. It
 encapsulates queries and **centralises the soft-delete filter** (`deletedAt:
 null`) so no caller can forget it, exposes an optimistic-locked update
 (`updateIfVersionMatches` → row count), and keeps pagination query shape in one
@@ -151,20 +164,26 @@ add it to the readiness check.
 
 ### Standard → where (map)
 
-| Standard                                                      | Where in the template                                        |
-| ------------------------------------------------------------- | ------------------------------------------------------------ |
-| Module structure / DI                                         | `reference.module.ts`                                        |
-| Controller (thin, OpenAPI, status codes)                      | `reference.controller.ts`                                    |
-| Service (use cases, authz, errors)                            | `reference.service.ts`                                       |
-| Repository (data access, soft-delete filter, optimistic lock) | `reference.repository.ts`                                    |
-| Validation (DTOs)                                             | `dto/*.dto.ts`                                               |
-| Response/error envelope                                       | live infra (`src/common/interceptors`, `src/common/filters`) |
-| Pagination / filtering / sorting                              | `reference.service.ts` + `dto/list-*.dto.ts`                 |
-| RBAC + resource scoping                                       | `reference-permissions.ts` + `principal.can()` + guards      |
-| Database standards                                            | `schema.reference.prisma`                                    |
-| Logging / correlation                                         | `reference.service.ts` (PinoLogger)                          |
-| Unit tests                                                    | `reference.service.spec.ts`                                  |
-| Integration / API e2e                                         | `reference.e2e-spec.ts`                                      |
+Paths are relative to `apps/api/src/modules/clients/` unless noted — the
+canonical exemplar. The richer patterns name their own module.
+
+| Standard                                                      | Where                                                             |
+| ------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Module structure / DI                                         | `clients.module.ts`                                               |
+| Controller (thin, OpenAPI, status codes)                      | `clients.controller.ts`                                           |
+| Service (use cases, authz, errors)                            | `clients.service.ts`                                              |
+| Repository (data access, soft-delete filter, optimistic lock) | `client.repository.ts`                                            |
+| Validation (DTOs)                                             | `dto/*.dto.ts`                                                    |
+| Response/error envelope                                       | live infra (`src/common/interceptors`, `src/common/filters`)      |
+| Pagination / filtering / sorting                              | `clients.service.ts` + `src/common/dto/pagination-query.dto.ts`   |
+| RBAC + resource scoping                                       | `src/common/auth/org-permissions.ts` + `principal.can()` + guards |
+| Database standards                                            | `prisma/schema.prisma` (the `Client` model)                       |
+| Logging / correlation                                         | `clients.service.ts` (PinoLogger)                                 |
+| Unit tests                                                    | `clients.service.spec.ts`                                         |
+| Integration / API e2e                                         | `apps/api/test/clients.e2e-spec.ts`                               |
+| Soft-delete **cascade** + restore guards                      | `modules/notes` + `src/common/hierarchy/` (ADR-0046)              |
+| Advisory locking                                              | `src/common/db/*-advisory-lock.ts` (ADR-0022/0028/0053)           |
+| A distinct auth principal + guard                             | `modules/share/share-token.guard.ts` (ADR-0051)                   |
 
 ---
 
@@ -260,18 +279,27 @@ prefetch on intent; justify every dependency against the bundle budget. See
 
 ---
 
-## Creating a new feature from the template
+## Creating a new feature
 
 1. **Run the process first** ([`PROCESS.md`](PROCESS.md)): spec + plan, approved.
-2. Copy `apps/api/examples/reference-feature/module/` →
-   `apps/api/src/modules/<feature>/` and rename `ReferenceItem` → your entity
-   throughout.
-3. Add your model to `apps/api/prisma/schema.prisma` (sketch in
-   `schema.reference.prisma`); `pnpm --filter @repo/api prisma:migrate`.
-4. Define the feature's permission codes and role→permission map in
-   `<feature>-permissions.ts`.
+2. Read the nearest exemplar end to end — usually
+   [`apps/api/src/modules/clients/`](../apps/api/src/modules/clients/) — and
+   create `apps/api/src/modules/<feature>/` with the same file set:
+   `<feature>.module.ts`, `<feature>.controller.ts`, `<feature>.service.ts`,
+   `<entity>.repository.ts`, `dto/`, `<feature>.service.spec.ts`.
+3. Add your model to `apps/api/prisma/schema.prisma` and write the migration
+   (`pnpm --filter @repo/api prisma:migrate`). Anything Prisma cannot express —
+   partial indexes, CHECK constraints — goes in the migration as raw SQL, with a
+   comment in the model and **no** `@@index` declaration (see the `Activity`
+   model for why: a declared full index that the database does not have breaks
+   the CI schema-drift check).
+4. Add the feature's permission codes to
+   [`src/common/auth/org-permissions.ts`](../apps/api/src/common/auth/org-permissions.ts)
+   and map them to roles there. (A module owns its own permissions file only
+   when it needs a non-org permission — `modules/interchange` is the one case.)
 5. Register the module in `AppModule`.
-6. Move/adapt the tests into `src/…` and `test/…`; get them **green**.
+6. Write the tests as you go — unit alongside the service, e2e in
+   `apps/api/test/<feature>.e2e-spec.ts` — and get them **green**.
 7. Update `API.md`/OpenAPI and any affected docs; add a changeset.
 8. Review with the relevant agents (api, security, backend-performance,
    test-engineer).
@@ -307,16 +335,17 @@ the specific queries in the repository, and the endpoints.
 - Adding an endpoint without OpenAPI annotations, tests, or a doc update.
 - Copy-pasting one-off styling on the frontend instead of design-system tokens.
 
-## Keeping the template healthy
+## Keeping this document honest
 
-`scripts/verify-template.sh` (and the **Verify feature template** CI job)
-materialise the template, type-check it, and run its unit tests on every push —
-so it stays correct as the codebase evolves. When you change a cross-cutting
-standard (an envelope, a guard, the auth model), **update the template too** and
-re-run the script.
+There is no script that can verify this. The exemplars are real modules under
+real tests, so they cannot stop compiling — but they _can_ stop being
+representative, quietly, if the standard moves and this document does not follow.
+Two habits keep that from happening:
 
-## Delete-when-done
-
-Once real features make the template redundant, delete
-`apps/api/examples/reference-feature/`, `scripts/verify-template.sh`, the CI job,
-and this document (or repoint it at a real exemplar feature).
+- **When you change a cross-cutting standard** (an envelope, a guard, the auth
+  model, a DB convention), update this document in the same pull request. The ADR
+  that changes the standard is not a substitute — a reader looking for "how do I
+  build a feature" comes here.
+- **Check the exemplars during the periodic reconcile**
+  ([`TECH_DEBT.md`](TECH_DEBT.md)): do the three named modules still exist, and
+  is each still the best example of what it is named for?

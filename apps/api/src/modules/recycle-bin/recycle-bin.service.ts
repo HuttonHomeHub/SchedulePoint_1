@@ -7,16 +7,7 @@ import { ForbiddenError } from '../../common/errors/domain-errors';
 import { OrganizationsService } from '../organizations/organizations.service';
 
 import { decodeDeletedCursor, encodeDeletedCursor } from './recycle-bin.cursor';
-import { RecycleBinRepository, type DeletedRow } from './recycle-bin.repository';
-
-/** Total order over the union: `deletedAt` descending, then `id` ascending. */
-function byDeletedAtDescThenId(a: DeletedRow, b: DeletedRow): number {
-  const delta = b.deletedAt.getTime() - a.deletedAt.getTime();
-  if (delta !== 0) return delta;
-  if (a.id < b.id) return -1;
-  if (a.id > b.id) return 1;
-  return 0;
-}
+import { RecycleBinRepository } from './recycle-bin.repository';
 
 /**
  * Read model for the recycle bin — an organisation's soft-deleted clients,
@@ -49,9 +40,9 @@ export class RecycleBinService {
       ...(cursor ? { cursor } : {}),
     });
 
-    // Each table returned its own top `limit + 1`; the global top `limit + 1` is
-    // a subset of their union, so merge-sort then slice yields the correct page.
-    rows.sort(byDeletedAtDescThenId);
+    // The repository's `UNION ALL … ORDER BY … LIMIT` already returns the globally
+    // ordered top `limit + 1` across all three tables, so there is nothing to merge
+    // here — only the standard over-fetch-by-one has-more probe (TECH_DEBT #22).
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const last = page[page.length - 1];

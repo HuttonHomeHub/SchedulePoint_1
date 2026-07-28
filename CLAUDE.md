@@ -19,12 +19,18 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: foundation in place, application features not yet built.** The
-> engineering foundation (tooling, structure, CI/CD, containers, docs, standards,
-> delivery process, reference template) exists; SchedulePoint's domain/business
-> code does **not** yet. Build features from the reference template (§12,
-> ADR-0015) via the delivery process (§21). Do not assume domain code exists —
-> check before referencing it.
+> **Current stage: the application is substantially built.** 19 API modules
+> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~570 web
+> source files with 15 flag-scoped Playwright suites, and 58 ADRs. The CPM/GPM
+> engine is real and its conformance matrix is closed (ADR-0034). Read the code
+> before assuming anything is missing — this banner said the opposite for months
+> after it stopped being true, which is exactly the failure it now warns against.
+>
+> What is **not** built: the Gantt view (the one remaining Must-have in
+> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8), and the deployment target
+> is still undecided. New work still follows the delivery process (§21) and the
+> implementation standard (§12), which is now demonstrated by real modules
+> rather than by a template to copy (ADR-0057).
 >
 > SchedulePoint is **multi-tenant**: users belong to one or more
 > **organisations**; clients, projects, plans and their activities are
@@ -52,7 +58,7 @@ performance**. Concretely:
 | Monorepo       | Turborepo + pnpm workspaces                         |
 | Language       | TypeScript (strict) on Node.js 22 LTS               |
 | Frontend       | React 19 + Vite                                     |
-| Styling / UI   | Tailwind CSS v4, shadcn/ui, Lucide icons            |
+| Styling / UI   | Tailwind CSS v4, hand-rolled APG primitives, Lucide |
 | Backend        | NestJS 11                                           |
 | Database / ORM | PostgreSQL 17 + Prisma                              |
 | API            | REST, documented with OpenAPI (`@nestjs/swagger`)   |
@@ -68,20 +74,30 @@ The rationale for the big decisions lives in [`docs/adr/`](docs/adr/).
 ## 4. Repository layout
 
 ```text
-Blank App/
+SchedulePoint/
 ├── apps/
-│   ├── web/          # React + Vite client (@repo/web)
-│   └── api/          # NestJS REST API (@repo/api)
+│   ├── web/                  # React + Vite client (@repo/web)
+│   │   ├── src/features/     #   Feature-first app code
+│   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
+│   │   └── e2e*/             #   Playwright suites — one per feature flag
+│   └── api/                  # NestJS REST API (@repo/api)
+│       ├── src/modules/      #   19 feature modules
+│       ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
+│       ├── src/common/       #   Auth, guards, filters, locks, lifecycle
+│       ├── prisma/           #   Schema (25 models) + 41 migrations
+│       └── test/             #   Supertest API e2e specs
 ├── packages/
-│   ├── config/       # Shared ESLint + tsconfig presets (@repo/config)
-│   ├── interchange/  # Pure schedule-interchange model/parsers (@repo/interchange, ADR-0050)
-│   └── types/        # Shared cross-boundary types/DTOs (@repo/types)
-├── docs/             # Architecture, guides, ADRs, roadmap, decisions
-├── scripts/          # Repo automation (bootstrap, etc.)
-├── .github/          # CI/CD workflows, issue/PR templates, CODEOWNERS
-├── .changeset/       # Release/versioning state
-├── CLAUDE.md         # ← you are here
-└── (root configs)    # turbo, tsconfig.base, eslint, prettier, docker-compose…
+│   ├── config/               # Shared ESLint + tsconfig presets (@repo/config)
+│   ├── interchange/          # Pure schedule-interchange model/parsers (ADR-0050)
+│   ├── engine-conformance/   # Engine-free conformance fixture + loaders (ADR-0034)
+│   └── types/                # Shared cross-boundary types/DTOs (@repo/types)
+├── docs/                     # Architecture, guides, ADRs, roadmap, decisions
+├── scripts/                  # Repo automation (bootstrap, etc.)
+├── .claude/agents/           # Specialised review/design subagents
+├── .github/                  # CI/CD workflows, issue/PR templates, CODEOWNERS
+├── .changeset/               # Release/versioning state
+├── CLAUDE.md                 # ← you are here
+└── (root configs)            # turbo, tsconfig.base, eslint, prettier, docker-compose…
 ```
 
 ## 5. Coding standards
@@ -100,8 +116,10 @@ Blank App/
   production, and always log with context.
 - **Comments explain _why_, not _what_.** Match the density of surrounding code.
 - **Frontend:** function components + hooks only. Co-locate state with the
-  feature. Shared primitives live in `components/`, generated shadcn/ui parts in
-  `components/ui/`.
+  feature. Shared app-level components live in `components/layout/`;
+  design-system primitives live in `components/ui/` and are **hand-rolled on
+  semantic HTML + the WAI-ARIA APG** — there is no Radix dependency, and adding
+  a component library is an ADR-level decision.
 - **Backend:** thin controllers, logic in services, validation via DTOs
   (`class-validator`). One feature per Nest module. Prisma access is wrapped in
   a `PrismaService`.
@@ -185,7 +203,8 @@ documents (keep them authoritative):
 
 Essentials: feature-first structure; server state in TanStack Query; URL state
 in the router (TanStack Router); minimal client state; forms via RHF + Zod;
-styling via semantic tokens + Tailwind v4 + shadcn/ui + CVA. **Mobile-first,
+styling via semantic tokens + Tailwind v4 + CVA, rebound per **surface scope**
+(ADR-0055). **Mobile-first,
 theme-aware (light/dark/system), and no one-off component styling — ever.** The
 authenticated app is a **persistent app-shell** with a Client → Project → Plan
 **Project Explorer** navigator (ADR-0029); row actions use the hand-rolled APG
@@ -207,15 +226,16 @@ The backend is designed to last a decade. Governing documents:
   health/readiness, metrics, tracing.
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — caching, async, query
   optimisation, scalability.
-- [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md) — the non-shipping
-  feature **template** (`apps/api/examples/reference-feature/`, ADR-0014).
+- [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md) — the implementation
+  standard, and the real modules that exemplify it (ADR-0057).
 
 Essentials: NestJS modular monolith; **thin controllers → services → Prisma**;
 **deny-by-default** auth with **RBAC + resource (organisation) scoping**; validated
 DTOs; standard `{ data, meta }` / `{ error }` envelopes; **soft deletes,
 auditing, optimistic locking**; structured logs with correlation IDs. When
-building a feature, copy the non-shipping reference template in
-`apps/api/examples/reference-feature/` (ADR-0014). **Security is on by default.**
+building a feature, start from the nearest exemplar — `modules/clients` for the
+canonical shape, `modules/notes` for cascades, `modules/share` for an auth
+boundary (ADR-0057). **Security is on by default.**
 
 ## 13. Accessibility requirements
 
@@ -673,17 +693,56 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   raised zoom ceiling through a required `maxPxPerDay` parameter (so it can never leak into the
   flag-off path — a component-review finding), then flipped the flag default-on.
 
+- **ADR-0058** _(Accepted)_ — Drift control — computed gates and the reconciliation
+  pass: documentation drift is a defect class with its own gates. Adds a doc-link
+  checker (`pnpm check:doc-links`), coverage **ratchets** set at the measured floor
+  (API 74% / web 87%, not the aspirational 80% — a gate that fails on day one gets
+  deleted rather than fixed), and `passWithNoTests: false`; these join the
+  schema-drift check, the token-contrast matrix, the structural seam test and the
+  flag-off parity suites. What cannot be gated — "does this prose still describe the
+  system?" — goes to a **reconciliation pass** at each epic boundary with a
+  three-month floor ([`docs/RECONCILE.md`](docs/RECONCILE.md)). Written after four
+  passes found: this file describing a repo with no domain code beside 19 modules; a
+  coverage bar asserted in four places that had never been collectable (the provider
+  was not installed); docs specifying Radix, CASL, OpenTelemetry, BullMQ and a
+  `lib/telemetry.ts` that do not exist; and README badges pointing at a repository
+  that does not exist. Rule: **verify the claim; do not trust the document** — the
+  ADR count in the banner above drifted again while this ADR was being written.
+
+- **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
+  `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
+  template job, superseding ADR-0014/0015. With 19 real modules built to the
+  standard, a synthetic `ReferenceItem` taught less than the code it modelled while
+  costing a standing "keep it in step" obligation and a working-tree-mutating verify
+  script (which destroyed uncommitted work once, TECH_DEBT #52). `docs/REFERENCE_FEATURE.md`
+  keeps the standard and now names three exemplars — `modules/clients` (canonical
+  shape), `modules/notes` (cascade + polymorphic parent), `modules/share` (auth
+  boundary). "Must copy the template" becomes "must match the standard"; divergence
+  still needs an ADR.
+
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## 17. Known limitations & assumptions
 
-- No application/domain code exists yet; docs describe intent and conventions.
-- The web app has no entry point yet, so CI builds only the API and runs e2e
-  with the dev server skipped until the walking skeleton lands (see
-  `docs/TECH_DEBT.md`).
+- **Four accepted ADRs have no implementation** — background jobs + Redis
+  (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
+  tracing (0013, of which only Pino is wired). Nothing in the running system
+  depends on them and none of their dependencies are installed. Do not cite
+  them as existing capability; see `docs/ARCHITECTURE.md` §10. The mail port is
+  a **logging** stub — invitation emails are logged, not sent.
+- **No append-only audit log** exists; row attribution plus structured logs are
+  not an audit trail (`docs/TECH_DEBT.md` #14). There is likewise no hard-delete
+  or data-export path — every deletion is a soft delete.
 - Deployment target (managed host vs. self-hosted Kubernetes) is **not yet
   decided**; the container/registry foundation is deliberately platform-neutral.
+  Auto-deploy exists but ships dormant, so a release does not reach users until
+  an operator acts (ADR-0047, `docs/TECH_DEBT.md` #5/#29).
+- Cross-browser e2e coverage is Chromium-first: the Playwright config defines
+  firefox/webkit projects but the journeys are exercised mainly on Chromium.
+- The engine's draw-performance budget (ADR-0026 §16) has never been measured on
+  the hardware envelope it names — a mid-tier laptop and iPad-class Safari. CI
+  runners cannot stand in for that (`docs/TECH_DEBT.md` #59).
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 
@@ -701,14 +760,14 @@ When operating in this repo, Claude Code should:
    follow the delivery process (§21, [`docs/PROCESS.md`](docs/PROCESS.md)):
    understand → design → plan → **get approval** → build. Use the
    **feature-analyst** agent to produce the spec + plan.
-2. **Build features from the reference template.** New features are created by
-   copying the canonical template (`apps/api/examples/reference-feature/`) and
-   adapting it — see [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md).
-   **Do not diverge from its cross-cutting patterns** (layering
-   controller→service→repository, deny-by-default auth + permission/scope checks,
-   standard envelopes, DB standards, tests) **without a documented architectural
-   reason — an ADR** (ADR-0015). Keep the template in step when you change a
-   cross-cutting standard (`scripts/verify-template.sh` enforces it in CI).
+2. **Build features to the implementation standard.** Match the layering
+   (controller → service → repository), deny-by-default auth with permission and
+   org-scope checks, standard envelopes, DB standards and tests described in
+   [`docs/REFERENCE_FEATURE.md`](docs/REFERENCE_FEATURE.md), starting from the
+   nearest real exemplar (`modules/clients`, `modules/notes`, `modules/share`).
+   **Do not diverge from those cross-cutting patterns without a documented
+   architectural reason — an ADR** (ADR-0057, superseding ADR-0015). There is no
+   template to keep in step: the exemplars are real modules under real tests.
 3. **Prefer the smallest change that fully solves the task.** Do not scaffold
    application features unless explicitly asked.
 4. **Match existing conventions** (this file + `docs/`). If a convention is
@@ -783,6 +842,10 @@ review, performance, accessibility, Docker build, CI green, changelog/changeset,
 and version-impact assessed — mirrored in the PR template.
 
 **Change management:** architectural changes require an ADR (problem, options,
-choice, trade-offs, consequences). **Repository maintenance:** periodically
-review architecture, dependencies, security, performance, tech debt, docs, and
-UI consistency, and recommend improvements.
+choice, trade-offs, consequences). **Repository maintenance:** run the
+**reconciliation pass** ([`docs/RECONCILE.md`](docs/RECONCILE.md), ADR-0058) at
+each epic boundary, with a three-month hard floor — architecture, dependencies,
+security, performance, tech debt, docs and UI consistency. Its rule is _verify
+the claim; do not trust the document_: "review periodically" produced months of
+drift, including a stage banner in this file that described a repository with no
+domain code while nineteen modules were shipping.

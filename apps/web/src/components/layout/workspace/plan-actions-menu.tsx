@@ -67,8 +67,10 @@ export function PlanActionsMenu({
         <MenuItem onSelect={() => setDialog('baselines')}>
           <Layers aria-hidden="true" className="size-4" /> Baselines…
         </MenuItem>
+        {/* Named for the whole dialog's scope, not just its first section — see the matching
+            toolbar item's note (TECH_DEBT #60). The two entry points must read the same. */}
         <MenuItem onSelect={() => setDialog('calendar')}>
-          <CalendarDays aria-hidden="true" className="size-4" /> Calendar…
+          <CalendarDays aria-hidden="true" className="size-4" /> Schedule settings…
         </MenuItem>
         {EARNED_VALUE_ENABLED ? (
           <MenuItem onSelect={() => setDialog('earned-value')}>

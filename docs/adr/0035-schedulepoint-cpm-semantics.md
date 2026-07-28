@@ -546,7 +546,7 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
 - [Capability matrix](../specs/engine-conformance-framework/CAPABILITY_MATRIX.md) · rows citing M2/M4/M6.
 - ADR-0036 — hour-granular rework (exact instants for constraint roll-forward, elapsed durations).
 - The fixture `TEST_MATRIX.md` (§2 constraints, §5 progress, §6 float) and `negative_cases.json`.
-- [ADR-0042 — percent-complete types & Earned Value](0042-percent-complete-and-earned-value.md) · the
+- [ADR-0042 — percent-complete types & Earned Value](0042-percent-complete-types-and-earned-value.md) · the
   read-model design §29 documents the golden contract for (`percentCompleteType`, BAC/PV/EV/AC, the
   EAC methods, N22–N24).
 - [ADR-0025 — baselines: snapshot-copy model](0025-baselines-snapshot-and-variance.md) · the cost-

@@ -1,8 +1,10 @@
 # Database Standards
 
-> Standards and philosophy for the Blank App data layer: **PostgreSQL 17 + Prisma**.
-> The schema in [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma)
-> is the single source of truth for the data model. See ADR-0008.
+> Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
+> Prisma**. The schema in
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 25
+> models across 41 committed migrations — is the single source of truth for the
+> data model. See ADR-0008.
 
 ## Philosophy
 
@@ -21,7 +23,7 @@
 
 ## Naming conventions
 
-- **Tables:** plural `snake_case` (`reference_items`, `organization_members`).
+- **Tables:** plural `snake_case` (`resource_assignments`, `org_members`).
 - **Columns:** `snake_case` (`created_at`, `organization_id`).
 - **Primary keys:** `id`, **UUID v7** (time-ordered) where possible for good
   index locality without exposing counts.

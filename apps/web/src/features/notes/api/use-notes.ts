@@ -49,8 +49,8 @@ async function fetchNotePage(path: string, cursor: string | null): Promise<NoteP
 }
 
 /**
- * A target's note thread — newest-first, cursor-paginated (ADR-0046). The API defaults to `order=desc`
- * so page 1 is the newest notes; "Load more" fetches the next (older) page. `enabled` lets a host keep
+ * A target's note thread — newest-first, cursor-paginated (ADR-0046). The endpoint's keyset is fixed
+ * newest-first, so page 1 is the newest notes; "Load more" fetches the next (older) page. `enabled` lets a host keep
  * the query mounted but idle (a closed dialog / the flag off), so nothing fetches until it's shown.
  */
 export function useNoteThread(

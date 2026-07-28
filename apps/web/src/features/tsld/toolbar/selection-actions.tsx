@@ -57,10 +57,15 @@ const PROGRESS_REASON = 'You don’t have permission to report progress';
  * `VITE_ACTIVITY_STEPS` and hides for a duration-derived selection — matching the table's Steps row
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
- * Every item is deliberately `tier: 1` (visible labels) for discoverability of the newer actions. The
- * trade-off: under extreme narrow width the primitive demotes trailing items (Edit/Delete) to overflow
- * before the newer ones — accepted, since this floating bar rarely overflows and surfacing the new
- * actions is the goal.
+ * Every item pins `showLabel: 'always'` — this is a compact floating bar of five actions where the
+ * name **is** the affordance, so a label is not something to trade away for width. Every item is also
+ * `tier: 1`, but that is now a separate statement (TECH_DEBT #61): it says "demote these last", not
+ * "label these". The two used to be the same property, and this file's own comment used to gloss
+ * `tier: 1` as "(visible labels)" — which is precisely the conflation the split removed.
+ *
+ * The tier trade-off stands: under extreme narrow width the primitive demotes trailing items
+ * (Edit/Delete) to overflow before the newer ones — accepted, since this floating bar rarely
+ * overflows and surfacing the new actions is the goal.
  */
 export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
   defineToolbar<SelectionActionContext>([
@@ -68,6 +73,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       id: 'open-logic',
       group: 'object',
       tier: 1,
+      showLabel: 'always',
       order: 0,
       label: 'Logic',
       icon: <Waypoints className="size-4" />,
@@ -79,6 +85,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
             id: 'progress',
             group: 'object',
             tier: 1,
+            showLabel: 'always',
             order: 1,
             label: 'Report progress',
             icon: <ClipboardCheck className="size-4" />,
@@ -99,6 +106,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
             id: 'resources',
             group: 'object',
             tier: 1,
+            showLabel: 'always',
             order: 2,
             label: 'Resources',
             icon: <Users className="size-4" />,
@@ -112,6 +120,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
             id: 'steps',
             group: 'object',
             tier: 1,
+            showLabel: 'always',
             order: 3,
             label: 'Steps',
             icon: <ListChecks className="size-4" />,
@@ -126,6 +135,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       id: 'edit',
       group: 'object',
       tier: 1,
+      showLabel: 'always',
       order: 4,
       label: 'Edit',
       icon: <SquarePen className="size-4" />,
@@ -137,6 +147,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       id: 'delete',
       group: 'object',
       tier: 1,
+      showLabel: 'always',
       order: 5,
       label: 'Delete',
       icon: <Trash2 className="size-4" />,

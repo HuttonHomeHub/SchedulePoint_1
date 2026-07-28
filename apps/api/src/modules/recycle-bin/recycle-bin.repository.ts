@@ -21,13 +21,35 @@ export interface DeletedCursor {
   id: string;
 }
 
+/** The union query's row shape, before it is narrowed to {@link DeletedRow}. */
+interface DeletedUnionRow {
+  kind: string;
+  id: string;
+  name: string;
+  deleted_at: Date;
+  parent_active: boolean;
+}
+
 /**
  * Data-access for the recycle bin. Reads soft-deleted rows across all three
  * hierarchy tables. The ordering `(deletedAt desc, id asc)` is a total order over
  * the union (ids are globally-unique uuids), and — because a cascade stamps a
  * whole batch with one `deletedAt` — the id tiebreaker keeps a batch grouped and
- * safe to keyset-page. Each table is fetched for its own top `take` after the
- * cursor; the service merges and slices (see {@link RecycleBinService}).
+ * safe to keyset-page.
+ *
+ * One `UNION ALL` does the merge in the database and returns exactly `take` rows.
+ * It replaces three `findMany`s each taking their own top `take` for the service
+ * to merge-sort and slice: correct, but it read `3 × take` rows to return `take`
+ * (TECH_DEBT #22), and the recycle-bin screen follows every cursor to the end, so
+ * the waste multiplied by the number of pages rather than being paid once.
+ *
+ * `parent_active` — whether the row can be restored right now — is the join the
+ * merge previously did per-table: a client's parent is its always-active
+ * organisation, a project's is its client, a plan's is its project. Deliberately
+ * NO new indexes: deleted rows are a small minority of each table and nobody has
+ * profiled this screen, so a supporting `(organization_id, deleted_at DESC, id)
+ * WHERE deleted_at IS NOT NULL` index stays the measure-first escalation, not a
+ * guess shipped alongside a refactor.
  */
 @Injectable()
 export class RecycleBinRepository {
@@ -39,73 +61,54 @@ export class RecycleBinRepository {
     cursor?: DeletedCursor;
   }): Promise<DeletedRow[]> {
     const { organizationId, take, cursor } = params;
-    // Rows strictly after the cursor in `(deletedAt desc, id asc)` order.
-    const after = cursor
-      ? {
-          OR: [
-            { deletedAt: { lt: cursor.deletedAt } },
-            { deletedAt: cursor.deletedAt, id: { gt: cursor.id } },
-          ],
-        }
-      : {};
+    // Rows strictly after the cursor in `(deleted_at desc, id asc)` order. A null
+    // cursor is the first page, so every deleted row qualifies. Interpolations are
+    // Prisma parameters, never string-built SQL (SECURITY_STANDARDS.md).
+    const cursorAt = cursor?.deletedAt ?? null;
+    const cursorId = cursor?.id ?? null;
 
-    const [clients, projects, plans] = await Promise.all([
-      this.prisma.client.findMany({
-        where: { organizationId, deletedAt: { not: null }, ...after },
-        select: { id: true, name: true, deletedAt: true },
-        orderBy: [{ deletedAt: 'desc' }, { id: 'asc' }],
-        take,
-      }),
-      this.prisma.project.findMany({
-        where: { organizationId, deletedAt: { not: null }, ...after },
-        select: { id: true, name: true, deletedAt: true, client: { select: { deletedAt: true } } },
-        orderBy: [{ deletedAt: 'desc' }, { id: 'asc' }],
-        take,
-      }),
-      this.prisma.plan.findMany({
-        where: { organizationId, deletedAt: { not: null }, ...after },
-        select: { id: true, name: true, deletedAt: true, project: { select: { deletedAt: true } } },
-        orderBy: [{ deletedAt: 'desc' }, { id: 'asc' }],
-        take,
-      }),
-    ]);
+    const rows = await this.prisma.$queryRaw<DeletedUnionRow[]>`
+      SELECT 'client' AS kind, c.id, c.name, c.deleted_at, true AS parent_active
+        FROM clients c
+       WHERE c.organization_id = ${organizationId}::uuid
+         AND c.deleted_at IS NOT NULL
+         AND (
+           ${cursorAt}::timestamptz IS NULL
+           OR c.deleted_at < ${cursorAt}::timestamptz
+           OR (c.deleted_at = ${cursorAt}::timestamptz AND c.id > ${cursorId}::uuid)
+         )
+      UNION ALL
+      SELECT 'project' AS kind, p.id, p.name, p.deleted_at, (cl.deleted_at IS NULL) AS parent_active
+        FROM projects p
+        JOIN clients cl ON cl.id = p.client_id
+       WHERE p.organization_id = ${organizationId}::uuid
+         AND p.deleted_at IS NOT NULL
+         AND (
+           ${cursorAt}::timestamptz IS NULL
+           OR p.deleted_at < ${cursorAt}::timestamptz
+           OR (p.deleted_at = ${cursorAt}::timestamptz AND p.id > ${cursorId}::uuid)
+         )
+      UNION ALL
+      SELECT 'plan' AS kind, pl.id, pl.name, pl.deleted_at, (pr.deleted_at IS NULL) AS parent_active
+        FROM plans pl
+        JOIN projects pr ON pr.id = pl.project_id
+       WHERE pl.organization_id = ${organizationId}::uuid
+         AND pl.deleted_at IS NOT NULL
+         AND (
+           ${cursorAt}::timestamptz IS NULL
+           OR pl.deleted_at < ${cursorAt}::timestamptz
+           OR (pl.deleted_at = ${cursorAt}::timestamptz AND pl.id > ${cursorId}::uuid)
+         )
+      ORDER BY deleted_at DESC, id ASC
+      LIMIT ${take}
+    `;
 
-    const rows: DeletedRow[] = [];
-    for (const c of clients) {
-      // A client's parent is its (always-active) organisation, so it is always
-      // restorable. `deletedAt` is non-null by the `where` filter; guard to narrow.
-      if (c.deletedAt) {
-        rows.push({
-          kind: 'client',
-          id: c.id,
-          name: c.name,
-          deletedAt: c.deletedAt,
-          parentActive: true,
-        });
-      }
-    }
-    for (const p of projects) {
-      if (p.deletedAt) {
-        rows.push({
-          kind: 'project',
-          id: p.id,
-          name: p.name,
-          deletedAt: p.deletedAt,
-          parentActive: p.client.deletedAt === null,
-        });
-      }
-    }
-    for (const p of plans) {
-      if (p.deletedAt) {
-        rows.push({
-          kind: 'plan',
-          id: p.id,
-          name: p.name,
-          deletedAt: p.deletedAt,
-          parentActive: p.project.deletedAt === null,
-        });
-      }
-    }
-    return rows;
+    return rows.map((row) => ({
+      kind: row.kind as DeletedKind,
+      id: row.id,
+      name: row.name,
+      deletedAt: row.deleted_at,
+      parentActive: row.parent_active,
+    }));
   }
 }

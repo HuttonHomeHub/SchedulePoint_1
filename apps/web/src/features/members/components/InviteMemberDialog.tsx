@@ -12,10 +12,8 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 
 /** Dialog to invite a member by email + role. Shows the accept link on success. */
 export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.ReactElement {
@@ -87,16 +85,13 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
               error={errors.email?.message}
               {...register('email')}
             />
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="invite-role">Role</Label>
-              <Select id="invite-role" {...register('role')}>
-                {ROLE_OPTIONS.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <SelectField label="Role" id="invite-role" {...register('role')}>
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role}>
+                  {ROLE_LABELS[role]}
+                </option>
+              ))}
+            </SelectField>
             <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
               {create.isPending ? 'Sending…' : 'Send invitation'}
             </Button>

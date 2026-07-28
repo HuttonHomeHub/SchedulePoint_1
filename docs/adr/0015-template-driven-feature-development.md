@@ -1,6 +1,6 @@
 # ADR-0015: Template-driven feature development
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0057](0057-real-modules-replace-the-reference-template.md) — features must still match one standard, but the standard is now demonstrated by real modules rather than by copying a template. CI template verification is removed.
 - **Date:** 2026-07-09
 - **Deciders:** Principal Engineer, Technical Lead
 

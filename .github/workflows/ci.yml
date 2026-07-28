@@ -48,34 +48,18 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # A dead link in an ADR is worse than a typo: the decision record is what
+      # you reach for when nobody remembers why, and it has to still resolve.
+      # The 2026-07-27 reconcile found five by hand, two of which that same pass
+      # had created by deleting a directory an ADR pointed at.
+      - name: Check documentation links
+        run: pnpm check:doc-links
+
       - name: Unit tests
         run: pnpm test
 
       - name: Build (api + web)
         run: pnpm build
-
-  template:
-    name: Verify feature template
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Materialise, type-check, and unit-test the canonical reference template
-      # so it can never silently rot (see docs/REFERENCE_FEATURE.md, ADR-0015).
-      - name: Verify reference template
-        run: bash scripts/verify-template.sh
 
   e2e:
     name: End-to-end tests
@@ -125,6 +109,19 @@ jobs:
 
       - name: Apply database migrations
         run: pnpm --filter @repo/api prisma:deploy
+
+      # Schema ↔ migration lock-step. The migrations have just been applied to
+      # a pristine database, so diffing that database against the datamodel
+      # answers one question: does `schema.prisma` describe what the migrations
+      # actually build? A non-empty diff means someone edited the model without
+      # writing the matching migration (or wrote one that drifted) — caught here
+      # rather than at `prisma migrate dev` on the next contributor's machine.
+      # Objects Prisma cannot express (partial indexes/uniques, CHECK and
+      # EXCLUDE constraints — this repo has many, by convention in raw SQL) are
+      # invisible to both sides of the diff, so they neither pass nor trip it;
+      # they stay documented in the model comments instead (TECH_DEBT #54).
+      - name: Check schema/migration drift
+        run: pnpm --filter @repo/api prisma:check-drift
 
       # API e2e (Supertest) and web e2e (Playwright) run sequentially — they
       # share the test database, so running them in parallel could race.

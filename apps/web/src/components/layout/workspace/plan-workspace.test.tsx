@@ -214,27 +214,30 @@ describe('PlanWorkspace (flag on) — canvas-first layout', () => {
 });
 
 describe('PlanWorkspace — header overflow menu (M3)', () => {
-  it('consolidates Plan details / Edit / Baselines / Calendar and opens Baselines in a dialog', () => {
+  it('consolidates Plan details / Edit / Baselines / Schedule settings and opens Baselines in a dialog', () => {
     h.role = 'PLANNER';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
     // A writer sees all four actions.
     expect(screen.getByRole('menuitem', { name: /Plan details/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Edit plan/ })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /Calendar/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Schedule settings/ })).toBeInTheDocument();
     // Choosing Baselines opens the dialog holding the (re-homed) panel.
     fireEvent.click(screen.getByRole('menuitem', { name: /Baselines/ }));
     expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
   });
 
-  it('opens Calendar in a dialog', () => {
+  it('opens Schedule settings in a dialog, with the calendar as one section', () => {
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /Calendar/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Schedule settings/ }));
     expect(screen.getByTestId('calendar-picker')).toBeInTheDocument();
+    // Each settings group is signposted by its own heading, so the dialog is navigable rather than
+    // an unlabelled stack of seven unrelated sections (TECH_DEBT #60).
+    expect(screen.getByRole('heading', { name: 'Working-day calendar' })).toBeInTheDocument();
   });
 
-  it('hides Edit plan for a non-writer but keeps Plan details / Baselines / Calendar', () => {
+  it('hides Edit plan for a non-writer but keeps Plan details / Baselines / Schedule settings', () => {
     h.role = 'VIEWER';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
@@ -242,7 +245,7 @@ describe('PlanWorkspace — header overflow menu (M3)', () => {
     // A read-only role can still read the plan's details/description here — no capability lost.
     expect(screen.getByRole('menuitem', { name: /Plan details/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Baselines/ })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /Calendar/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Schedule settings/ })).toBeInTheDocument();
   });
 });
 

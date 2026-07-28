@@ -1582,6 +1582,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       row: 'look',
       tier: 1,
+      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      showLabel: 'always',
       order: 1,
       label: 'Early mode',
       isVisible: () => SCHEDULING_MODES_ENABLED,
@@ -1596,6 +1598,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       row: 'look',
       tier: 1,
+      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      showLabel: 'always',
       order: 2,
       label: 'Visual mode',
       isVisible: () => SCHEDULING_MODES_ENABLED,
@@ -1793,6 +1797,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       row: 'do',
       tier: 1,
+      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      showLabel: 'always',
       order: 0,
       label: 'Add activity',
       icon: <Plus className="size-4" />,
@@ -1932,6 +1938,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       row: 'do',
       tier: 1,
+      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      showLabel: 'always',
       order: 7,
       label: 'Recalculate',
       icon: <RefreshCw className="size-4" />,
@@ -2003,13 +2011,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <Layers className="size-4" />,
       onActivate: (ctx) => ctx.openBaselines(),
     },
+    // The dialog behind this holds the plan's working-day calendar AND six other settings groups
+    // that all change how its dates are calculated (critical path & float, progress/recalc mode,
+    // expected finish, levelling, external relationships, earned value). It was labelled
+    // "Calendar…" when the calendar was all it held; the label now names the whole scope, so a
+    // planner looking for the float measure has somewhere to look (TECH_DEBT #60). The id stays
+    // `calendar` — a stable test/telemetry handle, and the `PlanChromeDialog` key.
     {
       id: 'calendar',
       group: 'object',
       row: 'do',
       tier: 2,
       order: 3,
-      label: 'Calendar…',
+      label: 'Schedule settings…',
       icon: <CalendarDays className="size-4" />,
       onActivate: (ctx) => ctx.openCalendar(),
     },

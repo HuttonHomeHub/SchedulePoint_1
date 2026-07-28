@@ -150,5 +150,5 @@ architecturally significant, link the ADR.>
 
 ## 5. Links
 
-- Implementation plan: <templates/implementation-plan.md → docs/plans/…>
+- Implementation plan: <./implementation-plan.md, beside this spec>
 - Related docs updated by this change: <list>

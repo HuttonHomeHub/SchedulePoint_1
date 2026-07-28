@@ -18,9 +18,7 @@ import {
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 
 /** Which side of the new link the anchor activity sits on. */
 export type LinkDirection = 'predecessor' | 'successor';
@@ -135,56 +133,40 @@ export function AddDependencyDialog({
               {create.error.message}
             </p>
           ) : null}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dependency-other">{otherLabel}</Label>
-            <Select
-              id="dependency-other"
-              aria-invalid={errors.otherActivityId ? true : undefined}
-              aria-describedby={errors.otherActivityId ? 'dependency-other-error' : undefined}
-              {...register('otherActivityId')}
-            >
-              <option value="" disabled>
-                Choose an activity…
+          <SelectField
+            label={otherLabel}
+            id="dependency-other"
+            error={errors.otherActivityId?.message}
+            {...register('otherActivityId')}
+          >
+            <option value="" disabled>
+              Choose an activity…
+            </option>
+            {options.map((activity) => (
+              <option key={activity.id} value={activity.id}>
+                {activity.code ? `${activity.code} — ${activity.name}` : activity.name}
               </option>
-              {options.map((activity) => (
-                <option key={activity.id} value={activity.id}>
-                  {activity.code ? `${activity.code} — ${activity.name}` : activity.name}
-                </option>
-              ))}
-            </Select>
-            {errors.otherActivityId?.message ? (
-              <p id="dependency-other-error" className="text-destructive-text text-sm">
-                {errors.otherActivityId.message}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dependency-type">Type</Label>
-            <Select id="dependency-type" {...register('type')}>
-              {DEPENDENCY_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {DEPENDENCY_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dependency-lag-calendar">Lag calendar</Label>
-            <Select
-              id="dependency-lag-calendar"
-              aria-describedby="dependency-lag-calendar-hint"
-              {...register('lagCalendar')}
-            >
-              {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
-                <option key={value} value={value}>
-                  {LAG_CALENDAR_LABELS[value]}
-                </option>
-              ))}
-            </Select>
-            <p id="dependency-lag-calendar-hint" className="text-muted-foreground text-sm">
-              {LAG_CALENDAR_HINT}
-            </p>
-          </div>
+            ))}
+          </SelectField>
+          <SelectField label="Type" id="dependency-type" {...register('type')}>
+            {DEPENDENCY_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {DEPENDENCY_TYPE_LABELS[value]}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Lag calendar"
+            id="dependency-lag-calendar"
+            hint={LAG_CALENDAR_HINT}
+            {...register('lagCalendar')}
+          >
+            {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+              <option key={value} value={value}>
+                {LAG_CALENDAR_LABELS[value]}
+              </option>
+            ))}
+          </SelectField>
           <TextField
             label={lagFieldLabel(lagCalendar)}
             type="number"

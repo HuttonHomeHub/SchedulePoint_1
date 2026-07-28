@@ -192,6 +192,40 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     expect(second.body.data.isActive).toBe(false);
   });
 
+  // The one list in the app that honours `order` — the reason it declares the param
+  // at all, and every other list does not (TECH_DEBT #19). Both keyset terms
+  // (created_at, id) flip together, so the reversal must be exact, not merely different.
+  it('honours ?order — newest-first by default, oldest-first on asc', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+
+    for (const name of ['First', 'Second', 'Third']) {
+      await actor.agent.post(baselinesUrl(planId)).send({ name }).expect(201);
+    }
+
+    const def = await actor.agent.get(baselinesUrl(planId)).expect(200);
+    expect(def.body.data.map((b: { name: string }) => b.name)).toEqual([
+      'Third',
+      'Second',
+      'First',
+    ]);
+
+    const asc = await actor.agent.get(`${baselinesUrl(planId)}?order=asc`).expect(200);
+    expect(asc.body.data.map((b: { name: string }) => b.name)).toEqual([
+      'First',
+      'Second',
+      'Third',
+    ]);
+
+    await actor.agent.get(`${baselinesUrl(planId)}?order=sideways`).expect(422);
+
+    // And the contract's other half: a list that does NOT honour a direction now
+    // says so — `forbidNonWhitelisted` turns the old accept-and-ignore into a 422.
+    await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/activities?order=desc`)
+      .expect(422);
+  });
+
   it('422s (SCHEDULE_NOT_CALCULATED) capturing a plan that was never calculated', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');

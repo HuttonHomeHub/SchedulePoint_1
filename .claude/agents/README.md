@@ -1,9 +1,18 @@
 # Claude agents
 
-Specialised subagents for Blank App. Each lives in a Markdown file here with YAML
+Specialised subagents for SchedulePoint. Each lives in a Markdown file here with YAML
 frontmatter (`name`, `description`, `tools`, `model`) and a system prompt. Claude
 Code can delegate to them automatically based on their `description`, or you can
 invoke one explicitly (e.g. "use the security-reviewer").
+
+Each agent carries a **SchedulePoint invariants** section: the things that break in
+_this_ codebase, not generic best practice. That is deliberate — a reviewer that
+only knows "check for IDOR" will not notice that cross-org access must be a 404
+rather than a 403, that the guest principal's isolation is a compile-time property,
+or that a new engine read has to argue the recalc parity gate. Those sections are
+rebaselined during the periodic reconcile ([`docs/TECH_DEBT.md`](../../docs/TECH_DEBT.md));
+if you change a cross-cutting invariant, update the agent that polices it in the
+same pull request.
 
 ## Discovery
 

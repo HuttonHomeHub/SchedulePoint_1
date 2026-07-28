@@ -1,5 +1,5 @@
 <!--
-Thanks for contributing to Blank App! Please complete this template.
+Thanks for contributing to SchedulePoint! Please complete this template.
 Keep the PR focused — one logical change per PR. See CONTRIBUTING.md.
 -->
 

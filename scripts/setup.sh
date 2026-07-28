@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# One-shot local development bootstrap for Blank App.
+# One-shot local development bootstrap for SchedulePoint.
 # Idempotent: safe to run repeatedly.
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -15,7 +15,7 @@ required_major=22
 if command -v node >/dev/null 2>&1; then
   current_major="$(node -p 'process.versions.node.split(".")[0]')"
   if [ "$current_major" -lt "$required_major" ]; then
-    warn "Node $current_major detected; Blank App requires >= $required_major (see .nvmrc)."
+    warn "Node $current_major detected; SchedulePoint requires >= $required_major (see .nvmrc)."
   fi
 else
   warn "Node.js not found. Install Node >= $required_major (see .nvmrc)."

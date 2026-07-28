@@ -13,8 +13,10 @@ export default mergeConfig(
       // directly instead of Vitest's Oxc transformer trying to process it.
       server: { deps: { external: [/packages[\\/]types/, /packages[\\/]interchange/] } },
       globals: true,
-      // No app tests exist yet (foundation stage); don't fail the suite.
-      passWithNoTests: true,
+      // `passWithNoTests` is deliberately OFF — see apps/api/vitest.config.ts
+      // for why. A run that matches no spec files is a broken config, not a
+      // pass.
+      passWithNoTests: false,
       setupFiles: ['./src/test/setup.ts'],
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       coverage: {
@@ -22,6 +24,18 @@ export default mergeConfig(
         reporter: ['text', 'html', 'lcov'],
         include: ['src/**/*.{ts,tsx}'],
         exclude: ['src/**/*.{test,spec}.{ts,tsx}', 'src/test/**', 'src/main.tsx'],
+        // A ratchet at the figures measured on 2026-07-27 (87.36 lines / 85.59
+        // statements / 79.33 branches / 81.38 functions), rounded down so an
+        // unrelated refactor cannot redden CI. See apps/api/vitest.config.ts
+        // for why these are floors rather than the >= 80% target in
+        // docs/TESTING.md. Ratchet UP as coverage rises; never down without
+        // saying why in the pull request.
+        thresholds: {
+          lines: 87,
+          statements: 85,
+          branches: 79,
+          functions: 81,
+        },
       },
     },
   }),

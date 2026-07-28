@@ -1,6 +1,6 @@
 # ADR-0014: Reference feature as a non-shipping template
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0057](0057-real-modules-replace-the-reference-template.md) — the template was deleted on 2026-07-27; 19 real modules are the exemplars. The reasoning below (a phantom `reference_items` table must not ship) still holds.
 - **Date:** 2026-07-09
 - **Deciders:** Principal Engineer, Technical Lead (repository readiness review)
 
@@ -31,7 +31,7 @@ future developers should follow; remove if it adds complexity or confusion_):
 ## Decision
 
 **Option 3.** The reference feature is retained as a **non-shipping template** at
-[`apps/api/examples/reference-feature/`](../../apps/api/examples/reference-feature/):
+`apps/api/examples/reference-feature/`:
 
 - **Not shipped:** it is not registered in `AppModule`, not compiled into the
   build (it lives outside `src/`), and excluded from lint/type-check
@@ -67,5 +67,5 @@ future developers should follow; remove if it adds complexity or confusion_):
 ## References
 
 - [`docs/REFERENCE_FEATURE.md`](../REFERENCE_FEATURE.md),
-  [`apps/api/examples/reference-feature/README.md`](../../apps/api/examples/reference-feature/README.md),
+  `apps/api/examples/reference-feature/README.md`,
   ADR-0008 (modular monolith), ADR-0012 (RBAC)

@@ -27,13 +27,13 @@ import type { PlanVarianceSummary } from '@repo/types';
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { BaselinesService } from './baselines.service';
 import { BaselineDetailResponseDto, BaselineResponseDto } from './dto/baseline-response.dto';
 import { BaselineVarianceRowResponseDto } from './dto/baseline-variance-response.dto';
 import { CreateBaselineDto } from './dto/create-baseline.dto';
+import { ListBaselinesQueryDto } from './dto/list-baselines-query.dto';
 
 /**
  * Baselines HTTP surface, nested under a plan (ADR-0025). Every route resolves the org
@@ -52,13 +52,19 @@ export class BaselinesController {
   constructor(private readonly service: BaselinesService) {}
 
   @Get()
-  @ApiOperation({ summary: "List a plan's baselines (cursor-paginated, newest first)." })
+  @ApiOperation({
+    summary: "List a plan's baselines (cursor-paginated, newest first).",
+    description:
+      'The one list whose direction is caller-controllable: `?order=asc` reads the capture ' +
+      'history oldest-first. Both keyset terms (`created_at, id`) flip together, so paging ' +
+      'stays correct in either direction.',
+  })
   @ApiOkResponse({ type: BaselineResponseDto, isArray: true })
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ListBaselinesQueryDto,
   ): Promise<Paginated<BaselineResponseDto>> {
     const { items, meta } = await this.service.list(principal, orgSlug, planId, query);
     return new Paginated(

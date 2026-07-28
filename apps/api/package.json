@@ -2,7 +2,7 @@
   "name": "@repo/api",
   "version": "0.28.0",
   "private": true,
-  "description": "Blank App REST API — NestJS + Prisma + PostgreSQL, documented with OpenAPI.",
+  "description": "SchedulePoint REST API \u2014 NestJS + Prisma + PostgreSQL, documented with OpenAPI.",
   "license": "MIT",
   "scripts": {
     "dev": "nest start --watch",
@@ -12,12 +12,14 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "prisma:check-drift": "prisma migrate diff --from-url \"$DATABASE_URL\" --to-schema-datamodel ./prisma/schema.prisma --exit-code",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
@@ -52,6 +54,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.7",
     "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "catalog:",
     "eslint": "^9.39.5",
     "pino-pretty": "^13.0.0",
     "rimraf": "^6.0.1",

@@ -55,7 +55,9 @@ Dependencies point **down** the tiers only. Primitives never import feature code
 - **Variants via CVA.** Declare the variant matrix once; the component's type is
   derived from it. Call sites pick variants, never hand-write class strings.
 - **Controlled/uncontrolled:** support both where it matters (inputs), following
-  Radix conventions (`value`/`defaultValue`, `onValueChange`).
+  the conventional prop shape (`value`/`defaultValue`, `onValueChange`). Some
+  primitives are deliberately **controlled-only** — `Combobox` is, because the
+  consumer owns the query, the debounce and the paging.
 - **No business logic or data fetching** inside reusable components — pass data
   and callbacks in. Fetching lives in feature `api/` hooks.
 - **No hard-coded user-facing copy** in primitives/composites.
@@ -210,9 +212,16 @@ user on an option that is no longer current). Callers supply `label`, `value`, `
 
 `ToggleChip` (`components/ui/toggle-chip.tsx`) is a CVA `aria-pressed` button. Its pressed
 state changes **fill and border**, so it never signals state by hue alone (WCAG 1.4.1).
-**The consumer owes an announcement**: a chip that filters a list without changing an announced
+**A chip that filters owes an announcement**: filtering a list without changing an announced
 result count leaves screen-reader users with no evidence anything happened (WCAG 4.1.3) — pair
-it with `useResultCountAnnouncement` or an equivalent live region.
+it with `useResultCountAnnouncement` or an equivalent live region. A chip that is a **form
+field** owes nothing extra: its own `aria-pressed` already reports the value, and there is no
+result set to count.
+
+The reference consumer is the **working-days picker** in `CalendarFormDialog`'s
+`WeekdayToggleGroup` — seven independent booleans in a labelled `<fieldset>`, which is the
+form-field case above. It is deliberately not a `SegmentedControl`: turning Monday on says
+nothing about Tuesday, so "one of a set of N" would misdescribe it.
 
 ## Layout: `BrandMark` and `AccountChip`
 

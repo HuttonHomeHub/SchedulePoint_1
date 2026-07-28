@@ -1,4 +1,4 @@
-# Contributing to Blank App
+# Contributing to SchedulePoint
 
 Thank you for contributing! This guide explains how we work. It complements the
 project operating manual, [`CLAUDE.md`](CLAUDE.md), which is the source of truth
@@ -105,5 +105,5 @@ Use the [issue templates](.github/ISSUE_TEMPLATE/). For security issues, do
 
 ## Questions
 
-Open a [discussion](https://github.com/HuttonHomeHub/blank-app/discussions). Thanks
-again for helping make Blank App better!
+Open a [discussion](https://github.com/HuttonHomeHub/SchedulePoint_1/discussions). Thanks
+again for helping make SchedulePoint better!

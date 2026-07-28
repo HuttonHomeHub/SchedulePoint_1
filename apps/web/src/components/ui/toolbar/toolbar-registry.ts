@@ -41,6 +41,23 @@ export function groupRank(group: ToolbarGroupId): number {
 export type ToolbarTier = 1 | 2 | 3;
 
 /**
+ * Whether a plain-button item shows its text label beside the icon — a **presentation** choice,
+ * deliberately separate from {@link ToolbarTier}, which is a **priority** one.
+ *
+ * The two used to be the same line of code (`showLabel={item.tier === 1}`), so `tier` silently
+ * answered both "what demotes into `⋯` first?" and "does this get a label?" — questions that only
+ * coincide by convention. The measured consequence: at 1 920 px the Do row carries ~1 000 px of
+ * unused slack, yet showed exactly as many icon-only controls as it does at 1 280 px, because
+ * nothing ever asked whether a label was affordable at the width actually available.
+ *
+ * - `'always'` — always labelled. For the handful of primary controls whose name is the affordance.
+ * - `'never'` — always icon-only (the name still reaches AT via `aria-label` + `title`).
+ * - `'auto'` (default) — labelled **only when the row measurably has room**, decided per render
+ *   from the container's width. Never at the cost of demoting a command into the overflow.
+ */
+export type ToolbarLabelPolicy = 'always' | 'auto' | 'never';
+
+/**
  * Which of the two toolbar rows an item belongs to (ADR-0031 two-row amendment). `look` = the
  * always-live view/navigate/find row; `do` = the build-&-manage row (its pen-gated authoring cluster
  * shades as a set). Absent ⇒ `look`. The workspace renders one {@link Toolbar} per row, so this only
@@ -88,6 +105,13 @@ export interface ToolbarItem<Ctx> {
   /** Which toolbar row this item lives on (ADR-0031 two-row amendment). Absent ⇒ `look`. */
   row?: ToolbarRow;
   tier: ToolbarTier;
+  /**
+   * Whether this item's text label is shown beside its icon. Defaults to `'auto'` — labelled only
+   * where the row has measured room. Set `'always'` for a control whose name is the affordance, or
+   * `'never'` to pin it icon-only. See {@link ToolbarLabelPolicy}; ignored by `render` items, which
+   * own their own chrome.
+   */
+  showLabel?: ToolbarLabelPolicy;
   /** Sort order **within the group** (ascending). Ties break by registry order. */
   order: number;
   /** Accessible name — always required (icon-only buttons still need it). */
