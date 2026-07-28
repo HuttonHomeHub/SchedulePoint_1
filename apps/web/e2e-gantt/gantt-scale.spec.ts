@@ -25,16 +25,22 @@ const LARGE_PLAN = 400;
 const SMALL_PLAN = 40;
 
 /**
+ * The open plan's id, read from the route. Deliberately NOT "the first plan the list endpoint
+ * returns": with two plans in the org that depends on the API's ordering, and would silently seed
+ * the wrong one — the kind of green-for-the-wrong-reason this suite exists to avoid.
+ */
+function openPlanId(page: Page): string {
+  const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());
+  if (!match?.[1]) throw new Error(`no plan id in ${page.url()}`);
+  return match[1];
+}
+
+/**
  * Seed activities straight through the API. Authoring 400 bars on the canvas would measure the
  * canvas; the session cookie rides along because the request is issued from the page's own origin.
  */
 async function seedActivities(page: Page, orgSlug: string, count: number): Promise<void> {
-  const planId = await page.evaluate(async (org: string) => {
-    const plans = await fetch(`/api/v1/organizations/${org}/plans?limit=1`, {
-      credentials: 'include',
-    }).then((r) => r.json());
-    return plans.data[0].id as string;
-  }, orgSlug);
+  const planId = openPlanId(page);
 
   await page.evaluate(
     async ({ org, id, n }: { org: string; id: string; n: number }) => {
