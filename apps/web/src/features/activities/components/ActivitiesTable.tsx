@@ -253,6 +253,13 @@ export function ActivitiesTable({
         // neutral pill, not the critical Conflict tone. Text + sr-only clause carry the meaning
         // (never colour alone, WCAG 1.4.1). Only shown when the inter-project surface is on.
         const externalDriven = INTER_PROJECT_DATES_ENABLED && activity.externalDriven;
+        // A resource-dependent activity with no driving assignment (engine-owned, ADR-0035 §23):
+        // the engine produces-and-flags rather than refusing, scheduling it on the ordinary calendar
+        // and setting this. Until now the flag was computed, persisted and rendered NOWHERE, so the
+        // failure was silent — the activity simply scheduled on the wrong working time and looked
+        // fine. Critical tone because it means the dates on screen are not the ones the planner
+        // asked for. Gated on the same flag as the type that produces it.
+        const driverMissing = ADVANCED_ACTIVITY_TYPES_ENABLED && activity.resourceDriverMissing;
         // Per-activity note count (ADR-0046), route-composed like variance — a small badge only when
         // the map is supplied (behind `VITE_NOTES`) and the row has ≥1 note (the badge hides at zero).
         const noteCount = NOTES_ENABLED ? (noteCountByActivityId?.get(activity.id) ?? 0) : 0;
@@ -285,6 +292,21 @@ export function ActivitiesTable({
                   {' '}
                   — an imported date from another project drove this activity’s schedule this
                   recalculation.
+                </span>
+              </Badge>
+            ) : null}
+            {driverMissing ? (
+              <Badge
+                variant="critical"
+                size="sm"
+                title="This resource-dependent activity has no driving resource assignment, so it was scheduled on the plan's calendar instead of the resource's."
+              >
+                Needs a driver
+                <span className="sr-only">
+                  {' '}
+                  — this resource-dependent activity has no driving resource assignment, so it was
+                  scheduled on the plan’s calendar instead of the resource’s. Assign a resource and
+                  mark it driving, then recalculate.
                 </span>
               </Badge>
             ) : null}

@@ -2,7 +2,11 @@ import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { INTER_PROJECT_DATES_ENABLED, RESOURCE_LEVELLING_ENABLED } from '@/config/env';
+import {
+  ADVANCED_ACTIVITY_TYPES_ENABLED,
+  INTER_PROJECT_DATES_ENABLED,
+  RESOURCE_LEVELLING_ENABLED,
+} from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** One labelled figure in the strip. `hintId` links an explanatory footnote for AT. */
@@ -67,6 +71,12 @@ export function ScheduleSummaryStrip({
   // How many activities an external / inter-project bound drove this recalc (ADR-0043). Shown only
   // behind the flag and only when non-zero, matching the other engine-count chips.
   const externalDrivenCount = INTER_PROJECT_DATES_ENABLED ? summary.data.externalDrivenCount : 0;
+  // Resource-dependent activities the engine could find no driving assignment for (ADR-0035 §23).
+  // The API has returned this count since M7.2 and nothing displayed it, so a plan could schedule
+  // work on the wrong calendar with no indication anywhere. Gated on the flag that offers the type.
+  const resourceDriverMissingCount = ADVANCED_ACTIVITY_TYPES_ENABLED
+    ? summary.data.resourceDriverMissingCount
+    : 0;
   const {
     leveledProjectFinish,
     leveledActivityCount,
@@ -121,6 +131,13 @@ export function ScheduleSummaryStrip({
             hintId="external-driven-hint"
           />
         ) : null}
+        {resourceDriverMissingCount > 0 ? (
+          <Stat
+            label="Missing a driver"
+            value={resourceDriverMissingCount}
+            hintId="resource-driver-missing-hint"
+          />
+        ) : null}
         {hasLevelled ? (
           <>
             <Stat label="Levelled finish" value={formatCalendarDate(leveledProjectFinish)} />
@@ -158,6 +175,13 @@ export function ScheduleSummaryStrip({
         <p id="external-driven-hint" className="text-muted-foreground text-xs">
           Externally driven counts activities whose start or finish was set by an imported external
           date from outside this plan rather than by this plan’s own logic.
+        </p>
+      ) : null}
+      {resourceDriverMissingCount > 0 ? (
+        <p id="resource-driver-missing-hint" className="text-muted-foreground text-xs">
+          Missing a driver counts resource-dependent activities with no driving resource assignment.
+          They were scheduled on their own or the plan’s calendar instead of a resource’s — assign a
+          resource, mark it driving, and recalculate.
         </p>
       ) : null}
       {hasLevelled ? (

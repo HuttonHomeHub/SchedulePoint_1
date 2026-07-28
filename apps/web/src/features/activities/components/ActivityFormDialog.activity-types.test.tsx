@@ -200,3 +200,57 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     expect(screen.queryByRole('option', { name: 'TT.4 · Superstructure' })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * **Resource-dependent** (ADR-0035 §23 / ADR-0039) — the third advanced type.
+ *
+ * It was Accepted and fully built server-side (engine, driving-calendar resolution, conformance)
+ * while being absent from this picker, so the whole feature was unreachable from the product. These
+ * cases pin the surface, not the semantics: the option exists, it keeps its own duration (unlike the
+ * two derived types), and the calendar picker it cannot use is shaded with the reason rather than
+ * left live to save a value that the service overrides.
+ */
+describe('ActivityFormDialog — resource-dependent type (flag on)', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch)
+      .mockReset()
+      .mockResolvedValue({ ...BASE_LOE, id: 'new', type: 'RESOURCE_DEPENDENT' });
+  });
+
+  it('offers Resource-dependent in the Type picker', () => {
+    renderDialog();
+    expect(screen.getByRole('option', { name: 'Resource-dependent' })).toBeInTheDocument();
+  });
+
+  it('keeps the Duration input — only the CALENDAR changes, not the duration', () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'RESOURCE_DEPENDENT' } });
+    // The contrast that matters: LOE and WBS summary derive their duration and hide the field.
+    // A resource-dependent activity behaves exactly like a task for logic, so hiding it here
+    // would lose real planner input.
+    expect(screen.getByLabelText('Duration (working days)')).toBeInTheDocument();
+    // Matched on wording unique to the TYPE hint: "driving resource" alone also appears in the
+    // calendar field's shaded help below, so the looser pattern passed for the wrong reason.
+    expect(screen.getByText(/follows that crew or plant’s working time/i)).toBeInTheDocument();
+  });
+
+  it('shades the calendar picker and says why, rather than leaving it live and ineffective', () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'RESOURCE_DEPENDENT' } });
+
+    expect(screen.getByLabelText(/Calendar/)).toBeDisabled();
+    expect(
+      screen.getByText(/scheduled on its driving resource’s calendar instead/i),
+    ).toBeInTheDocument();
+  });
+
+  it('re-enables the calendar picker when the type moves back to a task', () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'RESOURCE_DEPENDENT' } });
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'TASK' } });
+
+    // A disabled spell must not be permanent: the shading is a function of the current type, not a
+    // one-way latch.
+    expect(screen.getByLabelText(/Calendar/)).not.toBeDisabled();
+  });
+});
