@@ -1387,9 +1387,26 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   container, found its scroller exactly as tall as its own content, and rendered **every** row —
   `clientHeight === scrollHeight`, 101 live rows at 100 activities and 301 at 300, measured in a
   browser. That is precisely the premise ADR-0059 §1 rejected canvas on, so the scale journey was the
-  right test and it worked as intended on its first real run. The fix is one word in each of the two
-  shell roots (`AppShell` and the `VITE_NAV_TREE=false` fallback in `authed-layout.tsx`, which has to
-  carry it too or a rollback resurrects the bug). Ordinary long screens are unaffected — they overflow
-  the root box and the document still scrolls, which is the behaviour the minimum was reaching for.
-  Held by `e2e-gantt/gantt-scale.spec.ts`: **no unit test can hold this**, because jsdom has no layout
-  and cannot tell a bounded scroller from an unbounded one.
+  right test and it worked as intended on its first real run.
+
+  Both shell roots take the fix (`AppShell` and the `VITE_NAV_TREE=false` fallback in
+  `authed-layout.tsx`, which has to carry it too or a rollback resurrects the bug), and each takes
+  **both halves**: the root becomes `h-dvh overflow-hidden` _and_ `<main>` becomes the scroller
+  (`min-h-0 overflow-auto`). A fixed root without a scroller is the trap in between — the first
+  attempt did exactly that and turned "a screen taller than the viewport scrolls" into "a screen
+  taller than the viewport collides", which the flag-off plan workspace demonstrated immediately: its
+  canvas region was squeezed to nothing while the empty-state inside it could not shrink, so it
+  overflowed onto the docked activities panel. The panel stayed visible and enabled in the
+  accessibility tree while every click landed on the canvas — the worst shape a layout bug can take,
+  because nothing looks broken. Scrolling `<main>` rather than the document is also the honest model
+  for a persistent shell: with a fixed header and rail, scrolling the page moved the chrome away
+  anyway.
+
+  That squeeze was a real latent defect of its own, not collateral: `CANVAS_MIN_HEIGHT` had been
+  documented as "height always kept for the canvas" since ADR-0030 but was only ever applied to
+  clamp the panel's _maximum_, never as an actual floor on the canvas region. It is now a real
+  `min-height`, so the column grows past the viewport and scrolls instead of overlapping.
+
+  Held by `e2e-gantt/gantt-scale.spec.ts` (the row count) and `e2e-workspace/workspace.spec.ts` (the
+  collision). **No unit test can hold either**, because jsdom has no layout: it cannot tell a bounded
+  scroller from an unbounded one, nor a panel from the element painted over it.

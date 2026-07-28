@@ -165,7 +165,10 @@ function Adr0030PlanWorkspace({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // No `min-h-0`: this column must be allowed to exceed the shell so `<main>` scrolls it. With
+    // `min-h-0` it shrinks to the viewport instead and the body's `overflow-hidden` clips whatever
+    // did not fit, which hides the docked panel rather than letting the user reach it.
+    <div className="flex flex-1 flex-col">
       <PlanHeaderBar model={model} plan={plan} />
 
       {/* One consolidated pen read-only note above the whole body (ADR-0030 US-4) — never repeated
@@ -177,9 +180,25 @@ function Adr0030PlanWorkspace({
       ) : null}
 
       {isWide ? (
-        <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {/* Canvas region — fills the height left by the panel. */}
-          <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-3 pb-2">{canvas}</div>
+        <div ref={bodyRef} className="flex flex-1 flex-col overflow-hidden">
+          {/* Canvas region — fills the height left by the panel, but never below
+              {@link CANVAS_MIN_HEIGHT}.
+
+              That floor is load-bearing, not cosmetic. This layout stacks chrome ABOVE the body
+              (the header, the pen note, the schedule summary and — flag-off of the entry routes —
+              the whole inline Notes block), so on a short viewport the body is the only thing left
+              to squeeze. With `min-h-0` here the region was squeezed to nothing while its own
+              content (an empty-state with `p-8`, or the canvas) could not shrink to match, so it
+              overflowed downward and painted over the docked activities panel — the panel stayed
+              in the accessibility tree, visible and enabled, but every click landed on the canvas.
+              Giving the region a real floor makes the column taller than the viewport instead, and
+              the shell's `<main>` scrolls, which is reachable rather than merely present. */}
+          <div
+            className="flex flex-1 flex-col gap-2 px-4 pt-3 pb-2"
+            style={{ minHeight: CANVAS_MIN_HEIGHT }}
+          >
+            {canvas}
+          </div>
 
           {panel.collapsed ? (
             <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />

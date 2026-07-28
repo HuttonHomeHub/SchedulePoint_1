@@ -93,9 +93,14 @@ function ShellFrame(): React.ReactElement {
             sizes itself from a ResizeObserver and simply fills whatever it is given — but the
             Gantt's virtualizer measures its scroller, found it as tall as its own content, and
             rendered every row (ADR-0059 §1's premise, falsified by a layout bug rather than by
-            the substrate choice). Ordinary long screens still scroll the document: they overflow
-            this box, which is the behaviour a minimum was reaching for. */}
-        <div className="flex h-dvh flex-col">
+            the substrate choice).
+
+            The shell is therefore exactly the viewport and `<main>` scrolls (below), rather than
+            the document scrolling: with a persistent header and rail, scrolling the page moved the
+            chrome off-screen anyway. Making the root a fixed height WITHOUT giving the content a
+            scroller is the trap in between — a screen taller than the viewport stops scrolling and
+            starts colliding, which is exactly what it did to the plan workspace's docked panel. */}
+        <div className="flex h-dvh flex-col overflow-hidden">
           {/* The chrome band owns the header and (flag-on) the slot a plan's toolbar portals
               into — so the top of the app reads as one designed surface without the shell ever
               learning what a plan is (ADR-0029 / ADR-0055 §3). Flag-off it is just the header. */}
@@ -125,7 +130,11 @@ function ShellFrame(): React.ReactElement {
               )}
               {/* The single workspace region — the one <main> for the page; routed screens
                 render their content into it (M3). */}
-              <main className="flex min-w-0 flex-1 flex-col">
+              {/* The workspace region is the scroller. `min-h-0` lets it actually shrink to the
+                  shell (without it a tall child would push the flex item past the viewport and
+                  nothing would scroll); `overflow-auto` gives screens taller than the viewport
+                  somewhere to go, so the header and rail stay put while the content moves. */}
+              <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
                 <Outlet />
               </main>
             </div>
