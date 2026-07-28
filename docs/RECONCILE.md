@@ -4,7 +4,7 @@
 > Backed by [ADR-0058](adr/0058-drift-control-and-the-reconciliation-pass.md),
 > which records why it exists and why several of the steps are automated.
 >
-> **Last full pass: 2026-07-27.** Record each pass in
+> **Last full pass: 2026-07-28.** Record each pass in
 > [`DECISIONS.md`](DECISIONS.md) and update that date.
 
 ## Why this exists
@@ -81,6 +81,16 @@ none of which existed.
 For each library or module a doc names, confirm it: `package.json` for a
 dependency, `ls` for a file. If it is absent, the doc is describing an intention
 and must say so.
+
+**Then check the manifests themselves.** A `package.json` `description` is prose
+that no reviewer reads and no gate covers, so it rots undisturbed — the first
+pass corrected five documents that claimed shadcn/ui and left the claim standing
+in `apps/web/package.json`, where it then shipped in a release. Sweep every
+manifest, not just the docs that quote them:
+
+```bash
+grep -rn '"description"' --include=package.json . | grep -v node_modules
+```
 
 ### 3. Reconcile accepted-but-unbuilt ADRs
 

@@ -10,6 +10,58 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-07-28 — The documentation rebaseline pass, and what it found
+
+**What ran.** The first full reconciliation pass under
+[`RECONCILE.md`](RECONCILE.md) / [ADR-0058](adr/0058-drift-control-and-the-reconciliation-pass.md),
+over four sittings. Every document in `docs/`, `README.md`, `CLAUDE.md` and the twelve agent
+definitions was checked claim-by-claim against the repository. Shipped as PR #180
+(`api-v0.29.0` / `web-v0.54.0`).
+
+**What was found wrong.** Recorded here because ADR-0058's argument is that the findings, not the
+diff, are the evidence the pass is worth repeating:
+
+- **A coverage bar asserted in four places that had never once been measurable.**
+  `docs/TESTING.md`, `docs/FRONTEND_QUALITY.md`, `CLAUDE.md` §7 and the PR template all required
+  ≥ 80% on changed code. `@vitest/coverage-v8` was not installed, so `--coverage` failed outright
+  and CI never invoked it. The bar had been quoted, in good faith, in review after review.
+- **`passWithNoTests: true` in both apps**, commented "no app tests exist yet (foundation stage)",
+  beside 2,429 passing tests. A broken `include` glob would have turned the suite green having run
+  nothing — the gate would have failed silently in the one direction that matters.
+- **Five documents specified libraries that are not installed:** Radix (via shadcn/ui), CASL,
+  OpenTelemetry, BullMQ/Redis, S3, and a `lib/telemetry.ts` facade that was never written.
+  `DESIGN_SYSTEM.md` specified nine primitives — toasts, tabs, charts, pagination, skeletons among
+  them — that do not exist.
+- **`API.md` documented the error contract with a `BILL_NOT_FOUND` example** inherited from a
+  predecessor product, and never stated the one fact a client author most needs: the wire `code` is
+  a generic class, and the branchable discriminator lives in `details.reason`.
+- **Every README badge, the clone command and the security-advisory link pointed at
+  `HuttonHomeHub/blank-app`** — a repository that does not exist.
+- **The specialist agents, pointed at nine unreviewed commits**, found four defects invisible to
+  their author: a live unlinked `aria-describedby` on the cross-plan client picker, a
+  `SelectField.renderControl` escape hatch that could not pass a `ref` and so could not do the only
+  job it existed for, a latent copy of a just-fixed bug in `Sheet`, and an overstated claim in this
+  file.
+
+**What the pass itself got wrong.** Two things, both instructive.
+
+First, **the brief said "all documentation" and the third slice covered only the documents that
+carried blank-template language** — the other eight were checked for that phrasing and not verified
+claim-by-claim. Caught by the reader, not by me, and it became its own batch.
+
+Second, and worse: **the pass corrected five documents that claimed shadcn/ui and left the claim
+standing in `apps/web/package.json`**, where it shipped in the release the pass itself cut. The
+checklist said "for each library a doc names, confirm it" and the manifests are not docs, so nothing
+sent anyone there. `RECONCILE.md` step 2 now sweeps every manifest `description` with a one-line
+grep. The whole audit is seven strings; the cost of checking them is nil, which is exactly why it
+was never done.
+
+**The general lesson**, consistent with the four passes that preceded this one: the drift is never
+in the parts anyone is looking at. It is in the sentence that reads correctly, in the file nobody
+opens, asserting something that was true when written.
+
+---
+
 ### 2026-07-27 — Tech-debt register reconciled against the code
 
 **What happened.** Every row in `docs/TECH_DEBT.md` was checked against the repository rather than
