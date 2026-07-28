@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 
@@ -317,5 +317,43 @@ describe('GanttPanel — the bar encodings', () => {
   it('labels the timeline column for assistive technology', () => {
     render(<GanttPanel activities={TWO} />);
     expect(screen.getByText('Timeline')).toBeInTheDocument();
+  });
+});
+
+describe('GanttPanel — the shared time axis', () => {
+  // jsdom reports clientWidth 0, so without this the scale always falls back and the assertion
+  // below cannot discriminate — it would pass for a component that ignored the preset entirely.
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      value: 1200,
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+  });
+
+  const chartScale = (container: HTMLElement): string =>
+    (container.querySelector('[role="treegrid"]') as HTMLElement).style.width;
+
+  // ADR-0059 §2: the Gantt consumes ADR-0056's presets rather than carrying its own scale. If a
+  // future change reintroduces a private constant, this stops discriminating.
+  it('changes the chart scale with the zoom preset', () => {
+    const year = render(<GanttPanel activities={TWO} zoomLevel="year" />);
+    const day = render(<GanttPanel activities={TWO} zoomLevel="day" />);
+    expect(chartScale(year.container)).not.toBe(chartScale(day.container));
+  });
+
+  it('scales up as the preset gets finer', () => {
+    const px = (c: HTMLElement): number => Number.parseFloat(chartScale(c));
+    const month = render(<GanttPanel activities={TWO} zoomLevel="month" />);
+    const day = render(<GanttPanel activities={TWO} zoomLevel="day" />);
+    expect(px(day.container)).toBeGreaterThan(px(month.container));
+  });
+
+  it('defaults to a preset rather than an arbitrary constant', () => {
+    const explicit = render(<GanttPanel activities={TWO} zoomLevel="month" />);
+    const implicit = render(<GanttPanel activities={TWO} />);
+    expect(chartScale(implicit.container)).toBe(chartScale(explicit.container));
   });
 });

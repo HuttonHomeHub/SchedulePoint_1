@@ -15,6 +15,8 @@ import {
 
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
+import type { ZoomLevel } from '@/features/tsld/render/render-model';
+import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
@@ -24,8 +26,16 @@ export const GANTT_ROW_HEIGHT = 32;
 /** Width of the pinned identity/date grid. */
 const GRID_WIDTH = 420;
 
-/** Pixels per calendar day. A later milestone wires this to the ADR-0056 zoom presets. */
-const DEFAULT_PX_PER_DAY = 6;
+/**
+ * The scale used before the bar region has been measured, and whenever measurement is
+ * unavailable. Not a design constant — the real scale is derived from the container width via
+ * ADR-0056's {@link pxPerDayForPreset}, per ADR-0059 §2 ("the time axis is shared, not
+ * reimplemented"). A second date-to-pixel scale is how two views drift about where a Monday is.
+ */
+const FALLBACK_PX_PER_DAY = 6;
+
+/** Frames roughly a year — the range a stakeholder reading a programme usually wants first. */
+const DEFAULT_ZOOM: ZoomLevel = 'month';
 
 interface Column {
   key: GanttSortKey;
@@ -69,6 +79,12 @@ const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
 
 export interface GanttPanelProps {
   activities: readonly ActivitySummary[];
+  /**
+   * The shared zoom preset (ADR-0056). Passed from the workspace so ONE control drives both
+   * projections — a Gantt with its own private zoom would disagree with the diagram about how
+   * much schedule a screen holds.
+   */
+  zoomLevel?: ZoomLevel;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -97,6 +113,7 @@ export interface GanttPanelProps {
  */
 export function GanttPanel({
   activities,
+  zoomLevel = DEFAULT_ZOOM,
   loading = false,
   error,
   onSelectActivity,
@@ -110,10 +127,26 @@ export function GanttPanel({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
+  // The bar region's own width, measured so the zoom preset can frame its target range in the
+  // space actually available (`pxPerDayForPreset` is width-dependent by design — ADR-0056).
+  const [barRegionWidth, setBarRegionWidth] = useState(0);
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const measure = (): void => setBarRegionWidth(Math.max(0, element.clientWidth - GRID_WIDTH));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const pxPerDay =
+    barRegionWidth > 0 ? pxPerDayForPreset(zoomLevel, barRegionWidth) : FALLBACK_PX_PER_DAY;
+
   const rows = useMemo(() => buildRows(activities, sort, collapsed), [activities, sort, collapsed]);
   const span = useMemo(() => rowsDateSpan(rows), [rows]);
   const anchor = span === null ? null : chartAnchor(span);
-  const chartPx = span === null ? 0 : chartWidth(span, DEFAULT_PX_PER_DAY);
+  const chartPx = span === null ? 0 : chartWidth(span, pxPerDay);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -319,7 +352,7 @@ export function GanttPanel({
             style={{ width: chartPx }}
           >
             <span className="sr-only">Timeline</span>
-            <GanttRuler anchorIso={anchor} widthPx={chartPx} pxPerDay={DEFAULT_PX_PER_DAY} />
+            <GanttRuler anchorIso={anchor} widthPx={chartPx} pxPerDay={pxPerDay} />
           </div>
         </div>
 
@@ -335,6 +368,7 @@ export function GanttPanel({
                 top={item.start}
                 anchorIso={anchor}
                 chartPx={chartPx}
+                pxPerDay={pxPerDay}
                 isTabStop={item.index === tabStopIndex}
                 isSelected={row.activity.id === selectedActivityId}
                 registerRef={(element) => {
@@ -376,6 +410,7 @@ interface GanttRowViewProps {
   top: number;
   anchorIso: string;
   chartPx: number;
+  pxPerDay: number;
   isTabStop: boolean;
   isSelected: boolean;
   registerRef: (element: HTMLDivElement | null) => void;
@@ -390,6 +425,7 @@ function GanttRowView({
   top,
   anchorIso,
   chartPx,
+  pxPerDay,
   isTabStop,
   isSelected,
   registerRef,
@@ -398,7 +434,7 @@ function GanttRowView({
   onToggle,
 }: GanttRowViewProps): React.ReactElement {
   const { activity, depth, hasChildren, expanded } = row;
-  const geometry = barGeometry(activity, anchorIso, DEFAULT_PX_PER_DAY);
+  const geometry = barGeometry(activity, anchorIso, pxPerDay);
 
   return (
     <div
@@ -529,4 +565,4 @@ function GanttRowView({
   );
 }
 
-export { GRID_WIDTH, TOTAL_COLUMN_WIDTH, COLUMNS as GANTT_COLUMNS, DEFAULT_PX_PER_DAY };
+export { GRID_WIDTH, TOTAL_COLUMN_WIDTH, COLUMNS as GANTT_COLUMNS, FALLBACK_PX_PER_DAY };

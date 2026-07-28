@@ -382,6 +382,9 @@ export function ToolbarPlanWorkspace({
       <GanttPanel
         key={`${model.planId}-gantt`}
         activities={model.activities.data ?? []}
+        // One zoom control for both projections (ADR-0056 presets, ADR-0059 §2): the toolbar's
+        // preset drives the diagram and the chart alike, so switching view keeps the scale.
+        zoomLevel={ctx.zoomPreset}
         loading={model.activities.isPending}
         onSelectActivity={model.setLogicActivity}
         selectedActivityId={model.logicActivity?.id}
