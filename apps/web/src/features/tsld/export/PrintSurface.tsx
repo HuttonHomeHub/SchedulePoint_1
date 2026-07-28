@@ -1,14 +1,17 @@
-import { flushSync } from 'react-dom';
-import { createRoot, type Root } from 'react-dom/client';
-
 import './PrintSurface.css';
+
+import {
+  mountPrintDocument,
+  PRINT_TEARDOWN_FALLBACK_MS,
+  type PrintDocumentDeps,
+} from '@/lib/print-document';
 
 /**
  * The **print-only diagram surface** for the TSLD Browser-Print deliverable (spec
- * `docs/specs/export-print/` §Milestone 4, feature-spec §4 **CQ-4** — the IMAGE path). It is the
- * counterpart to the co-located `PrintSurface.css` print stylesheet: a container that is
- * `display:none` on screen (so the live app is visually unchanged) and revealed only in `@media print`,
- * where the stylesheet hides the app-shell root (`#root`) so the print dialog shows just the
+ * `docs/specs/export-print/` §Milestone 4, feature-spec §4 **CQ-4** — the IMAGE path). It rides the
+ * shared print-document convention (`@/lib/print-document`): a detached container that is
+ * `display:none` on screen (so the live app is visually unchanged) and revealed only in
+ * `@media print`, where the app-shell root (`#root`) is hidden so the print dialog shows just the
  * whole-diagram image + its title.
  *
  * Printing reuses the SAME off-screen PNG the PNG/PDF deliverables produce (the shared
@@ -20,13 +23,8 @@ import './PrintSurface.css';
 
 /** The class the print stylesheet keys the on-screen-hidden / print-revealed rules on. */
 const PRINT_ROOT_CLASS = 'tsld-print-root';
-/** The wrapper the mount helper appends to `document.body`; the stylesheet keeps it (and only it)
- * visible while printing (`body > *:not(.tsld-print-container)` is hidden). */
-const PRINT_CONTAINER_CLASS = 'tsld-print-container';
-/** Fallback teardown delay (ms) if the browser never fires `afterprint` (e.g. the dialog is dismissed
- * without an event, or a headless context). Generous so it never races a real print session, but
- * bounded so the print-only DOM can't leak. */
-export const PRINT_TEARDOWN_FALLBACK_MS = 60_000;
+
+export { PRINT_TEARDOWN_FALLBACK_MS };
 
 export interface PrintSurfaceProps {
   /** The object/data URL of the already-produced whole-diagram PNG. */
@@ -69,25 +67,15 @@ export interface PrintDiagramImageInput {
 }
 
 /** Injectable seams so the mount/teardown lifecycle is testable without a real print dialog. */
-export interface PrintDiagramImageDeps {
-  /** The print trigger (defaults to `window.print`). Injected in tests where jsdom has no `print`. */
-  print?: () => void;
-  /** The React root factory (defaults to `createRoot`); injectable for tests. */
-  createRootImpl?: (container: Element) => Root;
-  /** The fallback teardown delay (ms); defaults to {@link PRINT_TEARDOWN_FALLBACK_MS}. */
-  fallbackMs?: number;
-}
+export type PrintDiagramImageDeps = PrintDocumentDeps;
 
 /**
  * Mount the {@link PrintSurface} for `input.blob`, open the browser print dialog, and tear everything
- * down again. The teardown fires on the `afterprint` event AND on a fallback timeout (in case
- * `afterprint` never fires), and is idempotent (whichever fires first wins). Focus is captured before
- * printing and restored to the previously-focused control afterwards, so keyboard users land back where
- * they were (WCAG 2.4.3). A no-op in a no-DOM environment (import-safe).
+ * down again — all of which is the shared {@link mountPrintDocument} lifecycle. The only concern
+ * added here is the object URL: created before the mount, revoked in the teardown, so the blob is
+ * released exactly once however the print session ends.
  *
- * The image is committed to the DOM synchronously (`flushSync`) before `window.print()` so the dialog
- * has the diagram to render. Errors from the caller-supplied `print` are swallowed after teardown is
- * still scheduled, so a print failure never leaks the mounted surface.
+ * A no-op where `URL.createObjectURL` is unavailable (import-safe).
  */
 export function printDiagramImage(
   input: PrintDiagramImageInput,
@@ -96,49 +84,13 @@ export function printDiagramImage(
   if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return;
 
   const url = URL.createObjectURL(input.blob);
-  const container = document.createElement('div');
-  container.className = PRINT_CONTAINER_CLASS;
-  document.body.appendChild(container);
-  const root = (deps.createRootImpl ?? createRoot)(container);
-
-  // Capture the control that had focus (the Print toolbar button) so we can return focus after printing.
-  const previousFocus = document.activeElement as HTMLElement | null;
-
-  // A `const` holder for the mutable fallback-timer id, so the `teardown` closure (defined before the
-  // timer is scheduled) can read + clear it without a reassigned `let`.
-  const state: { done: boolean; fallbackTimer?: ReturnType<typeof setTimeout> } = { done: false };
-  const teardown = (): void => {
-    if (state.done) return;
-    state.done = true;
-    window.removeEventListener('afterprint', teardown);
-    if (state.fallbackTimer !== undefined) clearTimeout(state.fallbackTimer);
-    root.unmount();
-    container.remove();
-    URL.revokeObjectURL(url);
-    if (
-      previousFocus &&
-      typeof previousFocus.focus === 'function' &&
-      document.contains(previousFocus)
-    ) {
-      previousFocus.focus();
-    }
-  };
-
-  flushSync(() => {
-    root.render(
-      <PrintSurface
-        imageUrl={url}
-        title={input.title}
-        subtitle={input.subtitle}
-        alt={`Diagram of ${input.title}`}
-      />,
-    );
-  });
-
-  window.addEventListener('afterprint', teardown);
-  state.fallbackTimer = setTimeout(teardown, deps.fallbackMs ?? PRINT_TEARDOWN_FALLBACK_MS);
-
-  const print =
-    deps.print ?? (typeof window.print === 'function' ? window.print.bind(window) : undefined);
-  print?.();
+  mountPrintDocument(
+    <PrintSurface
+      imageUrl={url}
+      title={input.title}
+      subtitle={input.subtitle}
+      alt={`Diagram of ${input.title}`}
+    />,
+    { ...deps, onTeardown: () => URL.revokeObjectURL(url) },
+  );
 }

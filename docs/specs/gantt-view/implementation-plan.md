@@ -143,14 +143,14 @@ flowchart LR
 
 ---
 
-### Milestone M4 — Print & PDF issue
+### Milestone M4 — Print & PDF issue — **landed**
 
 **Outcome:** a planner produces a document for a progress meeting without leaving the app.
 
-- **4.1** A print stylesheet that paginates rows and repeats the ruler per page. _(M)_
-- **4.2** Wire the Gantt into the Stage C1 `Export▾` PDF path. _(M)_
+- **4.1** ✅ A **print document**, not a print stylesheet (ADR-0059 §6). Investigating 4.1 turned up the blocker that decided it: printing a virtualized list prints only the rows on screen, and the shell's clipped panes would crop it further. `GanttPrintSurface` mounts detached, renders every row, fits the whole span to the page, and delegates pagination to a real `<thead>` — which is how the ruler repeats per page. The container/lifecycle convention the TSLD image path already used is extracted to `lib/print-document.ts` + `styles/print-document.css` and shared. _(M)_
+- **4.2** ❌ **Not done, deliberately.** The Stage C1 PDF path embeds a PNG from `renderExportImage` — a canvas rasterisation, which cannot render a DOM Gantt (verified by reading `export/pdf.ts`, not assumed). Browser print-to-PDF covers the need today. A native Gantt PDF would need a second, DOM-aware renderer; that is its own spec, not a task in this one.
 
-**Risk:** the existing PDF path is canvas-image-based; a DOM Gantt needs a different route. Investigate before committing — this may be its own spec.
+**Risk (realised as expected):** the existing PDF path is canvas-image-based, so 4.2 spun out rather than being forced.
 
 ---
 

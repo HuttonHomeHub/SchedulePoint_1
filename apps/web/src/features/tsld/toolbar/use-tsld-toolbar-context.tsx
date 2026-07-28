@@ -33,7 +33,7 @@ import {
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
-import { DEFAULT_PLAN_VIEW_MODE, type PlanViewMode } from '@/features/gantt';
+import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
 import {
   EXPORT_FORMAT_LABELS,
   exportErrorMessage,
@@ -231,6 +231,7 @@ export function useTsldToolbarContext({
 
   const {
     zoomPreset,
+    setZoomPreset: setCanvasZoomPreset,
     canvasControlRef,
     requestFit,
     viewToggles,
@@ -434,7 +435,18 @@ export function useTsldToolbarContext({
     return {
       // Frame — the canvas is commanded imperatively via the shared control handle.
       zoomPreset,
-      setZoomPreset: (level) => canvasControlRef.current?.zoomToPreset(level),
+      // The zoom PRESET is shared state, not a canvas property: the Gantt derives its scale from it
+      // directly (ADR-0059 §2). So it is set here first and the canvas is commanded second —
+      // delegating only to the handle would leave the control enabled and silently inert whenever
+      // the canvas is unmounted, which is every moment the Gantt is showing.
+      setZoomPreset: (level) => {
+        setCanvasZoomPreset(level);
+        canvasControlRef.current?.zoomToPreset(level);
+      },
+      // Stepping, fitting and go-to-date are canvas VIEWPORT commands with no Gantt equivalent (its
+      // scale comes from the preset and its chart already spans the plan). `canvasActive` shades
+      // them with a reason in the Gantt rather than leaving dead buttons.
+      canvasActive: planView === 'tsld',
       stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
       fit: requestFit,
       // The plan's data date (`plannedStart`) is read-only here: it gates Go-to-date visibility and is
@@ -720,6 +732,23 @@ export function useTsldToolbarContext({
       // canvas is never touched — only its viewport is READ by `buildDiagramImage`.
       printDiagram: () => {
         if (!EXPORT_PRINT_ENABLED || printing) return;
+
+        // The Gantt is DOM, so it prints as a document — no rasterisation, nothing async, and no
+        // `printing` flag to reset (ADR-0059 M4). Branching on `planView` is enough to keep the
+        // flag-off path byte-identical: with `VITE_GANTT_VIEW` off it is hard-wired to `tsld`.
+        if (planView === 'gantt') {
+          printGanttSchedule({
+            title: plan.name,
+            subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)}`,
+            activities,
+            ...(model.varianceByActivityId
+              ? { varianceByActivityId: model.varianceByActivityId }
+              : {}),
+          });
+          announce(`Printing ${plan.name}.`);
+          return;
+        }
+
         const built = buildDiagramImage('whole');
         if (!built) return;
         setPrinting(true);
@@ -879,6 +908,9 @@ export function useTsldToolbarContext({
     hasActiveBaseline,
     varianceLoading,
     varianceError,
+    // The printed programme reads the variance map directly (ADR-0059 M4). Omitting it here would
+    // print last refetch's comparison — a stale document that looks current.
+    model.varianceByActivityId,
     // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
     // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
     navState.isolateActive,

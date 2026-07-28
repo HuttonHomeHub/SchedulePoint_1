@@ -7,6 +7,7 @@ import {
   baselineGeometry,
   chartAnchor,
   chartWidth,
+  fitPxPerDay,
 } from './bar-geometry';
 
 import { anActivity } from '@/test/activity-fixture';
@@ -236,5 +237,32 @@ describe('baselineGeometry', () => {
     ['the baseline has no finish', { baselineFinish: null }],
   ])('draws nothing when %s', (_label, over) => {
     expect(baselineGeometry(row(over), ANCHOR, 10)).toBeNull();
+  });
+});
+
+describe('fitPxPerDay', () => {
+  const span = { start: '2026-02-02', finish: '2026-02-11' }; // 10 days + 2 padding = 12
+
+  // The round trip is the point: fitting a span to a width, then measuring the chart at that
+  // scale, must land back on the width. A printed page that is 3% too wide clips a column.
+  it('is the inverse of chartWidth', () => {
+    const px = fitPxPerDay(span, 600);
+    expect(chartWidth(span, px)).toBeCloseTo(600, 6);
+  });
+
+  it('shrinks the scale as the span grows, for a fixed page', () => {
+    const short = fitPxPerDay({ start: '2026-02-02', finish: '2026-02-11' }, 600);
+    const long = fitPxPerDay({ start: '2026-02-02', finish: '2036-02-11' }, 600);
+    expect(long).toBeLessThan(short);
+    expect(long).toBeGreaterThan(0);
+  });
+
+  // A caller that has measured nothing must draw nothing, not divide into infinity.
+  it.each([0, -100])('returns zero for a non-positive width (%s)', (width) => {
+    expect(fitPxPerDay(span, width)).toBe(0);
+  });
+
+  it('handles a single-day span without dividing by zero', () => {
+    expect(fitPxPerDay({ start: '2026-02-02', finish: '2026-02-02' }, 600)).toBe(200);
   });
 });

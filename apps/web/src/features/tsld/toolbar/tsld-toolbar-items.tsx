@@ -473,6 +473,12 @@ function LinkControl({
   );
 }
 
+/**
+ * Why a canvas viewport command is shaded in the Gantt. The zoom *preset* still works in both views
+ * (ADR-0059 §2) — panning, stepping and fitting are the canvas's own, and the Gantt's chart already
+ * spans the plan, so there is nothing to fit it to.
+ */
+const CANVAS_ONLY_REASON = 'Only in the diagram view';
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
 /** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
@@ -1510,8 +1516,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 10,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
-      isEnabled: (ctx) => ctx.hasDiagram,
-      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : ZOOM_DISABLED_REASON),
+      isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+      disabledReason: (ctx) =>
+        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.stepZoom(0.5),
     },
     {
@@ -1522,8 +1529,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 11,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
-      isEnabled: (ctx) => ctx.hasDiagram,
-      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : ZOOM_DISABLED_REASON),
+      isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+      disabledReason: (ctx) =>
+        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.stepZoom(2),
     },
     {
@@ -1534,8 +1542,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 12,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
-      isEnabled: (ctx) => ctx.hasDiagram,
-      disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to fit the view'),
+      isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+      disabledReason: (ctx) =>
+        !ctx.hasDiagram
+          ? 'Add an activity to fit the view'
+          : ctx.canvasActive
+            ? undefined
+            : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.fit(),
     },
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
@@ -1546,8 +1559,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : 'Add an activity to go to today'),
+          isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
+          disabledReason: (ctx) =>
+            !ctx.hasDiagram
+              ? 'Add an activity to go to today'
+              : ctx.canvasActive
+                ? undefined
+                : CANVAS_ONLY_REASON,
           onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
         }
       : placeholderItem(todayShape),

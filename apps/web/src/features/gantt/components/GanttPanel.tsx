@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { barGeometry, baselineGeometry, chartAnchor, chartWidth } from '../layout/bar-geometry';
+import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
   DEFAULT_GANTT_SORT,
   buildRows,
@@ -17,7 +18,6 @@ import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
-import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
 /** Row height in pixels. Fixed, so the virtualizer needs no measurement pass. */
@@ -37,64 +37,22 @@ const FALLBACK_PX_PER_DAY = 6;
 /** Frames roughly a year — the range a stakeholder reading a programme usually wants first. */
 const DEFAULT_ZOOM: ZoomLevel = 'month';
 
-interface Column {
-  key: GanttSortKey;
-  label: string;
-  width: number;
-  align?: 'right';
-  /** The cell's text for an activity — also the accessible content, never derived from the bar. */
-  value: (activity: ActivitySummary) => string;
-}
+/** On-screen column widths, keyed to the shared {@link GANTT_COLUMNS} semantics. */
+const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
+  code: 80,
+  name: 180,
+  earlyStart: 90,
+  earlyFinish: 90,
+  totalFloat: 60,
+};
 
-/**
- * Every visual encoding on the chart has a text equivalent here. A screen-reader user reads dates
- * and float from these cells; the bar is decorative reinforcement, not the only carrier (spec
- * GV-3). That is what makes a bar chart usable without sight of it.
- */
-const COLUMNS: readonly Column[] = [
-  { key: 'code', label: 'Code', width: 80, value: (a) => a.code ?? '—' },
-  { key: 'name', label: 'Activity', width: 180, value: (a) => a.name },
-  {
-    key: 'earlyStart',
-    label: 'Start',
-    width: 90,
-    value: (a) => (a.earlyStart === null ? '—' : formatCalendarDate(a.earlyStart)),
-  },
-  {
-    key: 'earlyFinish',
-    label: 'Finish',
-    width: 90,
-    value: (a) => (a.earlyFinish === null ? '—' : formatCalendarDate(a.earlyFinish)),
-  },
-  {
-    key: 'totalFloat',
-    label: 'Float',
-    width: 60,
-    align: 'right',
-    value: (a) => (a.totalFloat === null ? '—' : `${a.totalFloat}d`),
-  },
-];
+const columnWidth = (column: GanttColumn): number => SCREEN_COLUMN_WIDTHS[column.key] ?? 90;
 
-const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
+const COLUMNS = GANTT_COLUMNS;
+const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0);
 
-/**
- * The variance readout, shown only when a baseline is active. Signed and unit-suffixed so the
- * direction is unambiguous in text — a ghost bar alone says "different", not "later" (spec GV-3:
- * every visual encoding needs a text equivalent).
- */
+/** Width of the variance column, shown only when a baseline is active. */
 const VARIANCE_COLUMN_WIDTH = 72;
-
-function varianceText(row: BaselineVarianceRow | undefined): string {
-  // No row at all is NOT the same fact as "added since the baseline". The API returns a row per
-  // activity when a baseline is active, so an absent one means we were not told — and claiming
-  // "New" for it would invent a comparison we do not have.
-  if (row === undefined) return '—';
-  if (!row.inBaseline) return 'New';
-  const days = row.startVarianceDays;
-  if (days === null) return '—';
-  if (days === 0) return 'On plan';
-  return days > 0 ? `+${days}d late` : `${days}d early`;
-}
 
 export interface GanttPanelProps {
   activities: readonly ActivitySummary[];
@@ -357,7 +315,7 @@ export function GanttPanel({
                     active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
                   }
                   className="shrink-0 px-2 pb-1"
-                  style={{ width: column.width }}
+                  style={{ width: columnWidth(column) }}
                 >
                   <button
                     type="button"
@@ -537,7 +495,7 @@ function GanttRowView({
               column.align === 'right' ? 'text-right' : 'text-left',
             )}
             style={{
-              width: column.width,
+              width: columnWidth(column),
               // Indentation belongs to the first column only, so the date columns stay aligned
               // down the page however deep the hierarchy goes.
               ...(i === 0 ? { paddingLeft: 8 + depth * 14 } : {}),
@@ -642,4 +600,4 @@ function GanttRowView({
   );
 }
 
-export { GRID_WIDTH, TOTAL_COLUMN_WIDTH, COLUMNS as GANTT_COLUMNS, FALLBACK_PX_PER_DAY };
+export { GRID_WIDTH, TOTAL_COLUMN_WIDTH, FALLBACK_PX_PER_DAY };

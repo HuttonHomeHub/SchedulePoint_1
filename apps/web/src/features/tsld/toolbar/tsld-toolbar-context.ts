@@ -27,6 +27,12 @@ export interface TsldToolbarContext {
   /** The active zoom preset (drives the segmented control's pressed state). */
   zoomPreset: ZoomLevel;
   setZoomPreset: (level: ZoomLevel) => void;
+  /**
+   * True when the TSLD canvas is the mounted surface. The zoom **preset** is shared state that both
+   * views read (ADR-0059 §2), but stepping, fitting and go-to-date are canvas *viewport* commands
+   * with no Gantt equivalent — they shade with a reason there rather than sitting enabled and inert.
+   */
+  canvasActive: boolean;
   stepZoom: (factor: number) => void;
   fit: () => void;
   /** The plan's data date (`plannedStart`) — the canvas day-zero origin; null when unset. The registry

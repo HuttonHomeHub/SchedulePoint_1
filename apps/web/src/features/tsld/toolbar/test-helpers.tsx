@@ -21,6 +21,7 @@ export function makeTsldToolbarContext(
     // Frame / navigate
     zoomPreset: 'week',
     setZoomPreset: vi.fn(),
+    canvasActive: true,
     stepZoom: vi.fn(),
     fit: vi.fn(),
     plannedStart: '2026-01-01',

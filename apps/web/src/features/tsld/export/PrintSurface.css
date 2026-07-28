@@ -2,10 +2,8 @@
  * Print-only diagram surface (spec `docs/specs/export-print/` §Milestone 4, feature-spec §4 CQ-4 —
  * the IMAGE path, not a CSS print of the live canvas DOM).
  *
- * The container is `display:none` on screen, so the live app is visually unchanged; it is revealed
- * ONLY in `@media print`, where the live application (React mounts the app-shell into `#root`) and any
- * body-level portal nodes (open menus/dialogs) are hidden, so the browser print dialog shows only the
- * injected whole-diagram image + its title.
+ * The container/reveal mechanics are shared — see `src/styles/print-document.css` and
+ * `src/lib/print-document.ts`. This file styles only *this* surface's own markup.
  *
  * The printed page is deliberately forced LIGHT (white paper, dark ink) — reports and paper want light
  * regardless of the app's light/dark/system theme. This mirrors `resolvePrintPalette()` (which bakes the
@@ -23,19 +21,8 @@
 }
 
 @media print {
-  /* Hide the live application (`#root`) and every other body-level node (portalled menus/dialogs), so
-     only the injected print container is sent to the printer. */
-  #root,
-  body > *:not(.tsld-print-container) {
-    display: none !important;
-  }
-
-  .tsld-print-container,
   .tsld-print-root {
     display: block !important;
-  }
-
-  .tsld-print-root {
     margin: 0;
     padding: 16px;
     background: #ffffff;

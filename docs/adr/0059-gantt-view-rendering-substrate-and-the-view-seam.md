@@ -70,6 +70,30 @@ back in through the side door.
 **5. Behind `VITE_GANTT_VIEW`, default off**, with flag-off parity suites kept as the rollback
 contract (ADR-0053 M6).
 
+**6. Printing mounts a separate print document, not a print stylesheet over the live view** (M4).
+
+The live panel virtualizes, and the app shell is deliberately built from fixed-height, clipped
+panes so the _workspace_ scrolls instead of the page (ADR-0029/0030). Printing that DOM would emit
+a programme cropped to whichever ~40 rows happened to be scrolled into view — a document that looks
+authoritative and quietly omits work, which is the opposite of what a view built for people who do
+not read logic diagrams is for. So `Print` mounts a purpose-built `GanttPrintSurface` into a
+detached container on `document.body`, exactly as the TSLD's image path already does; that shared
+convention is extracted to `lib/print-document.ts` + `styles/print-document.css` and both surfaces
+now use it. The printed document:
+
+- renders **every** row, unvirtualized;
+- **fits the whole span to the page** (`fitPxPerDay`, the inverse of `chartWidth`) rather than
+  windowing it — a sheet of paper cannot be panned;
+- is a real `<table>` with a `<thead>`, so the browser repeats the column headings **and the time
+  ruler** on every page natively, with no pagination code;
+- forces the light palette and carries a legend, because a greyscale photocopy is the normal case.
+
+Semantics are shared, not re-decided: `layout/grid-columns.ts` owns what a cell says and
+`layout/ruler-ticks.ts` owns where a month starts, so the screen and the page cannot disagree about
+a date. The in-app **PDF** button stays the canvas-image path and is **not** wired to the Gantt —
+it rasterises the diagram, which cannot render a DOM Gantt; browser print-to-PDF covers the need,
+and a native Gantt PDF is its own spec if one is ever wanted.
+
 ## Alternatives considered
 
 - **Canvas-2D bars beside a DOM grid.** Reuses `paint.ts` and matches the house style. Rejected:

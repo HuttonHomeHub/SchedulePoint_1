@@ -29,6 +29,7 @@
     "test:e2e:library": "playwright test --config playwright.library.config.ts --pass-with-no-tests",
     "test:e2e:designed-ui": "playwright test --config playwright.designed-ui.config.ts --pass-with-no-tests",
     "test:e2e:designed-chrome": "playwright test --config playwright.designed-chrome.config.ts --pass-with-no-tests",
+    "test:e2e:gantt": "playwright test --config playwright.gantt.config.ts --pass-with-no-tests",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {

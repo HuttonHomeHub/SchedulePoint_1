@@ -7,6 +7,7 @@
  * parity gate structurally untouched by this epic.
  */
 export { GanttPanel } from './components/GanttPanel';
+export { printGanttSchedule, GanttPrintSurface } from './components/GanttPrintSurface';
 export { usePlanViewMode } from './use-plan-view-mode';
 export {
   DEFAULT_PLAN_VIEW_MODE,

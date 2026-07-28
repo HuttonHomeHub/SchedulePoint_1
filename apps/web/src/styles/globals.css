@@ -1,6 +1,7 @@
 /**
- * Blank App design tokens & global styles — the single source of truth for the
- * visual language. Tailwind CSS v4 (CSS-first) + shadcn/ui conventions.
+ * SchedulePoint design tokens & global styles — the single source of truth for
+ * the visual language. Tailwind CSS v4 (CSS-first), hand-rolled WAI-ARIA APG
+ * primitives (there is no shadcn/ui or Radix dependency).
  *
  * See docs/DESIGN_SYSTEM.md for the human-readable spec and rationale.
  *
@@ -11,12 +12,17 @@
  *  - Colour is authored in OKLCH for perceptual uniformity and predictable
  *    light/dark pairs.
  *
- * This file is the design-system implementation. It is wired into the app by
- * the web entry point (`src/main.tsx`), which lands with the walking skeleton
- * (roadmap M1); until then it stands as the canonical token definition.
+ * This file is the design-system implementation, wired into the app by the web
+ * entry point (`src/main.tsx`). Surface scopes (ADR-0055) rebind the semantic
+ * families per surface below; see docs/DESIGN_SYSTEM.md.
  */
 
 @import 'tailwindcss';
+
+/* The shared print-document convention (src/lib/print-document.ts). Imported here rather than from
+   a feature module so the body-hiding rule is always in the bundle, whichever print surface a
+   route happens to pull in. */
+@import './print-document.css';
 
 /* Enable class-based dark mode: `<html class="dark">` (see theme management). */
 @custom-variant dark (&:is(.dark *));

@@ -93,6 +93,23 @@ export function chartWidth(span: { start: string; finish: string }, pxPerDay: nu
 /** Days of breathing room either side of the data. */
 export const CHART_PADDING_DAYS = 1;
 
+/**
+ * The scale that fits a whole date span into `chartWidthPx` — the inverse of {@link chartWidth}.
+ *
+ * This is what **paper** wants. On screen the scale comes from the zoom preset (ADR-0056) and the
+ * user pans to see the rest; a printed page cannot be panned, so a printed programme that showed a
+ * window of the plan would be a document that quietly omits work. Fitting the span means the sheet
+ * holds the whole thing, at whatever scale that takes.
+ *
+ * Returns 0 for a non-positive width, so a caller measuring nothing draws nothing rather than
+ * dividing into infinity.
+ */
+export function fitPxPerDay(span: { start: string; finish: string }, chartWidthPx: number): number {
+  if (chartWidthPx <= 0) return 0;
+  const days = daysBetween(span.start, span.finish) + 1 + CHART_PADDING_DAYS * 2;
+  return days > 0 ? chartWidthPx / days : 0;
+}
+
 /** The chart's x = 0 date: one padding day before the earliest activity. */
 export function chartAnchor(span: { start: string }): string {
   const ms = Date.parse(`${span.start}T00:00:00Z`) - CHART_PADDING_DAYS * 86_400_000;
