@@ -33,9 +33,10 @@ import {
  */
 
 /**
- * The first fill must **already overflow** the rendered window, or "the window did not grow" proves
- * nothing. CI measured 40 activities rendering all 40 rows — a viewport plus the virtualizer's
- * overscan comfortably holds that many — so the floor is set well clear of it.
+ * Two plan sizes far enough apart that "the DOM did not grow" is a real statement. CI measured 100
+ * activities rendering 101 rows on the runner's window, which is why the assertion below is about
+ * **growth** rather than an absolute ceiling — how many rows a viewport holds is not a constant, and
+ * pinning one would make this test fail for reasons unrelated to virtualization.
  */
 const FIRST_FILL = 100;
 const TOPPED_UP = 300;
@@ -59,18 +60,24 @@ test.describe('the Gantt at plan scale', () => {
     await seedActivities(page, orgSlug, FIRST_FILL);
     await page.reload();
     const small = await liveRowCount(page);
-    // The window has to be full for the comparison to mean anything: if 40 rows all fit, growing
-    // the plan would legitimately grow the DOM and the assertion below would prove nothing.
-    expect(small).toBeLessThan(FIRST_FILL);
 
-    // Top the SAME plan up by an order of magnitude.
+    // Top the SAME plan up by three times.
     await ensurePen(page);
     await seedActivities(page, orgSlug, TOPPED_UP - FIRST_FILL, FIRST_FILL);
     await page.reload();
     const large = await liveRowCount(page);
 
-    // Ten times the plan must not mean ten times the DOM — that is the whole argument.
-    expect(large).toBe(small);
+    // **The invariant, stated as growth rather than size.** Three times the plan must not mean three
+    // times the DOM. Asserting an absolute ceiling instead would need a guess at how many rows a
+    // viewport holds — which varies with chrome, zoom and the runner's window — and would fail for
+    // reasons that say nothing about virtualization. Growth is the property ADR-0026's premise turns
+    // on, and it is exact.
+    //
+    // The measurements ride in the message: if this ever fails, the numbers say immediately whether
+    // the window merely shifted or virtualization stopped windowing altogether.
+    const measured = `rows at ${FIRST_FILL} activities: ${small}; at ${TOPPED_UP}: ${large}`;
+    expect(large, measured).toBe(small);
+    expect(large, measured).toBeLessThan(TOPPED_UP);
 
     // Accessibility must still describe the WHOLE plan: a screen-reader user hearing "row 12 of 40"
     // for a 300-activity programme is being misinformed about how much work there is.
