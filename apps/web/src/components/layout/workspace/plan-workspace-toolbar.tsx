@@ -42,7 +42,7 @@ import {
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities';
-import { GanttPanel } from '@/features/gantt';
+import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -134,6 +134,11 @@ export function ToolbarPlanWorkspace({
     el?.scrollIntoView({ block: 'start' });
     el?.focus();
   }, [setNotesOpen]);
+  // The view switch is router-backed, so the workspace (which is inside the router) owns it and
+  // passes it down — exactly like `legend` and `revealComments`. Keeping `useNavigate` out of the
+  // toolbar-context builder means the six spec files that render that builder standalone need no
+  // router of their own.
+  const [planView, setPlanView] = usePlanViewMode();
   const ctx = useTsldToolbarContext({
     model,
     plan,
@@ -141,6 +146,8 @@ export function ToolbarPlanWorkspace({
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     revealComments,
+    planView,
+    setPlanView,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,

@@ -33,7 +33,7 @@ import {
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
-import { usePlanViewMode } from '@/features/gantt';
+import { DEFAULT_PLAN_VIEW_MODE, type PlanViewMode } from '@/features/gantt';
 import {
   EXPORT_FORMAT_LABELS,
   exportErrorMessage,
@@ -100,6 +100,8 @@ export function useTsldToolbarContext({
   openDialog,
   legend,
   revealComments,
+  planView = DEFAULT_PLAN_VIEW_MODE,
+  setPlanView = () => {},
 }: {
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
@@ -111,6 +113,18 @@ export function useTsldToolbarContext({
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
+  /**
+   * Which projection the workspace is showing, and how to switch it (ADR-0059 §3).
+   *
+   * Passed IN rather than read here, for the same reason `legend` and `revealComments` are: the
+   * state belongs to the workspace, not the toolbar. It is also router-backed, and this builder is
+   * rendered standalone by six spec files — a `useNavigate()` inside it would make every one of
+   * them need a router they have no other use for.
+   *
+   * Defaults describe a build with no Gantt: the diagram, and switching is a no-op.
+   */
+  planView?: PlanViewMode;
+  setPlanView?: (view: PlanViewMode) => void;
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
@@ -123,9 +137,6 @@ export function useTsldToolbarContext({
   const canInterchangeExport = model.canExportSchedule;
   const recalc = useRecalculateCommand(orgSlug, planId);
   const setPlanMode = useSetPlanSchedulingMode(orgSlug);
-  // Which projection the workspace shows (ADR-0059). URL-backed, so it deep-links and survives a
-  // reload; hard-wired to the diagram when `VITE_GANTT_VIEW` is off.
-  const [planView, setPlanView] = usePlanViewMode();
   // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
   // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
   // client state; nothing persists.
