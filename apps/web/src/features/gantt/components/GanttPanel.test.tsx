@@ -276,7 +276,7 @@ describe('GanttPanel — the bar encodings', () => {
 
   it('fills a bar in proportion to progress', () => {
     render(<GanttPanel activities={[anActivity({ percentComplete: 40 })]} />);
-    const fill = barCell(rows()[0]!).querySelector('span > span') as HTMLElement | null;
+    const fill = barCell(rows()[0]!).querySelector<HTMLElement>('span > span');
     expect(fill?.style.width).toBe('40%');
   });
 
