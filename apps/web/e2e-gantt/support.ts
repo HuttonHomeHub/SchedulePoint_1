@@ -2,10 +2,14 @@ import { expect, type Page } from '@playwright/test';
 
 /**
  * Journey helpers for the flag-ON **Gantt view** suite (`VITE_GANTT_VIEW`, ADR-0059,
- * `docs/specs/gantt-view/`). The onboarding + client/project/plan + canvas-authoring helpers mirror
- * `e2e-library/support.ts` verbatim (the same canvas-authoring flags bake into this suite's
- * `webServer`, so a plan opens on a draw-ready blank canvas). The onboarding actor becomes the
- * org's Org Admin, which already satisfies everything this journey does.
+ * `docs/specs/gantt-view/`). The onboarding + client/project/plan helpers mirror
+ * `e2e-library/support.ts` verbatim. The onboarding actor becomes the org's Org Admin, which
+ * already satisfies everything this journey does.
+ *
+ * There is deliberately **no canvas-drawing helper**. This suite builds its schedule through the
+ * API and reads the diagram through its parallel listbox: authoring on the canvas is the TSLD's
+ * contract to test, and a Gantt assertion that fails because a click landed oddly tells you nothing
+ * about the Gantt.
  */
 
 /** Sign up + create an organisation; returns the org slug (name "Gantt Co" → "gantt-co-…"). */
@@ -71,26 +75,6 @@ export async function ensurePen(page: Page): Promise<void> {
   await startEditing(page);
 }
 
-/** The interactive base canvas of the TSLD diagram region (aria-hidden, so located by element). */
-export function canvas(page: Page): ReturnType<Page['locator']> {
-  return page.locator('section[aria-label="Time-scaled logic diagram"] canvas').first();
-}
-
-/** Draw a task on the canvas via the Add split-button (mirrors `e2e-library/support.ts`). */
-export async function drawActivity(
-  page: Page,
-  name: string,
-  pos: { x: number; y: number },
-): Promise<void> {
-  await page.getByRole('button', { name: /^Add(ing .+)?$/ }).click();
-  await page.getByRole('menuitemradio', { name: 'Task' }).click();
-  await canvas(page).click({ position: pos });
-  const form = page.getByRole('form', { name: 'Name the new activity' });
-  await form.getByRole('textbox', { name: 'New activity name' }).fill(name);
-  await form.getByRole('button', { name: 'Add' }).click();
-  await expect(form).toBeHidden();
-}
-
 /** The Gantt's treegrid — the surface every assertion in this journey reads. */
 export function ganttGrid(page: Page): ReturnType<Page['getByRole']> {
   return page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
@@ -110,10 +94,15 @@ export function openPlanId(page: Page): string {
 /**
  * Seed activities into the open plan through the API, then recalculate.
  *
- * The canvas is exercised by `drawActivity` — once, exactly as every other flag-on suite does. Bulk
- * seeding goes through the API on purpose: authoring hundreds of bars by click would measure the
- * canvas, take minutes, and make a Gantt assertion fail for reasons that have nothing to do with
- * the Gantt. The session cookie rides along because the request is issued from the page's origin.
+ * Seeding goes through the API rather than the canvas on purpose: authoring hundreds of bars by
+ * click would measure the canvas, take minutes, and make a Gantt assertion fail for reasons that
+ * have nothing to do with the Gantt. The session cookie rides along because the request is issued
+ * from the page's origin.
+ *
+ * **Sequential, and every response is checked.** An earlier version fired batches concurrently and
+ * ignored the results; some creates were rejected and the seed silently produced half the rows it
+ * claimed, which turned a Gantt assertion into a lottery. A seed helper that lies about how much it
+ * seeded is worse than a slow one — three hundred round trips are a few seconds.
  *
  * `startIndex` keeps names and codes unique when a plan is topped up in more than one call.
  */
@@ -125,32 +114,32 @@ export async function seedActivities(
 ): Promise<void> {
   const planId = openPlanId(page);
 
-  await page.evaluate(
+  const failures = await page.evaluate(
     async ({ org, id, n, from }: { org: string; id: string; n: number; from: number }) => {
-      // Small concurrent batches: 400 strictly-sequential round trips is minutes of wall clock on
-      // a shared runner, and the point of the seed is to arrive at a row count, not to measure the
-      // API. Batched rather than all-at-once so the pool is not swamped.
-      const BATCH = 20;
-      for (let start = 0; start < n; start += BATCH) {
-        await Promise.all(
-          Array.from({ length: Math.min(BATCH, n - start) }, (_, k) => {
-            const i = from + start + k;
-            return fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                name: `Seeded ${i}`,
-                code: `S${String(i).padStart(4, '0')}`,
-                durationDays: 5,
-              }),
-            });
+      const bad: string[] = [];
+      for (let k = 0; k < n; k += 1) {
+        const i = from + k;
+        const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: `Seeded ${i}`,
+            code: `S${String(i).padStart(4, '0')}`,
+            durationDays: 5,
           }),
-        );
+        });
+        if (!response.ok) bad.push(`${i}: ${response.status} ${await response.text()}`);
       }
+      return bad;
     },
     { org: orgSlug, id: planId, n: count, from: startIndex },
   );
+  if (failures.length > 0) {
+    throw new Error(
+      `seeding rejected ${failures.length} create(s): ${failures.slice(0, 3).join('; ')}`,
+    );
+  }
 
   await page.evaluate(
     async ({ org, id }: { org: string; id: string }) => {
@@ -167,4 +156,14 @@ export async function seedActivities(
 export async function showGantt(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Gantt', exact: true }).click();
   await expect(ganttGrid(page)).toBeVisible();
+}
+
+/**
+ * The diagram's **parallel focusable listbox** — the accessible representation ADR-0026 built by
+ * hand because a canvas has none. It is the right probe for "the two views are the same model":
+ * the diagram's own account of what it contains, compared against the Gantt's rows, with no canvas
+ * pixel-poking in between.
+ */
+export function diagramActivityList(page: Page): ReturnType<Page['getByRole']> {
+  return page.getByRole('listbox', { name: 'Activities in the diagram' });
 }

@@ -32,8 +32,12 @@ import {
  * envelope — a mid-tier laptop, iPad-class Safari — stays an operator gate (`TECH_DEBT #60`).
  */
 
-/** Enough to fill the viewport several times over; small enough that seeding stays quick. */
-const FIRST_FILL = 40;
+/**
+ * The first fill must **already overflow** the rendered window, or "the window did not grow" proves
+ * nothing. CI measured 40 activities rendering all 40 rows — a viewport plus the virtualizer's
+ * overscan comfortably holds that many — so the floor is set well clear of it.
+ */
+const FIRST_FILL = 100;
 const TOPPED_UP = 300;
 
 async function liveRowCount(page: Page): Promise<number> {
