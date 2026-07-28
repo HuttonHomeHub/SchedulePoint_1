@@ -1,5 +1,79 @@
 # @repo/web
 
+## 0.54.0
+
+### Minor Changes
+
+- [#180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/180) [`bd011eb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd011eb9e99a233081096dfca0b21990d77ddf91) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Two tech-debt fixes in the plan workspace.
+
+  **The "Calendar…" dialog is now "Schedule settings".** It had accumulated seven settings groups
+  one migration at a time — working-day calendar, critical path & float, progress/recalc mode,
+  expected finish, resource levelling, external relationships, earned value — while still being
+  titled and described as if it only held the first. Six of its seven sections were not about
+  calendars, and none of them rendered a visible heading, so a planner looking for the total-float
+  measure had no reason to open "Calendar…" and no signpost once inside. The dialog, its description,
+  and both entry points (the TSLD toolbar item and the plan-actions overflow menu) now name the whole
+  scope, and each section carries its own `<h3>` beneath the dialog's `<h2>` so heading navigation
+  reaches it.
+
+  **The weekday picker now uses the shared `ToggleChip`.** The calendar form's working-days control
+  was a hand-rolled `<Button variant={pressed ? 'default' : 'outline'}>` — the one-off styling the
+  design system exists to prevent — while `ToggleChip` shipped with no call sites at all. Weekdays are
+  independent booleans, which is exactly what that primitive is for, so the picker adopts it.
+
+- [#180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/180) [`bd011eb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd011eb9e99a233081096dfca0b21990d77ddf91) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Toolbar buttons now show their text labels when the row has room for them.
+
+  A toolbar item's `tier` used to decide two unrelated things: what gets demoted into the `⋯`
+  overflow first, and whether the button shows a text label. Those only coincided by convention, and
+  the consequence was measurable — at 1920px the plan toolbar's second row carried roughly 1000px of
+  unused width while showing exactly as many icon-only controls as it does at 1280px, because nothing
+  ever asked whether a label was affordable at the width actually available.
+
+  `ToolbarItem` gains a `showLabel` policy (`'always' | 'auto' | 'never'`, default `'auto'`) that is
+  separate from `tier`, and `'auto'` resolves from the measured container width on every resize. The
+  primary actions (Early/Visual mode, Add, Recalculate, and every button in the floating
+  selection-actions bar) pin `'always'`, since their names are the affordance; everything else gains
+  a label on wide viewports and keeps today's icon-only chrome on narrow ones. Labels are never
+  promoted at the cost of pushing a command into the overflow.
+
+### Patch Changes
+
+- [#180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/180) [`bd011eb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd011eb9e99a233081096dfca0b21990d77ddf91) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Surface load failures on the cross-plan link picker, and stop a nested dialog closing its `Sheet`.
+
+  The four cascade pickers in **Add cross-plan link** (client → project → plan →
+  activity) were still hand-rolled `Label`+`Select` blocks. A failed clients query
+  rendered an error paragraph with no `id`, so it was never linked to the select
+  and never reached assistive technology; failures on the project, plan and
+  activity queries were not surfaced at all, leaving the control stuck on its
+  placeholder with no explanation. All four now use `SelectField`, with the load
+  failure announced (`role="alert"`) and the validation message left to the form's
+  error summary.
+
+  `Sheet` also gains the close-scoping guard `Dialog` received: a dialog nested
+  inside a sheet would otherwise close the sheet out from under it. No screen does
+  that today, so this is latent rather than a live fix.
+
+- [#180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/180) [`bd011eb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd011eb9e99a233081096dfca0b21990d77ddf91) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Confirming inside a dialog no longer closes the dialog behind it.
+
+  Revoking a share link, or deleting a baseline, opened a confirmation on top of the dialog that
+  launched it — and answering that confirmation tore down both. The user landed back on the plan with
+  no way to see the result of what they had just confirmed, and had to reopen the parent to check.
+
+  `close` and `cancel` do not bubble, but React listens at the root in the capture phase, and capture
+  reaches every ancestor on the way down. So the inner dialog's close was delivered to the outer
+  dialog's handler as well. The `Dialog` primitive now ignores a close whose target is not itself,
+  which fixes every nesting rather than the two that had been noticed.
+
+- [#180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/180) [`bd011eb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd011eb9e99a233081096dfca0b21990d77ddf91) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A shared `SelectField` primitive replaces 16 hand-assembled label-and-select blocks.
+
+  The idiom had been written out 33 times across 15 files, and the copies had drifted: some errors were
+  announced to screen readers and some weren't, some hints were rendered but never linked to their
+  control, one screen pointed two different paragraphs at the same id. `SelectField` now owns that
+  wiring, and every select in the activity form, the dependency and cross-plan link dialogs, plan
+  status and invite role uses it.
+
+  No visible change. The point is that the next accessibility fix to any of them lands once.
+
 ## 0.53.0
 
 ### Minor Changes

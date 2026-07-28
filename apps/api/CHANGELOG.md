@@ -1,5 +1,37 @@
 # @repo/api
 
+## 0.29.0
+
+### Minor Changes
+
+- [#180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/180) [`bd011eb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd011eb9e99a233081096dfca0b21990d77ddf91) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - List endpoints no longer advertise a sort-direction param they ignore.
+
+  `PaginationQueryDto` carried an `order` field, so every cursor-paginated list documented
+  `?order=asc|desc` in its OpenAPI — while exactly one of them (a plan's baselines) actually read it.
+  Everywhere else the value was accepted and discarded: a client sending `order=desc` got a `200` and
+  the wrong page, with nothing in the response to suggest otherwise. A documented no-op is worse than
+  an absent feature, because it looks like a contract.
+
+  `order` now lives only on `ListBaselinesQueryDto`, the one list that honours it. Every other list
+  keeps its fixed direction — which was always a product decision (a member roster reads oldest-first,
+  a note thread newest-first) — and simply stops claiming otherwise.
+
+  **Behaviour change:** because the API rejects unknown query params, sending `order` to a list that
+  does not declare it is now a `422` rather than being silently ignored. No SchedulePoint client sends
+  it. A list can opt back in by declaring `order` in its own query DTO and threading it into its
+  `orderBy`; a `(created_at, id)` keyset reverses correctly provided both terms flip together.
+
+### Patch Changes
+
+- [#180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/180) [`bd011eb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd011eb9e99a233081096dfca0b21990d77ddf91) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The recycle bin reads one page instead of three.
+
+  It paginated the union of the client, project and plan tables by fetching each table's own top page
+  and merge-sorting in the service — reading three times as many rows as it returned. That cost was
+  paid on every page, not once, because the recycle-bin screen follows the cursor to the end.
+
+  One `UNION ALL … ORDER BY (deleted_at DESC, id ASC) LIMIT` now does the merge in the database and
+  returns exactly the page asked for. Same rows, same order, same restorability.
+
 ## 0.28.0
 
 ### Minor Changes
