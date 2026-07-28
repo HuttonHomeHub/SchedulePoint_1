@@ -1,8 +1,11 @@
-# ADR-0060: The tabbed activity editor, per-scope save, and the co-located progress model
+# ADR-0060: The tabbed activity editor, per-scope save, the steps edit-lock gate, and the co-located progress model
 
 - **Status:** Proposed
 - **Date:** 2026-07-28
 - **Deciders:** Technical Lead, Product Owner
+- **Note:** the three open questions were answered on 2026-07-28. Two were confirmed as drafted; the
+  third (steps gating) was answered with an option neither drafted alternative offered — fix the
+  server (§5) — which is why this ADR is no longer describing a purely frontend change.
 - **Spec:** [`docs/specs/activity-editor-restructure/`](../specs/activity-editor-restructure/feature-spec.md)
 
 ## Context
@@ -14,19 +17,14 @@ per accepted decision over a year (ADR-0037 calendar, ADR-0038 WBS parent, ADR-0
 ADR-0041 levelling priority, ADR-0042 EV inputs, ADR-0043 external dates, ADR-0044 accrual) — and
 there is no reason to think the growth stops.
 
-Four things about it are wrong in ways that can be pointed at rather than argued about:
+Three things about it are wrong in ways that can be pointed at rather than argued about:
 
-1. **All three `<legend>`s are `sr-only`**, each shadowed by an `aria-hidden` paragraph carrying the
-   visible text. A screen-reader user gets three named groups; a sighted user gets hairline rules.
-   The usual accessibility failure is the other way round, which is presumably how it survived
-   review. Two sibling dialogs already use a visible legend, so the house pattern exists and this
-   dialog is the outlier.
-2. **Ten of 22 fields are in no group at all** — an eight-field ungrouped preamble, `Description`
+1. **Ten of 22 fields are in no group at all** — an eight-field ungrouped preamble, `Description`
    trailing after the last fieldset.
-3. **The primary constraint is orphaned from the secondary.** `Constraint` / `Constraint date` sit
+2. **The primary constraint is orphaned from the secondary.** `Constraint` / `Constraint date` sit
    between the Cost fieldset's close and the Advanced fieldset's open, while `Secondary constraint`
    sits inside `Advanced scheduling`. Two halves of one concept in two different grouping states.
-4. **The progress model is spread over four dialogs and one of its controls is inert.**
+3. **The progress model is spread over four dialogs and one of its controls is inert.**
    `ActivityProgressDialog` holds the schedule % that moves dates; `ActivityFormDialog` holds the
    `% complete type` selector and the manual physical %; `ActivityStepsDialog` holds the weighted
    steps; `ActivityResourcesDialog` holds the units. `rollupPhysicalPercent`
@@ -35,6 +33,22 @@ Four things about it are wrong in ways that can be pointed at rather than argued
    defect class as the Gantt zoom preset (ADR-0059 M6) and the `RESOURCE_DEPENDENT` calendar picker:
    a lit control with no effect. The **selector** for a three-way choice sits on a screen with none
    of the three things it selects between.
+
+A fourth item stood here in the first draft — "all three `<legend>`s are `sr-only`, so a sighted
+user gets hairline rules" — and it was **wrong**, in a way worth leaving on the record. Each
+`sr-only` `<legend>` is immediately followed by a **visible** `<p aria-hidden="true">` carrying the
+same text (`ActivityFormDialog.tsx:532-536, 652-656, 711-715`), which is the standard workaround for
+`<legend>` being near-impossible to lay out inside a flex column. Sighted users do see the headings;
+the two audiences get equivalent information; it survived review because it is fine. The draft's own
+sentence — "the usual accessibility failure is the other way round, which is presumably how it
+survived review" — was a story invented to explain a defect that did not exist, in an ADR that cites
+ADR-0058's "verify the claim; do not trust the document" three paragraphs later. Both the dialog
+audit and this ADR read the `sr-only` and stopped. **No WCAG benefit is claimed for this work.**
+
+What remains of it is a consistency point, and it is worth doing on that basis alone: two sibling
+dialogs (`CalendarFormDialog`, `AddCrossPlanLinkDialog`) use a real visible `<legend>`, and the
+workaround duplicates each heading across two nodes that can drift. The requirement below is
+therefore "one source of truth per section heading", not "remove the `sr-only`".
 
 One constraint dominates the design. Progress writes are deliberately **not** pen-gated (ADR-0028)
 so a Contributor can report from site without taking the plan edit-lock; definition writes are.
@@ -48,11 +62,13 @@ Two further facts were verified in the code rather than assumed, and both shape 
 - `UpdateActivityDto` states "Every field is optional; send only what changes", and partial PATCHes
   are already in production (`useSetActivityVisualStart` and `useRepositionLane` send two or three
   keys). Per-scope saves need **no API change**.
-- The steps `PUT` is **not** pen-gated server-side (`activity-steps.service.ts` asserts
-  `activity:update` and never calls `assertHoldsPen`), and the two current hosts already disagree
-  about it: `ActivitiesTable` gates the Steps row action on role alone, `plan-dialogs.tsx` gates it
-  on role **and** pen. That divergence is live today; this work has to resolve it rather than
-  inherit it.
+- The steps `PUT` is **not** pen-gated server-side: `activity-steps.service.ts` asserts
+  `activity:update` and never calls `assertHoldsPen`. Meanwhile **every web path to that write has
+  always required the pen** — `plan-dialogs.tsx:156` gates it on `model.canEditSchedule`, and
+  `ActivitiesTable`'s prop, though named `canWrite`, is fed `model.canEditSchedule` at both of its
+  call sites (`plan-detail.tsx:351`, `activity-bottom-panel.tsx:84`). The first draft of this ADR
+  said "the two hosts disagree with each other"; they do not. The divergence is
+  **client-versus-server**, which is the more serious of the two and is what §5 fixes.
 
 ## Decision
 
@@ -77,8 +93,11 @@ by imagined consumers grows options nobody needs — the `renderControl` escape 
 **2. `ActivityFormDialog` becomes `ActivityEditorDialog`, with four tabs**: **General**
 (identity, duration, WBS parent, description), **Scheduling** (calendar, **both** constraints
 together, ALAP + expected finish, external dates, levelling priority), **Progress**, **Cost**
-(budgeted/actual expense, accrual). All 22 fields are placed; none is ungrouped; every legend is
-**visible**; the orphaned primary constraint rejoins the secondary; `Description` stops trailing;
+(budgeted/actual expense, accrual). All 22 fields are placed; none is ungrouped; every section
+heading is visible and rendered **from one string** (a real `<legend>` where the layout allows,
+otherwise the existing pairing driven from a single constant — a de-duplication rule, not an
+accessibility fix); the orphaned primary constraint rejoins the secondary; `Description` stops
+trailing;
 `% complete type` moves out of "Cost & earned value" and onto Progress, beside what it selects
 between. A tab whose every field is hidden by flags is not rendered — an empty tab is a dead end.
 
@@ -90,7 +109,7 @@ and its own mutation, and sends **only its own keys plus `version`**:
 | General / Scheduling / Cost      | `PATCH …/activities/:id`          | `activity:update`          | yes (423) |
 | Progress → Reported progress     | `PATCH …/activities/:id/progress` | `activity:update_progress` | **no**    |
 | Progress → How value is measured | `PATCH …/activities/:id`          | `activity:update`          | yes       |
-| Progress → Weighted steps        | `PUT …/activities/:id/steps`      | `activity:update`          | see §5    |
+| Progress → Weighted steps        | `PUT …/activities/:id/steps`      | `activity:update`          | yes — §5  |
 
 On three tabs that is exactly one Save. **The Progress tab carries three**, and the reasons are
 structural rather than aesthetic:
@@ -110,13 +129,36 @@ including ones hidden by a flag and seeded from the row purely so they survive t
 pattern the dialog repeats in nine separate comments. A scope that shows five fields now sends five
 fields, so it cannot overwrite something it never displayed.
 
-**5. Weighted steps are pen-gated in the UI** (the spec's Q2, default pending approval), aligning
-with the canvas host and giving the Progress tab exactly one boundary: _progress is yours; the
-activity's definition needs the lock._ This narrows the activities table's current role-only Steps
-path — taking the pen is one click, and the change is stated in the changeset rather than slipped
-in. The server-side asymmetry (a definition-class write that skips `assertHoldsPen`) is recorded in
-`TECH_DEBT.md` as defence-in-depth to fix separately; the client gate is advisory and the API
-remains the sole trust boundary either way.
+**5. The weighted-steps write is pen-gated at the API, not in the UI** — and that fix **ships first,
+on its own, unflagged**, as Milestone M0.
+
+The question put to the product owner was "pen-gate the Steps panel in the editor, or leave it
+role-only to match the API?" Both options were rejected, and rightly: each accepts a client and a
+server that disagree about who may write. The client has required the pen for steps since the
+surface existed; the server has never checked. So `assertHoldsPen` is added to
+`activity-steps.service.ts`, after the existing 403/404 checks and before the business rules,
+following the resource-assignment precedent verbatim (`resource-assignment.service.ts:111-115`,
+TECH_DEBT #39). The route declares its 423 (`@ApiLockedResponse`), and a Supertest case joins the
+existing ones in `plan-lock-write-gate.e2e-spec.ts`.
+
+The justification is the same one that brought resource assignments under the gate, and it is
+stronger here: **a steps `PUT` bumps the parent activity's `version`**. A write that increments an
+activity's optimistic-lock version is an activity write by any reading, and every other activity
+write asserts the pen.
+
+**It is deliberately not behind `VITE_ACTIVITY_EDITOR_TABS`.** A `VITE_` flag is a client
+build-time constant; it cannot gate a server check, and pretending otherwise would recreate the
+divergence being removed. The gate rides `PLAN_EDIT_LOCK_ENFORCED` — the switch every other pen
+assertion rides, and which still defaults to `false` (`config/env.validation.ts:51-54`), so the
+assertion is inert until an operator turns enforcement on.
+
+**It is also sequenced first and shipped separately**, because it is a defect fix on its own terms
+rather than a consequence of this epic: if the tabbed editor were cancelled tomorrow, this should
+still land. Nothing in M1–M6 depends on it, and it depends on nothing.
+
+This is a deliberate departure from an otherwise frontend-only epic, and the departure is the
+point — the alternative was to have the UI police a boundary the trust boundary itself does not
+enforce.
 
 **6. A scope a user cannot write is shaded with a stated reason, never hidden.** A leading reason
 banner (before the fields in DOM order, so a screen-reader user meets the reason before the
@@ -137,10 +179,12 @@ three superseded dialogs and every touched host screen. Those suites are the rol
 are kept, not weakened, when they become inconvenient (ADR-0053 M6). The superseded dialogs are not
 deleted at the flip; their retirement is a separate `TECH_DEBT.md` item with a stated condition.
 
-**9. This is frontend-only.** No endpoint, DTO, migration, permission or engine change. The CPM
-engine is not imported; no scheduling input is added or altered; the same values go to the same
-endpoints in smaller bodies. **The ADR-0034 recalc parity gate is structurally untouched** — there
-is nothing to compare because there is nothing new for `computeSchedule` to receive.
+**9. Everything except §5 is frontend-only.** No new endpoint, no DTO shape change, no migration, no
+new permission, no engine change. The only contract movement in the whole epic is the 423 §5 adds to
+the steps route. The CPM engine is not imported; no scheduling input is added or altered; the same
+values go to the same endpoints in smaller bodies. **The ADR-0034 recalc parity gate is structurally
+untouched** — there is nothing to compare because there is nothing new for `computeSchedule` to
+receive.
 
 **10. One editor, one intent, one gating function.** The three hosts (`ActivitiesTable`, the canvas
 `SelectionActionsBar` via `activity-crud-dialogs.tsx`, the plan toolbar) collapse their three ids
@@ -157,6 +201,14 @@ to drift — which matters, because it already had.
 - **One Save for the whole tabbed dialog.** The literal reading of "just add tabs". Rejected on the
   Contributor regression, and on the two-phase-write hazard between the steps `PUT` and the activity
   `PATCH`.
+- **Gate the steps write in the UI only** — either pen-gate the editor's Steps panel (matching what
+  every web surface already does) or leave it role-only (matching the API). **Both rejected** in
+  favour of §5. The first leaves the client policing a boundary the trust boundary does not enforce;
+  the second would have the new editor offer a write the rest of the app has always withheld. Fixing
+  the server is smaller than either and fixes the actual defect.
+- **Feature-flag the steps pen-gate** behind `VITE_ACTIVITY_EDITOR_TABS`, so it arrives with the
+  editor. Rejected as incoherent: a `VITE_` constant is compiled into the client and cannot gate a
+  server-side check, so this would recreate the client/server divergence it exists to remove.
 - **A wizard.** Fits create, not edit. Nobody wants five steps to change a duration.
 - **A docked right-hand properties panel** instead of a modal, P6/MSP style. Genuinely attractive,
   and probably where this ends up. Rejected _for now_ as an ADR-0030 workspace-layout change: it
@@ -186,11 +238,21 @@ to drift — which matters, because it already had.
 - The two permission boundaries (progress vs. definition, role vs. pen) become visible in the
   interface instead of implicit in which dialog you happened to open.
 - Adding the next ADR's field is "which tab?", not "where in the scroll?".
+- The edit-lock has one fewer hole: when an operator enables `PLAN_EDIT_LOCK_ENFORCED`, the steps
+  write is covered like every sibling write instead of being the exception nobody had noticed.
 
 **Harder / costs**
 
 - Three Save buttons on the Progress tab. Justified above, and mitigated by captioned panels, but it
   is more chrome than one button.
+- **§5 is a user-visible contract change**: a steps `PUT` from a Planner who does not hold the pen
+  now returns **423** where it used to succeed. It ships with a changeset (minor, pre-1.0). Two
+  qualifications, both verified: the assertion is **inert while `PLAN_EDIT_LOCK_ENFORCED` is
+  `false`**, which is the default, so a default deployment sees no change today; and no user loses a
+  visible affordance, because every web path to that write already required the pen. The people this
+  can bite are direct API consumers and any future non-web client.
+- The epic can no longer describe itself as "no `apps/api` diff", which was a useful review
+  heuristic. It is replaced by a sharper one: **only M0 touches the API, and its diff is API-only.**
 - Two scopes now PATCH the same row from one open dialog, so **`version` must be read from the live
   row at submit time**. A scope that captured it at open would 409 on every second save. Likewise
   the seed effect must stay keyed on `open` + `activity.id`: widening it to react to the activity
@@ -210,8 +272,12 @@ to drift — which matters, because it already had.
 **Neutral / follow-ups**
 
 - `ActivityResourcesDialog` keeps its own dialog and needs its own spec (master/detail).
-- A `TECH_DEBT.md` entry for the steps `PUT`'s missing `assertHoldsPen`.
 - A `TECH_DEBT.md` entry with a stated condition for retiring the superseded dialogs.
+- A `TECH_DEBT.md` entry for a gap found while checking §5's precedent: the resource-assignment
+  routes **assert** the pen but do not **declare** `@ApiLockedResponse`, so their 423 is
+  undocumented. Not fixed here — noticed here.
+- The `ActivitiesTable` prop named `canWrite` is fed `canEditSchedule` by both call sites. The name
+  is a trap that has now misled two documents; rename it during M5's convergence.
 - The `Tabs` primitive has one consumer; if a second appears, extend it here rather than fork it.
 
 ## References
@@ -232,3 +298,13 @@ to drift — which matters, because it already had.
   `apps/api/src/modules/activities/{activities.controller.ts,activities.service.ts,activity-steps.controller.ts,activity-steps.service.ts,dto/update-activity.dto.ts}`;
   `apps/api/src/modules/schedule/engine/earned-value.ts`;
   `apps/api/src/common/auth/org-permissions.ts`.
+- Precedent for §5: `apps/api/src/modules/resources/resource-assignment.service.ts:111-115, 240-245,
+350-353` (the same gate, same reasoning, TECH_DEBT #39);
+  `apps/api/test/plan-lock-write-gate.e2e-spec.ts` (where its case goes — beside
+  "gates resource-assignment create / update / delete on the pen" and
+  "never gates the Contributor progress path, even without the pen");
+  `apps/api/src/config/env.validation.ts:51-54` (`PLAN_EDIT_LOCK_ENFORCED` defaults to `false`);
+  `apps/api/src/common/decorators/api-locked-response.decorator.ts`.
+- Corrections folded in on 2026-07-28, both instances of the same failure mode (reading a name or an
+  attribute and inferring behaviour): the `sr-only` legend "defect" that is not one, and the "two
+  hosts disagree" claim contradicted by `plan-detail.tsx:351` and `activity-bottom-panel.tsx:84`.

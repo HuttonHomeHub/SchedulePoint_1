@@ -2,14 +2,20 @@
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Draft ADR:** [`ADR-0060`](../../adr/0060-tabbed-activity-editor-and-per-scope-save.md) (Proposed)
-- **Status:** Draft — **awaiting approval before any code is written**
+- **Status:** Draft — critical questions answered 2026-07-28 (spec §1 "Resolved decisions");
+  **awaiting approval before any code is written**
 - **Owner:** _(unassigned)_
+- **What the answers changed:** Q1 (three Saves on the Progress tab) and Q3 (the editor stays open,
+  announcing each save by section) were confirmed as drafted. **Q2 was answered with a third
+  option** — pen-gate the steps write at the **API** — which adds **Milestone M0** below: a
+  standalone, unflagged, API-side PR that ships **before** any tabs code.
 
 ## Breakdown
 
 ```mermaid
 flowchart LR
-  E["Epic: Activity editor restructure"] --> M1[M1 Tabs primitive · dark]
+  E["Epic: Activity editor restructure"] --> M0["M0 Steps pen-gate · API · UNFLAGGED · ships first"]
+  E --> M1[M1 Tabs primitive · dark]
   E --> M2[M2 Scope schemas + gating · dark]
   E --> M3[M3 Definition tabs · flagged]
   E --> M4[M4 Progress co-location · flagged]
@@ -18,22 +24,113 @@ flowchart LR
   M1 --> M3
   M2 --> M3
   M3 --> M4 --> M5 --> M6
+  M0 -.->|"no dependency either way —<br/>sequenced first because it is<br/>a defect fix, not a prerequisite"| M4
 ```
 
 ### Epic
 
 **Activity editor restructure** — replace the app's 22-field single-submit activity dialog with a
 four-tab editor whose Save follows the write scope, and co-locate the progress model that is
-currently spread across four surfaces. Frontend-only. No roadmap Must-have; this serves authoring
-ergonomics and closes four verified defects in the app's most-used authoring surface.
+currently spread across four surfaces. Frontend-only **except M0**, one small API fix that closes
+a client/server disagreement about the plan edit-lock and ships on its own. No roadmap Must-have;
+this serves authoring ergonomics and closes three verified defects in the app's most-used authoring
+surface.
 
 **Epic-level invariants — true at the end of every task:**
 
-- No API, DTO, schema or engine change. `computeSchedule` is not imported or called.
+- **Only M0 touches `apps/api/`.** Every other task's diff is confined to `apps/web/` (plus docs and
+  changesets). If a later task finds itself editing the API, the design has drifted and the spec
+  needs revisiting.
+- No schema or engine change, ever. `computeSchedule` is not imported or called.
 - `VITE_ACTIVITY_EDITOR_TABS` **off** renders the three existing dialogs byte-for-byte, pinned by
-  parity suites that are kept, never weakened.
-- No new permission and no widening of an existing one.
+  parity suites that are kept, never weakened. **M0 is not behind that flag** — a `VITE_` constant
+  is a client build-time value and cannot gate a server check.
+- No new permission and no widening of an existing one. M0 **narrows** one, deliberately.
 - `main` stays releasable after every task.
+
+---
+
+### Milestone M0 — The steps write joins the edit-lock (API, unflagged, ships first)
+
+**Outcome:** `PUT …/activities/:activityId/steps` asserts the plan edit-lock like every sibling
+structural write, so the client and the server finally agree about who may change an activity's
+steps. Independent of the rest of the epic in both directions.
+
+**Why it is here at all, and why first.** The client has always required the pen for steps; the
+server never checked. That is a defect on its own terms — it is not a consequence of adding tabs,
+and it should not wait on a flagged UI epic to be fixed. It is also small: one assertion, one
+decorator, two tests.
+
+**Can it genuinely ship before any tabs code? Yes — and here is the check, not the assertion.**
+
+- **No web change is needed.** Both real `ActivitiesTable` call sites already pass the pen-gated
+  boolean into the prop that gates the Steps row action: `plan-detail.tsx:351` and
+  `activity-bottom-panel.tsx:84` both render `canWrite={model.canEditSchedule}`. The prop is merely
+  _named_ `canWrite`. `plan-dialogs.tsx:156` gates the same dialog on `model.canEditSchedule`
+  directly. So there is no lit-but-doomed button to fix, and **the first draft of this plan was
+  wrong to say the two hosts disagreed** — they agree; it is the server that dissents.
+- **No import, DI or ordering dependency on M1–M6.** `ActivityStepsService` already receives
+  services by constructor injection in `ActivitiesModule`; adding the edit-lock service is the same
+  wiring `ActivitiesService` and `ResourceAssignmentService` already have.
+- **Nothing in M1–M6 depends on M0 landing.** The tabs work would function identically against the
+  un-gated endpoint; M0 only means the Weighted-steps panel's 423 path is real rather than
+  theoretical. Sequencing is a judgement about value and blast radius, not a constraint.
+
+**Release impact.** A previously-accepted request can now return 423 — a user-visible contract
+change, so it carries a **changeset** (minor, pre-1.0, CLAUDE.md §10). Two honest qualifications:
+`PLAN_EDIT_LOCK_ENFORCED` **defaults to `false`** (`config/env.validation.ts:51-54`) and
+`assertHoldsPen` no-ops while it is off, so a default deployment sees no behaviour change today;
+and no user loses a visible affordance, because every web path to the write already required the
+pen. The change matters at the moment an operator enables enforcement — which is precisely when a
+missed gate would be worst to discover.
+
+---
+
+#### Feature: `assertHoldsPen` on the weighted-steps write
+
+> **Description:** bring the steps `PUT` under the ADR-0028 single-editor write-gate, document its
+> 423, and prove both branches.
+> **Complexity:** S
+> **Dependencies:** none — nothing in this epic, and nothing outside it.
+> **Risks:** (a) placing the assertion before the 403/404 checks would leak existence to a
+> non-member → put it **after** them, matching `activities.service.ts:334` and the assertion already
+> pinned by the e2e ("403 and 404 still precede the 423 gate"); (b) an import path that reaches the
+> steps service through a non-pen context (interchange, restore) 423-ing unexpectedly → checked:
+> `activity-steps.service.ts` has no internal callers, only the controller.
+> **Testing requirements:** service spec (both branches, mocked lock) + a new case in the existing
+> `plan-lock-write-gate.e2e-spec.ts`; the existing "never gates the Contributor progress path" case
+> must stay green.
+
+##### Task 0.1 — Gate the write and declare the 423 (≈ one PR)
+
+- **Description:** inject the edit-lock service into `ActivityStepsService`; in `replace()`, after
+  `assertCan('activity:update', …)` and after the activity is loaded (which gives `planId`), call
+  `await this.editLock.assertHoldsPen(principal, activity.planId, organization.id)`. Add
+  `@ApiLockedResponse(...)` to the `PUT` in `activity-steps.controller.ts` and update the route's
+  description. Follow the resource-assignment precedent verbatim
+  (`resource-assignment.service.ts:111-115`), including the comment style that says _why_ the write
+  is structural — here: **a steps `PUT` bumps the parent activity's `version`**, so it is an
+  activity write by any reading, and it feeds the ADR-0044 §33 physical-% rollup.
+- **Complexity:** S
+- **Dependencies:** none
+- **Risks:** the `GET` must stay ungated (reads are member-level, `activity:read`) → assert it in
+  the e2e, not just in review.
+- **Testing:**
+  - Service spec: holder → proceeds; non-holder → `LockedError`; enforcement off → inert.
+  - E2e in `apps/api/test/plan-lock-write-gate.e2e-spec.ts`, beside the resource-assignment case:
+    non-holder `PUT` → **423** and the step rows are unchanged; holder → **200**; `GET` steps → 200
+    for a non-holder; 403/404 still precede the 423.
+  - Re-run `activity-steps.service.spec.ts` and the steps API e2e unchanged.
+- **Development steps:**
+  1. DI + assertion + comment.
+  2. `@ApiLockedResponse` + route description; regenerate/verify the OpenAPI document.
+  3. Service spec + e2e case.
+  4. `docs/API.md`; a `TECH_DEBT.md` line for the gap found while checking the precedent — the
+     resource-assignment routes assert the pen but **do not** declare `@ApiLockedResponse`
+     (verified: no match for that decorator under `modules/resources/`), so their 423 is undocumented.
+  5. Changeset (minor): "the weighted-steps write now requires the plan edit-lock when enforcement
+     is enabled".
+  6. Review with **api-reviewer** and **security-reviewer** before merge.
 
 ---
 
@@ -201,17 +298,20 @@ shading. Progress and Steps still open their existing dialogs. Flag off: nothing
   - Success → panel re-seeds from the response, marker clears, `useAnnounce` says "General saved.",
     the dialog stays open, `onSaved(before, after)` still fires (ADR-0048 undo).
   - Focus lands on the selected tab on open (not the close button).
-  - Zero `sr-only` legends in the rendered editor (structural query).
+  - Every section heading is visible **and rendered from one string** (a structural query over the
+    panel's headings). NB this is a de-duplication/consistency requirement, **not** an accessibility
+    fix — the existing `sr-only` `<legend>` + visible `aria-hidden` paragraph pairing is equivalent
+    for both audiences and is not a defect (spec §1).
 - **Development steps:**
   1. Shell + tab set derivation (a tab with no visible field is not rendered).
-  2. General panel with visible legends; move `Description` into it.
+  2. General panel with visible section headings from single constants; move `Description` into it.
   3. Save wiring, announcement, `onSaved`.
   4. Tests, including the two trap regressions where applicable.
 
 ##### Task 3.3 — Scheduling panel (the grouping fixes)
 
 - **Description:** Calendar / **Constraints (primary + secondary together)** / Placement & targets /
-  External dates / Resource levelling, each a visible-legend fieldset. Keeps every existing
+  External dates / Resource levelling, each a fieldset with a visible heading. Keeps every existing
   conditional rule verbatim: the constraint date appears once a type is chosen, the
   `RESOURCE_DEPENDENT` calendar picker stays disabled with its reason, expected finish hides for
   duration-derived types, `calendarScopeErrorMessage` still maps the ADR-0053 rejections.
@@ -307,13 +407,17 @@ version}`; the UNITS pointer opens the resources dialog.
 
 - **Description:** port `ActivityStepsDialog`'s field array (add/remove/reorder, its careful focus
   management, its loading/error states, the live rollup) into a panel with **Save steps** →
-  `PUT …/steps`. Gating per **Q2** (default: pen-gated in the UI, with the reason stated).
+  `PUT …/steps`. **Pen-gated** (Q2, resolved), which is what both existing web hosts already do and
+  what M0 makes the server agree with; the panel shades with the standard pen reason and handles a
+  raced 423 like every other pen-gated scope.
 - **Complexity:** M
-- **Dependencies:** 4.2
+- **Dependencies:** 4.2. **Not** M0 — the panel behaves identically against a gated or un-gated
+  endpoint; M0 only makes its 423 path reachable in practice.
 - **Risks:** the existing focus choreography after add/remove is subtle and easy to lose in a port →
   mitigation: port its tests verbatim first, then move the markup.
 - **Testing:** the ported focus/announce tests pass unchanged; a steps save bumps the version and
-  the **other** panels' next save still succeeds (the version trap, again, across endpoints).
+  the **other** panels' next save still succeeds (the version trap, again, across endpoints); a
+  mocked 423 shades the panel with the pen reason.
 
 ##### Task 4.4 — Progress/Steps entry points fork on the flag
 
@@ -362,9 +466,13 @@ table, the canvas and the toolbar because there is nothing to drift.
   steps dialogs under the flag; `ActivitiesTable` uses the same helper;
   `selection-actions.tsx` item callbacks build intents.
 - **Complexity:** M · **Dependencies:** 5.1
-- **Risks:** `ActivitiesTable` currently gates its **Steps** row action on `canWrite` (role only)
-  while the workspace gates it on `canEditSchedule` (role + pen) — a real, pre-existing divergence.
-  Convergence resolves it per **Q2** and the change must be stated in the changeset, not slipped in.
+- **Risks:** the `ActivitiesTable` prop named `canWrite` is fed `model.canEditSchedule` at both call
+  sites (`plan-detail.tsx:351`, `activity-bottom-panel.tsx:84`), so it is **already** the pen-gated
+  boolean despite its name. An earlier draft of this plan read the name and claimed the hosts
+  diverged; they do not. The risk is therefore the opposite of what was written: a refactor that
+  "fixes" the naming could silently change the value being passed → mitigation: rename the prop to
+  `canEditSchedule` in the same PR as the convergence, with the parity test asserting the gating
+  outcome rather than the prop name.
 - **Testing:** the three-host parity test; flag-off parity for every touched screen.
 
 ---
@@ -391,9 +499,13 @@ the Contributor path. The flag-off suites stay as the rollback contract.
 
 - **Description:** run **accessibility-reviewer** (tab semantics, focus on open and on change, the
   disabled-with-reason trade-off, marker naming), **ux-reviewer** (tab labels, three-Save legibility,
-  copy of every reason sentence), **component-reviewer** (the `Tabs` API, token usage, no one-off
+  copy of every reason sentence, and the **stay-open-after-save** change — two of the three replaced
+  dialogs close on save today, so this is the epic's most likely muscle-memory complaint),
+  **component-reviewer** (the `Tabs` API, token usage, no one-off
   styling), **security-reviewer** (per-scope bodies, no widened gate, the client-derived
-  `canReadCost`). Fold every blocking finding.
+  `canReadCost`). Fold every blocking finding. **api-reviewer + security-reviewer already ran on M0**
+  (its own PR) — they are applicable to this epic because of that milestone, and were wrongly ruled
+  out while it was described as frontend-only.
 - **Complexity:** M · **Dependencies:** M5 · **Testing:** the findings' own regression tests.
 
 ##### Task 6.2 — Playwright journey `apps/web/e2e-activity-editor/`
@@ -413,9 +525,10 @@ the Contributor path. The flag-off suites stay as the rollback contract.
 
 - **Description:** `flagDefaultOff` → `flagDefaultOn` with a dated docblock recording the gates that
   passed; update `CLAUDE.md` §16 with ADR-0060, `docs/COMPONENT_LIBRARY.md`,
-  `docs/UX_STANDARDS.md` (the "one Save per write scope" rule), `docs/TECH_DEBT.md` (the steps-PUT
-  pen asymmetry; the client-derived `canReadCost`; the retirement of the superseded dialogs);
-  changeset (minor, pre-1.0 user-visible).
+  `docs/UX_STANDARDS.md` (the "one Save per write scope" rule), `docs/TECH_DEBT.md` (the
+  client-derived `canReadCost`; the undocumented 423 on the resource-assignment routes; the
+  retirement of the superseded dialogs — the steps-PUT asymmetry itself is **closed by M0**, not
+  registered as debt); changeset (minor, pre-1.0 user-visible).
 - **Complexity:** S
 - **Dependencies:** 6.2
 - **Risks:** deleting the superseded dialogs at the flip would destroy the rollback contract →
@@ -427,18 +540,26 @@ the Contributor path. The flag-off suites stay as the rollback contract.
 
 ## Sequencing & slices
 
+0. **M0 ships first and alone** — one PR, API-side, **unflagged**, with its own changeset. It is
+   sequenced first because it is a standing defect (the server never checked a lock the client has
+   always required), not because anything downstream needs it. It could equally ship after M6; it
+   should not, because "we found a hole in the edit-lock" is not a thing to hold behind a UI epic.
+   If the epic were cancelled tomorrow, M0 should still land.
 1. **M1** and **M2** are dark and independent of each other — they can land in either order or in
    parallel. Neither changes a pixel.
 2. **M3** is the first user-visible slice, and only behind the flag, and only for **Edit**. If it
    stopped here it would still be releasable and coherent.
 3. **M4** is the slice that pays off the audit's headline finding. It is deliberately after M3 so
    the tab machinery is already proved before the three-write-scope tab is built on it.
-4. **M5** is a refactor with no new behaviour except the Q2 resolution — small, reviewable, and
-   after the surfaces it converges are all built.
+4. **M5** is a refactor with no new user-facing behaviour — small, reviewable, and after the
+   surfaces it converges are all built.
 5. **M6** flips. The flip is its own PR and its own decision.
 
 Feature flag: `VITE_ACTIVITY_EDITOR_TABS`, default off from M3 until M6. Every milestone from M3 on
-adds or extends a flag-off parity suite for the screens it touches.
+adds or extends a flag-off parity suite for the screens it touches. **M0 is deliberately not behind
+it** — a `VITE_` constant is a client build-time value and cannot gate a server check; flagging it
+would recreate the very client/server divergence it removes. It rides `PLAN_EDIT_LOCK_ENFORCED`,
+the switch every other pen assertion already rides.
 
 ## Definition of Done (per task)
 
@@ -449,24 +570,30 @@ CI green, changeset, version impact.
 
 Additional per-PR checks specific to this epic:
 
-- The diff touches **no** file under `apps/api/` or `packages/` (except test fixtures). If it does,
-  the ADR's premise has changed and the spec needs revisiting.
+- **Outside M0**, the diff touches **no** file under `apps/api/` or `packages/` (except test
+  fixtures). If it does, the ADR's premise has changed and the spec needs revisiting. **M0's** diff
+  is the mirror image: `apps/api/` only, plus docs and its changeset.
 - Any new save path has a **request-body key-set assertion**.
-- Any new fieldset has a **visible** `<legend>`.
+- Any new fieldset renders a **visible heading from a single string** (not "a real `<legend>`" — the
+  `sr-only` + `aria-hidden` pairing is a legitimate layout workaround, spec §1).
 - No colour literal in `className`/`style` (the ADR-0055 lint rule).
+- **M0 only:** reviewed by **api-reviewer** and **security-reviewer**; the OpenAPI 423 is declared;
+  `docs/API.md` updated in the same PR.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                   | Likelihood            | Impact   | Mitigation                                                                                                                        |
-| --------------------------------------------------------------------------------------------------- | --------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| A scope save carries another scope's keys → a capability regression or a silent overwrite           | med                   | **high** | Exact key-set assertions per builder; per-scope hook; the M6 Contributor e2e                                                      |
-| A scope captures `version` at open → 409 on the second save                                         | **high** if unguarded | high     | Requirement V1 (read at submit from the live row) + the "save two scopes in a row" regression test                                |
-| The seed effect is widened to react to the activity object → saving one panel wipes another's edits | med                   | high     | Keep the effect keyed on `open` + `activity.id`; dedicated test                                                                   |
-| The schema split silently drops a field or a refinement                                             | med                   | high     | Structural key-union test + per-refinement tests, written before the split                                                        |
-| RHF stops retaining values across panel unmount (library default change)                            | low                   | med      | Pinned by an explicit test, not trusted                                                                                           |
-| Three Save buttons on the Progress tab read as clutter                                              | med                   | med      | Each in its own captioned panel, labelled by what it saves; ux-reviewer gate in M6                                                |
-| Q2 resolved as "pen-gate steps" narrows the table's current role-only Steps path                    | **certain if chosen** | low      | Taking the pen is one click; stated in the changeset and the ADR, not slipped in                                                  |
-| `canReadCost` derived client-side from role drifts if the permission sets diverge                   | low                   | med      | True today (verified in `org-permissions.ts`); TECH_DEBT entry to expose a server flag if they ever separate                      |
-| Flag-off parity suites get weakened to make a change easy                                           | low                   | high     | They are the rollback contract; the ADR says so and the M6 gate re-runs them after the flip                                       |
-| Scope creep into "steps should drive dates"                                                         | med                   | high     | Named out of scope in the spec and the ADR; it would need its own ADR + ADR-0035 conformance scenarios + a recalc-parity argument |
-| Scope creep into `ActivityResourcesDialog`                                                          | med                   | med      | Out of scope with a stated reason; recommended as its own spec (master/detail, not tabs)                                          |
+| Risk / assumption                                                                                   | Likelihood                           | Impact   | Mitigation                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A scope save carries another scope's keys → a capability regression or a silent overwrite           | med                                  | **high** | Exact key-set assertions per builder; per-scope hook; the M6 Contributor e2e                                                                                        |
+| A scope captures `version` at open → 409 on the second save                                         | **high** if unguarded                | high     | Requirement V1 (read at submit from the live row) + the "save two scopes in a row" regression test                                                                  |
+| The seed effect is widened to react to the activity object → saving one panel wipes another's edits | med                                  | high     | Keep the effect keyed on `open` + `activity.id`; dedicated test                                                                                                     |
+| The schema split silently drops a field or a refinement                                             | med                                  | high     | Structural key-union test + per-refinement tests, written before the split                                                                                          |
+| RHF stops retaining values across panel unmount (library default change)                            | low                                  | med      | Pinned by an explicit test, not trusted                                                                                                                             |
+| Three Save buttons on the Progress tab read as clutter                                              | med                                  | med      | Each in its own captioned panel, labelled by what it saves; ux-reviewer gate in M6                                                                                  |
+| M0 makes a previously-accepted steps `PUT` return 423 for a non-holder                              | **certain, where enforcement is on** | low      | Inert while `PLAN_EDIT_LOCK_ENFORCED=false` (the default); no visible web affordance is lost (every web path already required the pen); changeset (minor) states it |
+| M0's assertion placed before the 403/404 checks would leak existence to a non-member                | low                                  | high     | Place it after them, matching `activities.service.ts:334`; the e2e already pins "403 and 404 precede the 423"                                                       |
+| A non-controller caller of the steps service starts 423-ing (import, restore)                       | low                                  | med      | Verified: `activity-steps.service.ts` has no internal callers, only its controller                                                                                  |
+| `canReadCost` derived client-side from role drifts if the permission sets diverge                   | low                                  | med      | True today (verified in `org-permissions.ts`); TECH_DEBT entry to expose a server flag if they ever separate                                                        |
+| Flag-off parity suites get weakened to make a change easy                                           | low                                  | high     | They are the rollback contract; the ADR says so and the M6 gate re-runs them after the flip                                                                         |
+| Scope creep into "steps should drive dates"                                                         | med                                  | high     | Named out of scope in the spec and the ADR; it would need its own ADR + ADR-0035 conformance scenarios + a recalc-parity argument                                   |
+| Scope creep into `ActivityResourcesDialog`                                                          | med                                  | med      | Out of scope with a stated reason; recommended as its own spec (master/detail, not tabs)                                                                            |
