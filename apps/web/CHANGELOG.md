@@ -1,5 +1,49 @@
 # @repo/web
 
+## 0.56.0
+
+### Minor Changes
+
+- [#185](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/185) [`8a9ae73`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8a9ae730b7b03d46d12be6bc0a5443c801e91863) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make resource-dependent activities reachable, and show when one has no driver.
+
+  **Resource-dependent** joins the activity Type picker. The scheduling behaviour has been live since
+  M7.2 — such an activity is scheduled on its driving resource's calendar rather than its own — but the
+  type was missing from the picker, so the only way to create one was through the API or an import.
+
+  The engine's "no driving resource assignment" flag is now visible too: a **Needs a driver** badge on
+  the row and a **Missing a driver** count in the schedule summary, each explaining that the activity
+  was scheduled on the ordinary calendar rather than skipped. Until now that flag was computed, stored
+  and returned by the API without anything rendering it, so a plan could schedule work on the wrong
+  working time and look completely normal.
+
+  The per-activity calendar picker is disabled — with the reason shown — while the type is
+  resource-dependent, since the driving resource's calendar wins and any value saved there is ignored.
+
+### Patch Changes
+
+- [#185](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/185) [`8a9ae73`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8a9ae730b7b03d46d12be6bc0a5443c801e91863) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the activity editor's per-scope schemas, body builders and gating (dark)
+
+  The pure layer the tabbed editor stands on: four scope schemas partitioning
+  `activityFormSchema` (with a structural test asserting the partition is exact in
+  both directions), four PATCH body builders whose exact key sets are pinned, a
+  `useUpdateActivityFields` partial-update hook beside the unchanged
+  `useUpdateActivity`, and `deriveActivityEditorGating` with a full role × pen
+  matrix test. Nothing consumes any of it yet, so nothing user-visible changes.
+
+- [#185](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/185) [`8a9ae73`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8a9ae730b7b03d46d12be6bc0a5443c801e91863) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the tabbed activity editor's definition tabs (behind VITE_ACTIVITY_EDITOR_TABS, default off)
+
+  General / Scheduling / Cost, each with its own form, its own Save and its
+  own gate. Nothing reaches it yet — the entry points still open the existing
+  dialog — so with the flag off, or on, today's behaviour is unchanged.
+
+- [#185](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/185) [`8a9ae73`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8a9ae730b7b03d46d12be6bc0a5443c801e91863) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the `Tabs` design-system primitive (no consumer yet)
+
+  A hand-rolled WAI-ARIA APG tablist in `components/ui/tabs.tsx`: roving
+  `tabindex`, Arrow/Home/End with wraparound, automatic activation, and text
+  markers that extend a tab's accessible name rather than tinting it. Built for
+  `ActivityEditorDialog` (ADR-0060) and not yet wired to anything, so nothing
+  user-visible changes.
+
 ## 0.55.0
 
 ### Minor Changes
