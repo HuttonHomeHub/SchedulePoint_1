@@ -100,6 +100,7 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
                 // the cross-plan section this feature must not import sideways — so each has its
                 // own regression test.
                 logic: {
+                  onAdded: model.recordDependencyAdd,
                   onRemoved: model.recordDependencyRemove,
                   ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
                     ? { onNudgeLag: model.nudgeDependencyLag }

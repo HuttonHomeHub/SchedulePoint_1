@@ -577,6 +577,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
   );
+  // Record a dependency ADD on the undo stack (ADR-0048 M2), the mirror of `recordDependencyRemove`.
+  // Called by the Logic panel after a successful add — the canvas link path records its own inline
+  // (there is no shared code path, so there is no double-count; a test asserts exactly one command
+  // per add). Undoing an add was asymmetric until this: removing a link from the panel could be
+  // undone, adding one could not.
+  const recordDependencyAdd = useCallback(
+    (dependency: DependencySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      editHistory.record(
+        dependencyAddCommand({
+          dependency,
+          createDependency: createDependency.mutateAsync,
+          deleteDependency: deleteDependency.mutateAsync,
+        }),
+      );
+    },
+    [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
+  );
   // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
   // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
   // EARLY mode) the schedule mode is always EARLY, so today's SNET path is byte-for-byte unchanged.
@@ -1296,6 +1314,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // removal. No-ops when `VITE_UNDO_REDO` is off.
     recordActivityDelete,
     recordDependencyRemove,
+    recordDependencyAdd,
     // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.

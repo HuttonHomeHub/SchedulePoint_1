@@ -35,6 +35,7 @@ export function ActivityLogicPanel({
   canManageLogic = false,
   manageLogicReason,
   enabled = true,
+  onAdded,
   onRemoved,
   onNudgeLag,
   crossPlanSlot,
@@ -62,6 +63,11 @@ export function ActivityLogicPanel({
    * for a host that mounts on demand (the dialog, which renders its children only while open).
    */
   enabled?: boolean;
+  /**
+   * Called with the created edge after a successful add (ADR-0048 M2) — the mirror of
+   * {@link onRemoved}, and the reason the undo stack is symmetric for links.
+   */
+  onAdded?: (dependency: DependencySummary) => void;
   /**
    * Called with the just-removed edge after a successful remove (ADR-0048 M2) — the composition root
    * passes the undo/redo recording seam here, keeping this feature free of a sideways feature import.
@@ -222,6 +228,7 @@ export function ActivityLogicPanel({
               options={others}
               gate={{ writable: canManageLogic, reason: manageLogicReason ?? null }}
               {...(activity ? { anchor: activity } : {})}
+              {...(onAdded ? { onAdded } : {})}
             />
           ) : null}
           {/* Cross-plan links (ADR-0045) — passed by the composition root only when

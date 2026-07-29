@@ -29,6 +29,8 @@ export function DependencyEditor({
   open: boolean;
   onClose: () => void;
   /** See {@link ActivityLogicPanel} — forwarded unchanged. */
+  onAdded?: (dependency: DependencySummary) => void;
+  /** See {@link ActivityLogicPanel} — forwarded unchanged. */
   onRemoved?: (dependency: DependencySummary) => void;
   /** See {@link ActivityLogicPanel} — forwarded unchanged. */
   onNudgeLag?: (dependency: DependencySummary, delta: number) => void;

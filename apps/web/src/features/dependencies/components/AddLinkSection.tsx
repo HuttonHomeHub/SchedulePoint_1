@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -51,6 +51,7 @@ export function AddLinkSection({
   anchor,
   options,
   gate,
+  onAdded,
 }: {
   orgSlug: string;
   planId: string;
@@ -60,6 +61,12 @@ export function AddLinkSection({
   options: ActivitySummary[];
   /** May this member add links, and — when not — why (the shade-with-a-reason rule, ADR-0060 §6). */
   gate: { writable: boolean; reason: string | null };
+  /**
+   * Called with the created edge after a successful add (ADR-0048 M2) — the mirror of the panel's
+   * `onRemoved`. Without it the undo stack was asymmetric: a link removed here could be undone, a
+   * link added here could not.
+   */
+  onAdded?: (dependency: DependencySummary) => void;
 }): React.ReactElement {
   const create = useCreateDependency(orgSlug);
   const announce = useAnnounce();
@@ -103,7 +110,8 @@ export function AddLinkSection({
         lagCalendar: values.lagCalendar,
       },
       {
-        onSuccess: () => {
+        onSuccess: (created) => {
+          onAdded?.(created);
           announce(`Dependency added to “${anchor.name}”.`);
           // Keep the direction the planner chose — linking up a chain means adding several
           // predecessors in a row, and re-picking "predecessor" each time is friction.

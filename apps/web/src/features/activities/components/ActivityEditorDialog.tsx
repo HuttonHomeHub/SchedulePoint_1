@@ -157,6 +157,8 @@ export function ActivityEditorDialog({
   logic?: {
     /** `VITE_PROGRAMME_SCHEDULING`'s cross-plan links section (ADR-0045). */
     crossPlanSlot?: React.ReactNode;
+    /** Undo recording for an added link (ADR-0048 M2). */
+    onAdded?: (dependency: DependencySummary) => void;
     /** Undo recording for a removed link (ADR-0048 M2). */
     onRemoved?: (dependency: DependencySummary) => void;
     /** The coalesced keyboard lag nudge (ADR-0052 M3) — `Shift+←/→` on a link's row buttons. */
@@ -709,6 +711,7 @@ export function ActivityEditorDialog({
                   {...(activity ? { activity } : {})}
                   {...(gating.logic.reason ? { manageLogicReason: gating.logic.reason } : {})}
                   {...(logic?.crossPlanSlot ? { crossPlanSlot: logic.crossPlanSlot } : {})}
+                  {...(logic?.onAdded ? { onAdded: logic.onAdded } : {})}
                   {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
                   {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
                 />
@@ -725,6 +728,10 @@ export function ActivityEditorDialog({
                   activityDurationType={activity.durationType}
                   isMilestone={isMilestoneType(activity.type)}
                   canWrite={gating.resources.writable}
+                  // The Cost tab and the assignment money fields answer to one gate: a role that
+                  // cannot read cost gets no tab AND no cost fields on a row. Latent today
+                  // (`canReadCost === canWrite`, TECH_DEBT #62) and load-bearing the day it isn't.
+                  canReadCost={gating.cost.readable}
                   enabled={open && current === 'resources'}
                 />
               ) : null}

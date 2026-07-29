@@ -1,6 +1,6 @@
 import type { ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assignmentKeys, resourceKeys } from '../api/use-resources';
@@ -14,6 +14,7 @@ import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   LIBRARY_SCOPING_ENABLED: false,
+  EARNED_VALUE_ENABLED: true,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
@@ -112,6 +113,24 @@ describe('ActivityResourcesPanel', () => {
     vi.mocked(apiFetch).mockRejectedValue(new Error('offline'));
     renderPanel({ seed: false });
     expect(await screen.findByText(/Couldn’t load assignments/)).toBeInTheDocument();
+  });
+
+  // Scoped to the assigned ROW: the assign form carries its own "Budgeted cost" field, so an
+  // unscoped query would match either one and prove neither.
+  const assignedRow = (): HTMLElement => screen.getByRole('listitem');
+
+  it('shows the assignment’s money fields to a role that can read cost', () => {
+    renderPanel();
+    expect(within(assignedRow()).getByLabelText('Budgeted cost')).toBeInTheDocument();
+  });
+
+  it('withholds them from a role that cannot — the same gate the Cost tab answers to', () => {
+    // Latent today (`canReadCost === canWrite`, TECH_DEBT #62); a tightening that becomes
+    // load-bearing the day those role sets diverge, which is when nobody will be looking.
+    renderPanel({ canReadCost: false });
+    expect(within(assignedRow()).queryByLabelText('Budgeted cost')).not.toBeInTheDocument();
+    // The row itself is still there — this gates the money, not the assignment.
+    expect(screen.getByRole('button', { name: 'Unassign Crew A' })).toBeInTheDocument();
   });
 
   it('issues no request while disabled — a host may mount it before it is showing', async () => {

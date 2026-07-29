@@ -246,6 +246,7 @@ export function AssignmentRow({
   durationType,
   showCurve,
   canWrite,
+  canReadCost = true,
   onRemoved,
 }: {
   orgSlug: string;
@@ -259,6 +260,8 @@ export function AssignmentRow({
   /** Whether the loading-curve control is applicable (false for a zero-span milestone, TECH_DEBT #44b). */
   showCurve: boolean;
   canWrite: boolean;
+  /** May this member see cost figures (see {@link ActivityResourcesPanel}). Defaults true. */
+  canReadCost?: boolean;
   /** Called after a successful unassign so the parent can restore focus (the row unmounts). */
   onRemoved: () => void;
 }): React.ReactElement {
@@ -556,8 +559,9 @@ export function AssignmentRow({
               Unassign
             </Button>
           </div>
-          {/* Cost & actuals (EV4b, ADR-0042) — the EV read's per-assignment inputs, behind the flag. */}
-          {EARNED_VALUE_ENABLED ? (
+          {/* Cost & actuals (EV4b, ADR-0042) — the EV read's per-assignment inputs, behind the
+              flag and the caller's cost-read gate. */}
+          {EARNED_VALUE_ENABLED && canReadCost ? (
             <AssignmentCostFields
               orgSlug={orgSlug}
               planId={planId}

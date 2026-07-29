@@ -57,6 +57,7 @@ export function ActivityResourcesPanel({
   activityDurationType,
   isMilestone = false,
   canWrite,
+  canReadCost = true,
   enabled = true,
   onRowRemoved,
 }: {
@@ -73,6 +74,13 @@ export function ActivityResourcesPanel({
    * since a curve has no span to distribute units over (TECH_DEBT #44b). Defaults false. */
   isMilestone?: boolean;
   canWrite: boolean;
+  /**
+   * May this member see cost figures. Defaults **true**, which is the dialog's behaviour and today's
+   * only reality (`canReadCost === canWrite`, TECH_DEBT #62). A host that derives the two separately
+   * — the editor, from its cost scope — passes the real answer, so the money fields follow the same
+   * gate the Cost tab does the day those role sets diverge.
+   */
+  canReadCost?: boolean;
   /**
    * Whether this surface is currently showing. False keeps the panel mounted but idle — no library or
    * assignment queries are issued — for a host that mounts it before it is visible. Default true.
@@ -234,6 +242,7 @@ export function ActivityResourcesPanel({
                   durationType={activityDurationType}
                   showCurve={showCurve}
                   canWrite={canWrite}
+                  canReadCost={canReadCost}
                   onRemoved={() => (onRowRemoved ? onRowRemoved() : listRef.current?.focus())}
                 />
               ))}
@@ -381,10 +390,10 @@ export function ActivityResourcesPanel({
                     })}
                   />
                 ) : null}
-                {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag. Money in
-                    MAJOR units (×100 → minor on submit); budgeted cost is an optional override of the
-                    units × rate derivation. */}
-                {EARNED_VALUE_ENABLED ? (
+                {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag and the
+                    caller's cost-read gate. Money in MAJOR units (×100 → minor on submit); budgeted
+                    cost is an optional override of the units × rate derivation. */}
+                {EARNED_VALUE_ENABLED && canReadCost ? (
                   <>
                     <TextField
                       label="Budgeted cost"

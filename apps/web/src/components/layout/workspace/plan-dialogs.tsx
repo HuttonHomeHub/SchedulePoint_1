@@ -56,6 +56,7 @@ export function PlanDialogs({
           canManageLogic={model.canManageLogic}
           open={model.logicActivity !== undefined}
           onClose={() => model.setLogicActivity(undefined)}
+          onAdded={model.recordDependencyAdd}
           onRemoved={model.recordDependencyRemove}
           {...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
             ? { onNudgeLag: model.nudgeDependencyLag }

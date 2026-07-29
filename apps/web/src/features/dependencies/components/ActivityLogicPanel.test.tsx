@@ -217,6 +217,19 @@ describe('ActivityLogicPanel', () => {
     expect(fetchOne).not.toHaveBeenCalled();
   });
 
+  it('reports the created edge exactly once, so undo is symmetric with remove', async () => {
+    const onAdded = vi.fn();
+    fetchOne.mockResolvedValue({ id: 'new-dep', planId: 'pl1' });
+    fetchAllPages.mockResolvedValue([]);
+    renderPanel({ canManageLogic: true, planActivities: OTHERS, onAdded });
+    fireEvent.change(screen.getByLabelText('Predecessor activity'), { target: { value: 'a1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalledTimes(1));
+    // The command needs the SERVER's row (it holds the new id undo deletes), not the form values.
+    expect(onAdded).toHaveBeenCalledWith(expect.objectContaining({ id: 'new-dep' }));
+  });
+
   it('explains a refused add rather than hiding it, when the host can say why', () => {
     fetchAllPages.mockResolvedValue([]);
     renderPanel({ planActivities: OTHERS, manageLogicReason: 'Take the pen to change logic.' });
