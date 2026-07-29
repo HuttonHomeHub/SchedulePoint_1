@@ -21,6 +21,12 @@ import { Button } from '@/components/ui/button';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
+import {
+  FieldGrid,
+  FieldGridContainer,
+  FieldGridFull,
+  FormSection,
+} from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import {
@@ -238,88 +244,121 @@ export function ResourceFormDialog({
       open={open}
       onClose={onClose}
       title={title}
+      size="lg"
       {...(isEdit || readOnly ? {} : { description: 'Add a reusable resource to the library.' })}
     >
-      <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-        <FormErrorSummary errors={errors} />
-        {mutation.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {/* Chiefly the 422 RESOURCE_REQUIRES_ORG_CALENDAR (ADR-0053 §2) — the picker only ever
+      <FieldGridContainer>
+        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
+          <FormErrorSummary errors={errors} />
+          {mutation.isError ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              {/* Chiefly the 422 RESOURCE_REQUIRES_ORG_CALENDAR (ADR-0053 §2) — the picker only ever
                 offers organisation calendars, so this is defence in depth against a calendar that
                 was narrowed to a project after the list loaded. */}
-            {calendarScopeErrorMessage(mutation.error) ?? mutation.error.message}
-          </p>
-        ) : null}
-        <TextField
-          label="Name"
-          autoComplete="off"
-          readOnly={readOnly}
-          error={errors.name?.message}
-          {...register('name')}
-        />
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={kindSelectId}>Kind</Label>
-          <Select id={kindSelectId} disabled={readOnly} {...register('kind')}>
-            {/* GROUP is only offered behind the flag (ADR-0053 §3) — with it off the option list
-                is byte-for-byte the three assignable kinds it has always been. */}
-            {(LIBRARY_SCOPING_ENABLED ? RESOURCE_KINDS : ASSIGNABLE_RESOURCE_KINDS).map(
-              (kindOption) => (
-                <option key={kindOption} value={kindOption}>
-                  {RESOURCE_KIND_LABELS[kindOption]}
-                </option>
-              ),
-            )}
-          </Select>
-          {isGroup ? (
-            <p className="text-muted-foreground text-sm">
-              A group only organises the library. It can’t be assigned to an activity and has no
-              calendar, capacity or cost of its own.
+              {calendarScopeErrorMessage(mutation.error) ?? mutation.error.message}
             </p>
           ) : null}
-        </div>
-        {LIBRARY_SCOPING_ENABLED ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={parentSelectId}>Group (optional)</Label>
-            <Combobox
-              id={parentSelectId}
-              value={parentId ?? ''}
-              onChange={(value) =>
-                setValue('parentId', value, { shouldDirty: true, shouldValidate: true })
-              }
-              query={parentQuery}
-              onQueryChange={setParentQuery}
-              options={parentComboboxOptions}
-              // A seeded group no longer on offer stays selected under the combobox's own
-              // "Unavailable" fallback, so the field never silently reads "top level".
-              selectedLabel={
-                parentOptions.find((row) => row.resource.id === parentId)?.resource.name
-              }
-              emptyOption={{ label: TOP_LEVEL_PARENT_LABEL }}
-              disabled={readOnly}
-              describedBy={parentHelpId}
-              toggleLabel="Show groups"
-              emptyMessage="No groups match your search."
-            />
-            <p id={parentHelpId} className="text-muted-foreground text-sm">
-              Nest this resource under a group to keep a large library navigable. Grouping is
-              organisational only — it never changes how anything is scheduled or levelled.
-            </p>
-          </div>
-        ) : null}
-        <TextField
-          label="Code (optional)"
-          autoComplete="off"
-          readOnly={readOnly}
-          hint="A short natural-key handle, unique in this organisation."
-          error={errors.code?.message}
-          {...register('code')}
-        />
-        {/* A group has no calendar, capacity or cost (ADR-0053 §3) — the fields are hidden rather
+
+          {/* The sections are consecutive siblings in their own wrapper (ADR-0061): the error
+            summary above must not sit between them, or the first section grows a stray rule. */}
+          <div className="flex flex-col gap-5">
+            <FormSection title="Identity">
+              <FieldGrid columns="lead">
+                <TextField
+                  label="Name"
+                  autoComplete="off"
+                  readOnly={readOnly}
+                  error={errors.name?.message}
+                  {...register('name')}
+                />
+                <TextField
+                  label="Code"
+                  autoComplete="off"
+                  readOnly={readOnly}
+                  hint="A short natural-key handle, unique in this organisation."
+                  error={errors.code?.message}
+                  {...register('code')}
+                />
+                <FieldGridFull>
+                  <TextareaField
+                    label="Description"
+                    readOnly={readOnly}
+                    error={errors.description?.message}
+                    {...register('description')}
+                  />
+                </FieldGridFull>
+              </FieldGrid>
+            </FormSection>
+
+            <FormSection
+              title="Classification"
+              description="What this resource is, and where it sits in the library."
+            >
+              <FieldGrid>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={kindSelectId}>Kind</Label>
+                  <Select id={kindSelectId} disabled={readOnly} {...register('kind')}>
+                    {/* GROUP is only offered behind the flag (ADR-0053 §3) — with it off the option
+                    list is byte-for-byte the three assignable kinds it has always been. */}
+                    {(LIBRARY_SCOPING_ENABLED ? RESOURCE_KINDS : ASSIGNABLE_RESOURCE_KINDS).map(
+                      (kindOption) => (
+                        <option key={kindOption} value={kindOption}>
+                          {RESOURCE_KIND_LABELS[kindOption]}
+                        </option>
+                      ),
+                    )}
+                  </Select>
+                  {isGroup ? (
+                    <p className="text-muted-foreground text-sm">
+                      A group only organises the library. It can’t be assigned to an activity and
+                      has no calendar, capacity or cost of its own.
+                    </p>
+                  ) : null}
+                </div>
+                {LIBRARY_SCOPING_ENABLED ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={parentSelectId}>Group</Label>
+                    <Combobox
+                      id={parentSelectId}
+                      value={parentId ?? ''}
+                      onChange={(value) =>
+                        setValue('parentId', value, { shouldDirty: true, shouldValidate: true })
+                      }
+                      query={parentQuery}
+                      onQueryChange={setParentQuery}
+                      options={parentComboboxOptions}
+                      // A seeded group no longer on offer stays selected under the combobox's own
+                      // "Unavailable" fallback, so the field never silently reads "top level".
+                      selectedLabel={
+                        parentOptions.find((row) => row.resource.id === parentId)?.resource.name
+                      }
+                      emptyOption={{ label: TOP_LEVEL_PARENT_LABEL }}
+                      disabled={readOnly}
+                      describedBy={parentHelpId}
+                      toggleLabel="Show groups"
+                      emptyMessage="No groups match your search."
+                    />
+                    <p id={parentHelpId} className="text-muted-foreground text-sm">
+                      Nest this resource under a group to keep a large library navigable. Grouping
+                      is organisational only — it never changes how anything is scheduled or
+                      levelled.
+                    </p>
+                  </div>
+                ) : null}
+              </FieldGrid>
+            </FormSection>
+
+            {/* A group has no calendar, capacity or cost (ADR-0053 §3) — the fields are hidden rather
             than shown-and-rejected, and `use-resources` strips any value left over from a kind
             switch, so what the form shows and what it sends can never disagree. */}
-        {isGroup ? null : (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={calendarSelectId}>Calendar (optional)</Label>
+            {isGroup ? null : (
+              <FormSection
+                title="Availability &amp; cost"
+                description="Drives scheduling, levelling and Earned Value."
+              >
+                <FieldGrid>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={calendarSelectId}>Calendar</Label>
             {LIBRARY_SCOPING_ENABLED ? (
               <Combobox
                 id={calendarSelectId}
@@ -366,67 +405,67 @@ export function ResourceFormDialog({
                 ))}
               </Select>
             )}
-            <p id={calendarHelpId} className="text-muted-foreground text-sm">
-              The working-time calendar this resource is scheduled on when it drives an activity.
-              Inherits the plan’s calendar unless you pick one.
-              {LIBRARY_SCOPING_ENABLED
-                ? ' Organisation calendars only — the resource pool is shared across every project, so a project’s own calendar can’t be used here.'
-                : null}
-            </p>
-            {calendarsError ? (
-              <p id={calendarErrorId} role="alert" className="text-destructive-text text-sm">
-                Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is available.
-              </p>
-            ) : null}
+                    <p id={calendarHelpId} className="text-muted-foreground text-sm">
+                      The working-time calendar this resource is scheduled on when it drives an
+                      activity. Inherits the plan’s calendar unless you pick one.
+                      {LIBRARY_SCOPING_ENABLED
+                        ? ' Organisation calendars only — the resource pool is shared across every project, so a project’s own calendar can’t be used here.'
+                        : null}
+                    </p>
+                    {calendarsError ? (
+                      <p id={calendarErrorId} role="alert" className="text-destructive-text text-sm">
+                        Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is
+                        available.
+                      </p>
+                    ) : null}
+                  </div>
+                  {RESOURCE_LEVELLING_ENABLED ? (
+                    <TextField
+                      label="Max units/hour"
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      readOnly={readOnly}
+                      hint="The most this resource can supply at once. Resource levelling delays activities so demand never exceeds it. Leave blank for uncapped."
+                      error={errors.maxUnitsPerHour?.message}
+                      {...register('maxUnitsPerHour', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                  ) : null}
+                  {EARNED_VALUE_ENABLED ? (
+                    <TextField
+                      label="Cost per unit"
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      readOnly={readOnly}
+                      hint="The cost per unit of work this resource does, shown in each plan’s own currency when Earned Value reads it. Earned Value derives an assignment’s budgeted cost from units × this rate. Leave blank for no rate."
+                      error={errors.costPerUnit?.message}
+                      {...register('costPerUnit', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                  ) : null}
+                </FieldGrid>
+              </FormSection>
+            )}
           </div>
-        )}
-        {RESOURCE_LEVELLING_ENABLED && !isGroup ? (
-          <TextField
-            label="Max units/hour (optional)"
-            type="number"
-            min={0}
-            step="any"
-            inputMode="decimal"
-            readOnly={readOnly}
-            hint="The most this resource can supply at once. Resource levelling delays activities so demand never exceeds it. Leave blank for uncapped."
-            error={errors.maxUnitsPerHour?.message}
-            {...register('maxUnitsPerHour', {
-              setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-            })}
-          />
-        ) : null}
-        {EARNED_VALUE_ENABLED && !isGroup ? (
-          <TextField
-            label="Cost per unit (optional)"
-            type="number"
-            min={0}
-            step="any"
-            inputMode="decimal"
-            readOnly={readOnly}
-            hint="The cost per unit of work this resource does, shown in each plan’s own currency when Earned Value reads it. Earned Value derives an assignment’s budgeted cost from units × this rate. Leave blank for no rate."
-            error={errors.costPerUnit?.message}
-            {...register('costPerUnit', {
-              setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-            })}
-          />
-        ) : null}
-        <TextareaField
-          label="Description (optional)"
-          readOnly={readOnly}
-          error={errors.description?.message}
-          {...register('description')}
-        />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            {readOnly ? 'Close' : 'Cancel'}
-          </Button>
-          {readOnly ? null : (
-            <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create resource'}
+
+          <div className="border-border flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              {readOnly ? 'Close' : 'Cancel'}
             </Button>
-          )}
-        </div>
-      </form>
+            {readOnly ? null : (
+              <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
+                {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create resource'}
+              </Button>
+            )}
+          </div>
+        </form>
+      </FieldGridContainer>
     </Dialog>
   );
 }

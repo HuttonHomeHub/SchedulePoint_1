@@ -55,7 +55,7 @@ describe('ResourceFormDialog — cost rate (flag on)', () => {
   it('creates a resource carrying the entered rate as minor units (×100)', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Excavator' } });
-    fireEvent.change(screen.getByLabelText('Cost per unit (optional)'), {
+    fireEvent.change(screen.getByLabelText('Cost per unit'), {
       target: { value: '12.50' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create resource' }));
@@ -80,7 +80,7 @@ describe('ResourceFormDialog — cost rate (flag on)', () => {
 
   it('seeds the rate (minor → major) from the row and round-trips it on save', async () => {
     renderDialog({ resource: RESOURCE });
-    expect(screen.getByLabelText('Cost per unit (optional)')).toHaveValue(12.5);
+    expect(screen.getByLabelText('Cost per unit')).toHaveValue(12.5);
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -90,7 +90,7 @@ describe('ResourceFormDialog — cost rate (flag on)', () => {
 
   it('clears the rate to null when the field is emptied on edit', async () => {
     renderDialog({ resource: RESOURCE });
-    fireEvent.change(screen.getByLabelText('Cost per unit (optional)'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Cost per unit'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -101,7 +101,7 @@ describe('ResourceFormDialog — cost rate (flag on)', () => {
   it('rejects a negative rate and makes no request', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Crew' } });
-    fireEvent.change(screen.getByLabelText('Cost per unit (optional)'), {
+    fireEvent.change(screen.getByLabelText('Cost per unit'), {
       target: { value: '-1' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create resource' }));

@@ -18,13 +18,16 @@ import { cn } from '@/lib/utils';
  * keyboard user cannot reach. Recorded in ADR-0060 rather than left as a silent deviation.
  *
  * **Markers are text, never colour** (WCAG 1.4.1): a marker renders a visible glyph or count *and*
- * extends the tab's accessible name ("Scheduling, 3 problems"), so a validation error on an
- * unfocused tab is announced rather than merely tinted. An unmarked tab's accessible name stays
- * exactly its visible label, keeping name-in-label intact (WCAG 2.5.3).
+ * extends the tab's accessible name ("Scheduling, 3 problems"), so a state on an unfocused tab is
+ * announced rather than merely tinted. An unmarked tab's accessible name stays exactly its visible
+ * label, keeping name-in-label intact (WCAG 2.5.3).
  *
- * This primitive has **one consumer** (`ActivityEditorDialog`) and is built for it deliberately —
- * no `renderTab` escape hatch, no orientation prop, no lazy-mount option. `form.tsx` records what
- * happens when a primitive grows options for a hypothetical second caller.
+ * **`orientation="vertical"` renders the list as a rail beside the panel** (ADR-0061 §3). This
+ * primitive's first version said, in this docblock, that it would never grow an orientation prop —
+ * citing `form.tsx`'s lesson about options added for hypothetical callers. The lesson stands and
+ * this is not a violation of it: the option arrives *with* its caller, the activity editor, whose
+ * scopes carry per-scope permission state that a horizontal strip has nowhere to put. An option
+ * with a real consumer and a test is the opposite of the trap `form.tsx` records.
  *
  * ```tsx
  * <Tabs label="Activity sections" tabs={TABS} active={active} onChange={setActive}>
@@ -32,21 +35,27 @@ import { cn } from '@/lib/utils';
  * </Tabs>
  * ```
  */
-export interface TabMarker {
-  /** Optional count rendered as a badge. Omit for a presence-only marker (the dirty dot). */
-  count?: number;
-  /**
-   * How the marker reads aloud, appended to the tab's label as ", <label>" — e.g. `3 problems`,
-   * `unsaved changes`. Always required when a marker is present: a marker nobody can hear is
-   * colour-only meaning.
-   */
-  label: string;
-}
+
+/**
+ * What a tab needs to say about itself beyond its name.
+ *
+ * A discriminated union rather than an optional `count`, because the three states are not degrees
+ * of one thing: an error demands attention, an unsaved edit records it, and a locked scope explains
+ * an absence. Inferring them from whether a number happened to be present is how "3 problems" and
+ * "you cannot edit this" ended up rendering as the same dot.
+ */
+export type TabMarker =
+  /** Validation errors — the count is the point, and it outranks everything else. */
+  | { kind: 'count'; count: number; label: string }
+  /** Presence-only: unsaved edits live here. */
+  | { kind: 'dot'; label: string }
+  /** This scope is readable but not writable — the permission model, made visible up front. */
+  | { kind: 'locked'; label: string };
 
 export interface TabDescriptor<T extends string> {
   id: T;
   label: string;
-  /** Present when the tab needs to say something about itself (errors, unsaved edits). */
+  /** Present when the tab needs to say something about itself (errors, unsaved edits, a lock). */
   marker?: TabMarker;
 }
 
@@ -58,6 +67,11 @@ export interface TabsProps<T extends string> {
   onChange: (id: T) => void;
   /** Renders the active panel's content. Called with the active id on every render. */
   children: (active: T) => React.ReactNode;
+  /**
+   * `'horizontal'` (default) is the strip above the panel. `'vertical'` is a rail beside it —
+   * for a dialog whose sections carry per-section state worth reading before you arrive.
+   */
+  orientation?: 'horizontal' | 'vertical';
   /** Extra classes on the wrapper. Tabs and panel are styled by the primitive, never by callers. */
   className?: string;
 }
@@ -68,10 +82,12 @@ export function Tabs<T extends string>({
   active,
   onChange,
   children,
+  orientation = 'horizontal',
   className,
 }: TabsProps<T>): React.ReactElement {
   const base = useId();
   const refs = useRef<Partial<Record<T, HTMLButtonElement | null>>>({});
+  const vertical = orientation === 'vertical';
 
   const tabId = (id: T): string => `${base}-tab-${id}`;
   const panelId = `${base}-panel`;
@@ -83,19 +99,24 @@ export function Tabs<T extends string>({
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
     const index = tabs.findIndex((tab) => tab.id === active);
-    switch (event.key) {
-      case 'ArrowRight':
-      case 'ArrowDown':
+    // A **vertical** rail answers only the vertical arrows: responding to Left/Right too would
+    // swallow keystrokes a user aims at the pane's own controls beside it (APG — the tablist's
+    // orientation determines which arrows move focus). Horizontal keeps answering both axes, which
+    // is what it has always done and is permitted; narrowing it here would be an unrelated
+    // behaviour change smuggled in with a layout one.
+    const next: string[] = vertical ? ['ArrowDown'] : ['ArrowRight', 'ArrowDown'];
+    const previous: string[] = vertical ? ['ArrowUp'] : ['ArrowLeft', 'ArrowUp'];
+    switch (true) {
+      case next.includes(event.key):
         move(tabs[(index + 1) % tabs.length]!.id);
         break;
-      case 'ArrowLeft':
-      case 'ArrowUp':
+      case previous.includes(event.key):
         move(tabs[(index - 1 + tabs.length) % tabs.length]!.id);
         break;
-      case 'Home':
+      case event.key === 'Home':
         move(tabs[0]!.id);
         break;
-      case 'End':
+      case event.key === 'End':
         move(tabs[tabs.length - 1]!.id);
         break;
       default:
@@ -105,13 +126,20 @@ export function Tabs<T extends string>({
   };
 
   return (
-    <div className={cn('flex min-h-0 flex-col', className)}>
-      {/* The list scrolls rather than wraps: a wrapped tablist reflows the panel below it as the
-          marker set changes, which moves the content under the user's cursor mid-edit. */}
+    <div className={cn('flex min-h-0', vertical ? 'flex-row' : 'flex-col', className)}>
+      {/* Horizontal: the list scrolls rather than wraps — a wrapped tablist reflows the panel below
+          it as the marker set changes, which moves content under the user's cursor mid-edit.
+          Vertical: it is a fixed-width rail that scrolls independently of the pane. */}
       <div
         role="tablist"
         aria-label={label}
-        className="border-border flex shrink-0 gap-1 overflow-x-auto border-b"
+        {...(vertical ? { 'aria-orientation': 'vertical' as const } : {})}
+        className={cn(
+          'flex shrink-0',
+          vertical
+            ? 'bg-muted border-border w-52 flex-col gap-0.5 overflow-y-auto border-r p-2'
+            : 'border-border gap-1 overflow-x-auto border-b',
+        )}
       >
         {tabs.map((tab) => {
           const selected = tab.id === active;
@@ -132,27 +160,39 @@ export function Tabs<T extends string>({
               className={cn(
                 // min-h-11 keeps the target ≥ 24px with room to spare (WCAG 2.5.8); whitespace-nowrap
                 // stops a two-word label wrapping into a taller, ragged tab.
-                'focus-visible:ring-ring -mb-px flex min-h-11 items-center gap-2 border-b-2 px-4 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
-                selected
-                  ? 'border-primary text-foreground'
-                  : 'text-muted-foreground hover:text-foreground border-transparent',
+                'focus-visible:ring-ring flex min-h-11 items-center gap-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
+                vertical
+                  ? 'w-full justify-between rounded-md px-3 py-2 text-left'
+                  : '-mb-px border-b-2 px-4',
+                vertical
+                  ? selected
+                    ? 'bg-card text-foreground ring-border shadow-sm ring-1'
+                    : 'text-muted-foreground hover:text-foreground'
+                  : selected
+                    ? 'border-primary text-foreground'
+                    : 'text-muted-foreground hover:text-foreground border-transparent',
               )}
             >
-              {tab.label}
+              <span className={cn(vertical && 'truncate')}>{tab.label}</span>
               {tab.marker ? (
                 <>
                   <span
                     aria-hidden="true"
                     className={cn(
-                      'flex items-center justify-center rounded-full text-xs font-semibold',
-                      tab.marker.count === undefined
-                        ? 'bg-primary size-2'
-                        : 'bg-destructive text-destructive-foreground min-w-5 px-1.5 py-0.5',
+                      'flex shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                      tab.marker.kind === 'count'
+                        ? 'bg-destructive text-destructive-foreground min-w-5 px-1.5 py-0.5'
+                        : tab.marker.kind === 'dot'
+                          ? 'bg-primary size-2'
+                          : 'text-muted-foreground',
                     )}
                   >
-                    {tab.marker.count === undefined ? null : tab.marker.count}
+                    {tab.marker.kind === 'count' ? tab.marker.count : null}
+                    {/* A padlock glyph, not a colour and not an opacity: "you cannot write here"
+                        has to survive a greyscale screenshot and a monochrome display. */}
+                    {tab.marker.kind === 'locked' ? '🔒' : null}
                   </span>
-                  {/* The marker's meaning in words — this is what makes it more than a colour. */}
+                  {/* The marker's meaning in words — this is what makes it more than a glyph. */}
                   <span className="sr-only">, {tab.marker.label}</span>
                 </>
               ) : null}
@@ -165,7 +205,7 @@ export function Tabs<T extends string>({
         id={panelId}
         aria-labelledby={tabId(active)}
         tabIndex={0}
-        className="focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-inset"
+        className="focus-visible:ring-ring flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-inset"
       >
         {children(active)}
       </div>

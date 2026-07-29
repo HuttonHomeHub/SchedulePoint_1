@@ -19,6 +19,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
+import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 
 /** Which side of the new link the anchor activity sits on. */
 export type LinkDirection = 'predecessor' | 'successor';
@@ -133,47 +134,61 @@ export function AddDependencyDialog({
               {create.error.message}
             </p>
           ) : null}
-          <SelectField
-            label={otherLabel}
-            id="dependency-other"
-            error={errors.otherActivityId?.message}
-            {...register('otherActivityId')}
-          >
-            <option value="" disabled>
-              Choose an activity…
-            </option>
-            {options.map((activity) => (
-              <option key={activity.id} value={activity.id}>
-                {activity.code ? `${activity.code} — ${activity.name}` : activity.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label="Type" id="dependency-type" {...register('type')}>
-            {DEPENDENCY_TYPES.map((value) => (
-              <option key={value} value={value}>
-                {DEPENDENCY_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            label="Lag calendar"
-            id="dependency-lag-calendar"
-            hint={LAG_CALENDAR_HINT}
-            {...register('lagCalendar')}
-          >
-            {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
-              <option key={value} value={value}>
-                {LAG_CALENDAR_LABELS[value]}
-              </option>
-            ))}
-          </SelectField>
-          <TextField
-            label={lagFieldLabel(lagCalendar)}
-            type="number"
-            error={errors.lagDays?.message}
-            {...register('lagDays', { valueAsNumber: true })}
-          />
-          <div className="flex justify-end gap-2">
+          <FieldGridContainer className="flex flex-col gap-5">
+            <FormSection title="The link">
+              <SelectField
+                label={otherLabel}
+                id="dependency-other"
+                error={errors.otherActivityId?.message}
+                {...register('otherActivityId')}
+              >
+                <option value="" disabled>
+                  Choose an activity…
+                </option>
+                {options.map((activity) => (
+                  <option key={activity.id} value={activity.id}>
+                    {activity.code ? `${activity.code} — ${activity.name}` : activity.name}
+                  </option>
+                ))}
+              </SelectField>
+              <SelectField label="Type" id="dependency-type" {...register('type')}>
+                {DEPENDENCY_TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {DEPENDENCY_TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </SelectField>
+            </FormSection>
+
+            {/* The lag and the calendar it is counted in are one decision — a "5" means a different
+                date depending on the row above it, which stacking them concealed. */}
+            <FormSection
+              title="Lag"
+              description="How much time separates the two, and which calendar counts it."
+            >
+              <FieldGrid columns="lead">
+                <SelectField
+                  label="Lag calendar"
+                  id="dependency-lag-calendar"
+                  hint={LAG_CALENDAR_HINT}
+                  {...register('lagCalendar')}
+                >
+                  {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+                    <option key={value} value={value}>
+                      {LAG_CALENDAR_LABELS[value]}
+                    </option>
+                  ))}
+                </SelectField>
+                <TextField
+                  label={lagFieldLabel(lagCalendar)}
+                  type="number"
+                  error={errors.lagDays?.message}
+                  {...register('lagDays', { valueAsNumber: true })}
+                />
+              </FieldGrid>
+            </FormSection>
+          </FieldGridContainer>
+          <div className="border-border flex justify-end gap-2 border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>

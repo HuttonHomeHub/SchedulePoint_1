@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
@@ -483,5 +483,69 @@ describe('ActivityEditorDialog — review findings', () => {
     // saying "click Move up" could not activate it.
     const up = screen.getByRole('button', { name: 'Move up, step 1' });
     expect(up.getAttribute('aria-label')).toContain(up.textContent);
+  });
+});
+
+/**
+ * The ADR-0061 layout. These assert what the *previous* editor could not do at all — say where the
+ * activity sits while you edit it, and say which scopes are shut before you click into them.
+ */
+describe('editor layout (ADR-0061 Direction B)', () => {
+  it('navigates its scopes with a rail, not a strip', () => {
+    mount();
+    expect(screen.getByRole('tablist', { name: 'Activity sections' })).toHaveAttribute(
+      'aria-orientation',
+      'vertical',
+    );
+  });
+
+  it('keeps the computed dates and float on screen while they are being changed', () => {
+    mount({
+      activity: row({
+        earlyStart: '2026-08-12',
+        earlyFinish: '2026-08-27',
+        totalFloat: 0,
+        freeFloat: 0,
+        percentComplete: 0,
+        isCritical: true,
+      }),
+    });
+    const strip = screen.getByLabelText('Computed schedule');
+    expect(strip).toHaveTextContent('12 Aug 2026');
+    expect(strip).toHaveTextContent('27 Aug 2026');
+    expect(strip).toHaveTextContent('Critical');
+  });
+
+  it('shows no strip at all before the plan has been calculated', () => {
+    // Not a row of em dashes: an uncalculated plan is a state, and a blank strip would read as a
+    // rendering fault rather than "nothing has been computed yet".
+    mount({ activity: row({ earlyStart: null }) });
+    expect(screen.queryByLabelText('Computed schedule')).not.toBeInTheDocument();
+  });
+
+  it('marks every pen-gated scope read-only in the rail, in words', () => {
+    // The reason the rail earns its width. Flag-off — and in the horizontal strip — a Contributor
+    // discovered each shut form only by opening it.
+    mount({ gating: PLANNER_NO_PEN });
+    expect(screen.getByRole('tab', { name: 'General, read-only' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Scheduling, read-only' })).toBeInTheDocument();
+    // …but never Progress, which the pen deliberately does not gate (ADR-0028 Q-C). A padlock here
+    // would be a lie in exactly the case the rail exists to clarify.
+    expect(screen.getByRole('tab', { name: 'Progress' })).toBeInTheDocument();
+  });
+
+  it('groups the scheduling fields instead of listing them', () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Scheduling' }));
+    const constraints = screen.getByRole('group', { name: 'Constraints' });
+    expect(within(constraints).getByLabelText('Constraint')).toBeInTheDocument();
+    // The group says what it is for, linked to the group rather than floating beside it.
+    expect(constraints).toHaveAccessibleDescription(/Dates you impose on the network/);
+  });
+
+  it('identifies the activity in the header rather than prefixing "Edit"', () => {
+    mount();
+    expect(screen.getByRole('heading', { name: 'Pour slab' })).toBeInTheDocument();
+    expect(screen.getByText('A100 · Task · 5 working days')).toBeInTheDocument();
   });
 });

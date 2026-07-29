@@ -16,13 +16,21 @@ const TABS: ReadonlyArray<TabDescriptor<Key>> = [
 function Harness({
   initial = 'general',
   tabs = TABS,
+  orientation,
 }: {
   initial?: Key;
   tabs?: ReadonlyArray<TabDescriptor<Key>>;
+  orientation?: 'horizontal' | 'vertical';
 }): React.ReactElement {
   const [active, setActive] = useState<Key>(initial);
   return (
-    <Tabs label="Activity sections" tabs={tabs} active={active} onChange={setActive}>
+    <Tabs
+      label="Activity sections"
+      tabs={tabs}
+      active={active}
+      onChange={setActive}
+      {...(orientation ? { orientation } : {})}
+    >
       {(current) => <p>Panel for {current}</p>}
     </Tabs>
   );
@@ -141,8 +149,12 @@ describe('Tabs', () => {
   describe('markers', () => {
     const marked: ReadonlyArray<TabDescriptor<Key>> = [
       { id: 'general', label: 'General' },
-      { id: 'scheduling', label: 'Scheduling', marker: { count: 3, label: '3 problems' } },
-      { id: 'progress', label: 'Progress', marker: { label: 'unsaved changes' } },
+      {
+        id: 'scheduling',
+        label: 'Scheduling',
+        marker: { kind: 'count', count: 3, label: '3 problems' },
+      },
+      { id: 'progress', label: 'Progress', marker: { kind: 'dot', label: 'unsaved changes' } },
     ];
 
     it('joins a counted marker to the tab’s accessible name, never colour alone', () => {
@@ -161,6 +173,53 @@ describe('Tabs', () => {
     it('leaves an unmarked tab’s name exactly its label (WCAG 2.5.3)', () => {
       render(<Harness tabs={marked} />);
       expect(screen.getByRole('tab', { name: 'General' })).toBeInTheDocument();
+    });
+
+    it('words a locked scope rather than leaving it to a glyph', () => {
+      // The rail's whole reason for existing is that a reader learns which scopes are shut before
+      // clicking into them. A padlock nobody can hear would tell half the users nothing.
+      render(
+        <Harness
+          tabs={[
+            { id: 'general', label: 'General', marker: { kind: 'locked', label: 'read-only' } },
+            { id: 'scheduling', label: 'Scheduling' },
+            { id: 'progress', label: 'Progress' },
+          ]}
+        />,
+      );
+      expect(screen.getByRole('tab', { name: 'General, read-only' })).toBeInTheDocument();
+    });
+  });
+
+  describe('vertical orientation', () => {
+    const vertical = (): void => {
+      render(<Harness orientation="vertical" />);
+    };
+
+    it('declares its axis so assistive tech announces the right arrow keys', () => {
+      vertical();
+      expect(screen.getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
+    });
+
+    it('moves on Down/Up', () => {
+      vertical();
+      fireEvent.keyDown(selectedTab(), { key: 'ArrowDown' });
+      expect(selectedTab()).toHaveAccessibleName('Scheduling');
+      fireEvent.keyDown(selectedTab(), { key: 'ArrowUp' });
+      expect(selectedTab()).toHaveAccessibleName('General');
+    });
+
+    it('ignores Left/Right, leaving them to the panel’s own controls', () => {
+      // A rail that also answered the horizontal arrows would swallow keystrokes meant for a text
+      // field or a slider inside the pane beside it.
+      vertical();
+      fireEvent.keyDown(selectedTab(), { key: 'ArrowRight' });
+      expect(selectedTab()).toHaveAccessibleName('General');
+    });
+
+    it('has no axe violations', async () => {
+      const { container } = render(<Harness orientation="vertical" />);
+      expect((await axe(container)).violations).toEqual([]);
     });
   });
 

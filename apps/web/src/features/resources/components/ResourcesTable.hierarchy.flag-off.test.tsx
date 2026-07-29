@@ -96,6 +96,6 @@ describe('resource tree — flag off (VITE_LIBRARY_SCOPING default)', () => {
     const kind = screen.getByLabelText('Kind');
     expect(within(kind).queryByRole('option', { name: 'Group' })).not.toBeInTheDocument();
     expect(within(kind).getAllByRole('option')).toHaveLength(3);
-    expect(screen.queryByLabelText('Group (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Group')).not.toBeInTheDocument();
   });
 });
