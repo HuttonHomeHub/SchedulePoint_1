@@ -22,6 +22,7 @@ export function Dialog({
   description,
   role,
   size = 'md',
+  confirmBeforeClose = false,
   children,
 }: {
   open: boolean;
@@ -30,6 +31,15 @@ export function Dialog({
   description?: string;
   role?: 'dialog' | 'alertdialog';
   size?: keyof typeof SIZE_CLASSES;
+  /**
+   * The host may *refuse* a close — e.g. to confirm discarding unsaved work — so Escape and the
+   * backdrop must ask rather than act.
+   *
+   * Without this, `cancel` closes the `<dialog>` natively before `onClose` has any say: the host
+   * opens its confirmation into a dialog the browser has already torn down, and the user sees the
+   * editor vanish with their work. Opt-in, so every other consumer keeps today's behaviour exactly.
+   */
+  confirmBeforeClose?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
@@ -59,6 +69,9 @@ export function Dialog({
    */
   const closeIfSelf = (event: React.SyntheticEvent<HTMLDialogElement>): void => {
     if (event.target !== ref.current) return;
+    // `cancel` is Escape (and the backdrop). Cancelling it keeps the dialog on screen so the host's
+    // `onClose` can decide — the browser's default is to close first and ask never.
+    if (confirmBeforeClose && event.type === 'cancel') event.preventDefault();
     onClose();
   };
 

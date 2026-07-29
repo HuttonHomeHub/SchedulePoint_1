@@ -598,6 +598,8 @@ export function ActivitiesTable({
           onClose={() => setEditorIntent(null)}
           gating={editorGating}
           calendars={calendars}
+          calendarsLoading={calendarsLoading}
+          calendarsError={calendarsError}
           planActivities={activities.data ?? []}
           activity={intended}
           {...(editorIntent ? { intent: editorIntent } : {})}

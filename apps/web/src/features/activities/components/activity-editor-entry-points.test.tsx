@@ -7,6 +7,7 @@ import { activityKeys } from '../api/use-activities';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable } from './ActivitiesTable';
+import { expectInert } from './scope-save-bar-assertions';
 
 /**
  * M5 — entry-point convergence, with `VITE_ACTIVITY_EDITOR_TABS` forced ON.
@@ -134,7 +135,7 @@ describe('activity editor entry points (flag on)', () => {
     renderTable(CONTRIBUTOR, false);
     rowAction('Report progress');
     expect(screen.getByLabelText('Percent complete')).toBeEnabled();
-    expect(screen.getByRole('button', { name: /save measure/i })).toBeDisabled();
+    expectInert(screen.getByRole('button', { name: /save measure/i }));
     // …and Cost is not merely disabled but absent, because there is nothing there to read.
     expect(screen.queryByRole('tab', { name: 'Cost' })).not.toBeInTheDocument();
   });

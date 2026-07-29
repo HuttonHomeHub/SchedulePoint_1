@@ -3,6 +3,7 @@ import type { ActivitySummary } from '@repo/types';
 import { useEffect, useRef } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 
+import { measureBody } from '../api/scope-bodies';
 import { useUpdateActivityProgress } from '../api/use-activities';
 import { useActivitySteps, useReplaceActivitySteps } from '../api/use-activity-steps';
 import type { ScopeGate } from '../lib/activity-editor-gating';
@@ -21,6 +22,7 @@ import {
 } from '../schemas/step-schemas';
 
 import { seedMeasure } from './activity-editor-seeds';
+import { ScopeSaveBar } from './ScopeSaveBar';
 import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
@@ -177,7 +179,12 @@ export function ReportedProgressPanel({
       <p className="text-muted-foreground text-sm">
         Resulting status: <strong className="text-foreground">{deriveStatusLabel(values)}</strong>
       </p>
-      <PanelSave gate={gate} dirty={isDirty} pending={mutation.isPending} label="Save progress" />
+      <ScopeSaveBar
+        gate={gate}
+        dirty={isDirty}
+        pending={mutation.isPending}
+        label="Save progress"
+      />
     </form>
   );
 }
@@ -222,18 +229,12 @@ export function ValueMeasurePanel({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        void form.handleSubmit((values) =>
-          onSave(
-            {
-              percentCompleteType: values.percentCompleteType,
-              physicalPercentComplete:
-                values.physicalPercentComplete === undefined
-                  ? null
-                  : values.physicalPercentComplete,
-            },
-            () => form.reset(values),
-          ),
-        )(event);
+        // The body comes from the shared builder, never a literal here — `scope-bodies.ts` is where
+        // "this scope's keys and no other's" is stated once and pinned by test. A hand-rolled copy
+        // beside it is two implementations of one mapping, with nothing keeping them equal.
+        void form.handleSubmit((values) => onSave(measureBody(values), () => form.reset(values)))(
+          event,
+        );
       }}
       className="flex flex-col gap-4"
     >
@@ -297,7 +298,7 @@ export function ValueMeasurePanel({
           />
         </>
       ) : null}
-      <PanelSave gate={gate} dirty={isDirty} pending={pending} label="Save measure" />
+      <ScopeSaveBar gate={gate} dirty={isDirty} pending={pending} label="Save measure" />
     </form>
   );
 }
@@ -560,7 +561,7 @@ export function WeightedStepsPanel({
                         variant="outline"
                         data-step-up=""
                         disabled={!gate.writable || index === 0}
-                        aria-label={`Move step ${index + 1} up`}
+                        aria-label={`Move up, step ${index + 1}`}
                         onClick={() => moveStep(index, -1)}
                       >
                         Move up
@@ -571,7 +572,7 @@ export function WeightedStepsPanel({
                         variant="outline"
                         data-step-down=""
                         disabled={!gate.writable || index === fields.length - 1}
-                        aria-label={`Move step ${index + 1} down`}
+                        aria-label={`Move down, step ${index + 1}`}
                         onClick={() => moveStep(index, 1)}
                       >
                         Move down
@@ -606,7 +607,12 @@ export function WeightedStepsPanel({
             </Button>
           </div>
 
-          <PanelSave gate={gate} dirty={isDirty} pending={replace.isPending} label="Save steps" />
+          <ScopeSaveBar
+            gate={gate}
+            dirty={isDirty}
+            pending={replace.isPending}
+            label="Save steps"
+          />
         </form>
       )}
     </section>
@@ -636,29 +642,6 @@ function PanelHeading({
       {/* The effect line is the whole point of the co-location: two measures that look alike do
           different things, and the heading says which. */}
       <p className="text-muted-foreground text-sm">{effect}</p>
-    </div>
-  );
-}
-
-function PanelSave({
-  gate,
-  dirty,
-  pending,
-  label,
-}: {
-  gate: ScopeGate;
-  dirty: boolean;
-  pending: boolean;
-  label: string;
-}): React.ReactElement {
-  return (
-    <div className="border-border flex items-center justify-between gap-4 border-t pt-4">
-      <p className="text-muted-foreground text-sm">
-        {gate.writable ? (dirty ? 'Unsaved changes in this section.' : null) : gate.reason}
-      </p>
-      <Button type="submit" disabled={!gate.writable || !dirty || pending} aria-busy={pending}>
-        {pending ? 'Saving…' : label}
-      </Button>
     </div>
   );
 }

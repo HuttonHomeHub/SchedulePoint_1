@@ -105,6 +105,7 @@ vi.mock('@/features/activities', () => ({
   isDurationDerivedType: () => false,
   ActivitiesTable: () => <div data-testid="activities-table" />,
   ActivityFormDialog: () => null,
+  ActivityEditorDialog: () => null,
   ActivityProgressDialog: () => null,
   ActivityStepsDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,

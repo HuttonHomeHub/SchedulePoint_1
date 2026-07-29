@@ -182,3 +182,37 @@ because every test asserts the current coincidence.
 `meta.permissions` block on the activity read, or a distinguishable "redacted" marker on the cost
 fields (not `null`). Until then, treat the permission sets as coupled: changing one without the
 other is a client bug in a different file.
+
+### 63. The Progress tab carries no unsaved marker for its three panels
+
+Every other tab in the activity editor shows a dirty/error marker in its tab label (ADR-0060 §4).
+**Progress does not** — its three panels (Reported progress / How value is measured / Weighted
+steps) own independent forms, and none of their state reaches the tab.
+
+So: edit the weighted steps, switch to General, and nothing anywhere says the Progress tab has
+unsaved work. The discard confirmation on close has the same blind spot — it names General,
+Scheduling and Cost, never Progress. Neither is data loss with consequences (each panel is one
+Save from durable, and the panels are visible the moment you return to the tab), which is why this
+is debt and not a defect — but it is an inconsistency the tab strip's own rationale argues against,
+found by the M6 UX gate.
+
+**What would close it:** lift the three panels' `isDirty`/`errorCount` to the dialog — a callback
+prop per panel, or a small shared context — and fold them into the same `marker()` the other three
+tabs use, plus into `dirtyScopeNames` for the confirmation.
+
+### 64. Fields still use native `disabled`, so a mid-session pen loss can drop focus
+
+ADR-0060's Save buttons were moved to `aria-disabled` + a pointer-events guard (`ScopeSaveBar`),
+because a natively-disabled button is blurred to `<body>` the instant it flips — and they flip on
+every save. The **fields** they sit beside were not: they are still natively `disabled` when the
+scope is un-writable.
+
+That is fine while writability is fixed for a session, and it is not — the pen can be taken over
+by another user mid-edit (ADR-0028), which flips every definition field from enabled to disabled
+under whatever focus the user had. Rarer than the Save case (which fired on the happy path, every
+time), same root cause, same WCAG 2.4.3 exposure. Raised by the M6 accessibility gate as the
+lower-priority half of that finding.
+
+**What would close it:** extend the `aria-disabled` treatment from `ScopeSaveBar` to the form
+primitives (`TextField`/`SelectField`/`CheckboxField`), which would fix every gated surface in the
+app at once rather than this editor alone — which is also why it is a separate piece of work.

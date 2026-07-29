@@ -79,6 +79,8 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
           onSaved={model.recordActivityUpdate}
           gating={model.activityEditorGating}
           calendars={model.calendars.data ?? []}
+          calendarsLoading={model.calendars.isPending}
+          calendarsError={model.calendars.isError}
           planActivities={model.activities.data ?? []}
           activity={intended}
           {...(model.editorIntent ? { intent: model.editorIntent } : {})}

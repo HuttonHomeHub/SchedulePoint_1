@@ -17,7 +17,6 @@ import {
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
   DURATION_TYPE_LABELS,
-  INHERIT_CALENDAR_LABEL,
   isDurationDerivedType,
   selectableActivityTypes,
 } from '../schemas/activity-schemas';
@@ -28,15 +27,18 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedScheduling } from './activity-editor-seeds';
+import { ActivityCalendarField } from './ActivityCalendarField';
 import {
   ReportedProgressPanel,
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
+import { ScopeSaveBar } from './ScopeSaveBar';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import {
   CheckboxField,
@@ -47,6 +49,8 @@ import {
 } from '@/components/ui/form';
 import { Tabs, type TabDescriptor } from '@/components/ui/tabs';
 import {
+  ACTIVITY_CALENDAR_ENABLED,
+  ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
   COST_ACCRUAL_ENABLED,
@@ -92,6 +96,8 @@ export function ActivityEditorDialog({
   gating,
   intent,
   calendars = [],
+  calendarsLoading = false,
+  calendarsError = false,
   planActivities = [],
 }: {
   orgSlug: string;
@@ -110,12 +116,27 @@ export function ActivityEditorDialog({
   /** Per-scope writability and its reason (`deriveActivityEditorGating`). */
   gating: ActivityEditorGating;
   calendars?: CalendarSummary[];
+  /** The calendar list is still in flight — the picker says so rather than reading as "inherit". */
+  calendarsLoading?: boolean;
+  /** The calendar list failed — surfaced in the picker, not swallowed. */
+  calendarsError?: boolean;
   planActivities?: ActivitySummary[];
 }): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
   const [active, setActive] = useState<TabKey>(intent?.tab ?? 'general');
-  const [saveError, setSaveError] = useState<string | null>(null);
+  /**
+   * The failing scope and its message — **scoped**, not one dialog-level banner.
+   *
+   * The first draft kept a single string above the tablist and cleared it when *any* scope's next
+   * save started, so a Scheduling 409 vanished the moment General saved successfully and no marker
+   * ever recorded that a conflict was still unresolved. Keyed by scope, the error stays with the tab
+   * that owns it.
+   */
+  const [saveError, setSaveError] = useState<{ scope: TabKey; message: string } | null>(null);
+  /** The scope that last saved, cleared on its next edit — the visible half of the save signal. */
+  const [savedScope, setSavedScope] = useState<TabKey | null>(null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // The entry point chooses the landing tab (ADR-0060 §7): **Report progress** and **Steps** open
   // the same editor as **Edit**, on the tab that answers the action. The hosts keep this dialog
@@ -147,6 +168,54 @@ export function ActivityEditorDialog({
   );
 
   /**
+   * The scopes with unsaved edits, named for the discard confirmation. Progress's three panels own
+   * their own forms and their own saves, so they are not represented here — each is one endpoint
+   * away from durable, and none of them can be lost by a stray Escape without the others.
+   */
+  const dirtyScopeNames = [
+    general.isDirty ? 'General' : null,
+    scheduling.isDirty ? 'Scheduling' : null,
+    cost.isDirty && gating.cost.readable ? 'Cost' : null,
+  ].filter((name): name is string => name !== null);
+
+  /** Close, unless there is work to lose — then ask (spec US-5). */
+  const requestClose = (): void => {
+    if (dirtyScopeNames.length > 0) {
+      setConfirmingClose(true);
+      return;
+    }
+    onClose();
+  };
+
+  /**
+   * Recover a scope after a conflict: re-seed it from the row the failed save's refetch brought
+   * back, so the retry carries the CURRENT version rather than the one that just 409'd. Without
+   * this a user's only route out of a stale-version error is to close and reopen the editor —
+   * discarding every other tab's work on the way.
+   */
+  const refreshScope = (scope: TabKey): void => {
+    setSaveError(null);
+    if (scope === 'general') general.form.reset(seedGeneral(activity));
+    if (scope === 'scheduling') scheduling.form.reset(seedScheduling(activity));
+    if (scope === 'cost') cost.form.reset(seedCost(activity));
+  };
+
+  /** One scope's server error, with the way out. Rendered inside the tab that owns it. */
+  const scopeError = (scope: TabKey): React.ReactElement | null => {
+    if (saveError?.scope !== scope) return null;
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p role="alert" className="text-destructive-text text-sm">
+          {saveError.message}
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={() => refreshScope(scope)}>
+          Refresh this section
+        </Button>
+      </div>
+    );
+  };
+
+  /**
    * Save one scope. `version` comes from the live row **now**, not from when the dialog opened —
    * see the docblock. A 409 surfaces its message and the list refetch re-seeds, so a retry carries
    * the version the other tab's save produced.
@@ -158,7 +227,7 @@ export function ActivityEditorDialog({
     resetTo: () => void,
   ): void => {
     if (!activity) return;
-    setSaveError(null);
+    setSaveError((current) => (current?.scope === scope ? null : current));
     update.mutate(
       { activityId: activity.id, version: activity.version, patch },
       {
@@ -168,10 +237,11 @@ export function ActivityEditorDialog({
           // if saving one tab closed the others. Reset marks the scope clean so its dirty marker
           // clears without discarding what the user just saved.
           resetTo();
+          setSavedScope(scope);
           announce(`${label} saved.`);
         },
         onError: (error: Error) => {
-          setSaveError(error.message);
+          setSaveError({ scope, message: error.message });
           setActive(scope);
         },
       },
@@ -198,16 +268,13 @@ export function ActivityEditorDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      // Escape and the backdrop route through the same guard as the Close button — an Escape reflex
+      // is exactly the case the confirmation exists for.
+      onClose={requestClose}
+      confirmBeforeClose
       title={activity ? `Edit ${activity.name}` : 'Edit activity'}
     >
       <div className="flex min-h-0 flex-col gap-4">
-        {saveError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {saveError}
-          </p>
-        ) : null}
-
         <Tabs label="Activity sections" tabs={tabs} active={active} onChange={setActive}>
           {(current) => (
             <div className="flex flex-col gap-4 py-4">
@@ -225,6 +292,7 @@ export function ActivityEditorDialog({
                   className="flex flex-col gap-4"
                 >
                   <FormErrorSummary errors={general.form.formState.errors} />
+                  {scopeError('general')}
                   <TextField
                     label="Name"
                     disabled={!gating.general.writable}
@@ -301,6 +369,7 @@ export function ActivityEditorDialog({
                     gate={gating.general}
                     dirty={general.isDirty}
                     pending={update.isPending}
+                    saved={savedScope === 'general'}
                     label="Save general"
                   />
                 </form>
@@ -320,19 +389,23 @@ export function ActivityEditorDialog({
                   className="flex flex-col gap-4"
                 >
                   <FormErrorSummary errors={scheduling.form.formState.errors} />
-                  <SelectField
-                    label="Calendar"
-                    hint="The working-time calendar this activity schedules on. Inherit uses the plan’s."
-                    disabled={!gating.scheduling.writable}
-                    {...scheduling.form.register('calendarId')}
-                  >
-                    <option value="">{INHERIT_CALENDAR_LABEL}</option>
-                    {calendars.map((calendar) => (
-                      <option key={calendar.id} value={calendar.id}>
-                        {calendar.name}
-                      </option>
-                    ))}
-                  </SelectField>
+                  {scopeError('scheduling')}
+                  {ACTIVITY_CALENDAR_ENABLED ? (
+                    <ActivityCalendarField
+                      value={scheduling.form.watch('calendarId') ?? ''}
+                      onChange={(calendarId) =>
+                        scheduling.form.setValue('calendarId', calendarId, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                      calendars={calendars}
+                      loading={calendarsLoading}
+                      errored={calendarsError}
+                      activityType={type}
+                      disabled={!gating.scheduling.writable}
+                    />
+                  ) : null}
 
                   <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
                     <legend className="sr-only">Constraints</legend>
@@ -461,6 +534,7 @@ export function ActivityEditorDialog({
                     gate={gating.scheduling}
                     dirty={scheduling.isDirty}
                     pending={update.isPending}
+                    saved={savedScope === 'scheduling'}
                     label="Save scheduling"
                   />
                 </form>
@@ -486,17 +560,22 @@ export function ActivityEditorDialog({
                     pending={update.isPending}
                     onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
                   />
-                  <WeightedStepsPanel
-                    orgSlug={orgSlug}
-                    planId={planId}
-                    activity={activity}
-                    gate={gating.steps}
-                    open={open}
-                    announce={announce}
-                    // Only the **Steps** entry point asks for this. Landing at the top of a
-                    // three-panel tab would make that action feel like it opened the wrong thing.
-                    autoFocusHeading={intent?.focusSteps === true}
-                  />
+                  {/* Same flag pair the Steps entry points check (`ActivitiesTable`,
+                      `selection-actions`). Without it the tab would show a checklist that no menu
+                      offers a way to reach — a flag-parity gap the security review caught. */}
+                  {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED ? (
+                    <WeightedStepsPanel
+                      orgSlug={orgSlug}
+                      planId={planId}
+                      activity={activity}
+                      gate={gating.steps}
+                      open={open}
+                      announce={announce}
+                      // Only the **Steps** entry point asks for this. Landing at the top of a
+                      // three-panel tab would make that action feel like it opened the wrong thing.
+                      autoFocusHeading={intent?.focusSteps === true}
+                    />
+                  ) : null}
                 </div>
               ) : null}
 
@@ -512,6 +591,7 @@ export function ActivityEditorDialog({
                   className="flex flex-col gap-4"
                 >
                   <FormErrorSummary errors={cost.form.formState.errors} />
+                  {scopeError('cost')}
                   {EARNED_VALUE_ENABLED ? (
                     <>
                       <TextField
@@ -556,6 +636,7 @@ export function ActivityEditorDialog({
                     gate={gating.cost}
                     dirty={cost.isDirty}
                     pending={update.isPending}
+                    saved={savedScope === 'cost'}
                     label="Save cost"
                   />
                 </form>
@@ -565,11 +646,28 @@ export function ActivityEditorDialog({
         </Tabs>
 
         <div className="flex justify-end">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={requestClose}>
             Close
           </Button>
         </div>
       </div>
+
+      {/* Discard confirmation (spec US-5). The blast radius is why it matters here and not in the
+          dialogs this replaces: up to three scopes can be independently dirty at once, so one
+          Escape reflex now risks three forms' worth of work instead of one. */}
+      <ConfirmDialog
+        open={confirmingClose}
+        onClose={() => setConfirmingClose(false)}
+        onConfirm={() => {
+          setConfirmingClose(false);
+          onClose();
+        }}
+        title="Discard unsaved changes?"
+        description={`${dirtyScopeNames.join(', ')} ${
+          dirtyScopeNames.length === 1 ? 'has' : 'have'
+        } unsaved changes. Closing will discard them.`}
+        confirmLabel="Discard"
+      />
     </Dialog>
   );
 }
@@ -585,32 +683,4 @@ function marker(errorCount: number, dirty: boolean): Pick<TabDescriptor<string>,
     };
   }
   return dirty ? { marker: { label: 'unsaved changes' } } : {};
-}
-
-/**
- * One scope's Save, with its reason when it cannot be used. Never a bare disabled button: the
- * repo's rule is shade-with-a-reason, and a Save whose disabled state is unexplained is the same
- * lit-but-inert defect this epic set out to remove.
- */
-function ScopeSaveBar({
-  gate,
-  dirty,
-  pending,
-  label,
-}: {
-  gate: { writable: boolean; reason: string | null };
-  dirty: boolean;
-  pending: boolean;
-  label: string;
-}): React.ReactElement {
-  return (
-    <div className="border-border flex items-center justify-between gap-4 border-t pt-4">
-      <p className="text-muted-foreground text-sm">
-        {gate.writable ? (dirty ? 'Unsaved changes in this section.' : null) : gate.reason}
-      </p>
-      <Button type="submit" disabled={!gate.writable || !dirty || pending} aria-busy={pending}>
-        {pending ? 'Saving…' : label}
-      </Button>
-    </div>
-  );
 }
