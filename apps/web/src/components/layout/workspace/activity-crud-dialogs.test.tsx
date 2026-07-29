@@ -1,6 +1,22 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+/**
+ * **Flag-OFF parity** for the workspace's activity dialogs — the rollback contract for ADR-0060.
+ *
+ * `VITE_ACTIVITY_EDITOR_TABS` went default-ON at the M6 gate, so this suite pins it OFF explicitly
+ * rather than being rewritten to the new surface. That is deliberate and matches the ADR-0053 M6
+ * precedent: a parity suite that is updated to describe the new behaviour stops being a parity
+ * suite, and the day the flag is rolled back there is nothing left saying what "back" meant.
+ *
+ * The flag-ON path for this host is covered by `e2e-activity-editor/` (a real browser, a real API,
+ * the pen enforced) and by `activity-editor-entry-points.test.tsx` for the table host.
+ */
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ACTIVITY_EDITOR_TABS_ENABLED: false,
+}));
+
 // Announcer + the activities feature are mocked so we can assert the dialog wiring in isolation.
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));

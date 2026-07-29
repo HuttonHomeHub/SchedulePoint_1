@@ -1,6 +1,6 @@
 # ADR-0060: The tabbed activity editor, per-scope save, the steps edit-lock gate, and the co-located progress model
 
-- **Status:** Proposed
+- **Status:** Accepted (M0–M6 landed; `VITE_ACTIVITY_EDITOR_TABS` **default-on** 2026-07-29)
 - **Date:** 2026-07-28
 - **Deciders:** Technical Lead, Product Owner
 - **Note:** the three open questions were answered on 2026-07-28. Two were confirmed as drafted; the
@@ -160,14 +160,28 @@ This is a deliberate departure from an otherwise frontend-only epic, and the dep
 point — the alternative was to have the UI police a boundary the trust boundary itself does not
 enforce.
 
-**6. A scope a user cannot write is shaded with a stated reason, never hidden.** A leading reason
-banner (before the fields in DOM order, so a screen-reader user meets the reason before the
-controls), disabled fields, and a disabled Save carrying the same reason. The reasons are specific —
-"Start editing to take the plan's edit lock", "Reporting progress doesn't include changing an
-activity's definition", "Cost is visible to Planners and Org Admins", "Steps are driving this — the
-rolled-up value (62%) is used." This is the RD-1 / ADR-0059 M6 precedent: a disabled control with no
-reason reads as a bug, and a control whose effect lives elsewhere has to say so. It is also, in the
-fourth case, the direct fix for the inert manual physical %.
+**6. A scope a user cannot write is shaded with a stated reason, never hidden — with one
+deliberate exception.** Disabled fields and an inert Save carrying the reason, which is
+`aria-describedby`-linked to the button rather than merely printed beside it (the M6 accessibility
+gate found the first draft doing the latter and calling it association). This is the RD-1 /
+ADR-0059 M6 precedent: a disabled control with no reason reads as a bug, and a control whose effect
+lives elsewhere has to say so — which, for the manual physical %, is the direct fix for the inert
+field that started this epic.
+
+Two corrections this section carries, both from the M6 gates, both recorded rather than quietly
+applied:
+
+- **The pen sentence is the app's existing one**, `"Start editing to change this activity."` This
+  ADR previously quoted `"Start editing to take the plan's edit lock"` and the first implementation
+  shipped a third variant — `"Someone else is editing this plan. Take over the edit lock…"` — which
+  is not merely inconsistent but _false_ whenever nobody holds the pen, the common case. Three
+  sentences for one state, in a section arguing that reasons must be specific.
+- **The Cost tab is HIDDEN, not shaded**, when the role cannot read cost. The exception is
+  principled: shading implies a value is there to see, and a tab of blank disabled money fields
+  claims the activity has no cost rather than that the reader may not see it. Every other scope
+  shades. The spec's edge-case table promised a `"Cost is visible to Planners and Org Admins"`
+  banner that was never built; the table is corrected to match the code, because the code is
+  right.
 
 **7. Steps do not drive the schedule**, and this decision does not change that. The
 schedule/physical split is P6-faithful and Accepted (ADR-0042 §1, ADR-0044 §33); making steps move

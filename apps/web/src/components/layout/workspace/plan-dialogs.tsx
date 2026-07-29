@@ -4,6 +4,7 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
+  ACTIVITY_EDITOR_TABS_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   EARNED_VALUE_ENABLED,
@@ -133,10 +134,12 @@ export function PlanDialogs({
       {/* The progress editor, shared by BOTH the toolbar's Report-progress command and the canvas
           selection bar's Report-progress action (entry-route), driven off `model.progressActivity`
           (the id reused by both entry points, so there's exactly ONE progress dialog per workspace).
+          Superseded behind `VITE_ACTIVITY_EDITOR_TABS`, where both entry points open the tabbed
+          editor's Progress tab instead and `ActivityCrudDialogs` is the workspace's only editor.
           Role-gated (Contributor+), NOT pen-gated (the progress precedent, ADR-0046). Rendered by both
           canvas layouts (this component is shared), so progress works on the selection bar regardless
           of `VITE_CANVAS_TOOLBAR`. */}
-      {model.canProgress ? (
+      {model.canProgress && !ACTIVITY_EDITOR_TABS_ENABLED ? (
         <ActivityProgressDialog
           orgSlug={model.orgSlug}
           planId={model.planId}
@@ -149,10 +152,13 @@ export function PlanDialogs({
       {/* The weighted-steps editor the canvas selection bar's **Steps** action opens (entry-route +
           earned-value/steps flags), driven off `model.stepsActivity`. Same dialog + gates as the
           activities-table Steps row action (writer surface; the item hides for a duration-derived
-          selection). Flag-off / flags-off ⇒ not rendered (byte-for-byte). */}
+          selection). Superseded behind `VITE_ACTIVITY_EDITOR_TABS` — Steps then opens the editor's
+          Progress tab, focused on the Weighted-steps panel beside the physical % it overrides.
+          Flag-off / flags-off ⇒ not rendered (byte-for-byte). */}
       {ENTRY_ROUTES_ENABLED &&
       EARNED_VALUE_ENABLED &&
       ACTIVITY_STEPS_ENABLED &&
+      !ACTIVITY_EDITOR_TABS_ENABLED &&
       model.canEditSchedule ? (
         <ActivityStepsDialog
           orgSlug={model.orgSlug}

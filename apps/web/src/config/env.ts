@@ -880,20 +880,30 @@ export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
 export const GANTT_VIEW_ENABLED = flagDefaultOn(import.meta.env.VITE_GANTT_VIEW);
 
 /**
- * Tabbed activity editor (ADR-0060, spec `docs/specs/activity-editor-restructure/`). **OFF by
- * default** until the M6 gate. Replaces the 22-field single-submit `ActivityFormDialog` with a
- * four-tab editor (General / Scheduling / Progress / Cost) that saves **per write scope**, and
- * co-locates the progress model that is currently spread across four dialogs.
+ * Tabbed activity editor (ADR-0060, spec `docs/specs/activity-editor-restructure/`). **ON by
+ * default** (flipped 2026-07-29 at the M6 gate). Replaces the 22-field single-submit
+ * `ActivityFormDialog` with a four-tab editor (General / Scheduling / Progress / Cost) that saves
+ * **per write scope**, and co-locates the progress model that was spread across four dialogs.
  *
  * Per-scope save is not a styling choice. Progress writes are deliberately not pen-gated
  * (ADR-0028 Q-C) while definition writes are, so one merged Save would fuse a Contributor's
  * capability with a Planner's and quietly remove the former.
  *
+ * The M6 gate is why this is on. Four specialist reviews over the combined M1–M5 diff found six
+ * defects in code that had already passed a human read — a dropped calendar Combobox with its
+ * loading/error states, Save buttons that blurred to `<body>` on every save, a reason sentence
+ * placed beside its control instead of associated with it, an invented pen message that was false
+ * whenever nobody held the pen, a missing discard confirmation, and a duplicated save bar already
+ * diverging between its two copies. All six are folded, with regression tests; two lower-priority
+ * findings are recorded as TECH_DEBT #63/#64. That is the epic's own premise landing on itself, and
+ * it is the reason the flip is a separate decision from the build.
+ *
  * Flag-off renders the three existing dialogs byte-for-byte — the rollback contract the parity
- * suites pin. Frontend-only: no schema, DTO or engine change, and no path into `computeSchedule`.
- * (The steps edit-lock gate that shipped alongside this epic is **not** behind this flag: a server
- * check cannot be gated by a client build-time constant — see ADR-0060 §5.)
+ * suites pin, kept rather than weakened. Frontend-only: no schema, DTO or engine change, and no
+ * path into `computeSchedule`. (The steps edit-lock gate that shipped alongside this epic is
+ * **not** behind this flag: a server check cannot be gated by a client build-time constant — see
+ * ADR-0060 §5.)
  */
-export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOff(
+export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ACTIVITY_EDITOR_TABS,
 );

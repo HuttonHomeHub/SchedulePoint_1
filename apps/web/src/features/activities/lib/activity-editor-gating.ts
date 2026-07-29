@@ -56,7 +56,16 @@ export interface ScopeGate {
 export type ActivityEditorGating = Record<ActivityWritePath, ScopeGate>;
 
 const NO_ROLE = 'Your role cannot edit activity details.';
-const NO_PEN = 'Someone else is editing this plan. Take over the edit lock to make changes.';
+/**
+ * The app's existing sentence for this exact state — `tsld-toolbar-items.tsx` shades every pen-gated
+ * command with "Start editing to …" and has since ADR-0031.
+ *
+ * The first draft invented "Someone else is editing this plan. Take over the edit lock to make
+ * changes.", which was both a fourth variant of one message and, in the common case, **false**:
+ * nobody holds the pen when a plan has just been opened, so there is no one to take it from and
+ * nothing to take over — the reader is told to fight a phantom instead of pressing Start editing.
+ */
+const NO_PEN = 'Start editing to change this activity.';
 const NO_PROGRESS_ROLE = 'Your role cannot report progress.';
 
 export function deriveActivityEditorGating(input: ActivityEditorGatingInput): ActivityEditorGating {

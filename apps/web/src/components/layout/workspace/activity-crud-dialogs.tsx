@@ -5,7 +5,8 @@ import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ActivityFormDialog, useDeleteActivity } from '@/features/activities';
+import { ACTIVITY_EDITOR_TABS_ENABLED } from '@/config/env';
+import { ActivityEditorDialog, ActivityFormDialog, useDeleteActivity } from '@/features/activities';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
@@ -14,6 +15,12 @@ import { ActivityFormDialog, useDeleteActivity } from '@/features/activities';
  * `deleteActivityId` (which the bar's callbacks set). The edit target is re-derived from the live
  * query so a 409 retry carries the current version, mirroring {@link ActivitiesTable}'s own dialogs;
  * both use the same shared `ActivityFormDialog` / `ConfirmDialog`, so their behaviour can't drift.
+ *
+ * Behind `VITE_ACTIVITY_EDITOR_TABS` this becomes the workspace's **one** activity editor
+ * (ADR-0060 §7, M5): the canvas's Edit, its Report-progress and its Steps actions — plus the
+ * toolbar's Update-progress — all resolve to the same `editorIntent`, so `plan-dialogs.tsx` stops
+ * mounting the separate progress and steps dialogs entirely. Flag-off, every line below is what it
+ * was.
  */
 export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): React.ReactElement {
   const { orgSlug, planId } = model;
@@ -23,6 +30,11 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
 
   const editing = model.editActivityId
     ? model.activities.data?.find((a) => a.id === model.editActivityId)
+    : undefined;
+  // Same rule as `editing`: the intent holds an id, the row comes from the live query, so a save
+  // that bumps `version` feeds the next one and the editor closes when its target is deleted.
+  const intended = model.editorIntent
+    ? model.activities.data?.find((a) => a.id === model.editorIntent?.activityId)
     : undefined;
   const deleting = model.deleteActivityId
     ? model.activities.data?.find((a) => a.id === model.deleteActivityId)
@@ -58,20 +70,37 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
 
   return (
     <>
-      <ActivityFormDialog
-        orgSlug={orgSlug}
-        planId={planId}
-        open={editing !== undefined}
-        onClose={() => model.setEditActivityId(null)}
-        onSaved={model.recordActivityUpdate}
-        calendars={model.calendars.data ?? []}
-        calendarsLoading={model.calendars.isPending}
-        calendarsError={model.calendars.isError}
-        planActivities={model.activities.data ?? []}
-        planActivitiesLoading={model.activities.isPending}
-        planActivitiesError={model.activities.isError}
-        {...(editing ? { activity: editing } : {})}
-      />
+      {ACTIVITY_EDITOR_TABS_ENABLED ? (
+        <ActivityEditorDialog
+          orgSlug={orgSlug}
+          planId={planId}
+          open={intended !== undefined}
+          onClose={() => model.setEditorIntent(null)}
+          onSaved={model.recordActivityUpdate}
+          gating={model.activityEditorGating}
+          calendars={model.calendars.data ?? []}
+          calendarsLoading={model.calendars.isPending}
+          calendarsError={model.calendars.isError}
+          planActivities={model.activities.data ?? []}
+          activity={intended}
+          {...(model.editorIntent ? { intent: model.editorIntent } : {})}
+        />
+      ) : (
+        <ActivityFormDialog
+          orgSlug={orgSlug}
+          planId={planId}
+          open={editing !== undefined}
+          onClose={() => model.setEditActivityId(null)}
+          onSaved={model.recordActivityUpdate}
+          calendars={model.calendars.data ?? []}
+          calendarsLoading={model.calendars.isPending}
+          calendarsError={model.calendars.isError}
+          planActivities={model.activities.data ?? []}
+          planActivitiesLoading={model.activities.isPending}
+          planActivitiesError={model.activities.isError}
+          {...(editing ? { activity: editing } : {})}
+        />
+      )}
       <ConfirmDialog
         open={deleting !== undefined}
         onClose={closeDelete}

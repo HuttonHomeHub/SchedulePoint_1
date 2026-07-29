@@ -88,18 +88,25 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
 
   // Report progress on the task — the derived status shows in the row afterwards. Row actions
   // live behind an overflow "Actions for …" menu (TECH_DEBT #38): open it, then choose the action.
+  //
+  // Since ADR-0060 M6 this opens the **tabbed activity editor** on its Progress tab, not a
+  // progress-only dialog — Report progress, Edit and Steps are three doors into one editor. This
+  // suite runs at the shipped defaults, so it describes that; the previous surface is pinned by the
+  // dedicated flag-off suites, and the tabbed permission model by `e2e-activity-editor/`.
   const actionsButton = page.getByRole('button', { name: 'Actions for Excavate' });
   await actionsButton.click();
   await page.getByRole('menuitem', { name: 'Report progress' }).click();
   await expect(dialog).toBeVisible();
-  // The progress dialog (with its live status preview) is accessible.
+  await expect(dialog.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
+  // The editor (three progress panels, live status preview) is accessible.
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
-  // Cancelling returns focus to the trigger (native <dialog> focus restore) — the menu's
-  // own close-and-restore already returned focus to the "Actions for …" trigger before the
-  // dialog opened, so that's what the dialog restores focus to.
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  // Closing with nothing edited returns focus to the trigger (native <dialog> focus restore) — the
+  // menu's own close-and-restore already returned focus to the "Actions for …" trigger before the
+  // dialog opened, so that's what the dialog restores focus to. Nothing is dirty, so the editor
+  // closes straight away rather than asking to discard.
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(actionsButton).toBeFocused();
 
@@ -111,6 +118,11 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await dialog.getByLabel(/Actual start/).fill('2026-01-02');
   await expect(dialog.getByText('In progress')).toBeVisible();
   await dialog.getByRole('button', { name: 'Save progress' }).click();
+  // The editor stays open after a save (ADR-0060) — a multi-scope session would be pointless if
+  // saving one section closed the others — so close it before reading the row behind it.
+  await expect(dialog.getByText('Saved.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
 
   await expect(page.getByRole('cell', { name: 'In progress · 40%', exact: true })).toBeVisible();
 });

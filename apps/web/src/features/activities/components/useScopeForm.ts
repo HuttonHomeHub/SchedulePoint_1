@@ -47,9 +47,13 @@ export function useScopeForm<TValues extends FieldValues>(
   const { reset } = form;
   useEffect(() => {
     if (open) reset(seed(activity));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed ONLY on open / target change.
-    // Adding `activity` (the object) would re-seed — and so discard unsaved edits in every other
-    // scope — each time a sibling scope's save refetched the row. See the docblock's trap 2.
+    // Seed ONLY on open / target change. Adding `activity` (the object) would re-seed — and so
+    // discard unsaved edits in every other scope — each time a sibling scope's save refetched the
+    // row. See the docblock's trap 2.
+    //
+    // The directive must sit on the line ABOVE the dependency array, not above this explanation:
+    // the first draft put it three lines up, where it disabled a comment and suppressed nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activity?.id]);
 
   return {

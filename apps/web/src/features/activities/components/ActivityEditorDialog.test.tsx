@@ -4,10 +4,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
+import { expectInert } from './scope-save-bar-assertions';
 
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 
 const PATCHES: { url: string; body: Record<string, unknown> }[] = [];
+
+/** What the steps GET returns. Mutable so a test can open the Progress tab on an activity that has them. */
+let STEPS: { name: string; weight: number; percentComplete: number }[] = [];
 
 /** A row whose `version` the test can advance, to prove the editor re-reads it per save. */
 function row(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
@@ -69,15 +73,23 @@ function mount(props: Partial<Parameters<typeof ActivityEditorDialog>[0]> = {}) 
 
 beforeEach(() => {
   PATCHES.length = 0;
+  STEPS = [];
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      const body: string = typeof init?.body === 'string' ? init.body : '{}';
-      PATCHES.push({ url, body: JSON.parse(body) as Record<string, unknown> });
+      const method = (init?.method ?? 'GET').toUpperCase();
+      // Record WRITES only. The Progress tab issues a steps GET on mount (the rollup needs them),
+      // and counting it would make every "the first request was the save" assertion a lie.
+      if (method !== 'GET') {
+        const body: string = typeof init?.body === 'string' ? init.body : '{}';
+        PATCHES.push({ url, body: JSON.parse(body) as Record<string, unknown> });
+      }
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ data: row({ version: 2 }) }),
+        // Both shapes the hooks read: the step list for `…/steps`, the row for a definition write.
+        json: () =>
+          Promise.resolve(url.includes('/steps') ? { data: STEPS } : { data: row({ version: 2 }) }),
       } as unknown as Response);
     }),
   );
@@ -181,8 +193,8 @@ describe('ActivityEditorDialog — per-scope save', () => {
 describe('ActivityEditorDialog — gating', () => {
   it('disables a scope’s Save and states the reason when the pen is elsewhere', () => {
     mount({ gating: PLANNER_NO_PEN });
-    expect(screen.getByRole('button', { name: /save general/i })).toBeDisabled();
-    expect(screen.getByText(/take over the edit lock/i)).toBeInTheDocument();
+    expectInert(screen.getByRole('button', { name: /save general/i }));
+    expect(screen.getByText(/start editing to change this activity/i)).toBeInTheDocument();
   });
 
   it('disables the fields too, not only the Save', () => {
@@ -192,7 +204,7 @@ describe('ActivityEditorDialog — gating', () => {
 
   it('keeps Save disabled until the scope is dirty', () => {
     mount();
-    expect(screen.getByRole('button', { name: /save general/i })).toBeDisabled();
+    expectInert(screen.getByRole('button', { name: /save general/i }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Changed' } });
     expect(screen.getByRole('button', { name: /save general/i })).toBeEnabled();
   });
@@ -214,5 +226,262 @@ describe('ActivityEditorDialog — tab markers', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /General, 1 problem/ })).toBeInTheDocument(),
     );
+  });
+});
+
+/**
+ * M4 — the Progress tab. The property under test is not "it renders": it is that the three write
+ * paths stay separate. A Contributor reporting progress while a Planner holds the pen is the
+ * capability a single merged Save would have destroyed, and it is asserted here through the
+ * component, not only in the gating unit test.
+ */
+describe('ActivityEditorDialog — Progress tab', () => {
+  const CONTRIBUTOR_NO_PEN = deriveActivityEditorGating({
+    penManaged: true,
+    holdsPen: false,
+    canWrite: false,
+    canProgress: true,
+    canReadCost: false,
+  });
+
+  it('states what each panel does to the schedule', () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    expect(screen.getByText(/moves the activity’s dates/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/earns value in earned value\. changes no dates\./i),
+    ).toBeInTheDocument();
+  });
+
+  it('gives progress and measure separate Saves', () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    expect(screen.getByRole('button', { name: /save progress/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save measure/i })).toBeInTheDocument();
+  });
+
+  it('lets a Contributor without the pen report progress while the measure stays locked', () => {
+    mount({ gating: CONTRIBUTOR_NO_PEN });
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+
+    const percent = screen.getByLabelText('Percent complete');
+    expect(percent).toBeEnabled();
+    fireEvent.change(percent, { target: { value: '40' } });
+    expect(screen.getByRole('button', { name: /save progress/i })).toBeEnabled();
+
+    // …while the measure beside it is shut, with the reason shown. This contrast IS the design:
+    // one merged Save could not produce it.
+    //
+    // The reason is ROLE, not the pen — a Contributor may never edit a definition field whatever
+    // the lock says, so naming the lock here would send them to take a pen that would not help.
+    expectInert(screen.getByRole('button', { name: /save measure/i }));
+    expect(screen.getByText(/your role cannot edit activity details/i)).toBeInTheDocument();
+  });
+
+  it('names the PEN, not the role, when a Planner is merely without the lock', () => {
+    mount({ gating: PLANNER_NO_PEN });
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    // A Planner CAN edit the measure — they just need the lock, so the sentence must say so.
+    expect(screen.getByText(/start editing to change this activity/i)).toBeInTheDocument();
+    // …and progress stays open for them regardless, because it is never pen-gated.
+    expect(screen.getByLabelText('Percent complete')).toBeEnabled();
+  });
+
+  it('sends progress to the progress endpoint, carrying no definition keys', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: /save progress/i }));
+
+    await waitFor(() => expect(PATCHES).toHaveLength(1));
+    expect(PATCHES[0]!.url).toContain('/progress');
+    expect(PATCHES[0]!.body.percentComplete).toBe(25);
+    expect(PATCHES[0]!.body).not.toHaveProperty('name');
+    expect(PATCHES[0]!.body).not.toHaveProperty('percentCompleteType');
+  });
+
+  it('previews the status the server will derive', () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '100' } });
+    expect(screen.getByText('Complete')).toBeInTheDocument();
+  });
+});
+
+/**
+ * M4 Task 4.3 — the weighted steps, now beside the physical % they override. Two properties matter
+ * beyond "it renders": steps are **pen-gated** (ADR-0060 §5, which M0 made the server enforce too),
+ * and the focus choreography survived the port out of `ActivityStepsDialog` — the risk the plan
+ * named. A dropped focus is invisible to a mouse and total to a keyboard.
+ */
+describe('ActivityEditorDialog — weighted steps panel', () => {
+  async function openSteps(props: Parameters<typeof mount>[0] = {}) {
+    mount(props);
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    // The steps query resolves on a microtask; until then the panel shows its loading state.
+    return screen.findByRole('button', { name: /save steps/i });
+  }
+
+  it('sits on the Progress tab with its own Save and its effect stated', async () => {
+    await openSteps();
+    expect(
+      screen.getByText(/sets the physical % complete\. changes no dates\./i),
+    ).toBeInTheDocument();
+    // Three panels, three Saves — the shape the gate table forces.
+    expect(screen.getByRole('button', { name: /save progress/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save measure/i })).toBeInTheDocument();
+  });
+
+  it('is pen-gated: a Planner without the lock cannot even add a row', async () => {
+    await openSteps({ gating: PLANNER_NO_PEN });
+    expect(screen.getByRole('button', { name: 'Add step' })).toBeDisabled();
+    expectInert(screen.getByRole('button', { name: /save steps/i }));
+    // …while progress beside it stays open, which is the whole reason these are separate saves.
+    expect(screen.getByLabelText('Percent complete')).toBeEnabled();
+  });
+
+  it('focuses the new row’s name field on add, not the button below the list', async () => {
+    await openSteps();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    const name = screen.getByLabelText('Step 1 name');
+    expect(name).toBeInTheDocument();
+    expect(document.activeElement).toBe(name);
+  });
+
+  it('restores focus after a remove instead of dropping it to the body', async () => {
+    await openSteps();
+    const add = screen.getByRole('button', { name: 'Add step' });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 2' }));
+
+    expect(screen.queryByLabelText('Step 2 name')).not.toBeInTheDocument();
+    // The previous row's Remove button — never <body>.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove step 1' }));
+  });
+
+  it('keeps focus on a move that disables the button just pressed', async () => {
+    await openSteps();
+    const add = screen.getByRole('button', { name: 'Add step' });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    // Row 2 to the top: "Move up" becomes disabled there, so focus must fall through to "Move down"
+    // rather than to <body>. This is the case the source dialog did not handle.
+    fireEvent.click(screen.getByRole('button', { name: 'Move up, step 2' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move down, step 1' }));
+  });
+
+  it('bulk-replaces via PUT …/steps, carrying the live row version', async () => {
+    await openSteps();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    fireEvent.change(screen.getByLabelText('Step 1 name'), { target: { value: 'Formwork' } });
+    fireEvent.change(screen.getByLabelText('Step 1 % complete'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: /save steps/i }));
+
+    await waitFor(() => expect(PATCHES).toHaveLength(1));
+    expect(PATCHES[0]!.url).toContain('/steps');
+    expect(PATCHES[0]!.body.version).toBe(1);
+    expect(PATCHES[0]!.body.steps).toEqual([{ name: 'Formwork', weight: 1, percentComplete: 50 }]);
+  });
+
+  it('previews the rollup the server will compute', async () => {
+    await openSteps();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    fireEvent.change(screen.getByLabelText('Step 1 % complete'), { target: { value: '40' } });
+    expect(screen.getByText('40%')).toBeInTheDocument();
+  });
+
+  it('shuts the manual physical % when steps are winning, and says why', async () => {
+    STEPS = [{ name: 'Formwork', weight: 1, percentComplete: 60 }];
+    await openSteps();
+    const physical = await screen.findByLabelText('Physical % complete');
+    expect(physical).toBeDisabled();
+    // The reason names what would re-enable it — a bare "Read-only" is the dead end this epic
+    // exists to remove, and this field was previously editable while being silently ignored.
+    expect(screen.getByText(/weighted steps are setting this to 60%/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The M6 review fold. Every case here pins a defect the specialist gates found in code that had
+ * already passed a human read — which is the epic's own premise, arriving on schedule.
+ */
+describe('ActivityEditorDialog — review findings', () => {
+  it('keeps Save in the tab order while it is inert, and explains itself', () => {
+    mount({ gating: PLANNER_NO_PEN });
+    const save = screen.getByRole('button', { name: /save general/i });
+    // Native `disabled` would blur to <body> the moment it flips — and it flips on every save.
+    expectInert(save);
+    // …and the reason is ASSOCIATED, not merely nearby. Proximity in the DOM is not association.
+    const describedBy = save.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toMatch(/start editing/i);
+  });
+
+  it('says a scope saved, rather than going silently blank', async () => {
+    mount();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+    expect(screen.getByText('Unsaved changes in this section.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+
+    // Without this the helper text goes to null and the button greys — pixel-identical to a tab
+    // nobody has touched. A sighted user got no signal at all that the save happened.
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
+  it('asks before discarding, naming the scopes that would be lost', () => {
+    const onClose = vi.fn();
+    mount({ onClose });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Dirty' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText(/General has unsaved changes/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('closes straight away when there is nothing to lose', () => {
+    const onClose = vi.fn();
+    mount({ onClose });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('keeps a failed save with the tab that owns it, and offers a way out', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 409,
+          json: () => Promise.resolve({ error: { message: 'This activity changed elsewhere.' } }),
+        } as unknown as Response),
+      ),
+    );
+    mount();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Conflicting' } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+
+    // Scoped to General — not one dialog-level banner that any other scope's save would wipe.
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    const refresh = screen.getByRole('button', { name: 'Refresh this section' });
+    fireEvent.click(refresh);
+    // Re-seeded from the live row: the error is gone and the scope is clean again, so a retry
+    // carries the CURRENT version instead of the one that just conflicted.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toHaveValue('Pour slab');
+  });
+
+  it('keeps the visible label inside the accessible name on the step move buttons', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    await screen.findByRole('button', { name: /save steps/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+
+    // WCAG 2.5.3: "Move step 1 up" does not contain the visible "Move up", so a speech-input user
+    // saying "click Move up" could not activate it.
+    const up = screen.getByRole('button', { name: 'Move up, step 1' });
+    expect(up.getAttribute('aria-label')).toContain(up.textContent);
   });
 });

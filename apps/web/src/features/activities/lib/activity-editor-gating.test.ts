@@ -50,12 +50,15 @@ describe('deriveActivityEditorGating — definition scopes', () => {
   );
 
   it.each(['planner', 'orgAdmin'] as const)(
-    'blocks %s on every definition scope without the pen, with the take-over sentence',
+    'blocks %s on every definition scope without the pen, telling them to start editing',
     (role) => {
       const g = gate(role, 'notHeld');
       for (const path of DEFINITION_PATHS) {
         expect(g[path].writable).toBe(false);
-        expect(g[path].reason).toMatch(/edit lock/i);
+        // The app's existing sentence for this state, not a fourth variant of it. An earlier draft
+        // said "Someone else is editing this plan. Take over the edit lock" — which is false
+        // whenever nobody holds the pen, i.e. most of the time.
+        expect(g[path].reason).toMatch(/^Start editing to/);
       }
     },
   );

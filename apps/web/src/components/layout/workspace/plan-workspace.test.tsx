@@ -119,6 +119,7 @@ vi.mock('@/features/activities', () => ({
     <div data-testid="activities-table" data-can-write={String(canWrite)} />
   ),
   ActivityFormDialog: () => null,
+  ActivityEditorDialog: () => null,
   ActivityProgressDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));

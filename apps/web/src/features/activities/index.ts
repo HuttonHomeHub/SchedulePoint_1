@@ -24,6 +24,17 @@ export { CreateActivityButton } from './components/CreateActivityButton';
 export { ActivityFormDialog } from './components/ActivityFormDialog';
 export { ActivityProgressDialog } from './components/ActivityProgressDialog';
 export { ActivityStepsDialog } from './components/ActivityStepsDialog';
+export { ActivityEditorDialog } from './components/ActivityEditorDialog';
+export {
+  deriveActivityEditorGating,
+  type ActivityEditorGating,
+} from './lib/activity-editor-gating';
+export {
+  openActivityEditor,
+  type ActivityEditorIntent,
+  type ActivityEditorPurpose,
+  type ActivityEditorTab,
+} from './lib/activity-editor-intent';
 export {
   ACTIVITY_TYPE_LABELS,
   ACTIVITY_STATUS_LABELS,
