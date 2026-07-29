@@ -27,6 +27,7 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedScheduling } from './activity-editor-seeds';
+import { ReportedProgressPanel, ValueMeasurePanel } from './ActivityProgressPanels';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -50,7 +51,7 @@ import {
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 
-type TabKey = 'general' | 'scheduling' | 'cost';
+type TabKey = 'general' | 'scheduling' | 'progress' | 'cost';
 
 /**
  * The tabbed activity editor (ADR-0060). Behind `VITE_ACTIVITY_EDITOR_TABS`; the flag-off path
@@ -160,6 +161,7 @@ export function ActivityEditorDialog({
       label: 'Scheduling',
       ...marker(scheduling.errorCount, scheduling.isDirty),
     },
+    { id: 'progress', label: 'Progress' },
     ...(gating.cost.readable
       ? [{ id: 'cost' as const, label: 'Cost', ...marker(cost.errorCount, cost.isDirty) }]
       : []),
@@ -434,6 +436,29 @@ export function ActivityEditorDialog({
                     label="Save scheduling"
                   />
                 </form>
+              ) : null}
+
+              {/* The co-location (M4): three panels, three write scopes, each headed by what it
+                  does to the schedule. Rendered only when a row exists — every panel writes. */}
+              {current === 'progress' && activity ? (
+                <div className="flex flex-col gap-8">
+                  <ReportedProgressPanel
+                    orgSlug={orgSlug}
+                    planId={planId}
+                    activity={activity}
+                    gate={gating.progress}
+                    open={open}
+                    announce={announce}
+                  />
+                  <ValueMeasurePanel
+                    orgSlug={orgSlug}
+                    activity={activity}
+                    gate={gating.measure}
+                    open={open}
+                    pending={update.isPending}
+                    onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
+                  />
+                </div>
               ) : null}
 
               {current === 'cost' && gating.cost.readable ? (

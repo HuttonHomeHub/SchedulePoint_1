@@ -72,12 +72,23 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      const body: string = typeof init?.body === 'string' ? init.body : '{}';
-      PATCHES.push({ url, body: JSON.parse(body) as Record<string, unknown> });
+      const method = (init?.method ?? 'GET').toUpperCase();
+      // Record WRITES only. The Progress tab issues a steps GET on mount (the rollup needs them),
+      // and counting it would make every "the first request was the save" assertion a lie.
+      if (method !== 'GET') {
+        const body: string = typeof init?.body === 'string' ? init.body : '{}';
+        PATCHES.push({ url, body: JSON.parse(body) as Record<string, unknown> });
+      }
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ data: row({ version: 2 }) }),
+        // Both shapes the hooks read: a bare list for the steps GET, `{ data }` for a row write.
+        json: () =>
+          Promise.resolve(
+            method === 'GET' && url.includes('/steps')
+              ? { data: [] }
+              : { data: row({ version: 2 }) },
+          ),
       } as unknown as Response);
     }),
   );
@@ -214,5 +225,84 @@ describe('ActivityEditorDialog — tab markers', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /General, 1 problem/ })).toBeInTheDocument(),
     );
+  });
+});
+
+/**
+ * M4 — the Progress tab. The property under test is not "it renders": it is that the three write
+ * paths stay separate. A Contributor reporting progress while a Planner holds the pen is the
+ * capability a single merged Save would have destroyed, and it is asserted here through the
+ * component, not only in the gating unit test.
+ */
+describe('ActivityEditorDialog — Progress tab', () => {
+  const CONTRIBUTOR_NO_PEN = deriveActivityEditorGating({
+    penManaged: true,
+    holdsPen: false,
+    canWrite: false,
+    canProgress: true,
+    canReadCost: false,
+  });
+
+  it('states what each panel does to the schedule', () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    expect(screen.getByText(/moves the activity’s dates/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/earns value in earned value\. changes no dates\./i),
+    ).toBeInTheDocument();
+  });
+
+  it('gives progress and measure separate Saves', () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    expect(screen.getByRole('button', { name: /save progress/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save measure/i })).toBeInTheDocument();
+  });
+
+  it('lets a Contributor without the pen report progress while the measure stays locked', () => {
+    mount({ gating: CONTRIBUTOR_NO_PEN });
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+
+    const percent = screen.getByLabelText('Percent complete');
+    expect(percent).toBeEnabled();
+    fireEvent.change(percent, { target: { value: '40' } });
+    expect(screen.getByRole('button', { name: /save progress/i })).toBeEnabled();
+
+    // …while the measure beside it is shut, with the reason shown. This contrast IS the design:
+    // one merged Save could not produce it.
+    //
+    // The reason is ROLE, not the pen — a Contributor may never edit a definition field whatever
+    // the lock says, so naming the lock here would send them to take a pen that would not help.
+    expect(screen.getByRole('button', { name: /save measure/i })).toBeDisabled();
+    expect(screen.getByText(/your role cannot edit activity details/i)).toBeInTheDocument();
+  });
+
+  it('names the PEN, not the role, when a Planner is merely without the lock', () => {
+    mount({ gating: PLANNER_NO_PEN });
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    // A Planner CAN edit the measure — they just need the lock, so the sentence must say so.
+    expect(screen.getByText(/take over the edit lock/i)).toBeInTheDocument();
+    // …and progress stays open for them regardless, because it is never pen-gated.
+    expect(screen.getByLabelText('Percent complete')).toBeEnabled();
+  });
+
+  it('sends progress to the progress endpoint, carrying no definition keys', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: /save progress/i }));
+
+    await waitFor(() => expect(PATCHES).toHaveLength(1));
+    expect(PATCHES[0]!.url).toContain('/progress');
+    expect(PATCHES[0]!.body.percentComplete).toBe(25);
+    expect(PATCHES[0]!.body).not.toHaveProperty('name');
+    expect(PATCHES[0]!.body).not.toHaveProperty('percentCompleteType');
+  });
+
+  it('previews the status the server will derive', () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '100' } });
+    expect(screen.getByText('Complete')).toBeInTheDocument();
   });
 });
