@@ -10,6 +10,7 @@ import { useWatch } from 'react-hook-form';
 import { costBody, generalBody, schedulingBody } from '../api/scope-bodies';
 import { useUpdateActivityFields } from '../api/use-activities';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
+import type { ActivityEditorIntent } from '../lib/activity-editor-intent';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
@@ -89,6 +90,7 @@ export function ActivityEditorDialog({
   onSaved,
   activity,
   gating,
+  intent,
   calendars = [],
   planActivities = [],
 }: {
@@ -96,6 +98,11 @@ export function ActivityEditorDialog({
   planId: string;
   open: boolean;
   onClose: () => void;
+  /**
+   * Why the editor was opened (ADR-0060 §7): which tab to land on, and whether to move focus to the
+   * Weighted-steps panel. Omitted ⇒ General, the plain **Edit** behaviour.
+   */
+  intent?: ActivityEditorIntent;
   /** Called after a scope saves, with the pre-save row and the server's post-save row (ADR-0048). */
   onSaved?: (before: ActivitySummary, after: ActivitySummary) => void;
   /** The row being edited. This editor is edit-only; creation stays with `ActivityFormDialog`. */
@@ -107,8 +114,22 @@ export function ActivityEditorDialog({
 }): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
-  const [active, setActive] = useState<TabKey>('general');
+  const [active, setActive] = useState<TabKey>(intent?.tab ?? 'general');
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // The entry point chooses the landing tab (ADR-0060 §7): **Report progress** and **Steps** open
+  // the same editor as **Edit**, on the tab that answers the action. The hosts keep this dialog
+  // mounted and toggle `open`, so a tab chosen for the previous target would otherwise persist into
+  // the next one — but the user's own tab clicks must survive every other re-render.
+  //
+  // Adjusted **during render** against the previous intent, not in an effect: an effect would paint
+  // the stale tab first and then correct it, and setting state from one is the cascading-render
+  // pattern the lint rule rejects. Each open builds a fresh intent object, so identity is the signal.
+  const [seenIntent, setSeenIntent] = useState(intent);
+  if (intent !== seenIntent) {
+    setSeenIntent(intent);
+    if (intent) setActive(intent.tab);
+  }
 
   const general = useScopeForm(activityGeneralSchema, seedGeneral, activity, open);
   const scheduling = useScopeForm(activitySchedulingSchema, seedScheduling, activity, open);
@@ -472,6 +493,9 @@ export function ActivityEditorDialog({
                     gate={gating.steps}
                     open={open}
                     announce={announce}
+                    // Only the **Steps** entry point asks for this. Landing at the top of a
+                    // three-panel tab would make that action feel like it opened the wrong thing.
+                    autoFocusHeading={intent?.focusSteps === true}
                   />
                 </div>
               ) : null}

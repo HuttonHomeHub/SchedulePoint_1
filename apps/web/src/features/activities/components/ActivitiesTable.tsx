@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useActivities, useDeleteActivity } from '../api/use-activities';
+import type { ActivityEditorGating } from '../lib/activity-editor-gating';
+import { openActivityEditor, type ActivityEditorIntent } from '../lib/activity-editor-intent';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
@@ -11,6 +13,7 @@ import {
   isMilestoneType,
 } from '../schemas/activity-schemas';
 
+import { ActivityEditorDialog } from './ActivityEditorDialog';
 import { ActivityFormDialog } from './ActivityFormDialog';
 import { ActivityProgressDialog } from './ActivityProgressDialog';
 import { ActivityStepsDialog } from './ActivityStepsDialog';
@@ -23,6 +26,7 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Menu, MenuItem } from '@/components/ui/menu';
 import {
   ACTIVITY_CALENDAR_ENABLED,
+  ACTIVITY_EDITOR_TABS_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
@@ -92,6 +96,7 @@ export function ActivitiesTable({
   planId,
   canWrite,
   canReportProgress = false,
+  editorGating,
   onOpenLogic,
   varianceByActivityId,
   noteCountByActivityId,
@@ -105,6 +110,14 @@ export function ActivitiesTable({
   canWrite: boolean;
   /** May report progress (Contributor upward). Planners also have it. */
   canReportProgress?: boolean;
+  /**
+   * The tabbed editor's per-scope gate (ADR-0060 §6), derived once by the plan workspace and passed
+   * down. Required in practice behind `VITE_ACTIVITY_EDITOR_TABS`; optional in the type so the
+   * flag-off path — and every existing test that mounts this table — is untouched. It cannot be
+   * rebuilt from `canWrite`, which has already fused the role and the pen into one boolean and so
+   * cannot say WHICH of the two is missing.
+   */
+  editorGating?: ActivityEditorGating;
   /** Open the logic (predecessors/successors) panel for a row. Available to any
    * member (read); the host owns the panel so this feature stays dependency-free. */
   onOpenLogic?: (activity: ActivitySummary) => void;
@@ -160,6 +173,9 @@ export function ActivitiesTable({
   const [progressId, setProgressId] = useState<string | null>(null);
   const [resourcesId, setResourcesId] = useState<string | null>(null);
   const [stepsId, setStepsId] = useState<string | null>(null);
+  // Flag-on, the row menu's Edit / Report progress / Steps all resolve to ONE intent and ONE editor
+  // (ADR-0060 §7). Flag-off this stays null and the three legacy ids above still drive.
+  const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // The per-row actions overflow menu (one open at a time, ADR-0029 `Menu` primitive / TECH_DEBT #38).
@@ -176,6 +192,19 @@ export function ActivitiesTable({
     ? activities.data?.find((a) => a.id === resourcesId)
     : undefined;
   const editingSteps = stepsId ? activities.data?.find((a) => a.id === stepsId) : undefined;
+  const intended = editorIntent
+    ? activities.data?.find((a) => a.id === editorIntent.activityId)
+    : undefined;
+  /** Open the tabbed editor if it is on, else fall back to this purpose's own legacy dialog. */
+  const openFor = (activity: ActivitySummary, purpose: 'edit' | 'progress' | 'steps'): void => {
+    if (ACTIVITY_EDITOR_TABS_ENABLED) {
+      setEditorIntent(openActivityEditor(activity, purpose));
+      return;
+    }
+    if (purpose === 'edit') setEditingId(activity.id);
+    else if (purpose === 'progress') setProgressId(activity.id);
+    else setStepsId(activity.id);
+  };
 
   // The per-row action list, role-/flag-gated (ADR-0039/0044). Feeds both the decision to show a
   // row's "⋯" trigger and the items in its overflow `Menu` (TECH_DEBT #38: dense row actions belong
@@ -190,7 +219,7 @@ export function ActivitiesTable({
       actions.push({
         key: 'progress',
         label: 'Report progress',
-        onSelect: () => setProgressId(activity.id),
+        onSelect: () => openFor(activity, 'progress'),
       });
     }
     // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
@@ -211,10 +240,10 @@ export function ActivitiesTable({
       canWrite &&
       !isDurationDerivedType(activity.type)
     ) {
-      actions.push({ key: 'steps', label: 'Steps', onSelect: () => setStepsId(activity.id) });
+      actions.push({ key: 'steps', label: 'Steps', onSelect: () => openFor(activity, 'steps') });
     }
     if (canWrite) {
-      actions.push({ key: 'edit', label: 'Edit', onSelect: () => setEditingId(activity.id) });
+      actions.push({ key: 'edit', label: 'Edit', onSelect: () => openFor(activity, 'edit') });
       actions.push({
         key: 'delete',
         label: 'Delete',
@@ -514,7 +543,7 @@ export function ActivitiesTable({
         }
       />
 
-      {canReportProgress ? (
+      {canReportProgress && !ACTIVITY_EDITOR_TABS_ENABLED ? (
         <ActivityProgressDialog
           orgSlug={orgSlug}
           planId={planId}
@@ -545,7 +574,10 @@ export function ActivitiesTable({
         />
       ) : null}
 
-      {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED && canWrite ? (
+      {ACTIVITY_STEPS_ENABLED &&
+      EARNED_VALUE_ENABLED &&
+      canWrite &&
+      !ACTIVITY_EDITOR_TABS_ENABLED ? (
         <ActivityStepsDialog
           orgSlug={orgSlug}
           planId={planId}
@@ -555,21 +587,40 @@ export function ActivitiesTable({
         />
       ) : null}
 
+      {/* The ONE editor behind the flag — the same component the canvas workspace hosts, opened by
+          all three row actions. Mounted for any role that can reach a scope (a Contributor reaches
+          Progress), unlike the legacy edit dialog which was writer-only. */}
+      {ACTIVITY_EDITOR_TABS_ENABLED && editorGating ? (
+        <ActivityEditorDialog
+          orgSlug={orgSlug}
+          planId={planId}
+          open={intended !== undefined}
+          onClose={() => setEditorIntent(null)}
+          gating={editorGating}
+          calendars={calendars}
+          planActivities={activities.data ?? []}
+          activity={intended}
+          {...(editorIntent ? { intent: editorIntent } : {})}
+        />
+      ) : null}
+
       {canWrite ? (
         <>
-          <ActivityFormDialog
-            orgSlug={orgSlug}
-            planId={planId}
-            open={editing !== undefined}
-            onClose={() => setEditingId(null)}
-            calendars={calendars}
-            calendarsLoading={calendarsLoading}
-            calendarsError={calendarsError}
-            planActivities={activities.data ?? []}
-            planActivitiesLoading={activities.isPending}
-            planActivitiesError={activities.isError}
-            {...(editing ? { activity: editing } : {})}
-          />
+          {ACTIVITY_EDITOR_TABS_ENABLED ? null : (
+            <ActivityFormDialog
+              orgSlug={orgSlug}
+              planId={planId}
+              open={editing !== undefined}
+              onClose={() => setEditingId(null)}
+              calendars={calendars}
+              calendarsLoading={calendarsLoading}
+              calendarsError={calendarsError}
+              planActivities={activities.data ?? []}
+              planActivitiesLoading={activities.isPending}
+              planActivitiesError={activities.isError}
+              {...(editing ? { activity: editing } : {})}
+            />
+          )}
           <ConfirmDialog
             open={deleting !== null}
             onClose={() => {

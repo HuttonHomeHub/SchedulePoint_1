@@ -332,6 +332,7 @@ export function WeightedStepsPanel({
   gate,
   open,
   announce,
+  autoFocusHeading = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -339,9 +340,15 @@ export function WeightedStepsPanel({
   gate: ScopeGate;
   open: boolean;
   announce: (message: string) => void;
+  /** The **Steps** entry point opened the editor: move focus here rather than the tab's top. */
+  autoFocusHeading?: boolean;
 }): React.ReactElement {
   const steps = useActivitySteps(orgSlug, activity.id);
   const replace = useReplaceActivitySteps(orgSlug, planId, activity.id);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (open && autoFocusHeading) headingRef.current?.focus();
+  }, [open, autoFocusHeading, activity.id]);
 
   // A `useFieldArray` mutation re-renders, so the new/previous DOM only exists on the next paint.
   // A no-dep effect runs after every commit and drains a one-shot callback.
@@ -459,6 +466,7 @@ export function WeightedStepsPanel({
       <PanelHeading
         title="Weighted steps"
         effect="Sets the physical % complete. Changes no dates."
+        headingRef={headingRef}
       />
 
       {/* aria-live on the container, not the value, so AT hears the label with the figure —
@@ -605,10 +613,26 @@ export function WeightedStepsPanel({
   );
 }
 
-function PanelHeading({ title, effect }: { title: string; effect: string }): React.ReactElement {
+function PanelHeading({
+  title,
+  effect,
+  headingRef,
+}: {
+  title: string;
+  effect: string;
+  /** Present when an entry point lands focus on this panel — hence `tabIndex={-1}`, never in the tab
+   * sequence, only programmatically focusable (the app-shell heading-focus precedent). */
+  headingRef?: React.RefObject<HTMLHeadingElement | null>;
+}): React.ReactElement {
   return (
     <div className="flex flex-col gap-1">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <h3
+        ref={headingRef}
+        {...(headingRef ? { tabIndex: -1 } : {})}
+        className="text-sm font-semibold outline-none"
+      >
+        {title}
+      </h3>
       {/* The effect line is the whole point of the co-location: two measures that look alike do
           different things, and the heading says which. */}
       <p className="text-muted-foreground text-sm">{effect}</p>

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
+  ACTIVITY_EDITOR_TABS_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   NOTES_ENABLED,
@@ -20,6 +21,15 @@ import {
   useDeleteActivity,
   isMilestoneType,
 } from '@/features/activities';
+// Deep import, deliberately (the `@/features/navigator/lib` precedent): these are pure, dependency-
+// free helpers, and the activities barrel pulls the whole data layer with it — which is exactly why
+// a dozen workspace tests replace that barrel wholesale. Routing pure logic through a mocked module
+// would have those tests exercising a stub of the gate this epic exists to get right.
+import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
+import {
+  openActivityEditor,
+  type ActivityEditorIntent,
+} from '@/features/activities/lib/activity-editor-intent';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
@@ -148,8 +158,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // trigger the same host-owned dialogs (ADR-0026 D8: the tsld feature stays dependency-free).
   const [editActivityId, setEditActivityId] = useState<string | null>(null);
   const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null);
-  const onEditActivity = useCallback((a: ActivitySummary) => setEditActivityId(a.id), []);
   const onDeleteActivity = useCallback((a: ActivitySummary) => setDeleteActivityId(a.id), []);
+  /**
+   * The tabbed editor's open intent (ADR-0060 §7, M5) — the ONE piece of state the three entry
+   * points (**Edit**, **Report progress**, **Steps**) now share, replacing the three that could
+   * drift. `null` ⇒ closed. Flag-off it is never set: each opener below falls back to the legacy
+   * per-dialog state, so the old surface is byte-for-byte what it was.
+   */
+  const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
+  const onEditActivity = useCallback(
+    (a: ActivitySummary) =>
+      ACTIVITY_EDITOR_TABS_ENABLED
+        ? setEditorIntent(openActivityEditor(a, 'edit'))
+        : setEditActivityId(a.id),
+    [],
+  );
   // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
   // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
   // drawer's Close button clears. Inert when nothing reads it (flag off) — the notes stay inline.
@@ -168,7 +191,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // + earned-value/steps flags) — held as an id like the crud/resources targets so a refetch re-derives
   // the current row and the dialog closes when it vanishes. Drives the workspace-hosted `ActivityStepsDialog`.
   const [stepsActivityId, setStepsActivityId] = useState<string | null>(null);
-  const onStepsActivity = useCallback((a: ActivitySummary) => setStepsActivityId(a.id), []);
+  // Flag-on, **Steps** is no longer a dialog of its own: it opens the editor's Progress tab with
+  // focus on the Weighted-steps panel, beside the physical % it overrides (ADR-0060 §7).
+  const onStepsActivity = useCallback(
+    (a: ActivitySummary) =>
+      ACTIVITY_EDITOR_TABS_ENABLED
+        ? setEditorIntent(openActivityEditor(a, 'steps'))
+        : setStepsActivityId(a.id),
+    [],
+  );
   const setStepsActivity = useCallback(
     (a: ActivitySummary | undefined) => setStepsActivityId(a?.id ?? null),
     [],
@@ -188,7 +219,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // The canvas selection bar's **Report progress** action (entry-route, `VITE_ENTRY_ROUTES`) reuses this
   // same `progressActivityId` state the toolbar's Report-progress drives, so both entry points open the
   // ONE workspace-hosted `ActivityProgressDialog` (no second dialog). Stable opener like `onEditActivity`.
-  const onProgressActivity = useCallback((a: ActivitySummary) => setProgressActivityId(a.id), []);
+  // Flag-on, both entry points open the editor's Progress tab instead — where the reported % sits
+  // beside the measure it does NOT control (ADR-0060 §7).
+  const onProgressActivity = useCallback(
+    (a: ActivitySummary) =>
+      ACTIVITY_EDITOR_TABS_ENABLED
+        ? setEditorIntent(openActivityEditor(a, 'progress'))
+        : setProgressActivityId(a.id),
+    [],
+  );
 
   const plan = usePlan(orgSlug, planId);
   const project = useProject(orgSlug, plan.data?.projectId ?? '');
@@ -241,6 +280,28 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     );
   }, [variance.data]);
   const canManageLogic = canEditSchedule; // dependency write is pen-gated schedule editing
+
+  /**
+   * The tabbed editor's per-scope write gate (ADR-0060 §6), derived **once** here and handed to
+   * every host — the workspace's editor and both `ActivitiesTable` mounts. That is the point: the
+   * role/pen split cannot be reconstructed from `canEditSchedule` alone (it has already fused the
+   * two), so a host given only that boolean would have to guess which sentence to show, and would
+   * eventually guess differently from its sibling. Deriving it where both inputs still exist makes
+   * the divergence impossible rather than merely unlikely.
+   */
+  const activityEditorGating = useMemo(
+    () =>
+      deriveActivityEditorGating({
+        penManaged: pen.penManaged,
+        holdsPen: pen.holdsPen,
+        canWrite,
+        canProgress,
+        // Client-derived from the role, because the DTO returns `null` for both "unset" and "not
+        // permitted" (TECH_DEBT #62). Sound while `cost:read` and `activity:update` share a role set.
+        canReadCost: canWrite,
+      }),
+    [pen.penManaged, pen.holdsPen, canWrite, canProgress],
+  );
 
   // Per-activity note counts for the activities-table row badge (ADR-0046), route-composed like
   // `varianceByActivityId` — ONE batch query for the whole table (never per-row). Gated on `VITE_NOTES`
@@ -1145,6 +1206,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setDeleteActivityId,
     onEditActivity,
     onDeleteActivity,
+    // The tabbed editor's single open intent + the per-scope gate every host shares (ADR-0060 §7,
+    // M5). Flag-off `editorIntent` is never set, so the legacy per-dialog state above still drives.
+    editorIntent,
+    setEditorIntent,
+    activityEditorGating,
     // Canvas selection lifted to the workspace (toolbar quick-wins F0) + the toolbar's Update-progress
     // target (F3). Inert when nothing reads them (flag off). `selectedActivity`/`progressActivity`
     // resolve from the live query, so they clear when their row is deleted.

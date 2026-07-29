@@ -350,6 +350,7 @@ function LegacyPlanLayout({
           planId={planId}
           canWrite={model.canEditSchedule}
           canReportProgress={model.canProgress}
+          editorGating={model.activityEditorGating}
           onOpenLogic={model.setLogicActivity}
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
