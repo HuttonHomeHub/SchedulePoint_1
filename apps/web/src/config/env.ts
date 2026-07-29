@@ -909,8 +909,14 @@ export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
 );
 
 /**
- * Activity-editor convergence (spec `docs/specs/activity-editor-logic-resources-convergence/`).
- * **OFF by default** while it builds.
+ * Activity-editor convergence (ADR-0062; spec
+ * `docs/specs/activity-editor-logic-resources-convergence/`). **ON by default since 2026-07-29**,
+ * once the four specialist gates ran over the combined M0–M5 diff and every blocking finding was
+ * folded with a regression test: the Resources tab **hid** its assign form instead of shading it
+ * with the reason (raised independently by ux and component — the lit-but-inert dead end inverted),
+ * the tab order followed build order rather than the subject, the steps save bar never passed
+ * `saved` (in a panel with no unit coverage at all, because the suite named for steps covers the
+ * legacy dialog), and this flag pair could be set to a stranded combination — see below.
  *
  * Turns the two remaining per-activity pop-outs — the **Logic** dialog (predecessors, successors,
  * cross-plan links, notes) and the **Resources** dialog (assignments) — into tabs of the ADR-0060
@@ -928,9 +934,15 @@ export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
  * `computeSchedule`. Note that flag-off is **not** byte-for-byte the pre-epic surface: the inline
  * add-link form (M1) landed unflagged in the Logic dialog, deliberately and early so it soaks.
  *
+ * **It is `AND`-ed with {@link ACTIVITY_EDITOR_TABS_ENABLED}, not read alone.** There is no such
+ * thing as a Logic *tab* without the tabbed editor to hold it: with tabs off and convergence on,
+ * the row menu's Logic and Resources items would build an editor intent for a dialog that never
+ * renders, stranding both entry points on a surface that opens nothing. Deriving the constant makes
+ * that combination unrepresentable rather than merely untested (the security review's finding on
+ * the combined diff), and the flag-matrix suite asserts all four combinations.
+ *
  * Rollback: set `VITE_ACTIVITY_EDITOR_CONVERGENCE=false` and rebuild the web image. Nothing
  * persisted depends on it.
  */
-export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED = flagDefaultOff(
-  import.meta.env.VITE_ACTIVITY_EDITOR_CONVERGENCE,
-);
+export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
+  ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_ACTIVITY_EDITOR_CONVERGENCE);

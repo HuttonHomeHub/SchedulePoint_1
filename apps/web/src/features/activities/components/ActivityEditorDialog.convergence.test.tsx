@@ -74,10 +74,31 @@ beforeEach(() => {
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
       REQUESTS.push({ url, method: (init?.method ?? 'GET').toUpperCase() });
+      // The resource library answers with one row: an empty library replaces the assign form with
+      // its "nothing to assign" state, which would hide the very gate the shading test asserts.
+      const data = url.includes('/resources')
+        ? [
+            {
+              id: 'res-1',
+              name: 'Crew A',
+              code: null,
+              description: null,
+              kind: 'LABOUR',
+              parentId: null,
+              maxUnitsPerHour: null,
+              costPerUnit: null,
+              calendarId: null,
+              archivedAt: null,
+              version: 1,
+              createdAt: '2026-01-01T00:00:00Z',
+              updatedAt: '2026-01-01T00:00:00Z',
+            },
+          ]
+        : [];
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ data: [] }),
+        json: () => Promise.resolve({ data }),
       } as unknown as Response);
     }),
   );
@@ -89,7 +110,10 @@ describe('ActivityEditorDialog — the Logic tab', () => {
   it('adds Logic and Resources to the rail, in their subject order', () => {
     mount();
     const labels = screen.getAllByRole('tab').map((tab) => tab.textContent);
-    expect(labels).toEqual(['General', 'Scheduling', 'Logic', 'Progress', 'Cost', 'Resources']);
+    // Spec §4.11's order: what it IS → what it depends on → what does the work → how it is going →
+    // what it costs → what people said. Resources sits with the other pen-gated definition scopes,
+    // before the status divide, rather than after Cost where the first draft appended it.
+    expect(labels).toEqual(['General', 'Scheduling', 'Logic', 'Resources', 'Progress', 'Cost']);
   });
 
   it('renders the same panel the Logic dialog renders', async () => {
@@ -199,5 +223,19 @@ describe('ActivityEditorDialog — the Resources tab', () => {
   it('marks Resources read-only without the pen', () => {
     mount({ gating: PLANNER_NO_PEN });
     expect(screen.getByRole('tab', { name: /Resources/ })).toHaveTextContent('read-only');
+  });
+
+  it('shades the assign form with the gate’s reason rather than hiding it', async () => {
+    // The tab passes `gating.resources.reason` through, exactly as the Logic tab passes
+    // `manageLogicReason`. Dropping it left a Planner without the pen on a tab whose assign form
+    // had vanished, with the rail's padlock as the only explanation.
+    mount({ gating: PLANNER_NO_PEN });
+    fireEvent.click(screen.getByRole('tab', { name: /Resources/ }));
+    // Wait for the library read to settle — until it does the section shows "Loading resources…".
+    const save = await screen.findByRole('button', { name: 'Assign resource' });
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('group', { name: 'Assign a resource' })).toHaveTextContent(
+      'Start editing to change this activity.',
+    );
   });
 });

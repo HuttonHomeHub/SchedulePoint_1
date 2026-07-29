@@ -631,10 +631,15 @@ export function WeightedStepsPanel({
             </Button>
           </div>
 
+          {/* `saved` is what makes a successful save visible: without it the helper text goes from
+              "Unsaved changes in this section." to blank and the button greys — pixel-identical to a
+              panel nobody has touched. The mutation's own success flag is the honest source, and
+              editing again re-dirties the form, which takes precedence in the bar. */}
           <ScopeSaveBar
             gate={gate}
             dirty={isDirty}
             pending={replace.isPending}
+            saved={replace.isSuccess}
             label="Save steps"
           />
         </form>

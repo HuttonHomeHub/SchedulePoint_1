@@ -39,6 +39,7 @@ export function ScopeSaveBar({
   pending,
   saved = false,
   label,
+  pendingLabel = 'Saving…',
   dirtyMessage = 'Unsaved changes in this section.',
   savedMessage = 'Saved.',
 }: {
@@ -62,6 +63,12 @@ export function ScopeSaveBar({
   saved?: boolean;
   /** The button's text, e.g. "Save progress". Scope-specific so three Saves are tellable apart. */
   label: string;
+  /**
+   * What the button says while the write is in flight. Defaults to the editor's "Saving…"; a form
+   * whose verb is not "save" overrides it, so the busy state names the same action the idle label
+   * promised ("Add link" → "Adding…", not "Saving…").
+   */
+  pendingLabel?: string;
   /**
    * What to say while there are unsaved edits. Defaults to the editor's sentence; a **create** form
    * overrides it — "Unsaved changes in this section" describes an edit to something that already
@@ -93,7 +100,7 @@ export function ScopeSaveBar({
         }}
         className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
       >
-        {pending ? 'Saving…' : label}
+        {pending ? pendingLabel : label}
       </Button>
     </div>
   );

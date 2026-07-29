@@ -313,6 +313,18 @@ export function ActivityEditorDialog({
     ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
       ? [{ id: 'logic' as const, label: 'Logic', ...collectionMarker(gating.logic) }]
       : []),
+    // Resources needs BOTH flags: the convergence one to be a tab at all, and `VITE_RESOURCES`
+    // because there is no resources surface without it. A tab whose entry point is hidden — or an
+    // entry point with no tab — is the exact flag-parity gap the ADR-0060 security review caught on
+    // the steps panel, so the four combinations have their own matrix test.
+    //
+    // It sits **before** Progress, following the spec's order (§4.11): what the activity IS
+    // (General/Scheduling) → what it depends on (Logic) → what does the work (Resources) → how it is
+    // going (Progress) → what it costs (Cost) → what people said (Notes). Resources is a definition
+    // scope on the same pen-gated rule as Logic, so it belongs on that side of the status divide.
+    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && RESOURCES_ENABLED
+      ? [{ id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) }]
+      : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
     // so a padlock here would be a lie in exactly the situation the rail exists to clarify.
     { id: 'progress', label: 'Progress' },
@@ -324,13 +336,6 @@ export function ActivityEditorDialog({
             ...marker(cost.errorCount, cost.isDirty, gating.cost.writable),
           },
         ]
-      : []),
-    // Resources needs BOTH flags: the convergence one to be a tab at all, and `VITE_RESOURCES`
-    // because there is no resources surface without it. A tab whose entry point is hidden — or an
-    // entry point with no tab — is the exact flag-parity gap the ADR-0060 security review caught on
-    // the steps panel, so the four combinations have their own matrix test.
-    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && RESOURCES_ENABLED
-      ? [{ id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) }]
       : []),
     // Notes, like Progress, are **never** marked read-only: the pen does not gate them (ADR-0046),
     // so a padlock would be false for exactly the reader it is meant to inform. Needs `VITE_NOTES`
@@ -728,6 +733,11 @@ export function ActivityEditorDialog({
                   activityDurationType={activity.durationType}
                   isMilestone={isMilestoneType(activity.type)}
                   canWrite={gating.resources.writable}
+                  // Shaded with the reason, never hidden — the same seam the Logic tab uses one
+                  // block above. Dropping it made a Planner without the pen meet a Resources tab
+                  // whose assign form had simply vanished, with a padlock on the rail as the only
+                  // clue: the lit-but-inert dead end inverted, which is no better.
+                  {...(gating.resources.reason ? { writeReason: gating.resources.reason } : {})}
                   // The Cost tab and the assignment money fields answer to one gate: a role that
                   // cannot read cost gets no tab AND no cost fields on a row. Latent today
                   // (`canReadCost === canWrite`, TECH_DEBT #62) and load-bearing the day it isn't.

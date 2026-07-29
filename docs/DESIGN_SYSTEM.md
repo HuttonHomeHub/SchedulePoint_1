@@ -507,7 +507,10 @@ modal buries the surface's main action behind a detour, and the new row appearin
 is better feedback than a dialog closing over one. A control the current member cannot use is
 **shaded with its reason** (`ScopeSaveBar`) rather than hidden — but only when the host can say
 what the reason actually is; a fused permission boolean cannot, and an invented sentence is worse
-than none.
+than none. The same rule governs the **whole section**: shown-and-shaded when there is a reason to
+give, hidden when there is not — a Viewer who can never add a link should not meet the form at all.
+Hiding it from someone who normally _may_ write, such as a Planner who has not taken the pen, is the
+lit-but-inert dead end inverted and reads as breakage rather than as a rule (ADR-0062).
 
 **Labels never say `(optional)`.** It was on eleven of twenty-two labels in one dialog, which is
 enough that it stopped meaning anything. Where optionality matters, the section description or the

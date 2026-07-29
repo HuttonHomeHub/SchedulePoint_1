@@ -63,6 +63,12 @@ export default defineConfig({
             timeout: 120_000,
             env: {
               VITE_ACTIVITY_EDITOR_TABS: 'true',
+              // The convergence epic on top: Logic, Resources and Notes are tabs of this editor,
+              // and the permission claims they make (a link needs the pen; a note does not) can
+              // only be tested against a server that actually enforces the lock.
+              VITE_ACTIVITY_EDITOR_CONVERGENCE: 'true',
+              VITE_RESOURCES: 'true',
+              VITE_NOTES: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
               VITE_CANVAS_WORKSPACE: 'false',

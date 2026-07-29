@@ -199,6 +199,14 @@ lower-priority half of that finding.
 primitives (`TextField`/`SelectField`/`CheckboxField`), which would fix every gated surface in the
 app at once rather than this editor alone — which is also why it is a separate piece of work.
 
+**Widened by the convergence epic (ADR-0062).** The Resources surface is now a tab of the same
+long-lived session rather than a dialog opened and closed in seconds, so its natively-`disabled`
+controls (`ActivityResourcesPanel`'s assign fields, and `AssignmentRow`'s cost / units / rate saves,
+driving checkbox, curve select and Unassign) sit inside exactly the window this entry describes.
+`AssignmentRow` is the **worse** case and the one to fix first: on `canWrite` going false it does not
+disable its editors, it **unmounts** them for a read-only summary line — a guaranteed focus-to-`<body>`
+rather than a possible one. Raised by the ADR-0062 accessibility gate.
+
 ### 65. A link's lag or type edited from the dialog is not recorded for undo
 
 The undo stack now covers a dependency **add** and **remove** symmetrically (the convergence epic's
@@ -215,3 +223,53 @@ snapshot (the inverse needs the old type/lag/lagCalendar, which the mutation's r
 contain), recorded through a `dependencyEditCommand`. It wants a coalescing key so a lag nudged five
 times is one undo step rather than five — which is why it is its own piece of work rather than a
 line in the epic that noticed it.
+
+### 66. A shaded create form still accepts input it cannot submit
+
+The house rule is shade-with-a-reason, and `ScopeSaveBar` implements it correctly: the Save is
+`aria-disabled` with the reason `aria-describedby`-linked. But on the two create forms this epic
+shipped — **Add a link** (`AddLinkSection`) and **Assign a resource** (`ActivityResourcesPanel`) —
+only the Save is gated. The fields above it stay fully interactive, so a member who cannot write can
+fill in an entire form and meet the refusal at the end of it.
+
+Not a WCAG failure (the reason is announced, and the control is reachable), and deliberately not
+"fixed" by adding native `disabled` — that is #64's defect, reintroduced. It is the same question as
+#64 from the other side: what the shaded _state_ of a whole form should look like.
+
+**What would close it:** decide the pattern once — a `readOnly` pass-through on the form primitives,
+or a section-level treatment — and apply it to both forms together. Raised by the ADR-0062
+accessibility gate as a nit, and by its ux gate as "the form should say so before the last click".
+
+### 67. The Logic panel's post-remove focus target is the whole panel
+
+After removing a dependency, `ActivityLogicPanel` moves focus to a wrapper around **everything** —
+both tables, the add form and the cross-plan/notes slots. It is not a regression (it is what
+`DependencyEditor` always did, and it beats dropping focus to `<body>`), but this epic shipped a
+better pattern one file over: `ActivityResourcesPanel` falls back to a narrow region around just the
+assigned list, and lets its host override the target — which the dialog uses to focus its Close
+button.
+
+**What would close it:** narrow `regionRef` to the two `<section>`s and add the same host-override
+seam Resources has, so removing a link from the dialog lands on Close and from the tab lands on the
+list. Raised by the ADR-0062 accessibility gate.
+
+### 68. **Add note** lands on the Notes tab but not in its composer
+
+`openActivityEditor`'s `steps` intent carries `focusSteps`, which the editor wires to the steps
+heading. The `notes` intent carries only the tab, on the reasoning that "the intent IS the reveal" —
+true visually, but the native `<dialog>`'s initial focus is the ✕ close button regardless of which
+tab is active (the pre-existing gap in #17c). So a keyboard or screen-reader user who chose **Add
+note** still traverses ✕ → the Notes tab → the panel before reaching the composer.
+
+**What would close it:** a `focusNotes` flag on the intent, mirroring `focusSteps` one line above it,
+with the composer exposing a ref. Raised by the ADR-0062 accessibility gate.
+
+### 69. Two idioms for editing a row in place
+
+`AssignmentRow` saves each field with its own inline button; `DependencyTable` opens a dialog per
+row. Both are defensible on their own and they now sit two tabs apart in one editor, so the
+inconsistency is visible in a way it was not when each lived in its own pop-out.
+
+**What would close it:** pick one row-edit idiom and state it in `docs/DESIGN_SYSTEM.md` (the
+list/manage archetype is the natural home), then move whichever surface loses. Raised by the
+ADR-0062 component gate as a suggestion — deliberately not rushed inside the epic that noticed it.

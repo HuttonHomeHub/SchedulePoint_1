@@ -138,7 +138,13 @@ vi.mock('@/features/activities', () => ({
     />
   ),
   ActivityFormDialog: () => null,
-  ActivityEditorDialog: () => null,
+  // With the convergence flag on (default), the Logic surface is a **tab of this editor** rather
+  // than its own dialog, so the pen gate for links is read from the editor's gating object. Its
+  // `logic` scope is the same object as `general` by construction (ADR-0062 §3) — this asserts it
+  // arrives at the host with the pen already folded in.
+  ActivityEditorDialog: ({ gating }: { gating: { logic: { writable: boolean } } }) => (
+    <div data-testid="activity-editor" data-can-manage={String(gating.logic.writable)} />
+  ),
   ActivityProgressDialog: () => null,
   CreateActivityButton: () => <div data-testid="create-activity" />,
 }));
@@ -235,7 +241,7 @@ describe('PlanDetailScreen — pen gating (flag off: role only)', () => {
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('true');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('true');
     expect(screen.getByTestId('recalculate').dataset.canCalc).toBe('true');
-    expect(screen.getByTestId('dependency-editor').dataset.canManage).toBe('true');
+    expect(screen.getByTestId('activity-editor').dataset.canManage).toBe('true');
     expect(screen.getByTestId('create-activity')).toBeInTheDocument();
     expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });
@@ -250,7 +256,7 @@ describe('PlanDetailScreen — pen gating (flag on)', () => {
     // Progress is never pen-gated (Q-C) — a Planner can report progress.
     expect(screen.getByTestId('activities-table').dataset.canProgress).toBe('true');
     expect(screen.getByTestId('recalculate').dataset.canCalc).toBe('false');
-    expect(screen.getByTestId('dependency-editor').dataset.canManage).toBe('false');
+    expect(screen.getByTestId('activity-editor').dataset.canManage).toBe('false');
     expect(screen.queryByTestId('create-activity')).not.toBeInTheDocument();
     // The read-only hint appears (Logic + Activities sections).
     expect(screen.getAllByText(/read-only/i).length).toBeGreaterThan(0);

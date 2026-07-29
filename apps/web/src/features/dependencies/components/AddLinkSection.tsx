@@ -206,6 +206,7 @@ export function AddLinkSection({
             savedMessage={null}
             pending={create.isPending}
             label="Add link"
+            pendingLabel="Adding…"
           />
         </form>
       )}

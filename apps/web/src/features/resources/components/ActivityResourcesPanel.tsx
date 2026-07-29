@@ -21,11 +21,11 @@ import {
 import { AssignmentRow, DRIVING_HINT, MATERIAL_DRIVING_HINT } from './AssignmentRow';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import { Button } from '@/components/ui/button';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
+import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Select } from '@/components/ui/select';
 import {
   DURATION_TYPES_ENABLED,
@@ -57,6 +57,7 @@ export function ActivityResourcesPanel({
   activityDurationType,
   isMilestone = false,
   canWrite,
+  writeReason,
   canReadCost = true,
   enabled = true,
   onRowRemoved,
@@ -74,6 +75,15 @@ export function ActivityResourcesPanel({
    * since a curve has no span to distribute units over (TECH_DEBT #44b). Defaults false. */
   isMilestone?: boolean;
   canWrite: boolean;
+  /**
+   * Why this member cannot assign resources, when {@link canWrite} is false. Supplying it **shows**
+   * the Assign a resource section shaded with the reason (the house shade-with-a-reason rule);
+   * omitting it hides the section entirely, which is what the dialog does today and what a Viewer
+   * should see. The Logic panel's `manageLogicReason` is the same seam — only a host that can tell
+   * role from pen apart should pass one, since a fused boolean cannot and an invented sentence is
+   * worse than none (ADR-0060 M6).
+   */
+  writeReason?: string;
   /**
    * May this member see cost figures. Defaults **true**, which is the dialog's behaviour and today's
    * only reality (`canReadCost === canWrite`, TECH_DEBT #62). A host that derives the two separately
@@ -138,10 +148,14 @@ export function ActivityResourcesPanel({
   // "Load more" for the rest. Idle unless the panel is actually showing for a writer.
   const [resourceQuery, setResourceQuery] = useState('');
   const debouncedResourceQuery = useDebouncedValue(resourceQuery);
+  // Shown to anyone who may assign, and to a member the host can explain the refusal to. Without a
+  // reason it stays hidden — a shaded form with no explanation is the dead end the house rule
+  // forbids, and a Viewer should not see one at all (the `ActivityLogicPanel` precedent).
+  const showAssignSection = canWrite || writeReason !== undefined;
   const search = useResourceSearch(
     orgSlug,
     { q: debouncedResourceQuery },
-    LIBRARY_SCOPING_ENABLED && queriesEnabled && canWrite,
+    LIBRARY_SCOPING_ENABLED && queriesEnabled && showAssignSection,
   );
   // GROUPs and already-assigned rows are dropped from the page client-side: the API has no "not a
   // group" filter, and "already assigned here" is per-activity knowledge the library cannot hold.
@@ -251,7 +265,7 @@ export function ActivityResourcesPanel({
         </div>
       </FormSection>
 
-      {canWrite ? (
+      {showAssignSection ? (
         <FormSection
           title="Assign a resource"
           description="Units and cost drive the histogram and Earned Value; only the driving resource changes the activity’s calendar."
@@ -433,11 +447,19 @@ export function ActivityResourcesPanel({
                   </>
                 ) : null}
               </FieldGrid>
-              <div className="flex justify-end">
-                <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
-                  {create.isPending ? 'Assigning…' : 'Assign resource'}
-                </Button>
-              </div>
+              <ScopeSaveBar
+                gate={{ writable: canWrite, reason: writeReason ?? null }}
+                // A create form is always submittable: what is missing is the field errors' job to
+                // say. The feedback for a successful assign is the new row in the list above, so
+                // neither the dirty nor the saved sentence has anything to add (the AddLinkSection
+                // precedent).
+                dirty
+                dirtyMessage={null}
+                savedMessage={null}
+                pending={create.isPending}
+                label="Assign resource"
+                pendingLabel="Assigning…"
+              />
             </form>
           )}
         </FormSection>

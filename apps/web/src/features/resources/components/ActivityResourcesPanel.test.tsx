@@ -94,6 +94,22 @@ describe('ActivityResourcesPanel', () => {
     expect(screen.getByText(/5 units/)).toBeInTheDocument();
   });
 
+  it('shades the assign form with the reason when the host supplies one', () => {
+    // The shade-with-a-reason rule (ADR-0060 §6): a host that can tell role from pen apart passes
+    // the sentence, and the section stays visible with its Save inert. Hiding it instead left a
+    // Planner without the pen looking at a Resources tab whose form had simply vanished.
+    renderPanel({ canWrite: false, writeReason: 'Start editing to change this activity.' });
+    const assign = screen.getByRole('group', { name: 'Assign a resource' });
+    const save = within(assign).getByRole('button', { name: 'Assign resource' });
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    // Associated with the control, not merely adjacent to it.
+    const reasonId = save.getAttribute('aria-describedby');
+    expect(reasonId).toBeTruthy();
+    expect(document.getElementById(reasonId!)).toHaveTextContent(
+      'Start editing to change this activity.',
+    );
+  });
+
   it('shows the assignments empty state', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
