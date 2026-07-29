@@ -3,9 +3,15 @@ import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Principal, type Permission } from '../../common/auth/principal';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  LockedError,
+  NotFoundError,
+} from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 
 import type { ActivityStepRepository } from './activity-step.repository';
 import { ActivityStepsService } from './activity-steps.service';
@@ -13,9 +19,17 @@ import { ActivityStepsService } from './activity-steps.service';
 const ORG_ID = 'org-1';
 const USER_ID = 'user-1';
 const ACTIVITY_ID = '00000000-0000-0000-0000-0000000000ac';
+const PLAN_ID = '00000000-0000-0000-0000-0000000000p1';
 
 function activity(overrides: Partial<Activity> = {}): Partial<Activity> {
-  return { id: ACTIVITY_ID, organizationId: ORG_ID, deletedAt: null, version: 1, ...overrides };
+  return {
+    id: ACTIVITY_ID,
+    organizationId: ORG_ID,
+    planId: PLAN_ID,
+    deletedAt: null,
+    version: 1,
+    ...overrides,
+  };
 }
 
 function step(seq: number, overrides: Partial<ActivityStep> = {}): ActivityStep {
@@ -57,6 +71,7 @@ describe('ActivityStepsService', () => {
     $transaction: ReturnType<typeof vi.fn>;
     activity: { findFirst: ReturnType<typeof vi.fn> };
   };
+  let editLock: { assertHoldsPen: ReturnType<typeof vi.fn> };
   let service: ActivityStepsService;
 
   beforeEach(() => {
@@ -76,11 +91,14 @@ describe('ActivityStepsService', () => {
       ),
       activity: { findFirst: vi.fn().mockResolvedValue(activity()) },
     };
+    // Default: the caller holds the pen (or enforcement is off — both are a resolved no-op here).
+    editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new ActivityStepsService(
       organizations as unknown as OrganizationsService,
       steps as unknown as ActivityStepRepository,
       prisma as unknown as PrismaService,
+      editLock as unknown as PlanEditLockService,
       logger,
     );
   });
@@ -193,6 +211,44 @@ describe('ActivityStepsService', () => {
       await expect(
         service.replace(principalWith(['activity:read']), 'acme', ACTIVITY_ID, dto([])),
       ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    // The ADR-0028 single-editor write-gate (ADR-0060 §5). A replace bumps the parent activity's
+    // `version`, so it is a structural write and belongs under the same lock as every sibling.
+    describe('plan edit-lock', () => {
+      it('asserts the pen on the activity’s plan, after the permission and scope checks', async () => {
+        await service.replace(principalWith(ALL), 'acme', ACTIVITY_ID, dto([]));
+        expect(editLock.assertHoldsPen).toHaveBeenCalledWith(expect.anything(), PLAN_ID, ORG_ID);
+      });
+
+      it('423s a non-holder and writes nothing', async () => {
+        editLock.assertHoldsPen.mockRejectedValue(new LockedError('Someone else is editing.'));
+        await expect(
+          service.replace(
+            principalWith(ALL),
+            'acme',
+            ACTIVITY_ID,
+            dto([{ name: 'A', weight: 1, percentComplete: 0 }]),
+          ),
+        ).rejects.toBeInstanceOf(LockedError);
+        // The gate precedes the transaction entirely — no version bump, no row touched.
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(txActivityUpdateMany).not.toHaveBeenCalled();
+        expect(steps.create).not.toHaveBeenCalled();
+        expect(steps.softDeleteMany).not.toHaveBeenCalled();
+      });
+
+      it('does not gate the read path', async () => {
+        await service.list(principalWith(ALL), 'acme', ACTIVITY_ID);
+        expect(editLock.assertHoldsPen).not.toHaveBeenCalled();
+      });
+
+      it('is inert when enforcement is off (assertHoldsPen resolves)', async () => {
+        // PLAN_EDIT_LOCK_ENFORCED=false makes assertHoldsPen a no-op; the write proceeds unchanged.
+        await expect(
+          service.replace(principalWith(ALL), 'acme', ACTIVITY_ID, dto([])),
+        ).resolves.toBeDefined();
+      });
     });
   });
 });

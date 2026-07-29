@@ -87,4 +87,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_TIME_AXIS?: string;
   /** Gantt view — a grid-and-bar projection of the same model, reached through the TSLD | Gantt view switch, for the audience that does not read logic diagrams (ADR-0059, docs/specs/gantt-view/). Read-only in the first slices. "true"/"1" enables it; off by default until the M6 enablement gate. */
   readonly VITE_GANTT_VIEW?: string;
+  /** Tabbed activity editor — the 22-field single-submit dialog split into four tabs that save per write scope, with the progress model co-located (ADR-0060, docs/specs/activity-editor-restructure/). "true"/"1" enables it; off by default until the M6 enablement gate. */
+  readonly VITE_ACTIVITY_EDITOR_TABS?: string;
 }

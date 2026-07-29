@@ -172,7 +172,12 @@ discriminators. Each becomes a spec/plan before build:
 - **M5-epic — Advanced activity types (ADR-0035 §21, §23–§24).** **Level-of-Effort** (§21) and
   **WBS-summary** rollup (§24) are **delivered & enabled** (`VITE_ADVANCED_ACTIVITY_TYPES` on by default —
   engine, API, conformance, and the flagged web type/parent pickers; ADR-0038 for the WBS parent tree).
-  **Still pending: resource-dependent** scheduling (§23) — deferred, needs a resource model first. Canvas
+  **Resource-dependent** scheduling (§23) is **delivered & enabled** too — this entry claimed for months
+  that it was "still pending, needs a resource model first", which stopped being true when ADR-0039
+  shipped the model: the engine, the driving-resource-calendar resolution and the conformance slice all
+  landed in M7.2. What was actually missing was the **web surface** — the type was absent from the
+  picker and the engine's `resourceDriverMissing` flag was rendered nowhere — so the feature was
+  complete and unreachable. Both are now closed. Canvas
   summary/LOE span-bars + navigator visual nesting are a deferred visualisation follow-on (TECH_DEBT #37).
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)

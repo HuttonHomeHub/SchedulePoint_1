@@ -27,10 +27,14 @@ browser-native team use. See the full product context in
 > after it stopped being true, which is exactly the failure it now warns against.
 >
 > The **Gantt view shipped** on 2026-07-28 (ADR-0059, `VITE_GANTT_VIEW`
-> default-on), closing the last outstanding Must-have in
-> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8 — read-only by design, with
-> WBS rows, the baseline variance bar and a printed programme. What remains
-> undecided is the **deployment target**. New work still follows the delivery
+> default-on) — read-only by design, with WBS rows, the baseline variance bar and
+> a printed programme. It **substantially** delivers the last outstanding
+> Must-have in [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8, which words it
+> "read-primary; **edit supported**" — Gantt editing is deferred as ADR-0059 M5,
+> so that line is not yet closed. This banner and the PR that shipped it both said
+> "closing the last Must-have" until the brief was re-read: the same trust-the-
+> document failure the paragraph above warns about, one paragraph later. What
+> remains undecided is the **deployment target**. New work still follows the delivery
 > process (§21) and the implementation standard (§12), which is demonstrated by
 > real modules rather than by a template to copy (ADR-0057).
 >

@@ -250,6 +250,38 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
 }
 
 /**
+ * A **partial** definition PATCH: the caller supplies the exact field slice to send (ADR-0060 §4).
+ * Added beside {@link useUpdateActivity}, which is unchanged and still serves the flag-off dialog.
+ *
+ * The tabbed editor saves one write scope at a time, so it cannot use the whole-form mutation
+ * without resending — and potentially clobbering — fields the user never opened. `UpdateActivityDto`
+ * already treats every field as optional, so no API change is needed; the caller's `patch` is built
+ * by one of the `scope-bodies` builders, whose exact key sets are asserted in tests.
+ *
+ * The invalidations deliberately match `useUpdateActivity`'s: any scope may change the duration
+ * (General) or a date bound (Scheduling), and the assignment refetch costs nothing when that query
+ * is not mounted. Divergent invalidation would make a tab's save leave a staler cache than the
+ * whole-form save it replaces.
+ */
+export function useUpdateActivityFields(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { activityId: string; version: number; patch: Record<string, unknown> }) =>
+      apiFetch<ActivitySummary>(`/organizations/${orgSlug}/activities/${input.activityId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ...input.patch, version: input.version }),
+      }),
+    onSettled: (_data, _error, input) =>
+      Promise.all([
+        invalidateActivity(queryClient, orgSlug, planId, input.activityId),
+        queryClient.invalidateQueries({
+          queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
+        }),
+      ]),
+  });
+}
+
+/**
  * A canvas Visual-Planning placement (ADR-0033 M3): the minimal `{ visualStart, laneIndex?, version }`
  * PATCH on the single-activity endpoint. In VISUAL mode a day-drag hand-places the bar's start via
  * `visualStart` (never an SNET constraint) and — unlike {@link useRepositionLane} — it *does* feed the

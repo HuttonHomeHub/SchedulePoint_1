@@ -12,6 +12,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -63,10 +64,12 @@ export class ActivityStepsController {
       'server assigns `seq` contiguously (never client input) and bumps the parent activity’s `version`. ' +
       'An out-of-range `percentComplete` (N28, 422) or negative `weight` is rejected at the boundary; a ' +
       'stale activity `version` is a 409 (nothing changes). An empty list clears the steps (the manual ' +
-      'physical % then stands).',
+      'physical % then stands). Requires the plan edit-lock (ADR-0028) like every other activity ' +
+      'write — a replace bumps the parent activity’s `version`, so it is a structural write.',
   })
   @ApiOkResponse({ type: ActivityStepResponseDto, isArray: true })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   @ApiUnprocessableEntityResponse({
     description: 'A step percentComplete outside 0–100 (N28) or a negative weight.',
   })

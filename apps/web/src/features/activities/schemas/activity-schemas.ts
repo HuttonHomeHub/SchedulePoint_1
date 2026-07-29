@@ -134,12 +134,22 @@ export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
 
 /**
  * Advanced activity types offered only when `VITE_ADVANCED_ACTIVITY_TYPES` is on (M5-epic, ADR-0035).
- * **Level of Effort** (span-derived, §21) and **WBS summary** (branch roll-up, §24) — both with live
- * engine/API/conformance support. `HAMMOCK` is intentionally NOT offered (no engine behaviour yet),
- * though {@link ACTIVITY_TYPE_LABELS} still names every value so a legacy/imported one displays
- * honestly.
+ * **Level of Effort** (span-derived, §21), **WBS summary** (branch roll-up, §24) and
+ * **Resource-dependent** (§23 — schedules on its driving resource's calendar, ADR-0039) — all three
+ * with live engine/API/conformance support. `HAMMOCK` is intentionally NOT offered (no engine
+ * behaviour yet), though {@link ACTIVITY_TYPE_LABELS} still names every value so a legacy/imported
+ * one displays honestly.
+ *
+ * `RESOURCE_DEPENDENT` was missing from this list until well after §23 was Accepted and built:
+ * the engine resolved the driving resource's calendar, the conformance suite covered it, and no
+ * planner could reach it. The membership rule for this list is therefore "the engine honours it as
+ * labelled" — the same bar the constraint selector holds.
  */
-export const ADVANCED_ACTIVITY_TYPES: readonly ActivityType[] = ['LEVEL_OF_EFFORT', 'WBS_SUMMARY'];
+export const ADVANCED_ACTIVITY_TYPES: readonly ActivityType[] = [
+  'LEVEL_OF_EFFORT',
+  'WBS_SUMMARY',
+  'RESOURCE_DEPENDENT',
+];
 
 /**
  * The activity types the Type picker should offer: the always-supported {@link BASE_ACTIVITY_TYPES},

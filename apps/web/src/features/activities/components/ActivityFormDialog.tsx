@@ -225,6 +225,12 @@ export function ActivityFormDialog({
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
   const missingCalendar = Boolean(calendarId) && !calendars.some((c) => c.id === calendarId);
+  // A RESOURCE_DEPENDENT activity schedules on its DRIVING RESOURCE's calendar (ADR-0035 §23 /
+  // ADR-0039), so its own `calendarId` is resolved and then overridden by the service. Leaving the
+  // picker live would be a control that saves a value with no effect — the lit-but-inert defect this
+  // codebase keeps re-finding. It is shaded with the reason instead of hidden, so the binding an
+  // imported or re-typed activity already carries stays visible and is not silently dropped.
+  const resourceDependent = type === 'RESOURCE_DEPENDENT';
   // Behind `LIBRARY_SCOPING_ENABLED` the list spans two tiers (ADR-0053 §1) — the project's own
   // calendars alongside the organisation's — so the options are grouped under named `<optgroup>`s,
   // which a screen reader announces with the option. Not grouped when the project has none of its
@@ -342,6 +348,19 @@ export function ActivityFormDialog({
             {...register('durationDays', { valueAsNumber: true })}
           />
         )}
+        {/* A resource-dependent activity keeps its own duration (it behaves exactly like a task for
+            logic) — only the CALENDAR it is measured on changes, to its driving resource's
+            (ADR-0035 §23 / ADR-0039). Saying so here is the difference between a type that looks
+            inert and one whose effect is elsewhere: without an assignment the engine schedules it
+            on the ordinary calendar and flags it, which is what the Needs-a-driver badge reports. */}
+        {resourceDependent ? (
+          <p className="text-muted-foreground text-sm">
+            A resource-dependent activity is scheduled on its <strong>driving resource’s</strong>{' '}
+            calendar rather than its own, so it follows that crew or plant’s working time. Assign a
+            resource and mark it driving, then Recalculate. Until you do, it schedules like an
+            ordinary task and is flagged as needing a driver.
+          </p>
+        ) : null}
         {/* Duration type governs the resource-units triad (ADR-0040), so it is meaningless for a type
             with no entered duration/units (a milestone, LOE or WBS summary) — hidden for those, mirroring
             the Duration field. */}
@@ -427,6 +446,7 @@ export function ActivityFormDialog({
                 selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
                 groupLabels={CALENDAR_TIER_GROUP_LABELS}
                 emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
+                disabled={resourceDependent}
                 loading={calendarsLoading}
                 errored={calendarsError}
                 describedBy={
@@ -441,7 +461,7 @@ export function ActivityFormDialog({
             ) : (
               <Select
                 id="activity-calendar"
-                disabled={calendarsLoading}
+                disabled={calendarsLoading || resourceDependent}
                 aria-busy={calendarsLoading}
                 aria-invalid={calendarsError ? true : undefined}
                 aria-describedby={
@@ -468,8 +488,12 @@ export function ActivityFormDialog({
               </Select>
             )}
             <p id="activity-calendar-help" className="text-muted-foreground text-sm">
-              The working-time calendar this activity is scheduled on. Inherits the plan’s calendar
-              unless you pick one. Recalculate to apply the calendar to the activity’s dates.
+              {resourceDependent
+                ? // Says WHY it is unavailable, not merely that it is. A disabled control with no
+                  // reason reads as a bug; this one is disabled because another field already
+                  // decides the answer.
+                  'Not used by a resource-dependent activity — it is scheduled on its driving resource’s calendar instead. Change the type back to set a calendar here.'
+                : 'The working-time calendar this activity is scheduled on. Inherits the plan’s calendar unless you pick one. Recalculate to apply the calendar to the activity’s dates.'}
             </p>
             {calendarsError ? (
               <p

@@ -566,7 +566,10 @@ case-insensitive substring match bounded by the org filter; there is deliberatel
   in one transaction (retained rows updated in place, new ones appended, removed
   ones soft-deleted; the server assigns `seq`). `version` is the parent **activity's**
   optimistic-lock version (the replace bumps it; a stale value is a `409`). Steps
-  are activity-write data (`activity:update`, no new permission). When present,
+  are activity-write data (`activity:update`, no new permission) and the `PUT`
+  **requires the plan edit-lock** (ADR-0028 / ADR-0060 §5) like every other activity
+  write — a `423` when enforcement is on and the caller does not hold the pen. The
+  `GET` is member-level and never gated. When present,
   their weight-weighted mean `Σ(w·p)/Σw` is the activity's **PHYSICAL** %-complete
   and **wins** over `physicalPercentComplete` (feeding the `GET …/schedule/earned-value`
   read only — never a CPM date); with no steps the manual field stands (parity). A
