@@ -183,6 +183,7 @@ export function ReportedProgressPanel({
         gate={gate}
         dirty={isDirty}
         pending={mutation.isPending}
+        saved={mutation.isSuccess}
         label="Save progress"
       />
     </form>
@@ -198,6 +199,7 @@ export function ValueMeasurePanel({
   onSave,
   onOpenResources,
   pending,
+  saved = false,
 }: {
   orgSlug: string;
   activity: ActivitySummary;
@@ -206,6 +208,8 @@ export function ValueMeasurePanel({
   onSave: (patch: Record<string, unknown>, reset: () => void) => void;
   onOpenResources?: () => void;
   pending: boolean;
+  /** This panel saves through the host (it shares the activity PATCH), so the host owns the flag. */
+  saved?: boolean;
 }): React.ReactElement {
   const { form, isDirty } = useScopeForm(activityMeasureSchema, seedMeasure, activity, open);
   const steps = useActivitySteps(orgSlug, activity.id);
@@ -298,7 +302,13 @@ export function ValueMeasurePanel({
           />
         </>
       ) : null}
-      <ScopeSaveBar gate={gate} dirty={isDirty} pending={pending} label="Save measure" />
+      <ScopeSaveBar
+        gate={gate}
+        dirty={isDirty}
+        pending={pending}
+        saved={saved}
+        label="Save measure"
+      />
     </form>
   );
 }

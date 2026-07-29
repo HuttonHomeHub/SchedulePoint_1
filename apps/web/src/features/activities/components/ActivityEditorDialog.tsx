@@ -558,6 +558,7 @@ export function ActivityEditorDialog({
                     gate={gating.measure}
                     open={open}
                     pending={update.isPending}
+                    saved={savedScope === 'progress'}
                     onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
                   />
                   {/* Same flag pair the Steps entry points check (`ActivitiesTable`,
