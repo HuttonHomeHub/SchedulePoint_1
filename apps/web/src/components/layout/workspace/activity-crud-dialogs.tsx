@@ -113,7 +113,10 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
                             planId={planId}
                             activity={intended}
                             canManageLogic={model.canManageLogic}
-                            enabled={intended !== undefined}
+                            // `intended` is already narrowed truthy by this branch's own
+                            // condition (`PROGRAMME_SCHEDULING_ENABLED && intended`), so this
+                            // section is always showing its subject when it renders at all.
+                            enabled
                           />
                         ),
                       }
@@ -127,7 +130,10 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
                           planId={planId}
                           activity={intended}
                           canWrite={model.canWriteNotes}
-                          enabled={intended !== undefined}
+                          // Same reasoning as the cross-plan slot above: `intended` is already
+                          // narrowed truthy by this branch's own condition (`NOTES_ENABLED &&
+                          // intended`).
+                          enabled
                         />
                       ),
                     }
