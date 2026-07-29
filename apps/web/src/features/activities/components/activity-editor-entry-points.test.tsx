@@ -60,7 +60,7 @@ const CONTRIBUTOR = deriveActivityEditorGating({
   canReadCost: false,
 });
 
-function renderTable(gating = PLANNER_WITH_PEN, canWrite = true) {
+function renderTable(gating = PLANNER_WITH_PEN, canEditSchedule = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [BASE]);
   return render(
@@ -68,7 +68,7 @@ function renderTable(gating = PLANNER_WITH_PEN, canWrite = true) {
       <ActivitiesTable
         orgSlug="acme"
         planId="pl1"
-        canWrite={canWrite}
+        canEditSchedule={canEditSchedule}
         canReportProgress
         editorGating={gating}
       />

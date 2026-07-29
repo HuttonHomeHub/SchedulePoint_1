@@ -87,7 +87,7 @@ describe('convergence flag-off — the row menu', () => {
         <ActivitiesTable
           orgSlug="acme"
           planId="pl1"
-          canWrite
+          canEditSchedule
           editorGating={PLANNER_WITH_PEN}
           onOpenLogic={onOpenLogic}
         />

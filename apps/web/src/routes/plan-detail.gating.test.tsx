@@ -125,15 +125,15 @@ vi.mock('@/features/activities', () => ({
   useBatchPositions: () => ({ mutateAsync: h.batchPositions }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   ActivitiesTable: ({
-    canWrite,
+    canEditSchedule,
     canReportProgress,
   }: {
-    canWrite: boolean;
+    canEditSchedule: boolean;
     canReportProgress: boolean;
   }) => (
     <div
       data-testid="activities-table"
-      data-can-write={String(canWrite)}
+      data-can-write={String(canEditSchedule)}
       data-can-progress={String(canReportProgress)}
     />
   ),

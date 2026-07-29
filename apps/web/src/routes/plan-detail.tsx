@@ -349,7 +349,7 @@ function LegacyPlanLayout({
         <ActivitiesTable
           orgSlug={orgSlug}
           planId={planId}
-          canWrite={model.canEditSchedule}
+          canEditSchedule={model.canEditSchedule}
           canReportProgress={model.canProgress}
           editorGating={model.activityEditorGating}
           onOpenLogic={model.onOpenLogic}

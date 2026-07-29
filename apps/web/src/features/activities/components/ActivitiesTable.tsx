@@ -94,7 +94,7 @@ function scheduleColumn(
 export function ActivitiesTable({
   orgSlug,
   planId,
-  canWrite,
+  canEditSchedule,
   canReportProgress = false,
   editorGating,
   onOpenLogic,
@@ -107,14 +107,14 @@ export function ActivitiesTable({
   orgSlug: string;
   planId: string;
   /** May create/edit/delete the definition (Planner/Org Admin). */
-  canWrite: boolean;
+  canEditSchedule: boolean;
   /** May report progress (Contributor upward). Planners also have it. */
   canReportProgress?: boolean;
   /**
    * The tabbed editor's per-scope gate (ADR-0060 §6), derived once by the plan workspace and passed
    * down. Required in practice behind `VITE_ACTIVITY_EDITOR_TABS`; optional in the type so the
    * flag-off path — and every existing test that mounts this table — is untouched. It cannot be
-   * rebuilt from `canWrite`, which has already fused the role and the pen into one boolean and so
+   * rebuilt from `canEditSchedule`, which has already fused the role and the pen into one boolean and so
    * cannot say WHICH of the two is missing.
    */
   editorGating?: ActivityEditorGating;
@@ -223,7 +223,7 @@ export function ActivitiesTable({
       });
     }
     // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
-    // writes inside are gated on `canWrite`).
+    // writes inside are gated on `canEditSchedule`).
     if (RESOURCES_ENABLED) {
       actions.push({
         key: 'resources',
@@ -237,12 +237,12 @@ export function ActivitiesTable({
     if (
       ACTIVITY_STEPS_ENABLED &&
       EARNED_VALUE_ENABLED &&
-      canWrite &&
+      canEditSchedule &&
       !isDurationDerivedType(activity.type)
     ) {
       actions.push({ key: 'steps', label: 'Steps', onSelect: () => openFor(activity, 'steps') });
     }
-    if (canWrite) {
+    if (canEditSchedule) {
       actions.push({ key: 'edit', label: 'Edit', onSelect: () => openFor(activity, 'edit') });
       actions.push({
         key: 'delete',
@@ -480,7 +480,7 @@ export function ActivitiesTable({
       varianceColumn('Float variance', 'float', 'lg'),
     );
   }
-  if (canWrite || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
+  if (canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
     columns.push({
       header: 'Actions',
       srHeader: true,
@@ -538,7 +538,7 @@ export function ActivitiesTable({
         errorLabel="Couldn’t load activities. Please try again."
         empty={
           <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            No activities yet.{canWrite ? ' Add the first activity to this plan.' : ''}
+            No activities yet.{canEditSchedule ? ' Add the first activity to this plan.' : ''}
           </div>
         }
       />
@@ -559,7 +559,7 @@ export function ActivitiesTable({
           planId={planId}
           open={managingResources !== undefined}
           onClose={() => setResourcesId(null)}
-          canWrite={canWrite}
+          canWrite={canEditSchedule}
           {...(managingResources
             ? {
                 activityId: managingResources.id,
@@ -576,7 +576,7 @@ export function ActivitiesTable({
 
       {ACTIVITY_STEPS_ENABLED &&
       EARNED_VALUE_ENABLED &&
-      canWrite &&
+      canEditSchedule &&
       !ACTIVITY_EDITOR_TABS_ENABLED ? (
         <ActivityStepsDialog
           orgSlug={orgSlug}
@@ -606,7 +606,7 @@ export function ActivitiesTable({
         />
       ) : null}
 
-      {canWrite ? (
+      {canEditSchedule ? (
         <>
           {ACTIVITY_EDITOR_TABS_ENABLED ? null : (
             <ActivityFormDialog

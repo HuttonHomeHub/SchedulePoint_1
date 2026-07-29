@@ -115,8 +115,8 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  ActivitiesTable: ({ canWrite }: { canWrite: boolean }) => (
-    <div data-testid="activities-table" data-can-write={String(canWrite)} />
+  ActivitiesTable: ({ canEditSchedule }: { canEditSchedule: boolean }) => (
+    <div data-testid="activities-table" data-can-write={String(canEditSchedule)} />
   ),
   ActivityFormDialog: () => null,
   ActivityEditorDialog: () => null,
