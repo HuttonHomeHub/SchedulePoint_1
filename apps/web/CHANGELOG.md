@@ -1,5 +1,49 @@
 # @repo/web
 
+## 0.57.0
+
+### Minor Changes
+
+- [#187](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/187) [`dad7142`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dad71421b0d6dcf9f4ffd146d2688488a66dd49e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Turn the tabbed activity editor on by default (ADR-0060 M6, `VITE_ACTIVITY_EDITOR_TABS`). The
+  activity's General, Scheduling, Progress and Cost fields now live on four tabs that save per write
+  scope, and the progress model — the reported %, the value measure, and the weighted steps that
+  override it — is co-located on one tab instead of spread across four dialogs.
+
+  Four specialist reviews over the combined diff found six defects in code that had already passed a
+  human read, all folded before the flip: a dropped calendar Combobox with its loading and error
+  states, Save buttons that lost focus on every save, a reason sentence placed beside its control
+  rather than associated with it, an invented edit-lock message that was false whenever nobody held
+  the lock, no confirmation before discarding unsaved work, and a save bar duplicated across two files
+  that had already begun to diverge. A flag-on Playwright journey with its own CI step proves the
+  permission model end to end against a real API.
+
+  `VITE_ACTIVITY_EDITOR_TABS=false` restores the previous three dialogs exactly, pinned by parity
+  suites.
+
+- [#187](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/187) [`dad7142`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dad71421b0d6dcf9f4ffd146d2688488a66dd49e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Converge the activity editor's entry points (ADR-0060 M5). Edit, Report progress and Steps — from the
+  activities row menu, the canvas selection bar and the plan toolbar — now build one `ActivityEditorIntent`
+  and open one editor on the tab that answers the action, instead of three dialogs driven by three pieces
+  of state. The per-scope gate is derived once by the plan workspace and passed to every host, so the
+  role-versus-pen reason a shaded control shows cannot differ between the table and the canvas.
+
+- [#187](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/187) [`dad7142`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dad71421b0d6dcf9f4ffd146d2688488a66dd49e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Move the weighted-steps editor into the tabbed activity editor's Progress tab (ADR-0060 M4), beside
+  the physical % complete it overrides — the two were previously in separate dialogs, reachable one at
+  a time, with no cue that one silently won. The panel is pen-gated to match the server assertion added
+  in M0, and its focus choreography now also covers reordering: moving a step to either end of the list
+  used to disable the button just pressed and drop focus to the document body.
+
+### Patch Changes
+
+- [#187](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/187) [`dad7142`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dad71421b0d6dcf9f4ffd146d2688488a66dd49e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Co-locate the activity progress model on one tab (behind VITE_ACTIVITY_EDITOR_TABS, default off)
+
+  Reported progress, the value measure and the manual physical % now sit on
+  one Progress tab, each panel headed by what it does to the schedule
+  ("Moves the activity's dates" vs "Earns value in Earned Value. Changes no
+  dates"). The manual physical field is disabled with its reason when
+  weighted steps override it, instead of staying editable and silently
+  ignored. Three panels keep three Saves, because progress is not pen-gated
+  and the measure is.
+
 ## 0.56.0
 
 ### Minor Changes
