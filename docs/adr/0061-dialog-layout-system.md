@@ -137,10 +137,21 @@ What stands in for the flag: the existing unit and Playwright suites, which quer
 label** rather than by structure, and therefore assert exactly the contract this change preserves.
 Every one of them passes unchanged except where a label deliberately lost `(optional)`.
 
-One consequence is recorded here because it will recur: `FormSection` renders `role="group"`, so a
-bare `container.querySelector('[role="group"]')` in a test now finds the enclosing section. One
-existing assertion (`ActivityFormDialog.scope.test.tsx`, the combobox's tier groups) had to be
-scoped to the listbox. Its sibling helper had already been scoped for exactly this reason.
+Two consequences are recorded here because they will recur — **a named group is addressable the
+same ways a control is**:
+
+1. `FormSection` renders `role="group"`, so a bare `querySelector('[role="group"]')` now finds the
+   enclosing section. `ActivityFormDialog.scope.test.tsx`'s combobox tier-group assertion had to be
+   scoped to the listbox; its sibling helper had already been scoped for exactly this reason.
+2. The group carries an accessible **name** via `aria-labelledby`, so Playwright's `getByLabel` —
+   substring-matching by default — matches it too. A section titled "Upstream activity" beside a
+   field labelled "Activity" is a strict-mode violation
+   (`e2e-programme/programme.spec.ts`), fixed with `{ exact: true }`.
+
+Neither is a defect: naming a group is the point. Both were caught by running the Playwright suites
+against a real stack **before** pushing, which is the practice ADR-0060's own post-merge CI failure
+was supposed to have established and this change actually followed. Four suites' unit tests were
+green while `e2e/activities.spec.ts` and `e2e-programme` were not.
 
 ## Consequences
 

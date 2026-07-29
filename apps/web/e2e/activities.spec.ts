@@ -61,10 +61,10 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
   await dialog.getByLabel('Name').fill('Excavate');
-  await dialog.getByLabel('Code (optional)').fill('A100');
+  await dialog.getByLabel('Code').fill('A100');
   await dialog.getByLabel('Duration (working days)', { exact: true }).fill('10');
   // Choosing a constraint reveals its date field — check that revealed state is accessible.
-  await dialog.getByLabel('Constraint (optional)').selectOption('SNET');
+  await dialog.getByLabel('Constraint', { exact: true }).selectOption('SNET');
   await dialog.getByLabel('Constraint date').fill('2026-05-01');
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
