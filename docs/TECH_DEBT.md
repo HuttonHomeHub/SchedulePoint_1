@@ -161,3 +161,24 @@ declare theirs, so this is an outlier rather than a convention.
 enforcement is on).')` to the three assignment routes and regenerate the OpenAPI document. Worth
 pairing with a structural test that every route whose service calls `assertHoldsPen` declares the
 response, so the pair cannot drift again.
+
+### 62. `canReadCost` is derived from the role because the DTO cannot say
+
+The activity DTO returns `null` for a cost field that is **unset** and `null` for one the caller
+**may not read** — the two are indistinguishable on the wire. So the tabbed activity editor
+(ADR-0060 §6) decides whether to show its Cost tab from the caller's role, via
+`deriveActivityEditorGating`'s `canReadCost` input, rather than from the payload.
+
+That is sound **today** and only today: `cost:read` and `activity:update` are granted to exactly
+the same roles (Planner and Org Admin, `org-permissions.ts`), so "can edit the activity" and "can
+see its money" coincide, and the derivation cannot be wrong. It is a coincidence the code depends
+on without being able to check.
+
+The day those permission sets diverge — a role that may edit an activity but not see its cost, or
+the reverse — the client will show or hide the Cost tab incorrectly, and no test will fail,
+because every test asserts the current coincidence.
+
+**What would close it:** have the API say so rather than making the client guess — either a
+`meta.permissions` block on the activity read, or a distinguishable "redacted" marker on the cost
+fields (not `null`). Until then, treat the permission sets as coupled: changing one without the
+other is a client bug in a different file.
