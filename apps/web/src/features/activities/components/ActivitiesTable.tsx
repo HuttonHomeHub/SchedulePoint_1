@@ -26,6 +26,7 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Menu, MenuItem } from '@/components/ui/menu';
 import {
   ACTIVITY_CALENDAR_ENABLED,
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_EDITOR_TABS_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
@@ -98,6 +99,7 @@ export function ActivitiesTable({
   canReportProgress = false,
   editorGating,
   onOpenLogic,
+  onOpenResources,
   varianceByActivityId,
   noteCountByActivityId,
   calendars = [],
@@ -121,6 +123,13 @@ export function ActivitiesTable({
   /** Open the logic (predecessors/successors) panel for a row. Available to any
    * member (read); the host owns the panel so this feature stays dependency-free. */
   onOpenLogic?: (activity: ActivitySummary) => void;
+  /**
+   * Open the resource-assignment surface for a row. Like {@link onOpenLogic} the host owns it, so
+   * both row actions resolve to the **same** editor the canvas opens rather than to a second one
+   * mounted here. Absent (or with the convergence flag off) the table falls back to its own
+   * `ActivityResourcesDialog`, which is today's behaviour.
+   */
+  onOpenResources?: (activity: ActivitySummary) => void;
   /**
    * Per-activity variance vs the plan's active baseline, keyed by activity id. When
    * present (the plan has an active baseline), a "Baseline finish" column is shown. The
@@ -195,6 +204,13 @@ export function ActivitiesTable({
   const intended = editorIntent
     ? activities.data?.find((a) => a.id === editorIntent.activityId)
     : undefined;
+  /**
+   * Whether **Resources** belongs to the host (the convergence epic) rather than to this table's
+   * own dialog. Narrowed as a const so the row action can call `onOpenResources` without a second
+   * existence check that TypeScript could not connect to this one.
+   */
+  const hostOwnsResources = ACTIVITY_EDITOR_CONVERGENCE_ENABLED && onOpenResources !== undefined;
+
   /** Open the tabbed editor if it is on, else fall back to this purpose's own legacy dialog. */
   const openFor = (activity: ActivitySummary, purpose: 'edit' | 'progress' | 'steps'): void => {
     if (ACTIVITY_EDITOR_TABS_ENABLED) {
@@ -228,7 +244,8 @@ export function ActivitiesTable({
       actions.push({
         key: 'resources',
         label: 'Resources',
-        onSelect: () => setResourcesId(activity.id),
+        onSelect: () =>
+          hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
       });
     }
     // Dark surface (ADR-0044 §2): weighted steps are a writer authoring surface whose only effect is
@@ -553,7 +570,7 @@ export function ActivitiesTable({
         />
       ) : null}
 
-      {RESOURCES_ENABLED ? (
+      {RESOURCES_ENABLED && !hostOwnsResources ? (
         <ActivityResourcesDialog
           orgSlug={orgSlug}
           planId={planId}

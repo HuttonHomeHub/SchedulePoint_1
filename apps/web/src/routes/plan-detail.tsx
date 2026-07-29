@@ -353,6 +353,7 @@ function LegacyPlanLayout({
           canReportProgress={model.canProgress}
           editorGating={model.activityEditorGating}
           onOpenLogic={model.onOpenLogic}
+          onOpenResources={model.onResourcesActivity}
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
           calendarsError={model.calendars.isError}

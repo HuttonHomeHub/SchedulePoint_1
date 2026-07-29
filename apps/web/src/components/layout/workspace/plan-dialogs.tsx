@@ -108,7 +108,7 @@ export function PlanDialogs({
           and toggled like the crud dialogs; its target re-derives from the live query, so it closes when
           the row is deleted. Reuses the same dialog + prop shape as the activities-table row action; the
           dialog enforces its own write gating via `canWrite`. Flag-off ⇒ not rendered (byte-for-byte). */}
-      {ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED ? (
+      {ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED && !ACTIVITY_EDITOR_CONVERGENCE_ENABLED ? (
         <ActivityResourcesDialog
           orgSlug={model.orgSlug}
           planId={model.planId}

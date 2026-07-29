@@ -18,6 +18,8 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
   ACTIVITY_EDITOR_TABS_ENABLED: true,
   CANVAS_DIRECT_MANIPULATION_ENABLED: true,
+  ENTRY_ROUTES_ENABLED: true,
+  RESOURCES_ENABLED: true,
   PROGRAMME_SCHEDULING_ENABLED: true,
 }));
 
@@ -33,7 +35,9 @@ vi.mock('@/features/cross-plan-dependencies', () => ({
 
 vi.mock('@/features/notes', () => ({ ActivityNotesSection: () => null }));
 vi.mock('@/features/plans', () => ({ PlanFormDialog: () => null }));
-vi.mock('@/features/resources', () => ({ ActivityResourcesDialog: () => null }));
+vi.mock('@/features/resources', () => ({
+  ActivityResourcesDialog: () => <div data-testid="resources-dialog" />,
+}));
 
 /** Captures what the editor was handed, so the seams can be asserted without the real panel. */
 const editorProps = vi.fn();
@@ -99,6 +103,11 @@ describe('the workspace hosts, with the convergence flag on', () => {
   it('does not mount the Logic dialog — Logic is a tab of the one editor', () => {
     render(<PlanDialogs model={makeModel()} plan={{ projectId: 'proj-1' } as never} />);
     expect(screen.queryByTestId('dependency-editor')).not.toBeInTheDocument();
+  });
+
+  it('does not mount the Resources dialog either — Resources is the other tab', () => {
+    render(<PlanDialogs model={makeModel()} plan={{ projectId: 'proj-1' } as never} />);
+    expect(screen.queryByTestId('resources-dialog')).not.toBeInTheDocument();
   });
 
   it('hands the editor the undo seam for a removed link', () => {

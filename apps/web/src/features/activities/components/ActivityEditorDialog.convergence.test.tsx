@@ -12,6 +12,7 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
+  RESOURCES_ENABLED: true,
 }));
 
 const REQUESTS: { url: string; method: string }[] = [];
@@ -84,10 +85,10 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('ActivityEditorDialog — the Logic tab', () => {
-  it('adds Logic to the rail, between Scheduling and Progress', () => {
+  it('adds Logic and Resources to the rail, in their subject order', () => {
     mount();
     const labels = screen.getAllByRole('tab').map((tab) => tab.textContent);
-    expect(labels).toEqual(['General', 'Scheduling', 'Logic', 'Progress', 'Cost']);
+    expect(labels).toEqual(['General', 'Scheduling', 'Logic', 'Progress', 'Cost', 'Resources']);
   });
 
   it('renders the same panel the Logic dialog renders', async () => {
@@ -145,5 +146,35 @@ describe('ActivityEditorDialog — the Logic tab', () => {
     mount({ logic: { crossPlanSlot: <p>Cross-plan links</p> } });
     fireEvent.click(screen.getByRole('tab', { name: /Logic/ }));
     expect(screen.getByText('Cross-plan links')).toBeInTheDocument();
+  });
+});
+
+describe('ActivityEditorDialog — the Resources tab', () => {
+  it('renders the same panel the Resources dialog renders', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: /Resources/ }));
+    expect(await screen.findByRole('group', { name: 'Assigned' })).toBeInTheDocument();
+  });
+
+  it('fetches nothing for Resources until its tab is the active one', async () => {
+    mount();
+    expect(REQUESTS.filter((r) => r.url.includes('assignments'))).toHaveLength(0);
+    fireEvent.click(screen.getByRole('tab', { name: /Resources/ }));
+    await waitFor(() =>
+      expect(REQUESTS.filter((r) => r.url.includes('assignments')).length).toBeGreaterThan(0),
+    );
+  });
+
+  it('derives the milestone rule from the row, so the curve picker stays hidden for one', async () => {
+    // The dialog took `isMilestone` from each call site; the editor holds the row, so it decides.
+    mount({ activity: row({ type: 'START_MILESTONE', durationDays: 0 }) });
+    fireEvent.click(screen.getByRole('tab', { name: /Resources/ }));
+    await screen.findByRole('group', { name: 'Assigned' });
+    expect(screen.queryByLabelText('Loading curve')).not.toBeInTheDocument();
+  });
+
+  it('marks Resources read-only without the pen', () => {
+    mount({ gating: PLANNER_NO_PEN });
+    expect(screen.getByRole('tab', { name: /Resources/ })).toHaveTextContent('read-only');
   });
 });

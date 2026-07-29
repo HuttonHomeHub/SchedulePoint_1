@@ -20,6 +20,7 @@ import {
   CONSTRAINT_TYPE_LABELS,
   DURATION_TYPE_LABELS,
   isDurationDerivedType,
+  isMilestoneType,
   selectableActivityTypes,
 } from '../schemas/activity-schemas';
 import {
@@ -69,8 +70,10 @@ import {
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
+  RESOURCES_ENABLED,
 } from '@/config/env';
 import { ActivityLogicPanel } from '@/features/dependencies';
+import { ActivityResourcesPanel } from '@/features/resources';
 import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
@@ -311,6 +314,13 @@ export function ActivityEditorDialog({
             ...marker(cost.errorCount, cost.isDirty, gating.cost.writable),
           },
         ]
+      : []),
+    // Resources needs BOTH flags: the convergence one to be a tab at all, and `VITE_RESOURCES`
+    // because there is no resources surface without it. A tab whose entry point is hidden — or an
+    // entry point with no tab — is the exact flag-parity gap the ADR-0060 security review caught on
+    // the steps panel, so the four combinations have their own matrix test.
+    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && RESOURCES_ENABLED
+      ? [{ id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) }]
       : []),
   ];
 
@@ -687,6 +697,21 @@ export function ActivityEditorDialog({
                   {...(logic?.crossPlanSlot ? { crossPlanSlot: logic.crossPlanSlot } : {})}
                   {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
                   {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
+                />
+              ) : null}
+
+              {/* Resources — the same `ActivityResourcesPanel` the Resources dialog renders. The
+                  milestone and duration-type facts are derived from the row the editor already
+                  holds, rather than passed in by each host as the dialog required. */}
+              {current === 'resources' && activity ? (
+                <ActivityResourcesPanel
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  activityId={activity.id}
+                  activityDurationType={activity.durationType}
+                  isMilestone={isMilestoneType(activity.type)}
+                  canWrite={gating.resources.writable}
+                  enabled={open && current === 'resources'}
                 />
               ) : null}
 

@@ -195,7 +195,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // current row and the dialog closes the moment its target vanishes. Drives the workspace-hosted
   // `ActivityResourcesDialog` (beside the crud dialogs). Inert when nothing reads it (flag off).
   const [resourcesActivityId, setResourcesActivityId] = useState<string | null>(null);
-  const onResourcesActivity = useCallback((a: ActivitySummary) => setResourcesActivityId(a.id), []);
+  // Flag-on, **Resources** is a tab of the one editor rather than a dialog of its own — the same
+  // shape as `onEditActivity` / `onOpenLogic`. Flag-off it still drives the workspace-hosted
+  // `ActivityResourcesDialog` below.
+  const onResourcesActivity = useCallback(
+    (a: ActivitySummary) =>
+      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+        ? setEditorIntent(openActivityEditor(a, 'resources'))
+        : setResourcesActivityId(a.id),
+    [],
+  );
   const setResourcesActivity = useCallback(
     (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
     [],

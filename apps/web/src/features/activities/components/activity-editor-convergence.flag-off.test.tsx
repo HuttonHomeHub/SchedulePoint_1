@@ -28,6 +28,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: false,
   ACTIVITY_EDITOR_TABS_ENABLED: true,
+  RESOURCES_ENABLED: true,
 }));
 
 const ROW = {
@@ -97,5 +98,29 @@ describe('convergence flag-off — the row menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Excavate' }));
     fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Logic' }));
     expect(onOpenLogic).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
+  });
+
+  it('leaves Resources opening the table’s own dialog, not the host', () => {
+    const onOpenResources = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [ROW]);
+    render(
+      <QueryClientProvider client={client}>
+        <ActivitiesTable
+          orgSlug="acme"
+          planId="pl1"
+          canEditSchedule
+          editorGating={PLANNER_WITH_PEN}
+          onOpenResources={onOpenResources}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Excavate' }));
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Resources' }));
+    // The host callback exists but must be ignored with the flag off — that is the contract a
+    // rollback depends on, and the reason the table still mounts its own dialog.
+    expect(onOpenResources).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Resources' })).toBeInTheDocument();
   });
 });
