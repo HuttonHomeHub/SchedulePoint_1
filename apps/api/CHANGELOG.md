@@ -1,5 +1,16 @@
 # @repo/api
 
+## 0.30.1
+
+### Patch Changes
+
+- [#191](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/191) [`75d1069`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/75d1069c2e8c4e7621ba46fda57d559d889cc070) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Declare the 423 the resource-assignment routes can already return
+
+  `ResourceAssignmentService` asserts the plan edit-lock on create, update and delete, and an e2e case
+  pins it — but none of the three routes carried `@ApiLockedResponse`, so the OpenAPI document did not
+  mention the status. A client generated from the spec had no branch for it. Documentation only: no
+  behaviour, permission or schema change. Closes TECH_DEBT [#61](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/61).
+
 ## 0.30.0
 
 ### Minor Changes
