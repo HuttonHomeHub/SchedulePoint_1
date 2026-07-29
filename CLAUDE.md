@@ -185,10 +185,24 @@ Full detail in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Summary:
 
 1. Merging changesets to `main` makes the **Release** workflow open/update a
    "Version Packages" PR.
-2. Merging that PR bumps versions, updates `CHANGELOG.md`, and tags `vX.Y.Z`.
-3. The tag triggers the **Publish container images** workflow, pushing `api` and
-   `web` images to **GHCR** with SemVer + SHA tags, SBOM, and provenance.
-4. Deployment promotes those immutable images through environments.
+2. Merging that PR bumps versions, updates each `CHANGELOG.md`, and tags
+   `api-vX.Y.Z` / `web-vX.Y.Z` (per-package, ADR-0027).
+3. **The same Release run then publishes the images.** Its `publish` job calls
+   `docker-publish.yml` as a **reusable workflow** (`uses:`), pushing `api` and
+   `web` to **GHCR** with SemVer + SHA tags, SBOM and provenance — only for the
+   app(s) that actually released.
+   **The tag does not trigger anything.** A tag pushed with the default
+   `GITHUB_TOKEN` cannot start another workflow run, so a `push: tags` trigger
+   would never fire for a changesets-cut release; `release.yml` calls the
+   publisher directly instead. Two consequences worth knowing before you go
+   looking for a failure: `docker-publish.yml`'s **own** run list shows only
+   manual `workflow_dispatch` runs, because reusable-workflow calls appear as
+   jobs of the **caller's** run; and the same `GITHUB_TOKEN` rule is why the
+   "Version Packages" PR never has any checks. Neither is a fault. (Read this
+   before concluding a release didn't publish — that mistake has been made.)
+4. Deployment promotes those immutable images through environments — automatic
+   where an operator has enabled the Watchtower `autodeploy` profile (ADR-0047),
+   manual otherwise.
 
 ## 12. Frontend architecture, UI standards & design system
 
