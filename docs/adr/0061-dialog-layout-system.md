@@ -12,13 +12,11 @@
 Every dialog body in this application was the same shape:
 
 ```tsx
-<form className="flex flex-col gap-4">
-  …fields…
-</form>
+<form className="flex flex-col gap-4">…fields…</form>
 ```
 
 Eighteen dialogs, one layout. A one-field **Capture baseline** and a nine-field **Scheduling** tab
-had *identical* visual structure, which meant the structure said nothing: it could not indicate
+had _identical_ visual structure, which meant the structure said nothing: it could not indicate
 which fields belonged together, which were consequential, or which were defaults nobody needed to
 read.
 
@@ -32,7 +30,7 @@ Two measurements made the problem concrete rather than aesthetic:
 
 The immediate trigger was feedback on the ADR-0060 epic: the tabbing and the per-scope saves had
 landed, and inside each tab there was still just a list of settings. That criticism was correct.
-ADR-0060 restructured *which* fields live together and *who may save them*; it did not touch how
+ADR-0060 restructured _which_ fields live together and _who may save them_; it did not touch how
 any of them are laid out.
 
 Three primitives that would have helped already existed and were unused in every dialog:
@@ -50,11 +48,11 @@ missing component, but a missing **rule** about which component to reach for.
   `border-t`.
 - **`FieldGrid`** / **`FieldGridFull`** — two columns where two controls are one decision, one where
   there is no room. `FieldGridContainer` establishes the containment context.
-- **`ContextStrip`** — the read-only facts an edit is *about*.
+- **`ContextStrip`** — the read-only facts an edit is _about_.
 
 A Tailwind class cannot express "these two controls are one decision", so the fix has to be a
 component that carries the grouping. The previous idiom — a hand-built `<fieldset>` with an
-`sr-only` legend *and* a duplicate `aria-hidden` paragraph — was repeated four times in one file and
+`sr-only` legend _and_ a duplicate `aria-hidden` paragraph — was repeated four times in one file and
 had already drifted: the visible heading and the accessible name had been solved twice, separately.
 
 **`role="group"` + a real `<h3>`, not `<fieldset>`/`<legend>`.** A `<legend>` only captions its
@@ -158,7 +156,7 @@ green while `e2e/activities.spec.ts` and `e2e-programme` were not.
 - **The CPM engine, the API and the database are untouched.** The ADR-0034 recalc parity gate is
   structurally unaffected — no file under `apps/api/src/modules/schedule/engine/` is in this diff.
 - `Dialog` gains `xl` and `body="flush"`; both default to today's behaviour, so no existing consumer
-  changes. `xl` is documented as *for the two-pane layout only* — widening a single-column form to
+  changes. `xl` is documented as _for the two-pane layout only_ — widening a single-column form to
   896 px produces input rows nobody wants.
 - `docs/DESIGN_SYSTEM.md` gains a **Form layout** section: the authoring rule, so the next dialog is
   not a judgement call. That is the part that makes this an improvement rather than a one-off.

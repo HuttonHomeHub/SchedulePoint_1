@@ -359,52 +359,52 @@ export function ResourceFormDialog({
                 <FieldGrid>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor={calendarSelectId}>Calendar</Label>
-            {LIBRARY_SCOPING_ENABLED ? (
-              <Combobox
-                id={calendarSelectId}
-                value={calendarId ?? ''}
-                onChange={(value) =>
-                  setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
-                }
-                query={calendarQuery}
-                onQueryChange={setCalendarQuery}
-                options={calendarOptions}
-                selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
-                emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
-                loading={calendarsLoading}
-                errored={calendarsError}
-                disabled={readOnly}
-                describedBy={
-                  calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
-                }
-                invalid={calendarsError}
-                toggleLabel="Show calendars"
-                emptyMessage="No calendars match your search."
-              />
-            ) : (
-              <Select
-                id={calendarSelectId}
-                disabled={readOnly || calendarsLoading}
-                aria-busy={calendarsLoading}
-                aria-invalid={calendarsError ? true : undefined}
-                aria-describedby={
-                  calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
-                }
-                {...register('calendarId')}
-              >
-                <option value="">{INHERIT_CALENDAR_LABEL}</option>
-                {missingCalendar ? (
-                  <option value={calendarId}>
-                    {calendarsLoading ? 'Loading…' : 'Unavailable'}
-                  </option>
-                ) : null}
-                {calendars.map((calendar) => (
-                  <option key={calendar.id} value={calendar.id}>
-                    {calendar.name}
-                  </option>
-                ))}
-              </Select>
-            )}
+                    {LIBRARY_SCOPING_ENABLED ? (
+                      <Combobox
+                        id={calendarSelectId}
+                        value={calendarId ?? ''}
+                        onChange={(value) =>
+                          setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
+                        }
+                        query={calendarQuery}
+                        onQueryChange={setCalendarQuery}
+                        options={calendarOptions}
+                        selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
+                        emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
+                        loading={calendarsLoading}
+                        errored={calendarsError}
+                        disabled={readOnly}
+                        describedBy={
+                          calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
+                        }
+                        invalid={calendarsError}
+                        toggleLabel="Show calendars"
+                        emptyMessage="No calendars match your search."
+                      />
+                    ) : (
+                      <Select
+                        id={calendarSelectId}
+                        disabled={readOnly || calendarsLoading}
+                        aria-busy={calendarsLoading}
+                        aria-invalid={calendarsError ? true : undefined}
+                        aria-describedby={
+                          calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
+                        }
+                        {...register('calendarId')}
+                      >
+                        <option value="">{INHERIT_CALENDAR_LABEL}</option>
+                        {missingCalendar ? (
+                          <option value={calendarId}>
+                            {calendarsLoading ? 'Loading…' : 'Unavailable'}
+                          </option>
+                        ) : null}
+                        {calendars.map((calendar) => (
+                          <option key={calendar.id} value={calendar.id}>
+                            {calendar.name}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
                     <p id={calendarHelpId} className="text-muted-foreground text-sm">
                       The working-time calendar this resource is scheduled on when it drives an
                       activity. Inherits the plan’s calendar unless you pick one.
@@ -413,7 +413,11 @@ export function ResourceFormDialog({
                         : null}
                     </p>
                     {calendarsError ? (
-                      <p id={calendarErrorId} role="alert" className="text-destructive-text text-sm">
+                      <p
+                        id={calendarErrorId}
+                        role="alert"
+                        className="text-destructive-text text-sm"
+                      >
                         Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is
                         available.
                       </p>

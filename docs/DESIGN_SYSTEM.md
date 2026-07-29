@@ -479,7 +479,7 @@ side is worse than stacking them.
   a dialog's width comes from its size preset, not from the viewport, so `sm:` would give a 448px
   dialog and an 896px dialog the same answer.
 
-**`ContextStrip`** — the read-only facts an edit is *about*, kept on screen while it is made (the
+**`ContextStrip`** — the read-only facts an edit is _about_, kept on screen while it is made (the
 activity editor's computed dates and float). Read-only by contract: **no interactive children,
 ever**. The moment a fact becomes editable it is a field and belongs in a `FormSection`. When the
 facts don't exist yet, render **nothing** — a row of em dashes reads as breakage, not as
@@ -492,14 +492,14 @@ pads only the header, caps the height, and lets the pane own the scroll.
 
 **Which shape a dialog takes:**
 
-| Archetype                                     | Layout                                                  |
-| --------------------------------------------- | ------------------------------------------------------- |
-| Simple record (≤ ~4 fields)                   | No sections. `md`. Leave it alone.                      |
-| Dense record                                  | 2–3 `FormSection`s, `FieldGrid` for pairs. `lg`.        |
-| Multi-scope editor (today: the activity editor) | Vertical `Tabs` rail + pane, `xl` + `body="flush"`.    |
-| List / manage                                 | What exists **first**, then a `New …` section below it. |
-| Process / wizard                              | Numbered sections; every step present, carrying its own empty/pending/result state. |
-| Confirm / reference                           | Untouched.                                              |
+| Archetype                                       | Layout                                                                              |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Simple record (≤ ~4 fields)                     | No sections. `md`. Leave it alone.                                                  |
+| Dense record                                    | 2–3 `FormSection`s, `FieldGrid` for pairs. `lg`.                                    |
+| Multi-scope editor (today: the activity editor) | Vertical `Tabs` rail + pane, `xl` + `body="flush"`.                                 |
+| List / manage                                   | What exists **first**, then a `New …` section below it.                             |
+| Process / wizard                                | Numbered sections; every step present, carrying its own empty/pending/result state. |
+| Confirm / reference                             | Untouched.                                                                          |
 
 **Labels never say `(optional)`.** It was on eleven of twenty-two labels in one dialog, which is
 enough that it stopped meaning anything. Where optionality matters, the section description or the
