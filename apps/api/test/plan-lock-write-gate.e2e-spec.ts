@@ -56,6 +56,10 @@ describe.skipIf(!hasDatabase)('Plan edit-lock write-gate (e2e, enforced)', () =>
     await prisma.activityDependency.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();
+    // Steps hang off an activity with a RESTRICT FK, so they must go first. This spec created no
+    // steps until the ADR-0060 §5 gate case below, which is why the omission surfaced only now —
+    // the same order `calendar-scope.e2e-spec.ts` already uses.
+    await prisma.activityStep.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();
