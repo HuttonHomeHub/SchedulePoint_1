@@ -9,6 +9,9 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
 
 const PATCHES: { url: string; body: Record<string, unknown> }[] = [];
 
+/** What the steps GET returns. Mutable so a test can open the Progress tab on an activity that has them. */
+let STEPS: { name: string; weight: number; percentComplete: number }[] = [];
+
 /** A row whose `version` the test can advance, to prove the editor re-reads it per save. */
 function row(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -69,6 +72,7 @@ function mount(props: Partial<Parameters<typeof ActivityEditorDialog>[0]> = {}) 
 
 beforeEach(() => {
   PATCHES.length = 0;
+  STEPS = [];
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
@@ -82,13 +86,9 @@ beforeEach(() => {
       return Promise.resolve({
         ok: true,
         status: 200,
-        // Both shapes the hooks read: a bare list for the steps GET, `{ data }` for a row write.
+        // Both shapes the hooks read: the step list for `…/steps`, the row for a definition write.
         json: () =>
-          Promise.resolve(
-            method === 'GET' && url.includes('/steps')
-              ? { data: [] }
-              : { data: row({ version: 2 }) },
-          ),
+          Promise.resolve(url.includes('/steps') ? { data: STEPS } : { data: row({ version: 2 }) }),
       } as unknown as Response);
     }),
   );
@@ -304,5 +304,99 @@ describe('ActivityEditorDialog — Progress tab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
     fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '100' } });
     expect(screen.getByText('Complete')).toBeInTheDocument();
+  });
+});
+
+/**
+ * M4 Task 4.3 — the weighted steps, now beside the physical % they override. Two properties matter
+ * beyond "it renders": steps are **pen-gated** (ADR-0060 §5, which M0 made the server enforce too),
+ * and the focus choreography survived the port out of `ActivityStepsDialog` — the risk the plan
+ * named. A dropped focus is invisible to a mouse and total to a keyboard.
+ */
+describe('ActivityEditorDialog — weighted steps panel', () => {
+  async function openSteps(props: Parameters<typeof mount>[0] = {}) {
+    mount(props);
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    // The steps query resolves on a microtask; until then the panel shows its loading state.
+    return screen.findByRole('button', { name: /save steps/i });
+  }
+
+  it('sits on the Progress tab with its own Save and its effect stated', async () => {
+    await openSteps();
+    expect(
+      screen.getByText(/sets the physical % complete\. changes no dates\./i),
+    ).toBeInTheDocument();
+    // Three panels, three Saves — the shape the gate table forces.
+    expect(screen.getByRole('button', { name: /save progress/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save measure/i })).toBeInTheDocument();
+  });
+
+  it('is pen-gated: a Planner without the lock cannot even add a row', async () => {
+    await openSteps({ gating: PLANNER_NO_PEN });
+    expect(screen.getByRole('button', { name: 'Add step' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /save steps/i })).toBeDisabled();
+    // …while progress beside it stays open, which is the whole reason these are separate saves.
+    expect(screen.getByLabelText('Percent complete')).toBeEnabled();
+  });
+
+  it('focuses the new row’s name field on add, not the button below the list', async () => {
+    await openSteps();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    const name = screen.getByLabelText('Step 1 name');
+    expect(name).toBeInTheDocument();
+    expect(document.activeElement).toBe(name);
+  });
+
+  it('restores focus after a remove instead of dropping it to the body', async () => {
+    await openSteps();
+    const add = screen.getByRole('button', { name: 'Add step' });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 2' }));
+
+    expect(screen.queryByLabelText('Step 2 name')).not.toBeInTheDocument();
+    // The previous row's Remove button — never <body>.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove step 1' }));
+  });
+
+  it('keeps focus on a move that disables the button just pressed', async () => {
+    await openSteps();
+    const add = screen.getByRole('button', { name: 'Add step' });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    // Row 2 to the top: "Move up" becomes disabled there, so focus must fall through to "Move down"
+    // rather than to <body>. This is the case the source dialog did not handle.
+    fireEvent.click(screen.getByRole('button', { name: 'Move step 2 up' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move step 1 down' }));
+  });
+
+  it('bulk-replaces via PUT …/steps, carrying the live row version', async () => {
+    await openSteps();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    fireEvent.change(screen.getByLabelText('Step 1 name'), { target: { value: 'Formwork' } });
+    fireEvent.change(screen.getByLabelText('Step 1 % complete'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: /save steps/i }));
+
+    await waitFor(() => expect(PATCHES).toHaveLength(1));
+    expect(PATCHES[0]!.url).toContain('/steps');
+    expect(PATCHES[0]!.body.version).toBe(1);
+    expect(PATCHES[0]!.body.steps).toEqual([{ name: 'Formwork', weight: 1, percentComplete: 50 }]);
+  });
+
+  it('previews the rollup the server will compute', async () => {
+    await openSteps();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    fireEvent.change(screen.getByLabelText('Step 1 % complete'), { target: { value: '40' } });
+    expect(screen.getByText('40%')).toBeInTheDocument();
+  });
+
+  it('shuts the manual physical % when steps are winning, and says why', async () => {
+    STEPS = [{ name: 'Formwork', weight: 1, percentComplete: 60 }];
+    await openSteps();
+    const physical = await screen.findByLabelText('Physical % complete');
+    expect(physical).toBeDisabled();
+    // The reason names what would re-enable it — a bare "Read-only" is the dead end this epic
+    // exists to remove, and this field was previously editable while being silently ignored.
+    expect(screen.getByText(/weighted steps are setting this to 60%/i)).toBeInTheDocument();
   });
 });

@@ -27,7 +27,11 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedScheduling } from './activity-editor-seeds';
-import { ReportedProgressPanel, ValueMeasurePanel } from './ActivityProgressPanels';
+import {
+  ReportedProgressPanel,
+  ValueMeasurePanel,
+  WeightedStepsPanel,
+} from './ActivityProgressPanels';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -72,7 +76,10 @@ type TabKey = 'general' | 'scheduling' | 'progress' | 'cost';
  * moved verbatim. Most visibly, `(optional)` is gone from labels: it was on eleven of twenty-two,
  * which is enough that it stopped meaning anything.
  *
- * M3 ships the three definition tabs. Progress (with the co-located steps and physical %) is M4.
+ * M3 ships the three definition tabs; M4 adds Progress, where the reported %, the value measure and
+ * the weighted steps finally sit next to each other — three dialogs' worth of screens that were
+ * previously reachable only one at a time, from different menus, with no cue that one overrides
+ * another.
  */
 export function ActivityEditorDialog({
   orgSlug,
@@ -457,6 +464,14 @@ export function ActivityEditorDialog({
                     open={open}
                     pending={update.isPending}
                     onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
+                  />
+                  <WeightedStepsPanel
+                    orgSlug={orgSlug}
+                    planId={planId}
+                    activity={activity}
+                    gate={gating.steps}
+                    open={open}
+                    announce={announce}
                   />
                 </div>
               ) : null}
