@@ -148,12 +148,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setLogicRevealNotes(false);
     setLogicActivityState(activity);
   }, []);
-  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
-  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
-  const revealActivityNotes = useCallback((activity: ActivitySummary) => {
-    setLogicRevealNotes(true);
-    setLogicActivityState(activity);
-  }, []);
   // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
   // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
   // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
@@ -186,6 +180,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         : setLogicActivity(a),
     [setLogicActivity],
   );
+  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
+  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
+  // Flag-on there is nothing to reveal: **Add note** opens the editor's Notes tab, which IS the
+  // notes surface. Flag-off it keeps the scroll-and-focus plumbing, which is still the only way to
+  // reach a section buried three panels down the Logic dialog.
+  const revealActivityNotes = useCallback((activity: ActivitySummary) => {
+    if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
+      setEditorIntent(openActivityEditor(activity, 'notes'));
+      return;
+    }
+    setLogicRevealNotes(true);
+    setLogicActivityState(activity);
+  }, []);
   // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
   // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
   // drawer's Close button clears. Inert when nothing reads it (flag off) — the notes stay inline.

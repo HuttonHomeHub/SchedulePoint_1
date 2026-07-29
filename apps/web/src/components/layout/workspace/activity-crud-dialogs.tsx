@@ -9,10 +9,12 @@ import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_EDITOR_TABS_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
+  NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
 import { ActivityEditorDialog, ActivityFormDialog, useDeleteActivity } from '@/features/activities';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
+import { ActivityNotesSection } from '@/features/notes';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
@@ -116,6 +118,19 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
                       }
                     : {}),
                 },
+                ...(NOTES_ENABLED && intended
+                  ? {
+                      notesSlot: (
+                        <ActivityNotesSection
+                          orgSlug={orgSlug}
+                          planId={planId}
+                          activity={intended}
+                          canWrite={model.canWriteNotes}
+                          enabled={intended !== undefined}
+                        />
+                      ),
+                    }
+                  : {}),
               }
             : {})}
         />

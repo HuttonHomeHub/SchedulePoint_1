@@ -36,7 +36,8 @@ export interface ActivityEditorGatingInput {
   canReadCost: boolean;
 }
 
-export type ActivityWritePath = ActivityScope | 'progress' | 'steps' | 'logic' | 'resources';
+export type ActivityWritePath =
+  ActivityScope | 'progress' | 'steps' | 'logic' | 'resources' | 'notes';
 
 export interface ScopeGate {
   /** May the caller save this scope right now. */
@@ -67,6 +68,7 @@ const NO_ROLE = 'Your role cannot edit activity details.';
  */
 const NO_PEN = 'Start editing to change this activity.';
 const NO_PROGRESS_ROLE = 'Your role cannot report progress.';
+const NO_NOTES_ROLE = 'Your role cannot add notes.';
 
 export function deriveActivityEditorGating(input: ActivityEditorGatingInput): ActivityEditorGating {
   const { penManaged, holdsPen, canWrite, canProgress, canReadCost } = input;
@@ -98,5 +100,11 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
     // rather than asserted (the identity test in the sibling suite).
     logic: definition,
     resources: definition,
+    // Notes are **not** pen-gated (ADR-0046) — annotating a plan is not editing its schedule, and a
+    // Contributor may write one while a Planner holds the pen. Same role rule as progress, so it
+    // reuses that gate object rather than restating it.
+    notes: canProgress
+      ? { writable: true, reason: null, readable: true }
+      : { writable: false, reason: NO_NOTES_ROLE, readable: true },
   };
 }

@@ -13,6 +13,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
   RESOURCES_ENABLED: true,
+  NOTES_ENABLED: true,
 }));
 
 const REQUESTS: { url: string; method: string }[] = [];
@@ -146,6 +147,28 @@ describe('ActivityEditorDialog — the Logic tab', () => {
     mount({ logic: { crossPlanSlot: <p>Cross-plan links</p> } });
     fireEvent.click(screen.getByRole('tab', { name: /Logic/ }));
     expect(screen.getByText('Cross-plan links')).toBeInTheDocument();
+  });
+});
+
+describe('ActivityEditorDialog — the Notes tab', () => {
+  it('appears only when the composition root passes a notes section', () => {
+    const { unmount } = mount();
+    expect(screen.queryByRole('tab', { name: /Notes/ })).not.toBeInTheDocument();
+    unmount();
+
+    mount({ notesSlot: <p>Note thread</p> });
+    expect(screen.getByRole('tab', { name: /Notes/ })).toBeInTheDocument();
+  });
+
+  it('renders the section the root passed', () => {
+    mount({ notesSlot: <p>Note thread</p> });
+    fireEvent.click(screen.getByRole('tab', { name: /Notes/ }));
+    expect(screen.getByText('Note thread')).toBeInTheDocument();
+  });
+
+  it('is never marked read-only — the pen does not gate notes (ADR-0046)', () => {
+    mount({ gating: PLANNER_NO_PEN, notesSlot: <p>Note thread</p> });
+    expect(screen.getByRole('tab', { name: /Notes/ })).not.toHaveTextContent('read-only');
   });
 });
 

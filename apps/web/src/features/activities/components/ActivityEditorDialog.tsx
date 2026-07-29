@@ -69,6 +69,7 @@ import {
   DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
+  NOTES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
   RESOURCES_ENABLED,
 } from '@/config/env';
@@ -124,6 +125,7 @@ export function ActivityEditorDialog({
   calendarsError = false,
   planActivities = [],
   logic,
+  notesSlot,
 }: {
   orgSlug: string;
   planId: string;
@@ -160,6 +162,12 @@ export function ActivityEditorDialog({
     /** The coalesced keyboard lag nudge (ADR-0052 M3) — `Shift+←/→` on a link's row buttons. */
     onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
   };
+  /**
+   * The `VITE_NOTES` activity-notes section (ADR-0046), passed by the composition root for the same
+   * reason as the cross-plan slot: this feature must not import the notes data layer sideways.
+   * Absent ⇒ no Notes tab, which is what a host without the flag wants.
+   */
+  notesSlot?: React.ReactNode;
 }): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
@@ -321,6 +329,12 @@ export function ActivityEditorDialog({
     // the steps panel, so the four combinations have their own matrix test.
     ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && RESOURCES_ENABLED
       ? [{ id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) }]
+      : []),
+    // Notes, like Progress, are **never** marked read-only: the pen does not gate them (ADR-0046),
+    // so a padlock would be false for exactly the reader it is meant to inform. Needs `VITE_NOTES`
+    // as well as the convergence flag, and the composition root's slot to have anything to show.
+    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && NOTES_ENABLED && notesSlot
+      ? [{ id: 'notes' as const, label: 'Notes' }]
       : []),
   ];
 
@@ -714,6 +728,12 @@ export function ActivityEditorDialog({
                   enabled={open && current === 'resources'}
                 />
               ) : null}
+
+              {/* Notes — the composition root's section, given a tab of its own so **Add note**
+                  lands on it directly. Before this it opened the Logic dialog and then scrolled +
+                  focused a section three panels down; the reveal plumbing that did so survives
+                  untouched on the flag-off path, which still needs it. */}
+              {current === 'notes' ? notesSlot : null}
 
               {/* The co-location (M4): three panels, three write scopes, each headed by what it
                   does to the schedule. Rendered only when a row exists — every panel writes. */}

@@ -96,6 +96,23 @@ describe('deriveActivityEditorGating — definition scopes', () => {
       }
     },
   );
+
+  /**
+   * Notes are the third rule, not a fourth: annotating a plan is not editing its schedule
+   * (ADR-0046), so the tab must stay open to a Contributor while a Planner holds the pen — the same
+   * capability a merged Save would have destroyed for progress.
+   */
+  it('never pen-gates notes', () => {
+    for (const pen of ['held', 'notHeld', 'layerOff'] as const) {
+      expect(gate('contributor', pen).notes.writable).toBe(true);
+      expect(gate('planner', pen).notes.writable).toBe(true);
+    }
+    expect(gate('viewer', 'held').notes).toEqual({
+      writable: false,
+      reason: 'Your role cannot add notes.',
+      readable: true,
+    });
+  });
 });
 
 describe('deriveActivityEditorGating — progress is never pen-gated', () => {

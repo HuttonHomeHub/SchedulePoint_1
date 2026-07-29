@@ -16,10 +16,10 @@ import type { ActivitySummary } from '@repo/types';
  * itself when its target is deleted — the same rule the crud dialogs already followed.
  */
 export type ActivityEditorTab =
-  'general' | 'scheduling' | 'logic' | 'progress' | 'cost' | 'resources';
+  'general' | 'scheduling' | 'logic' | 'progress' | 'cost' | 'resources' | 'notes';
 
 /** Why the editor is being opened. Maps to a tab — and, for steps, to a focus target within it. */
-export type ActivityEditorPurpose = 'edit' | 'progress' | 'steps' | 'logic' | 'resources';
+export type ActivityEditorPurpose = 'edit' | 'progress' | 'steps' | 'logic' | 'resources' | 'notes';
 
 export interface ActivityEditorIntent {
   activityId: string;
@@ -51,6 +51,10 @@ export function openActivityEditor(
       return { activityId: activity.id, tab: 'logic' };
     case 'resources':
       return { activityId: activity.id, tab: 'resources' };
+    // **Add note** used to open the Logic dialog and then scroll + focus its Notes section, because
+    // notes had no home of their own. With a tab, the intent IS the reveal.
+    case 'notes':
+      return { activityId: activity.id, tab: 'notes' };
     case 'progress':
       return { activityId: activity.id, tab: 'progress' };
     case 'steps':
