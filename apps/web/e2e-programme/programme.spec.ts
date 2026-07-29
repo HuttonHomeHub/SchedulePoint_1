@@ -39,10 +39,13 @@ test('a planner links plans across projects and recalculates the programme', asy
   // No cross-plan link yet → the programme surface is invisible (the summary omits `scheduleStale`).
   await expect(page.getByRole('region', { name: 'Programme scheduling' })).toBeHidden();
 
-  // Draw the live cross-plan link from the downstream activity's Logic panel.
+  // Draw the live cross-plan link from the downstream activity's Logic tab (ADR-0062: the row
+  // menu's Logic action opens the tabbed activity editor, titled with the activity's own name,
+  // rather than a standalone "Logic for …" dialog).
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  const logic = page.getByRole('dialog', { name: /Logic for Erect frame/ });
+  const logic = page.getByRole('dialog');
+  await expect(logic.getByRole('heading', { name: 'Erect frame', exact: true })).toBeVisible();
   await expect(logic.getByRole('heading', { name: 'Cross-plan links' })).toBeVisible();
   await logic.getByRole('button', { name: 'Add cross-plan link' }).click();
 

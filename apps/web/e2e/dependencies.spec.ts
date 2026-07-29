@@ -55,7 +55,10 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   await page.getByRole('button', { name: 'Actions for Excavate' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: /Logic for Excavate/ })).toBeVisible();
+  // With the tabbed activity editor as the Logic entry point (ADR-0062), the dialog's title is
+  // the activity's own name and the tab list shows Logic as the section that opened.
+  await expect(dialog.getByRole('heading', { name: 'Excavate', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('tab', { name: /Logic/, selected: true })).toBeVisible();
   await expect(dialog.getByText(/No predecessors/)).toBeVisible();
   await expect(dialog.getByText(/No successors/)).toBeVisible();
 
