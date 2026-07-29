@@ -136,11 +136,14 @@ export function resourcesQueryOptions(orgSlug: string, filters: ResourceListFilt
   });
 }
 
+/** The org's resource library. `enabled` lets a host keep the query mounted but idle (e.g. a panel
+ * that is mounted behind an inactive tab). */
 export function useResources(
   orgSlug: string,
   filters: ResourceListFilters = {},
+  enabled = true,
 ): UseQueryResult<ResourceSummary[]> {
-  return useQuery(resourcesQueryOptions(orgSlug, filters));
+  return useQuery({ ...resourcesQueryOptions(orgSlug, filters), enabled });
 }
 
 /** How many rows one picker page asks for — the endpoint's own default, and a comfortable popover. */
@@ -333,11 +336,18 @@ export function assignmentsQueryOptions(orgSlug: string, activityId: string) {
   });
 }
 
+/** One activity's resource assignments. `enabled` lets a host keep the query mounted but idle
+ * (e.g. a panel that is mounted behind an inactive tab). */
 export function useAssignments(
   orgSlug: string,
   activityId: string,
+  enabled = true,
 ): UseQueryResult<ResourceAssignmentSummary[]> {
-  return useQuery(assignmentsQueryOptions(orgSlug, activityId));
+  // Both gates must hold: the caller's, and the options' own "don't fire without an activity".
+  return useQuery({
+    ...assignmentsQueryOptions(orgSlug, activityId),
+    enabled: enabled && Boolean(activityId),
+  });
 }
 
 export function useCreateAssignment(orgSlug: string, activityId: string, planId?: string) {

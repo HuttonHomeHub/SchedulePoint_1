@@ -25,6 +25,7 @@ export { ResourcesTable } from './components/ResourcesTable';
 export { CreateResourceButton } from './components/CreateResourceButton';
 export { ResourceFormDialog } from './components/ResourceFormDialog';
 export { ActivityResourcesDialog } from './components/ActivityResourcesDialog';
+export { ActivityResourcesPanel } from './components/ActivityResourcesPanel';
 export { ResourceHistogram } from './components/ResourceHistogram';
 export {
   BucketSizeSelect,
