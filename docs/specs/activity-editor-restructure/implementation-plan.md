@@ -261,6 +261,13 @@ reason }`, in the shape of `derivePlanGating`. One place decides every scope's r
 (General / Scheduling / Cost) with per-scope save, dirty markers, discard-on-close and read-only
 shading. Progress and Steps still open their existing dialogs. Flag off: nothing changes.
 
+**Copy is reviewed as it moves** (decided 2026-07-29, superseding this plan's original
+move-verbatim assumption): [`copy-review.md`](copy-review.md) is the field-by-field decision, and
+M3 implements it. The largest change is dropping the `(optional)` suffix from eleven of twenty-two
+labels — when half the form is marked optional the marker carries no information — and renaming two
+labels that were ambiguous in ways the old single-column layout hid. Copy changes make the flag-off
+parity suites **more** load-bearing, not less: they now pin wording as well as structure.
+
 ---
 
 #### Feature: `ActivityEditorDialog` — definition tabs
@@ -311,7 +318,9 @@ shading. Progress and Steps still open their existing dialogs. Flag off: nothing
 ##### Task 3.3 — Scheduling panel (the grouping fixes)
 
 - **Description:** Calendar / **Constraints (primary + secondary together)** / Placement & targets /
-  External dates / Resource levelling, each a fieldset with a visible heading. Keeps every existing
+  External dates / Resource levelling, each a fieldset with a visible heading. Label and hint copy
+  follows [`copy-review.md`](copy-review.md) — **reviewed as it moves, not moved verbatim**
+  (decided 2026-07-29). Keeps every existing
   conditional rule verbatim: the constraint date appears once a type is chosen, the
   `RESOURCE_DEPENDENT` calendar picker stays disabled with its reason, expected finish hides for
   duration-derived types, `calendarScopeErrorMessage` still maps the ADR-0053 rejections.
