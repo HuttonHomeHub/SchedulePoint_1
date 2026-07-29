@@ -223,6 +223,39 @@ The reference consumer is the **working-days picker** in `CalendarFormDialog`'s
 form-field case above. It is deliberately not a `SegmentedControl`: turning Monday on says
 nothing about Tuesday, so "one of a set of N" would misdescribe it.
 
+## Primitive: `Tabs` (`components/ui/tabs.tsx`)
+
+The WAI-ARIA APG `tablist` pattern, hand-rolled like `Menu` and `Combobox`. Controlled:
+callers own `active` and pass `onChange`; the panel's content comes from a
+`children: (active) => ReactNode` render prop, so there is exactly one panel in the DOM.
+
+**It has one consumer** — `ActivityEditorDialog` — and is built for it deliberately. No
+`renderTab` escape hatch, no orientation prop, no lazy-mount option. That is not an oversight
+to be corrected the first time a second caller appears; it is the lesson `form.tsx` records,
+where an escape hatch added "for flexibility" was removed the day it shipped. Add options when
+a real second consumer needs them, and not before.
+
+**Automatic activation.** Arrowing selects rather than merely focusing, which the APG
+recommends when revealing a panel is cheap. Every panel's data is already in memory here, so
+manual activation would only cost a keystroke.
+
+**The panel is a tab stop (`tabIndex={0}`), which departs from the APG.** The APG suggests that
+only for panels with no focusable children — guidance that assumes a panel which fits. Ours is
+a scroll container inside a dialog, and a scrollable region that is not focusable cannot be
+scrolled by keyboard at all. The conflict is real and **WCAG 2.1.1 wins**: the cost is one
+extra tab stop, the alternative is content a keyboard user cannot reach. Recorded in ADR-0060
+so it reads as a decision rather than a mistake.
+
+**Markers are text, never colour** (WCAG 1.4.1). A `TabDescriptor`'s optional `marker` renders
+a visible count badge or a presence dot **and** extends the tab's accessible name — "Scheduling,
+3 problems". Its `label` is required for exactly that reason: a marker nobody can hear is
+colour-only meaning, which is the specific way a validation error hides on an unfocused tab. An
+unmarked tab's accessible name stays exactly its visible label, keeping name-in-label intact
+(WCAG 2.5.3).
+
+The tablist **scrolls horizontally rather than wrapping**: a wrapped tablist changes height as
+markers appear and disappear, which reflows the panel under the user's cursor mid-edit.
+
 ## Layout: `BrandMark` and `AccountChip`
 
 `BrandMark` (`components/layout/brand-mark.tsx`) is the tile + wordmark. The tile is
