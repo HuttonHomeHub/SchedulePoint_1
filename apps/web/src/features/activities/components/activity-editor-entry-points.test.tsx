@@ -7,7 +7,8 @@ import { activityKeys } from '../api/use-activities';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable } from './ActivitiesTable';
-import { expectInert } from './scope-save-bar-assertions';
+
+import { expectInert } from '@/components/ui/scope-save-bar-assertions';
 
 /**
  * M5 — entry-point convergence, with `VITE_ACTIVITY_EDITOR_TABS` forced ON.
@@ -59,7 +60,7 @@ const CONTRIBUTOR = deriveActivityEditorGating({
   canReadCost: false,
 });
 
-function renderTable(gating = PLANNER_WITH_PEN, canWrite = true) {
+function renderTable(gating = PLANNER_WITH_PEN, canEditSchedule = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [BASE]);
   return render(
@@ -67,7 +68,7 @@ function renderTable(gating = PLANNER_WITH_PEN, canWrite = true) {
       <ActivitiesTable
         orgSlug="acme"
         planId="pl1"
-        canWrite={canWrite}
+        canEditSchedule={canEditSchedule}
         canReportProgress
         editorGating={gating}
       />

@@ -106,7 +106,7 @@ function renderTable(
       <ActivitiesTable
         orgSlug="acme"
         planId="pl1"
-        canWrite
+        canEditSchedule
         calendars={CALENDARS}
         {...calendarProps}
       />

@@ -821,6 +821,32 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   preserves. The authoring rule lives in `docs/DESIGN_SYSTEM.md` §"Form layout" so the
   next dialog is not a judgement call. Amends ADR-0060's layout, not its save model.
 
+- **ADR-0062** _(Accepted; M0–M6 landed, `VITE_ACTIVITY_EDITOR_CONVERGENCE` **default-on**
+  2026-07-29)_ — Activity-editor convergence: Logic, Resources and Notes as tabs. ADR-0060 made one
+  activity one editor and then left two of that activity's surfaces outside it — the row menu opened
+  the editor for three items and separate modals for the other two, and the Logic modal's "Add …"
+  buttons opened a **third** dialog on top of it to do the thing that surface exists for. The
+  load-bearing call is that the panels are **extracted, not reimplemented**: `ActivityLogicPanel` and
+  `ActivityResourcesPanel` are the _same components_ the dialogs render, so a tab and a dialog cannot
+  drift — a drift that would be invisible, since each looks right alone and only a reader who opens
+  the same activity two ways would ever see one is a version behind. The extraction's proof is that
+  **every pre-existing suite passed unchanged** through it. Adding a link becomes an **inline
+  section** below the two tables (the list/manage archetype, amending ADR-0032 M5), with direction as
+  a **field** rather than a fact carried by which button you pressed. Permissions do not change, and
+  that is checkable rather than asserted: Logic and Resources **reuse the `definition` gate object**
+  (an identity test pins `gating.logic === gating.general`) while Notes join the **progress** rule,
+  because ADR-0046 deliberately does not pen-gate them — which is exactly why ADR-0060's per-scope
+  save had to exist first. The flag is **derived** (`ACTIVITY_EDITOR_TABS_ENABLED && …`), since a tab
+  without the editor to hold it would strand both entry points on a surface that opens nothing.
+  **M6 is the gate pass**: it caught the Resources tab **hiding** its assign form instead of shading
+  it with a reason (raised independently by ux and component — the lit-but-inert dead end inverted),
+  a tab order that followed build order rather than the subject, a steps save bar that never passed
+  `saved` — in a panel with **no unit coverage at all**, because the suite named for steps covers the
+  legacy dialog — and the strandable flag pair. All folded with regression tests; the accessibility
+  review found no blocking failure and its four nits are TECH_DEBT #64 (widened)/#66/#67/#68, with
+  the component review's second finding as #69. Frontend-only: the CPM engine, the API and the
+  recalc parity gate are untouched, and the flag-off parity suites are kept as the rollback contract.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

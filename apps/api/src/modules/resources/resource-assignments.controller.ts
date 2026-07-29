@@ -24,6 +24,7 @@ import {
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
+import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -68,6 +69,7 @@ export class ResourceAssignmentsController {
     return items.map((row) => ResourceAssignmentResponseDto.from(row, canReadCost));
   }
 
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   @Post('activities/:activityId/assignments')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -109,6 +111,7 @@ export class ResourceAssignmentsController {
     return ResourceAssignmentResponseDto.from(assignment, canReadCost);
   }
 
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   @Patch('assignments/:id')
   @ApiOperation({
     summary:
@@ -142,6 +145,7 @@ export class ResourceAssignmentsController {
     return ResourceAssignmentResponseDto.from(assignment, canReadCost);
   }
 
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   @Delete('assignments/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Unassign a resource from an activity (soft delete).' })

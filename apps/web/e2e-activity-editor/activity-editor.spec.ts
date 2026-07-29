@@ -173,3 +173,140 @@ test('asks before discarding unsaved work on Escape', async ({ page }) => {
   // Discarded, not saved: the row keeps its original name.
   await expect(page.getByRole('cell', { name: 'Backfill', exact: true })).toBeVisible();
 });
+
+/**
+ * The convergence epic's own claims (`VITE_ACTIVITY_EDITOR_CONVERGENCE`), each of which needs a
+ * **real API with the lock enforced** to mean anything:
+ *
+ * - A link is a pen-gated write. The tab shades without the pen *and* the server refuses.
+ * - A cycle is refused by the engine, not by the client (ADR-0021) — untestable against a mock,
+ *   which will happily "create" one.
+ * - Two scopes in one session — a definition edit and a link — close with **no** discard prompt,
+ *   because a link is durable the moment it is added. That is the save model, end to end.
+ */
+test('a planner adds a link from the Logic tab, and the row appears in Predecessors', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Excavate');
+  await addActivity(page, 'Pour slab');
+
+  await openEditor(page, 'Pour slab', 'Logic');
+  const editor = page.getByRole('dialog');
+  await expect(editor.getByRole('tab', { name: /Logic/, selected: true })).toBeVisible();
+
+  await editor.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
+  await editor.getByRole('button', { name: 'Add link' }).click();
+  // The new row in the table above IS the feedback — no dialog closes over it.
+  await expect(editor.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
+
+  // A link that closes a loop is refused by the engine, inline, with nothing created.
+  await editor.getByLabel('Link it as').selectOption('successor');
+  await editor.getByLabel('Successor activity').selectOption({ label: 'Excavate' });
+  await editor.getByRole('button', { name: 'Add link' }).click();
+  await expect(editor.getByRole('alert')).toContainText(/cycle/i);
+
+  // Closing needs no confirmation: the link is already saved, so no scope is dirty.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
+});
+
+test('without the pen, the Logic tab is read-only and the server refuses a write', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Excavate');
+  await addActivity(page, 'Pour slab');
+  await releasePen(page);
+
+  await openEditor(page, 'Pour slab', 'Logic');
+  const editor = page.getByRole('dialog');
+  // Shaded with the reason, not hidden and not silently inert.
+  const add = editor.getByRole('button', { name: 'Add link' });
+  await expect(add).toHaveAttribute('aria-disabled', 'true');
+  await expect(editor.getByText('Start editing to change this activity.')).toBeVisible();
+
+  // The client's gate is a courtesy; the server is the trust boundary. A direct POST is 423 even
+  // though the UI would not have sent it.
+  const orgSlug = `editor-co-${stamp}`;
+  // The plan id comes from the URL rather than a list read: there is no org-level plans route, and
+  // guessing at one is how a test ends up asserting its own fetch instead of the server's rule.
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+  expect(planId).not.toBe('');
+  const status = await page.evaluate(
+    async ({ slug, planId }) => {
+      const acts = await fetch(`/api/v1/organizations/${slug}/plans/${planId}/activities`).then(
+        (r) => r.json(),
+      );
+      const rows = acts.data as { id: string; name: string }[];
+      const res = await fetch(`/api/v1/organizations/${slug}/plans/${planId}/dependencies`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          predecessorId: rows.find((a) => a.name === 'Excavate')!.id,
+          successorId: rows.find((a) => a.name === 'Pour slab')!.id,
+          type: 'FS',
+          lagDays: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+        }),
+      });
+      return res.status;
+    },
+    { slug: orgSlug, planId },
+  );
+  expect(status).toBe(423);
+});
+
+test('a resource assigned from the Resources tab persists', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Pour slab');
+
+  // The library is org-level; create one row through the API rather than a second UI journey.
+  await page.evaluate(async (slug) => {
+    await fetch(`/api/v1/organizations/${slug}/resources`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Crew A', kind: 'LABOUR' }),
+    });
+  }, orgSlug);
+
+  await openEditor(page, 'Pour slab', 'Resources');
+  const editor = page.getByRole('dialog');
+  await expect(editor.getByRole('tab', { name: /Resources/, selected: true })).toBeVisible();
+  // The picker is the shared searched Combobox (`VITE_LIBRARY_SCOPING` is default-on), not a
+  // native select — the `e2e-library` precedent.
+  await editor.getByRole('combobox', { name: 'Resource', exact: true }).press('ArrowDown');
+  await editor
+    .getByRole('option', { name: /Crew A/ })
+    .first()
+    .click();
+  await editor
+    .getByRole('group', { name: 'Assign a resource' })
+    .getByLabel('Budgeted units')
+    .fill('8');
+  await editor.getByRole('button', { name: 'Assign resource' }).click();
+
+  // The assignment lands in the list above, with its units.
+  await expect(editor.getByRole('listitem').filter({ hasText: 'Crew A' })).toBeVisible();
+  // By role, not label: the row's Save carries `aria-label="Save budgeted units for Crew A"`, which
+  // a label lookup matches too.
+  await expect(
+    editor.getByRole('listitem').getByRole('spinbutton', { name: 'Budgeted units' }),
+  ).toHaveValue('8');
+});

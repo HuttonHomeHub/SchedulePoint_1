@@ -37,6 +37,24 @@ function gate(
 
 const DEFINITION_PATHS: ActivityWritePath[] = ['general', 'scheduling', 'measure', 'cost'];
 
+describe('deriveActivityEditorGating — the converged collections', () => {
+  /**
+   * The convergence epic's whole "no permission change" claim, as an identity assertion.
+   *
+   * Not `toEqual` — **the same object**. A second expression of the same rule is how two gates
+   * that must agree start disagreeing: someone tightens one and the other keeps yesterday's
+   * answer, and nothing fails until a user is refused something they can do from the dialog.
+   */
+  it.each(['logic', 'resources'] as const)('reuses the definition gate object for %s', (path) => {
+    for (const role of ['viewer', 'contributor', 'planner'] as const) {
+      for (const pen of ['held', 'notHeld', 'layerOff'] as const) {
+        const gates = gate(role, pen);
+        expect(gates[path]).toBe(gates.general);
+      }
+    }
+  });
+});
+
 describe('deriveActivityEditorGating — definition scopes', () => {
   it.each(['planner', 'orgAdmin'] as const)(
     'lets %s write every definition scope while holding the pen',
@@ -78,6 +96,23 @@ describe('deriveActivityEditorGating — definition scopes', () => {
       }
     },
   );
+
+  /**
+   * Notes are the third rule, not a fourth: annotating a plan is not editing its schedule
+   * (ADR-0046), so the tab must stay open to a Contributor while a Planner holds the pen — the same
+   * capability a merged Save would have destroyed for progress.
+   */
+  it('never pen-gates notes', () => {
+    for (const pen of ['held', 'notHeld', 'layerOff'] as const) {
+      expect(gate('contributor', pen).notes.writable).toBe(true);
+      expect(gate('planner', pen).notes.writable).toBe(true);
+    }
+    expect(gate('viewer', 'held').notes).toEqual({
+      writable: false,
+      reason: 'Your role cannot add notes.',
+      readable: true,
+    });
+  });
 });
 
 describe('deriveActivityEditorGating — progress is never pen-gated', () => {

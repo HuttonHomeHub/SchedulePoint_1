@@ -2,8 +2,8 @@ import { useRef } from 'react';
 
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
-import { useAnnounce } from '@/components/ui/announcer';
 import {
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_EDITOR_TABS_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
@@ -23,7 +23,6 @@ import { DependencyEditor } from '@/features/dependencies';
 import { ActivityNotesSection } from '@/features/notes';
 import { PlanFormDialog } from '@/features/plans';
 import { ActivityResourcesDialog } from '@/features/resources';
-import { useCoalescedLagNudge } from '@/features/tsld';
 
 /**
  * The two modal surfaces a plan needs regardless of layout: the per-activity
@@ -43,60 +42,57 @@ export function PlanDialogs({
   // `ActivityNotesSection` (which makes the heading focusable) and the `DependencyEditor` (which scrolls
   // + focuses it when the panel is opened via the toolbar **Add note** button, `logicRevealNotes`).
   const notesHeadingRef = useRef<HTMLHeadingElement>(null);
-  // Keyboard lag nudge (ADR-0052 M3): the coalesced tsld hook over the model's `onTsldLag`,
-  // composed here into the Logic panel's dependency rows — the app's per-dependency keyboard
-  // surface (see `DependencyEditor.onNudgeLag`). The hook is unconditionally called (rules of
-  // hooks) but only wired under the flag for writers, so flag-off is byte-identical.
-  const announce = useAnnounce();
-  const nudgeLag = useCoalescedLagNudge({
-    onLag: model.onTsldLag,
-    dependencies: model.dependencies.data ?? [],
-    announce,
-  });
   return (
     <>
-      <DependencyEditor
-        orgSlug={model.orgSlug}
-        planId={model.planId}
-        planActivities={model.activities.data ?? []}
-        canManageLogic={model.canManageLogic}
-        open={model.logicActivity !== undefined}
-        onClose={() => model.setLogicActivity(undefined)}
-        onRemoved={model.recordDependencyRemove}
-        {...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
-          ? { onNudgeLag: nudgeLag }
-          : {})}
-        notesHeadingRef={notesHeadingRef}
-        revealNotes={model.logicRevealNotes}
-        {...(model.logicActivity ? { activity: model.logicActivity } : {})}
-        {...(PROGRAMME_SCHEDULING_ENABLED && model.logicActivity
-          ? {
-              crossPlanSlot: (
-                <CrossPlanLinksSection
-                  orgSlug={model.orgSlug}
-                  planId={model.planId}
-                  activity={model.logicActivity}
-                  canManageLogic={model.canManageLogic}
-                  enabled={model.logicActivity !== undefined}
-                />
-              ),
-            }
-          : {})}
-        {...(NOTES_ENABLED && model.logicActivity
-          ? {
-              notesSlot: (
-                <ActivityNotesSection
-                  orgSlug={model.orgSlug}
-                  planId={model.planId}
-                  activity={model.logicActivity}
-                  canWrite={model.canWriteNotes}
-                  enabled={model.logicActivity !== undefined}
-                  headingRef={notesHeadingRef}
-                />
-              ),
-            }
-          : {})}
-      />
+      {/* The Logic dialog. Flag-on it is not mounted at all: **Logic** opens the editor's Logic tab,
+          which renders the same `ActivityLogicPanel` with the same seams (`activity-crud-dialogs`
+          passes them). Mounting both would put two live copies of the panel — and two sets of
+          dependency queries — on the page at once. */}
+      {ACTIVITY_EDITOR_CONVERGENCE_ENABLED ? null : (
+        <DependencyEditor
+          orgSlug={model.orgSlug}
+          planId={model.planId}
+          planActivities={model.activities.data ?? []}
+          canManageLogic={model.canManageLogic}
+          open={model.logicActivity !== undefined}
+          onClose={() => model.setLogicActivity(undefined)}
+          onAdded={model.recordDependencyAdd}
+          onRemoved={model.recordDependencyRemove}
+          {...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
+            ? { onNudgeLag: model.nudgeDependencyLag }
+            : {})}
+          notesHeadingRef={notesHeadingRef}
+          revealNotes={model.logicRevealNotes}
+          {...(model.logicActivity ? { activity: model.logicActivity } : {})}
+          {...(PROGRAMME_SCHEDULING_ENABLED && model.logicActivity
+            ? {
+                crossPlanSlot: (
+                  <CrossPlanLinksSection
+                    orgSlug={model.orgSlug}
+                    planId={model.planId}
+                    activity={model.logicActivity}
+                    canManageLogic={model.canManageLogic}
+                    enabled={model.logicActivity !== undefined}
+                  />
+                ),
+              }
+            : {})}
+          {...(NOTES_ENABLED && model.logicActivity
+            ? {
+                notesSlot: (
+                  <ActivityNotesSection
+                    orgSlug={model.orgSlug}
+                    planId={model.planId}
+                    activity={model.logicActivity}
+                    canWrite={model.canWriteNotes}
+                    enabled={model.logicActivity !== undefined}
+                    headingRef={notesHeadingRef}
+                  />
+                ),
+              }
+            : {})}
+        />
+      )}
 
       {model.canWrite ? (
         <PlanFormDialog
@@ -113,7 +109,7 @@ export function PlanDialogs({
           and toggled like the crud dialogs; its target re-derives from the live query, so it closes when
           the row is deleted. Reuses the same dialog + prop shape as the activities-table row action; the
           dialog enforces its own write gating via `canWrite`. Flag-off ⇒ not rendered (byte-for-byte). */}
-      {ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED ? (
+      {ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED && !ACTIVITY_EDITOR_CONVERGENCE_ENABLED ? (
         <ActivityResourcesDialog
           orgSlug={model.orgSlug}
           planId={model.planId}

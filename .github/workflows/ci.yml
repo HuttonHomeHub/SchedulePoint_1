@@ -264,8 +264,12 @@ jobs:
       # claims against a real 423: two scopes save in one session (the second carrying the version
       # the first produced — a mocked fetch cannot test that), Steps opens the Progress tab focused
       # on its panel, weighted steps take over the physical % with a reason, and a holder-less
-      # session can still report progress while every definition scope is shut. Runs after the prior
-      # suites tear down their servers, reusing the ports.
+      # session can still report progress while every definition scope is shut. It also carries
+      # ADR-0062's convergence claims, which need the same real server: a link added from the Logic
+      # tab is refused by the ENGINE when it closes a cycle (a mock would happily create one) and by
+      # the pen with a 423, while progress in the same session is not, and a resource assigned from
+      # the Resources tab persists. Runs after the prior suites tear down their servers, reusing the
+      # ports.
       - name: Web end-to-end tests (tabbed activity editor flag on)
         run: pnpm --filter @repo/web test:e2e:activity-editor
 

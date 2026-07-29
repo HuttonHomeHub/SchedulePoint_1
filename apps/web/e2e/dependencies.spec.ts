@@ -55,7 +55,10 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   await page.getByRole('button', { name: 'Actions for Excavate' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: /Logic for Excavate/ })).toBeVisible();
+  // With the tabbed activity editor as the Logic entry point (ADR-0062), the dialog's title is
+  // the activity's own name and the tab list shows Logic as the section that opened.
+  await expect(dialog.getByRole('heading', { name: 'Excavate', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('tab', { name: /Logic/, selected: true })).toBeVisible();
   await expect(dialog.getByText(/No predecessors/)).toBeVisible();
   await expect(dialog.getByText(/No successors/)).toBeVisible();
 
@@ -112,17 +115,16 @@ test('a planner adds a dependency, is stopped from making a loop, and removes it
   // Add Excavate as a predecessor of Pour slab (Excavate → Pour slab).
   await page.getByRole('button', { name: 'Actions for Pour slab' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  await dialog.getByRole('button', { name: 'Add predecessor' }).click();
+  // Adding is inline, below the two tables — no second dialog opens over this one (ADR-0061 §2).
   await dialog.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
-  await dialog.getByRole('button', { name: 'Add dependency' }).click();
+  await dialog.getByRole('button', { name: 'Add link' }).click();
   await expect(dialog.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
 
   // Adding Excavate as a SUCCESSOR too would close a loop — the API stops it, shown inline.
-  await dialog.getByRole('button', { name: 'Add successor' }).click();
+  await dialog.getByLabel('Link it as').selectOption('successor');
   await dialog.getByLabel('Successor activity').selectOption({ label: 'Excavate' });
-  await dialog.getByRole('button', { name: 'Add dependency' }).click();
+  await dialog.getByRole('button', { name: 'Add link' }).click();
   await expect(dialog.getByRole('alert')).toContainText(/cycle/i);
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
 
   // Removing the predecessor link takes it away again.
   await dialog.getByRole('button', { name: 'Remove link to Excavate' }).click();

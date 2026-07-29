@@ -8,10 +8,11 @@ import { addActivity, createAndOpenPlan, onboard, openProject } from './support'
  * a real browser against the real API:
  *
  * 1. A plan with one activity.
- * 2. The activity **Logic panel** opened from the row's actions menu — its **Notes** section.
+ * 2. The activity editor opened from the row's actions menu (the only entry point into Notes,
+ *    ADR-0062 M4 — Notes is a tab of the same editor, not a section of Logic).
  * 3. **Add** a note → it appears in the thread, attributed to the author.
  * 4. **Edit** the own note → it shows the "edited" marker.
- * 5. The **row count badge** shows "1 note" once the panel is closed.
+ * 5. The **row count badge** shows "1 note" once the editor is closed.
  * 6. **Delete** the note → the thread is empty and the badge is gone.
  * 7. An **axe** wcag2a/wcag2aa pass with the notes surface visible — zero violations.
  *
@@ -25,10 +26,13 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   await createAndOpenPlan(page, 'Tower');
   await addActivity(page, 'Erect frame');
 
-  // Open the activity Logic panel from the row's actions menu.
+  // The row menu's only route into the editor is "Logic" — it opens on the Logic tab, so switch
+  // to Notes (ADR-0062: Notes is its own tab of the tabbed editor, not a section under Logic).
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  const logic = page.getByRole('dialog', { name: /Logic for Erect frame/ });
+  const logic = page.getByRole('dialog');
+  await expect(logic.getByRole('heading', { name: 'Erect frame', exact: true })).toBeVisible();
+  await logic.getByRole('tab', { name: 'Notes' }).click();
   await expect(logic.getByRole('heading', { name: 'Notes' })).toBeVisible();
   await expect(logic.getByText('No notes yet.')).toBeVisible();
 
@@ -58,9 +62,11 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   const row = page.getByRole('row', { name: /Erect frame/ });
   await expect(row.getByText('1 note', { exact: true })).toBeVisible();
 
-  // Re-open and delete the note → the thread empties.
+  // Re-open and delete the note → the thread empties. The editor always opens on Logic from this
+  // entry point, so switch to Notes again.
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
+  await logic.getByRole('tab', { name: 'Notes' }).click();
   await logic.getByRole('button', { name: /^Delete note \d+ by/ }).click();
   const confirm = page.getByRole('alertdialog', { name: 'Delete note' });
   await confirm.getByRole('button', { name: 'Delete' }).click();

@@ -139,29 +139,6 @@ the numbers in ADR-0059. Deliberately **not** turned into a CI gate: a milliseco
 measured on a runner would be noise dressed as a guarantee.
 | 57 | **Recycle-bin list has no index for its filter or its sort, and the screen pages it to exhaustion** | The `deleted_at IS NOT NULL` filter and the `ORDER BY deleted_at DESC, id ASC` on all three `UNION ALL` branches are unindexed: `clients`/`projects`/`plans` each index `(organization_id, created_at, id)`, none carry `deleted_at`. So Postgres filters and top-N sorts over **every** row for the org in that table, live rows included. That predates TECH_DEBT #22 and was deliberately deferred there as measure-first. What #22 did not weigh: the screen fetches via `apiFetchAllPages` (`use-deleted-items.ts`), which walks `?limit=100` to exhaustion — so the scan is re-run **per page**, making one screen-open cost `O(pages x org rows)` rather than `O(org rows)`. #22's own commit used that same pagination-amplification argument to justify fixing the row over-fetch immediately; it applies with more force here, and I did not apply it consistently. | Grows with an org's total row count, not its deleted-row count, and multiplies by page count. Harmless on a small org; an org that has ever created and deleted a lot of plans pays it on every visit to Recently deleted. | **Measure first — this is still unmeasured** (the reviewing agent had no database either). Get an `EXPLAIN ANALYZE` at realistic row counts; if it confirms the scan, add the partial index already named in `recycle-bin.repository.ts` — `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` per table. Also worth asking whether the screen should page to exhaustion at all. Raised by the backend-performance-reviewer agent, 2026-07-27. |
 
-### 61. The resource-assignment routes assert the plan edit-lock but never declare it
-
-`ResourceAssignmentService` calls `assertHoldsPen` on create, update and delete
-(`resource-assignment.service.ts:115`, `:245`, `:353`), and the behaviour is pinned by an e2e case
-in `plan-lock-write-gate.e2e-spec.ts`. None of the three routes carries `@ApiLockedResponse`, so
-the OpenAPI document does not mention the 423 they can return — verified by grep: there is no match
-for that decorator anywhere under `modules/resources/`.
-
-Found while reading those routes as the precedent for ADR-0060 M0, which gave the weighted-steps
-`PUT` the same gate **and** the missing declaration. Fixing the steps route and leaving its own
-model undeclared would be an odd place to stop, but it is a different module and belongs in its own
-diff rather than widening an API-only PR.
-
-The cost is narrow and real: a client generated from the spec has no 423 branch for assignment
-writes, so the first time an operator enables `PLAN_EDIT_LOCK_ENFORCED` an integrator meets an
-undocumented status code. The dependency, cross-plan-dependency and plan-lock controllers all
-declare theirs, so this is an outlier rather than a convention.
-
-**What would close it:** add `@ApiLockedResponse('You do not hold the plan edit-lock (when
-enforcement is on).')` to the three assignment routes and regenerate the OpenAPI document. Worth
-pairing with a structural test that every route whose service calls `assertHoldsPen` declares the
-response, so the pair cannot drift again.
-
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
 
 The activity DTO returns `null` for a cost field that is **unset** and `null` for one the caller
@@ -177,6 +154,11 @@ on without being able to check.
 The day those permission sets diverge — a role that may edit an activity but not see its cost, or
 the reverse — the client will show or hide the Cost tab incorrectly, and no test will fail,
 because every test asserts the current coincidence.
+
+It now has a **second consumer**: the activity editor's Resources tab passes the same
+`gating.cost.readable` into `ActivityResourcesPanel`, so an assignment's money fields follow the
+Cost tab's answer rather than its own. That widens the blast radius of the coincidence without
+changing its nature — one derivation, two surfaces.
 
 **What would close it:** have the API say so rather than making the client guess — either a
 `meta.permissions` block on the activity read, or a distinguishable "redacted" marker on the cost
@@ -216,3 +198,78 @@ lower-priority half of that finding.
 **What would close it:** extend the `aria-disabled` treatment from `ScopeSaveBar` to the form
 primitives (`TextField`/`SelectField`/`CheckboxField`), which would fix every gated surface in the
 app at once rather than this editor alone — which is also why it is a separate piece of work.
+
+**Widened by the convergence epic (ADR-0062).** The Resources surface is now a tab of the same
+long-lived session rather than a dialog opened and closed in seconds, so its natively-`disabled`
+controls (`ActivityResourcesPanel`'s assign fields, and `AssignmentRow`'s cost / units / rate saves,
+driving checkbox, curve select and Unassign) sit inside exactly the window this entry describes.
+`AssignmentRow` is the **worse** case and the one to fix first: on `canWrite` going false it does not
+disable its editors, it **unmounts** them for a read-only summary line — a guaranteed focus-to-`<body>`
+rather than a possible one. Raised by the ADR-0062 accessibility gate.
+
+### 65. A link's lag or type edited from the dialog is not recorded for undo
+
+The undo stack now covers a dependency **add** and **remove** symmetrically (the convergence epic's
+M5, `recordDependencyAdd` / `recordDependencyRemove`), and the canvas lag-anchor drag records its
+own change. What is still missing is the third way a link changes: the **Edit link** dialog, where a
+planner sets the type, the lag and the lag calendar.
+
+So `Shift+←/→` on a link is undoable and typing `5` into the same link's lag field is not — from one
+panel, one row apart. That is a worse inconsistency than the gap the add seam just closed, because
+both routes are visible at once.
+
+**What would close it:** an `onEdited` seam on `EditDependencyDialog` carrying the **pre-edit**
+snapshot (the inverse needs the old type/lag/lagCalendar, which the mutation's response does not
+contain), recorded through a `dependencyEditCommand`. It wants a coalescing key so a lag nudged five
+times is one undo step rather than five — which is why it is its own piece of work rather than a
+line in the epic that noticed it.
+
+### 66. A shaded create form still accepts input it cannot submit
+
+The house rule is shade-with-a-reason, and `ScopeSaveBar` implements it correctly: the Save is
+`aria-disabled` with the reason `aria-describedby`-linked. But on the two create forms this epic
+shipped — **Add a link** (`AddLinkSection`) and **Assign a resource** (`ActivityResourcesPanel`) —
+only the Save is gated. The fields above it stay fully interactive, so a member who cannot write can
+fill in an entire form and meet the refusal at the end of it.
+
+Not a WCAG failure (the reason is announced, and the control is reachable), and deliberately not
+"fixed" by adding native `disabled` — that is #64's defect, reintroduced. It is the same question as
+#64 from the other side: what the shaded _state_ of a whole form should look like.
+
+**What would close it:** decide the pattern once — a `readOnly` pass-through on the form primitives,
+or a section-level treatment — and apply it to both forms together. Raised by the ADR-0062
+accessibility gate as a nit, and by its ux gate as "the form should say so before the last click".
+
+### 67. The Logic panel's post-remove focus target is the whole panel
+
+After removing a dependency, `ActivityLogicPanel` moves focus to a wrapper around **everything** —
+both tables, the add form and the cross-plan/notes slots. It is not a regression (it is what
+`DependencyEditor` always did, and it beats dropping focus to `<body>`), but this epic shipped a
+better pattern one file over: `ActivityResourcesPanel` falls back to a narrow region around just the
+assigned list, and lets its host override the target — which the dialog uses to focus its Close
+button.
+
+**What would close it:** narrow `regionRef` to the two `<section>`s and add the same host-override
+seam Resources has, so removing a link from the dialog lands on Close and from the tab lands on the
+list. Raised by the ADR-0062 accessibility gate.
+
+### 68. **Add note** lands on the Notes tab but not in its composer
+
+`openActivityEditor`'s `steps` intent carries `focusSteps`, which the editor wires to the steps
+heading. The `notes` intent carries only the tab, on the reasoning that "the intent IS the reveal" —
+true visually, but the native `<dialog>`'s initial focus is the ✕ close button regardless of which
+tab is active (the pre-existing gap in #17c). So a keyboard or screen-reader user who chose **Add
+note** still traverses ✕ → the Notes tab → the panel before reaching the composer.
+
+**What would close it:** a `focusNotes` flag on the intent, mirroring `focusSteps` one line above it,
+with the composer exposing a ref. Raised by the ADR-0062 accessibility gate.
+
+### 69. Two idioms for editing a row in place
+
+`AssignmentRow` saves each field with its own inline button; `DependencyTable` opens a dialog per
+row. Both are defensible on their own and they now sit two tabs apart in one editor, so the
+inconsistency is visible in a way it was not when each lived in its own pop-out.
+
+**What would close it:** pick one row-edit idiom and state it in `docs/DESIGN_SYSTEM.md` (the
+list/manage archetype is the natural home), then move whichever surface loses. Raised by the
+ADR-0062 component gate as a suggestion — deliberately not rushed inside the epic that noticed it.

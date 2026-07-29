@@ -89,4 +89,6 @@ interface ImportMetaEnv {
   readonly VITE_GANTT_VIEW?: string;
   /** Tabbed activity editor — the 22-field single-submit dialog split into four tabs that save per write scope, with the progress model co-located (ADR-0060, docs/specs/activity-editor-restructure/). "true"/"1" enables it; off by default until the M6 enablement gate. */
   readonly VITE_ACTIVITY_EDITOR_TABS?: string;
+  /** Activity-editor convergence — the per-activity Logic and Resources pop-outs folded into tabs of the editor above, rendering the same panels the dialogs render (docs/specs/activity-editor-logic-resources-convergence/). No permission change: the new scopes reuse the existing definition gate. "true"/"1" enables it; off by default until the M6 enablement gate. */
+  readonly VITE_ACTIVITY_EDITOR_CONVERGENCE?: string;
 }

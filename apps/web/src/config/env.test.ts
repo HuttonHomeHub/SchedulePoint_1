@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
@@ -139,5 +139,23 @@ describe('CANVAS_TIME_AXIS_ENABLED', () => {
     // VITE_CANVAS_TIME_AXIS=false keeps ZOOM_STOPS, the single grid pass, whole-day Today, and the
     // flat non-working fill byte-for-byte — the rollback path / parity gate.
     expect(CANVAS_TIME_AXIS_ENABLED).toBe(true);
+  });
+});
+
+describe('ACTIVITY_EDITOR_CONVERGENCE_ENABLED', () => {
+  // The convergence flag is DERIVED from the tabbed-editor flag, not read beside it. With tabs off
+  // and convergence on, the row menu's Logic and Resources items would build an editor intent for a
+  // dialog that never renders — both entry points stranded on a surface that opens nothing. The
+  // security review asked for the two to be coupled; deriving the constant makes that combination
+  // unrepresentable rather than merely untested.
+  it('is off whenever the tabbed editor is off, however it is set', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_ACTIVITY_EDITOR_TABS', 'false');
+    vi.stubEnv('VITE_ACTIVITY_EDITOR_CONVERGENCE', 'true');
+    const env = await import('./env');
+    expect(env.ACTIVITY_EDITOR_TABS_ENABLED).toBe(false);
+    expect(env.ACTIVITY_EDITOR_CONVERGENCE_ENABLED).toBe(false);
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 });

@@ -88,7 +88,7 @@ describe('ActivitiesTable — note count badge (flag off)', () => {
         <ActivitiesTable
           orgSlug="acme"
           planId="pl1"
-          canWrite
+          canEditSchedule
           noteCountByActivityId={new Map([['a1', 3]])}
         />
       </QueryClientProvider>,

@@ -5,8 +5,16 @@ import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ACTIVITY_EDITOR_TABS_ENABLED } from '@/config/env';
+import {
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
+  ACTIVITY_EDITOR_TABS_ENABLED,
+  CANVAS_DIRECT_MANIPULATION_ENABLED,
+  NOTES_ENABLED,
+  PROGRAMME_SCHEDULING_ENABLED,
+} from '@/config/env';
 import { ActivityEditorDialog, ActivityFormDialog, useDeleteActivity } from '@/features/activities';
+import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
+import { ActivityNotesSection } from '@/features/notes';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
@@ -84,6 +92,54 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
           planActivities={model.activities.data ?? []}
           activity={intended}
           {...(model.editorIntent ? { intent: model.editorIntent } : {})}
+          {...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+            ? {
+                // The Logic tab's seams, which `plan-dialogs` wired into the Logic dialog before
+                // this. Each is named in the plan as a thing that dies silently if it is dropped
+                // in the move — the undo recording for a removed link, the keyboard lag nudge, and
+                // the cross-plan section this feature must not import sideways — so each has its
+                // own regression test.
+                logic: {
+                  onAdded: model.recordDependencyAdd,
+                  onRemoved: model.recordDependencyRemove,
+                  ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
+                    ? { onNudgeLag: model.nudgeDependencyLag }
+                    : {}),
+                  ...(PROGRAMME_SCHEDULING_ENABLED && intended
+                    ? {
+                        crossPlanSlot: (
+                          <CrossPlanLinksSection
+                            orgSlug={orgSlug}
+                            planId={planId}
+                            activity={intended}
+                            canManageLogic={model.canManageLogic}
+                            // `intended` is already narrowed truthy by this branch's own
+                            // condition (`PROGRAMME_SCHEDULING_ENABLED && intended`), so this
+                            // section is always showing its subject when it renders at all.
+                            enabled
+                          />
+                        ),
+                      }
+                    : {}),
+                },
+                ...(NOTES_ENABLED && intended
+                  ? {
+                      notesSlot: (
+                        <ActivityNotesSection
+                          orgSlug={orgSlug}
+                          planId={planId}
+                          activity={intended}
+                          canWrite={model.canWriteNotes}
+                          // Same reasoning as the cross-plan slot above: `intended` is already
+                          // narrowed truthy by this branch's own condition (`NOTES_ENABLED &&
+                          // intended`).
+                          enabled
+                        />
+                      ),
+                    }
+                  : {}),
+              }
+            : {})}
         />
       ) : (
         <ActivityFormDialog

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_EDITOR_TABS_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
@@ -48,6 +49,7 @@ import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
 import {
   addCalendarDays,
   todayDayFraction,
+  useCoalescedLagNudge,
   useNow,
   type TsldCreateInput,
   type TsldCreateOutcome,
@@ -146,12 +148,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setLogicRevealNotes(false);
     setLogicActivityState(activity);
   }, []);
-  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
-  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
-  const revealActivityNotes = useCallback((activity: ActivitySummary) => {
-    setLogicRevealNotes(true);
-    setLogicActivityState(activity);
-  }, []);
   // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
   // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
   // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
@@ -173,6 +169,30 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         : setEditActivityId(a.id),
     [],
   );
+  // The **Logic** entry point, shared by the canvas selection bar, the canvas keyboard (Enter on a
+  // focused bar), the row menu and the bottom panel. Flag-on it opens the editor's Logic tab
+  // instead of a dialog of its own (the convergence epic); flag-off it is `setLogicActivity`, which
+  // is what every host called directly before — the same conditional shape `onEditActivity` uses.
+  const onOpenLogic = useCallback(
+    (a: ActivitySummary) =>
+      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+        ? setEditorIntent(openActivityEditor(a, 'logic'))
+        : setLogicActivity(a),
+    [setLogicActivity],
+  );
+  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
+  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
+  // Flag-on there is nothing to reveal: **Add note** opens the editor's Notes tab, which IS the
+  // notes surface. Flag-off it keeps the scroll-and-focus plumbing, which is still the only way to
+  // reach a section buried three panels down the Logic dialog.
+  const revealActivityNotes = useCallback((activity: ActivitySummary) => {
+    if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
+      setEditorIntent(openActivityEditor(activity, 'notes'));
+      return;
+    }
+    setLogicRevealNotes(true);
+    setLogicActivityState(activity);
+  }, []);
   // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
   // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
   // drawer's Close button clears. Inert when nothing reads it (flag off) — the notes stay inline.
@@ -182,7 +202,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // current row and the dialog closes the moment its target vanishes. Drives the workspace-hosted
   // `ActivityResourcesDialog` (beside the crud dialogs). Inert when nothing reads it (flag off).
   const [resourcesActivityId, setResourcesActivityId] = useState<string | null>(null);
-  const onResourcesActivity = useCallback((a: ActivitySummary) => setResourcesActivityId(a.id), []);
+  // Flag-on, **Resources** is a tab of the one editor rather than a dialog of its own — the same
+  // shape as `onEditActivity` / `onOpenLogic`. Flag-off it still drives the workspace-hosted
+  // `ActivityResourcesDialog` below.
+  const onResourcesActivity = useCallback(
+    (a: ActivitySummary) =>
+      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+        ? setEditorIntent(openActivityEditor(a, 'resources'))
+        : setResourcesActivityId(a.id),
+    [],
+  );
   const setResourcesActivity = useCallback(
     (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
     [],
@@ -548,6 +577,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
   );
+  // Record a dependency ADD on the undo stack (ADR-0048 M2), the mirror of `recordDependencyRemove`.
+  // Called by the Logic panel after a successful add — the canvas link path records its own inline
+  // (there is no shared code path, so there is no double-count; a test asserts exactly one command
+  // per add). Undoing an add was asymmetric until this: removing a link from the panel could be
+  // undone, adding one could not.
+  const recordDependencyAdd = useCallback(
+    (dependency: DependencySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      editHistory.record(
+        dependencyAddCommand({
+          dependency,
+          createDependency: createDependency.mutateAsync,
+          deleteDependency: deleteDependency.mutateAsync,
+        }),
+      );
+    },
+    [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
+  );
   // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
   // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
   // EARLY mode) the schedule mode is always EARLY, so today's SNET path is byte-for-byte unchanged.
@@ -853,6 +900,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       };
     }
   };
+
+  // The keyboard lag nudge (ADR-0052 M3) composed once, here, rather than in whichever component
+  // happens to host the Logic panel: it is rendered by the Logic *dialog* flag-off and by the
+  // editor's Logic *tab* flag-on, and two call sites of the same hook is how the two surfaces
+  // would drift. The coalescing is what makes `Shift+←/→` held down one PATCH rather than ten.
+  const nudgeDependencyLag = useCoalescedLagNudge({
+    onLag: onTsldLag,
+    dependencies: dependencies.data ?? [],
+    announce,
+  });
 
   // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
   // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
@@ -1195,6 +1252,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     toggleOverAllocation,
     logicActivity,
     setLogicActivity,
+    // The Logic entry point every host calls (canvas bar, row menu, keyboard Enter). Flag-on it
+    // builds the editor intent; flag-off it opens the dialog, exactly as before.
+    onOpenLogic,
+    // The coalesced keyboard lag nudge, composed once here so the Logic dialog and the Logic tab
+    // cannot end up with two different implementations of the same chord.
+    nudgeDependencyLag,
     // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the
     // toolbar **Add note** opener that sets it. Inert unless `VITE_NOTES`/quick-wins are on.
     logicRevealNotes,
@@ -1251,6 +1314,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // removal. No-ops when `VITE_UNDO_REDO` is off.
     recordActivityDelete,
     recordDependencyRemove,
+    recordDependencyAdd,
     // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.

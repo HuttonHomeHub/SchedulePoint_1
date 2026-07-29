@@ -77,7 +77,7 @@ const ACTIVITY: ActivitySummary = {
 };
 
 function renderTable(
-  canWrite: boolean,
+  canEditSchedule: boolean,
   data: ActivitySummary[] = [ACTIVITY],
   canReportProgress = false,
 ) {
@@ -88,7 +88,7 @@ function renderTable(
       <ActivitiesTable
         orgSlug="acme"
         planId="pl1"
-        canWrite={canWrite}
+        canEditSchedule={canEditSchedule}
         canReportProgress={canReportProgress}
       />
     </QueryClientProvider>,
@@ -231,7 +231,12 @@ describe('ActivitiesTable', () => {
     queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [ACTIVITY]);
     render(
       <QueryClientProvider client={queryClient}>
-        <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} onOpenLogic={onOpenLogic} />
+        <ActivitiesTable
+          orgSlug="acme"
+          planId="pl1"
+          canEditSchedule={false}
+          onOpenLogic={onOpenLogic}
+        />
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Excavate' }));
@@ -267,7 +272,12 @@ describe('ActivitiesTable — baseline variance', () => {
     const map = row ? new Map([[row.activityId, row]]) : new Map<string, BaselineVarianceRow>();
     return render(
       <QueryClientProvider client={queryClient}>
-        <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} varianceByActivityId={map} />
+        <ActivitiesTable
+          orgSlug="acme"
+          planId="pl1"
+          canEditSchedule={false}
+          varianceByActivityId={map}
+        />
       </QueryClientProvider>,
     );
   }
@@ -278,7 +288,7 @@ describe('ActivitiesTable — baseline variance', () => {
     queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [ACTIVITY]);
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
-        <ActivitiesTable orgSlug="acme" planId="pl1" canWrite={false} />
+        <ActivitiesTable orgSlug="acme" planId="pl1" canEditSchedule={false} />
       </QueryClientProvider>,
     );
     expect(screen.queryByRole('columnheader', { name: 'Finish variance' })).not.toBeInTheDocument();
@@ -289,7 +299,7 @@ describe('ActivitiesTable — baseline variance', () => {
         <ActivitiesTable
           orgSlug="acme"
           planId="pl1"
-          canWrite={false}
+          canEditSchedule={false}
           varianceByActivityId={new Map([['a1', varianceRow()]])}
         />
       </QueryClientProvider>,

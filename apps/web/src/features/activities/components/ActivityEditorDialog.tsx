@@ -2,6 +2,7 @@ import {
   SELECTABLE_CONSTRAINT_TYPES,
   type ActivitySummary,
   type CalendarSummary,
+  type DependencySummary,
 } from '@repo/types';
 import { DURATION_TYPES } from '@repo/types';
 import { useState } from 'react';
@@ -11,7 +12,7 @@ import { costBody, generalBody, schedulingBody } from '../api/scope-bodies';
 import { useUpdateActivityFields } from '../api/use-activities';
 import { activityContextFacts, activitySubtitle } from '../lib/activity-editor-context';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
-import type { ActivityEditorIntent } from '../lib/activity-editor-intent';
+import type { ActivityEditorIntent, ActivityEditorTab } from '../lib/activity-editor-intent';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
@@ -19,6 +20,7 @@ import {
   CONSTRAINT_TYPE_LABELS,
   DURATION_TYPE_LABELS,
   isDurationDerivedType,
+  isMilestoneType,
   selectableActivityTypes,
 } from '../schemas/activity-schemas';
 import {
@@ -34,7 +36,6 @@ import {
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
-import { ScopeSaveBar } from './ScopeSaveBar';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -55,10 +56,12 @@ import {
   FieldGridFull,
   FormSection,
 } from '@/components/ui/form-layout';
+import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   ACTIVITY_CALENDAR_ENABLED,
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
@@ -66,11 +69,15 @@ import {
   DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
+  NOTES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
+  RESOURCES_ENABLED,
 } from '@/config/env';
+import { ActivityLogicPanel } from '@/features/dependencies';
+import { ActivityResourcesPanel } from '@/features/resources';
 import { cn } from '@/lib/utils';
 
-type TabKey = 'general' | 'scheduling' | 'progress' | 'cost';
+type TabKey = ActivityEditorTab;
 
 /**
  * The tabbed activity editor (ADR-0060). Behind `VITE_ACTIVITY_EDITOR_TABS`; the flag-off path
@@ -117,6 +124,8 @@ export function ActivityEditorDialog({
   calendarsLoading = false,
   calendarsError = false,
   planActivities = [],
+  logic,
+  notesSlot,
 }: {
   orgSlug: string;
   planId: string;
@@ -139,6 +148,28 @@ export function ActivityEditorDialog({
   /** The calendar list failed — surfaced in the picker, not swallowed. */
   calendarsError?: boolean;
   planActivities?: ActivitySummary[];
+  /**
+   * Composition-root wiring for the **Logic** tab, grouped so the tab's seams arrive and leave
+   * together rather than as four loose props (the cross-plan slot is the `notesSlot` precedent:
+   * this feature must not import `cross-plan-dependencies` sideways). Absent ⇒ the tab renders the
+   * plain panel, which is what a host without those flags wants.
+   */
+  logic?: {
+    /** `VITE_PROGRAMME_SCHEDULING`'s cross-plan links section (ADR-0045). */
+    crossPlanSlot?: React.ReactNode;
+    /** Undo recording for an added link (ADR-0048 M2). */
+    onAdded?: (dependency: DependencySummary) => void;
+    /** Undo recording for a removed link (ADR-0048 M2). */
+    onRemoved?: (dependency: DependencySummary) => void;
+    /** The coalesced keyboard lag nudge (ADR-0052 M3) — `Shift+←/→` on a link's row buttons. */
+    onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
+  };
+  /**
+   * The `VITE_NOTES` activity-notes section (ADR-0046), passed by the composition root for the same
+   * reason as the cross-plan slot: this feature must not import the notes data layer sideways.
+   * Absent ⇒ no Notes tab, which is what a host without the flag wants.
+   */
+  notesSlot?: React.ReactNode;
 }): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
@@ -277,6 +308,23 @@ export function ActivityEditorDialog({
       label: 'Scheduling',
       ...marker(scheduling.errorCount, scheduling.isDirty, gating.scheduling.writable),
     },
+    // Logic is a **collection**, not a form: it has no draft state to be dirty and no field to be
+    // invalid, so it can only ever carry the read-only marker (spec §2 "Save model").
+    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+      ? [{ id: 'logic' as const, label: 'Logic', ...collectionMarker(gating.logic) }]
+      : []),
+    // Resources needs BOTH flags: the convergence one to be a tab at all, and `VITE_RESOURCES`
+    // because there is no resources surface without it. A tab whose entry point is hidden — or an
+    // entry point with no tab — is the exact flag-parity gap the ADR-0060 security review caught on
+    // the steps panel, so the four combinations have their own matrix test.
+    //
+    // It sits **before** Progress, following the spec's order (§4.11): what the activity IS
+    // (General/Scheduling) → what it depends on (Logic) → what does the work (Resources) → how it is
+    // going (Progress) → what it costs (Cost) → what people said (Notes). Resources is a definition
+    // scope on the same pen-gated rule as Logic, so it belongs on that side of the status divide.
+    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && RESOURCES_ENABLED
+      ? [{ id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) }]
+      : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
     // so a padlock here would be a lie in exactly the situation the rail exists to clarify.
     { id: 'progress', label: 'Progress' },
@@ -288,6 +336,12 @@ export function ActivityEditorDialog({
             ...marker(cost.errorCount, cost.isDirty, gating.cost.writable),
           },
         ]
+      : []),
+    // Notes, like Progress, are **never** marked read-only: the pen does not gate them (ADR-0046),
+    // so a padlock would be false for exactly the reader it is meant to inform. Needs `VITE_NOTES`
+    // as well as the convergence flag, and the composition root's slot to have anything to show.
+    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && NOTES_ENABLED && notesSlot
+      ? [{ id: 'notes' as const, label: 'Notes' }]
       : []),
   ];
 
@@ -649,6 +703,55 @@ export function ActivityEditorDialog({
                 </form>
               ) : null}
 
+              {/* Logic — the same `ActivityLogicPanel` the Logic dialog renders, not a copy of it.
+                  Its queries are gated on this tab being the active one, so opening the editor on
+                  General does not fetch every activity's predecessors on the way past. */}
+              {current === 'logic' ? (
+                <ActivityLogicPanel
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  planActivities={planActivities}
+                  canManageLogic={gating.logic.writable}
+                  enabled={open && current === 'logic'}
+                  {...(activity ? { activity } : {})}
+                  {...(gating.logic.reason ? { manageLogicReason: gating.logic.reason } : {})}
+                  {...(logic?.crossPlanSlot ? { crossPlanSlot: logic.crossPlanSlot } : {})}
+                  {...(logic?.onAdded ? { onAdded: logic.onAdded } : {})}
+                  {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
+                  {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
+                />
+              ) : null}
+
+              {/* Resources — the same `ActivityResourcesPanel` the Resources dialog renders. The
+                  milestone and duration-type facts are derived from the row the editor already
+                  holds, rather than passed in by each host as the dialog required. */}
+              {current === 'resources' && activity ? (
+                <ActivityResourcesPanel
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  activityId={activity.id}
+                  activityDurationType={activity.durationType}
+                  isMilestone={isMilestoneType(activity.type)}
+                  canWrite={gating.resources.writable}
+                  // Shaded with the reason, never hidden — the same seam the Logic tab uses one
+                  // block above. Dropping it made a Planner without the pen meet a Resources tab
+                  // whose assign form had simply vanished, with a padlock on the rail as the only
+                  // clue: the lit-but-inert dead end inverted, which is no better.
+                  {...(gating.resources.reason ? { writeReason: gating.resources.reason } : {})}
+                  // The Cost tab and the assignment money fields answer to one gate: a role that
+                  // cannot read cost gets no tab AND no cost fields on a row. Latent today
+                  // (`canReadCost === canWrite`, TECH_DEBT #62) and load-bearing the day it isn't.
+                  canReadCost={gating.cost.readable}
+                  enabled={open && current === 'resources'}
+                />
+              ) : null}
+
+              {/* Notes — the composition root's section, given a tab of its own so **Add note**
+                  lands on it directly. Before this it opened the Logic dialog and then scrolled +
+                  focused a section three panels down; the reveal plumbing that did so survives
+                  untouched on the flag-off path, which still needs it. */}
+              {current === 'notes' ? notesSlot : null}
+
               {/* The co-location (M4): three panels, three write scopes, each headed by what it
                   does to the schedule. Rendered only when a row exists — every panel writes. */}
               {current === 'progress' && activity ? (
@@ -805,6 +908,19 @@ export function ActivityEditorDialog({
  * because it is the *stable* fact — and a scope cannot be both dirty and read-only anyway, since a
  * shut form has nothing to dirty.
  */
+/**
+ * The marker for a **collection** tab — Logic, Resources — which owns no draft state.
+ *
+ * Deliberately never `dot` or `count`: a link is created by its own request the moment you press
+ * Add, so there is nothing unsaved to warn about and nothing for the discard confirmation to name.
+ * Sharing {@link marker} would have made that a bug waiting for someone to pass a count.
+ */
+function collectionMarker(gate: { writable: boolean }): Pick<TabDescriptor<string>, 'marker'> {
+  return gate.writable
+    ? {}
+    : { marker: { kind: 'locked', label: 'read-only' } satisfies TabMarker };
+}
+
 function marker(
   errorCount: number,
   dirty: boolean,

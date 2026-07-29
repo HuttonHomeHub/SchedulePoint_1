@@ -76,14 +76,14 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   await page.getByRole('button', { name: 'Actions for Pour slab' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name: 'Add predecessor' }).click();
+  // The add form is inline in the Logic tab of the activity editor (ADR-0061 §2 / ADR-0062), so
+  // there is no sub-dialog to wait out before Close. `exact: true` disambiguates the editor's own
+  // "Close" footer button from the dialog chrome's "Close dialog" ✕, whose accessible name is a
+  // substring match otherwise.
   await dialog.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
-  await dialog.getByRole('button', { name: 'Add dependency' }).click();
-  // The "Add predecessor" sub-dialog closes on success; wait for it to go before clicking
-  // Close, otherwise both dialogs' close (✕) buttons match and the click is ambiguous.
-  await expect(page.getByRole('dialog', { name: 'Add predecessor' })).toBeHidden();
+  await dialog.getByRole('button', { name: 'Add link' }).click();
   await expect(dialog.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Close' }).click();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 
   // Before recompute the summary is not yet calculated.
   await expect(page.getByText(/Schedule not yet calculated/)).toBeVisible();

@@ -14,6 +14,8 @@ describe('openActivityEditor', () => {
     ['edit', { activityId: 'act-1', tab: 'general' }],
     ['progress', { activityId: 'act-1', tab: 'progress' }],
     ['steps', { activityId: 'act-1', tab: 'progress', focusSteps: true }],
+    ['logic', { activityId: 'act-1', tab: 'logic' }],
+    ['resources', { activityId: 'act-1', tab: 'resources' }],
   ];
 
   it.each(CASES)('maps %s to its intent', (purpose, expected) => {
@@ -27,6 +29,13 @@ describe('openActivityEditor', () => {
     expect(steps.tab).toBe(progress.tab);
     expect(progress.focusSteps).toBeUndefined();
     expect(steps.focusSteps).toBe(true);
+  });
+
+  it('gives Logic and Resources their own tabs — they are collections, not a scope of the form', () => {
+    // The convergence epic's claim: these were dialogs because they are *different subjects*, not
+    // because they are separate permissions. As tabs they land on themselves, focus nothing.
+    expect(openActivityEditor(ROW, 'logic')).toEqual({ activityId: 'act-1', tab: 'logic' });
+    expect(openActivityEditor(ROW, 'resources')).toEqual({ activityId: 'act-1', tab: 'resources' });
   });
 
   it('carries an id, never a row', () => {

@@ -86,7 +86,7 @@ function renderTable(data: ActivitySummary[], noteCountByActivityId?: ReadonlyMa
       <ActivitiesTable
         orgSlug="acme"
         planId="pl1"
-        canWrite
+        canEditSchedule
         {...(noteCountByActivityId ? { noteCountByActivityId } : {})}
       />
     </QueryClientProvider>,

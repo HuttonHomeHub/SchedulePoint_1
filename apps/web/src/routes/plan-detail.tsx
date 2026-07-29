@@ -1,6 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
+import { ActivityCrudDialogs } from '@/components/layout/workspace/activity-crud-dialogs';
 import { PlanDialogs } from '@/components/layout/workspace/plan-dialogs';
 import { PlanWorkspace } from '@/components/layout/workspace/plan-workspace';
 import {
@@ -311,7 +312,7 @@ function LegacyPlanLayout({
             onLag={model.onTsldLag}
             onLink={model.onTsldLink}
             onAutoArrange={model.onTsldAutoArrange}
-            onOpenLogic={model.setLogicActivity}
+            onOpenLogic={model.onOpenLogic}
             onRefresh={model.onTsldRefresh}
             calendar={model.tsldCalendar}
             todayIso={model.todayIso}
@@ -348,10 +349,11 @@ function LegacyPlanLayout({
         <ActivitiesTable
           orgSlug={orgSlug}
           planId={planId}
-          canWrite={model.canEditSchedule}
+          canEditSchedule={model.canEditSchedule}
           canReportProgress={model.canProgress}
           editorGating={model.activityEditorGating}
-          onOpenLogic={model.setLogicActivity}
+          onOpenLogic={model.onOpenLogic}
+          onOpenResources={model.onResourcesActivity}
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
           calendarsError={model.calendars.isError}
@@ -365,6 +367,13 @@ function LegacyPlanLayout({
       </div>
 
       <PlanDialogs model={model} plan={plan} />
+      {/* The host for the shared model's `editorIntent`. The canvas-first workspace has always
+          mounted this; the legacy layout did not, because none of its entry points set an intent —
+          until **Logic** became one (the convergence epic). An entry point that sets state nothing
+          renders is the lit-but-inert dead end the house rule forbids, so both layouts now host the
+          editor. Its other targets (`editActivityId` / `deleteActivityId`) are set only by the
+          canvas selection bar, which this layout does not render, so nothing else changes here. */}
+      <ActivityCrudDialogs model={model} />
     </div>
   );
 }

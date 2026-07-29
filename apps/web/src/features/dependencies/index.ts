@@ -14,4 +14,5 @@ export {
   useDeleteDependency,
 } from './api/use-dependencies';
 export { DependencyEditor } from './components/DependencyEditor';
+export { ActivityLogicPanel } from './components/ActivityLogicPanel';
 export { DEPENDENCY_TYPE_LABELS, formatLag } from './schemas/dependency-schemas';
