@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form';
+import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
@@ -762,9 +763,15 @@ export function ActivityResourcesDialog({
       title="Resources"
       {...(activityName ? { description: `Assign resources to “${activityName}”.` } : {})}
     >
-      <div className="flex flex-col gap-6">
-        <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold">Assigned</h3>
+      <FieldGridContainer className="flex flex-col gap-5">
+        <FormSection
+          title="Assigned"
+          aside={
+            assignments.isSuccess
+              ? `${(assignments.data ?? []).length} on this activity`
+              : undefined
+          }
+        >
           {assignments.isPending ? (
             <p className="text-muted-foreground text-sm">Loading assignments…</p>
           ) : assignments.isError ? (
@@ -793,11 +800,13 @@ export function ActivityResourcesDialog({
               ))}
             </ul>
           )}
-        </section>
+        </FormSection>
 
         {canWrite ? (
-          <section className="border-border border-t pt-6">
-            <h3 className="mb-3 text-sm font-semibold">Assign a resource</h3>
+          <FormSection
+            title="Assign a resource"
+            description="Units and cost drive the histogram and Earned Value; only the driving resource changes the activity’s calendar."
+          >
             {resources.isError ? (
               <p role="alert" className="text-destructive-text text-sm">
                 Couldn’t load the resource library. Please try again.
@@ -877,102 +886,104 @@ export function ActivityResourcesDialog({
                     </p>
                   ) : null}
                 </div>
-                <TextField
-                  label="Budgeted units"
-                  type="number"
-                  min={0}
-                  step="any"
-                  error={errors.budgetedUnits?.message}
-                  {...register('budgetedUnits', { valueAsNumber: true })}
-                />
-                <CheckboxField
-                  label="Driving resource"
-                  disabled={selectedIsMaterial}
-                  hint={selectedIsMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
-                  {...register('isDriving')}
-                />
-                {/* Loading curve (M7 rung 5, ADR-0044 §3) — the named P6 profile the resource histogram
-                    distributes budgeted units by across the span. Behind the flag and hidden for a
-                    zero-span milestone (#44b); UNIFORM is the flat default. Shapes only the
-                    histogram, never the dates. */}
-                {showCurve ? (
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={curveSelectId}>Loading curve</Label>
-                    <Select
-                      id={curveSelectId}
-                      aria-describedby={curveHelpId}
-                      {...register('curveType')}
-                    >
-                      {RESOURCE_CURVE_TYPES.map((curve) => (
-                        <option key={curve} value={curve}>
-                          {RESOURCE_CURVE_LABELS[curve]}
-                        </option>
-                      ))}
-                    </Select>
-                    <p id={curveHelpId} className="text-muted-foreground text-sm">
-                      Shapes how this resource’s units spread over the activity — the resource
-                      histogram only. It doesn’t move any dates.
-                    </p>
-                  </div>
-                ) : null}
-                {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
-                    driving box is ticked, and only behind the flag. An initial rate is stored inert; the
-                    duration derivation happens on a later units/rate edit in the row above. */}
-                {DURATION_TYPES_ENABLED && wantsDriving && !selectedIsMaterial ? (
+                <FieldGrid>
                   <TextField
-                    label="Units / time (rate)"
+                    label="Budgeted units"
                     type="number"
                     min={0}
                     step="any"
-                    hint="Optional. Units of work per working hour, kept with the duration type so units = duration × rate; editing it later can derive the activity’s duration."
-                    error={errors.unitsPerHour?.message}
-                    {...register('unitsPerHour', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
+                    error={errors.budgetedUnits?.message}
+                    {...register('budgetedUnits', { valueAsNumber: true })}
                   />
-                ) : null}
-                {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag. Money in
+                  <CheckboxField
+                    label="Driving resource"
+                    disabled={selectedIsMaterial}
+                    hint={selectedIsMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
+                    {...register('isDriving')}
+                  />
+                  {/* Loading curve (M7 rung 5, ADR-0044 §3) — the named P6 profile the resource histogram
+                    distributes budgeted units by across the span. Behind the flag and hidden for a
+                    zero-span milestone (#44b); UNIFORM is the flat default. Shapes only the
+                    histogram, never the dates. */}
+                  {showCurve ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={curveSelectId}>Loading curve</Label>
+                      <Select
+                        id={curveSelectId}
+                        aria-describedby={curveHelpId}
+                        {...register('curveType')}
+                      >
+                        {RESOURCE_CURVE_TYPES.map((curve) => (
+                          <option key={curve} value={curve}>
+                            {RESOURCE_CURVE_LABELS[curve]}
+                          </option>
+                        ))}
+                      </Select>
+                      <p id={curveHelpId} className="text-muted-foreground text-sm">
+                        Shapes how this resource’s units spread over the activity — the resource
+                        histogram only. It doesn’t move any dates.
+                      </p>
+                    </div>
+                  ) : null}
+                  {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
+                    driving box is ticked, and only behind the flag. An initial rate is stored inert; the
+                    duration derivation happens on a later units/rate edit in the row above. */}
+                  {DURATION_TYPES_ENABLED && wantsDriving && !selectedIsMaterial ? (
+                    <TextField
+                      label="Units / time (rate)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      hint="Optional. Units of work per working hour, kept with the duration type so units = duration × rate; editing it later can derive the activity’s duration."
+                      error={errors.unitsPerHour?.message}
+                      {...register('unitsPerHour', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                  ) : null}
+                  {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag. Money in
                     MAJOR units (×100 → minor on submit); budgeted cost is an optional override of the
                     units × rate derivation. */}
-                {EARNED_VALUE_ENABLED ? (
-                  <>
-                    <TextField
-                      label="Budgeted cost (optional)"
-                      type="number"
-                      min={0}
-                      step="any"
-                      inputMode="decimal"
-                      hint="Overrides the cost derived from budgeted units × the resource’s rate. Leave blank to derive it."
-                      error={errors.budgetedCost?.message}
-                      {...register('budgetedCost', {
-                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                      })}
-                    />
-                    <TextField
-                      label="Actual cost (optional)"
-                      type="number"
-                      min={0}
-                      step="any"
-                      inputMode="decimal"
-                      hint="The cost booked against this assignment so far, in the plan’s currency."
-                      error={errors.actualCost?.message}
-                      {...register('actualCost', {
-                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                      })}
-                    />
-                    <TextField
-                      label="Actual units (optional)"
-                      type="number"
-                      min={0}
-                      step="any"
-                      hint="The quantity of work done so far, feeding the Units earned-value measure."
-                      error={errors.actualUnits?.message}
-                      {...register('actualUnits', {
-                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                      })}
-                    />
-                  </>
-                ) : null}
+                  {EARNED_VALUE_ENABLED ? (
+                    <>
+                      <TextField
+                        label="Budgeted cost"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        hint="Overrides the cost derived from budgeted units × the resource’s rate. Leave blank to derive it."
+                        error={errors.budgetedCost?.message}
+                        {...register('budgetedCost', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                      <TextField
+                        label="Actual cost"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        hint="The cost booked against this assignment so far, in the plan’s currency."
+                        error={errors.actualCost?.message}
+                        {...register('actualCost', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                      <TextField
+                        label="Actual units"
+                        type="number"
+                        min={0}
+                        step="any"
+                        hint="The quantity of work done so far, feeding the Units earned-value measure."
+                        error={errors.actualUnits?.message}
+                        {...register('actualUnits', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                    </>
+                  ) : null}
+                </FieldGrid>
                 <div className="flex justify-end">
                   <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
                     {create.isPending ? 'Assigning…' : 'Assign resource'}
@@ -980,15 +991,15 @@ export function ActivityResourcesDialog({
                 </div>
               </form>
             )}
-          </section>
+          </FormSection>
         ) : null}
 
-        <div className="flex justify-end">
+        <div className="border-border flex justify-end border-t pt-4">
           <Button ref={closeButtonRef} type="button" variant="outline" onClick={onClose}>
             Close
           </Button>
         </div>
-      </div>
+      </FieldGridContainer>
     </Dialog>
   );
 }

@@ -16,6 +16,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField } from '@/components/ui/form';
+import { FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -164,71 +165,86 @@ function ImportFlow({
   const canConfirm = dryRun.isSuccess && !commit.isPending;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="interchange-file">Schedule file (.xer or .xml)</Label>
-        <input
-          id="interchange-file"
-          type="file"
-          accept=".xer,.xml"
-          onChange={onPickFile}
-          aria-invalid={!!errorMessage}
-          // Point the control at the error text only while it shows, so a screen-reader user
-          // moving onto the field hears the failure with it (WCAG 1.3.1 / 3.3.1 / 4.1.2) —
-          // mirroring the PlanCalendarPicker hint+error pattern.
-          aria-describedby={
-            errorMessage ? 'interchange-file-hint interchange-file-error' : 'interchange-file-hint'
-          }
-          className="border-input bg-background text-foreground file:bg-secondary file:text-secondary-foreground focus-visible:ring-ring focus-visible:ring-offset-background block w-full rounded-md border text-sm file:mr-3 file:cursor-pointer file:border-0 file:px-3 file:py-2 file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-        />
-        <p id="interchange-file-hint" className="text-muted-foreground text-xs">
-          Primavera P6 (.xer) or Microsoft Project MSPDI (.xml) files up to {MAX_UPLOAD_LABEL}.
-        </p>
-      </div>
+    <div className="flex flex-col gap-5">
+      {/* A real two-step process, numbered because the order is load-bearing (ADR-0061): you cannot
+          review a report before choosing a file, and you should not confirm before reading one.
+          Step 2 is always present, carrying its own empty/pending/result state — a step that
+          appears only once it has content leaves the reader unsure whether there is more to do. */}
+      <FormSection title="1 · Choose a file">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="interchange-file">Schedule file (.xer or .xml)</Label>
+          <input
+            id="interchange-file"
+            type="file"
+            accept=".xer,.xml"
+            onChange={onPickFile}
+            aria-invalid={!!errorMessage}
+            // Point the control at the error text only while it shows, so a screen-reader user
+            // moving onto the field hears the failure with it (WCAG 1.3.1 / 3.3.1 / 4.1.2) —
+            // mirroring the PlanCalendarPicker hint+error pattern.
+            aria-describedby={
+              errorMessage
+                ? 'interchange-file-hint interchange-file-error'
+                : 'interchange-file-hint'
+            }
+            className="border-input bg-background text-foreground file:bg-secondary file:text-secondary-foreground focus-visible:ring-ring focus-visible:ring-offset-background block w-full rounded-md border text-sm file:mr-3 file:cursor-pointer file:border-0 file:px-3 file:py-2 file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+          />
+          <p id="interchange-file-hint" className="text-muted-foreground text-xs">
+            Primavera P6 (.xer) or Microsoft Project MSPDI (.xml) files up to {MAX_UPLOAD_LABEL}.
+          </p>
+        </div>
 
-      {/*
+        {/*
         ADR-0053 §5. Imported calendars are tiered to this project by default, so importing three
         P6 files can no longer quietly add a dozen shared "Standard 5 Day Workweek" calendars every
         other project has to scroll past. The opt-out writes SHARED tenant state, so it is offered
         only to a holder of `calendar:manage_org`.
       */}
-      {canManageOrgCalendars ? (
-        <CheckboxField
-          label="Add this file’s global calendars to the organisation library"
-          checked={globalCalendarsShared}
-          onChange={(event) => onToggleGlobalCalendars(event.target.checked)}
-          hint={`Off (recommended): the file’s calendars belong to “${projectName}” alone. On: its global calendars join the shared library every project picks from.`}
-        />
-      ) : null}
+        {canManageOrgCalendars ? (
+          <CheckboxField
+            label="Add this file’s global calendars to the organisation library"
+            checked={globalCalendarsShared}
+            onChange={(event) => onToggleGlobalCalendars(event.target.checked)}
+            hint={`Off (recommended): the file’s calendars belong to “${projectName}” alone. On: its global calendars join the shared library every project picks from.`}
+          />
+        ) : null}
 
-      {errorMessage ? (
-        <p id="interchange-file-error" role="alert" className="text-destructive-text text-sm">
-          {errorMessage}
-        </p>
-      ) : null}
+        {errorMessage ? (
+          <p id="interchange-file-error" role="alert" className="text-destructive-text text-sm">
+            {errorMessage}
+          </p>
+        ) : null}
+      </FormSection>
 
-      {dryRun.isPending ? (
-        <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Spinner label="Parsing the file…" />
-          <span>Parsing the file…</span>
-        </div>
-      ) : null}
-
-      {dryRun.isSuccess ? (
-        <div className="flex flex-col gap-3">
-          <InterchangeReportTable report={dryRun.data} />
-          <div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => downloadReport(dryRun.data)}
-            >
-              Download report
-            </Button>
+      <FormSection
+        title="2 · Review what will be imported"
+        description="Every approximation and every dropped field is listed. Nothing is written until you confirm."
+      >
+        {dryRun.isPending ? (
+          <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <Spinner label="Parsing the file…" />
+            <span>Parsing the file…</span>
           </div>
-        </div>
-      ) : null}
+        ) : dryRun.isSuccess ? (
+          <div className="flex flex-col gap-3">
+            <InterchangeReportTable report={dryRun.data} />
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => downloadReport(dryRun.data)}
+              >
+                Download report
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+            Choose a file above and its report appears here.
+          </p>
+        )}
+      </FormSection>
 
       {commit.isPending ? (
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
@@ -237,7 +253,7 @@ function ImportFlow({
         </div>
       ) : null}
 
-      <div className="flex justify-end gap-2">
+      <div className="border-border flex justify-end gap-2 border-t pt-4">
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>

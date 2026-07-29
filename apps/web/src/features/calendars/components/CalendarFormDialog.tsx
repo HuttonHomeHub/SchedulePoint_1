@@ -20,6 +20,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
+import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ToggleChip } from '@/components/ui/toggle-chip';
@@ -218,120 +219,144 @@ export function CalendarFormDialog({
       title={title}
       {...(isEdit ? {} : { description: 'Define a reusable working-day pattern.' })}
     >
-      <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-        <FormErrorSummary errors={errors} />
-        {mutation.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {calendarErrorMessage(mutation.error, 'Couldn’t save this calendar. Please try again.')}
-          </p>
-        ) : null}
-        <TextField
-          label="Name"
-          autoComplete="off"
-          readOnly={readOnly}
-          error={errors.name?.message}
-          {...register('name')}
-        />
-        {showScopeChoice ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={scopeSelectId}>Scope</Label>
-            <Select
-              id={scopeSelectId}
-              aria-invalid={blockedByOrgPermission || Boolean(errors.projectId) ? true : undefined}
-              aria-describedby={
-                blockedByOrgPermission || errors.projectId
-                  ? `${scopeHelpId} ${scopeErrorId}`
-                  : scopeHelpId
-              }
-              defaultValue={defaultScope}
-              {...register('scope')}
-            >
-              {/* Disabled — not removed — without `calendar:manage_org`: an option that silently
+      <FieldGridContainer>
+        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
+          <FormErrorSummary errors={errors} />
+          {mutation.isError ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              {calendarErrorMessage(
+                mutation.error,
+                'Couldn’t save this calendar. Please try again.',
+              )}
+            </p>
+          ) : null}
+
+          {/* Sections as consecutive siblings (ADR-0061): what the calendar IS, then the working week
+            it defines. The week is the calendar's substance, not a field among others. */}
+          <div className="flex flex-col gap-5">
+            <FormSection title="Identity">
+              <TextField
+                label="Name"
+                autoComplete="off"
+                readOnly={readOnly}
+                error={errors.name?.message}
+                {...register('name')}
+              />
+              {showScopeChoice ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={scopeSelectId}>Scope</Label>
+                  <Select
+                    id={scopeSelectId}
+                    aria-invalid={
+                      blockedByOrgPermission || Boolean(errors.projectId) ? true : undefined
+                    }
+                    aria-describedby={
+                      blockedByOrgPermission || errors.projectId
+                        ? `${scopeHelpId} ${scopeErrorId}`
+                        : scopeHelpId
+                    }
+                    defaultValue={defaultScope}
+                    {...register('scope')}
+                  >
+                    {/* Disabled — not removed — without `calendar:manage_org`: an option that silently
                   vanishes teaches nothing, whereas a disabled one plus the note below says exactly
                   what is missing. The API is still the enforcing boundary. */}
-              <option value="ORG" disabled={!canManageOrg}>
-                {CALENDAR_SCOPE_LABELS.ORG} (shared library)
-              </option>
-              {hasProjectContext ? (
-                <option value="PROJECT">
-                  {projectName
-                    ? `${CALENDAR_SCOPE_LABELS.PROJECT}: ${projectName}`
-                    : `This ${CALENDAR_SCOPE_LABELS.PROJECT.toLowerCase()}`}
-                </option>
-              ) : null}
-            </Select>
-            <p id={scopeHelpId} className="text-muted-foreground text-sm">
-              {hasProjectContext
-                ? 'An organisation calendar is shared with every project; a project calendar is only offered inside this project.'
-                : 'Organisation calendars are shared with every project. To add one to a single project, open that project and use its Calendars section.'}
-            </p>
-            {/* One node, linked from the control by `aria-describedby`, so whichever reason applies
+                    <option value="ORG" disabled={!canManageOrg}>
+                      {CALENDAR_SCOPE_LABELS.ORG} (shared library)
+                    </option>
+                    {hasProjectContext ? (
+                      <option value="PROJECT">
+                        {projectName
+                          ? `${CALENDAR_SCOPE_LABELS.PROJECT}: ${projectName}`
+                          : `This ${CALENDAR_SCOPE_LABELS.PROJECT.toLowerCase()}`}
+                      </option>
+                    ) : null}
+                  </Select>
+                  <p id={scopeHelpId} className="text-muted-foreground text-sm">
+                    {hasProjectContext
+                      ? 'An organisation calendar is shared with every project; a project calendar is only offered inside this project.'
+                      : 'Organisation calendars are shared with every project. To add one to a single project, open that project and use its Calendars section.'}
+                  </p>
+                  {/* One node, linked from the control by `aria-describedby`, so whichever reason applies
                 is announced WITH the Select rather than only in the summary above. It is an `alert`
                 only when it actually blocks the submit; when the organisation option is merely
                 disabled beside a usable project option it is an ordinary hint, not an error. */}
-            {blockedByOrgPermission || errors.projectId?.message ? (
-              <p id={scopeErrorId} role="alert" className="text-destructive-text text-sm">
-                {blockedByOrgPermission ? ORG_TIER_DENIED_MESSAGE : errors.projectId?.message}
-              </p>
-            ) : null}
-            {orgTierUnavailable && !blockedByOrgPermission ? (
-              <p id={scopeErrorId} className="text-muted-foreground text-sm">
-                {ORG_TIER_DENIED_MESSAGE}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        {/* No tier is reachable at all: no `<select>` to operate, just the reason (and the submit is
+                  {blockedByOrgPermission || errors.projectId?.message ? (
+                    <p id={scopeErrorId} role="alert" className="text-destructive-text text-sm">
+                      {blockedByOrgPermission ? ORG_TIER_DENIED_MESSAGE : errors.projectId?.message}
+                    </p>
+                  ) : null}
+                  {orgTierUnavailable && !blockedByOrgPermission ? (
+                    <p id={scopeErrorId} className="text-muted-foreground text-sm">
+                      {ORG_TIER_DENIED_MESSAGE}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {/* No tier is reachable at all: no `<select>` to operate, just the reason (and the submit is
             disabled above), so the dialog is never a dead end with an unusable control. */}
-        {noTierAvailable ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {ORG_TIER_DENIED_MESSAGE}
-          </p>
-        ) : null}
-        {/* Editing: the tier is shown, not edited — a `<dl>` so the value is programmatically
+              {noTierAvailable ? (
+                <p role="alert" className="text-destructive-text text-sm">
+                  {ORG_TIER_DENIED_MESSAGE}
+                </p>
+              ) : null}
+              {/* Editing: the tier is shown, not edited — a `<dl>` so the value is programmatically
             associated with its term (the read-only convention used by the plan calendar picker). */}
-        {LIBRARY_SCOPING_ENABLED && isEdit ? (
-          <dl className="flex flex-col gap-1.5">
-            <dt className="text-sm font-medium">Scope</dt>
-            <dd>
-              <CalendarScopeBadge calendar={calendar} {...(projectName ? { projectName } : {})} />
-            </dd>
-          </dl>
-        ) : null}
-        <Controller
-          control={control}
-          name="workingWeekdays"
-          render={({ field }) => (
-            <WeekdayToggleGroup
-              value={field.value}
-              onChange={field.onChange}
-              disabled={readOnly}
-              groupRef={field.ref}
-              error={errors.workingWeekdays?.message}
-            />
-          )}
-        />
-        <TextareaField
-          label="Description (optional)"
-          readOnly={readOnly}
-          error={errors.description?.message}
-          {...register('description')}
-        />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            {readOnly ? 'Close' : 'Cancel'}
-          </Button>
-          {readOnly ? null : (
-            <Button
-              type="submit"
-              disabled={mutation.isPending || blockedByOrgPermission}
-              aria-busy={mutation.isPending}
+              {LIBRARY_SCOPING_ENABLED && isEdit ? (
+                <dl className="flex flex-col gap-1.5">
+                  <dt className="text-sm font-medium">Scope</dt>
+                  <dd>
+                    <CalendarScopeBadge
+                      calendar={calendar}
+                      {...(projectName ? { projectName } : {})}
+                    />
+                  </dd>
+                </dl>
+              ) : null}
+              <TextareaField
+                label="Description"
+                readOnly={readOnly}
+                error={errors.description?.message}
+                {...register('description')}
+              />
+            </FormSection>
+
+            <FormSection
+              title="Working week"
+              description="The days work happens on. Everything scheduled on this calendar counts its duration in these days."
             >
-              {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create calendar'}
+              <Controller
+                control={control}
+                name="workingWeekdays"
+                render={({ field }) => (
+                  <WeekdayToggleGroup
+                    value={field.value}
+                    onChange={field.onChange}
+                    disabled={readOnly}
+                    groupRef={field.ref}
+                    error={errors.workingWeekdays?.message}
+                  />
+                )}
+              />
+            </FormSection>
+          </div>
+
+          <div className="border-border flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              {readOnly ? 'Close' : 'Cancel'}
             </Button>
-          )}
-        </div>
-      </form>
+            {readOnly ? null : (
+              <Button
+                type="submit"
+                disabled={mutation.isPending || blockedByOrgPermission}
+                aria-busy={mutation.isPending}
+              >
+                {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create calendar'}
+              </Button>
+            )}
+          </div>
+        </form>
+      </FieldGridContainer>
 
       {isEdit ? (
         <div className="border-border mt-6 border-t pt-6">

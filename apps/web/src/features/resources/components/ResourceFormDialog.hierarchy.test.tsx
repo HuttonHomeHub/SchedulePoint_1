@@ -74,7 +74,7 @@ function lastBody(): Record<string, unknown> {
   return JSON.parse(init?.body as string) as Record<string, unknown>;
 }
 
-const groupField = (): HTMLElement => screen.getByRole('combobox', { name: 'Group (optional)' });
+const groupField = (): HTMLElement => screen.getByRole('combobox', { name: 'Group' });
 const openGroupField = (): void => {
   fireEvent.keyDown(groupField(), { key: 'ArrowDown' });
 };
@@ -134,7 +134,7 @@ describe('ResourceFormDialog — resource tree (ADR-0053 §3)', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Plant' } });
     // Fill the calendar FIRST, then switch to GROUP: the stale value must not survive.
     fireEvent.change(screen.getByLabelText('Kind'), { target: { value: 'GROUP' } });
-    expect(screen.queryByLabelText('Calendar (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Calendar')).not.toBeInTheDocument();
     expect(screen.getByText(/can’t be assigned to an activity/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create resource' }));
@@ -157,7 +157,7 @@ describe('ResourceFormDialog — resource tree (ADR-0053 §3)', () => {
 
     vi.mocked(apiFetch).mockClear();
     const edit = renderForm({ resource: LIBRARY[2]! });
-    const editField = within(edit.container).getByRole('combobox', { name: 'Group (optional)' });
+    const editField = within(edit.container).getByRole('combobox', { name: 'Group' });
     fireEvent.keyDown(editField, { key: 'ArrowDown' });
     fireEvent.pointerDown(
       within(edit.container).getByRole('option', { name: 'No group (top level)' }),

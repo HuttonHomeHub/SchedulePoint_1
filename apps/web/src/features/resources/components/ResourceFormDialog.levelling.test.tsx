@@ -54,7 +54,7 @@ describe('ResourceFormDialog — levelling capacity (flag on)', () => {
   it('creates a resource carrying the entered capacity', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Excavator' } });
-    fireEvent.change(screen.getByLabelText('Max units/hour (optional)'), {
+    fireEvent.change(screen.getByLabelText('Max units/hour'), {
       target: { value: '3' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create resource' }));
@@ -79,7 +79,7 @@ describe('ResourceFormDialog — levelling capacity (flag on)', () => {
 
   it('seeds the capacity from the row and round-trips it on save', async () => {
     renderDialog({ resource: RESOURCE });
-    expect(screen.getByLabelText('Max units/hour (optional)')).toHaveValue(2);
+    expect(screen.getByLabelText('Max units/hour')).toHaveValue(2);
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -89,7 +89,7 @@ describe('ResourceFormDialog — levelling capacity (flag on)', () => {
 
   it('clears the capacity to null when the field is emptied on edit', async () => {
     renderDialog({ resource: RESOURCE });
-    fireEvent.change(screen.getByLabelText('Max units/hour (optional)'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Max units/hour'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -100,7 +100,7 @@ describe('ResourceFormDialog — levelling capacity (flag on)', () => {
   it('rejects a negative capacity and makes no request', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Crew' } });
-    fireEvent.change(screen.getByLabelText('Max units/hour (optional)'), {
+    fireEvent.change(screen.getByLabelText('Max units/hour'), {
       target: { value: '-1' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create resource' }));

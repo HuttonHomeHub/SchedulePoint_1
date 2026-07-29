@@ -27,6 +27,7 @@ import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
+import { FieldGrid } from '@/components/ui/form-layout';
 import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
 
 /**
@@ -126,30 +127,19 @@ export function ReportedProgressPanel({
           {mutation.error.message}
         </p>
       ) : null}
-      <TextField
-        label="Percent complete"
-        type="number"
-        min={0}
-        max={100}
-        disabled={!gate.writable}
-        error={form.formState.errors.percentComplete?.message}
-        {...form.register('percentComplete', { valueAsNumber: true })}
-      />
-      <TextField
-        label="Actual start"
-        type="date"
-        disabled={!gate.writable}
-        {...form.register('actualStart')}
-      />
-      <TextField
-        label="Actual finish"
-        type="date"
-        disabled={!gate.writable}
-        error={form.formState.errors.actualFinish?.message}
-        {...form.register('actualFinish')}
-      />
-      {PROGRESS_INGESTION_ENABLED ? (
-        <>
+      {/* Two decisions, two groups: how far along it is, and when it actually happened. Flat, the
+          six controls read as one undifferentiated list of numbers and dates. */}
+      <FieldGrid>
+        <TextField
+          label="Percent complete"
+          type="number"
+          min={0}
+          max={100}
+          disabled={!gate.writable}
+          error={form.formState.errors.percentComplete?.message}
+          {...form.register('percentComplete', { valueAsNumber: true })}
+        />
+        {PROGRESS_INGESTION_ENABLED ? (
           <TextField
             label="Remaining duration (days)"
             type="number"
@@ -161,24 +151,44 @@ export function ReportedProgressPanel({
               setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
             })}
           />
-          <TextField
-            label="Suspend date"
-            type="date"
-            disabled={!gate.writable}
-            {...form.register('suspendDate')}
-          />
-          <TextField
-            label="Resume date"
-            type="date"
-            disabled={!gate.writable}
-            error={form.formState.errors.resumeDate?.message}
-            {...form.register('resumeDate')}
-          />
-        </>
-      ) : null}
-      <p className="text-muted-foreground text-sm">
-        Resulting status: <strong className="text-foreground">{deriveStatusLabel(values)}</strong>
-      </p>
+        ) : null}
+        <TextField
+          label="Actual start"
+          type="date"
+          disabled={!gate.writable}
+          {...form.register('actualStart')}
+        />
+        <TextField
+          label="Actual finish"
+          type="date"
+          disabled={!gate.writable}
+          error={form.formState.errors.actualFinish?.message}
+          {...form.register('actualFinish')}
+        />
+        {PROGRESS_INGESTION_ENABLED ? (
+          <>
+            <TextField
+              label="Suspend date"
+              type="date"
+              disabled={!gate.writable}
+              {...form.register('suspendDate')}
+            />
+            <TextField
+              label="Resume date"
+              type="date"
+              disabled={!gate.writable}
+              error={form.formState.errors.resumeDate?.message}
+              {...form.register('resumeDate')}
+            />
+          </>
+        ) : null}
+      </FieldGrid>
+      {/* The consequence of the six fields above, given the same weight as a field rather than
+          trailing off as a sentence — it is the answer to "what did I just say happened?". */}
+      <div className="bg-muted flex items-center justify-between gap-3 rounded-md px-3 py-2">
+        <span className="text-muted-foreground text-sm">Resulting status</span>
+        <strong className="text-sm font-semibold">{deriveStatusLabel(values)}</strong>
+      </div>
       <ScopeSaveBar
         gate={gate}
         dirty={isDirty}
@@ -249,18 +259,41 @@ export function ValueMeasurePanel({
       <FormErrorSummary errors={form.formState.errors} />
       {EARNED_VALUE_ENABLED ? (
         <>
-          <SelectField
-            label="Earn value from"
-            hint={PERCENT_COMPLETE_TYPE_LABELS[measure].description}
-            disabled={!gate.writable}
-            {...form.register('percentCompleteType')}
-          >
-            {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-              <option key={value} value={value}>
-                {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-              </option>
-            ))}
-          </SelectField>
+          {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
+              overriding this" legible at a glance instead of two rows apart. */}
+          <FieldGrid columns="lead">
+            <SelectField
+              label="Earn value from"
+              hint={PERCENT_COMPLETE_TYPE_LABELS[measure].description}
+              disabled={!gate.writable}
+              {...form.register('percentCompleteType')}
+            >
+              {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  {PERCENT_COMPLETE_TYPE_LABELS[value].label}
+                </option>
+              ))}
+            </SelectField>
+
+            <TextField
+              label="Physical % complete"
+              type="number"
+              min={0}
+              max={100}
+              // The reason, never a bare "Read-only" — a disabled control that does not say what
+              // would re-enable it is the dead end this epic set out to remove.
+              hint={
+                stepsWin
+                  ? `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`
+                  : 'The hand-entered physical progress that earns value when the measure is Physical.'
+              }
+              disabled={!gate.writable || stepsWin}
+              error={form.formState.errors.physicalPercentComplete?.message}
+              {...form.register('physicalPercentComplete', {
+                setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
+              })}
+            />
+          </FieldGrid>
 
           {measure === 'UNITS' ? (
             <p className="text-muted-foreground text-sm">
@@ -281,25 +314,6 @@ export function ValueMeasurePanel({
               <strong className="text-foreground">{Math.round(rolled)}%</strong>
             </p>
           ) : null}
-
-          <TextField
-            label="Physical % complete"
-            type="number"
-            min={0}
-            max={100}
-            // The reason, never a bare "Read-only" — a disabled control that does not say what
-            // would re-enable it is the dead end this epic set out to remove.
-            hint={
-              stepsWin
-                ? `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`
-                : 'The hand-entered physical progress that earns value when the measure is Physical.'
-            }
-            disabled={!gate.writable || stepsWin}
-            error={form.formState.errors.physicalPercentComplete?.message}
-            {...form.register('physicalPercentComplete', {
-              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-            })}
-          />
         </>
       ) : null}
       <ScopeSaveBar

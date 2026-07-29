@@ -50,7 +50,7 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
 
   // (2) Create a labelled link; its one-time guest URL surfaces in a read-only field (never rely on
   // clipboard permissions — read the value straight out of the DOM).
-  await dialog.getByLabel('Label (optional)').fill('Client review');
+  await dialog.getByLabel('Label').fill('Client review');
   await dialog.getByRole('button', { name: 'Create link' }).click();
   const urlField = dialog.getByLabel('Guest link');
   await expect(urlField).toBeVisible();

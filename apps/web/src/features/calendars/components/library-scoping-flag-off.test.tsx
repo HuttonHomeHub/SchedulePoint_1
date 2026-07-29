@@ -191,14 +191,14 @@ describe('library scoping — flag off parity', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Calendar (optional)').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Calendar').tagName).toBe('SELECT');
     expect(document.querySelectorAll('optgroup')).toHaveLength(0);
   });
 
   it('the resource calendar picker stays a native select and gains no organisation-only note', () => {
     withClient(<ResourceFormDialog orgSlug="acme" open onClose={vi.fn()} calendars={[ORG]} />);
 
-    expect(screen.getByLabelText('Calendar (optional)').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Calendar').tagName).toBe('SELECT');
     // …and no group picker at all: the resource tree is itself behind the flag (ADR-0053 §3).
     expect(screen.queryByLabelText('Group (optional)')).not.toBeInTheDocument();
     expect(screen.queryByText(/Organisation calendars only/)).not.toBeInTheDocument();

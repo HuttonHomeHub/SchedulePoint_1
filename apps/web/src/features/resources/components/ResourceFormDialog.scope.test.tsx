@@ -72,7 +72,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ResourceFormDia
   );
 }
 
-const field = (): HTMLElement => screen.getByRole('combobox', { name: 'Calendar (optional)' });
+const field = (): HTMLElement => screen.getByRole('combobox', { name: 'Calendar' });
 
 describe('ResourceFormDialog — organisation-only calendars (flag on)', () => {
   beforeEach(() => {

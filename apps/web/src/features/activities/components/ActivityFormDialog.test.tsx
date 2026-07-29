@@ -145,7 +145,7 @@ describe('ActivityFormDialog', () => {
     // The WBS parent picker is hidden (flag off), but the dialog seeds parentId from the row so editing
     // something else must never silently un-nest the activity — same rule as the calendar/constraint seeds.
     renderDialog({ activity: { ...ACTIVITY, parentId: 'wbs-parent-1' } });
-    expect(screen.queryByLabelText('WBS summary (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('WBS summary')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -158,7 +158,7 @@ describe('ActivityFormDialog', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Slab' } });
     expect(screen.queryByLabelText('Constraint date')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Constraint (optional)'), { target: { value: 'SNET' } });
+    fireEvent.change(screen.getByLabelText('Constraint'), { target: { value: 'SNET' } });
     fireEvent.change(screen.getByLabelText('Constraint date'), { target: { value: '2026-06-01' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
@@ -169,7 +169,7 @@ describe('ActivityFormDialog', () => {
 
   it('offers only the six honoured constraint types (no parked MANDATORY_*)', () => {
     renderDialog();
-    const select = screen.getByLabelText('Constraint (optional)');
+    const select = screen.getByLabelText('Constraint');
     const values = within(select)
       .getAllByRole('option')
       .map((o) => (o as HTMLOptionElement).value);
@@ -190,7 +190,7 @@ describe('ActivityFormDialog', () => {
       calendarId: null,
     };
     renderDialog({ activity: parked });
-    const select = screen.getByLabelText('Constraint (optional)');
+    const select = screen.getByLabelText('Constraint');
     // The current value is shown as an honest, pre-selected option (not silently changed to MSO).
     expect(select).toHaveValue('MANDATORY_START');
     expect(
@@ -214,7 +214,7 @@ describe('ActivityFormDialog', () => {
       calendarId: null,
     };
     renderDialog({ activity: parked });
-    const select = screen.getByLabelText('Constraint (optional)');
+    const select = screen.getByLabelText('Constraint');
     expect(within(select).getAllByRole('option')).toHaveLength(8); // None + 6 + the parked one
     fireEvent.change(select, { target: { value: 'FNLT' } });
     // The honest legacy option disappears — the planner can't re-pick a parked type.
@@ -227,9 +227,9 @@ describe('ActivityFormDialog', () => {
   it('seeds edit mode and clears the constraint by sending nulls with the version', async () => {
     renderDialog({ activity: ACTIVITY });
     expect(screen.getByLabelText('Name')).toHaveValue('Excavate');
-    expect(screen.getByLabelText('Constraint (optional)')).toHaveValue('SNET');
+    expect(screen.getByLabelText('Constraint')).toHaveValue('SNET');
     // Remove the constraint.
-    fireEvent.change(screen.getByLabelText('Constraint (optional)'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Constraint'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());

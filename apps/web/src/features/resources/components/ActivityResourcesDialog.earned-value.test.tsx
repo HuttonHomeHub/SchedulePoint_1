@@ -134,10 +134,10 @@ describe('ActivityResourcesDialog — cost & actuals (flag on)', () => {
     renderDialog([]);
     fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
     fireEvent.change(screen.getByLabelText('Budgeted units'), { target: { value: '100' } });
-    fireEvent.change(screen.getByLabelText('Budgeted cost (optional)'), {
+    fireEvent.change(screen.getByLabelText('Budgeted cost'), {
       target: { value: '750' },
     });
-    fireEvent.change(screen.getByLabelText('Actual units (optional)'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Actual units'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());

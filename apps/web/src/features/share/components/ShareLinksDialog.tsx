@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/form';
+import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { formatCalendarDate, formatTimestamp } from '@/lib/format-date';
 
 /** Human state for a link — active, revoked, or expired (a link past its `expiresAt` but not revoked). */
@@ -248,53 +249,67 @@ export function ShareLinksDialog({
       title="Share links"
       description="Create revocable, read-only links so people outside your organisation can view this plan. Anyone with a link can see the schedule until you revoke it."
     >
-      <div className="flex flex-col gap-6">
-        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-          {create.isError ? (
-            <p role="alert" className="text-destructive-text text-sm">
-              {createShareErrorMessage(create.error)}
-            </p>
-          ) : null}
-          <div className="flex flex-col gap-4">
-            <TextField
-              label="Label (optional)"
-              autoComplete="off"
-              placeholder="e.g. Client review – Acme"
-              error={errors.label?.message}
-              {...register('label')}
-            />
-            <TextField
-              label="Expires (optional)"
-              type="date"
-              min={minDate}
-              max={maxDate}
-              hint={`Leave blank for no expiry. Up to a year out (by ${formatCalendarDate(maxDate)}).`}
-              error={errors.expiryDate?.message}
-              {...register('expiryDate')}
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
-              {create.isPending ? 'Creating…' : 'Create link'}
-            </Button>
-          </div>
-        </form>
+      <FieldGridContainer className="flex flex-col gap-5">
+        {/* Existing links first, then the form that adds one (ADR-0061, the list/manage shape). The
+            previous order put a creation form above a table of what already existed, so the first
+            thing a planner saw was a way to make another link rather than the ones already live. */}
+        <FormSection title="Existing links">
+          <DataTable
+            caption="Share links"
+            columns={columns}
+            query={shares}
+            getRowKey={(s) => s.id}
+            loadingLabel="Loading share links…"
+            errorLabel="Couldn’t load share links. Please try again."
+            empty={
+              <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+                No share links yet. Create one to give someone read-only access to this plan.
+              </div>
+            }
+          />
+        </FormSection>
 
         {created ? <CreatedLinkPanel key={created.share.id} created={created} /> : null}
 
-        <DataTable
-          caption="Share links"
-          columns={columns}
-          query={shares}
-          getRowKey={(s) => s.id}
-          loadingLabel="Loading share links…"
-          errorLabel="Couldn’t load share links. Please try again."
-          empty={
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-              No share links yet. Create one to give someone read-only access to this plan.
+        <FormSection
+          title="New link"
+          description="A label is for your own reference; it is never shown to the guest."
+        >
+          <form
+            noValidate
+            onSubmit={(event) => void onSubmit(event)}
+            className="flex flex-col gap-4"
+          >
+            {create.isError ? (
+              <p role="alert" className="text-destructive-text text-sm">
+                {createShareErrorMessage(create.error)}
+              </p>
+            ) : null}
+            <FieldGrid columns="lead">
+              <TextField
+                label="Label"
+                autoComplete="off"
+                placeholder="e.g. Client review – Acme"
+                error={errors.label?.message}
+                {...register('label')}
+              />
+              <TextField
+                label="Expires"
+                type="date"
+                min={minDate}
+                max={maxDate}
+                hint={`Leave blank for no expiry. Up to a year out (by ${formatCalendarDate(maxDate)}).`}
+                error={errors.expiryDate?.message}
+                {...register('expiryDate')}
+              />
+            </FieldGrid>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
+                {create.isPending ? 'Creating…' : 'Create link'}
+              </Button>
             </div>
-          }
-        />
+          </form>
+        </FormSection>
 
         <ConfirmDialog
           open={revoking !== null}
@@ -314,7 +329,7 @@ export function ShareLinksDialog({
           pendingLabel="Revoking…"
           error={revokeError}
         />
-      </div>
+      </FieldGridContainer>
     </Dialog>
   );
 }

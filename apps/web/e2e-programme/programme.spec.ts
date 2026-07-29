@@ -48,10 +48,12 @@ test('a planner links plans across projects and recalculates the programme', asy
 
   // The endpoint picker cascade: client → project → plan → activity (in the other plan).
   const add = page.getByRole('dialog', { name: 'Add cross-plan link' });
-  await add.getByLabel('Client').selectOption({ label: 'Northgate' });
-  await add.getByLabel('Project').selectOption({ label: 'Riverside' });
-  await add.getByLabel('Plan').selectOption({ label: 'Procurement' });
-  await add.getByLabel('Activity').selectOption({ label: 'Deliver steel' });
+  // `exact` because the enclosing `FormSection` is a named `role="group"` (ADR-0061), so its own
+  // accessible name — "Upstream activity" — is a substring match for the `Activity` field.
+  await add.getByLabel('Client', { exact: true }).selectOption({ label: 'Northgate' });
+  await add.getByLabel('Project', { exact: true }).selectOption({ label: 'Riverside' });
+  await add.getByLabel('Plan', { exact: true }).selectOption({ label: 'Procurement' });
+  await add.getByLabel('Activity', { exact: true }).selectOption({ label: 'Deliver steel' });
   await add.getByRole('button', { name: 'Add cross-plan link' }).click();
 
   // The add succeeds and the link is created. The durable, deterministic signal is the **programme

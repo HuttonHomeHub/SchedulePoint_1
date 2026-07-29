@@ -98,10 +98,10 @@ describe('ActivityFormDialog — External dates (flag on)', () => {
   it('creates an activity carrying both external dates', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Procure valves' } });
-    fireEvent.change(screen.getByLabelText('External early start (optional)'), {
+    fireEvent.change(screen.getByLabelText('External early start'), {
       target: { value: '2026-02-01' },
     });
-    fireEvent.change(screen.getByLabelText('External late finish (optional)'), {
+    fireEvent.change(screen.getByLabelText('External late finish'), {
       target: { value: '2026-03-01' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
@@ -130,10 +130,10 @@ describe('ActivityFormDialog — External dates (flag on)', () => {
   it('rejects an inverted window client-side (N26) and does not submit', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Inverted' } });
-    fireEvent.change(screen.getByLabelText('External early start (optional)'), {
+    fireEvent.change(screen.getByLabelText('External early start'), {
       target: { value: '2026-03-01' },
     });
-    fireEvent.change(screen.getByLabelText('External late finish (optional)'), {
+    fireEvent.change(screen.getByLabelText('External late finish'), {
       target: { value: '2026-02-01' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
@@ -148,8 +148,8 @@ describe('ActivityFormDialog — External dates (flag on)', () => {
 
   it('seeds both dates from the row and round-trips them on save', async () => {
     renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('External early start (optional)')).toHaveValue('2026-02-01');
-    expect(screen.getByLabelText('External late finish (optional)')).toHaveValue('2026-03-01');
+    expect(screen.getByLabelText('External early start')).toHaveValue('2026-02-01');
+    expect(screen.getByLabelText('External late finish')).toHaveValue('2026-03-01');
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -163,7 +163,7 @@ describe('ActivityFormDialog — External dates (flag on)', () => {
 
   it('clears an external date to null when the field is emptied on edit', async () => {
     renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('External late finish (optional)'), {
+    fireEvent.change(screen.getByLabelText('External late finish'), {
       target: { value: '' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));

@@ -101,10 +101,10 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
     fireEvent.change(screen.getByLabelText('% complete type'), { target: { value: 'UNITS' } });
-    fireEvent.change(screen.getByLabelText('Budgeted expense (optional)'), {
+    fireEvent.change(screen.getByLabelText('Budgeted expense'), {
       target: { value: '1000' },
     });
-    fireEvent.change(screen.getByLabelText('Actual expense (optional)'), {
+    fireEvent.change(screen.getByLabelText('Actual expense'), {
       target: { value: '250.50' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
@@ -135,17 +135,17 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
   it('shows the physical %-field only for the PHYSICAL measure', () => {
     renderDialog();
     // Default DURATION — no physical field.
-    expect(screen.queryByLabelText('Physical % complete (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Physical % complete')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('% complete type'), { target: { value: 'PHYSICAL' } });
-    expect(screen.getByLabelText('Physical % complete (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Physical % complete')).toBeInTheDocument();
   });
 
   it('seeds the fields (minor → major) from the row and round-trips them on save', async () => {
     renderDialog({ activity: ACTIVITY });
     expect(screen.getByLabelText('% complete type')).toHaveValue('PHYSICAL');
-    expect(screen.getByLabelText('Physical % complete (optional)')).toHaveValue(40);
-    expect(screen.getByLabelText('Budgeted expense (optional)')).toHaveValue(2500);
-    expect(screen.getByLabelText('Actual expense (optional)')).toHaveValue(1000);
+    expect(screen.getByLabelText('Physical % complete')).toHaveValue(40);
+    expect(screen.getByLabelText('Budgeted expense')).toHaveValue(2500);
+    expect(screen.getByLabelText('Actual expense')).toHaveValue(1000);
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -161,7 +161,7 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
 
   it('clears a blank expense to null on edit', async () => {
     renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('Budgeted expense (optional)'), {
+    fireEvent.change(screen.getByLabelText('Budgeted expense'), {
       target: { value: '' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -175,6 +175,6 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
     expect(screen.queryByLabelText('% complete type')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Budgeted expense (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Budgeted expense')).not.toBeInTheDocument();
   });
 });
