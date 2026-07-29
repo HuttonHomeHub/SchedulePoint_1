@@ -21,7 +21,7 @@ browser-native team use. See the full product context in
 
 > **Current stage: the application is substantially built.** 19 API modules
 > (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~590 web
-> source files with 16 flag-scoped Playwright suites, and 59 ADRs. The CPM/GPM
+> source files with 17 flag-scoped Playwright suites, and 60 ADRs. The CPM/GPM
 > engine is real and its conformance matrix is closed (ADR-0034). Read the code
 > before assuming anything is missing — this banner said the opposite for months
 > after it stopped being true, which is exactly the failure it now warns against.
@@ -763,6 +763,38 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   reason) — and added the flag-on journey `apps/web/e2e-gantt/` with its own CI step,
   including the browser-measured proof that the live row count is bounded by the
   viewport and not the plan. **M5 (editing) stays deferred by design.**
+
+- **ADR-0060** _(Accepted; M0–M6 landed, `VITE_ACTIVITY_EDITOR_TABS` **default-on** 2026-07-29)_ —
+  The tabbed activity editor, per-scope save, the steps edit-lock gate, and the co-located progress
+  model. The load-bearing decision is that the editor saves **per write scope, not per dialog**,
+  because the scopes it spans do not share a permission: definition writes need the pen (ADR-0028),
+  progress writes deliberately do not (Q-C), and steps joined the pen side here — so one merged Save
+  would have to pick one rule and would quietly remove a Contributor's ability to report progress
+  while a Planner holds the lock. Per-scope save is structural, not a layout preference, and the
+  three Save buttons on the Progress tab are its honest consequence. **M0 is the one API change**
+  (`PUT …/steps` now asserts `assertHoldsPen`, closing a client/server disagreement the client had
+  always assumed); it is not behind the flag, because a `VITE_` constant is a client build-time
+  value and cannot gate a server check. Progress is co-located because it was spread across four
+  dialogs — the schedule % that moves dates, the physical % that earns value and moves nothing, the
+  weighted steps that silently override it, and the selector choosing between them, which sat in a
+  fifth place. All three entry points (**Edit** / **Report progress** / **Steps**) now build one
+  `ActivityEditorIntent` and open one editor, with the per-scope gate derived **once** by the plan
+  workspace: `canEditSchedule` has already fused role and pen into one boolean, so a host given only
+  that cannot say which is missing and would eventually differ from its sibling.
+  **M6 is the epic's own premise landing on itself.** Four specialist reviews over the combined diff
+  found six defects in code that had already passed a human read — a dropped calendar `Combobox`
+  with its loading/error states and `RESOURCE_DEPENDENT` reason (a field that renders, looks right,
+  and reports a calendar the activity does not have); Save buttons on native `disabled`, which blurs
+  to `<body>` and flips twice per save; a reason sentence beside its control rather than
+  `aria-describedby`-linked to it; an invented pen message that was **false** whenever nobody held
+  the pen; no confirmation before discarding unsaved work across three independently-dirty scopes;
+  and a save bar duplicated across two files, already diverging in how it typed its gate. All six
+  folded with regression tests, plus a flag-on Playwright journey (`apps/web/e2e-activity-editor/`,
+  its own CI step) that proves the permission model against a real API with the pen enforced — the
+  only place the optimistic-`version` trap can be tested, since a mocked fetch accepts any version.
+  Two findings are recorded rather than rushed (TECH_DEBT #63/#64), and the Cost-tab doc drift is
+  resolved **toward the code**: hiding a tab whose values the reader may not see beats shading it,
+  which would claim the activity has no cost. Supersedes nothing; builds on ADR-0028/0042/0044/0053.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
