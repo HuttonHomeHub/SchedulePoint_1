@@ -34,7 +34,7 @@ import {
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
-import { ScopeSaveBar } from './ScopeSaveBar';
+import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';

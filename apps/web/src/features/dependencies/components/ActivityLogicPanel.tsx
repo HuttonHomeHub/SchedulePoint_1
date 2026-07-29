@@ -4,13 +4,13 @@ import { flushSync } from 'react-dom';
 
 import { useDeleteDependency, usePredecessors, useSuccessors } from '../api/use-dependencies';
 
-import { AddDependencyDialog, type LinkDirection } from './AddDependencyDialog';
+import { AddLinkSection } from './AddLinkSection';
 import { DependencyTable } from './DependencyTable';
 import { EditDependencyDialog } from './EditDependencyDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { FieldGridContainer } from '@/components/ui/form-layout';
 
 /**
  * The Logic surface for one activity — its predecessors (what must come before) and
@@ -33,6 +33,7 @@ export function ActivityLogicPanel({
   activity,
   planActivities,
   canManageLogic = false,
+  manageLogicReason,
   enabled = true,
   onRemoved,
   onNudgeLag,
@@ -47,6 +48,14 @@ export function ActivityLogicPanel({
   /** The plan's activities, for the add picker (self is excluded here). */
   planActivities?: ActivitySummary[];
   canManageLogic?: boolean;
+  /**
+   * Why this member cannot add or change links, when {@link canManageLogic} is false. Supplying it
+   * **shows** the Add a link section shaded with the reason (the house shade-with-a-reason rule);
+   * omitting it hides the section entirely, which is what a Viewer should see and what every host
+   * does today. Only a host that can tell role from pen apart should pass one — a fused boolean
+   * cannot, and an invented sentence is worse than none (ADR-0060 M6).
+   */
+  manageLogicReason?: string;
   /**
    * Whether this surface is currently showing. False keeps the panel mounted but idle — no
    * dependency queries are issued — for a host that mounts it before it is visible. Default true,
@@ -114,7 +123,6 @@ export function ActivityLogicPanel({
     heading.focus();
   }, [enabled, revealNotes, notesHeadingRef]);
 
-  const [adding, setAdding] = useState<LinkDirection | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -122,6 +130,11 @@ export function ActivityLogicPanel({
   const others = activity
     ? (planActivities ?? []).filter((candidate) => candidate.id !== activity.id)
     : [];
+
+  // Shown to anyone who may add links, and to a member the host can explain the refusal to.
+  // Without a reason it stays hidden — a shaded form with no explanation is the dead end the
+  // house rule forbids, and a Viewer should not see one at all.
+  const showAddSection = canManageLogic || manageLogicReason !== undefined;
 
   // Look the edit/remove targets up by id from the live query each render, so a
   // 409 retry (after a concurrent edit) carries the refreshed version, not a
@@ -169,69 +182,59 @@ export function ActivityLogicPanel({
 
   return (
     <>
-      <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-6 outline-none">
-        {/* Advertise the lag-nudge chord (ADR-0052 M3) — a non-hover, in-context hint, since the
-            canvas-scoped shortcuts sheet doesn't cover this panel. Rendered only when the nudge
-            is wired, so the panel is byte-identical otherwise. */}
-        {canManageLogic && onNudgeLag ? (
-          <p className="text-muted-foreground text-xs">
-            Tip: with a link’s Edit or Remove button focused, Shift + ← / → nudges that link’s lag
-            by one day.
-          </p>
-        ) : null}
-        <section className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-4">
+      <div ref={regionRef} tabIndex={-1} className="outline-none">
+        <FieldGridContainer className="flex flex-col gap-6">
+          {/* Advertise the lag-nudge chord (ADR-0052 M3) — a non-hover, in-context hint, since the
+              canvas-scoped shortcuts sheet doesn't cover this panel. Rendered only when the nudge
+              is wired, so the panel is byte-identical otherwise. */}
+          {canManageLogic && onNudgeLag ? (
+            <p className="text-muted-foreground text-xs">
+              Tip: with a link’s Edit or Remove button focused, Shift + ← / → nudges that link’s lag
+              by one day.
+            </p>
+          ) : null}
+          <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Predecessors</h3>
-            {canManageLogic ? (
-              <Button variant="outline" size="sm" onClick={() => setAdding('predecessor')}>
-                Add predecessor
-              </Button>
-            ) : null}
-          </div>
-          <DependencyTable
-            query={predecessors}
-            endpoint="predecessor"
-            caption="Predecessors"
-            emptyLabel="No predecessors — nothing has to finish before this activity."
-            {...editHandlers}
-          />
-        </section>
-        <section className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-4">
+            <DependencyTable
+              query={predecessors}
+              endpoint="predecessor"
+              caption="Predecessors"
+              emptyLabel="No predecessors — nothing has to finish before this activity."
+              {...editHandlers}
+            />
+          </section>
+          <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Successors</h3>
-            {canManageLogic ? (
-              <Button variant="outline" size="sm" onClick={() => setAdding('successor')}>
-                Add successor
-              </Button>
-            ) : null}
-          </div>
-          <DependencyTable
-            query={successors}
-            endpoint="successor"
-            caption="Successors"
-            emptyLabel="No successors — this activity doesn’t drive anything yet."
-            {...editHandlers}
-          />
-        </section>
-        {/* Cross-plan links (ADR-0045) — passed by the composition root only when
-            VITE_PROGRAMME_SCHEDULING is on; absent (byte-identical) otherwise. */}
-        {crossPlanSlot}
-        {/* Notes (ADR-0046) — passed by the composition root only when VITE_NOTES is on; absent
-            (byte-identical) otherwise. */}
-        {notesSlot}
+            <DependencyTable
+              query={successors}
+              endpoint="successor"
+              caption="Successors"
+              emptyLabel="No successors — this activity doesn’t drive anything yet."
+              {...editHandlers}
+            />
+          </section>
+          {/* What exists, then the form that adds to it (ADR-0061 §2). The two "Add …" buttons
+              that used to sit beside these headings opened a second dialog on top of this one. */}
+          {showAddSection ? (
+            <AddLinkSection
+              orgSlug={orgSlug}
+              planId={planId}
+              options={others}
+              gate={{ writable: canManageLogic, reason: manageLogicReason ?? null }}
+              {...(activity ? { anchor: activity } : {})}
+            />
+          ) : null}
+          {/* Cross-plan links (ADR-0045) — passed by the composition root only when
+              VITE_PROGRAMME_SCHEDULING is on; absent (byte-identical) otherwise. */}
+          {crossPlanSlot}
+          {/* Notes (ADR-0046) — passed by the composition root only when VITE_NOTES is on; absent
+              (byte-identical) otherwise. */}
+          {notesSlot}
+        </FieldGridContainer>
       </div>
 
       {canManageLogic ? (
         <>
-          <AddDependencyDialog
-            orgSlug={orgSlug}
-            planId={planId}
-            direction={adding ?? 'predecessor'}
-            options={others}
-            open={adding !== null}
-            onClose={() => setAdding(null)}
-            {...(activity ? { anchor: activity } : {})}
-          />
           <EditDependencyDialog
             orgSlug={orgSlug}
             open={editing !== undefined}

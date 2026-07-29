@@ -1,7 +1,5 @@
 import { useId } from 'react';
 
-import type { ScopeGate } from '../lib/activity-editor-gating';
-
 import { Button } from '@/components/ui/button';
 
 /**
@@ -14,8 +12,13 @@ import { Button } from '@/components/ui/button';
  * identical bar, and the first draft shipped it twice — in two files, already diverging in how they
  * typed `gate` (one narrowed it to an inline `{writable, reason}` and dropped `readable`). That is
  * the `SelectField` history repeating on day one: the repo has a hand-assembled label+control block
- * that was written thirty-three times before someone extracted it. One component, seven callers —
- * which is also why the two accessibility fixes below are one change rather than seven.
+ * that was written thirty-three times before someone extracted it. One component, eight callers —
+ * which is also why the two accessibility fixes below are one change rather than eight.
+ *
+ * It lives in `components/ui/` rather than in the activities feature because the eighth caller is
+ * the Logic panel's **Add a link** section, in another feature: leaving it where it was would have
+ * had two feature barrels importing each other. `gate` is typed structurally (`writable` +
+ * `reason`), so an editor `ScopeGate` still satisfies it and no existing caller changed.
  *
  * **`aria-disabled`, not the native attribute** (the `RecalculateButton` precedent). A natively
  * disabled button is blurred to `<body>` the instant it flips — and this one flips on *every* save,
@@ -36,8 +39,14 @@ export function ScopeSaveBar({
   pending,
   saved = false,
   label,
+  dirtyMessage = 'Unsaved changes in this section.',
+  savedMessage = 'Saved.',
 }: {
-  gate: ScopeGate;
+  /**
+   * May the caller write, and — when not — why. Typed structurally so both the editor's `ScopeGate`
+   * and a one-off `{ writable, reason }` satisfy it without either side importing the other.
+   */
+  gate: { writable: boolean; reason: string | null };
   /** The scope has unsaved edits. A clean scope's Save is inert with no reason — nothing to say. */
   dirty: boolean;
   pending: boolean;
@@ -53,16 +62,19 @@ export function ScopeSaveBar({
   saved?: boolean;
   /** The button's text, e.g. "Save progress". Scope-specific so three Saves are tellable apart. */
   label: string;
+  /**
+   * What to say while there are unsaved edits. Defaults to the editor's sentence; a **create** form
+   * overrides it — "Unsaved changes in this section" describes an edit to something that already
+   * exists, and a half-filled new-link form is not that. `null` says nothing at all, for a surface
+   * where the result is its own feedback (a new row appearing in the list above the form).
+   */
+  dirtyMessage?: string | null;
+  /** What to say after a successful write. Overridden for the same reason as {@link dirtyMessage}. */
+  savedMessage?: string | null;
 }): React.ReactElement {
   const reasonId = useId();
   const blocked = !gate.writable || !dirty || pending;
-  const reason = gate.writable
-    ? dirty
-      ? 'Unsaved changes in this section.'
-      : saved
-        ? 'Saved.'
-        : null
-    : gate.reason;
+  const reason = gate.writable ? (dirty ? dirtyMessage : saved ? savedMessage : null) : gate.reason;
 
   return (
     <div className="border-border flex items-center justify-between gap-4 border-t pt-4">

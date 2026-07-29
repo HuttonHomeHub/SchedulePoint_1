@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
-import { expectInert } from './scope-save-bar-assertions';
+import { expectInert } from '@/components/ui/scope-save-bar-assertions';
 
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 

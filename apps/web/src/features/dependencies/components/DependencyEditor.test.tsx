@@ -89,6 +89,7 @@ function renderEditor(
   successors: DependencySummary[],
   canManageLogic = false,
 ) {
+  const others = [{ ...ACTIVITY, id: 'a1', code: 'A10', name: 'Excavate' }];
   const queryClient = new QueryClient();
   queryClient.setQueryData(dependencyKeys.predecessors('acme', 'b1'), predecessors);
   queryClient.setQueryData(dependencyKeys.successors('acme', 'b1'), successors);
@@ -98,6 +99,7 @@ function renderEditor(
         orgSlug="acme"
         planId="pl1"
         activity={ACTIVITY}
+        planActivities={others}
         canManageLogic={canManageLogic}
         open
         onClose={() => {}}
@@ -154,14 +156,15 @@ describe('DependencyEditor', () => {
 
   it('hides write affordances for a reader', () => {
     renderEditor([link()], []);
-    expect(screen.queryByRole('button', { name: 'Add predecessor' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Add a link' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Edit link/ })).not.toBeInTheDocument();
   });
 
-  it('shows add/edit/remove affordances for a logic manager', () => {
+  it('shows the inline add form and the edit/remove affordances for a logic manager', () => {
     renderEditor([link()], [], true);
-    expect(screen.getByRole('button', { name: 'Add predecessor' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add successor' })).toBeInTheDocument();
+    // Adding is a section below the tables, not a second dialog opened over this one (ADR-0061 §2).
+    expect(screen.getByRole('group', { name: 'Add a link' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add link' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit link to Excavate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove link to Excavate' })).toBeInTheDocument();
   });

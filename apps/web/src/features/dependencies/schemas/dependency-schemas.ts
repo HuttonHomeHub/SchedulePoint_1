@@ -92,13 +92,29 @@ export const typeAndLagSchema = z.object({
 
 export type TypeAndLagValues = z.infer<typeof typeAndLagSchema>;
 
+/** Which side of the new link the activity being edited sits on. */
+export const LINK_DIRECTIONS = ['predecessor', 'successor'] as const;
+
+export type LinkDirection = (typeof LINK_DIRECTIONS)[number];
+
 /**
- * Add-dependency form schema. `otherActivityId` is the far endpoint chosen from
- * the plan's activities; the predecessor/successor roles are decided by which
- * direction the dialog is opened in, not by the form.
+ * Human labels for the direction selector. `predecessor` means "the activity I choose comes
+ * **before** this one" — the same reading as the Predecessors table above the form.
+ */
+export const LINK_DIRECTION_LABELS: Record<LinkDirection, string> = {
+  predecessor: 'A predecessor — it comes before this activity',
+  successor: 'A successor — this activity drives it',
+};
+
+/**
+ * Add-dependency form schema. `otherActivityId` is the far endpoint chosen from the plan's
+ * activities and `direction` decides which of the two is the predecessor — it was carried by
+ * *which button you pressed* while adding opened a dialog, and is a field now that the form is
+ * inline (ADR-0061's list/manage archetype).
  */
 export const dependencyFormSchema = typeAndLagSchema.extend({
   otherActivityId: z.string().min(1, 'Choose an activity.'),
+  direction: z.enum(LINK_DIRECTIONS),
 });
 
 export type DependencyFormValues = z.infer<typeof dependencyFormSchema>;

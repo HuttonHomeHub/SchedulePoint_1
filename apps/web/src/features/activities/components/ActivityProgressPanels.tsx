@@ -22,7 +22,7 @@ import {
 } from '../schemas/step-schemas';
 
 import { seedMeasure } from './activity-editor-seeds';
-import { ScopeSaveBar } from './ScopeSaveBar';
+import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
