@@ -95,9 +95,11 @@ export async function drawTask(
 
 /**
  * Assign an already-created library resource to a drawn activity through the real "Resources" row
- * action (the same dialog `ActivityResourcesDialog` used everywhere resources are assigned) — expanding
- * the collapsed-by-default activities panel first, like the toolbar suite's `addActivity` helper.
- * Budgeted units seed the resource histogram this suite reads.
+ * action — expanding the collapsed-by-default activities panel first, like the toolbar suite's
+ * `addActivity` helper. With the activity-editor convergence flag default-on (ADR-0062), this opens
+ * the tabbed activity editor on its Resources tab (titled with the activity's own name) rather than
+ * the standalone `ActivityResourcesDialog`, which is now the flag-off fallback. Budgeted units seed
+ * the resource histogram this suite reads.
  */
 export async function assignResource(
   page: Page,
@@ -110,7 +112,7 @@ export async function assignResource(
   await page.getByRole('button', { name: `Actions for ${activityName}` }).click();
   await page.getByRole('menuitem', { name: 'Resources' }).click();
 
-  const dialog = page.getByRole('dialog', { name: 'Resources' });
+  const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   // The assign form's resource picker lists each unassigned library resource as "<name> (<kind>)"; a
   // freshly created resource defaults to Labour. Behind `VITE_LIBRARY_SCOPING` it is the shared APG
