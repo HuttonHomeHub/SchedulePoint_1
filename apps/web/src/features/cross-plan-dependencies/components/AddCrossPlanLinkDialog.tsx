@@ -20,6 +20,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
+import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { ApiFetchError } from '@/lib/api/client';
 import {
   clientsQueryOptions,
@@ -181,162 +182,183 @@ export function AddCrossPlanLinkDialog({
           : ''
       }
     >
-      <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-        <FormErrorSummary errors={errors} />
-        {create.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {crossPlanErrorMessage(create.error)}
-          </p>
-        ) : null}
+      <FieldGridContainer>
+        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
+          <FormErrorSummary errors={errors} />
+          {create.isError ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              {crossPlanErrorMessage(create.error)}
+            </p>
+          ) : null}
 
-        {/* The endpoint picker: narrow down to an activity in another plan, client → project → plan
+          {/* The endpoint picker: narrow down to an activity in another plan, client → project → plan
             → activity. Each level clears the levels below it so a stale leaf can't be submitted. */}
-        <fieldset className="border-border m-0 flex flex-col gap-4 rounded-lg border p-4">
-          <legend className="px-1 text-sm font-medium">Upstream activity (another plan)</legend>
+          <div className="flex flex-col gap-5">
+            <FormSection
+              title="Upstream activity"
+              description="Narrow down to the activity in another plan that drives this one."
+            >
+              <SelectField
+                label="Client"
+                id="cross-plan-client"
+                error={
+                  errors.clientId?.message ??
+                  (clients.isError ? 'Couldn\u2019t load clients. Please try again.' : undefined)
+                }
+                {...alertIfLoadFailed(!errors.clientId && clients.isError)}
+                {...clientReg}
+                onChange={(event) => {
+                  void clientReg.onChange(event);
+                  setValue('projectId', '');
+                  setValue('predecessorPlanId', '');
+                  setValue('predecessorActivityId', '');
+                }}
+              >
+                <option value="" disabled>
+                  {clients.isPending ? 'Loading clients\u2026' : 'Choose a client\u2026'}
+                </option>
+                {(clients.data ?? []).map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </SelectField>
 
-          <SelectField
-            label="Client"
-            id="cross-plan-client"
-            error={
-              errors.clientId?.message ??
-              (clients.isError ? 'Couldn\u2019t load clients. Please try again.' : undefined)
-            }
-            {...alertIfLoadFailed(!errors.clientId && clients.isError)}
-            {...clientReg}
-            onChange={(event) => {
-              void clientReg.onChange(event);
-              setValue('projectId', '');
-              setValue('predecessorPlanId', '');
-              setValue('predecessorActivityId', '');
-            }}
-          >
-            <option value="" disabled>
-              {clients.isPending ? 'Loading clients\u2026' : 'Choose a client\u2026'}
-            </option>
-            {(clients.data ?? []).map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </SelectField>
+              <SelectField
+                label="Project"
+                id="cross-plan-project"
+                disabled={clientId === ''}
+                error={
+                  errors.projectId?.message ??
+                  (projects.isError ? 'Couldn\u2019t load projects. Please try again.' : undefined)
+                }
+                {...alertIfLoadFailed(!errors.projectId && projects.isError)}
+                {...projectReg}
+                onChange={(event) => {
+                  void projectReg.onChange(event);
+                  setValue('predecessorPlanId', '');
+                  setValue('predecessorActivityId', '');
+                }}
+              >
+                <option value="" disabled>
+                  {projects.isPending && clientId !== ''
+                    ? 'Loading projects\u2026'
+                    : 'Choose a project\u2026'}
+                </option>
+                {(projects.data ?? []).map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </SelectField>
 
-          <SelectField
-            label="Project"
-            id="cross-plan-project"
-            disabled={clientId === ''}
-            error={
-              errors.projectId?.message ??
-              (projects.isError ? 'Couldn\u2019t load projects. Please try again.' : undefined)
-            }
-            {...alertIfLoadFailed(!errors.projectId && projects.isError)}
-            {...projectReg}
-            onChange={(event) => {
-              void projectReg.onChange(event);
-              setValue('predecessorPlanId', '');
-              setValue('predecessorActivityId', '');
-            }}
-          >
-            <option value="" disabled>
-              {projects.isPending && clientId !== ''
-                ? 'Loading projects\u2026'
-                : 'Choose a project\u2026'}
-            </option>
-            {(projects.data ?? []).map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </SelectField>
+              <SelectField
+                label="Plan"
+                id="cross-plan-plan"
+                disabled={projectId === ''}
+                error={
+                  errors.predecessorPlanId?.message ??
+                  (plans.isError ? 'Couldn\u2019t load plans. Please try again.' : undefined)
+                }
+                {...alertIfLoadFailed(!errors.predecessorPlanId && plans.isError)}
+                {...(projectId !== '' &&
+                !plans.isPending &&
+                !plans.isError &&
+                planOptions.length === 0
+                  ? { hint: 'No other plans in this project to link to.' }
+                  : {})}
+                {...planReg}
+                onChange={(event) => {
+                  void planReg.onChange(event);
+                  setValue('predecessorActivityId', '');
+                }}
+              >
+                <option value="" disabled>
+                  {plans.isPending && projectId !== ''
+                    ? 'Loading plans\u2026'
+                    : 'Choose a plan\u2026'}
+                </option>
+                {planOptions.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </option>
+                ))}
+              </SelectField>
 
-          <SelectField
-            label="Plan"
-            id="cross-plan-plan"
-            disabled={projectId === ''}
-            error={
-              errors.predecessorPlanId?.message ??
-              (plans.isError ? 'Couldn\u2019t load plans. Please try again.' : undefined)
-            }
-            {...alertIfLoadFailed(!errors.predecessorPlanId && plans.isError)}
-            {...(projectId !== '' && !plans.isPending && !plans.isError && planOptions.length === 0
-              ? { hint: 'No other plans in this project to link to.' }
-              : {})}
-            {...planReg}
-            onChange={(event) => {
-              void planReg.onChange(event);
-              setValue('predecessorActivityId', '');
-            }}
-          >
-            <option value="" disabled>
-              {plans.isPending && projectId !== '' ? 'Loading plans\u2026' : 'Choose a plan\u2026'}
-            </option>
-            {planOptions.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.name}
-              </option>
-            ))}
-          </SelectField>
+              <SelectField
+                label="Activity"
+                id="cross-plan-activity"
+                disabled={predecessorPlanId === ''}
+                error={
+                  errors.predecessorActivityId?.message ??
+                  (activities.isError
+                    ? 'Couldn\u2019t load activities. Please try again.'
+                    : undefined)
+                }
+                {...alertIfLoadFailed(!errors.predecessorActivityId && activities.isError)}
+                {...register('predecessorActivityId')}
+              >
+                <option value="" disabled>
+                  {activities.isPending && predecessorPlanId !== ''
+                    ? 'Loading activities\u2026'
+                    : 'Choose an activity\u2026'}
+                </option>
+                {(activities.data ?? []).map((activity) => (
+                  <option key={activity.id} value={activity.id}>
+                    {activity.code ? `${activity.code} \u2014 ${activity.name}` : activity.name}
+                  </option>
+                ))}
+              </SelectField>
+            </FormSection>
 
-          <SelectField
-            label="Activity"
-            id="cross-plan-activity"
-            disabled={predecessorPlanId === ''}
-            error={
-              errors.predecessorActivityId?.message ??
-              (activities.isError ? 'Couldn\u2019t load activities. Please try again.' : undefined)
-            }
-            {...alertIfLoadFailed(!errors.predecessorActivityId && activities.isError)}
-            {...register('predecessorActivityId')}
-          >
-            <option value="" disabled>
-              {activities.isPending && predecessorPlanId !== ''
-                ? 'Loading activities\u2026'
-                : 'Choose an activity\u2026'}
-            </option>
-            {(activities.data ?? []).map((activity) => (
-              <option key={activity.id} value={activity.id}>
-                {activity.code ? `${activity.code} \u2014 ${activity.name}` : activity.name}
-              </option>
-            ))}
-          </SelectField>
-        </fieldset>
+            <FormSection
+              title="The link"
+              description="How the two are related, and how much time separates them."
+            >
+              <SelectField label="Type" id="cross-plan-type" {...register('type')}>
+                {CROSS_PLAN_TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {CROSS_PLAN_TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </SelectField>
 
-        <SelectField label="Type" id="cross-plan-type" {...register('type')}>
-          {CROSS_PLAN_TYPES.map((value) => (
-            <option key={value} value={value}>
-              {CROSS_PLAN_TYPE_LABELS[value]}
-            </option>
-          ))}
-        </SelectField>
+              {/* The lag and the calendar counting it are one decision — a "5" means a different date
+              depending on the control beside it. */}
+              <FieldGrid columns="lead">
+                <SelectField
+                  label="Lag calendar"
+                  id="cross-plan-lag-calendar"
+                  hint={CROSS_PLAN_LAG_CALENDAR_HINT}
+                  {...register('lagCalendar')}
+                >
+                  {CROSS_PLAN_LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+                    <option key={value} value={value}>
+                      {CROSS_PLAN_LAG_CALENDAR_LABELS[value]}
+                    </option>
+                  ))}
+                </SelectField>
 
-        <SelectField
-          label="Lag calendar"
-          id="cross-plan-lag-calendar"
-          hint={CROSS_PLAN_LAG_CALENDAR_HINT}
-          {...register('lagCalendar')}
-        >
-          {CROSS_PLAN_LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
-            <option key={value} value={value}>
-              {CROSS_PLAN_LAG_CALENDAR_LABELS[value]}
-            </option>
-          ))}
-        </SelectField>
+                <TextField
+                  label={crossPlanLagFieldLabel(lagCalendar)}
+                  type="number"
+                  error={errors.lagDays?.message}
+                  {...register('lagDays', { valueAsNumber: true })}
+                />
+              </FieldGrid>
+            </FormSection>
+          </div>
 
-        <TextField
-          label={crossPlanLagFieldLabel(lagCalendar)}
-          type="number"
-          error={errors.lagDays?.message}
-          {...register('lagDays', { valueAsNumber: true })}
-        />
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
-            {create.isPending ? 'Saving…' : 'Add cross-plan link'}
-          </Button>
-        </div>
-      </form>
+          <div className="border-border flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
+              {create.isPending ? 'Saving…' : 'Add cross-plan link'}
+            </Button>
+          </div>
+        </form>
+      </FieldGridContainer>
     </Dialog>
   );
 }

@@ -446,6 +446,67 @@ link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
 
 ---
 
+## Form layout (ADR-0061)
+
+**A dialog body is never a bare list of fields.** For eighteen dialogs it was exactly that — one
+`flex flex-col gap-4` around one field or around nine — so the structure said nothing about which
+fields belonged together or which mattered. The vocabulary that replaces it lives in
+`components/ui/form-layout.tsx` and is the only sanctioned way to lay a form out.
+
+**`FormSection`** — a named group of related fields.
+
+- The title is what the group **is**, in a planner's words: `Constraints`, `Availability`,
+  `Cost & earned value`. Never `Section 2`, never `Other`.
+- `description` is one sentence on what the group **does**, when the title can't carry it alone. It
+  is linked with `aria-describedby`, so it is announced with the group.
+- `aside` is a status for the group as a whole — `None set`, `Priority 500`, `3 on this activity`.
+  This is what lets a reader skip a section honestly.
+- Sections separate themselves. **Never hand-place a `border-t` between them**, and keep them as
+  **consecutive siblings** — an error summary or a banner belongs outside their wrapper, because the
+  first section drops its rule via `:first-child`.
+- It renders `role="group"` + a real `<h3>`, not `<fieldset>`/`<legend>`. A `<legend>` only captions
+  its fieldset as the first child (so no status can sit beside it), and a fieldset's
+  `min-width: min-content` overflows a narrow dialog. Do not "fix" this back to a fieldset.
+
+**`FieldGrid`** — two columns **only when two controls are one decision**: a constraint and its
+date, a lag and the calendar counting it, a resource and its units. Two unrelated fields side by
+side is worse than stacking them.
+
+- `columns="lead"` weights the first column ~4:3, for a wide chooser governing a narrow value.
+- Wrap a full-width child (a textarea, a save bar) in `FieldGridFull` — never hand-write
+  `col-span-2`.
+- Wrap the body once in `FieldGridContainer`. The grid is a **container query**, not a breakpoint:
+  a dialog's width comes from its size preset, not from the viewport, so `sm:` would give a 448px
+  dialog and an 896px dialog the same answer.
+
+**`ContextStrip`** — the read-only facts an edit is *about*, kept on screen while it is made (the
+activity editor's computed dates and float). Read-only by contract: **no interactive children,
+ever**. The moment a fact becomes editable it is a field and belongs in a `FormSection`. When the
+facts don't exist yet, render **nothing** — a row of em dashes reads as breakage, not as
+"not computed yet".
+
+**Dialog sizes.** `md` (448px) is a simple record form. `lg` (672px) is a dense one or a list. `xl`
+(896px) is **for the two-pane rail layout only** — widening a single-column form to 896px produces
+900px-long input rows, which is worse than the 448px it came from. `body="flush"` goes with `xl`: it
+pads only the header, caps the height, and lets the pane own the scroll.
+
+**Which shape a dialog takes:**
+
+| Archetype                                     | Layout                                                  |
+| --------------------------------------------- | ------------------------------------------------------- |
+| Simple record (≤ ~4 fields)                   | No sections. `md`. Leave it alone.                      |
+| Dense record                                  | 2–3 `FormSection`s, `FieldGrid` for pairs. `lg`.        |
+| Multi-scope editor (today: the activity editor) | Vertical `Tabs` rail + pane, `xl` + `body="flush"`.    |
+| List / manage                                 | What exists **first**, then a `New …` section below it. |
+| Process / wizard                              | Numbered sections; every step present, carrying its own empty/pending/result state. |
+| Confirm / reference                           | Untouched.                                              |
+
+**Labels never say `(optional)`.** It was on eleven of twenty-two labels in one dialog, which is
+enough that it stopped meaning anything. Where optionality matters, the section description or the
+field hint says so in a sentence.
+
+---
+
 ## Content & formatting
 
 - Currency and dates via `Intl` APIs (locale-aware); money stored/handled as

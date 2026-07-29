@@ -109,7 +109,7 @@ describe('ShareLinksDialog', () => {
     renderDialog();
     await screen.findByText(/No share links yet/);
 
-    fireEvent.change(screen.getByLabelText('Label (optional)'), { target: { value: 'New link' } });
+    fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'New link' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
 
     // The one-time URL surfaces in a read-only field + a Copy button.
@@ -125,7 +125,7 @@ describe('ShareLinksDialog', () => {
     renderDialog();
     await screen.findByText(/No share links yet/);
     const tenYears = `${new Date().getFullYear() + 10}-01-01`;
-    fireEvent.change(screen.getByLabelText('Expires (optional)'), { target: { value: tenYears } });
+    fireEvent.change(screen.getByLabelText('Expires'), { target: { value: tenYears } });
     fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
     expect(await screen.findByText(/at most a year out/)).toBeInTheDocument();
     // Only the initial list GET fired — no POST.

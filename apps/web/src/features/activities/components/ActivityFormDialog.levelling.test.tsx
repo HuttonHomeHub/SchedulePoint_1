@@ -97,7 +97,7 @@ describe('ActivityFormDialog — levelling priority (flag on)', () => {
   it('creates an activity carrying the entered levelling priority', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText('Levelling priority (optional)'), {
+    fireEvent.change(screen.getByLabelText('Levelling priority'), {
       target: { value: '5' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
@@ -122,7 +122,7 @@ describe('ActivityFormDialog — levelling priority (flag on)', () => {
 
   it('seeds the priority from the row and round-trips it on save', async () => {
     renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('Levelling priority (optional)')).toHaveValue(10);
+    expect(screen.getByLabelText('Levelling priority')).toHaveValue(10);
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -132,7 +132,7 @@ describe('ActivityFormDialog — levelling priority (flag on)', () => {
 
   it('clears the priority to null when the field is emptied on edit', async () => {
     renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('Levelling priority (optional)'), {
+    fireEvent.change(screen.getByLabelText('Levelling priority'), {
       target: { value: '' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -145,6 +145,6 @@ describe('ActivityFormDialog — levelling priority (flag on)', () => {
   it('hides the priority field for a milestone (never levelled)', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
-    expect(screen.queryByLabelText('Levelling priority (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Levelling priority')).not.toBeInTheDocument();
   });
 });

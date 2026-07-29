@@ -36,6 +36,12 @@ import {
   TextField,
   TextareaField,
 } from '@/components/ui/form';
+import {
+  FieldGrid,
+  FieldGridContainer,
+  FieldGridFull,
+  FormSection,
+} from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import {
@@ -289,466 +295,514 @@ export function ActivityFormDialog({
       open={open}
       onClose={onClose}
       title={isEdit ? 'Edit activity' : 'New activity'}
+      size="lg"
       {...(isEdit ? {} : { description: 'Add an activity to this plan.' })}
     >
-      <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-        <FormErrorSummary errors={errors} />
-        {mutation.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
+      <FieldGridContainer>
+        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
+          <FormErrorSummary errors={errors} />
+          {mutation.isError ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
                 every other failure keeps the server's message verbatim, exactly as before. */}
-            {calendarScopeErrorMessage(mutation.error) ?? mutation.error.message}
-          </p>
-        ) : null}
-        <TextField
-          label="Name"
-          autoComplete="off"
-          error={errors.name?.message}
-          {...register('name')}
-        />
-        <TextField
-          label="Code (optional)"
-          autoComplete="off"
-          error={errors.code?.message}
-          {...register('code')}
-        />
-        <SelectField
-          label="Type"
-          id="activity-type"
-          error={errors.type?.message}
-          {...register('type')}
-        >
-          {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
-            <option key={value} value={value}>
-              {ACTIVITY_TYPE_LABELS[value]}
-            </option>
-          ))}
-        </SelectField>
-        {isDurationDerivedType(type) ? (
-          type === 'LEVEL_OF_EFFORT' ? (
-            <p className="text-muted-foreground text-sm">
-              A level-of-effort activity’s duration is derived from its span — the start of its
-              earliest start-to-start predecessor to the finish of its latest finish-to-finish
-              successor. Add those links, then Recalculate.
+              {calendarScopeErrorMessage(mutation.error) ?? mutation.error.message}
             </p>
-          ) : type === 'WBS_SUMMARY' ? (
-            <p className="text-muted-foreground text-sm">
-              A WBS summary’s dates roll up from the activities grouped under it — the earliest
-              start to the latest finish of its branch. It carries no logic of its own (no
-              dependencies). To fill it, open each activity in the branch and set its WBS summary to
-              this one, then Recalculate.
-            </p>
-          ) : null
-        ) : (
-          <TextField
-            label="Duration (working days)"
-            type="number"
-            min={0}
-            error={errors.durationDays?.message}
-            {...register('durationDays', { valueAsNumber: true })}
-          />
-        )}
-        {/* A resource-dependent activity keeps its own duration (it behaves exactly like a task for
+          ) : null}
+
+          {/* The sections are consecutive siblings in their own wrapper (ADR-0061), and they mirror
+            the tabbed editor's — so the create form and the edit surface answer the same questions
+            in the same order rather than being two different shapes for one record. */}
+          <div className="flex flex-col gap-5">
+            <FormSection title="Identity">
+              <FieldGrid columns="lead">
+                <TextField
+                  label="Name"
+                  autoComplete="off"
+                  error={errors.name?.message}
+                  {...register('name')}
+                />
+                <TextField
+                  label="Code"
+                  autoComplete="off"
+                  error={errors.code?.message}
+                  {...register('code')}
+                />
+                <FieldGridFull>
+                  <TextareaField
+                    label="Description"
+                    error={errors.description?.message}
+                    {...register('description')}
+                  />
+                </FieldGridFull>
+              </FieldGrid>
+            </FormSection>
+
+            <FormSection
+              title="Work"
+              description="What kind of activity this is, and how long it takes."
+            >
+              <FieldGrid>
+                <SelectField
+                  label="Type"
+                  id="activity-type"
+                  error={errors.type?.message}
+                  {...register('type')}
+                >
+                  {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
+                    <option key={value} value={value}>
+                      {ACTIVITY_TYPE_LABELS[value]}
+                    </option>
+                  ))}
+                </SelectField>
+                {isDurationDerivedType(type) ? (
+                  type === 'LEVEL_OF_EFFORT' ? (
+                    <FieldGridFull>
+                      <p className="text-muted-foreground text-sm">
+                        A level-of-effort activity’s duration is derived from its span — the start
+                        of its earliest start-to-start predecessor to the finish of its latest
+                        finish-to-finish successor. Add those links, then Recalculate.
+                      </p>
+                    </FieldGridFull>
+                  ) : type === 'WBS_SUMMARY' ? (
+                    <FieldGridFull>
+                      <p className="text-muted-foreground text-sm">
+                        A WBS summary’s dates roll up from the activities grouped under it — the
+                        earliest start to the latest finish of its branch. It carries no logic of
+                        its own (no dependencies). To fill it, open each activity in the branch and
+                        set its WBS summary to this one, then Recalculate.
+                      </p>
+                    </FieldGridFull>
+                  ) : null
+                ) : (
+                  <TextField
+                    label="Duration (working days)"
+                    type="number"
+                    min={0}
+                    error={errors.durationDays?.message}
+                    {...register('durationDays', { valueAsNumber: true })}
+                  />
+                )}
+                {/* A resource-dependent activity keeps its own duration (it behaves exactly like a task for
             logic) — only the CALENDAR it is measured on changes, to its driving resource's
             (ADR-0035 §23 / ADR-0039). Saying so here is the difference between a type that looks
             inert and one whose effect is elsewhere: without an assignment the engine schedules it
             on the ordinary calendar and flags it, which is what the Needs-a-driver badge reports. */}
-        {resourceDependent ? (
-          <p className="text-muted-foreground text-sm">
-            A resource-dependent activity is scheduled on its <strong>driving resource’s</strong>{' '}
-            calendar rather than its own, so it follows that crew or plant’s working time. Assign a
-            resource and mark it driving, then Recalculate. Until you do, it schedules like an
-            ordinary task and is flagged as needing a driver.
-          </p>
-        ) : null}
-        {/* Duration type governs the resource-units triad (ADR-0040), so it is meaningless for a type
+                {resourceDependent ? (
+                  <FieldGridFull>
+                    <p className="text-muted-foreground text-sm">
+                      A resource-dependent activity is scheduled on its{' '}
+                      <strong>driving resource’s</strong> calendar rather than its own, so it
+                      follows that crew or plant’s working time. Assign a resource and mark it
+                      driving, then Recalculate. Until you do, it schedules like an ordinary task
+                      and is flagged as needing a driver.
+                    </p>
+                  </FieldGridFull>
+                ) : null}
+                {/* Duration type governs the resource-units triad (ADR-0040), so it is meaningless for a type
             with no entered duration/units (a milestone, LOE or WBS summary) — hidden for those, mirroring
             the Duration field. */}
-        {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
-          <SelectField
-            label="Duration type"
-            id="activity-duration-type"
-            hint={
-              'Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or ' +
-              'units/time recomputes the others so units = duration × units/time stays true — e.g. a ' +
-              'crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or ' +
-              '“Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s ' +
-              'duration; with the two fixed-duration types, editing the duration here also updates ' +
-              'the driving resource’s units or rate.'
-            }
-            {...register('durationType')}
-          >
-            {DURATION_TYPES.map((value) => (
-              <option key={value} value={value}>
-                {DURATION_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </SelectField>
-        ) : null}
-        {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it never asserts a
+                {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
+                  <FieldGridFull>
+                    <SelectField
+                      label="Duration type"
+                      id="activity-duration-type"
+                      hint={
+                        'Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or ' +
+                        'units/time recomputes the others so units = duration × units/time stays true — e.g. a ' +
+                        'crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or ' +
+                        '“Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s ' +
+                        'duration; with the two fixed-duration types, editing the duration here also updates ' +
+                        'the driving resource’s units or rate.'
+                      }
+                      {...register('durationType')}
+                    >
+                      {DURATION_TYPES.map((value) => (
+                        <option key={value} value={value}>
+                          {DURATION_TYPE_LABELS[value]}
+                        </option>
+                      ))}
+                    </SelectField>
+                  </FieldGridFull>
+                ) : null}
+              </FieldGrid>
+            </FormSection>
+
+            {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it never asserts a
             false state while the plan activities are still resolving. The "no summaries yet"
             guidance is a distinct, appended clause shown only once the list has resolved empty —
             not conflated with loading or a load failure. */}
-        {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-          <SelectField
-            label="WBS summary (optional)"
-            id="activity-parent"
-            disabled={planActivitiesLoading}
-            aria-busy={planActivitiesLoading}
-            errorRole="alert"
-            error={
-              planActivitiesError
-                ? 'Couldn’t load the plan’s activities, so no WBS summaries are available to choose.'
-                : undefined
-            }
-            hint={
-              'Groups this activity under a WBS summary, whose dates roll up from its members.' +
-              (!planActivitiesLoading &&
-              !planActivitiesError &&
-              parentOptions.length === 0 &&
-              !missingParent
-                ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
-                : '')
-            }
-            {...register('parentId')}
-          >
-            <option value="">None (top-level)</option>
-            {/* A seeded parent not in the list stays selected under an honest label so the form
+            {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
+              <FormSection title="Breakdown">
+                <SelectField
+                  label="WBS summary"
+                  id="activity-parent"
+                  disabled={planActivitiesLoading}
+                  aria-busy={planActivitiesLoading}
+                  errorRole="alert"
+                  error={
+                    planActivitiesError
+                      ? 'Couldn’t load the plan’s activities, so no WBS summaries are available to choose.'
+                      : undefined
+                  }
+                  hint={
+                    'Groups this activity under a WBS summary, whose dates roll up from its members.' +
+                    (!planActivitiesLoading &&
+                    !planActivitiesError &&
+                    parentOptions.length === 0 &&
+                    !missingParent
+                      ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
+                      : '')
+                  }
+                  {...register('parentId')}
+                >
+                  <option value="">None (top-level)</option>
+                  {/* A seeded parent not in the list stays selected under an honest label so the form
                   never silently un-nests the activity (never blank, which reads as "top-level"). */}
-            {missingParent ? (
-              <option value={parentId}>{planActivitiesLoading ? 'Loading…' : 'Unavailable'}</option>
+                  {missingParent ? (
+                    <option value={parentId}>
+                      {planActivitiesLoading ? 'Loading…' : 'Unavailable'}
+                    </option>
+                  ) : null}
+                  {parentOptions.map((summary) => (
+                    <option key={summary.id} value={summary.id}>
+                      {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
+                    </option>
+                  ))}
+                </SelectField>
+              </FormSection>
             ) : null}
-            {parentOptions.map((summary) => (
-              <option key={summary.id} value={summary.id}>
-                {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
-              </option>
-            ))}
-          </SelectField>
-        ) : null}
-        {ACTIVITY_CALENDAR_ENABLED ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="activity-calendar">Calendar (optional)</Label>
-            {LIBRARY_SCOPING_ENABLED ? (
-              /* The shared APG combobox (ADR-0053 §4 / US-8): type-ahead over a large library, the
-                 tiers as labelled option groups, and the "" = inherit choice as `emptyOption`. */
-              <Combobox
-                id="activity-calendar"
-                value={calendarId ?? ''}
-                onChange={(value) =>
-                  setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
-                }
-                query={calendarQuery}
-                onQueryChange={setCalendarQuery}
-                options={calendarOptions}
-                // The seeded calendar isn't resolvable from the list — still loading, or the list
-                // failed to load. The combobox falls back to "Loading…"/"Unavailable" itself, so the
-                // field is never blank (which would read as "inherit").
-                selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
-                groupLabels={CALENDAR_TIER_GROUP_LABELS}
-                emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
-                disabled={resourceDependent}
-                loading={calendarsLoading}
-                errored={calendarsError}
-                describedBy={
-                  calendarsError
-                    ? 'activity-calendar-help activity-calendar-error'
-                    : 'activity-calendar-help'
-                }
-                invalid={calendarsError}
-                toggleLabel="Show calendars"
-                emptyMessage="No calendars match your search."
-              />
-            ) : (
-              <Select
-                id="activity-calendar"
-                disabled={calendarsLoading || resourceDependent}
-                aria-busy={calendarsLoading}
-                aria-invalid={calendarsError ? true : undefined}
-                aria-describedby={
-                  calendarsError
-                    ? 'activity-calendar-help activity-calendar-error'
-                    : 'activity-calendar-help'
-                }
-                {...register('calendarId')}
+
+            {ACTIVITY_CALENDAR_ENABLED ? (
+              <FormSection
+                title="Working time"
+                description="Which calendar's working days this activity's duration is measured in."
               >
-                <option value="">{INHERIT_CALENDAR_LABEL}</option>
-                {/* The seeded calendar isn't resolvable from the list — still loading, or the list
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="activity-calendar">Calendar</Label>
+                  {LIBRARY_SCOPING_ENABLED ? (
+                    /* The shared APG combobox (ADR-0053 §4 / US-8): type-ahead over a large library, the
+                 tiers as labelled option groups, and the "" = inherit choice as `emptyOption`. */
+                    <Combobox
+                      id="activity-calendar"
+                      value={calendarId ?? ''}
+                      onChange={(value) =>
+                        setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
+                      }
+                      query={calendarQuery}
+                      onQueryChange={setCalendarQuery}
+                      options={calendarOptions}
+                      // The seeded calendar isn't resolvable from the list — still loading, or the list
+                      // failed to load. The combobox falls back to "Loading…"/"Unavailable" itself, so the
+                      // field is never blank (which would read as "inherit").
+                      selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
+                      groupLabels={CALENDAR_TIER_GROUP_LABELS}
+                      emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
+                      disabled={resourceDependent}
+                      loading={calendarsLoading}
+                      errored={calendarsError}
+                      describedBy={
+                        calendarsError
+                          ? 'activity-calendar-help activity-calendar-error'
+                          : 'activity-calendar-help'
+                      }
+                      invalid={calendarsError}
+                      toggleLabel="Show calendars"
+                      emptyMessage="No calendars match your search."
+                    />
+                  ) : (
+                    <Select
+                      id="activity-calendar"
+                      disabled={calendarsLoading || resourceDependent}
+                      aria-busy={calendarsLoading}
+                      aria-invalid={calendarsError ? true : undefined}
+                      aria-describedby={
+                        calendarsError
+                          ? 'activity-calendar-help activity-calendar-error'
+                          : 'activity-calendar-help'
+                      }
+                      {...register('calendarId')}
+                    >
+                      <option value="">{INHERIT_CALENDAR_LABEL}</option>
+                      {/* The seeded calendar isn't resolvable from the list — still loading, or the list
                     failed to load. Keep it selected under an honest label (never blank, which would
                     read as "inherit"); "Loading…" only while pending, else "Unavailable". */}
-                {missingCalendar ? (
-                  <option value={calendarId}>
-                    {calendarsLoading ? 'Loading…' : 'Unavailable'}
-                  </option>
-                ) : null}
-                {calendars.map((calendar) => (
-                  <option key={calendar.id} value={calendar.id}>
-                    {calendar.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-            <p id="activity-calendar-help" className="text-muted-foreground text-sm">
-              {resourceDependent
-                ? // Says WHY it is unavailable, not merely that it is. A disabled control with no
-                  // reason reads as a bug; this one is disabled because another field already
-                  // decides the answer.
-                  'Not used by a resource-dependent activity — it is scheduled on its driving resource’s calendar instead. Change the type back to set a calendar here.'
-                : 'The working-time calendar this activity is scheduled on. Inherits the plan’s calendar unless you pick one. Recalculate to apply the calendar to the activity’s dates.'}
-            </p>
-            {calendarsError ? (
-              <p
-                id="activity-calendar-error"
-                role="alert"
-                className="text-destructive-text text-sm"
-              >
-                Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is available.
-              </p>
+                      {missingCalendar ? (
+                        <option value={calendarId}>
+                          {calendarsLoading ? 'Loading…' : 'Unavailable'}
+                        </option>
+                      ) : null}
+                      {calendars.map((calendar) => (
+                        <option key={calendar.id} value={calendar.id}>
+                          {calendar.name}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <p id="activity-calendar-help" className="text-muted-foreground text-sm">
+                    {resourceDependent
+                      ? // Says WHY it is unavailable, not merely that it is. A disabled control with no
+                        // reason reads as a bug; this one is disabled because another field already
+                        // decides the answer.
+                        'Not used by a resource-dependent activity — it is scheduled on its driving resource’s calendar instead. Change the type back to set a calendar here.'
+                      : 'The working-time calendar this activity is scheduled on. Inherits the plan’s calendar unless you pick one. Recalculate to apply the calendar to the activity’s dates.'}
+                  </p>
+                  {calendarsError ? (
+                    <p
+                      id="activity-calendar-error"
+                      role="alert"
+                      className="text-destructive-text text-sm"
+                    >
+                      Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is
+                      available.
+                    </p>
+                  ) : null}
+                </div>
+              </FormSection>
             ) : null}
-          </div>
-        ) : null}
-        {/* Levelling priority (ADR-0041) only breaks ties when levelling delays over-allocated
+
+            {/* Levelling priority (ADR-0041) only breaks ties when levelling delays over-allocated
             activities, so it is meaningless for a type levelling never moves (a milestone, LOE or WBS
             summary) — hidden for those, mirroring the Duration/Duration-type fields. */}
-        {RESOURCE_LEVELLING_ENABLED && !isDurationDerivedType(type) ? (
-          <TextField
-            label="Levelling priority (optional)"
-            type="number"
-            min={0}
-            step={1}
-            inputMode="numeric"
-            hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
-            error={errors.levelingPriority?.message}
-            {...register('levelingPriority', {
-              setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-            })}
-          />
-        ) : null}
-        {/* Earned-Value inputs (EV4b, ADR-0042): the %-complete measure that earns value, an optional
+            {RESOURCE_LEVELLING_ENABLED && !isDurationDerivedType(type) ? (
+              <FormSection title="Levelling" description="Used only when the plan is levelled.">
+                <FieldGrid>
+                  <TextField
+                    label="Levelling priority"
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
+                    error={errors.levelingPriority?.message}
+                    {...register('levelingPriority', {
+                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                    })}
+                  />
+                </FieldGrid>
+              </FormSection>
+            ) : null}
+            {/* Earned-Value inputs (EV4b, ADR-0042): the %-complete measure that earns value, an optional
             hand-entered physical % (only relevant to the PHYSICAL measure), and the lump-sum budgeted /
             actual expense carried on the activity. Meaningless for a type with no entered
             duration/units/cost (a milestone, LOE or WBS summary) — hidden for those, mirroring the
             Duration / Duration-type fields. Money is entered in major units (e.g. dollars). */}
-        {(EARNED_VALUE_ENABLED || COST_ACCRUAL_ENABLED) && !isDurationDerivedType(type) ? (
-          <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
-            <legend className="sr-only">Cost &amp; earned value</legend>
-            <p className="text-sm font-medium" aria-hidden="true">
-              Cost &amp; earned value
-            </p>
-            {EARNED_VALUE_ENABLED ? (
-              <>
-                <SelectField
-                  label="% complete type"
-                  id="activity-percent-complete-type"
-                  hint={`${PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates — only how Earned value measures progress.`}
-                  {...register('percentCompleteType')}
-                >
-                  {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-                    </option>
-                  ))}
-                </SelectField>
-                {percentCompleteType === 'PHYSICAL' ? (
-                  <TextField
-                    label="Physical % complete (optional)"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    inputMode="numeric"
-                    hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
-                    error={errors.physicalPercentComplete?.message}
-                    {...register('physicalPercentComplete', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
-                  />
-                ) : null}
-                <TextField
-                  label="Budgeted expense (optional)"
-                  type="number"
-                  min={0}
-                  step="any"
-                  inputMode="decimal"
-                  hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
-                  error={errors.budgetedExpense?.message}
-                  {...register('budgetedExpense', {
-                    setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                  })}
-                />
-                <TextField
-                  label="Actual expense (optional)"
-                  type="number"
-                  min={0}
-                  step="any"
-                  inputMode="decimal"
-                  hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
-                  error={errors.actualExpense?.message}
-                  {...register('actualExpense', {
-                    setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                  })}
-                />
-              </>
-            ) : null}
-            {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the Earned-Value
-                Planned-Value curve, never a date. Its own flag, mirroring the %-complete-type picker. */}
-            {COST_ACCRUAL_ENABLED ? (
-              <SelectField
-                label="Cost accrual"
-                id="activity-accrual-type"
-                hint={
-                  'Sets when this activity’s cost is recognised: Start (all at the start), Uniform ' +
-                  '(spread evenly), or End (all at the finish). It changes only when cost is ' +
-                  'recognised in Earned value — never a date.'
-                }
-                {...register('accrualType')}
+            {(EARNED_VALUE_ENABLED || COST_ACCRUAL_ENABLED) && !isDurationDerivedType(type) ? (
+              <FormSection
+                title="Cost &amp; earned value"
+                description="How progress earns value, and what this activity costs. Never a date."
               >
-                {ACCRUAL_TYPE_OPTIONS.map((value) => (
-                  <option key={value} value={value}>
-                    {ACCRUAL_TYPE_LABELS[value]}
-                  </option>
-                ))}
-              </SelectField>
+                <FieldGrid>
+                  {EARNED_VALUE_ENABLED ? (
+                    <>
+                      <SelectField
+                        label="% complete type"
+                        id="activity-percent-complete-type"
+                        hint={`${PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates — only how Earned value measures progress.`}
+                        {...register('percentCompleteType')}
+                      >
+                        {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
+                          <option key={value} value={value}>
+                            {PERCENT_COMPLETE_TYPE_LABELS[value].label}
+                          </option>
+                        ))}
+                      </SelectField>
+                      {percentCompleteType === 'PHYSICAL' ? (
+                        <TextField
+                          label="Physical % complete"
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          inputMode="numeric"
+                          hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
+                          error={errors.physicalPercentComplete?.message}
+                          {...register('physicalPercentComplete', {
+                            setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                          })}
+                        />
+                      ) : null}
+                      <TextField
+                        label="Budgeted expense"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
+                        error={errors.budgetedExpense?.message}
+                        {...register('budgetedExpense', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                      <TextField
+                        label="Actual expense"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
+                        error={errors.actualExpense?.message}
+                        {...register('actualExpense', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                    </>
+                  ) : null}
+                  {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the Earned-Value
+                Planned-Value curve, never a date. Its own flag, mirroring the %-complete-type picker. */}
+                  {COST_ACCRUAL_ENABLED ? (
+                    <SelectField
+                      label="Cost accrual"
+                      id="activity-accrual-type"
+                      hint={
+                        'Sets when this activity’s cost is recognised: Start (all at the start), Uniform ' +
+                        '(spread evenly), or End (all at the finish). It changes only when cost is ' +
+                        'recognised in Earned value — never a date.'
+                      }
+                      {...register('accrualType')}
+                    >
+                      {ACCRUAL_TYPE_OPTIONS.map((value) => (
+                        <option key={value} value={value}>
+                          {ACCRUAL_TYPE_LABELS[value]}
+                        </option>
+                      ))}
+                    </SelectField>
+                  ) : null}
+                </FieldGrid>
+              </FormSection>
             ) : null}
-          </fieldset>
-        ) : null}
-        <SelectField
-          label="Constraint (optional)"
-          id="activity-constraint-type"
-          error={errors.constraintType?.message}
-          hint={
-            'Pins the activity’s start or finish to a date. Only constraints the scheduler applies ' +
-            'exactly as named are listed (an existing value keeps its own label).'
-          }
-          {...register('constraintType')}
-        >
-          <option value="">None</option>
-          {/* Only the six kinds the scheduler applies exactly as labelled (the engine parks
+
+            <FormSection
+              title="Constraints"
+              description="Dates you impose on the network. A constraint overrides what the logic would otherwise decide."
+              aside={constraintType ? undefined : 'None set'}
+            >
+              <FieldGrid columns="lead">
+                <SelectField
+                  label="Constraint"
+                  id="activity-constraint-type"
+                  error={errors.constraintType?.message}
+                  hint={
+                    'Pins the activity’s start or finish to a date. Only constraints the scheduler applies ' +
+                    'exactly as named are listed (an existing value keeps its own label).'
+                  }
+                  {...register('constraintType')}
+                >
+                  <option value="">None</option>
+                  {/* Only the six kinds the scheduler applies exactly as labelled (the engine parks
                 MANDATORY_* — see @repo/types SELECTABLE_CONSTRAINT_TYPES), so a planner never
                 sets a constraint that behaves differently than it reads. */}
-          {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-            <option key={value} value={value}>
-              {CONSTRAINT_TYPE_LABELS[value]}
-            </option>
-          ))}
-          {/* An activity that already carries a parked value keeps it as an honest, labelled
+                  {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+                    <option key={value} value={value}>
+                      {CONSTRAINT_TYPE_LABELS[value]}
+                    </option>
+                  ))}
+                  {/* An activity that already carries a parked value keeps it as an honest, labelled
                 option so opening the form never silently changes it; it drops out once the
                 planner picks something else. Driven by the live field value, not the original. */}
-          {parkedValue ? (
-            <option value={parkedValue}>{PARKED_CONSTRAINT_LABELS[parkedValue]}</option>
-          ) : null}
-        </SelectField>
-        {constraintType ? (
-          <TextField
-            label="Constraint date"
-            type="date"
-            error={errors.constraintDate?.message}
-            {...register('constraintDate')}
-          />
-        ) : null}
-        {ADVANCED_CONSTRAINTS_ENABLED ? (
-          // Grouped by the same top-border divider the app uses elsewhere (e.g. the plan Summary
-          // popover) rather than a bespoke bordered card, so the fields read like every other stacked
-          // field in this dialog. `<fieldset>`/`<legend>` keep the semantic grouping without the box.
-          <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
-            <legend className="sr-only">Advanced scheduling</legend>
-            <p className="text-sm font-medium" aria-hidden="true">
-              Advanced scheduling
-            </p>
-            <SelectField
-              label="Secondary constraint"
-              id="activity-secondary-constraint-type"
-              error={errors.secondaryConstraintType?.message}
-              hint={
-                'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
-                '“start no earlier than” with a secondary “finish no later than”. The primary ' +
-                'constraint drives its early dates.'
-              }
-              {...register('secondaryConstraintType')}
-            >
-              <option value="">None</option>
-              {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {CONSTRAINT_TYPE_LABELS[value]}
-                </option>
-              ))}
-              {secondaryParkedValue ? (
-                <option value={secondaryParkedValue}>
-                  {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
-                </option>
-              ) : null}
-            </SelectField>
-            {secondaryConstraintType ? (
-              <TextField
-                label="Secondary constraint date"
-                type="date"
-                error={errors.secondaryConstraintDate?.message}
-                {...register('secondaryConstraintDate')}
-              />
-            ) : null}
-            <CheckboxField
-              label="Schedule as late as possible"
-              hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
-              {...register('scheduleAsLateAsPossible')}
-            />
-            {/* Expected finish sizes work to a target finish, so it's meaningless for a type whose
+                  {parkedValue ? (
+                    <option value={parkedValue}>{PARKED_CONSTRAINT_LABELS[parkedValue]}</option>
+                  ) : null}
+                </SelectField>
+                {constraintType ? (
+                  <TextField
+                    label="Constraint date"
+                    type="date"
+                    error={errors.constraintDate?.message}
+                    {...register('constraintDate')}
+                  />
+                ) : null}
+                {ADVANCED_CONSTRAINTS_ENABLED ? (
+                  <>
+                    <SelectField
+                      label="Secondary constraint"
+                      id="activity-secondary-constraint-type"
+                      error={errors.secondaryConstraintType?.message}
+                      hint={
+                        'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
+                        '“start no earlier than” with a secondary “finish no later than”. The primary ' +
+                        'constraint drives its early dates.'
+                      }
+                      {...register('secondaryConstraintType')}
+                    >
+                      <option value="">None</option>
+                      {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+                        <option key={value} value={value}>
+                          {CONSTRAINT_TYPE_LABELS[value]}
+                        </option>
+                      ))}
+                      {secondaryParkedValue ? (
+                        <option value={secondaryParkedValue}>
+                          {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
+                        </option>
+                      ) : null}
+                    </SelectField>
+                    {secondaryConstraintType ? (
+                      <TextField
+                        label="Secondary constraint date"
+                        type="date"
+                        error={errors.secondaryConstraintDate?.message}
+                        {...register('secondaryConstraintDate')}
+                      />
+                    ) : null}
+                    <CheckboxField
+                      label="Schedule as late as possible"
+                      hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
+                      {...register('scheduleAsLateAsPossible')}
+                    />
+                    {/* Expected finish sizes work to a target finish, so it's meaningless for a type whose
                 duration isn't entered — a milestone (a point in time) or a level-of-effort (span-
                 derived) — hidden for those, mirroring the Duration field. */}
-            {isDurationDerivedType(type) ? null : (
-              <TextField
-                label="Expected finish (optional)"
-                type="date"
-                hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
-                error={errors.expectedFinish?.message}
-                {...register('expectedFinish')}
-              />
-            )}
-          </fieldset>
-        ) : null}
-        {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Grouped by the same top-border
+                    {isDurationDerivedType(type) ? null : (
+                      <TextField
+                        label="Expected finish"
+                        type="date"
+                        hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
+                        error={errors.expectedFinish?.message}
+                        {...register('expectedFinish')}
+                      />
+                    )}
+                  </>
+                ) : null}
+              </FieldGrid>
+            </FormSection>
+            {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Grouped by the same top-border
             divider as the other stacked sections (a `<fieldset>`/`<legend>` for the semantic grouping,
             no box). Shown for every type — a milestone can carry an external late finish too (A12500). */}
-        {INTER_PROJECT_DATES_ENABLED ? (
-          <fieldset className="border-border flex flex-col gap-4 border-t pt-4">
-            <legend className="sr-only">External dates</legend>
-            <p className="text-sm font-medium" aria-hidden="true">
-              External dates
-            </p>
-            <p className="text-muted-foreground text-sm">
-              Imported commitments from outside this plan (a vendor delivery, a downstream
-              commissioning window). The later of the activity’s logic and the external early start
-              drives its start; an external late finish earlier than the logic can achieve shows as
-              negative float. They never override a hard constraint.
-            </p>
-            <TextField
-              label="External early start (optional)"
-              type="date"
-              hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins. A date before the data date is honoured but can’t pull work earlier."
-              error={errors.externalEarlyStart?.message}
-              {...register('externalEarlyStart')}
-            />
-            <TextField
-              label="External late finish (optional)"
-              type="date"
-              hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
-              error={errors.externalLateFinish?.message}
-              {...register('externalLateFinish')}
-            />
-          </fieldset>
-        ) : null}
-        <TextareaField
-          label="Description (optional)"
-          error={errors.description?.message}
-          {...register('description')}
-        />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create activity'}
-          </Button>
-        </div>
-      </form>
+            {INTER_PROJECT_DATES_ENABLED ? (
+              <FormSection
+                title="External interfaces"
+                description="Imported commitments from outside this plan (a vendor delivery, a downstream commissioning window). The later of the activity’s logic and the external early start drives its start; an external late finish earlier than the logic can achieve shows as negative float. They never override a hard constraint."
+              >
+                <FieldGrid>
+                  <TextField
+                    label="External early start"
+                    type="date"
+                    hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins. A date before the data date is honoured but can’t pull work earlier."
+                    error={errors.externalEarlyStart?.message}
+                    {...register('externalEarlyStart')}
+                  />
+                  <TextField
+                    label="External late finish"
+                    type="date"
+                    hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
+                    error={errors.externalLateFinish?.message}
+                    {...register('externalLateFinish')}
+                  />
+                </FieldGrid>
+              </FormSection>
+            ) : null}
+          </div>
+
+          <div className="border-border flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
+              {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create activity'}
+            </Button>
+          </div>
+        </form>
+      </FieldGridContainer>
     </Dialog>
   );
 }

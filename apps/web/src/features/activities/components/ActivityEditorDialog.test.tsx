@@ -128,7 +128,7 @@ describe('ActivityEditorDialog — copy review applied', () => {
   it('names the WBS field as the parent it selects', () => {
     mount();
     // The old label was "WBS summary", which collided with the Type option of the same name.
-    expect(screen.queryByLabelText('WBS summary (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('WBS summary')).not.toBeInTheDocument();
   });
 });
 

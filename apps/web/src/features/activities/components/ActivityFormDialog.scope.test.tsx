@@ -124,7 +124,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDia
   );
 }
 
-const field = (): HTMLElement => screen.getByRole('combobox', { name: 'Calendar (optional)' });
+const field = (): HTMLElement => screen.getByRole('combobox', { name: 'Calendar' });
 /** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
 const open = (): void => {
   fireEvent.keyDown(field(), { key: 'ArrowDown' });
@@ -153,9 +153,13 @@ describe('ActivityFormDialog — combobox calendar picker (flag on)', () => {
 
     // `role="group"` + an associated visible label is the APG successor of `<optgroup label>`.
     expect(groupLabels()).toEqual(['Organisation calendars', 'This project’s calendars']);
-    // The inherit option is deliberately outside both groups — it is not a calendar.
-    const inherit = screen.getByRole('option', { name: 'Plan default (inherit)' });
-    expect(inherit.closest('[role="group"]')).toBeNull();
+    // The inherit option is deliberately outside both groups — it is not a calendar. Scoped to the
+    // listbox for the reason `groupLabels` already is: the form's own `FormSection`s are
+    // `role="group"` too (ADR-0061), and a bare `closest` would find the enclosing section instead.
+    const listbox = screen.getByRole('listbox');
+    const inherit = within(listbox).getByRole('option', { name: 'Plan default (inherit)' });
+    const enclosing = inherit.closest('[role="group"]');
+    expect(enclosing === null || !listbox.contains(enclosing)).toBe(true);
     const project = screen.getByRole('group', { name: 'This project’s calendars' });
     expect(within(project).getByRole('option', { name: 'Site shutdown' })).toBeInTheDocument();
   });

@@ -140,7 +140,7 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
 
   it('offers "Plan default (inherit)" plus each org calendar, defaulting to inherit on a new activity', () => {
     renderDialog();
-    const select = screen.getByLabelText('Calendar (optional)');
+    const select = screen.getByLabelText('Calendar');
     const labels = within(select)
       .getAllByRole('option')
       .map((o) => o.textContent);
@@ -151,7 +151,7 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
   it('creates an activity on a chosen calendar', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText('Calendar (optional)'), {
+    fireEvent.change(screen.getByLabelText('Calendar'), {
       target: { value: 'cal-5day' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
@@ -167,7 +167,7 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
 
   it('seeds the activity’s calendar and clears it to inherit (null) on save', async () => {
     renderDialog({ activity: ACTIVITY });
-    const select = screen.getByLabelText('Calendar (optional)');
+    const select = screen.getByLabelText('Calendar');
     expect(select).toHaveValue('cal-247');
     fireEvent.change(select, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -185,7 +185,7 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
     // The failure is announced, not silent.
     expect(screen.getByRole('alert')).toHaveTextContent(/Couldn’t load the calendar list/);
     // The seeded calendar still shows as selected under an honest label — never blank (= inherit).
-    const select = screen.getByLabelText('Calendar (optional)');
+    const select = screen.getByLabelText('Calendar');
     expect(select).toHaveValue('cal-247');
     expect(within(select).getByRole('option', { name: 'Unavailable' })).toBeInTheDocument();
   });

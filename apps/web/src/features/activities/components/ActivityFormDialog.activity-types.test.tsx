@@ -107,7 +107,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'LEVEL_OF_EFFORT' } });
     expect(screen.queryByLabelText('Duration (working days)')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Expected finish (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Expected finish')).not.toBeInTheDocument();
     expect(screen.getByText(/duration is derived from its span/i)).toBeInTheDocument();
   });
 
@@ -150,7 +150,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
 
   it('offers the plan’s summaries in the WBS parent picker (excluding the edited activity)', () => {
     renderDialog({ planActivities: [SUMMARY] });
-    const parent = screen.getByLabelText('WBS summary (optional)');
+    const parent = screen.getByLabelText('WBS summary');
     expect(parent).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'TT.4 · Superstructure' })).toBeInTheDocument();
     // The "None (top-level)" default is always present.
@@ -169,7 +169,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     expect(
       screen.queryByText(/There are no WBS summaries in this plan yet/i),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('WBS summary (optional)')).toBeDisabled();
+    expect(screen.getByLabelText('WBS summary')).toBeDisabled();
   });
 
   it('surfaces an honest error (not a false empty) when the plan activities fail to load', () => {
@@ -184,7 +184,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
   it('creates an activity nested under the chosen WBS summary', async () => {
     renderDialog({ planActivities: [SUMMARY] });
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour columns' } });
-    fireEvent.change(screen.getByLabelText('WBS summary (optional)'), {
+    fireEvent.change(screen.getByLabelText('WBS summary'), {
       target: { value: 'wbs1' },
     });
     fireEvent.click(screen.getByRole('button', { name: /create|save/i }));

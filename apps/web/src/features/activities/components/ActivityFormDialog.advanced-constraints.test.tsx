@@ -103,7 +103,7 @@ describe('ActivityFormDialog — advanced constraints (flag on)', () => {
       target: { value: '2026-06-15' },
     });
     fireEvent.click(screen.getByLabelText('Schedule as late as possible'));
-    fireEvent.change(screen.getByLabelText('Expected finish (optional)'), {
+    fireEvent.change(screen.getByLabelText('Expected finish'), {
       target: { value: '2026-06-10' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
@@ -125,7 +125,7 @@ describe('ActivityFormDialog — advanced constraints (flag on)', () => {
     expect(screen.getByLabelText('Secondary constraint')).toHaveValue('FNLT');
     expect(screen.getByLabelText('Secondary constraint date')).toHaveValue('2026-06-01');
     expect(screen.getByLabelText('Schedule as late as possible')).toBeChecked();
-    expect(screen.getByLabelText('Expected finish (optional)')).toHaveValue('2026-05-20');
+    expect(screen.getByLabelText('Expected finish')).toHaveValue('2026-05-20');
   });
 
   it('clears the secondary constraint to null and the ALAP flag to false on save', async () => {

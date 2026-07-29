@@ -796,6 +796,31 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   resolved **toward the code**: hiding a tab whose values the reader may not see beats shading it,
   which would claim the activity has no cost. Supersedes nothing; builds on ADR-0028/0042/0044/0053.
 
+- **ADR-0061** _(Accepted)_ — Dialog layout: form-layout primitives, and the two-pane
+  editor. Every dialog body was the same shape — one `flex flex-col gap-4` around one
+  field or around nine — so the structure could not say which fields belonged together
+  or which mattered; and `Dialog` defaults to `max-w-md`, so both the four-tab activity
+  editor and the eight-field resource form were **448px** wide (the editor's Scheduling
+  tab ~940px tall, Save below the fold). The fix is a **vocabulary, not a stylesheet**:
+  `FormSection` (a named group — `role="group"` + a real `<h3>`, because a `<legend>`
+  only captions as first child and a fieldset's `min-width: min-content` overflows a
+  narrow dialog), `FieldGrid` (two columns only where two controls are one decision; a
+  **container query**, since a dialog's width comes from its size preset and not the
+  viewport) and `ContextStrip` (the read-only facts an edit is about — withheld entirely
+  before first recalculation, because a row of em dashes reads as breakage). The activity
+  editor alone takes the **rail-beside-pane** layout at a new `xl` size, for the same
+  reason per-scope save was structural in ADR-0060: its scopes carry **different
+  permissions** and a horizontal strip has nowhere to say so, so a Contributor now sees
+  which sections are shut on arrival. `Tabs` gains `orientation="vertical"` (with its
+  consumer, which is what its own "no orientation prop" docblock was guarding against)
+  and a discriminated `TabMarker` — count/dot/locked had been inferred from whether a
+  number was present, which is how "3 problems" and "you cannot edit this" rendered as
+  the same dot. **Deliberately unflagged**: this is a structural refactor of nine dialog
+  bodies with no behavioural difference, and gating it would mean two copies of each in
+  one file; the existing suites query by role and label, which is exactly the contract it
+  preserves. The authoring rule lives in `docs/DESIGN_SYSTEM.md` §"Form layout" so the
+  next dialog is not a judgement call. Amends ADR-0060's layout, not its save model.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
