@@ -878,3 +878,22 @@ export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  * parity gate is untouched by construction.
  */
 export const GANTT_VIEW_ENABLED = flagDefaultOn(import.meta.env.VITE_GANTT_VIEW);
+
+/**
+ * Tabbed activity editor (ADR-0060, spec `docs/specs/activity-editor-restructure/`). **OFF by
+ * default** until the M6 gate. Replaces the 22-field single-submit `ActivityFormDialog` with a
+ * four-tab editor (General / Scheduling / Progress / Cost) that saves **per write scope**, and
+ * co-locates the progress model that is currently spread across four dialogs.
+ *
+ * Per-scope save is not a styling choice. Progress writes are deliberately not pen-gated
+ * (ADR-0028 Q-C) while definition writes are, so one merged Save would fuse a Contributor's
+ * capability with a Planner's and quietly remove the former.
+ *
+ * Flag-off renders the three existing dialogs byte-for-byte — the rollback contract the parity
+ * suites pin. Frontend-only: no schema, DTO or engine change, and no path into `computeSchedule`.
+ * (The steps edit-lock gate that shipped alongside this epic is **not** behind this flag: a server
+ * check cannot be gated by a client build-time constant — see ADR-0060 §5.)
+ */
+export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOff(
+  import.meta.env.VITE_ACTIVITY_EDITOR_TABS,
+);
