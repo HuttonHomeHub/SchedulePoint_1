@@ -36,7 +36,7 @@ export interface ActivityEditorGatingInput {
   canReadCost: boolean;
 }
 
-export type ActivityWritePath = ActivityScope | 'progress' | 'steps';
+export type ActivityWritePath = ActivityScope | 'progress' | 'steps' | 'logic' | 'resources';
 
 export interface ScopeGate {
   /** May the caller save this scope right now. */
@@ -92,5 +92,11 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
       ? { writable: true, reason: null, readable: true }
       : { writable: false, reason: NO_PROGRESS_ROLE, readable: true },
     steps: definition,
+    // Logic and Resources join the definition side unchanged — **the same object**, not a second
+    // expression of the same rule. Adding a link or an assignment has always needed the role and
+    // the pen, and reusing the object is what makes "this epic changes no permission" checkable
+    // rather than asserted (the identity test in the sibling suite).
+    logic: definition,
+    resources: definition,
   };
 }

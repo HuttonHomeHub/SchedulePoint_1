@@ -15,10 +15,11 @@ import type { ActivitySummary } from '@repo/types';
  * query, so a refetch carries the current `version` into the next save and the editor closes by
  * itself when its target is deleted — the same rule the crud dialogs already followed.
  */
-export type ActivityEditorTab = 'general' | 'scheduling' | 'progress' | 'cost';
+export type ActivityEditorTab =
+  'general' | 'scheduling' | 'logic' | 'progress' | 'cost' | 'resources';
 
 /** Why the editor is being opened. Maps to a tab — and, for steps, to a focus target within it. */
-export type ActivityEditorPurpose = 'edit' | 'progress' | 'steps';
+export type ActivityEditorPurpose = 'edit' | 'progress' | 'steps' | 'logic' | 'resources';
 
 export interface ActivityEditorIntent {
   activityId: string;
@@ -44,6 +45,12 @@ export function openActivityEditor(
   purpose: ActivityEditorPurpose,
 ): ActivityEditorIntent {
   switch (purpose) {
+    // Logic and Resources were dialogs of their own until the convergence epic; as purposes they
+    // are the plainest kind — one entry point, one tab, no focus target inside it.
+    case 'logic':
+      return { activityId: activity.id, tab: 'logic' };
+    case 'resources':
+      return { activityId: activity.id, tab: 'resources' };
     case 'progress':
       return { activityId: activity.id, tab: 'progress' };
     case 'steps':

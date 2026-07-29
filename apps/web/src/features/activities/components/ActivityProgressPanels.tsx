@@ -22,12 +22,12 @@ import {
 } from '../schemas/step-schemas';
 
 import { seedMeasure } from './activity-editor-seeds';
-import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid } from '@/components/ui/form-layout';
+import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
 
 /**

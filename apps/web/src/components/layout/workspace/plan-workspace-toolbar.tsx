@@ -326,7 +326,7 @@ export function ToolbarPlanWorkspace({
       // flag-gated), so the prop is simply absent.
       {...(CANVAS_ACTIVITY_TYPES_ENABLED ? { onLoeSpan: model.createLoeSpan } : {})}
       onAutoArrange={model.onTsldAutoArrange}
-      onOpenLogic={model.setLogicActivity}
+      onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each

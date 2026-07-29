@@ -146,7 +146,7 @@ function Adr0030PlanWorkspace({
       onLag={model.onTsldLag}
       onLink={model.onTsldLink}
       onAutoArrange={model.onTsldAutoArrange}
-      onOpenLogic={model.setLogicActivity}
+      onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each

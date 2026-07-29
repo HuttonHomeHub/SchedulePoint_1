@@ -5,8 +5,14 @@ import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ACTIVITY_EDITOR_TABS_ENABLED } from '@/config/env';
+import {
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
+  ACTIVITY_EDITOR_TABS_ENABLED,
+  CANVAS_DIRECT_MANIPULATION_ENABLED,
+  PROGRAMME_SCHEDULING_ENABLED,
+} from '@/config/env';
 import { ActivityEditorDialog, ActivityFormDialog, useDeleteActivity } from '@/features/activities';
+import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
@@ -84,6 +90,34 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
           planActivities={model.activities.data ?? []}
           activity={intended}
           {...(model.editorIntent ? { intent: model.editorIntent } : {})}
+          {...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+            ? {
+                // The Logic tab's seams, which `plan-dialogs` wired into the Logic dialog before
+                // this. Each is named in the plan as a thing that dies silently if it is dropped
+                // in the move — the undo recording for a removed link, the keyboard lag nudge, and
+                // the cross-plan section this feature must not import sideways — so each has its
+                // own regression test.
+                logic: {
+                  onRemoved: model.recordDependencyRemove,
+                  ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
+                    ? { onNudgeLag: model.nudgeDependencyLag }
+                    : {}),
+                  ...(PROGRAMME_SCHEDULING_ENABLED && intended
+                    ? {
+                        crossPlanSlot: (
+                          <CrossPlanLinksSection
+                            orgSlug={orgSlug}
+                            planId={planId}
+                            activity={intended}
+                            canManageLogic={model.canManageLogic}
+                            enabled={intended !== undefined}
+                          />
+                        ),
+                      }
+                    : {}),
+                },
+              }
+            : {})}
         />
       ) : (
         <ActivityFormDialog

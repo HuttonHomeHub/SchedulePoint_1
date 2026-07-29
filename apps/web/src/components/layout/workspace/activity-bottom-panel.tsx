@@ -84,7 +84,7 @@ export function ActivityBottomPanel({
           canWrite={model.canEditSchedule}
           canReportProgress={model.canProgress}
           editorGating={model.activityEditorGating}
-          onOpenLogic={model.setLogicActivity}
+          onOpenLogic={model.onOpenLogic}
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
           calendarsError={model.calendars.isError}

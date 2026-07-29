@@ -7,6 +7,7 @@ import { activityKeys } from '../api/use-activities';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable } from './ActivitiesTable';
+
 import { expectInert } from '@/components/ui/scope-save-bar-assertions';
 
 /**

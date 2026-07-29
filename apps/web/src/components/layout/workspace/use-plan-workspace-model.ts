@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_EDITOR_TABS_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
@@ -48,6 +49,7 @@ import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
 import {
   addCalendarDays,
   todayDayFraction,
+  useCoalescedLagNudge,
   useNow,
   type TsldCreateInput,
   type TsldCreateOutcome,
@@ -172,6 +174,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         ? setEditorIntent(openActivityEditor(a, 'edit'))
         : setEditActivityId(a.id),
     [],
+  );
+  // The **Logic** entry point, shared by the canvas selection bar, the canvas keyboard (Enter on a
+  // focused bar), the row menu and the bottom panel. Flag-on it opens the editor's Logic tab
+  // instead of a dialog of its own (the convergence epic); flag-off it is `setLogicActivity`, which
+  // is what every host called directly before — the same conditional shape `onEditActivity` uses.
+  const onOpenLogic = useCallback(
+    (a: ActivitySummary) =>
+      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+        ? setEditorIntent(openActivityEditor(a, 'logic'))
+        : setLogicActivity(a),
+    [setLogicActivity],
   );
   // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
   // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
@@ -854,6 +867,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     }
   };
 
+  // The keyboard lag nudge (ADR-0052 M3) composed once, here, rather than in whichever component
+  // happens to host the Logic panel: it is rendered by the Logic *dialog* flag-off and by the
+  // editor's Logic *tab* flag-on, and two call sites of the same hook is how the two surfaces
+  // would drift. The coalescing is what makes `Shift+←/→` held down one PATCH rather than ten.
+  const nudgeDependencyLag = useCoalescedLagNudge({
+    onLag: onTsldLag,
+    dependencies: dependencies.data ?? [],
+    announce,
+  });
+
   // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
   // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
   // engine rejects — surfaced non-destructively (nothing was created), never retried.
@@ -1195,6 +1218,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     toggleOverAllocation,
     logicActivity,
     setLogicActivity,
+    // The Logic entry point every host calls (canvas bar, row menu, keyboard Enter). Flag-on it
+    // builds the editor intent; flag-off it opens the dialog, exactly as before.
+    onOpenLogic,
+    // The coalesced keyboard lag nudge, composed once here so the Logic dialog and the Logic tab
+    // cannot end up with two different implementations of the same chord.
+    nudgeDependencyLag,
     // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the
     // toolbar **Add note** opener that sets it. Inert unless `VITE_NOTES`/quick-wins are on.
     logicRevealNotes,

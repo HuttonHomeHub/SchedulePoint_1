@@ -2,6 +2,7 @@ import {
   SELECTABLE_CONSTRAINT_TYPES,
   type ActivitySummary,
   type CalendarSummary,
+  type DependencySummary,
 } from '@repo/types';
 import { DURATION_TYPES } from '@repo/types';
 import { useState } from 'react';
@@ -11,7 +12,7 @@ import { costBody, generalBody, schedulingBody } from '../api/scope-bodies';
 import { useUpdateActivityFields } from '../api/use-activities';
 import { activityContextFacts, activitySubtitle } from '../lib/activity-editor-context';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
-import type { ActivityEditorIntent } from '../lib/activity-editor-intent';
+import type { ActivityEditorIntent, ActivityEditorTab } from '../lib/activity-editor-intent';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
@@ -34,7 +35,6 @@ import {
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
-import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -55,10 +55,12 @@ import {
   FieldGridFull,
   FormSection,
 } from '@/components/ui/form-layout';
+import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   ACTIVITY_CALENDAR_ENABLED,
+  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
@@ -68,9 +70,10 @@ import {
   INTER_PROJECT_DATES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
+import { ActivityLogicPanel } from '@/features/dependencies';
 import { cn } from '@/lib/utils';
 
-type TabKey = 'general' | 'scheduling' | 'progress' | 'cost';
+type TabKey = ActivityEditorTab;
 
 /**
  * The tabbed activity editor (ADR-0060). Behind `VITE_ACTIVITY_EDITOR_TABS`; the flag-off path
@@ -117,6 +120,7 @@ export function ActivityEditorDialog({
   calendarsLoading = false,
   calendarsError = false,
   planActivities = [],
+  logic,
 }: {
   orgSlug: string;
   planId: string;
@@ -139,6 +143,20 @@ export function ActivityEditorDialog({
   /** The calendar list failed — surfaced in the picker, not swallowed. */
   calendarsError?: boolean;
   planActivities?: ActivitySummary[];
+  /**
+   * Composition-root wiring for the **Logic** tab, grouped so the tab's seams arrive and leave
+   * together rather than as four loose props (the cross-plan slot is the `notesSlot` precedent:
+   * this feature must not import `cross-plan-dependencies` sideways). Absent ⇒ the tab renders the
+   * plain panel, which is what a host without those flags wants.
+   */
+  logic?: {
+    /** `VITE_PROGRAMME_SCHEDULING`'s cross-plan links section (ADR-0045). */
+    crossPlanSlot?: React.ReactNode;
+    /** Undo recording for a removed link (ADR-0048 M2). */
+    onRemoved?: (dependency: DependencySummary) => void;
+    /** The coalesced keyboard lag nudge (ADR-0052 M3) — `Shift+←/→` on a link's row buttons. */
+    onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
+  };
 }): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
@@ -277,6 +295,11 @@ export function ActivityEditorDialog({
       label: 'Scheduling',
       ...marker(scheduling.errorCount, scheduling.isDirty, gating.scheduling.writable),
     },
+    // Logic is a **collection**, not a form: it has no draft state to be dirty and no field to be
+    // invalid, so it can only ever carry the read-only marker (spec §2 "Save model").
+    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+      ? [{ id: 'logic' as const, label: 'Logic', ...collectionMarker(gating.logic) }]
+      : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
     // so a padlock here would be a lie in exactly the situation the rail exists to clarify.
     { id: 'progress', label: 'Progress' },
@@ -649,6 +672,24 @@ export function ActivityEditorDialog({
                 </form>
               ) : null}
 
+              {/* Logic — the same `ActivityLogicPanel` the Logic dialog renders, not a copy of it.
+                  Its queries are gated on this tab being the active one, so opening the editor on
+                  General does not fetch every activity's predecessors on the way past. */}
+              {current === 'logic' ? (
+                <ActivityLogicPanel
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  planActivities={planActivities}
+                  canManageLogic={gating.logic.writable}
+                  enabled={open && current === 'logic'}
+                  {...(activity ? { activity } : {})}
+                  {...(gating.logic.reason ? { manageLogicReason: gating.logic.reason } : {})}
+                  {...(logic?.crossPlanSlot ? { crossPlanSlot: logic.crossPlanSlot } : {})}
+                  {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
+                  {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
+                />
+              ) : null}
+
               {/* The co-location (M4): three panels, three write scopes, each headed by what it
                   does to the schedule. Rendered only when a row exists — every panel writes. */}
               {current === 'progress' && activity ? (
@@ -805,6 +846,19 @@ export function ActivityEditorDialog({
  * because it is the *stable* fact — and a scope cannot be both dirty and read-only anyway, since a
  * shut form has nothing to dirty.
  */
+/**
+ * The marker for a **collection** tab — Logic, Resources — which owns no draft state.
+ *
+ * Deliberately never `dot` or `count`: a link is created by its own request the moment you press
+ * Add, so there is nothing unsaved to warn about and nothing for the discard confirmation to name.
+ * Sharing {@link marker} would have made that a bug waiting for someone to pass a count.
+ */
+function collectionMarker(gate: { writable: boolean }): Pick<TabDescriptor<string>, 'marker'> {
+  return gate.writable
+    ? {}
+    : { marker: { kind: 'locked', label: 'read-only' } satisfies TabMarker };
+}
+
 function marker(
   errorCount: number,
   dirty: boolean,
