@@ -2054,6 +2054,12 @@ export interface WbsBandPalette {
  *
  * O(rendered bars + 1) per frame — typically under 50 against the scene's 2,000. The label is
  * guarded on `fillText`/`measureText` like the strip's, so the minimal test context never throws.
+ *
+ * `offsetY` exists for the **image export** (ADR-0063 §M5), which has no separate band canvas: the
+ * band is drawn into the same surface as the diagram, below the title strip. It rides in the
+ * transform rather than being added to each bar's `y`, so the band's own geometry stays
+ * band-local — the coordinate space the hit-test and the live canvas both use. Defaulting it to 0
+ * leaves the live path byte-identical.
  */
 export function paintWbsBand(
   ctx: Ctx2D,
@@ -2062,8 +2068,9 @@ export function paintWbsBand(
   band: Size,
   palette: WbsBandPalette,
   dpr = 1,
+  offsetY = 0,
 ): void {
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, offsetY * dpr);
   ctx.clearRect(0, 0, band.width, band.height);
 
   // A hairline at the band's foot separates it from the scene — a structural divider, so it is

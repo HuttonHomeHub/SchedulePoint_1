@@ -55,6 +55,21 @@ decision is made; only the work is outstanding.
 - `M` **Privacy operations** — a hard-delete path and a data-export path, both
   explicit and audited. Everything is a soft delete today.
 
+## WBS follow-ons (ADR-0063)
+
+- `S` **Dissolve for a resource `GROUP`** — the resource tree (ADR-0053 §3) has the same shape as
+  the WBS tree and the same problem: deleting a group takes its subtree with it, and there is no
+  way to remove the grouping alone. Deliberately out of scope for ADR-0063 (spec C-6), which was
+  about the WBS; the asymmetry is a stated decision, not an oversight, and this is where it gets
+  closed. The service-side shape is already proven — re-parent the children under the lock, then
+  soft-delete the now-childless node.
+- `S` **Nest a summary from the Members panel** — spec C-1b deliberately kept WBS nesting in the
+  Breakdown picker, because a checklist that can restructure the tree needs cycle feedback a
+  checklist cannot express well. Worth revisiting with a design for that feedback rather than by
+  simply widening the list.
+- `S` **A shape cue for the derived Unassigned band bar** (TECH_DEBT #71) and a widened
+  `CheckboxField` for the bulk-selection column (TECH_DEBT #72).
+
 ## Engineering / delivery
 
 - `M` **Decide and document the hosting platform** (see

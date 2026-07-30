@@ -1,8 +1,10 @@
 # Implementation Plan: WBS improvements
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved. **M0 landed** (API foundations + the honest delete warning);
-  **M1 landed** (the Members tab, behind `VITE_WBS_IMPROVEMENTS`, default off).
+- **Status:** **Complete.** M0–M6 landed; `VITE_WBS_IMPROVEMENTS` is **default-on** (2026-07-30).
+  M4b (table multi-select, the product owner's "Both") landed with M5. The follow-ons the epic
+  deliberately did not do are in `docs/BACKLOG.md` → "WBS follow-ons"; the gate findings it recorded
+  rather than rushed are `docs/TECH_DEBT.md` #71–#74.
 - **Owner:** _(unassigned)_
 
 > **Deviations from this plan as written, recorded rather than silently absorbed:**

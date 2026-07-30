@@ -1,5 +1,7 @@
 export { ActivityMembersPanel } from './components/ActivityMembersPanel';
-export { membershipDiff, type MembershipChange } from './model/membership-diff';
+export { WbsBulkAssignBar } from './components/WbsBulkAssignBar';
+export { bulkParentChanges, membershipDiff, type MembershipChange } from './model/membership-diff';
+export { deriveWbsBandSource, type WbsBandSource } from './model/wbs-band-source';
 export {
   deriveWbsGroups,
   groupHasBar,

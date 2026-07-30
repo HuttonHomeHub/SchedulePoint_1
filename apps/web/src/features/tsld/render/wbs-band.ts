@@ -89,9 +89,12 @@ export function wbsBandDepths(groups: readonly WbsBandGroup[]): number {
  *
  * Three things are excluded, each for its own reason:
  *
- * - **Deeper than the cap** — it keeps today's treatment in the scene (ADR-0063 §3). It is not
- *   lost; the band's accessible description says the cap exists and that deeper groupings remain
- *   below.
+ * - **Deeper than the cap** — it keeps today's treatment in the scene (ADR-0063 §3), so it is not
+ *   lost: a depth-3 summary is still an ordinary bar in the diagram and still an option in the
+ *   parallel listbox. (An earlier draft of this comment claimed the band carried an accessible
+ *   description saying the cap exists; it never did, and asserting a UX property that has not
+ *   shipped is the drift ADR-0058 exists to stop. If that description is wanted, build it — do not
+ *   describe it here.)
  * - **No span** — a group whose members are all uncalculated has no dates. Drawing a bar at an
  *   invented position would state a schedule the engine has not produced.
  * - **Entirely off-surface** — the viewport cull, mirroring the scene's.
@@ -153,4 +156,34 @@ export function wbsBandHitTest(
     if (x >= bar.x && x < bar.x + bar.w && y >= bar.y && y < bar.y + bar.h) return bar;
   }
   return null;
+}
+
+/**
+ * Where a band bar sits in **viewport** coordinates, given the SCENE canvas's own box.
+ *
+ * This exists because of the defect the M6 review found: the floating selection bar anchors to the
+ * selected activity's rect, and a summary is not in the scene when the band is on — so the anchor
+ * went `null`, the bar hid itself with `visibility: hidden`, and Dissolve/Edit/Delete left both the
+ * screen and the tab order for exactly the objects the band exists to show.
+ *
+ * The arithmetic is the load-bearing part and the reason this is a function rather than three lines
+ * inlined in the render loop: the band canvas is pinned at the ruler and the scene starts a band's
+ * height BELOW it, so a band bar's viewport top is the scene box's top **minus** the band height,
+ * plus the bar's own `y`. Getting that sign wrong puts the actions bar a band's height out of
+ * place, which looks like nothing at all until someone notices it overlapping the ruler.
+ *
+ * Returns `null` when the bar is culled off the surface horizontally, matching the scene path's
+ * own on-surface test — a bar scrolled out of view has no anchor to offer.
+ */
+export function wbsBandBarAnchor(
+  bar: Pick<WbsBandBar, 'x' | 'w' | 'y'>,
+  wbsBandHeightPx: number,
+  box: { top: number; left: number },
+  surfaceWidth: number,
+): { top: number; centerX: number } | null {
+  if (bar.x + bar.w <= 0 || bar.x >= surfaceWidth) return null;
+  return {
+    top: box.top - wbsBandHeightPx + bar.y,
+    centerX: box.left + bar.x + bar.w / 2,
+  };
 }

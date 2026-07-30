@@ -194,3 +194,65 @@ describe('resolvePrintPalette', () => {
     }
   });
 });
+
+/**
+ * The WBS band's reservation (ADR-0063 §M5). The band is drawn between the title strip and the
+ * diagram, so the diagram has to start lower and the surface has to be taller — by exactly the
+ * band's height, in both extents. Getting this wrong does not throw: it draws the band over the
+ * first lane of bars, which reads as a rendering glitch rather than as a geometry bug.
+ */
+describe('buildExportViewport — WBS band reservation', () => {
+  const LIVE = {
+    view: { pxPerDay: 8, originX: 40, originY: 12 },
+    size: { width: 900, height: 500 },
+  };
+  const BAND = 24;
+
+  it('pushes the VIEW crop down by the band and grows the surface to match', () => {
+    const without = buildExportViewport([], '2026-01-01', { extent: 'view', liveViewport: LIVE });
+    const with_ = buildExportViewport([], '2026-01-01', {
+      extent: 'view',
+      liveViewport: LIVE,
+      wbsBandHeight: BAND,
+    });
+    expect(with_.viewport.originY).toBe(without.viewport.originY + BAND);
+    expect(with_.size.height).toBe(without.size.height + BAND);
+    // The horizontal framing is untouched — the band is a vertical reservation only.
+    expect(with_.viewport.originX).toBe(without.viewport.originX);
+    expect(with_.size.width).toBe(without.size.width);
+  });
+
+  it('pushes the WHOLE framing down by the band too', () => {
+    const activities = [
+      {
+        id: 'a',
+        name: 'A',
+        laneIndex: 0,
+        earlyStart: '2026-01-01',
+        earlyFinish: '2026-01-10',
+      },
+    ] as unknown as Parameters<typeof buildExportViewport>[0];
+    const without = buildExportViewport(activities, '2026-01-01', {
+      extent: 'whole',
+      liveViewport: LIVE,
+    });
+    const with_ = buildExportViewport(activities, '2026-01-01', {
+      extent: 'whole',
+      liveViewport: LIVE,
+      wbsBandHeight: BAND,
+    });
+    expect(with_.viewport.originY).toBe(without.viewport.originY + BAND);
+    expect(with_.size.height).toBe(without.size.height + BAND);
+  });
+
+  // The parity default: omitting it is the prior geometry, not "the same by luck".
+  it('reserves nothing by default', () => {
+    const omitted = buildExportViewport([], '2026-01-01', { extent: 'view', liveViewport: LIVE });
+    const zero = buildExportViewport([], '2026-01-01', {
+      extent: 'view',
+      liveViewport: LIVE,
+      wbsBandHeight: 0,
+    });
+    expect(omitted).toEqual(zero);
+  });
+});

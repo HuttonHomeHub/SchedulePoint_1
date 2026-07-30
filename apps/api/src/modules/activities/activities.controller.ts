@@ -31,6 +31,7 @@ import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivitiesService } from './activities.service';
 import { ActivityResponseDto } from './dto/activity-response.dto';
+import { DissolveSummaryResponseDto } from './dto/dissolve-summary-response.dto';
 import { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 
@@ -150,18 +151,22 @@ export class ActivitiesController {
   }
 
   @Post(':activityId/dissolve')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Dissolve a WBS summary — remove the grouping, keep the work.',
     description:
       'Promotes the summary’s direct children to its own parent (or the top level), then ' +
       'soft-deletes the now-childless summary, in one transaction. The deliberate opposite of ' +
       'DELETE, which cascades to the whole subtree. Restoring a dissolved summary brings back the ' +
-      'summary ALONE — its former children stay where they were promoted to.',
+      'summary ALONE — its former children stay where they were promoted to. ' +
+      '**This write mutates sibling rows**: every promoted child’s `parentId` changes and its ' +
+      'optimistic-lock `version` is incremented, so a client holding a cached copy of one would ' +
+      'otherwise 409 on its next save with no explanation. The response returns those rows at ' +
+      'their new versions — the caller cannot derive them, since it did not know which activities ' +
+      'were children and the count alone would not carry the versions.',
   })
-  @ApiNoContentResponse()
+  @ApiOkResponse({ type: DissolveSummaryResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiNotFoundResponse({ description: 'Activity not found in this organisation.' })
   @ApiUnprocessableEntityResponse({
     description: 'The activity is not a WBS summary (NOT_A_SUMMARY).',
   })
@@ -170,8 +175,9 @@ export class ActivitiesController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
-  ): Promise<void> {
-    await this.service.dissolveSummary(principal, orgSlug, activityId);
+  ): Promise<DissolveSummaryResponseDto> {
+    const { promoted } = await this.service.dissolveSummary(principal, orgSlug, activityId);
+    return { promoted };
   }
 
   @Post(':activityId/restore')

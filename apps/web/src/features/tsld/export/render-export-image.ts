@@ -1,6 +1,7 @@
-import { paintScene, type TsldScene } from '../render/paint';
+import { paintScene, paintWbsBand, type TsldScene, type WbsBandPalette } from '../render/paint';
 import type { PrintPalette } from '../render/palette';
 import type { Size, Viewport } from '../render/render-model';
+import type { WbsBandBar } from '../render/wbs-band';
 
 /**
  * The thin, off-screen **Diagram-PNG renderer** for the TSLD export deliverables (spec
@@ -54,6 +55,17 @@ export interface RenderExportImageInput {
   /** Whether the raster was scaled to fit the cap — the band notes it. */
   scaledToFit: boolean;
   meta: ExportImageMeta;
+  /**
+   * The **WBS band** (ADR-0063), when it is on. Placed directly under the title strip and above the
+   * diagram, in the height `buildExportViewport` reserved for it — so a planner who turned the band
+   * on gets the picture they were looking at, phases and all. Absent (the default) is the byte-for-
+   * byte prior export.
+   *
+   * `bars` are already placed against the export viewport by `wbsBandBars`, which is the same
+   * function the live canvas calls with the live one. Nothing about *where* a phase sits is
+   * re-derived here.
+   */
+  wbsBand?: { height: number; bars: readonly WbsBandBar[]; palette: WbsBandPalette };
 }
 
 /** Injectable seams so the off-screen render is testable without a real 2D context. */
@@ -87,7 +99,7 @@ export async function renderExportImage(
   input: RenderExportImageInput,
   deps: RenderExportImageDeps = {},
 ): Promise<Blob> {
-  const { scene, viewport, size, dpr, topBand, palette, scaledToFit, meta } = input;
+  const { scene, viewport, size, dpr, topBand, palette, scaledToFit, meta, wbsBand } = input;
   const createCanvas = deps.createCanvas ?? (() => document.createElement('canvas'));
   const paint = deps.paint ?? paintScene;
 
@@ -101,6 +113,25 @@ export async function renderExportImage(
   // CSS px, so every draw below stays in CSS px too. It clears to transparent, so the white ground is
   // laid BEHIND everything afterwards (`destination-over`).
   paint(ctx, scene, viewport, size, palette, dpr);
+
+  // The band goes in BEFORE the paper ground: `paintWbsBand` clears its own strip (it owns a canvas
+  // on the live path), and clearing after the ground was laid would punch a transparent hole
+  // through the paper. Clearing here removes only diagram pixels — gridlines that ran up into the
+  // reserved strip — which is exactly what the live band canvas hides behind itself.
+  if (wbsBand && wbsBand.height > 0) {
+    paintWbsBand(
+      ctx,
+      wbsBand.bars,
+      null,
+      { width: size.width, height: wbsBand.height },
+      wbsBand.palette,
+      dpr,
+      topBand,
+    );
+    // `paintWbsBand` left the transform offset at the band; restore the surface's own frame so the
+    // ground fill and the title band author in page coordinates.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
 
   ctx.globalCompositeOperation = 'destination-over';
   ctx.fillStyle = palette.ground;

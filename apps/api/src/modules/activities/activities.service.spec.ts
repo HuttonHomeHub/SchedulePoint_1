@@ -937,11 +937,24 @@ describe('ActivitiesService', () => {
   describe('dissolveSummary', () => {
     /** The tx client's `activity.updateMany`, used to promote the children. */
     let txUpdateMany: ReturnType<typeof vi.fn>;
+    /** The tx client's `findFirst` — the summary RE-READ under the lock (the M6 perf finding). */
+    let txFindFirst: ReturnType<typeof vi.fn>;
+    /** The tx client's `findMany` — the children before, and the promoted rows after. */
+    let txFindMany: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
       txUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
+      txFindFirst = vi.fn().mockResolvedValue({ parentId: null });
+      txFindMany = vi.fn().mockResolvedValue([]);
       prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
-        cb({ $executeRaw: txExecuteRaw, activity: { updateMany: txUpdateMany } }),
+        cb({
+          $executeRaw: txExecuteRaw,
+          activity: {
+            updateMany: txUpdateMany,
+            findFirst: txFindFirst,
+            findMany: txFindMany,
+          },
+        }),
       );
     });
 
@@ -950,6 +963,7 @@ describe('ActivitiesService', () => {
 
     it('promotes the direct children to the summary’s own parent, then deletes it', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(summary({ parentId: 'grandparent' }));
+      txFindFirst.mockResolvedValue({ parentId: 'grandparent' });
       await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
 
       expect(txUpdateMany).toHaveBeenCalledWith({
@@ -970,6 +984,56 @@ describe('ActivitiesService', () => {
       expect(txUpdateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ parentId: null }) }),
       );
+    });
+
+    /**
+     * **The M6 backend-performance finding.** The summary is read once BEFORE the lock (to check
+     * its type and find its plan), and the children's new parent must come from a read taken
+     * AFTER it. Between the two, a concurrent `update` — which takes the same lock, so this is
+     * precisely the race the lock exists to settle — can re-parent the summary; using the pre-lock
+     * value would file the children under a grandparent it no longer has. A silently wrong tree,
+     * produced by a transaction that looks correctly serialised.
+     */
+    it('takes the children’s new parent from the RE-READ under the lock, not the pre-lock read', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary({ parentId: 'stale-grandparent' }));
+      // Someone re-parented the summary in the window before the lock was taken.
+      txFindFirst.mockResolvedValue({ parentId: 'fresh-grandparent' });
+
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+
+      expect(txUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ parentId: 'fresh-grandparent' }),
+        }),
+      );
+    });
+
+    it('404s when the summary vanished between the pre-lock read and the lock', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      txFindFirst.mockResolvedValue(null);
+      await expect(
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    /**
+     * The caller could not have predicted which rows moved — it did not know the summary's
+     * children — and each one's `version` was bumped, so a cached copy is now stale. Returning
+     * them is what stops the next save 409-ing for a reason the user did not cause.
+     */
+    it('returns the promoted rows at their new versions', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      txFindMany.mockResolvedValueOnce([{ id: 'c1' }, { id: 'c2' }]).mockResolvedValueOnce([
+        { id: 'c1', parentId: null, version: 3 },
+        { id: 'c2', parentId: null, version: 8 },
+      ]);
+
+      const result = await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+
+      expect(result.promoted).toEqual([
+        { id: 'c1', parentId: null, version: 3 },
+        { id: 'c2', parentId: null, version: 8 },
+      ]);
     });
 
     // A promoted child's row changed, so a client holding the old copy must not be able to write
@@ -993,7 +1057,7 @@ describe('ActivitiesService', () => {
       txUpdateMany.mockResolvedValue({ count: 0 });
       await expect(
         service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ promoted: [] });
       expect(lifecycle.cascadeSoftDelete).toHaveBeenCalled();
     });
 
@@ -1003,6 +1067,19 @@ describe('ActivitiesService', () => {
         service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
       ).rejects.toBeInstanceOf(ValidationError);
       expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Gate first: a caller without the pen is told THAT, not the activity's type. The security
+     * review's ordering nit, and the ordering every other structural write already uses.
+     */
+    it('asserts the pen BEFORE the type check', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
+      const locked = new LockedError('nope', { reason: 'PLAN_EDIT_LOCK_REQUIRED', holder: null });
+      penGuard.assertHoldsPen.mockRejectedValue(locked);
+      await expect(service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID)).rejects.toBe(
+        locked,
+      );
     });
 
     it('404s a missing activity', async () => {

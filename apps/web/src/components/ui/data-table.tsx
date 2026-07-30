@@ -9,6 +9,13 @@ export interface Column<T> {
   header: string;
   /** Cell renderer for a row. */
   cell: (row: T) => React.ReactNode;
+  /**
+   * Render a control in the header cell instead of the {@link header} text — a select-all checkbox,
+   * a sort trigger. The control must carry its own accessible name, because it replaces the text
+   * that would otherwise have named the column. {@link header} is still required: it stays the
+   * column's key and its identity in code.
+   */
+  headerCell?: () => React.ReactNode;
   /** Visually hide the header (e.g. an actions column). */
   srHeader?: boolean;
   headClassName?: string;
@@ -78,7 +85,13 @@ export function DataTable<T>({
                 scope="col"
                 className={column.headClassName ?? 'py-2 pr-4 font-medium'}
               >
-                {column.srHeader ? <span className="sr-only">{column.header}</span> : column.header}
+                {column.headerCell ? (
+                  column.headerCell()
+                ) : column.srHeader ? (
+                  <span className="sr-only">{column.header}</span>
+                ) : (
+                  column.header
+                )}
               </th>
             ))}
           </tr>

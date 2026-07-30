@@ -55,6 +55,14 @@ export interface BuildExportViewportOptions {
   padding?: number;
   /** Reserved title/legend band height (defaults to {@link EXPORT_TOP_BAND}). */
   topBand?: number;
+  /**
+   * Extra reserved height (CSS px) for the **WBS band** (ADR-0063), when it is on. Reserved here
+   * rather than folded into `topBand` because the two strips are different things drawn by
+   * different code: the title band is export chrome, the WBS band is part of the diagram, and only
+   * the second one has to line up with the time axis below it. `0` (the default) is the byte-for-
+   * byte prior geometry.
+   */
+  wbsBandHeight?: number;
 }
 
 export interface ExportViewport {
@@ -88,6 +96,8 @@ export function buildExportViewport(
   const maxPx = options.maxPx ?? EXPORT_MAX_PX;
   const padding = options.padding ?? EXPORT_PADDING;
   const topBand = options.topBand ?? EXPORT_TOP_BAND;
+  // Everything reserved above the diagram: the title strip, then the WBS band under it.
+  const reserved = topBand + (options.wbsBandHeight ?? 0);
   const { view: liveView, size: liveSize } = options.liveViewport;
 
   let viewport: Viewport;
@@ -105,23 +115,23 @@ export function buildExportViewport(
     }
     const contentW = (extent.maxDay - extent.minDay) * pxPerDay;
     const contentH = (maxLane + 1) * LANE_HEIGHT;
-    size = { width: contentW + padding * 2, height: topBand + contentH + padding * 2 };
+    size = { width: contentW + padding * 2, height: reserved + contentH + padding * 2 };
     viewport = {
       pxPerDay,
       originX: padding - extent.minDay * pxPerDay,
-      originY: topBand + padding,
+      originY: reserved + padding,
     };
   } else {
     // VIEW (and the degenerate WHOLE-with-nothing-placeable case): crop to the live viewport, with the
     // band reserved above it (the diagram shifts down by `topBand`, preserving the live framing).
     size = {
       width: Math.max(1, liveSize.width),
-      height: topBand + Math.max(1, liveSize.height),
+      height: reserved + Math.max(1, liveSize.height),
     };
     viewport = {
       pxPerDay: liveView.pxPerDay,
       originX: liveView.originX,
-      originY: liveView.originY + topBand,
+      originY: liveView.originY + reserved,
     };
   }
 

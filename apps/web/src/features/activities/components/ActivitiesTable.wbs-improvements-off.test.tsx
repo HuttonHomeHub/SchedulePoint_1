@@ -57,6 +57,15 @@ describe('ActivitiesTable — VITE_WBS_IMPROVEMENTS off (parity)', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
   });
 
+  // M4b. The selection column is the most structural thing the epic adds to this surface — it
+  // shifts every other column one to the right — so a rollback that left it behind would be
+  // visible on the first screenshot and invisible to every test that queries by role.
+  it('adds no selection column and no bulk-assign bar', () => {
+    renderTable(ROWS);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Assign to')).not.toBeInTheDocument();
+  });
+
   // M0-T4 is deliberately unflagged: an honest delete warning is a bug fix, not a feature, so it
   // must not disappear with the flag it happens to have been built alongside.
   it('keeps the unflagged subtree warning on delete', () => {

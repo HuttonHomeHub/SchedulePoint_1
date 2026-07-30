@@ -6,6 +6,7 @@ import {
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
   SCHEDULING_MODES_ENABLED,
+  WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 
 /**
@@ -27,6 +28,9 @@ import {
  * `Month bands` (tsld-toolbar-canvas-refinements M5, F7b) joined the Structure group the same
  * way — gated on `VITE_CANVAS_VISUAL_LANGUAGE`, which decides whether the ground layer exists at
  * all; the toggle only lets a user switch an existing layer off for the session.
+ *
+ * `WBS band` (ADR-0063) is the newest Structure member, gated on `VITE_WBS_IMPROVEMENTS`. It is
+ * the entry this test was written for: the band's whole paint layer is unreachable without it.
  */
 describe('TSLD View▾ toggle registry', () => {
   it('offers every view layer the canvas can actually paint', () => {
@@ -36,6 +40,9 @@ describe('TSLD View▾ toggle registry', () => {
       'yearGrid',
       // The alternating month-band ground (F7b) — gated on VITE_CANVAS_VISUAL_LANGUAGE.
       'monthBands',
+      // The ADR-0063 pinned WBS band — gated on VITE_WBS_IMPROVEMENTS. It sits with its Structure
+      // group-mates rather than at the end: the order here is the order of the menu.
+      'wbsBand',
       'today',
       'nonWorking',
       'labels',
@@ -55,6 +62,7 @@ describe('TSLD View▾ toggle registry', () => {
     expect(CANVAS_LIVE_FEEDBACK_ENABLED).toBe(true);
     expect(SCHEDULING_MODES_ENABLED).toBe(true);
     expect(CANVAS_VISUAL_LANGUAGE_ENABLED).toBe(true);
-    expect(TSLD_VIEW_TOGGLE_KEYS).toHaveLength(11);
+    expect(WBS_IMPROVEMENTS_ENABLED).toBe(true);
+    expect(TSLD_VIEW_TOGGLE_KEYS).toHaveLength(12);
   });
 });

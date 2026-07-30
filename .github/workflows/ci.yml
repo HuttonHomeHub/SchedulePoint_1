@@ -273,6 +273,17 @@ jobs:
       - name: Web end-to-end tests (tabbed activity editor flag on)
         run: pnpm --filter @repo/web test:e2e:activity-editor
 
+      # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
+      # AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
+      # membership write is per-row optimistic-locked (a mocked fetch accepts any version, so the
+      # versions the multi-select sends are only really checked here), dissolving a summary loses no
+      # activity (counted at the API, not read off the screen), the cascade-delete warning states
+      # the real count, the pinned canvas band leaves the accessibility listbox's count unchanged,
+      # and releasing the pen shuts the writes. Runs after the prior suites tear down their servers,
+      # reusing the ports.
+      - name: Web end-to-end tests (WBS improvements flag on)
+        run: pnpm --filter @repo/web test:e2e:wbs
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -285,6 +296,7 @@ jobs:
             apps/web/playwright-report-toolbar/
             apps/web/playwright-report-authoring/
             apps/web/playwright-report-activity-editor/
+            apps/web/playwright-report-wbs/
             apps/web/playwright-report-programme/
             apps/web/playwright-report-notes/
             apps/web/playwright-report-undo/

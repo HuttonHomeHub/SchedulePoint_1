@@ -519,18 +519,28 @@ case-insensitive substring match bounded by the org filter; there is deliberatel
 - Batch writes are **all-or-nothing**: if any item fails its scope check (`404`) or version
   check (`409`), the whole batch is rejected and nothing is written. Cap the array server-side.
 - `PATCH …/plans/:planId/activities/parents` with `{ parents: [{ id, parentId, version }] }` is the
-  WBS-membership sibling — a `null` `parentId` files the activity back at the top level. Unlike
-  `positions` it is **structural**: `parentId` feeds the engine's WBS rollup, so a committed batch
-  leaves the plan's computed dates stale until the next recalculation.
-- `POST …/activities/:activityId/dissolve` (204) removes a WBS summary's grouping and **keeps the
-  work**: its direct children take its own parent, then the now-childless summary is soft-deleted,
-  in one transaction. It is a separate endpoint from `DELETE`, not a flag on it, because `DELETE`
-  cascades to the whole subtree — the destructive reading must never be the default. Restoring a
-  dissolved summary brings back the summary **alone**; the promotion is not undone.
+  WBS-membership sibling — a `null` `parentId` files the activity back at the top level. `parentId`
+  is **required but nullable**: this is a batch of complete rows, not a partial `PATCH`, so an
+  omitted field is a validation error rather than a silent "top level". Unlike `positions` it is
+  **structural**: `parentId` feeds the engine's WBS rollup, so a committed batch leaves the plan's
+  computed dates stale until the next recalculation.
+- `POST …/activities/:activityId/dissolve` (**200**) removes a WBS summary's grouping and **keeps
+  the work**: its direct children take its own parent, then the now-childless summary is
+  soft-deleted, in one transaction. It is a separate endpoint from `DELETE`, not a flag on it,
+  because `DELETE` cascades to the whole subtree — the destructive reading must never be the
+  default. Restoring a dissolved summary brings back the summary **alone**; the promotion is not
+  undone. It returns `{ promoted: [{ id, parentId, version }] }` rather than `204`, because it
+  mutates **sibling rows the caller never named** and bumps each one's `version`: a client cannot
+  derive which activities were children, so a bare 204 would leave every cached child stale and
+  409-ing on its next save for a reason the user did not cause (the cross-resource-recompute rule
+  above, applied to the WBS tree).
 - A batch whose items are individually valid may still be **jointly** invalid. `parents` is checked
   against the **resulting** tree, not the current one, so `[{A→B}, {B→A}]` — two rows that each
   file a childless top-level summary under another — is a `409 PARENT_CYCLE`. Validate the state a
-  batch would produce, never row against pre-state.
+  batch would produce, never row against pre-state. A row naming **itself** as its parent is
+  unconditionally invalid input rather than a state-dependent conflict, so it is a distinct
+  `422 SELF_PARENT` — `details.reason` is the field a client branches on, and must not mean two
+  different things under two different statuses.
 
 ## Validation & data types
 

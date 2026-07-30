@@ -294,3 +294,55 @@ unit tests that assert the acquisition and its ordering directly, and fail when 
 hand-rolled transactions racing the read-then-write with a barrier between the read and the write),
 or accept the HTTP tests as invariant tests and rename them so they stop implying a concurrency
 guarantee. Until then, do not add another "serialises concurrent …" e2e test and treat it as a gate.
+
+### 71. The WBS band's derived bucket is distinguished by colour and label, not shape
+
+`paintWbsBand` draws the derived **Unassigned** bucket as the same rounded rect as a real summary,
+in a different fill (`--color-muted-foreground` vs `--color-primary`) with its label on top. Every
+pairing clears 4.5:1 in all three themes today, so this is not a contrast failure — but at a zoom
+where `truncateToWidth` drops the label entirely, the only remaining difference is colour (WCAG
+1.4.1). Its Gantt sibling deliberately does better: `GanttBucketRowView` draws a **bracket**, not a
+bar, precisely so the bucket is not a fourth kind of bar on the chart.
+
+**What would close it:** give the derived bar a shape cue — a hairline dash, a squared corner —
+matching the Gantt's stated rule. Raised by the ADR-0063 M6 accessibility gate as a recommendation;
+also flagged by the UX gate, which noted the `muted-foreground`-as-fill / `primary-foreground`-as-ink
+pairing is not one of the design system's validated pairs and has no contrast test pinning it.
+
+### 72. Bulk-selection checkboxes are a 16px target, and hand-rolled
+
+The activities table's new selection column renders a bare `size-4` `<input type="checkbox">` per
+row. `ActivityMembersPanel` does better for the same job — the whole row is a clickable `<label>` —
+and `CheckboxField` (`components/ui/form.tsx`) exists to stop the chrome being hand-assembled at
+all. It is not a regression (`TsldViewControls` and the toolbar registry already hand-roll the same
+className for compact inline toggles), but the selection column is the fifth occurrence of a shape
+the design system has a primitive for.
+
+**What would close it:** widen `CheckboxField` to support a visually-hidden label and trailing row
+content — the two reasons a straight swap is not free today — then move all five call sites, and
+make the table row itself the hit target. Raised by the ADR-0063 M6 component and UX gates.
+
+### 73. `Column.srHeader` is dead once `headerCell` is set
+
+`DataTable`'s render ternary takes `headerCell` first, so a column declaring both (the activities
+table's Select column does) silently ignores `srHeader`. Harmless today — the checkbox carries its
+own `aria-label` — but it is a prop that looks load-bearing and is not.
+
+**What would close it:** either drop the redundant `srHeader` at the call site and say so in the
+`Column` docblock, or make the two compose (render the sr-only text _beside_ the control). Raised by
+the ADR-0063 M6 component gate.
+
+### 74. The plan advisory lock's contention headroom is unmeasured
+
+Five write paths now serialise on the same per-plan advisory key — activity create/update (parent
+branch), the batch membership write, dissolve, and recalculate — and none of the `$transaction`
+calls sets an explicit timeout, so they share Prisma's 5 s default. At the ~2,000-activity ceiling,
+if recalculate's hold time approaches that default, a batch WBS write queued behind it would fail
+with a P2028 timeout rather than waiting cleanly.
+
+**What would close it:** seed a 2,000-activity plan, measure recalculate's hold duration on the key
+and a concurrent `PATCH …/activities/parents`'s wait, then set explicit transaction timeouts against
+the measured numbers. Raised by the ADR-0063 M6 backend-performance gate as an open risk, not a
+confirmed defect — the design (plan-scoped key, skipped on the uncontended path) is otherwise sound.
+Related: the parent-chain walk inside that lock has **no depth cap**, unlike the resource tree's
+documented ≤ 10 (ADR-0053 §3).

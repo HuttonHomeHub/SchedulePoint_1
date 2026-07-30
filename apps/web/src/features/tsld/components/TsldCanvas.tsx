@@ -73,6 +73,7 @@ import { drawnSpanPlacement } from '../render/snap';
 import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
 import { useThemeVersion } from '../render/use-theme-version';
 import {
+  wbsBandBarAnchor,
   wbsBandBars,
   wbsBandHitTest,
   type WbsBandBar,
@@ -899,8 +900,19 @@ export function TsldCanvas({
     const size = sizeRef.current;
     if (size.width <= 1) return; // not measured yet
     const activity = activities.find((a) => a.id === selectedId);
-    if (!activity) return;
-    const rect = activityRect(activity, viewRef.current, dataDate);
+    // A selected summary is not in the SCENE when the band is on (ADR-0063 §4) — it is a band bar.
+    // The band is top-pinned, so it never needs revealing vertically, but it still scrolls out of
+    // the viewport horizontally, and a keyboard user arrowing onto an off-screen phase would
+    // otherwise be told nothing moved.
+    const bandBar =
+      !activity && selectedId !== null && wbsBandHeightPx > 0
+        ? (wbsBandBarsRef.current.find((b) => b.id === selectedId) ?? null)
+        : null;
+    const rect = activity
+      ? activityRect(activity, viewRef.current, dataDate)
+      : bandBar
+        ? { x: bandBar.x, y: 0, w: bandBar.w, h: 0 }
+        : null;
     if (!rect) return;
     const margin = LANE_HEIGHT;
     const reveal = (start: number, span: number, extent: number): number => {
@@ -912,13 +924,14 @@ export function TsldCanvas({
       return 0;
     };
     const dx = reveal(rect.x, rect.w, size.width);
-    const dy = reveal(rect.y, rect.h, size.height);
+    // A band bar has no vertical position in the scene, so only the horizontal pan applies.
+    const dy = bandBar ? 0 : reveal(rect.y, rect.h, size.height);
     if (dx !== 0 || dy !== 0) {
       viewRef.current = pan(viewRef.current, dx, dy);
       dirtyRef.current = true;
       interactionDirtyRef.current = true;
     }
-  }, [selectedId, activities, dataDate]);
+  }, [selectedId, activities, dataDate, wbsBandHeightPx]);
 
   // Publish the pending ghost to the loop.
   useEffect(() => {
@@ -1240,7 +1253,27 @@ export function TsldCanvas({
             centerX: box.left + rect.x + rect.w / 2,
           };
         } else {
-          selectionAnchorRef.current = null;
+          /*
+           * **The selection may be a summary, which is not IN the scene** when the band is on
+           * (ADR-0063 §4) — so a lookup that only consults `scene.activities` finds nothing, the
+           * anchor goes null, and `SelectionActionsBar` hides itself with `visibility: hidden`,
+           * taking Dissolve/Edit/Delete out of the tab order as well as out of sight. Turning the
+           * band on would silently disable the canvas's own actions for the very objects the band
+           * exists to show: the "lit but inert" failure, inverted into "gone with no explanation".
+           *
+           * The band's placed bars are already on this frame in `wbsBandBarsRef`, in band-local
+           * coordinates. The band canvas is pinned at `RULER_HEIGHT` and the scene starts a band's
+           * height lower, so a band bar's viewport top is the scene canvas's own top minus that
+           * height plus the bar's `y`. Derived from the one box we already measured — no second
+           * `getBoundingClientRect`, no second geometry.
+           */
+          const bandBar =
+            scene.selectedId !== null && wbsBandHeightPx > 0
+              ? (wbsBandBarsRef.current.find((b) => b.id === scene.selectedId) ?? null)
+              : null;
+          selectionAnchorRef.current = bandBar
+            ? wbsBandBarAnchor(bandBar, wbsBandHeightPx, canvas.getBoundingClientRect(), size.width)
+            : null;
         }
       }
     };

@@ -847,7 +847,7 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   the component review's second finding as #69. Frontend-only: the CPM engine, the API and the
   recalc parity gate are untouched, and the flag-off parity suites are kept as the rollback contract.
 
-- **ADR-0063** _(Accepted; WBS improvements — behind `VITE_WBS_IMPROVEMENTS`, default off)_ —
+- **ADR-0063** _(Accepted; M0–M6 landed, `VITE_WBS_IMPROVEMENTS` **default-on** 2026-07-30)_ —
   The pinned WBS band, and the canvas band model. ADR-0038 gave activities a parent tree; nothing
   in the product then let a planner **see the programme at band level**, or fix a mis-built
   grouping without deleting the forty activities inside it (the only delete is the ADR-0038
@@ -879,6 +879,26 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   truncates the stack (the ADR-0048 M2 cascade rule). Amends ADR-0049 (bands at both ends),
   ADR-0052 M4 and ADR-0055 §4/ADR-0056 (one more `View▾ ▸ Structure` member); references
   ADR-0038 rather than editing it. **The CPM engine and the recalc parity gate are untouched.**
+  **M4b** adds the table's other half — a selection column and a bulk-assign bar sharing the Members
+  panel's minimal, version-carrying batch — and settles a rule the epic had not needed until then:
+  **selecting is a read**, so the checkboxes are not gated on the write right, because the bar they
+  open is the only place that says why the write is shut. **M5** puts the band into the exported
+  picture and the derived bucket into the printed programme, on **one** shared derivation
+  (`features/wbs/model/wbs-band-source.ts`) — two answers to "how tall is the band and what does the
+  scene still paint" would have differed eventually, and only in a printed programme. **M6** is the
+  gate pass, and it earned its place again: four defects that had passed a human read. A summary
+  selected while the band was on lost its **entire selection-actions bar** — the band lifts
+  summaries out of the scene, the anchor lookup only consulted the scene, and `visibility: hidden`
+  took Dissolve out of the tab order as well as out of sight, so turning the band on silently
+  disabled the canvas's own actions on every phase it drew. The Assign button used the native
+  `disabled` attribute on a control that flips twice per save (the `ScopeSaveBar` lesson, re-learnt).
+  `dissolve` bumped its children's `version` and returned `204`, so a cached child was stale with
+  nothing saying so — it now returns the promoted rows. And it read those children's new parent from
+  a snapshot taken **before** the lock it takes to make that read safe: a silently wrong tree
+  produced by a transaction that looked correctly serialised. Two more findings are recorded rather
+  than rushed (`docs/TECH_DEBT.md` #71–#74). The flag-on journey `apps/web/e2e-wbs/` (its own CI
+  step) proves the permission model and the no-activity-lost invariant against a real API with the
+  pen enforced — the only place the optimistic-`version` trap is testable at all.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

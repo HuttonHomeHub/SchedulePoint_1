@@ -443,10 +443,16 @@ export function useDeleteActivity(orgSlug: string, planId: string) {
 export function useDissolveSummary(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    // The response names the promoted children at their NEW versions — rows the client could not
+    // have predicted, since it did not know which activities the summary held. The blanket
+    // invalidation below already refetches them, so the body is not read here; it is typed rather
+    // than discarded so a caller that needs the ids (an undo, a targeted cache patch) can have
+    // them without changing the endpoint.
     mutationFn: (activityId: string) =>
-      apiFetch<void>(`/organizations/${orgSlug}/activities/${activityId}/dissolve`, {
-        method: 'POST',
-      }),
+      apiFetch<{ promoted: { id: string; parentId: string | null; version: number }[] }>(
+        `/organizations/${orgSlug}/activities/${activityId}/dissolve`,
+        { method: 'POST' },
+      ),
     onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }

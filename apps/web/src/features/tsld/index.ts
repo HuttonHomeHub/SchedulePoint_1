@@ -29,3 +29,9 @@ export { useCoalescedLagNudge } from './interaction/use-coalesced-lag-nudge';
  * the workspace model composes both so the marker never goes stale across a session. */
 export { useNow } from './render/use-now';
 export { todayDayFraction } from './render/time-scale';
+/**
+ * The WBS band's pure geometry constants (ADR-0063). Exported for `features/wbs`, which owns the
+ * band's *content* derivation and needs to know how tall the band that shows it will be — the one
+ * allowed direction across this seam (D8 forbids `tsld → other feature`, not the reverse).
+ */
+export { wbsBandDepths, wbsBandHeight, WBS_BAND_MAX_DEPTH } from './render/wbs-band';

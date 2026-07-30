@@ -6,6 +6,7 @@ import {
   WBS_BAND_PAD_Y,
   WBS_BAND_ROW_GAP,
   WBS_BAND_ROW_HEIGHT,
+  wbsBandBarAnchor,
   wbsBandBars,
   wbsBandDepths,
   wbsBandHeight,
@@ -186,5 +187,48 @@ describe('wbsBandHitTest', () => {
   it('still returns the derived bucket — refusing it is the caller’s job', () => {
     const bucket = wbsBandBars([group({ label: 'Unassigned', id: null })], DATA_DATE, view, size);
     expect(wbsBandHitTest(bucket, 5, WBS_BAND_PAD_Y + 2)?.id).toBeNull();
+  });
+});
+
+/**
+ * The **M6 review's blocking finding**, reduced to arithmetic.
+ *
+ * A summary leaves the SCENE when the band is on (ADR-0063 §4), so the floating selection bar's
+ * anchor — which looks the selection up among the painted activities — found nothing for it, went
+ * `null`, and the bar hid itself with `visibility: hidden`. That took Dissolve, Edit and Delete out
+ * of both the picture and the tab order for exactly the objects the band exists to show: turning
+ * the band on silently disabled the canvas's own actions on every phase.
+ *
+ * The sign is the part worth pinning. The band canvas is pinned at the ruler and the scene starts a
+ * band's height BELOW it, so a band bar sits ABOVE the scene box's own top — a minus, not a plus.
+ * Get it wrong and the bar lands a band's height out of place, which reads as a styling wobble.
+ */
+describe('wbsBandBarAnchor', () => {
+  const BOX = { top: 200, left: 50 };
+  const BAR = { x: 40, w: 100, y: 4 };
+
+  it('places a band bar ABOVE the scene box, by the band’s height', () => {
+    expect(wbsBandBarAnchor(BAR, 24, BOX, 800)).toEqual({
+      top: 200 - 24 + 4,
+      centerX: 50 + 40 + 50,
+    });
+  });
+
+  it('centres horizontally on the bar, in viewport coordinates', () => {
+    expect(wbsBandBarAnchor({ x: 0, w: 200, y: 4 }, 24, BOX, 800)?.centerX).toBe(150);
+  });
+
+  // Culled exactly as the scene path culls: a bar scrolled off the surface has no anchor to offer,
+  // so the bar hides rather than pointing at an edge.
+  it('refuses a bar scrolled off the right edge', () => {
+    expect(wbsBandBarAnchor({ x: 900, w: 100, y: 4 }, 24, BOX, 800)).toBeNull();
+  });
+
+  it('refuses a bar scrolled off the left edge', () => {
+    expect(wbsBandBarAnchor({ x: -150, w: 100, y: 4 }, 24, BOX, 800)).toBeNull();
+  });
+
+  it('keeps a bar straddling the left edge', () => {
+    expect(wbsBandBarAnchor({ x: -50, w: 100, y: 4 }, 24, BOX, 800)).not.toBeNull();
   });
 });

@@ -40,6 +40,19 @@ import type { UpdatePositionsDto } from './dto/update-positions.dto';
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
 
 /**
+ * What a dissolve tells the caller: the activities that were promoted, at their **new** versions.
+ *
+ * Returned rather than a bare 204 because the client cannot derive it. It did not know which
+ * activities were the summary's children, and the write bumps each one's optimistic-lock `version`
+ * — so without this, a cached copy of a promoted child is silently stale and its next save 409s
+ * with no explanation. This is `docs/API.md`'s cross-resource-recompute rule applied to the WBS
+ * tree, and the same shape `updateParents` already returns.
+ */
+export interface DissolveSummaryResult {
+  promoted: { id: string; parentId: string | null; version: number }[];
+}
+
+/**
  * Minutes in one full calendar day — the fixed day↔minute factor (ADR-0036 §4.2).
  * The public API stays day-denominated (`durationDays`); storage is minutes, so the
  * service converts at the boundary (a whole day of work = 1440 working-minutes).
@@ -113,7 +126,11 @@ export class ActivitiesService {
   ): Promise<void> {
     if (selfId !== null && parentId === selfId) {
       throw new ValidationError('An activity cannot be its own WBS parent.', {
-        reason: 'PARENT_CYCLE',
+        // SELF_PARENT, not PARENT_CYCLE: `details.reason` is the field a client branches on
+        // (docs/API.md), so it must not mean two different things under two different statuses.
+        // This is unconditionally invalid input (422); a cycle only forms against the plan's
+        // current tree and is state-dependent (409).
+        reason: 'SELF_PARENT',
       });
     }
     const parent = await this.activities.findActiveByIdInOrg(parentId, organizationId, tx);
@@ -710,7 +727,8 @@ export class ActivitiesService {
         if (row.parentId === null) continue;
         if (row.parentId === row.id) {
           throw new ValidationError('An activity cannot be its own WBS parent.', {
-            reason: 'PARENT_CYCLE',
+            // See `assertValidParent` — 422 SELF_PARENT, distinct from the 409 PARENT_CYCLE.
+            reason: 'SELF_PARENT',
           });
         }
         const parent = byId.get(row.parentId);
@@ -950,38 +968,72 @@ export class ActivitiesService {
    * propagates to its children", and this is the precise inverse. Folding it in would put both
    * meanings behind one name.
    */
-  async dissolveSummary(principal: Principal, orgSlug: string, activityId: string): Promise<void> {
+  async dissolveSummary(
+    principal: Principal,
+    orgSlug: string,
+    activityId: string,
+  ): Promise<DissolveSummaryResult> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:delete', organization.id);
 
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
+    // The pen is asserted BEFORE the business rule, so a caller without the lock is told that and
+    // not the activity's type — the "gate first" ordering every other structural write uses.
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
     if (existing.type !== 'WBS_SUMMARY') {
       throw new ValidationError('Only a WBS summary can be dissolved.', {
         reason: 'NOT_A_SUMMARY',
       });
     }
-    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
 
     const promoted = await this.prisma.$transaction(async (tx) => {
-      // Same lock as every other parent-tree write: the children's new parent is read from the
-      // summary's row, and a concurrent re-parent of the summary itself would move it underneath us.
+      // Same lock as every other parent-tree write.
       await acquirePlanWriteLock(tx, existing.planId);
+
+      /*
+       * **Re-read the summary under the lock**, and take the children's new parent from THAT row.
+       *
+       * The read above happened before the lock, so between the two a concurrent `update` could
+       * have re-parented this summary — and that write takes the same lock, so it is a race the
+       * lock is meant to settle. Using the pre-lock `parentId` would promote the children to a
+       * grandparent the summary no longer has: a silently wrong tree, produced by a transaction
+       * that looks correctly serialised. A single primary-key read is the whole cost of not
+       * having that bug.
+       */
+      const locked = await tx.activity.findFirst({
+        where: { id: activityId, organizationId: organization.id, deletedAt: null },
+        select: { parentId: true },
+      });
+      if (!locked) throw new NotFoundError('Activity not found.');
 
       // Children take the summary's own parent — null promotes them to the top level. Scoped to
       // org + active rows; `version` bumps so a client holding a stale copy of a promoted child
       // gets a clean 409 on its next write rather than silently overwriting the promotion.
-      const { count } = await tx.activity.updateMany({
+      const rows = await tx.activity.findMany({
+        where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
+        select: { id: true },
+      });
+      await tx.activity.updateMany({
         where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
         data: {
-          parentId: existing.parentId,
+          parentId: locked.parentId,
           updatedBy: principal.userId,
           version: { increment: 1 },
         },
       });
       // The summary is childless now, so the cascade has nothing left to take with it.
       await this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId);
-      return count;
+
+      // Re-read the promoted rows so the response carries their NEW versions. A client cannot
+      // derive them: it did not know which activities were children, and `updateMany` reports only
+      // a count. Without this the caller's only correct move after a dissolve is a full refetch,
+      // and nothing tells it so.
+      return tx.activity.findMany({
+        where: { id: { in: rows.map((r) => r.id) } },
+        select: { id: true, parentId: true, version: true },
+        orderBy: { id: 'asc' },
+      });
     });
 
     this.logger.info(
@@ -990,10 +1042,12 @@ export class ActivitiesService {
         planId: existing.planId,
         activityId,
         userId: principal.userId,
-        promoted,
+        promoted: promoted.length,
       },
       'WBS summary dissolved',
     );
+
+    return { promoted };
   }
 
   async restore(
