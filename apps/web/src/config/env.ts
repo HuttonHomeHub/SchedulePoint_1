@@ -948,7 +948,7 @@ export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
   ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_ACTIVITY_EDITOR_CONVERGENCE);
 
 /**
- * **WBS improvements** (`VITE_WBS_IMPROVEMENTS`, default **off**) — making the shipped WBS
+ * **WBS improvements** (`VITE_WBS_IMPROVEMENTS`, default **on** since 2026-07-30) — making the shipped WBS
  * (ADR-0038) workable rather than merely present: managing a summary's membership from the summary
  * itself, dissolving a grouping without deleting the work it contains, showing the activities that
  * belong to no summary at all, and expressing the programme shape on the canvas.
@@ -963,8 +963,23 @@ export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
  * an editor that never renders. Deriving the constant makes that combination unrepresentable
  * rather than merely untested.
  *
+ * **Default-on 2026-07-30 (ADR-0063 M6)**, once the deferred specialist gates had run over the
+ * whole epic diff and every blocking finding was folded with a regression test. Those gates found
+ * four defects that had passed a human read — a summary selected while the band is on lost its
+ * entire selection-actions bar (the band lifts summaries out of the scene, and the anchor lookup
+ * only consulted the scene, so Dissolve left the screen AND the tab order for exactly the objects
+ * the band exists to show); the bulk-assign Assign button used the native `disabled` attribute,
+ * which blurs to `<body>` the instant it flips, on a control that flips twice per save; dissolve
+ * mutated its children's `version` and returned `204`, so a cached child was silently stale; and it
+ * read those children's new parent from a snapshot taken **before** the lock it takes to make that
+ * read safe. The flag-on Playwright journey (`apps/web/e2e-wbs/`) proves the permission and
+ * no-activity-lost claims against a real API with the pen enforced — the only place the
+ * optimistic-`version` trap is testable, since a mocked fetch accepts any version.
+ *
  * Rollback: set `VITE_WBS_IMPROVEMENTS=false` and rebuild the web image. The API endpoints stay
- * reachable but unreferenced, which is harmless, and nothing persisted depends on the flag.
+ * reachable but unreferenced, which is harmless, and nothing persisted depends on the flag. Every
+ * flag-off parity suite is **kept and pinned** (`vi.mock` of `@/config/env`) rather than weakened —
+ * that is the rollback contract, not scaffolding.
  */
 export const WBS_IMPROVEMENTS_ENABLED =
-  ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOff(import.meta.env.VITE_WBS_IMPROVEMENTS);
+  ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_WBS_IMPROVEMENTS);

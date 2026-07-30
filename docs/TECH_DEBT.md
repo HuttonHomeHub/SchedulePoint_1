@@ -56,7 +56,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 28 | **TSLD canvas ring/stroke colour treatment** | From the D5 link-legality UX + a11y reviews. **(a)** The **legal** drop-target ring during a link-draw is visually identical to the ordinary **selection** ring (`paint.ts` — both `palette.selection`, solid, 2px), so two rings with different meanings can appear in the same style at once (predates D5). **(b)** The **illegal** ring reuses `palette.critical` (`--color-destructive`), the same token as the CPM critical-path **bar fill** (`paint.ts`), so an illegal drop hovered over a critical-path activity draws red-on-red — weaker contrast exactly where the signal matters, and overloads one colour for two meanings. **(c)** `--color-destructive` is documented (`globals.css`) as tuned for button surfaces; its use as a **state-border/stroke** on the canvas (the critical-bar outline too) wants a contrast check vs `--color-destructive-text` in both themes. | Cosmetic/robustness; the illegal ring is still distinguishable by its dash (colour + pattern, WCAG 1.4.1 holds), so not an AA failure. | Give the legal drop-target ring a distinct treatment from selection; pick a canvas "danger stroke" token distinct from the critical-bar fill; verify destructive-token stroke contrast in both themes when the canvas palette is next revised. |
 
-| 29 | **Auto-deploy ships dormant — no host has it enabled** | The mechanism landed 2026-07-19 (ADR-0047): `docker-compose.release.yml` carries a Watchtower service behind an `autodeploy` compose profile that polls GHCR and recreates only the label-enabled `web`/`api` containers on a moved `:latest`, with the API self-migrating on recreate (ADR-0018). It is **off by default and enabled nowhere** — an operator opts in per host with `COMPOSE_PROFILES=autodeploy`. So the original failure mode (production sat on `web:0.12.0` for several releases because nothing pulled) is _fixable_ but not yet _fixed_ on any real host. | A release still does not reach users until someone acts — the same gap as before, now one env var away from closing rather than a missing mechanism. | Enable the profile on the deployment host, or record the decision not to (monitor-only via `WATCHTOWER_MONITOR_ONLY` is the middle option). Blocked on #5 — there is no settled deployment target to enable it on. |
+| ~~29~~ | **RESOLVED 2026-07-30 — auto-deploy is enabled on the operator's host** | The mechanism landed 2026-07-19 (ADR-0047): `docker-compose.release.yml` carries a Watchtower service behind an `autodeploy` compose profile that polls GHCR and recreates only the label-enabled `web`/`api` containers on a moved `:latest`, with the API self-migrating on recreate (ADR-0018). It **ships** off by default — an operator opts in per host — and this row recorded that shipped default as though it were the state of the world, asserting for eleven days that no host had it enabled. **It was wrong.** The product owner runs the Compose stack with the profile on: each release is pulled and recreated automatically, and **every release is looked at by a person**. The original failure mode (production sat on `web:0.12.0` for several releases because nothing pulled) is _fixed_, not merely fixable. | None — the "shipped but not live" gap is closed for the one host that exists. The residual is #5: where this runs long-term is still undecided, and the answer may change how deployment is triggered. | No action. Kept as a **worked example of the ADR-0058 rule**: this row described `docker-compose.release.yml`'s default accurately and then stated a fact about the world it had never checked, and every reader downstream — including AI assistants planning what to build next — reasoned from "nobody has ever run this" for as long as it stood. Verify the claim; do not trust the document. |
 
 | 30 | **Canvas-first workspace fast-follows — what's left (ADR-0030 M1–M5 reviews)** | Of the original eight, four are done — (b) `useMenuTrigger` extracted, (d) the hidden-pane rAF pause (now regression-tested, see the 2026-07-27 entry in DECISIONS.md), (h) the duplicate "Activities" landmark renamed — and (a) was deliberately left as a `matchMedia` transition side-effect in `app-shell.tsx` rather than migrated onto `useMediaQuery`. Remaining: **(c)** the mobile Diagram/Activities `WorkspaceViewToggle` and the pen banner's segmented controls are both hand-rolled roving-`tabindex` single-selects — extract a shared `Tabs`/`SegmentedControl` primitive; **(e)** the panel-height clamp recomputes against `bodyHeight` on every workspace resize (`plan-workspace.tsx`) — an O(n) re-clamp, fine at current scale; **(f)** `usePlanWorkspaceModel` is covered only through the two route layouts, never directly; **(g)** the rail-prefs localStorage key changed shape (`width`→`size`) when it moved onto the shared primitive, dropping any persisted rail width once — accepted pre-1.0 per ADR-0030. | Minor; all current states meet WCAG 2.2 AA and sit within the perf budget. | Extract the `Tabs`/`SegmentedControl` primitive when the next consumer lands (it would be the third); add a direct `usePlanWorkspaceModel` test; revisit the resize re-clamp only if it profiles hot. (g) needs no action. |
 
@@ -294,3 +294,55 @@ unit tests that assert the acquisition and its ordering directly, and fail when 
 hand-rolled transactions racing the read-then-write with a barrier between the read and the write),
 or accept the HTTP tests as invariant tests and rename them so they stop implying a concurrency
 guarantee. Until then, do not add another "serialises concurrent …" e2e test and treat it as a gate.
+
+### 71. The WBS band's derived bucket is distinguished by colour and label, not shape
+
+`paintWbsBand` draws the derived **Unassigned** bucket as the same rounded rect as a real summary,
+in a different fill (`--color-muted-foreground` vs `--color-primary`) with its label on top. Every
+pairing clears 4.5:1 in all three themes today, so this is not a contrast failure — but at a zoom
+where `truncateToWidth` drops the label entirely, the only remaining difference is colour (WCAG
+1.4.1). Its Gantt sibling deliberately does better: `GanttBucketRowView` draws a **bracket**, not a
+bar, precisely so the bucket is not a fourth kind of bar on the chart.
+
+**What would close it:** give the derived bar a shape cue — a hairline dash, a squared corner —
+matching the Gantt's stated rule. Raised by the ADR-0063 M6 accessibility gate as a recommendation;
+also flagged by the UX gate, which noted the `muted-foreground`-as-fill / `primary-foreground`-as-ink
+pairing is not one of the design system's validated pairs and has no contrast test pinning it.
+
+### 72. Bulk-selection checkboxes are a 16px target, and hand-rolled
+
+The activities table's new selection column renders a bare `size-4` `<input type="checkbox">` per
+row. `ActivityMembersPanel` does better for the same job — the whole row is a clickable `<label>` —
+and `CheckboxField` (`components/ui/form.tsx`) exists to stop the chrome being hand-assembled at
+all. It is not a regression (`TsldViewControls` and the toolbar registry already hand-roll the same
+className for compact inline toggles), but the selection column is the fifth occurrence of a shape
+the design system has a primitive for.
+
+**What would close it:** widen `CheckboxField` to support a visually-hidden label and trailing row
+content — the two reasons a straight swap is not free today — then move all five call sites, and
+make the table row itself the hit target. Raised by the ADR-0063 M6 component and UX gates.
+
+### 73. `Column.srHeader` is dead once `headerCell` is set
+
+`DataTable`'s render ternary takes `headerCell` first, so a column declaring both (the activities
+table's Select column does) silently ignores `srHeader`. Harmless today — the checkbox carries its
+own `aria-label` — but it is a prop that looks load-bearing and is not.
+
+**What would close it:** either drop the redundant `srHeader` at the call site and say so in the
+`Column` docblock, or make the two compose (render the sr-only text _beside_ the control). Raised by
+the ADR-0063 M6 component gate.
+
+### 74. The plan advisory lock's contention headroom is unmeasured
+
+Five write paths now serialise on the same per-plan advisory key — activity create/update (parent
+branch), the batch membership write, dissolve, and recalculate — and none of the `$transaction`
+calls sets an explicit timeout, so they share Prisma's 5 s default. At the ~2,000-activity ceiling,
+if recalculate's hold time approaches that default, a batch WBS write queued behind it would fail
+with a P2028 timeout rather than waiting cleanly.
+
+**What would close it:** seed a 2,000-activity plan, measure recalculate's hold duration on the key
+and a concurrent `PATCH …/activities/parents`'s wait, then set explicit transaction timeouts against
+the measured numbers. Raised by the ADR-0063 M6 backend-performance gate as an open risk, not a
+confirmed defect — the design (plan-scoped key, skipped on the uncontended path) is otherwise sound.
+Related: the parent-chain walk inside that lock has **no depth cap**, unlike the resource tree's
+documented ≤ 10 (ADR-0053 §3).

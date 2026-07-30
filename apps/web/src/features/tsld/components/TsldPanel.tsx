@@ -51,7 +51,6 @@ import { drawnSpanPlacement, snapToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
-import { wbsBandDepths, wbsBandHeight } from '../render/wbs-band';
 import {
   SelectionActionsBar,
   type SelectionActionContext,
@@ -71,7 +70,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
-import { wbsBandGroups } from '@/features/wbs';
+import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
@@ -497,16 +496,24 @@ export function TsldPanel({
    * `wbsBandHeightPx` is derived once and used by BOTH the canvas (its reservation) and the create
    * popover (its container-y conversion, via the shared `sceneTopOffset`). Two derivations of the
    * same number is exactly how the popover would come to open above where the user clicked.
+   *
+   * The derivation itself is shared with the image export (`deriveWbsBandSource`), so the printed
+   * picture and the screen cannot disagree about the band's height or about which activities the
+   * scene paints.
    */
-  const wbsBandActive = WBS_IMPROVEMENTS_ENABLED && (viewToggles.wbsBand ?? false);
-  const wbsBandGroupRows = useMemo(
-    () => (wbsBandActive ? wbsBandGroups(activities, { source: barDateSource }) : null),
-    [wbsBandActive, activities, barDateSource],
+  const wbsBand = useMemo(
+    () =>
+      deriveWbsBandSource(activities, {
+        enabled: WBS_IMPROVEMENTS_ENABLED,
+        toggleOn: viewToggles.wbsBand ?? false,
+        source: barDateSource,
+      }),
+    [activities, viewToggles.wbsBand, barDateSource],
   );
-  const wbsBandHeightPx =
-    wbsBandGroupRows === null ? 0 : wbsBandHeight(wbsBandDepths(wbsBandGroupRows));
+  const wbsBandGroupRows = wbsBand.groups;
+  const wbsBandHeightPx = wbsBand.height;
 
-  /**
+  /*
    * The scene's activities. With the band on, summaries are drawn IN the band and not in the scene
    * (ADR-0063 §4) — drawing them in both would put one object on screen twice at two sizes, which
    * is how a planner comes to believe a summary has two sets of dates.
@@ -517,13 +524,9 @@ export function TsldPanel({
    * accessibility tree. A test pins the count across the toggle anyway, because "by construction"
    * is a property of today's code and not a promise about tomorrow's.
    */
-  const sceneActivities = useMemo(
-    () => (wbsBandActive ? activities.filter((a) => a.type !== 'WBS_SUMMARY') : activities),
-    [wbsBandActive, activities],
-  );
   const renderActivities = useMemo(
-    () => toRenderActivities(sceneActivities, barDateSource),
-    [sceneActivities, barDateSource],
+    () => toRenderActivities(wbsBand.sceneActivities, barDateSource),
+    [wbsBand.sceneActivities, barDateSource],
   );
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
   // The listbox option text (Tier-1 `describeActivity`) is memoised by activity, keyed on

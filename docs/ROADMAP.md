@@ -199,6 +199,15 @@ discriminators. Each becomes a spec/plan before build:
   Read-only by design — the brief says read-primary, and editing stays in the TSLD. Rendered as
   virtualized DOM rows rather than Canvas 2D, because virtualization removes the premise ADR-0026
   chose canvas for. Dependency arrows and Gantt editing are the deliberate next candidates.
+- **WBS improvements** — **shipped** (ADR-0063, `VITE_WBS_IMPROVEMENTS` default-on 2026-07-30):
+  making the shipped WBS (ADR-0038) workable rather than merely present. Membership is managed
+  from the summary (a Members tab) **and** from the list (table multi-select + bulk assign);
+  **Dissolve** removes a grouping without removing the work, which `DELETE`'s subtree cascade could
+  not; every activity appears in the WBS views, filed or not, via a derived **Unassigned** bucket;
+  and the programme's shape reads at band level on the canvas, in the exported picture and in the
+  printed programme. The CPM engine and the recalc parity gate are untouched. Deliberately not
+  done: the band is select-only (a summary's dates are an engine rollup, so there is nothing on it
+  to drag), and the derived bucket is never persisted.
 - **Export** (PDF/CSV) and **resources** (library + assignments) —
   Must/Should-have per the brief. (Resources have since shipped — M7.)
 

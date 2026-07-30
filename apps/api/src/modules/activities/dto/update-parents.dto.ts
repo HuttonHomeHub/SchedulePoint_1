@@ -1,13 +1,13 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsInt,
-  IsOptional,
   IsUUID,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -17,14 +17,24 @@ export class ActivityParentDto {
   @IsUUID()
   id!: string;
 
-  @ApiPropertyOptional({
+  /**
+   * Required, but **nullable** — deliberately not `@IsOptional()`.
+   *
+   * This is a batch of complete rows, not a PATCH of partial ones: every row states where its
+   * activity goes. With `@IsOptional()` a client that simply forgot the field would pass validation
+   * and be treated as an explicit `null`, silently promoting the activity to the top level — a
+   * destructive default produced by a typo. It also inverted the sibling contract, where an omitted
+   * `parentId` on `PATCH` means "unchanged" (ADR-0053 §3).
+   */
+  @ApiProperty({
     format: 'uuid',
     nullable: true,
     description:
-      'The WBS_SUMMARY to file this activity under, or null to move it to the top level. ' +
-      'Must be an active summary in the same plan, and may not sit inside this activity’s own subtree.',
+      'The WBS_SUMMARY to file this activity under, or null to move it to the top level. Must be ' +
+      'present on every row: omitting it is a validation error, not a silent “top level”. Must be ' +
+      'an active summary in the same plan, and may not sit inside this activity’s own subtree.',
   })
-  @IsOptional()
+  @ValidateIf((row: ActivityParentDto) => row.parentId !== null)
   @IsUUID()
   parentId!: string | null;
 

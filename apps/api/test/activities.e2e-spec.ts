@@ -875,7 +875,25 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
         const b = await task(actor, planId, 'Blind', s.id);
         const before = await prisma.activity.count({ where: { planId, deletedAt: null } });
 
-        await actor.agent.post(dissolveUrl(s.id)).expect(204);
+        const res = await actor.agent.post(dissolveUrl(s.id)).expect(200);
+
+        /*
+         * The response carries the rows the caller could NOT have predicted — the summary's
+         * children — at their NEW versions. Without it a cached copy of a promoted child is
+         * silently stale and its next save 409s for a reason the user did not cause (the M6 API
+         * review's finding; `docs/API.md`'s cross-resource-recompute rule).
+         */
+        expect(res.body.data.promoted).toHaveLength(2);
+        expect(
+          (res.body.data.promoted as { id: string; parentId: string | null; version: number }[])
+            .map((r) => r.id)
+            .sort(),
+        ).toEqual([a.id, b.id].sort());
+        for (const row of res.body.data.promoted as { version: number; parentId: null }[]) {
+          expect(row.parentId).toBeNull();
+          // Bumped past the version the caller was holding — that is the whole point of returning it.
+          expect(row.version).toBeGreaterThan(1);
+        }
 
         // The invariant that matters: exactly one row went (the summary), not the subtree.
         const after = await prisma.activity.count({ where: { planId, deletedAt: null } });
@@ -897,7 +915,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
           .expect(200);
         const leaf = await task(actor, planId, 'Leaf', inner.id);
 
-        await actor.agent.post(dissolveUrl(outer.id)).expect(204);
+        await actor.agent.post(dissolveUrl(outer.id)).expect(200);
 
         // Inner moved up to the top level; the leaf did NOT move — it is still Inner's child.
         expect(await prisma.activity.findUniqueOrThrow({ where: { id: inner.id } })).toMatchObject({
@@ -913,7 +931,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
         const { actor, planId } = await setup();
         const s = await summary(actor, planId, 'Substructure');
         const a = await task(actor, planId, 'Excavate', s.id);
-        await actor.agent.post(dissolveUrl(s.id)).expect(204);
+        await actor.agent.post(dissolveUrl(s.id)).expect(200);
 
         await actor.agent.post(`/api/v1/organizations/acme/activities/${s.id}/restore`).expect(200);
 

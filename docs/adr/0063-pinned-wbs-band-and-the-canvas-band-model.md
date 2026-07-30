@@ -110,7 +110,7 @@ failure mode is quiet: the band renders, the canvas looks right, and the create 
 forty pixels above where the user clicked. It gets its own regression test with the band on and
 off.
 
-### 6. The band is a `View▾ ▸ Structure` toggle, and it is off by default
+### 6. The band is a `View▾ ▸ Structure` toggle, and the toggle is off by default
 
 It joins the ADR-0056 `Month bands` switch under the same group. Default off: the band takes
 canvas height, and ADR-0031's canvas-maximal layout is a decision this must not quietly reverse
@@ -143,6 +143,49 @@ client records dissolve as a **non-undoable boundary** that truncates the undo s
 ADR-0048 M2 cascade-delete rule), because an inverse composed from the existing mutations would
 re-create a _different_ summary under a new id.
 
+### 9. One derivation feeds both the screen and the picture (M5)
+
+The band's height decides where the scene starts; the summaries it lifts out decide what the scene
+paints. `features/wbs/model/wbs-band-source.ts` answers both questions **once**, for the live canvas
+and for the image export. Two copies agreeing today is not the same as two that cannot disagree, and
+the failure mode is specific: a printed programme with its phases drawn twice, or with a band-shaped
+gap where the diagram should start — neither visible to any test of the live canvas.
+
+It lives in `features/wbs`, not in `features/tsld/render/`, where it was first drafted. Two rules
+put it there: `features/tsld` imports no other feature (ADR-0026 D8), and the render tier reads no
+feature flag. The flag is therefore a **parameter**. The tell that the first draft was in the wrong
+place is that its test had to `vi.mock('@/config/env')` to exercise pure arithmetic.
+
+### 10. The enablement gates found what the epic said they would (M6)
+
+`VITE_WBS_IMPROVEMENTS` flipped default-on once seven specialist reviews had run over the combined
+diff. Four blocking defects, all in code that had already passed a human read:
+
+1. **A summary selected while the band was on lost its entire selection-actions bar.** §4 lifts
+   summaries out of the scene; the anchor lookup consulted only the scene, found nothing, and
+   `SelectionActionsBar` hides on a null anchor with `visibility: hidden` — which removes it from
+   the tab order too. Turning the band on silently disabled Dissolve, Edit and Delete for exactly
+   the objects the band exists to show. The fix anchors to the band bar (`wbsBandBarAnchor`, a pure
+   function so the sign of the offset has a gate); the same lookup drove focus-follows-viewport, so
+   selecting an off-screen phase also did nothing.
+2. **The bulk-assign Assign button used the native `disabled` attribute**, which blurs to `<body>`
+   the instant it flips — on a control that flips twice per save. The `ScopeSaveBar` lesson, learnt
+   again one epic later; now `aria-disabled` + a click guard + an `aria-describedby`-linked reason.
+3. **`POST …/activities/:id/dissolve` returned `204` while mutating sibling rows** — every promoted
+   child's `parentId` and `version` — so a client holding a cached child was silently stale and its
+   next save 409'd for a reason the user did not cause. It now returns the promoted rows at their
+   new versions.
+4. **That write read the children's new parent from a snapshot taken before the lock.** The lock
+   exists to settle exactly the race a concurrent re-parent of the summary creates; taking the value
+   from the pre-lock read produced a silently wrong tree inside a transaction that looked correctly
+   serialised.
+
+M4b also settled a rule the epic had not needed until the table gained checkboxes: **selecting is a
+read**. The row boxes are not gated on the write right, because the bar they open is the only place
+that says why the write is shut — disabling them would leave a reader with a column of dead controls
+and the explanation locked behind them. (Contrast `ActivityMembersPanel`, where ticking _is_ the
+pending edit, so there the boxes do shade.)
+
 ## Consequences
 
 - **The CPM engine, the API's schedule path and the ADR-0034 recalc parity gate are untouched.**
@@ -160,6 +203,12 @@ re-create a _different_ summary under a new id.
   not a millisecond count, because a CI runner's absolute timings are noise (ADR-0054).
 - **ADR-0038 is referenced, not edited.** It remains the record of the hierarchy; this ADR
   records what is drawn and what may be done to it.
+- **`POST …/activities/:id/dissolve` changed shape after M6:** `204` → `200` with
+  `{ promoted: [{ id, parentId, version }] }`. Breaking for that endpoint, and correct — see §10.3.
+  `docs/API.md`'s batch-mutations section records it, along with `parentId` becoming
+  required-but-nullable on the batch and self-parenting splitting off as `422 SELF_PARENT`.
+- **The epic is enabled, and the flag-off parity suites are kept.** They are the rollback contract,
+  not scaffolding — the same standing they have in ADR-0053 M6 and ADR-0059 M6.
 
 ## Alternatives considered
 

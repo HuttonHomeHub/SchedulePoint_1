@@ -11,9 +11,10 @@ import { renderExportImage } from '../export/render-export-image';
 import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
 import { isFilterActive, isOverAllocated, matchesActivityFilter } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
-import { resolvePrintPalette } from '../render/palette';
+import { resolvePrintPalette, resolvePrintWbsBandPalette } from '../render/palette';
 import { daysBetween } from '../render/render-model';
 import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../render/to-render-model';
+import { wbsBandBars } from '../render/wbs-band';
 
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
@@ -32,6 +33,7 @@ import {
   CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
+  WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
 import {
@@ -46,6 +48,7 @@ import {
 } from '@/features/interchange';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
+import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** A stable empty conflict list, so the flag-off path (P-sug1) hands a byte-stable reference to the
@@ -401,7 +404,16 @@ export function useTsldToolbarContext({
       const live = canvasControlRef.current?.getViewport();
       if (dataDate === null || !live) return null;
       const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
-      const renderActivities = toRenderActivities(activities, source);
+      // The band comes from the SAME derivation the live canvas uses (ADR-0063 §M5), so the export
+      // cannot disagree with the screen about the band's height or about which activities the
+      // scene still paints. With the band on, summaries live in the band and not in the diagram —
+      // exactly as they do on screen.
+      const band = deriveWbsBandSource(activities, {
+        enabled: WBS_IMPROVEMENTS_ENABLED,
+        toggleOn: viewToggles.wbsBand ?? false,
+        source,
+      });
+      const renderActivities = toRenderActivities(band.sceneActivities, source);
       const scene = {
         activities: renderActivities,
         edges: toRenderEdges(dependencies),
@@ -414,6 +426,7 @@ export function useTsldToolbarContext({
         liveViewport: live,
         dpr: globalThis.devicePixelRatio || 1,
         topBand: EXPORT_TOP_BAND,
+        wbsBandHeight: band.height,
       });
       const promise = renderExportImage({
         scene,
@@ -424,6 +437,21 @@ export function useTsldToolbarContext({
         palette: resolvePrintPalette(),
         scaledToFit,
         meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },
+        // Placed against the EXPORT viewport, by the same `wbsBandBars` the live canvas calls with
+        // the live one — so the band's columns line up with the diagram's in the picture for the
+        // same reason they do on screen, not by a second calculation that agrees.
+        ...(band.groups && band.height > 0
+          ? {
+              wbsBand: {
+                height: band.height,
+                bars: wbsBandBars(band.groups, dataDate, viewport, {
+                  width: size.width,
+                  height: band.height,
+                }),
+                palette: resolvePrintWbsBandPalette(),
+              },
+            }
+          : {}),
       }).then((blob) => ({ blob, scaledToFit }));
       return {
         promise,

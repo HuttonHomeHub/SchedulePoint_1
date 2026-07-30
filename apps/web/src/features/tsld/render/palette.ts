@@ -304,3 +304,23 @@ export function resolveWbsBandPalette(root: Element = document.documentElement):
     selection: token('--color-ring', '#8ab4f8'),
   };
 }
+
+/**
+ * The **light-forced** WBS band palette for the image export and print (ADR-0063 §M5).
+ *
+ * It delegates to {@link resolveWbsBandPalette} with the `.dark` class momentarily cleared — the
+ * same synchronous clear/restore {@link resolvePrintPalette} uses, so no paint happens in between.
+ * Delegating rather than restating the five tokens is the point: a band whose colours were listed
+ * twice would eventually print in a colour the screen had stopped using.
+ */
+export function resolvePrintWbsBandPalette(
+  root: Element = document.documentElement,
+): WbsBandPalette {
+  const hadDark = root.classList.contains('dark');
+  if (hadDark) root.classList.remove('dark');
+  try {
+    return resolveWbsBandPalette(root);
+  } finally {
+    if (hadDark) root.classList.add('dark');
+  }
+}

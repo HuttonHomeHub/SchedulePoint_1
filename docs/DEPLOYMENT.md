@@ -202,7 +202,10 @@ So a release reaches the host without a manual pull, the reference stack ships a
 **optional** [Watchtower](https://containrrr.dev/watchtower/) service that polls
 GHCR and pulls + recreates the app containers when their `:latest` digest moves.
 It is **dormant by default** (a compose `autodeploy` profile) and **opt-in per
-host** — nothing auto-deploys until you enable it.
+host** — nothing auto-deploys until you enable it. That is the _shipped default_,
+not a description of the running world: the profile **is** enabled on the product
+owner's host, so in practice a merged release is pulled, recreated and seen by a
+person without anyone acting (`docs/TECH_DEBT.md` #29, closed).
 
 **Enable it:**
 

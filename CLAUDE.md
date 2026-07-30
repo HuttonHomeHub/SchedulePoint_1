@@ -161,6 +161,19 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
 - Open a PR early; keep it small; rebase (don't merge) `main` into your branch to
   stay current. Squash-merge into `main` with a Conventional Commit title.
 - Never force-push `main`. Never commit directly to `main`.
+- **After a squash-merge, reset the branch from `main` before doing anything else**
+  — `git fetch origin main && git checkout -B <branch> origin/main`. A squash
+  replaces the branch's commits with one new commit, so a branch that carries on
+  from its old tip now holds history `main` will never contain. The next PR from it
+  is **unmergeable** (`mergeable_state: dirty`), and because GitHub cannot compute
+  a merge ref, **CI never starts** — the PR looks like it is waiting for checks
+  that will never arrive. This is not hypothetical: it happened to the long-lived
+  agent branch after PR #193, and again after the release PR that followed it.
+  If the branch has already grown work past the merge, rebase that work onto the
+  new base (`git cherry-pick`/`git rebase --onto`) rather than merging `main` in —
+  a merge re-adds the changeset files the release already consumed and deleted,
+  which silently double-bumps the next version. Then `git push --force-with-lease`:
+  the discarded commits are already on `main` in squashed form, so nothing is lost.
 
 ## 9. Commit standards
 
@@ -847,7 +860,7 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   the component review's second finding as #69. Frontend-only: the CPM engine, the API and the
   recalc parity gate are untouched, and the flag-off parity suites are kept as the rollback contract.
 
-- **ADR-0063** _(Accepted; WBS improvements — behind `VITE_WBS_IMPROVEMENTS`, default off)_ —
+- **ADR-0063** _(Accepted; M0–M6 landed, `VITE_WBS_IMPROVEMENTS` **default-on** 2026-07-30)_ —
   The pinned WBS band, and the canvas band model. ADR-0038 gave activities a parent tree; nothing
   in the product then let a planner **see the programme at band level**, or fix a mis-built
   grouping without deleting the forty activities inside it (the only delete is the ADR-0038
@@ -879,6 +892,26 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   truncates the stack (the ADR-0048 M2 cascade rule). Amends ADR-0049 (bands at both ends),
   ADR-0052 M4 and ADR-0055 §4/ADR-0056 (one more `View▾ ▸ Structure` member); references
   ADR-0038 rather than editing it. **The CPM engine and the recalc parity gate are untouched.**
+  **M4b** adds the table's other half — a selection column and a bulk-assign bar sharing the Members
+  panel's minimal, version-carrying batch — and settles a rule the epic had not needed until then:
+  **selecting is a read**, so the checkboxes are not gated on the write right, because the bar they
+  open is the only place that says why the write is shut. **M5** puts the band into the exported
+  picture and the derived bucket into the printed programme, on **one** shared derivation
+  (`features/wbs/model/wbs-band-source.ts`) — two answers to "how tall is the band and what does the
+  scene still paint" would have differed eventually, and only in a printed programme. **M6** is the
+  gate pass, and it earned its place again: four defects that had passed a human read. A summary
+  selected while the band was on lost its **entire selection-actions bar** — the band lifts
+  summaries out of the scene, the anchor lookup only consulted the scene, and `visibility: hidden`
+  took Dissolve out of the tab order as well as out of sight, so turning the band on silently
+  disabled the canvas's own actions on every phase it drew. The Assign button used the native
+  `disabled` attribute on a control that flips twice per save (the `ScopeSaveBar` lesson, re-learnt).
+  `dissolve` bumped its children's `version` and returned `204`, so a cached child was stale with
+  nothing saying so — it now returns the promoted rows. And it read those children's new parent from
+  a snapshot taken **before** the lock it takes to make that read safe: a silently wrong tree
+  produced by a transaction that looked correctly serialised. Two more findings are recorded rather
+  than rushed (`docs/TECH_DEBT.md` #71–#74). The flag-on journey `apps/web/e2e-wbs/` (its own CI
+  step) proves the permission model and the no-activity-lost invariant against a real API with the
+  pen enforced — the only place the optimistic-`version` trap is testable at all.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
@@ -905,10 +938,16 @@ A lighter-weight running log of smaller decisions is in
 - **No append-only audit log** exists; row attribution plus structured logs are
   not an audit trail (`docs/TECH_DEBT.md` #14). There is likewise no hard-delete
   or data-export path — every deletion is a soft delete.
-- Deployment target (managed host vs. self-hosted Kubernetes) is **not yet
-  decided**; the container/registry foundation is deliberately platform-neutral.
-  Auto-deploy exists but ships dormant, so a release does not reach users until
-  an operator acts (ADR-0047, `docs/TECH_DEBT.md` #5/#29).
+- The **hosted** deployment target (managed host vs. self-hosted Kubernetes) is
+  **not yet decided**; the container/registry foundation is deliberately
+  platform-neutral (`docs/TECH_DEBT.md` #5). What is **not** undecided is whether
+  releases reach anyone: the product owner runs the Docker Compose stack with the
+  ADR-0047 Watchtower profile **enabled**, so a merged release is pulled and
+  recreated on that host and **every release is reviewed by a person**. Anything
+  shipped default-on is in use. This paragraph said the opposite for months — that
+  a release "does not reach users until an operator acts" — which is the ADR-0058
+  failure exactly: it described the shipped default and never checked the operator.
+  Do not reason about this product as if it were unused (corrected 2026-07-30).
 - Cross-browser e2e coverage is Chromium-first: the Playwright config defines
   firefox/webkit projects but the journeys are exercised mainly on Chromium.
 - The engine's draw-performance budget (ADR-0026 §16) has never been measured on

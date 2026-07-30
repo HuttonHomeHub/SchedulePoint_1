@@ -1,6 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow, CalendarSummary } from '@repo/types';
 import { MoreHorizontal } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useActivities, useDeleteActivity, useDissolveSummary } from '../api/use-activities';
@@ -40,6 +40,7 @@ import {
 } from '@/config/env';
 import { NoteCountBadge } from '@/features/notes';
 import { ActivityResourcesDialog } from '@/features/resources';
+import { WbsBulkAssignBar } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
@@ -86,6 +87,37 @@ function scheduleColumn(
     cellClassName: `hidden py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground ${show}`,
     cell: (activity) => formatCalendarDate(get(activity)),
   };
+}
+
+/**
+ * The bulk-assign column's select-all box. Its own component only because `indeterminate` is a DOM
+ * property with no HTML attribute, so it has to be written to the node after render — "some but not
+ * all" is a genuinely different state from "none", and rendering it as unchecked would tell a
+ * screen-reader user their selection had been dropped.
+ */
+function SelectAllCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: (checked: boolean) => void;
+}): React.ReactElement {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="accent-primary size-4 align-middle"
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      aria-label="Select all activities"
+    />
+  );
 }
 
 /**
@@ -195,6 +227,9 @@ export function ActivitiesTable({
   // variable, one boolean away from each other.
   const [dissolving, setDissolving] = useState<ActivitySummary | null>(null);
   const [dissolveError, setDissolveError] = useState<string | null>(null);
+  // The bulk-assign selection (M4b). Ids, not rows: the list refetches under it, and holding rows
+  // would mean re-sending a version the server has already superseded.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   // The per-row actions overflow menu (one open at a time, ADR-0029 `Menu` primitive / TECH_DEBT #38).
   // `anchor` is the trigger's viewport position; `menuTriggerRef` restores focus to it on close.
   const [menu, setMenu] = useState<{
@@ -218,6 +253,54 @@ export function ActivitiesTable({
    * existence check that TypeScript could not connect to this one.
    */
   const hostOwnsResources = ACTIVITY_EDITOR_CONVERGENCE_ENABLED && onOpenResources !== undefined;
+
+  /*
+   * ---- Bulk assign (M4b) ------------------------------------------------------------------
+   *
+   * The table gains a selection column only when the plan actually has somewhere to file things:
+   * with no summary, "Assign to" could offer nothing but "top level", so the column would be a
+   * row of checkboxes leading to a control that cannot change anything. Same rule as the derived
+   * Gantt bucket, and it keeps a WBS-less plan's table exactly as it is today.
+   */
+  // Memoised, not `activities.data ?? []` inline: a fresh `[]` on every render would make each
+  // dependent memo below recompute every render, which is precisely what they exist to avoid.
+  const loadedActivities = useMemo(() => activities.data ?? [], [activities.data]);
+  /**
+   * The rows a checkbox appears on. A `WBS_SUMMARY` is excluded because nesting one summary inside
+   * another is the Breakdown picker's job (spec C-1b) — a checklist has nowhere to put the cycle
+   * feedback that restructuring the tree needs.
+   */
+  const selectableIds = useMemo(
+    () =>
+      WBS_IMPROVEMENTS_ENABLED
+        ? new Set(loadedActivities.filter((a) => a.type !== 'WBS_SUMMARY').map((a) => a.id))
+        : new Set<string>(),
+    [loadedActivities],
+  );
+  const bulkAssignActive =
+    WBS_IMPROVEMENTS_ENABLED && loadedActivities.some((a) => a.type === 'WBS_SUMMARY');
+  /**
+   * The selection as it stands **against the current list**. Derived rather than pruned by an
+   * effect, so a row deleted underneath the selection cannot leave the bar counting an activity
+   * that is no longer there — a count that would then disagree with the batch actually sent.
+   */
+  const effectiveSelection = useMemo(() => {
+    const live = new Set<string>();
+    for (const id of selectedIds) if (selectableIds.has(id)) live.add(id);
+    return live;
+  }, [selectedIds, selectableIds]);
+  const membersGate = editorGating?.members ?? { writable: canEditSchedule, reason: null };
+  const allSelected = selectableIds.size > 0 && effectiveSelection.size === selectableIds.size;
+
+  const toggleRow = (id: string): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = (): void => setSelectedIds(new Set());
 
   /** Open the tabbed editor if it is on, else fall back to this purpose's own legacy dialog. */
   const openFor = (activity: ActivitySummary, purpose: 'edit' | 'progress' | 'steps'): void => {
@@ -306,6 +389,46 @@ export function ActivitiesTable({
   };
 
   const columns: Column<ActivitySummary>[] = [
+    // The bulk-assign selection column, first so a tick is the leftmost thing on a row. Conditional
+    // spread (not a post-hoc unshift) so its position cannot drift.
+    ...(bulkAssignActive
+      ? [
+          {
+            header: 'Select',
+            srHeader: true,
+            headClassName: 'py-2 pr-3 font-medium',
+            cellClassName: 'py-2 pr-3',
+            headerCell: () => (
+              <SelectAllCheckbox
+                checked={allSelected}
+                indeterminate={effectiveSelection.size > 0 && !allSelected}
+                onChange={(checked) => {
+                  setSelectedIds(checked ? new Set(selectableIds) : new Set());
+                }}
+              />
+            ),
+            cell: (activity: ActivitySummary) =>
+              // A summary has no checkbox at all rather than a disabled one: "you may not file this
+              // here" is not the message — it is filed from the Breakdown picker, which a shaded box
+              // on this row would not tell anyone.
+              //
+              // Selecting is deliberately NOT gated on the write right. Ticking a row is a read —
+              // nothing is sent until Assign — and it is the ONLY way to reach the bar that says
+              // why the write is shut. Disabling the boxes would leave a reader with a column of
+              // dead controls and the explanation behind them, unreachable. (Contrast the Members
+              // checklist, where ticking IS the pending edit, so there the boxes do shade.)
+              selectableIds.has(activity.id) ? (
+                <input
+                  type="checkbox"
+                  className="accent-primary size-4 align-middle"
+                  checked={effectiveSelection.has(activity.id)}
+                  onChange={() => toggleRow(activity.id)}
+                  aria-label={`Select ${activity.name}`}
+                />
+              ) : null,
+          } satisfies Column<ActivitySummary>,
+        ]
+      : []),
     {
       header: 'Code',
       cell: (activity) =>
@@ -595,6 +718,27 @@ export function ActivitiesTable({
 
   return (
     <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+      {/*
+        Above the table, not floating over it: the bar appears and disappears with the selection, and
+        a floating layer that reflows the rows underneath it moves the very checkboxes the user is
+        working through. Unmounting it on success would strand focus, so `onDone` clears the
+        selection and returns focus to this region — the same hand-off delete and dissolve use.
+      */}
+      {bulkAssignActive ? (
+        <WbsBulkAssignBar
+          orgSlug={orgSlug}
+          planId={planId}
+          selected={effectiveSelection}
+          planActivities={loadedActivities}
+          gate={membersGate}
+          onClear={clearSelection}
+          onDone={() => {
+            flushSync(clearSelection);
+            regionRef.current?.focus();
+          }}
+        />
+      ) : null}
+
       <DataTable
         caption="Activities"
         columns={columns}

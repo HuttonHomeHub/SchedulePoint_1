@@ -1,6 +1,7 @@
+import type { ActivityType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { membershipDiff } from './membership-diff';
+import { bulkParentChanges, membershipDiff } from './membership-diff';
 
 const SUMMARY = 's1';
 
@@ -100,5 +101,86 @@ describe('membershipDiff', () => {
     expect(diff([row('s1'), row('a')], [], ['a'])).toEqual([
       { id: 'a', parentId: null, version: 1 },
     ]);
+  });
+});
+
+type BulkRow = { id: string; parentId: string | null; version: number; type: ActivityType };
+
+const bulkRow = (
+  id: string,
+  parentId: string | null = null,
+  type: ActivityType = 'TASK',
+  version = 1,
+): BulkRow => ({ id, parentId, version, type });
+
+const bulk = (rows: BulkRow[], selected: string[], target: string | null) =>
+  bulkParentChanges(new Set(selected), target, new Map(rows.map((r) => [r.id, r])));
+
+describe('bulkParentChanges', () => {
+  it('files the selection under the target', () => {
+    expect(
+      bulk([bulkRow('s1', null, 'WBS_SUMMARY'), bulkRow('a'), bulkRow('b')], ['a', 'b'], 's1'),
+    ).toEqual([
+      { id: 'a', parentId: 's1', version: 1 },
+      { id: 'b', parentId: 's1', version: 1 },
+    ]);
+  });
+
+  // The minimal-batch rule, and the reason for it: every unnecessary row is another activity whose
+  // stale `version` can reject a save the user did not ask it to be part of.
+  it('sends nothing for an activity already at the target', () => {
+    expect(bulk([bulkRow('s1', null, 'WBS_SUMMARY'), bulkRow('a', 's1')], ['a'], 's1')).toEqual([]);
+  });
+
+  it('moves an activity filed under a DIFFERENT summary', () => {
+    const rows = [
+      bulkRow('s1', null, 'WBS_SUMMARY'),
+      bulkRow('s2', null, 'WBS_SUMMARY'),
+      bulkRow('a', 's2'),
+    ];
+    expect(bulk(rows, ['a'], 's1')).toEqual([{ id: 'a', parentId: 's1', version: 1 }]);
+  });
+
+  it('returns the selection to the top level when the target is null', () => {
+    expect(bulk([bulkRow('s1', null, 'WBS_SUMMARY'), bulkRow('a', 's1')], ['a'], null)).toEqual([
+      { id: 'a', parentId: null, version: 1 },
+    ]);
+  });
+
+  /**
+   * The three refusals. Each is a row the caller could plausibly hand over and each would fail the
+   * WHOLE batch — an all-or-nothing endpoint means one bad row loses thirty-nine good ones.
+   */
+  it('drops an id that is no longer in the plan', () => {
+    expect(bulk([bulkRow('s1', null, 'WBS_SUMMARY'), bulkRow('a')], ['a', 'gone'], 's1')).toEqual([
+      { id: 'a', parentId: 's1', version: 1 },
+    ]);
+  });
+
+  it('never files the target under itself', () => {
+    expect(bulk([bulkRow('s1', null, 'WBS_SUMMARY')], ['s1'], 's1')).toEqual([]);
+  });
+
+  // Nesting one summary inside another is the Breakdown picker's job (spec C-1b) — the cycle
+  // feedback that needs has nowhere to go in a row of checkboxes.
+  it('never re-parents a WBS summary', () => {
+    const rows = [bulkRow('s1', null, 'WBS_SUMMARY'), bulkRow('s2', null, 'WBS_SUMMARY')];
+    expect(bulk(rows, ['s2'], 's1')).toEqual([]);
+  });
+
+  it('carries each row’s own version, not a shared one', () => {
+    const rows = [
+      bulkRow('s1', null, 'WBS_SUMMARY'),
+      bulkRow('a', null, 'TASK', 4),
+      bulkRow('b', null, 'TASK', 9),
+    ];
+    expect(bulk(rows, ['a', 'b'], 's1').map((c) => c.version)).toEqual([4, 9]);
+  });
+
+  // Plan order, not tick order — so two users ticking the same five rows in different orders send
+  // byte-identical batches, and a diff in review means a real difference.
+  it('emits in plan order whatever order the user ticked in', () => {
+    const rows = [bulkRow('s1', null, 'WBS_SUMMARY'), bulkRow('a'), bulkRow('b'), bulkRow('c')];
+    expect(bulk(rows, ['c', 'a', 'b'], 's1').map((c) => c.id)).toEqual(['a', 'b', 'c']);
   });
 });
