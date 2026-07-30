@@ -127,7 +127,9 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   await expect(grid.getByText('Loose end')).toBeVisible();
 
   // ------------------------------------------------- M2: dissolve keeps the work
-  await page.getByRole('button', { name: 'TSLD', exact: true }).click();
+  // "Diagram", not "TSLD": the toolbar's view-mode pair is Diagram | Gantt (ADR-0059 §the view
+  // seam). The URL param is `?view=tsld`, which is where the wrong label came from.
+  await page.getByRole('button', { name: 'Diagram', exact: true }).click();
   const beforeDissolve = await activityCount(page, orgSlug);
 
   await openRowMenu(page, 'Substructure');
@@ -182,5 +184,11 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   await rowCheckbox(page, 'Excavate').check();
   const assign = page.getByRole('button', { name: 'Assign' });
   await expect(assign).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByRole('status')).toContainText('Start editing');
+  // Read the reason through the button's own `aria-describedby` rather than by hunting for a
+  // `role="status"`: the pen banner is also a status region, so a bare role query is ambiguous —
+  // and this asserts the thing that actually matters, that the reason is *associated* with the
+  // control it explains rather than merely nearby (the M6 accessibility finding).
+  const describedBy = await assign.getAttribute('aria-describedby');
+  expect(describedBy).not.toBeNull();
+  await expect(page.locator(`[id="${describedBy ?? ''}"]`)).toContainText('Start editing');
 });
