@@ -165,7 +165,15 @@ describe('ActivitiesService', () => {
   // driving assignment, so the triad is inert and every prior activity test stays byte-identical.
   let txDrivingFindFirst: ReturnType<typeof vi.fn>;
   let txDrivingUpdateMany: ReturnType<typeof vi.fn>;
+  // Hoisted so a test can assert WHICH advisory locks a write path took. Both the plan write lock
+  // (ADR-0038 parent-tree serialisation) and the calendar scope guard's lock go through
+  // `tx.$executeRaw` as tagged templates, distinguishable by their namespace argument.
+  let txExecuteRaw: ReturnType<typeof vi.fn>;
   let service: ActivitiesService;
+
+  /** The namespaces passed to `pg_advisory_xact_lock`, in acquisition order. */
+  const locksTaken = (): string[] =>
+    txExecuteRaw.mock.calls.map((call) => String(call[1])).filter((ns) => ns !== 'undefined');
 
   beforeEach(() => {
     organizations = {
@@ -187,10 +195,11 @@ describe('ActivitiesService', () => {
     // `resourceAssignment` model for the ADR-0040 driving-assignment recompute. Default: no driver.
     txDrivingFindFirst = vi.fn().mockResolvedValue(null);
     txDrivingUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+    txExecuteRaw = vi.fn();
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
-          $executeRaw: vi.fn(),
+          $executeRaw: txExecuteRaw,
           resourceAssignment: {
             findFirst: txDrivingFindFirst,
             updateMany: txDrivingUpdateMany,
@@ -307,6 +316,40 @@ describe('ActivitiesService', () => {
         service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'X', parentId: 'ghost' }),
       ).rejects.toBeInstanceOf(NotFoundError);
       expect(activities.create).not.toHaveBeenCalled();
+    });
+
+    // ADR-0038 invariant (a): the parent-tree cycle walk is a read-then-write and MUST be
+    // serialised per plan, or two concurrent mirror re-parents both pass a still-acyclic read.
+    it('takes the plan write lock when creating UNDER a WBS parent', async () => {
+      activities.create.mockResolvedValue(activity());
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }),
+      );
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'T', parentId: 'sum-1' });
+      expect(locksTaken()).toContain('dependency-plan');
+    });
+
+    // The cost of the fix must fall ONLY on the re-parenting path: a plan-wide lock on every
+    // ordinary create would serialise all authoring in the plan.
+    it('takes NO plan lock on a top-level create (the common path is uncontended)', async () => {
+      activities.create.mockResolvedValue(activity());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'T' });
+      expect(locksTaken()).not.toContain('dependency-plan');
+    });
+
+    // One acquisition order across this service (plan → calendar) is what makes two concurrent
+    // writes unable to deadlock against each other.
+    it('takes the plan lock BEFORE the calendar lock when a create sets both', async () => {
+      activities.create.mockResolvedValue(activity());
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }),
+      );
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'T',
+        parentId: 'sum-1',
+        calendarId: 'cal-1',
+      });
+      expect(locksTaken()).toEqual(['dependency-plan', 'calendar-assign']);
     });
 
     it('defaults type to TASK and duration to 1 when omitted', async () => {
@@ -518,6 +561,61 @@ describe('ActivitiesService', () => {
       await expect(
         service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { name: 'New', version: 1 }),
       ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    // ADR-0038 invariant (a). The re-parent path reads the ancestor chain and then writes on the
+    // strength of it; optimistic `version` cannot catch the mirror race (each row IS at the
+    // version it was read at), so the plan advisory lock is the only thing serialising it.
+    describe('WBS re-parent serialisation (ADR-0038 invariant (a))', () => {
+      /**
+       * First lookup resolves the activity being edited, the second its new parent; the trailing
+       * default covers the post-transaction re-read of the updated row.
+       */
+      function existingThenParent() {
+        activities.findActiveByIdInOrg
+          .mockResolvedValueOnce(activity())
+          .mockResolvedValueOnce(activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }))
+          .mockResolvedValue(activity({ parentId: 'sum-1' }));
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+      }
+
+      it('takes the plan write lock when re-parenting to a summary', async () => {
+        existingThenParent();
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          parentId: 'sum-1',
+          version: 1,
+        });
+        expect(locksTaken()).toContain('dependency-plan');
+      });
+
+      it('takes NO plan lock on an ordinary edit that omits parentId', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { name: 'New', version: 1 });
+        expect(locksTaken()).not.toContain('dependency-plan');
+      });
+
+      // Clearing to top-level cannot create a cycle — there is no chain to walk — so it does not
+      // pay for the lock either.
+      it('takes NO plan lock when clearing the parent to top level', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          parentId: null,
+          version: 1,
+        });
+        expect(locksTaken()).not.toContain('dependency-plan');
+      });
+
+      it('takes the plan lock BEFORE the calendar lock when an update sets both', async () => {
+        existingThenParent();
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          parentId: 'sum-1',
+          calendarId: 'cal-1',
+          version: 1,
+        });
+        expect(locksTaken()).toEqual(['dependency-plan', 'calendar-assign']);
+      });
     });
 
     // Duration-type triad recompute on the ACTIVITY write path (M7 rung 4, ADR-0040 §3).

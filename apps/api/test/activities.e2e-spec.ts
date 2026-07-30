@@ -696,6 +696,52 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // WBS parent tree — ADR-0038 invariant (a)
+  //
+  // Scope note, so nobody reads more into this than it proves: this exercises the
+  // cycle REJECTION through the real stack (HTTP → service → Postgres). It is NOT the
+  // regression gate for the plan advisory lock the re-parent path takes. Two mirror
+  // PATCHes fired with `Promise.all`, even on two separate keep-alive sockets, were
+  // measured NOT to overlap in the danger window — the second request's ancestor walk
+  // began ~15 ms after the first's transaction had already committed — so this test
+  // passes identically with the lock removed. The lock's real gate is the unit suite
+  // (`activities.service.spec.ts` → "WBS re-parent serialisation"), which asserts the
+  // acquisition itself and fails when it is taken away.
+  // ---------------------------------------------------------------------------
+
+  describe('WBS re-parent (ADR-0038 invariant (a))', () => {
+    async function summary(actor: Actor, planId: string, name: string) {
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name, type: 'WBS_SUMMARY' })
+        .expect(201);
+      return { id: res.body.data.id as string, version: res.body.data.version as number };
+    }
+
+    it('rejects the mirror re-parent that would close a cycle, leaving the tree acyclic', async () => {
+      const { actor, planId } = await setup();
+      const a = await summary(actor, planId, 'A');
+      const b = await summary(actor, planId, 'B');
+
+      // "A under B" then "B under A". The second closes a loop, so the ancestor walk must reject it
+      // (409) rather than persist it — optimistic `version` cannot catch this on its own, because
+      // each request writes only its OWN row, at exactly the version it read.
+      const url = (id: string) => `/api/v1/organizations/acme/activities/${id}`;
+      const [r1, r2] = await Promise.all([
+        actor.agent.patch(url(a.id)).send({ parentId: b.id, version: a.version }),
+        actor.agent.patch(url(b.id)).send({ parentId: a.id, version: b.version }),
+      ]);
+
+      // One wins; the loser is rejected as a cycle — not silently dropped.
+      expect([r1.status, r2.status].sort()).toEqual([200, 409]);
+
+      // The decisive assertion: the tree is still acyclic — at most one of the two carries a parent.
+      const rows = await prisma.activity.findMany({ where: { id: { in: [a.id, b.id] } } });
+      expect(rows.filter((r) => r.parentId !== null)).toHaveLength(1);
+    });
+  });
+
   it('401s without a session', async () => {
     await request(server())
       .get('/api/v1/organizations/acme/plans/00000000-0000-7000-8000-000000000000/activities')

@@ -10,6 +10,7 @@ import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import {
   ConflictError,
   ForbiddenError,
@@ -92,6 +93,15 @@ export class ActivitiesService {
    * inside `selfId`'s own subtree, which would make the WBS parent tree cyclic. Only a summary may be a
    * parent, and the tree is otherwise acyclic, so the ancestor walk terminates. Runs inside the write
    * transaction alongside the insert/update.
+   *
+   * **The caller MUST hold {@link acquirePlanWriteLock} for the plan.** The walk reads the parent
+   * chain and then writes on the strength of what it read; without the lock, two concurrent mirror
+   * re-parents (A under B, B under A) each read a chain that is still acyclic, both pass, and the
+   * tree ends up cyclic — ADR-0038 invariant (a) broken by a race no optimistic `version` check can
+   * catch, because each write's own row IS at the version it was read at. Same argument, and same
+   * remedy, as the dependency-DAG cycle check (ADR-0021) and the resource tree (ADR-0053 §3). Take
+   * the plan lock BEFORE the calendar guard's lock, so every path in this service acquires
+   * plan → calendar in one order and no two of them can deadlock.
    */
   private async assertValidParent(
     tx: Prisma.TransactionClient,
@@ -217,6 +227,11 @@ export class ActivitiesService {
 
     try {
       const activity = await this.prisma.$transaction(async (tx) => {
+        // Serialise the WBS parent-tree read-then-write per plan (ADR-0038 invariant (a)) — see
+        // `assertValidParent`. Taken ONLY when a parent is actually being set, so the overwhelmingly
+        // common top-level create never contends for a plan-wide lock; and taken FIRST, before the
+        // calendar guard's own lock, to keep this service's acquisition order plan → calendar.
+        if (parentId !== null) await acquirePlanWriteLock(tx, plan.id);
         // Validate a specific calendar through THE shared scope guard before the insert
         // (ADR-0037 + ADR-0053 §2): active + in-org (404 otherwise) AND usable by this
         // activity's PROJECT — an ORG calendar anywhere, a PROJECT calendar only inside its
@@ -446,6 +461,14 @@ export class ActivitiesService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        // Re-parenting: serialise the parent-tree read-then-write per plan (ADR-0038 invariant (a))
+        // — see `assertValidParent`. Only on the branch that sets a NON-NULL parent: clearing to
+        // top-level cannot create a cycle, and an ordinary edit (no `parentId` in the DTO) must not
+        // pay for a plan-wide lock. Taken FIRST, before the calendar guard's lock (order:
+        // plan → calendar).
+        if (parentId !== undefined && parentId !== null) {
+          await acquirePlanWriteLock(tx, existing.planId);
+        }
         // Assigning a specific calendar: THE shared scope guard (ADR-0053 §2) validates active
         // + in-org (404) under the calendar advisory lock — serialised with the delete-in-use
         // guard, so no TOCTOU dangling reference — AND that the tier allows it here (422
