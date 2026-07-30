@@ -23,8 +23,14 @@ vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }))
 
 const mutateSpy = vi.fn();
 const onSavedSpy = vi.fn();
-vi.mock('@/features/activities', () => ({
+vi.mock('@/features/activities', async () => ({
   useDeleteActivity: () => ({ mutate: mutateSpy, isPending: false }),
+  // The REAL copy helper, not a stub: this host must actually produce the WBS cascade warning, and
+  // a stub would let it silently stop while the test kept passing (the defect being fixed was
+  // precisely one surface saying something the other did not).
+  ...(await vi.importActual<Record<string, unknown>>(
+    '@/features/activities/lib/delete-activity-copy',
+  )),
   // A probe standing in for the real edit dialog — surfaces the open state + which activity, and
   // captures the `onSaved` prop so we can assert the workspace's undo-recording seam is wired through.
   ActivityFormDialog: ({
@@ -45,8 +51,8 @@ import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 const ACTIVITIES = [
-  { id: 'a1', name: 'Survey' },
-  { id: 'a2', name: 'Excavate' },
+  { id: 'a1', name: 'Survey', type: 'TASK', parentId: null },
+  { id: 'a2', name: 'Excavate', type: 'TASK', parentId: null },
 ];
 
 function makeModel(over: Partial<Record<string, unknown>> = {}): PlanWorkspaceModel {
@@ -114,5 +120,20 @@ describe('ActivityCrudDialogs', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Server said no');
     // The dialog stays open (not closed) so the user can retry.
     expect(setDeleteActivityId).not.toHaveBeenCalled();
+  });
+  // The same WBS cascade warning the table host shows (ADR-0038). Asserted here because the two
+  // hosts raise the SAME dialog from different code, and a warning on only one of them is the
+  // original defect wearing a different hat.
+  it('warns that deleting a WBS summary takes its subtree, with the count', () => {
+    const activities = {
+      data: [
+        { id: 's1', name: 'Substructure', type: 'WBS_SUMMARY', parentId: null },
+        { id: 'c1', name: 'Excavate', type: 'TASK', parentId: 's1' },
+        { id: 'c2', name: 'Blind', type: 'TASK', parentId: 's1' },
+      ],
+    };
+    render(<ActivityCrudDialogs model={makeModel({ deleteActivityId: 's1', activities })} />);
+    expect(screen.getByText(/2 activities below it/)).toBeInTheDocument();
+    expect(screen.getByText(/dissolve/)).toBeInTheDocument();
   });
 });

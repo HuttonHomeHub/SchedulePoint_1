@@ -12,7 +12,12 @@ import {
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
-import { ActivityEditorDialog, ActivityFormDialog, useDeleteActivity } from '@/features/activities';
+import {
+  ActivityEditorDialog,
+  ActivityFormDialog,
+  deleteActivityDescription,
+  useDeleteActivity,
+} from '@/features/activities';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
 
@@ -162,7 +167,9 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         onClose={closeDelete}
         onConfirm={confirmDelete}
         title="Delete activity"
-        description={deleting ? `Delete “${deleting.name}”? You can restore it later.` : ''}
+        description={
+          deleting ? deleteActivityDescription(deleting, model.activities.data ?? []) : ''
+        }
         pending={deleteActivity.isPending}
         pendingLabel="Deleting…"
         error={deleteError}

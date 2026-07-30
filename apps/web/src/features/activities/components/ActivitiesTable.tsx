@@ -6,6 +6,7 @@ import { flushSync } from 'react-dom';
 import { useActivities, useDeleteActivity } from '../api/use-activities';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import { openActivityEditor, type ActivityEditorIntent } from '../lib/activity-editor-intent';
+import { deleteActivityDescription } from '../lib/delete-activity-copy';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
@@ -648,7 +649,7 @@ export function ActivitiesTable({
             }}
             onConfirm={confirmDelete}
             title="Delete activity"
-            description={deleting ? `Delete “${deleting.name}”? You can restore it later.` : ''}
+            description={deleting ? deleteActivityDescription(deleting, activities.data ?? []) : ''}
             pending={deleteActivity.isPending}
             pendingLabel="Deleting…"
             error={deleteError}

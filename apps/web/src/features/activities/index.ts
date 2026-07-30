@@ -29,6 +29,7 @@ export {
   deriveActivityEditorGating,
   type ActivityEditorGating,
 } from './lib/activity-editor-gating';
+export { deleteActivityDescription } from './lib/delete-activity-copy';
 export {
   openActivityEditor,
   type ActivityEditorIntent,
