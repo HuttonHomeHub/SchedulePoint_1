@@ -150,3 +150,78 @@ function deriveBucket(
 export function groupHasBar(group: DerivedGroup): boolean {
   return group.start !== null && group.finish !== null;
 }
+
+/**
+ * One row of the TSLD WBS band (ADR-0063): a real summary or the derived bucket, with its nesting
+ * depth and the span it draws at.
+ *
+ * Structurally identical to the render model's `WbsBandGroup`, and deliberately declared here
+ * rather than imported: `features/tsld` imports no other feature (ADR-0026 D8), so the geometry
+ * module cannot reach into this one, and this one must not become the reason that rule bends. The
+ * host composes the two.
+ */
+export interface WbsBandGroupInput {
+  /** `null` for the derived bucket — it has no activity id, because it is not in the database. */
+  id: string | null;
+  label: string;
+  depth: number;
+  start: string | null;
+  finish: string | null;
+}
+
+/**
+ * Project the plan's groups into band rows, in draw order: summaries outermost-first, then the
+ * derived bucket last.
+ *
+ * Depth is the count of summary ancestors, walked with a `seen` guard. The server forbids a cycle
+ * in the parent tree (ADR-0038), but this is render-path code and must not hang the canvas if one
+ * ever exists; a cycle simply stops the walk, and the group lands at the depth reached so far.
+ *
+ * The bucket is given **depth 0**: it is a top-level grouping, a sibling of the outermost
+ * summaries, not a child of anything.
+ */
+export function wbsBandGroups(
+  activities: readonly ActivitySummary[],
+  { source = 'early' }: { source?: BarDateSource } = {},
+): WbsBandGroupInput[] {
+  const groups = deriveWbsGroups(activities, { source });
+  const byId = new Map(activities.map((a) => [a.id, a]));
+
+  const depthOf = (activity: ActivitySummary): number => {
+    let depth = 0;
+    const seen = new Set<string>([activity.id]);
+    let parentId = activity.parentId;
+    while (parentId !== null && !seen.has(parentId)) {
+      const parent = byId.get(parentId);
+      if (!parent) break; // an orphan is top-level, exactly as the row model treats it
+      seen.add(parentId);
+      depth += 1;
+      parentId = parent.parentId;
+    }
+    return depth;
+  };
+
+  const rows: WbsBandGroupInput[] = groups.summaries
+    .map((group) => {
+      const span = drawnSpan(group.summary, source);
+      return {
+        id: group.summary.id,
+        label: group.summary.name,
+        depth: depthOf(group.summary),
+        start: span.start,
+        finish: span.finish,
+      };
+    })
+    .sort((a, b) => a.depth - b.depth);
+
+  if (groups.unassigned !== null) {
+    rows.push({
+      id: null,
+      label: groups.unassigned.label,
+      depth: 0,
+      start: groups.unassigned.start,
+      finish: groups.unassigned.finish,
+    });
+  }
+  return rows;
+}
