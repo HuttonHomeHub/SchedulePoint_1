@@ -1,5 +1,50 @@
 # @repo/api
 
+## 0.31.0
+
+### Minor Changes
+
+- [#193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/193) [`8f94a06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f94a06a11b5ae35775196e8e0dfdcdb95cab09d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the batch WBS membership write, `PATCH …/plans/:planId/activities/parents`.
+
+  Files one or more of a plan's activities under a summary — or, on a null `parentId`, back at the
+  top level — in a single all-or-nothing transaction, so managing a summary's whole membership in one
+  place either lands wholesale or not at all. Modelled on the existing `positions` batch, but
+  structural: `parentId` feeds the engine's WBS rollup, so a committed batch leaves the plan's
+  computed dates stale until the next recalculation.
+
+  Validated against the **resulting** tree rather than the current one. A row-by-row check against
+  pre-state would accept a batch like "A under B" plus "B under A" — each row files a childless
+  top-level summary under another, so each passes alone, while together they close a cycle. The batch
+  is overlaid on the plan's current edges and the whole result is walked, which is also cheaper than
+  a per-row ancestor walk.
+
+- [#193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/193) [`8f94a06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f94a06a11b5ae35775196e8e0dfdcdb95cab09d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add `POST …/activities/:activityId/dissolve` — remove a WBS grouping, keep the work.
+
+  Promotes the summary's direct children to its own parent (or the top level), then soft-deletes the
+  now-childless summary, in one transaction under the plan advisory lock, so a child can never be
+  stranded between the two writes: the count of active activities falls by exactly one.
+
+  Deliberately a separate endpoint rather than a flag on `DELETE`, which cascades to the whole
+  subtree. That cascade is right when the work is genuinely cancelled and catastrophic when the
+  planner only meant to drop a level of grouping, so the destructive reading must never be the
+  default. A nested branch keeps its shape — a grandchild stays under its own parent, which simply
+  moves up a level. Restoring a dissolved summary brings back the summary alone.
+
+### Patch Changes
+
+- [#193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/193) [`8f94a06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f94a06a11b5ae35775196e8e0dfdcdb95cab09d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Serialise WBS re-parenting with the plan advisory lock.
+
+  `assertValidParent` walks an activity's ancestor chain and then writes on the strength of what it
+  read, but its two callers — activity create and activity update — ran that read-then-write without
+  the per-plan advisory lock ADR-0038 invariant (a) assumes. Two concurrent mirror re-parents (A under
+  B, B under A) could each read a still-acyclic tree, both pass, and leave the WBS parent tree cyclic;
+  optimistic `version` cannot catch it, because each request writes only its own row at exactly the
+  version it read.
+
+  Both callers now take `acquirePlanWriteLock` — only on the branch that sets a non-null parent, so an
+  ordinary edit and a top-level create are unchanged, and before the calendar guard's lock so this
+  service has one acquisition order.
+
 ## 0.30.1
 
 ### Patch Changes
