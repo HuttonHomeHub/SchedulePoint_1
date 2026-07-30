@@ -7,6 +7,8 @@ export {
   useRepositionLane,
   useSetActivityVisualStart,
   useBatchPositions,
+  useUpdateActivityParents,
+  useDissolveSummary,
   useUpdateActivityProgress,
   useDeleteActivity,
   activitiesQueryOptions,
@@ -29,6 +31,7 @@ export {
   deriveActivityEditorGating,
   type ActivityEditorGating,
 } from './lib/activity-editor-gating';
+export { deleteActivityDescription, dissolveSummaryDescription } from './lib/delete-activity-copy';
 export {
   openActivityEditor,
   type ActivityEditorIntent,

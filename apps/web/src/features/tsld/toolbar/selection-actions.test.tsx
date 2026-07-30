@@ -19,6 +19,7 @@ const spies = {
   onResources: vi.fn(),
   onProgress: vi.fn(),
   onSteps: vi.fn(),
+  onDissolve: vi.fn(),
 };
 
 function ctx(over: Partial<SelectionActionContext> = {}): SelectionActionContext {
@@ -33,6 +34,8 @@ function ctx(over: Partial<SelectionActionContext> = {}): SelectionActionContext
     onResources: spies.onResources,
     onProgress: spies.onProgress,
     onSteps: spies.onSteps,
+    isSummary: false,
+    onDissolve: spies.onDissolve,
     ...over,
   };
 }

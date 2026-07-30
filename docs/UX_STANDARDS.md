@@ -68,6 +68,14 @@ a bug:
 - **Feedback within 100ms** for any interaction (press state, focus, spinner).
 - **Destructive actions** require explicit confirmation (AlertDialog) and use
   the `destructive` intent; prefer reversible actions with undo.
+- **A confirmation must name what is actually destroyed — including what the user
+  did not select.** If an action cascades, say so and say how much: "Delete the
+  summary “X” and the 12 activities below it?" A generic "Delete “X”? You can
+  restore it later." on an action that removes a subtree is not a warning, it is
+  a reassurance about the wrong thing. Where a non-destructive alternative exists
+  (dissolve vs. delete), the confirmation is the right place to point at it.
+  Derive the count from data already loaded, and when it is not available say
+  what happens without inventing a number — a wrong count is worse than none.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear
   error summary, disabled+busy submit while pending, and preserved input on
   error. Never lose a user's work.

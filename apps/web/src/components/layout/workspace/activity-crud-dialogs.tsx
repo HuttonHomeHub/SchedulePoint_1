@@ -12,7 +12,14 @@ import {
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
-import { ActivityEditorDialog, ActivityFormDialog, useDeleteActivity } from '@/features/activities';
+import {
+  ActivityEditorDialog,
+  ActivityFormDialog,
+  deleteActivityDescription,
+  dissolveSummaryDescription,
+  useDeleteActivity,
+  useDissolveSummary,
+} from '@/features/activities';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
 
@@ -33,8 +40,10 @@ import { ActivityNotesSection } from '@/features/notes';
 export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): React.ReactElement {
   const { orgSlug, planId } = model;
   const deleteActivity = useDeleteActivity(orgSlug, planId);
+  const dissolveSummary = useDissolveSummary(orgSlug, planId);
   const announce = useAnnounce();
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [dissolveError, setDissolveError] = useState<string | null>(null);
 
   const editing = model.editActivityId
     ? model.activities.data?.find((a) => a.id === model.editActivityId)
@@ -46,6 +55,9 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
     : undefined;
   const deleting = model.deleteActivityId
     ? model.activities.data?.find((a) => a.id === model.deleteActivityId)
+    : undefined;
+  const dissolving = model.dissolveActivityId
+    ? model.activities.data?.find((a) => a.id === model.dissolveActivityId)
     : undefined;
 
   const closeDelete = (): void => {
@@ -73,6 +85,31 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         announce(`Activity “${name}” deleted.`);
       },
       onError: (err) => setDeleteError(err.message),
+    });
+  };
+
+  const closeDissolve = (): void => {
+    model.setDissolveActivityId(null);
+    setDissolveError(null);
+  };
+
+  const confirmDissolve = (): void => {
+    if (!dissolving) return;
+    const name = dissolving.name;
+    dissolveSummary.mutate(dissolving.id, {
+      onSuccess: () => {
+        // Dissolve is a server-side compound with no client-composable inverse, so it truncates the
+        // undo history rather than offering a broken one (ADR-0048 M2's cascade-delete rule).
+        model.recordDissolveBoundary();
+        flushSync(() => {
+          model.setDissolveActivityId(null);
+          setDissolveError(null);
+        });
+        // Says what SURVIVED, not just what went — the whole point of the action, and the thing a
+        // planner will otherwise assume went with it.
+        announce(`Summary “${name}” dissolved. Its activities were kept.`);
+      },
+      onError: (err) => setDissolveError(err.message),
     });
   };
 
@@ -162,10 +199,32 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         onClose={closeDelete}
         onConfirm={confirmDelete}
         title="Delete activity"
-        description={deleting ? `Delete “${deleting.name}”? You can restore it later.` : ''}
+        description={
+          deleting ? deleteActivityDescription(deleting, model.activities.data ?? []) : ''
+        }
         pending={deleteActivity.isPending}
         pendingLabel="Deleting…"
         error={deleteError}
+      />
+      {/*
+        Deliberately NOT `confirmVariant="destructive"`: dissolve keeps every activity. Dressing it
+        in the delete red would tell the eye the opposite of what the sentence says, and the eye
+        wins. The same pairing is used by the table's own Dissolve action, from the same copy
+        function, so the two entry points cannot say different things.
+      */}
+      <ConfirmDialog
+        open={dissolving !== undefined}
+        onClose={closeDissolve}
+        onConfirm={confirmDissolve}
+        title="Dissolve summary"
+        description={
+          dissolving ? dissolveSummaryDescription(dissolving, model.activities.data ?? []) : ''
+        }
+        confirmLabel="Dissolve"
+        confirmVariant="default"
+        pending={dissolveSummary.isPending}
+        pendingLabel="Dissolving…"
+        error={dissolveError}
       />
     </>
   );

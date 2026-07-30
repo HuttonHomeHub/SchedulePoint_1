@@ -101,6 +101,7 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   isMilestoneType: () => false,
   isDurationDerivedType: () => false,
   ActivitiesTable: () => <div data-testid="activities-table" />,

@@ -16,10 +16,26 @@ import type { ActivitySummary } from '@repo/types';
  * itself when its target is deleted — the same rule the crud dialogs already followed.
  */
 export type ActivityEditorTab =
-  'general' | 'scheduling' | 'logic' | 'progress' | 'cost' | 'resources' | 'notes';
+  | 'general'
+  | 'scheduling'
+  | 'logic'
+  | 'progress'
+  | 'cost'
+  | 'resources'
+  | 'notes'
+  /** A WBS summary's membership (`VITE_WBS_IMPROVEMENTS`) — present only on a `WBS_SUMMARY`. */
+  | 'members';
 
 /** Why the editor is being opened. Maps to a tab — and, for steps, to a focus target within it. */
-export type ActivityEditorPurpose = 'edit' | 'progress' | 'steps' | 'logic' | 'resources' | 'notes';
+export type ActivityEditorPurpose =
+  | 'edit'
+  | 'progress'
+  | 'steps'
+  | 'logic'
+  | 'resources'
+  | 'notes'
+  /** Manage a WBS summary's membership — only ever raised for a `WBS_SUMMARY`. */
+  | 'members';
 
 export interface ActivityEditorIntent {
   activityId: string;
@@ -51,6 +67,8 @@ export function openActivityEditor(
       return { activityId: activity.id, tab: 'logic' };
     case 'resources':
       return { activityId: activity.id, tab: 'resources' };
+    case 'members':
+      return { activityId: activity.id, tab: 'members' };
     // **Add note** used to open the Logic dialog and then scroll + focus its Notes section, because
     // notes had no home of their own. With a tab, the intent IS the reveal.
     case 'notes':

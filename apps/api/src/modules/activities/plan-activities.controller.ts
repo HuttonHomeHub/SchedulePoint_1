@@ -32,6 +32,7 @@ import { ParseUuidPipe } from '../../common/validation/uuid';
 import { ActivitiesService } from './activities.service';
 import { ActivityResponseDto } from './dto/activity-response.dto';
 import { CreateActivityDto } from './dto/create-activity.dto';
+import { UpdateParentsDto } from './dto/update-parents.dto';
 import { UpdatePositionsDto } from './dto/update-positions.dto';
 
 /**
@@ -113,6 +114,48 @@ export class PlanActivitiesController {
     @Body() dto: UpdatePositionsDto,
   ): Promise<ActivityResponseDto[]> {
     const { items, canReadCost } = await this.service.updatePositions(
+      principal,
+      orgSlug,
+      planId,
+      dto,
+    );
+    return items.map((activity) => ActivityResponseDto.from(activity, canReadCost));
+  }
+
+  @Patch('parents')
+  @ApiOperation({
+    summary:
+      'Batch-file activities under a WBS summary, or back to the top level (Planner or Org Admin). ' +
+      'All-or-nothing.',
+    description:
+      'Structural: `parentId` feeds the engine’s WBS rollup, so a committed batch leaves the ' +
+      'plan’s computed dates stale until the next recalculation. Validated against the RESULTING ' +
+      'tree, so a batch that is cycle-free row by row but cyclic as a whole is still rejected.',
+  })
+  @ApiOkResponse({ type: ActivityResponseDto, isArray: true })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({
+    description:
+      'The organisation or plan is not found, or a row names an activity or parent id not in the plan.',
+  })
+  @ApiConflictResponse({
+    description:
+      'A stale version, or the batch would make the WBS tree cyclic (PARENT_CYCLE) — either way ' +
+      'the whole batch is rejected and nothing moves.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The same activity id appears more than once (DUPLICATE_PARENT_ID), an activity is its own ' +
+      'parent (PARENT_CYCLE), or the chosen parent is not a WBS_SUMMARY (PARENT_NOT_SUMMARY).',
+  })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
+  async updateParents(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Body() dto: UpdateParentsDto,
+  ): Promise<ActivityResponseDto[]> {
+    const { items, canReadCost } = await this.service.updateParents(
       principal,
       orgSlug,
       planId,

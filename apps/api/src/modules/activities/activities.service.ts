@@ -10,6 +10,7 @@ import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import {
   ConflictError,
   ForbiddenError,
@@ -33,6 +34,7 @@ import { ActivityRepository, type ActivityPatch } from './activity.repository';
 import type { CreateActivityDto } from './dto/create-activity.dto';
 import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import type { UpdateActivityDto } from './dto/update-activity.dto';
+import type { UpdateParentsDto } from './dto/update-parents.dto';
 import type { UpdatePositionsDto } from './dto/update-positions.dto';
 
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
@@ -92,6 +94,15 @@ export class ActivitiesService {
    * inside `selfId`'s own subtree, which would make the WBS parent tree cyclic. Only a summary may be a
    * parent, and the tree is otherwise acyclic, so the ancestor walk terminates. Runs inside the write
    * transaction alongside the insert/update.
+   *
+   * **The caller MUST hold {@link acquirePlanWriteLock} for the plan.** The walk reads the parent
+   * chain and then writes on the strength of what it read; without the lock, two concurrent mirror
+   * re-parents (A under B, B under A) each read a chain that is still acyclic, both pass, and the
+   * tree ends up cyclic — ADR-0038 invariant (a) broken by a race no optimistic `version` check can
+   * catch, because each write's own row IS at the version it was read at. Same argument, and same
+   * remedy, as the dependency-DAG cycle check (ADR-0021) and the resource tree (ADR-0053 §3). Take
+   * the plan lock BEFORE the calendar guard's lock, so every path in this service acquires
+   * plan → calendar in one order and no two of them can deadlock.
    */
   private async assertValidParent(
     tx: Prisma.TransactionClient,
@@ -217,6 +228,11 @@ export class ActivitiesService {
 
     try {
       const activity = await this.prisma.$transaction(async (tx) => {
+        // Serialise the WBS parent-tree read-then-write per plan (ADR-0038 invariant (a)) — see
+        // `assertValidParent`. Taken ONLY when a parent is actually being set, so the overwhelmingly
+        // common top-level create never contends for a plan-wide lock; and taken FIRST, before the
+        // calendar guard's own lock, to keep this service's acquisition order plan → calendar.
+        if (parentId !== null) await acquirePlanWriteLock(tx, plan.id);
         // Validate a specific calendar through THE shared scope guard before the insert
         // (ADR-0037 + ADR-0053 §2): active + in-org (404 otherwise) AND usable by this
         // activity's PROJECT — an ORG calendar anywhere, a PROJECT calendar only inside its
@@ -446,6 +462,14 @@ export class ActivitiesService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        // Re-parenting: serialise the parent-tree read-then-write per plan (ADR-0038 invariant (a))
+        // — see `assertValidParent`. Only on the branch that sets a NON-NULL parent: clearing to
+        // top-level cannot create a cycle, and an ordinary edit (no `parentId` in the DTO) must not
+        // pay for a plan-wide lock. Taken FIRST, before the calendar guard's lock (order:
+        // plan → calendar).
+        if (parentId !== undefined && parentId !== null) {
+          await acquirePlanWriteLock(tx, existing.planId);
+        }
         // Assigning a specific calendar: THE shared scope guard (ADR-0053 §2) validates active
         // + in-org (404) under the calendar advisory lock — serialised with the delete-in-use
         // guard, so no TOCTOU dangling reference — AND that the tier allows it here (422
@@ -632,6 +656,132 @@ export class ActivitiesService {
   }
 
   /**
+   * Batch WBS membership write: file one or more of a plan's activities under a summary — or, on a
+   * null `parentId`, back at the top level — in a single **all-or-nothing** transaction. Every id
+   * must be an active activity in this plan+org (anti-IDOR) and still match its optimistic-lock
+   * `version`, or the whole batch is rejected and nothing moves: the semantics managing a summary's
+   * whole membership in one panel needs.
+   *
+   * Unlike the sibling lane-position write this is **structural** — `parentId` feeds the engine's
+   * WBS rollup — so a committed batch leaves the plan's computed dates stale until the next
+   * recalculation. It writes only `parentId` (plus the usual `version`/`updatedBy`), never a date;
+   * the CPM engine is not called from here.
+   *
+   * **Validation is against the RESULTING tree, not the current one.** Checking each row against
+   * the pre-batch state would accept `[A→B, B→A]`: read alone, each is filing under a childless
+   * top-level summary, and each passes. Applied together they close a cycle. So the batch is
+   * overlaid on the plan's current edges and the whole result is walked (see
+   * {@link ActivitiesService.assertNoParentCycles}) — which is also cheaper than the per-row
+   * ancestor walk, being one projected read plus O(n) rather than O(rows × depth) queries.
+   */
+  async updateParents(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    dto: UpdateParentsDto,
+  ): Promise<{ items: Activity[]; canReadCost: boolean }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
+    await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
+    await this.editLock.assertHoldsPen(principal, planId, organization.id);
+
+    const rows = dto.parents.map((p) => ({ ...p, parentId: p.parentId ?? null }));
+    const ids = rows.map((r) => r.id);
+    if (new Set(ids).size !== ids.length) {
+      throw new ValidationError('Each activity may appear at most once in a parents batch.', {
+        reason: 'DUPLICATE_PARENT_ID',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // The parent tree's acyclicity is a read-then-write invariant (ADR-0038 (a)) — serialise it
+      // per plan, exactly as the single-activity re-parent path does.
+      await acquirePlanWriteLock(tx, planId);
+
+      // ONE projected read of the plan's tree serves every check below: membership (is this id even
+      // in this plan?), the summary-only-parent rule, and the resulting-tree cycle walk.
+      const tree = await this.activities.findPlanWbsTree(organization.id, planId, tx);
+      const byId = new Map(tree.map((a) => [a.id, a]));
+
+      for (const row of rows) {
+        // A cross-plan / foreign / deleted / unknown id reads as 404, leaking nothing.
+        if (!byId.has(row.id)) throw new NotFoundError('Activity not found in this plan.');
+        if (row.parentId === null) continue;
+        if (row.parentId === row.id) {
+          throw new ValidationError('An activity cannot be its own WBS parent.', {
+            reason: 'PARENT_CYCLE',
+          });
+        }
+        const parent = byId.get(row.parentId);
+        if (!parent) throw new NotFoundError('Parent activity not found.');
+        if (parent.type !== 'WBS_SUMMARY') {
+          throw new ValidationError('A WBS parent must be a summary activity.', {
+            reason: 'PARENT_NOT_SUMMARY',
+          });
+        }
+      }
+
+      // Overlay the batch on the plan's current edges and prove the RESULT is a forest.
+      const resulting = new Map(tree.map((a) => [a.id, a.parentId]));
+      for (const row of rows) resulting.set(row.id, row.parentId);
+      this.assertNoParentCycles(resulting);
+
+      // One set-based UPDATE keyed by id+version and re-asserting plan/org/active scope: a stale or
+      // cross-plan/tenant id simply doesn't match and isn't written. All-or-nothing is the count
+      // check below — a shortfall rolls the whole (possibly partial) UPDATE back.
+      const updated = await this.activities.updateParents(
+        organization.id,
+        planId,
+        rows,
+        principal.userId,
+        tx,
+      );
+      if (updated !== rows.length) {
+        // Every id was proven present in the plan above and nothing else writes under this lock, so
+        // a shortfall here can only be a version mismatch.
+        throw new ConflictError(
+          'This plan changed since you opened it — nothing was moved. Refresh and try again.',
+        );
+      }
+    });
+
+    this.logger.info(
+      { organizationId: organization.id, planId, userId: principal.userId, count: ids.length },
+      'activity WBS parents updated',
+    );
+
+    // Return the moved rows with their fresh versions so the client can reconcile optimistic state.
+    const items = await this.prisma.activity.findMany({
+      where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+    });
+    return { items, canReadCost };
+  }
+
+  /**
+   * Prove a `child → parent` map is a forest. Walks up from each node, marking nodes proven
+   * cycle-free so the whole check is O(n) however deep the tree; a node reached twice within one
+   * walk closes a loop. Operates on the map alone — no queries — so the caller can hand it a
+   * hypothetical (post-batch) tree rather than the persisted one.
+   */
+  private assertNoParentCycles(parentOf: ReadonlyMap<string, string | null>): void {
+    const safe = new Set<string>();
+    for (const start of parentOf.keys()) {
+      if (safe.has(start)) continue;
+      const walked = new Set<string>();
+      let node: string | null = start;
+      while (node !== null && !safe.has(node)) {
+        if (walked.has(node)) {
+          throw new ConflictError('That would create a WBS cycle.', { reason: 'PARENT_CYCLE' });
+        }
+        walked.add(node);
+        node = parentOf.get(node) ?? null;
+      }
+      for (const seen of walked) safe.add(seen);
+    }
+  }
+
+  /**
    * Report progress (status / % / actual dates) — the Contributor-capable path.
    * Requires only `activity:update_progress`, so a Contributor can move progress
    * without the `activity:update` needed to change logic or definition. `status`
@@ -778,6 +928,71 @@ export class ActivitiesService {
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },
       'activity deleted',
+    );
+  }
+
+  /**
+   * Dissolve a WBS summary: remove the grouping and **keep the work**. Its direct children take the
+   * summary's own parent (its grandparent, or the top level), then the — now childless — summary is
+   * soft-deleted through the usual cascade.
+   *
+   * This exists because deleting a summary is the opposite operation: `cascadeSoftDelete` takes the
+   * whole subtree with it (ADR-0038), which is right when the work is genuinely cancelled and
+   * catastrophic when the planner only meant to drop a level of grouping. The two are deliberately
+   * separate endpoints rather than a flag, so the destructive one is never the default.
+   *
+   * A grandchild is untouched: it stays under its own parent, which simply moves up a level, so a
+   * nested branch keeps its shape. The re-parent and the delete share ONE transaction under the
+   * plan advisory lock, so a child can never be stranded between them — the count of active
+   * activities falls by exactly one.
+   *
+   * Deliberately NOT in `HierarchyLifecycleService`: that service's contract is "a parent's removal
+   * propagates to its children", and this is the precise inverse. Folding it in would put both
+   * meanings behind one name.
+   */
+  async dissolveSummary(principal: Principal, orgSlug: string, activityId: string): Promise<void> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:delete', organization.id);
+
+    const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
+    if (!existing) throw new NotFoundError('Activity not found.');
+    if (existing.type !== 'WBS_SUMMARY') {
+      throw new ValidationError('Only a WBS summary can be dissolved.', {
+        reason: 'NOT_A_SUMMARY',
+      });
+    }
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
+
+    const promoted = await this.prisma.$transaction(async (tx) => {
+      // Same lock as every other parent-tree write: the children's new parent is read from the
+      // summary's row, and a concurrent re-parent of the summary itself would move it underneath us.
+      await acquirePlanWriteLock(tx, existing.planId);
+
+      // Children take the summary's own parent — null promotes them to the top level. Scoped to
+      // org + active rows; `version` bumps so a client holding a stale copy of a promoted child
+      // gets a clean 409 on its next write rather than silently overwriting the promotion.
+      const { count } = await tx.activity.updateMany({
+        where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
+        data: {
+          parentId: existing.parentId,
+          updatedBy: principal.userId,
+          version: { increment: 1 },
+        },
+      });
+      // The summary is childless now, so the cascade has nothing left to take with it.
+      await this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId);
+      return count;
+    });
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        planId: existing.planId,
+        activityId,
+        userId: principal.userId,
+        promoted,
+      },
+      'WBS summary dissolved',
     );
   }
 

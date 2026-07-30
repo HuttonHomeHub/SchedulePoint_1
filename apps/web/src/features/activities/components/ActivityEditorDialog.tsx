@@ -72,9 +72,11 @@ import {
   NOTES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
   RESOURCES_ENABLED,
+  WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
+import { ActivityMembersPanel } from '@/features/wbs';
 import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
@@ -324,6 +326,14 @@ export function ActivityEditorDialog({
     // scope on the same pen-gated rule as Logic, so it belongs on that side of the status divide.
     ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && RESOURCES_ENABLED
       ? [{ id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) }]
+      : []),
+    // Members — a WBS summary's contents (`VITE_WBS_IMPROVEMENTS`). Conditional on the SUBJECT, not
+    // just on a flag: every other tab here asks something of any activity, and "what is filed under
+    // this?" is meaningless for one that cannot hold anything. It sits after Resources and before
+    // Progress, on the definition side of the status divide, because membership is a pen-gated
+    // structural fact and reuses the `definition` gate object verbatim (see `gating.members`).
+    ...(WBS_IMPROVEMENTS_ENABLED && activity?.type === 'WBS_SUMMARY'
+      ? [{ id: 'members' as const, label: 'Members', ...collectionMarker(gating.members) }]
       : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
     // so a padlock here would be a lie in exactly the situation the rail exists to clarify.
@@ -719,6 +729,21 @@ export function ActivityEditorDialog({
                   {...(logic?.onAdded ? { onAdded: logic.onAdded } : {})}
                   {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
                   {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
+                />
+              ) : null}
+
+              {/* Members — a WBS summary's contents. Rendered only for a `WBS_SUMMARY`, which is
+                  also the only case the tab exists for, so the two conditions cannot disagree. It
+                  is handed the plan's already-loaded activities rather than fetching its own: the
+                  editor has them, the plan is bounded, and a second list here could disagree with
+                  the one the Scheduling tab's parent picker shows. */}
+              {current === 'members' && activity ? (
+                <ActivityMembersPanel
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  summary={activity}
+                  planActivities={planActivities}
+                  gate={gating.members}
                 />
               ) : null}
 

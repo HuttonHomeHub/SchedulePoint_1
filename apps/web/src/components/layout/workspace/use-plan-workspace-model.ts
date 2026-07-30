@@ -155,6 +155,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const [editActivityId, setEditActivityId] = useState<string | null>(null);
   const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null);
   const onDeleteActivity = useCallback((a: ActivitySummary) => setDeleteActivityId(a.id), []);
+  // The summary targeted by **Dissolve** (WBS improvements M2). Deliberately its own state rather
+  // than a mode on `deleteActivityId`: the two confirmations say opposite things about the work
+  // underneath, and sharing one slot is how they would end up sharing one sentence.
+  const [dissolveActivityId, setDissolveActivityId] = useState<string | null>(null);
+  const onDissolveSummary = useCallback((a: ActivitySummary) => setDissolveActivityId(a.id), []);
   /**
    * The tabbed editor's open intent (ADR-0060 §7, M5) — the ONE piece of state the three entry
    * points (**Edit**, **Report progress**, **Steps**) now share, replacing the three that could
@@ -406,18 +411,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Any structural edit — from the canvas, the activities table, or the logic editor — should
   // auto-recalc. Watching only the row *count* misses in-place edits that change the schedule
   // without adding/removing a row (a duration or constraint edit from the table — ux review), so we
-  // key on a **scheduling-input signature**: each activity's duration/type/constraint and each
-  // dependency's type/lag. Crucially this excludes the engine-*computed* fields (early/late dates,
-  // floats, critical) that a recalc writes back, so a settled recalc never re-triggers `notify()` —
-  // no loop. Layout-only `laneIndex` is excluded too (a lane move needs no recalc; the canvas path
-  // already skips it). The canvas reposition/link callbacks still `notify()` explicitly, which just
-  // coalesces with this. Baseline is taken on the first *loaded* (non-pending) observation, so
-  // opening a plan never fires a gratuitous recalc.
+  // key on a **scheduling-input signature**: each activity's duration/type/constraint/WBS-parent and
+  // each dependency's type/lag. `parentId` is included because reparenting to (or out of) a
+  // WBS_SUMMARY changes that summary's rollup dates, which are themselves engine-computed — without
+  // this a WBS reassignment would silently never auto-recalc. Crucially this excludes the engine-
+  // *computed* fields (early/late dates, floats, critical) that a recalc writes back, so a settled
+  // recalc never re-triggers `notify()` — no loop. Layout-only `laneIndex` is excluded too (a lane
+  // move needs no recalc; the canvas path already skips it). The canvas reposition/link callbacks
+  // still `notify()` explicitly, which just coalesces with this. Baseline is taken on the first
+  // *loaded* (non-pending) observation, so opening a plan never fires a gratuitous recalc.
   const structureSignature = useMemo(() => {
     const acts = (activities.data ?? [])
       .map(
         (a) =>
-          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}`,
+          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}:${a.parentId ?? ''}`,
       )
       .sort()
       .join('|');
@@ -561,6 +568,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       deleteActivity.mutateAsync,
     ],
   );
+  /**
+   * Record a summary **dissolve** as a non-undoable boundary (WBS improvements M2). Dissolve is one
+   * server-side compound — reparent every child, then soft-delete the summary — and the client has no
+   * inverse it can compose from the existing mutations: re-creating the summary yields a NEW id, so
+   * "undo" would rebuild a different grouping and leave the original in Recently deleted. That is a
+   * worse outcome than no undo, so this **truncates** the history exactly as a cascade delete does.
+   * A no-op unless `VITE_UNDO_REDO` is on.
+   */
+  const recordDissolveBoundary = useCallback((): void => {
+    if (!UNDO_REDO_ENABLED) return;
+    editHistory.clear();
+  }, [editHistory]);
   // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the `DependencyEditor` after
   // a successful remove, with the pre-remove edge. The inverse re-creates the link (a new id) from its
   // endpoints/type/lag; redo removes it again. A no-op unless `VITE_UNDO_REDO` is on.
@@ -1269,6 +1288,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setDeleteActivityId,
     onEditActivity,
     onDeleteActivity,
+    // Dissolve target (WBS improvements M2) — set by the canvas selection bar, rendered by
+    // ActivityCrudDialogs. Inert when `VITE_WBS_IMPROVEMENTS` is off: nothing sets it.
+    dissolveActivityId,
+    setDissolveActivityId,
+    onDissolveSummary,
     // The tabbed editor's single open intent + the per-scope gate every host shares (ADR-0060 §7,
     // M5). Flag-off `editorIntent` is never set, so the legacy per-dialog state above still drives.
     editorIntent,
@@ -1313,6 +1337,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // truncation); the `DependencyEditor` calls `recordDependencyRemove` after a successful link
     // removal. No-ops when `VITE_UNDO_REDO` is off.
     recordActivityDelete,
+    // Dissolve's undo boundary (WBS improvements M2) — see `recordDissolveBoundary`.
+    recordDissolveBoundary,
     recordDependencyRemove,
     recordDependencyAdd,
     // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace

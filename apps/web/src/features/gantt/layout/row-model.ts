@@ -1,5 +1,8 @@
 import type { ActivitySummary } from '@repo/types';
 
+import type { BarDateSource } from '@/features/tsld';
+import { deriveWbsGroups, type DerivedGroup } from '@/features/wbs';
+
 /**
  * Which column the grid is ordered by. `wbs` is the plan's own order (the ADR-0038 parent tree,
  * or `laneIndex` while M1 is flat) and is the default: a schedule read in an arbitrary order is
@@ -27,8 +30,9 @@ export const GANTT_SORT_KEYS: readonly GanttSortKey[] = [
 
 export const DEFAULT_GANTT_SORT: GanttSort = { key: 'wbs', direction: 'asc' };
 
-/** One rendered line of the Gantt: an activity plus where it sits in the hierarchy. */
-export interface GanttRow {
+/** One rendered line of the Gantt for a real activity, plus where it sits in the hierarchy. */
+export interface GanttActivityRow {
+  kind: 'activity';
   activity: ActivitySummary;
   /** 0 for a top-level row; one deeper per WBS parent (ADR-0038). Drives indentation. */
   depth: number;
@@ -36,6 +40,53 @@ export interface GanttRow {
   hasChildren: boolean;
   /** Undefined unless {@link hasChildren}; otherwise the current disclosure state. */
   expanded?: boolean;
+}
+
+/**
+ * The **Unassigned** bucket row — a grouping line with no activity behind it, because the bucket is
+ * derived in the view layer and never persisted (see `features/wbs/model/wbs-groups.ts`).
+ *
+ * A discriminated union rather than a synthetic `ActivitySummary`: a fake activity would flow into
+ * selection, the row menu, the bar geometry and the variance lookup, and each of those would appear
+ * to work while acting on a row the server has never heard of. With `kind` the compiler makes every
+ * consumer say which it is holding.
+ */
+export interface GanttBucketRow {
+  kind: 'bucket';
+  /** Reserved, non-UUID id — the collapse set and the focus map are keyed by row id. */
+  id: typeof UNASSIGNED_ROW_ID;
+  label: 'Unassigned';
+  /** How many activities are unfiled. Shown so the row says why it exists. */
+  count: number;
+  start: string | null;
+  finish: string | null;
+  expanded: boolean;
+}
+
+export type GanttRow = GanttActivityRow | GanttBucketRow;
+
+/**
+ * The bucket row's id. Deliberately not a UUID so it can never collide with an activity id in the
+ * collapse set, the focus map, or a future `?row=` deep link.
+ */
+export const UNASSIGNED_ROW_ID = '__unassigned__';
+
+/**
+ * The key a row is tracked by — focus, the roving tab stop, the collapse set and the ref map all
+ * use it. One accessor rather than `row.activity.id` at each site, so a bucket row cannot reach a
+ * lookup that assumes an activity.
+ */
+export function rowId(row: GanttRow): string {
+  return row.kind === 'bucket' ? row.id : row.activity.id;
+}
+
+/**
+ * A row's disclosure state, or `null` when it has nothing to disclose. Both row kinds can be
+ * expandable, and both answer through here so the keyboard handler never has to know which it has.
+ */
+export function rowDisclosure(row: GanttRow): { expanded: boolean } | null {
+  if (row.kind === 'bucket') return { expanded: row.expanded };
+  return row.hasChildren ? { expanded: row.expanded === true } : null;
 }
 
 /**
@@ -112,6 +163,7 @@ export function buildRows(
   activities: readonly ActivitySummary[],
   sort: GanttSort,
   collapsed: ReadonlySet<string> = new Set(),
+  options: { unassignedBucket?: boolean; barDateSource?: BarDateSource } = {},
 ): GanttRow[] {
   const byParent = new Map<string | null, ActivitySummary[]>();
   const ids = new Set(activities.map((a) => a.id));
@@ -135,6 +187,7 @@ export function buildRows(
       const hasChildren = children !== undefined && children.length > 0;
       const expanded = hasChildren ? !collapsed.has(activity.id) : undefined;
       rows.push({
+        kind: 'activity',
         activity,
         depth,
         hasChildren,
@@ -144,8 +197,55 @@ export function buildRows(
     }
   };
 
+  const bucket = options.unassignedBucket === true ? bucketFor(activities, options) : null;
+  if (bucket === null) {
+    walk(null, 0);
+    return rows;
+  }
+
+  // Filed structure first, then everything not yet filed: the bucket is the plan's remainder, and
+  // reading it before the structure would make an unstructured tail look like the plan's shape.
+  const unfiled = new Set(bucket.memberIds);
+  const topLevel = (byParent.get(null) ?? []).filter((a) => !unfiled.has(a.id));
+  byParent.set(null, topLevel);
   walk(null, 0);
+
+  const expanded = !collapsed.has(UNASSIGNED_ROW_ID);
+  rows.push({
+    kind: 'bucket',
+    id: UNASSIGNED_ROW_ID,
+    label: 'Unassigned',
+    count: bucket.memberIds.length,
+    start: bucket.start,
+    finish: bucket.finish,
+    expanded,
+  });
+  if (expanded) {
+    const members = activities.filter((a) => unfiled.has(a.id));
+    for (const activity of sortActivities(members, sort)) {
+      // A bucket member is by definition top-level and not a summary, so it can have no subtree of
+      // its own — the walk below it would always be empty.
+      rows.push({ kind: 'activity', activity, depth: 1, hasChildren: false });
+    }
+  }
   return rows;
+}
+
+/**
+ * The bucket, or `null` when it should not be shown.
+ *
+ * Two conditions, both deliberate. **No unfiled work** ⇒ nothing to bucket. **No real summary** ⇒
+ * the plan is flat, and heading a flat list "Unassigned" would invent a hierarchy that does not
+ * exist and indent every row for nothing. The bucket exists to make a *half*-structured plan read
+ * honestly; a plan with no structure is already honest.
+ */
+function bucketFor(
+  activities: readonly ActivitySummary[],
+  options: { barDateSource?: BarDateSource },
+): DerivedGroup | null {
+  const groups = deriveWbsGroups(activities, { source: options.barDateSource ?? 'early' });
+  if (groups.unassigned === null || groups.summaries.length === 0) return null;
+  return groups.unassigned;
 }
 
 /**
@@ -158,13 +258,16 @@ export function buildRows(
 export function rowsDateSpan(rows: readonly GanttRow[]): { start: string; finish: string } | null {
   let start: string | null = null;
   let finish: string | null = null;
-  for (const { activity } of rows) {
-    if (activity.earlyStart !== null && (start === null || activity.earlyStart < start)) {
-      start = activity.earlyStart;
-    }
-    if (activity.earlyFinish !== null && (finish === null || activity.earlyFinish > finish)) {
-      finish = activity.earlyFinish;
-    }
+  const widen = (rowStart: string | null, rowFinish: string | null): void => {
+    if (rowStart !== null && (start === null || rowStart < start)) start = rowStart;
+    if (rowFinish !== null && (finish === null || rowFinish > finish)) finish = rowFinish;
+  };
+  for (const row of rows) {
+    // The bucket counts too. When it is expanded its span merely restates its members'; when it is
+    // COLLAPSED they are not rows at all, and skipping it would frame a chart its own bar hangs off
+    // the end of.
+    if (row.kind === 'bucket') widen(row.start, row.finish);
+    else widen(row.activity.earlyStart, row.activity.earlyFinish);
   }
   return start !== null && finish !== null ? { start, finish } : null;
 }

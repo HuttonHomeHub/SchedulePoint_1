@@ -696,6 +696,286 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // WBS parent tree — ADR-0038 invariant (a)
+  //
+  // Scope note, so nobody reads more into this than it proves: this exercises the
+  // cycle REJECTION through the real stack (HTTP → service → Postgres). It is NOT the
+  // regression gate for the plan advisory lock the re-parent path takes. Two mirror
+  // PATCHes fired with `Promise.all`, even on two separate keep-alive sockets, were
+  // measured NOT to overlap in the danger window — the second request's ancestor walk
+  // began ~15 ms after the first's transaction had already committed — so this test
+  // passes identically with the lock removed. The lock's real gate is the unit suite
+  // (`activities.service.spec.ts` → "WBS re-parent serialisation"), which asserts the
+  // acquisition itself and fails when it is taken away.
+  // ---------------------------------------------------------------------------
+
+  describe('WBS re-parent (ADR-0038 invariant (a))', () => {
+    async function summary(actor: Actor, planId: string, name: string) {
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name, type: 'WBS_SUMMARY' })
+        .expect(201);
+      return { id: res.body.data.id as string, version: res.body.data.version as number };
+    }
+
+    describe('batch membership write', () => {
+      const parentsUrl = (planId: string) =>
+        `/api/v1/organizations/acme/plans/${planId}/activities/parents`;
+
+      async function task(actor: Actor, planId: string, name: string) {
+        const res = await actor.agent
+          .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+          .send({ name })
+          .expect(201);
+        return { id: res.body.data.id as string, version: res.body.data.version as number };
+      }
+
+      it('files several activities under a summary in one call and bumps their versions', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate');
+        const b = await task(actor, planId, 'Blind');
+
+        const res = await actor.agent
+          .patch(parentsUrl(planId))
+          .send({
+            parents: [
+              { id: a.id, parentId: s.id, version: a.version },
+              { id: b.id, parentId: s.id, version: b.version },
+            ],
+          })
+          .expect(200);
+
+        const byId = new Map(
+          (res.body.data as { id: string; parentId: string | null; version: number }[]).map((r) => [
+            r.id,
+            r,
+          ]),
+        );
+        expect(byId.get(a.id)).toMatchObject({ parentId: s.id, version: a.version + 1 });
+        expect(byId.get(b.id)).toMatchObject({ parentId: s.id, version: b.version + 1 });
+      });
+
+      it('clears a member back to the top level on a null parentId', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate');
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: a.id, parentId: s.id, version: a.version }] })
+          .expect(200);
+
+        const res = await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: a.id, parentId: null, version: a.version + 1 }] })
+          .expect(200);
+        expect(res.body.data[0]).toMatchObject({ id: a.id, parentId: null });
+      });
+
+      it('rejects the whole batch on one stale version, writing nothing (409)', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate');
+        const b = await task(actor, planId, 'Blind');
+
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({
+            parents: [
+              { id: a.id, parentId: s.id, version: a.version },
+              { id: b.id, parentId: s.id, version: b.version + 5 }, // stale
+            ],
+          })
+          .expect(409);
+
+        // The decisive assertion: the GOOD row did not land either.
+        const rows = await prisma.activity.findMany({ where: { id: { in: [a.id, b.id] } } });
+        expect(rows.every((r) => r.parentId === null)).toBe(true);
+        expect(rows.every((r) => r.version === 1)).toBe(true);
+      });
+
+      it('rejects a batch that is cycle-free row by row but cyclic as a whole (409)', async () => {
+        const { actor, planId } = await setup();
+        const s1 = await summary(actor, planId, 'A');
+        const s2 = await summary(actor, planId, 'B');
+
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({
+            parents: [
+              { id: s1.id, parentId: s2.id, version: s1.version },
+              { id: s2.id, parentId: s1.id, version: s2.version },
+            ],
+          })
+          .expect(409);
+
+        const rows = await prisma.activity.findMany({ where: { id: { in: [s1.id, s2.id] } } });
+        expect(rows.every((r) => r.parentId === null)).toBe(true);
+      });
+
+      it('422s a non-summary parent and 404s an activity from another plan', async () => {
+        const { actor, orgId, planId } = await setup();
+        const a = await task(actor, planId, 'Excavate');
+        const b = await task(actor, planId, 'Blind');
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: a.id, parentId: b.id, version: a.version }] })
+          .expect(422);
+
+        // A second plan in the same org: its activity is not addressable through this plan's route.
+        const project = await prisma.project.findFirstOrThrow({
+          where: { organizationId: orgId },
+        });
+        const other = await actor.agent
+          .post(`/api/v1/organizations/acme/projects/${project.id}/plans`)
+          .send({ name: 'Other', plannedStart: '2026-01-01' })
+          .expect(201);
+        const foreign = await task(actor, other.body.data.id as string, 'Elsewhere');
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: foreign.id, parentId: null, version: foreign.version }] })
+          .expect(404);
+      });
+
+      it('forbids a Contributor and a Viewer (403)', async () => {
+        const { actor, orgId, planId } = await setup();
+        const a = await task(actor, planId, 'Excavate');
+        const body = { parents: [{ id: a.id, parentId: null, version: a.version }] };
+
+        const contributor = await signUp('parents-contrib@example.com');
+        await prisma.orgMember.create({
+          data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+        });
+        await contributor.agent.patch(parentsUrl(planId)).send(body).expect(403);
+
+        const viewer = await signUp('parents-viewer@example.com');
+        await prisma.orgMember.create({
+          data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+        });
+        await viewer.agent.patch(parentsUrl(planId)).send(body).expect(403);
+      });
+    });
+
+    describe('dissolve (remove the grouping, keep the work)', () => {
+      const dissolveUrl = (id: string) => `/api/v1/organizations/acme/activities/${id}/dissolve`;
+
+      async function task(actor: Actor, planId: string, name: string, parentId?: string) {
+        const res = await actor.agent
+          .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+          .send({ name, ...(parentId ? { parentId } : {}) })
+          .expect(201);
+        return { id: res.body.data.id as string, version: res.body.data.version as number };
+      }
+
+      it('promotes the children and loses no activity', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate', s.id);
+        const b = await task(actor, planId, 'Blind', s.id);
+        const before = await prisma.activity.count({ where: { planId, deletedAt: null } });
+
+        await actor.agent.post(dissolveUrl(s.id)).expect(204);
+
+        // The invariant that matters: exactly one row went (the summary), not the subtree.
+        const after = await prisma.activity.count({ where: { planId, deletedAt: null } });
+        expect(after).toBe(before - 1);
+        const rows = await prisma.activity.findMany({ where: { id: { in: [a.id, b.id] } } });
+        expect(rows.every((r) => r.deletedAt === null && r.parentId === null)).toBe(true);
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+          deletedAt: expect.any(Date) as Date,
+        });
+      });
+
+      it('keeps a nested branch intact, moving it up one level', async () => {
+        const { actor, planId } = await setup();
+        const outer = await summary(actor, planId, 'Outer');
+        const inner = await summary(actor, planId, 'Inner');
+        await actor.agent
+          .patch(`/api/v1/organizations/acme/activities/${inner.id}`)
+          .send({ parentId: outer.id, version: inner.version })
+          .expect(200);
+        const leaf = await task(actor, planId, 'Leaf', inner.id);
+
+        await actor.agent.post(dissolveUrl(outer.id)).expect(204);
+
+        // Inner moved up to the top level; the leaf did NOT move — it is still Inner's child.
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: inner.id } })).toMatchObject({
+          parentId: null,
+          deletedAt: null,
+        });
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: leaf.id } })).toMatchObject({
+          parentId: inner.id,
+        });
+      });
+
+      it('restores the summary ALONE — its former children stay promoted', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate', s.id);
+        await actor.agent.post(dissolveUrl(s.id)).expect(204);
+
+        await actor.agent.post(`/api/v1/organizations/acme/activities/${s.id}/restore`).expect(200);
+
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+          deletedAt: null,
+        });
+        // Dissolve is not undone by restoring: the child stays where it was promoted to.
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+          parentId: null,
+        });
+      });
+
+      it('422s a non-summary activity, leaving it active', async () => {
+        const { actor, planId } = await setup();
+        const a = await task(actor, planId, 'Excavate');
+        await actor.agent.post(dissolveUrl(a.id)).expect(422);
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+          deletedAt: null,
+        });
+      });
+
+      it('404s an activity in another organisation, and forbids a Contributor (403)', async () => {
+        const { actor, orgId, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+
+        const contributor = await signUp('dissolve-contrib@example.com');
+        await prisma.orgMember.create({
+          data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+        });
+        await contributor.agent.post(dissolveUrl(s.id)).expect(403);
+
+        const outsider = await signUp('dissolve-outsider@example.com');
+        await outsider.agent.post('/api/v1/organizations').send({ name: 'Other Co' }).expect(201);
+        await outsider.agent
+          .post(`/api/v1/organizations/other-co/activities/${s.id}/dissolve`)
+          .expect(404);
+      });
+    });
+
+    it('rejects the mirror re-parent that would close a cycle, leaving the tree acyclic', async () => {
+      const { actor, planId } = await setup();
+      const a = await summary(actor, planId, 'A');
+      const b = await summary(actor, planId, 'B');
+
+      // "A under B" then "B under A". The second closes a loop, so the ancestor walk must reject it
+      // (409) rather than persist it — optimistic `version` cannot catch this on its own, because
+      // each request writes only its OWN row, at exactly the version it read.
+      const url = (id: string) => `/api/v1/organizations/acme/activities/${id}`;
+      const [r1, r2] = await Promise.all([
+        actor.agent.patch(url(a.id)).send({ parentId: b.id, version: a.version }),
+        actor.agent.patch(url(b.id)).send({ parentId: a.id, version: b.version }),
+      ]);
+
+      // One wins; the loser is rejected as a cycle — not silently dropped.
+      expect([r1.status, r2.status].sort()).toEqual([200, 409]);
+
+      // The decisive assertion: the tree is still acyclic — at most one of the two carries a parent.
+      const rows = await prisma.activity.findMany({ where: { id: { in: [a.id, b.id] } } });
+      expect(rows.filter((r) => r.parentId !== null)).toHaveLength(1);
+    });
+  });
+
   it('401s without a session', async () => {
     await request(server())
       .get('/api/v1/organizations/acme/plans/00000000-0000-7000-8000-000000000000/activities')

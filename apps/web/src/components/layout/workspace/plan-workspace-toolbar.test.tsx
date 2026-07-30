@@ -146,6 +146,7 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: () => <div data-testid="activities-table" />,
   ActivityFormDialog: () => null,
   ActivityEditorDialog: () => null,

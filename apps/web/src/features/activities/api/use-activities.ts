@@ -356,6 +356,34 @@ export function useBatchPositions(orgSlug: string, planId: string) {
   });
 }
 
+/**
+ * Batch WBS membership write: file many activities under a summary — or, on a `null` parentId, back
+ * at the top level — in one all-or-nothing PATCH (per-row optimistic lock, so a single stale
+ * `version` rejects the whole batch with a 409).
+ *
+ * Deliberately **no optimistic update**. This is not a per-keystroke surface — it is one Save on a
+ * panel the user has finished ticking — and an optimistic write here would have to lie convincingly
+ * about a batch that fails atomically: on a 409 the UI would have to unpick every row it had
+ * already moved, from a cache that may also be stale. Invalidate-and-refetch on settle costs one
+ * round trip and cannot disagree with the server.
+ *
+ * Unlike its lane-position sibling this is **structural**: `parentId` feeds the engine's WBS
+ * rollup, so a committed batch leaves the plan's computed dates stale until the next
+ * recalculation. That is why the baseline variance is invalidated too — the rollup rows it
+ * describes have moved.
+ */
+export function useUpdateActivityParents(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { parents: { id: string; parentId: string | null; version: number }[] }) =>
+      apiFetch<ActivitySummary[]>(`/organizations/${orgSlug}/plans/${planId}/activities/parents`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
+  });
+}
+
 function progressBody(input: ProgressFormValues & { version: number }) {
   return {
     percentComplete: input.percentComplete,
@@ -396,6 +424,29 @@ export function useDeleteActivity(orgSlug: string, planId: string) {
     mutationFn: (activityId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/activities/${activityId}`, { method: 'DELETE' }),
     // Removing an activity changes the baseline variance (it reads as "Removed" or drops out).
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
+  });
+}
+
+/**
+ * Dissolve a WBS summary: remove the grouping and **keep the work** — the children are promoted to
+ * the summary's own parent and the now-childless summary is soft-deleted, in one server-side
+ * transaction.
+ *
+ * Deliberately a separate hook from {@link useDeleteActivity} rather than a flag on it, mirroring
+ * the API: `DELETE` cascades to the whole subtree, and the destructive reading must never be
+ * reachable by accident from the non-destructive one.
+ *
+ * Structural — every promoted child's `parentId` changed — so it settles like a delete, refreshing
+ * the activities list and the baseline variance whose rollup rows have moved.
+ */
+export function useDissolveSummary(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (activityId: string) =>
+      apiFetch<void>(`/organizations/${orgSlug}/activities/${activityId}/dissolve`, {
+        method: 'POST',
+      }),
     onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }

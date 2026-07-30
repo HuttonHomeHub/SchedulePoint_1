@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_GANTT_SORT,
+  UNASSIGNED_ROW_ID,
   buildRows,
+  rowId,
   rowsDateSpan,
   sortActivities,
+  type GanttActivityRow,
+  type GanttRow,
   type GanttSort,
 } from './row-model';
 
@@ -13,7 +17,12 @@ import { anActivity } from '@/test/activity-fixture';
 const asc = (key: GanttSort['key']): GanttSort => ({ key, direction: 'asc' });
 const desc = (key: GanttSort['key']): GanttSort => ({ key, direction: 'desc' });
 
-const ids = (rows: { activity: { id: string } }[]): string[] => rows.map((r) => r.activity.id);
+// `rowId` handles both row kinds; the bucket's reserved id shows up as `__unassigned__`, which is
+// what the bucket tests below assert against.
+const ids = (rows: GanttRow[]): string[] => rows.map(rowId);
+/** The activity rows only, for the assertions that are about depth/disclosure. */
+const activityRows = (rows: GanttRow[]): GanttActivityRow[] =>
+  rows.filter((r): r is GanttActivityRow => r.kind === 'activity');
 
 describe('sortActivities', () => {
   it('orders by lane index for the default WBS sort', () => {
@@ -127,21 +136,21 @@ describe('buildRows', () => {
   it('nests children under their parent, depth-first', () => {
     const rows = buildRows([sibling, childB, childA, parent], DEFAULT_GANTT_SORT);
     expect(ids(rows)).toEqual(['p', 'ca', 'cb', 's']);
-    expect(rows.map((r) => r.depth)).toEqual([0, 1, 1, 0]);
+    expect(activityRows(rows).map((r) => r.depth)).toEqual([0, 1, 1, 0]);
   });
 
   it('marks a parent as having children, and a leaf as not', () => {
     const rows = buildRows([parent, childA], DEFAULT_GANTT_SORT);
-    expect(rows[0]?.hasChildren).toBe(true);
-    expect(rows[0]?.expanded).toBe(true);
-    expect(rows[1]?.hasChildren).toBe(false);
-    expect(rows[1]?.expanded).toBeUndefined();
+    expect(activityRows(rows)[0]?.hasChildren).toBe(true);
+    expect(activityRows(rows)[0]?.expanded).toBe(true);
+    expect(activityRows(rows)[1]?.hasChildren).toBe(false);
+    expect(activityRows(rows)[1]?.expanded).toBeUndefined();
   });
 
   it('hides the subtree of a collapsed parent but keeps the parent', () => {
     const rows = buildRows([parent, childA, childB, sibling], DEFAULT_GANTT_SORT, new Set(['p']));
     expect(ids(rows)).toEqual(['p', 's']);
-    expect(rows[0]?.expanded).toBe(false);
+    expect(activityRows(rows)[0]?.expanded).toBe(false);
   });
 
   it('keeps children under their parent even when the sort would interleave them', () => {
@@ -149,13 +158,13 @@ describe('buildRows', () => {
     // that says nothing about structure. Nesting must win.
     const rows = buildRows([parent, childA, childB, sibling], asc('name'));
     expect(ids(rows)).toEqual(['p', 'cb', 'ca', 's']);
-    expect(rows.map((r) => r.depth)).toEqual([0, 1, 1, 0]);
+    expect(activityRows(rows).map((r) => r.depth)).toEqual([0, 1, 1, 0]);
   });
 
   it('nests three levels deep', () => {
     const grandchild = anActivity({ id: 'g', parentId: 'ca', laneIndex: 9 });
     const rows = buildRows([parent, childA, grandchild], DEFAULT_GANTT_SORT);
-    expect(rows.map((r) => r.depth)).toEqual([0, 1, 2]);
+    expect(activityRows(rows).map((r) => r.depth)).toEqual([0, 1, 2]);
   });
 
   // A row the user cannot see is worse than one indented wrongly.
@@ -163,11 +172,78 @@ describe('buildRows', () => {
     const orphan = anActivity({ id: 'o', parentId: 'missing-parent' });
     const rows = buildRows([orphan], DEFAULT_GANTT_SORT);
     expect(ids(rows)).toEqual(['o']);
-    expect(rows[0]?.depth).toBe(0);
+    expect(activityRows(rows)[0]?.depth).toBe(0);
   });
 
   it('handles an empty plan', () => {
     expect(buildRows([], DEFAULT_GANTT_SORT)).toEqual([]);
+  });
+
+  it('emits no bucket unless asked, whatever the plan looks like', () => {
+    const loose = anActivity({ id: 'loose', laneIndex: 9 });
+    expect(ids(buildRows([parent, childA, loose], DEFAULT_GANTT_SORT))).toEqual([
+      'p',
+      'ca',
+      'loose',
+    ]);
+  });
+});
+
+/**
+ * The derived **Unassigned** bucket (WBS improvements M3). What is filed is decided by
+ * `features/wbs/model/wbs-groups.ts`, which has its own suite; these tests are about the ROWS —
+ * where the bucket sits, what it nests, and the two conditions under which it does not appear.
+ */
+describe('buildRows — the Unassigned bucket', () => {
+  const parent = anActivity({ id: 'p', type: 'WBS_SUMMARY', name: 'Substructure', laneIndex: 0 });
+  const child = anActivity({ id: 'c', parentId: 'p', name: 'Piling', laneIndex: 1 });
+  const loose = anActivity({ id: 'l1', name: 'Loose one', laneIndex: 5 });
+  const looser = anActivity({ id: 'l2', name: 'Loose two', laneIndex: 6 });
+  const withBucket = { unassignedBucket: true } as const;
+
+  it('gathers unfiled work under one bucket row, after the filed structure', () => {
+    const rows = buildRows(
+      [parent, child, loose, looser],
+      DEFAULT_GANTT_SORT,
+      new Set(),
+      withBucket,
+    );
+    expect(ids(rows)).toEqual(['p', 'c', UNASSIGNED_ROW_ID, 'l1', 'l2']);
+  });
+
+  it('indents the bucket’s members one level, like any other grouping', () => {
+    const rows = buildRows([parent, child, loose], DEFAULT_GANTT_SORT, new Set(), withBucket);
+    expect(activityRows(rows).map((r) => r.depth)).toEqual([0, 1, 1]);
+  });
+
+  it('collapses to hide its members, keeping the bucket row', () => {
+    const rows = buildRows(
+      [parent, child, loose, looser],
+      DEFAULT_GANTT_SORT,
+      new Set([UNASSIGNED_ROW_ID]),
+      withBucket,
+    );
+    expect(ids(rows)).toEqual(['p', 'c', UNASSIGNED_ROW_ID]);
+    expect(rows.at(-1)).toMatchObject({ kind: 'bucket', expanded: false, count: 2 });
+  });
+
+  // Two separate conditions, and each has its own reason. Nothing unfiled ⇒ nothing to bucket.
+  it('emits no bucket when every activity is filed', () => {
+    const rows = buildRows([parent, child], DEFAULT_GANTT_SORT, new Set(), withBucket);
+    expect(ids(rows)).toEqual(['p', 'c']);
+  });
+
+  // A flat plan is already honest; heading it "Unassigned" would invent a hierarchy it has not got
+  // and indent every row to say nothing.
+  it('emits no bucket when the plan has no real summary at all', () => {
+    const rows = buildRows([loose, looser], DEFAULT_GANTT_SORT, new Set(), withBucket);
+    expect(ids(rows)).toEqual(['l1', 'l2']);
+  });
+
+  it('sorts the bucket’s members by the active sort, like any sibling set', () => {
+    const rows = buildRows([parent, child, looser, loose], asc('name'), new Set(), withBucket);
+    // "Loose one" before "Loose two" by name, whatever order they arrived in.
+    expect(ids(rows).slice(-2)).toEqual(['l1', 'l2']);
   });
 });
 

@@ -32,6 +32,8 @@ function ctx(): SelectionActionContext {
     onResources: vi.fn(),
     onProgress: vi.fn(),
     onSteps: vi.fn(),
+    isSummary: false,
+    onDissolve: vi.fn(),
   };
 }
 

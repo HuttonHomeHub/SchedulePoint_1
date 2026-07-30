@@ -847,6 +847,39 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   the component review's second finding as #69. Frontend-only: the CPM engine, the API and the
   recalc parity gate are untouched, and the flag-off parity suites are kept as the rollback contract.
 
+- **ADR-0063** _(Accepted; WBS improvements — behind `VITE_WBS_IMPROVEMENTS`, default off)_ —
+  The pinned WBS band, and the canvas band model. ADR-0038 gave activities a parent tree; nothing
+  in the product then let a planner **see the programme at band level**, or fix a mis-built
+  grouping without deleting the forty activities inside it (the only delete is the ADR-0038
+  subtree cascade). The band is a **fourth canvas layer**, top-pinned, painted from the **same
+  `viewRef`** and importing `screenXOfDay`/`daysBetween` verbatim — column alignment with the
+  scene is definitional, not arithmetic that has to be kept in step, which is the ADR-0059
+  "the time axis is shared, not reimplemented" rule applied inside one picture. It is
+  **select-only**, and that is what the object permits rather than a scoping compromise: a
+  summary's dates are an engine rollup, so there is nothing on it to drag and no good answer to
+  what dragging one would mean for its children. Depth is capped at **0–2 stacked** (depth 0
+  alone is often one node — a bar spanning the whole plan is a decoration; uncapped makes the
+  band's height data-dependent, taking the canvas away a row at a time). Summaries **leave the
+  scene** when the band is on, so the invariant that matters is stated as a test rather than a
+  paragraph: **the count of AT-reachable activities does not change across the toggle** —
+  ADR-0026 D7's hand-built DOM layer is the only way an AT user reaches a bar. Building it showed
+  the drafted "move them to a band DOM group" to be the worse option and it is not what shipped:
+  the listbox reads the plan's activities rather than what the scene paints, so the invariant
+  holds **by construction**, with no second list to keep in step. The specific thing most likely to break is quiet:
+  three features (`create popover`, cursor readout, drag ghosts) convert canvas-y to container-y
+  by adding `RULER_HEIGHT`, correct only while the ruler is the sole thing above the scene — so
+  that constant becomes one derived `sceneTopOffset` routed through every call site, with its own
+  regression test band-on and band-off. The **Unassigned** bucket is **derived** (`features/wbs/
+model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree) and is
+  announced but not selectable; a persisted bucket was rejected because it would change
+  `computeSchedule`'s input for **every plan in the system** — the byte-identity ADR-0034 exists
+  to protect — for a display feature. **Dissolve** (`POST …/dissolve`) is recorded here as the
+  inverse of building a band, including the part users get wrong: restoring a dissolved summary
+  brings back **the summary only**, so the client records it as a non-undoable boundary that
+  truncates the stack (the ADR-0048 M2 cascade rule). Amends ADR-0049 (bands at both ends),
+  ADR-0052 M4 and ADR-0055 §4/ADR-0056 (one more `View▾ ▸ Structure` member); references
+  ADR-0038 rather than editing it. **The CPM engine and the recalc parity gate are untouched.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

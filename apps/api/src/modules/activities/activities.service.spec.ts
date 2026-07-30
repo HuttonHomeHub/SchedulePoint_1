@@ -1,4 +1,4 @@
-import { Prisma, type Activity, type Plan } from '@prisma/client';
+import { Prisma, type Activity, type ActivityType, type Plan } from '@prisma/client';
 import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +6,7 @@ import { Principal, type Permission } from '../../common/auth/principal';
 import {
   ConflictError,
   ForbiddenError,
+  LockedError,
   NotFoundError,
   ValidationError,
 } from '../../common/errors/domain-errors';
@@ -154,18 +155,33 @@ describe('ActivitiesService', () => {
     findByIdInOrg: ReturnType<typeof vi.fn>;
     findManyActiveByPlan: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
+    findPlanWbsTree: ReturnType<typeof vi.fn>;
+    updateParents: ReturnType<typeof vi.fn>;
   };
   let lifecycle: {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
     restoreBatch: ReturnType<typeof vi.fn>;
   };
   let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
-  let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let prisma: {
+    $transaction: ReturnType<typeof vi.fn>;
+    activity: { findMany: ReturnType<typeof vi.fn> };
+  };
   // Driving-assignment access on the tx client (ADR-0040 activity-path recompute). Default: no
   // driving assignment, so the triad is inert and every prior activity test stays byte-identical.
   let txDrivingFindFirst: ReturnType<typeof vi.fn>;
   let txDrivingUpdateMany: ReturnType<typeof vi.fn>;
+  // Hoisted so a test can assert WHICH advisory locks a write path took. Both the plan write lock
+  // (ADR-0038 parent-tree serialisation) and the calendar scope guard's lock go through
+  // `tx.$executeRaw` as tagged templates, distinguishable by their namespace argument.
+  let txExecuteRaw: ReturnType<typeof vi.fn>;
+  // Hoisted so a test can make the pen refuse (423) and assert the write path stops there.
+  let penGuard: { assertHoldsPen: ReturnType<typeof vi.fn> };
   let service: ActivitiesService;
+
+  /** The namespaces passed to `pg_advisory_xact_lock`, in acquisition order. */
+  const locksTaken = (): string[] =>
+    txExecuteRaw.mock.calls.map((call) => String(call[1])).filter((ns) => ns !== 'undefined');
 
   beforeEach(() => {
     organizations = {
@@ -178,6 +194,8 @@ describe('ActivitiesService', () => {
       findByIdInOrg: vi.fn(),
       findManyActiveByPlan: vi.fn(),
       updateIfVersionMatches: vi.fn(),
+      findPlanWbsTree: vi.fn().mockResolvedValue([]),
+      updateParents: vi.fn(),
     };
     lifecycle = {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
@@ -187,10 +205,13 @@ describe('ActivitiesService', () => {
     // `resourceAssignment` model for the ADR-0040 driving-assignment recompute. Default: no driver.
     txDrivingFindFirst = vi.fn().mockResolvedValue(null);
     txDrivingUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+    txExecuteRaw = vi.fn();
     prisma = {
+      // The post-transaction re-read of the rows a batch write moved.
+      activity: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
-          $executeRaw: vi.fn(),
+          $executeRaw: txExecuteRaw,
           resourceAssignment: {
             findFirst: txDrivingFindFirst,
             updateMany: txDrivingUpdateMany,
@@ -198,7 +219,8 @@ describe('ActivitiesService', () => {
         }),
       ),
     };
-    const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
+    penGuard = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
+    const editLock = penGuard;
     // Activity calendars are validated in-org via this repo (ADR-0037); default: id resolves.
     // An ORG-tier calendar is usable by any activity in the org (ADR-0053 §2); the
     // wrong-project reject path is covered by the guard's own truth-table spec and e2e.
@@ -307,6 +329,40 @@ describe('ActivitiesService', () => {
         service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'X', parentId: 'ghost' }),
       ).rejects.toBeInstanceOf(NotFoundError);
       expect(activities.create).not.toHaveBeenCalled();
+    });
+
+    // ADR-0038 invariant (a): the parent-tree cycle walk is a read-then-write and MUST be
+    // serialised per plan, or two concurrent mirror re-parents both pass a still-acyclic read.
+    it('takes the plan write lock when creating UNDER a WBS parent', async () => {
+      activities.create.mockResolvedValue(activity());
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }),
+      );
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'T', parentId: 'sum-1' });
+      expect(locksTaken()).toContain('dependency-plan');
+    });
+
+    // The cost of the fix must fall ONLY on the re-parenting path: a plan-wide lock on every
+    // ordinary create would serialise all authoring in the plan.
+    it('takes NO plan lock on a top-level create (the common path is uncontended)', async () => {
+      activities.create.mockResolvedValue(activity());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'T' });
+      expect(locksTaken()).not.toContain('dependency-plan');
+    });
+
+    // One acquisition order across this service (plan → calendar) is what makes two concurrent
+    // writes unable to deadlock against each other.
+    it('takes the plan lock BEFORE the calendar lock when a create sets both', async () => {
+      activities.create.mockResolvedValue(activity());
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }),
+      );
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'T',
+        parentId: 'sum-1',
+        calendarId: 'cal-1',
+      });
+      expect(locksTaken()).toEqual(['dependency-plan', 'calendar-assign']);
     });
 
     it('defaults type to TASK and duration to 1 when omitted', async () => {
@@ -520,6 +576,61 @@ describe('ActivitiesService', () => {
       ).rejects.toBeInstanceOf(NotFoundError);
     });
 
+    // ADR-0038 invariant (a). The re-parent path reads the ancestor chain and then writes on the
+    // strength of it; optimistic `version` cannot catch the mirror race (each row IS at the
+    // version it was read at), so the plan advisory lock is the only thing serialising it.
+    describe('WBS re-parent serialisation (ADR-0038 invariant (a))', () => {
+      /**
+       * First lookup resolves the activity being edited, the second its new parent; the trailing
+       * default covers the post-transaction re-read of the updated row.
+       */
+      function existingThenParent() {
+        activities.findActiveByIdInOrg
+          .mockResolvedValueOnce(activity())
+          .mockResolvedValueOnce(activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }))
+          .mockResolvedValue(activity({ parentId: 'sum-1' }));
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+      }
+
+      it('takes the plan write lock when re-parenting to a summary', async () => {
+        existingThenParent();
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          parentId: 'sum-1',
+          version: 1,
+        });
+        expect(locksTaken()).toContain('dependency-plan');
+      });
+
+      it('takes NO plan lock on an ordinary edit that omits parentId', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { name: 'New', version: 1 });
+        expect(locksTaken()).not.toContain('dependency-plan');
+      });
+
+      // Clearing to top-level cannot create a cycle — there is no chain to walk — so it does not
+      // pay for the lock either.
+      it('takes NO plan lock when clearing the parent to top level', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          parentId: null,
+          version: 1,
+        });
+        expect(locksTaken()).not.toContain('dependency-plan');
+      });
+
+      it('takes the plan lock BEFORE the calendar lock when an update sets both', async () => {
+        existingThenParent();
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          parentId: 'sum-1',
+          calendarId: 'cal-1',
+          version: 1,
+        });
+        expect(locksTaken()).toEqual(['dependency-plan', 'calendar-assign']);
+      });
+    });
+
     // Duration-type triad recompute on the ACTIVITY write path (M7 rung 4, ADR-0040 §3).
     // editedField = DURATION: the duration is held; the dependent (Units or Units/Time, per the
     // truth table) recomputes on the DRIVING assignment. `D` = durationMinutes / 60 working hours.
@@ -656,6 +767,265 @@ describe('ActivitiesService', () => {
           service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { durationDays: 10, version: 1 }),
         ).rejects.toBeInstanceOf(ConflictError);
       });
+    });
+  });
+
+  describe('updateParents (batch WBS membership)', () => {
+    /** A node as `findPlanWbsTree` projects it. */
+    const node = (id: string, parentId: string | null = null, type: ActivityType = 'TASK') => ({
+      id,
+      parentId,
+      type,
+    });
+    /** A plan with two top-level summaries and two unfiled tasks. */
+    const flatPlan = () => [
+      node('s1', null, 'WBS_SUMMARY'),
+      node('s2', null, 'WBS_SUMMARY'),
+      node('t1'),
+      node('t2'),
+    ];
+    const call = (parents: { id: string; parentId: string | null; version: number }[]) =>
+      service.updateParents(principalWith(ALL), 'acme', PLAN_ID, { parents });
+
+    beforeEach(() => {
+      activities.findPlanWbsTree.mockResolvedValue(flatPlan());
+    });
+
+    it('files several activities under a summary in one write', async () => {
+      activities.updateParents.mockResolvedValue(2);
+      await call([
+        { id: 't1', parentId: 's1', version: 1 },
+        { id: 't2', parentId: 's1', version: 1 },
+      ]);
+      expect(activities.updateParents).toHaveBeenCalledWith(
+        ORG_ID,
+        PLAN_ID,
+        [
+          { id: 't1', parentId: 's1', version: 1 },
+          { id: 't2', parentId: 's1', version: 1 },
+        ],
+        expect.any(String),
+        expect.anything(),
+      );
+    });
+
+    it('clears a member to the top level on a null parentId', async () => {
+      activities.findPlanWbsTree.mockResolvedValue([
+        node('s1', null, 'WBS_SUMMARY'),
+        node('t1', 's1'),
+      ]);
+      activities.updateParents.mockResolvedValue(1);
+      await call([{ id: 't1', parentId: null, version: 1 }]);
+      expect(activities.updateParents).toHaveBeenCalledWith(
+        ORG_ID,
+        PLAN_ID,
+        [{ id: 't1', parentId: null, version: 1 }],
+        expect.any(String),
+        expect.anything(),
+      );
+    });
+
+    it('takes the plan write lock (ADR-0038 invariant (a))', async () => {
+      activities.updateParents.mockResolvedValue(1);
+      await call([{ id: 't1', parentId: 's1', version: 1 }]);
+      expect(locksTaken()).toContain('dependency-plan');
+    });
+
+    it('422s a duplicate id without writing (DUPLICATE_PARENT_ID)', async () => {
+      await expect(
+        call([
+          { id: 't1', parentId: 's1', version: 1 },
+          { id: 't1', parentId: 's2', version: 1 },
+        ]),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    it('404s an id that is not in this plan (anti-IDOR)', async () => {
+      await expect(call([{ id: 'ghost', parentId: 's1', version: 1 }])).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    it('404s a parent that is not in this plan', async () => {
+      await expect(call([{ id: 't1', parentId: 'ghost', version: 1 }])).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    it('422s a non-summary parent (PARENT_NOT_SUMMARY)', async () => {
+      await expect(call([{ id: 't1', parentId: 't2', version: 1 }])).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    it('422s an activity filed under itself (PARENT_CYCLE)', async () => {
+      await expect(call([{ id: 's1', parentId: 's1', version: 1 }])).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    // The reason validation runs against the RESULTING tree rather than the current one. Read row
+    // by row against the pre-batch state, BOTH of these are legal — each files a childless
+    // top-level summary under another childless top-level summary. Applied together they close a
+    // loop, and a per-row check would have written it.
+    it('409s a batch that is cycle-free row by row but cyclic as a whole', async () => {
+      await expect(
+        call([
+          { id: 's1', parentId: 's2', version: 1 },
+          { id: 's2', parentId: 's1', version: 1 },
+        ]),
+      ).rejects.toBeInstanceOf(ConflictError);
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    it('409s a batch that closes a loop through an EXISTING edge', async () => {
+      // s2 already sits under s1, so filing s1 under s2 closes s1 → s2 → s1.
+      activities.findPlanWbsTree.mockResolvedValue([
+        node('s1', null, 'WBS_SUMMARY'),
+        node('s2', 's1', 'WBS_SUMMARY'),
+      ]);
+      await expect(call([{ id: 's1', parentId: 's2', version: 1 }])).rejects.toBeInstanceOf(
+        ConflictError,
+      );
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    it('accepts deep nesting that is legal (no false cycle from a long chain)', async () => {
+      activities.findPlanWbsTree.mockResolvedValue([
+        node('s1', null, 'WBS_SUMMARY'),
+        node('s2', 's1', 'WBS_SUMMARY'),
+        node('s3', 's2', 'WBS_SUMMARY'),
+        node('t1'),
+      ]);
+      activities.updateParents.mockResolvedValue(1);
+      await expect(call([{ id: 't1', parentId: 's3', version: 1 }])).resolves.toBeDefined();
+    });
+
+    it('409s and writes nothing when a row carries a stale version', async () => {
+      activities.updateParents.mockResolvedValue(1); // one row short of the batch
+      await expect(
+        call([
+          { id: 't1', parentId: 's1', version: 1 },
+          { id: 't2', parentId: 's1', version: 9 },
+        ]),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it('refuses without the pen (423), before any read or write', async () => {
+      const locked = new LockedError('nope', { reason: 'PLAN_EDIT_LOCK_REQUIRED', holder: null });
+      penGuard.assertHoldsPen.mockRejectedValue(locked);
+      await expect(call([{ id: 't1', parentId: 's1', version: 1 }])).rejects.toBe(locked);
+      expect(activities.findPlanWbsTree).not.toHaveBeenCalled();
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+
+    it('403s a principal without activity:update', async () => {
+      await expect(
+        service.updateParents(principalWith([]), 'acme', PLAN_ID, {
+          parents: [{ id: 't1', parentId: 's1', version: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(activities.updateParents).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dissolveSummary', () => {
+    /** The tx client's `activity.updateMany`, used to promote the children. */
+    let txUpdateMany: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      txUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+        cb({ $executeRaw: txExecuteRaw, activity: { updateMany: txUpdateMany } }),
+      );
+    });
+
+    const summary = (over: Partial<Activity> = {}) =>
+      activity({ id: ACTIVITY_ID, type: 'WBS_SUMMARY', parentId: null, ...over });
+
+    it('promotes the direct children to the summary’s own parent, then deletes it', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary({ parentId: 'grandparent' }));
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+
+      expect(txUpdateMany).toHaveBeenCalledWith({
+        where: { organizationId: ORG_ID, parentId: ACTIVITY_ID, deletedAt: null },
+        data: expect.objectContaining({ parentId: 'grandparent' }),
+      });
+      expect(lifecycle.cascadeSoftDelete).toHaveBeenCalledWith(
+        expect.anything(),
+        'activity',
+        ACTIVITY_ID,
+        USER_ID,
+      );
+    });
+
+    it('promotes children to the top level when the summary is top-level', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary({ parentId: null }));
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+      expect(txUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ parentId: null }) }),
+      );
+    });
+
+    // A promoted child's row changed, so a client holding the old copy must not be able to write
+    // over the promotion — it gets a 409 on its next attempt instead.
+    it('bumps the promoted children’s versions', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+      const data = txUpdateMany.mock.calls[0]?.[0].data as { version: unknown };
+      expect(data.version).toEqual({ increment: 1 });
+    });
+
+    it('takes the plan write lock, and does both writes in ONE transaction', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+      expect(locksTaken()).toContain('dependency-plan');
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles a childless summary (nothing to promote, still deleted)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      txUpdateMany.mockResolvedValue({ count: 0 });
+      await expect(
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
+      ).resolves.toBeUndefined();
+      expect(lifecycle.cascadeSoftDelete).toHaveBeenCalled();
+    });
+
+    it('422s a non-summary activity without deleting it (NOT_A_SUMMARY)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
+      await expect(
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+
+    it('404s a missing activity', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('refuses without the pen (423), before any write', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      const locked = new LockedError('nope', { reason: 'PLAN_EDIT_LOCK_REQUIRED', holder: null });
+      penGuard.assertHoldsPen.mockRejectedValue(locked);
+      await expect(service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID)).rejects.toBe(
+        locked,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('403s a principal without activity:delete', async () => {
+      await expect(
+        service.dissolveSummary(principalWith([]), 'acme', ACTIVITY_ID),
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
   });
 

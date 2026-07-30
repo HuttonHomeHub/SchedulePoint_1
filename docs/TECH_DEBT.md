@@ -273,3 +273,24 @@ inconsistency is visible in a way it was not when each lived in its own pop-out.
 **What would close it:** pick one row-edit idiom and state it in `docs/DESIGN_SYSTEM.md` (the
 list/manage archetype is the natural home), then move whichever surface loses. Raised by the
 ADR-0062 component gate as a suggestion — deliberately not rushed inside the epic that noticed it.
+
+### 70. The API e2e harness cannot reproduce a same-plan write race
+
+The WBS re-parent path takes the plan advisory lock so two mirror re-parents cannot both pass a
+still-acyclic ancestor walk (ADR-0038 invariant (a), fixed in the WBS-improvements M0). The natural
+regression test — two mirror `PATCH`es fired with `Promise.all`, the shape used by
+`resource-hierarchy.e2e-spec.ts` and `dependencies.e2e-spec.ts` — **does not actually race** in this
+harness: instrumenting the ancestor walk showed the second request beginning ~15 ms _after_ the
+first transaction had already committed, on two separate keep-alive sockets, so it passes
+identically with the lock removed. Concurrency itself is fine (two interactive Prisma transactions
+were measured interleaving correctly) — the requests are serialised somewhere earlier in the
+in-process Supertest path.
+
+The consequence is that the three existing "serialises concurrent mirror X" e2e tests are weaker
+than they read: they prove the rejection path, not the serialisation. The lock is gated instead by
+unit tests that assert the acquisition and its ordering directly, and fail when it is removed.
+
+**What would close it:** either drive the race below HTTP (two concurrent service calls, or two
+hand-rolled transactions racing the read-then-write with a barrier between the read and the write),
+or accept the HTTP tests as invariant tests and rename them so they stop implying a concurrency
+guarantee. Until then, do not add another "serialises concurrent …" e2e test and treat it as a gate.

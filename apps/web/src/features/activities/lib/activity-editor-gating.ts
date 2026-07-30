@@ -37,7 +37,7 @@ export interface ActivityEditorGatingInput {
 }
 
 export type ActivityWritePath =
-  ActivityScope | 'progress' | 'steps' | 'logic' | 'resources' | 'notes';
+  ActivityScope | 'progress' | 'steps' | 'logic' | 'resources' | 'notes' | 'members';
 
 export interface ScopeGate {
   /** May the caller save this scope right now. */
@@ -100,6 +100,11 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
     // rather than asserted (the identity test in the sibling suite).
     logic: definition,
     resources: definition,
+    // Membership joins them for the same reason and by the same means: re-parenting an activity is
+    // a structural write that has always needed the role and the pen (it is the batch form of the
+    // `parentId` edit already on the Scheduling tab), so this is **the same object**, and the
+    // identity test says so rather than a comment claiming it.
+    members: definition,
     // Notes are **not** pen-gated (ADR-0046) — annotating a plan is not editing its schedule, and a
     // Contributor may write one while a Planner holds the pen. Same role rule as progress, so it
     // reuses that gate object rather than restating it.

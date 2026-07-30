@@ -149,6 +149,7 @@ function Adr0030PlanWorkspace({
       onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      onDissolveSummary={model.onDissolveSummary}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
       // toolbar item is flag-gated, so flag-off is byte-for-byte. Their dialogs are mounted in the
       // shared `PlanDialogs` below, so they work in this ADR-0030 layout too.

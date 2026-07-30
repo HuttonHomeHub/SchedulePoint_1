@@ -1,4 +1,12 @@
-import { ClipboardCheck, ListChecks, SquarePen, Trash2, Users, Waypoints } from 'lucide-react';
+import {
+  ClipboardCheck,
+  ListChecks,
+  SquarePen,
+  Trash2,
+  Ungroup,
+  Users,
+  Waypoints,
+} from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
@@ -8,6 +16,7 @@ import {
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   RESOURCES_ENABLED,
+  WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 
 /**
@@ -27,9 +36,17 @@ export interface SelectionActionContext {
    * (milestone / LOE / WBS summary), matching the activities-table Steps row action. Gates the `steps`
    * item's visibility (with `canEditSchedule`), mirroring the table's `!isDurationDerivedType`. */
   stepsEligible: boolean;
+  /**
+   * The selection is a `WBS_SUMMARY` — the only kind of activity that can be dissolved. A context
+   * fact rather than a check inside the handler, so a non-summary selection cannot reach an action
+   * the server would 422.
+   */
+  isSummary: boolean;
   onOpenLogic: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Dissolve the selected summary — remove the grouping, keep the work (`VITE_WBS_IMPROVEMENTS`). */
+  onDissolve: () => void;
   /** Open the per-activity resource-assignment editor (entry-route win 2, `VITE_ENTRY_ROUTES`). Wired
    * regardless of the flag; the `resources` item that calls it is only registered when the flag is on. */
   onResources: () => void;
@@ -143,12 +160,35 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       disabledReason: () => PEN_REASON,
       onActivate: (ctx) => ctx.onEdit(),
     },
+    // Dissolve — only for a summary selection, and only behind `VITE_WBS_IMPROVEMENTS`. Registered
+    // BEFORE Delete for the same reason the table's row menu orders them that way: the two are
+    // neighbours in intent ("get rid of this grouping") and opposites in effect, so the
+    // non-destructive one must be visible at the moment the destructive one is being chosen.
+    ...(WBS_IMPROVEMENTS_ENABLED
+      ? [
+          {
+            id: 'dissolve',
+            group: 'object',
+            tier: 1,
+            showLabel: 'always',
+            order: 5,
+            label: 'Dissolve',
+            icon: <Ungroup className="size-4" />,
+            penGated: true,
+            disabledReason: () => PEN_REASON,
+            // Registered for every selection but only VISIBLE on a summary: `isSummary` is a
+            // context fact, so a non-summary selection cannot reach an action that would 422.
+            isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
+            onActivate: (ctx: SelectionActionContext) => ctx.onDissolve(),
+          } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
     {
       id: 'delete',
       group: 'object',
       tier: 1,
       showLabel: 'always',
-      order: 5,
+      order: 6,
       label: 'Delete',
       icon: <Trash2 className="size-4" />,
       penGated: true,

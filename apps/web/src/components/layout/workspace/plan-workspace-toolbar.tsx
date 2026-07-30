@@ -166,11 +166,17 @@ export function ToolbarPlanWorkspace({
   // "A modal is open" — the plan dialogs + the edit-plan form + the activity edit/delete dialogs.
   // Gates both the `?` shortcut (don't stack the sheet on an open modal) and the undo/redo keybindings
   // (don't mutate plan state from beneath an open `ConfirmDialog`/`ActivityFormDialog`, ADR-0048).
+  // `editorIntent` is listed because with `VITE_ACTIVITY_EDITOR_TABS` on (default) it is the state
+  // that opens the editor — `editActivityId` is never set on that path, so without this line the
+  // undo/redo chords were live underneath the open editor, which is the exact thing this guard
+  // exists to prevent.
   const anotherDialogOpen =
     dialog !== null ||
     model.editing ||
     model.editActivityId !== null ||
-    model.deleteActivityId !== null;
+    model.editorIntent !== null ||
+    model.deleteActivityId !== null ||
+    model.dissolveActivityId !== null;
 
   // Below `md` the vertical split can't give the canvas and the table useful height at once, so
   // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
@@ -329,6 +335,7 @@ export function ToolbarPlanWorkspace({
       onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      onDissolveSummary={model.onDissolveSummary}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
       // toolbar item is flag-gated, so flag-off is byte-for-byte. Progress is role-gated via
       // `canReportProgress`; Steps hides for a duration-derived selection via `isStepsEligible`.

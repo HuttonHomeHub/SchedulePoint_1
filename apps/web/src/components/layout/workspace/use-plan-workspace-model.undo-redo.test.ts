@@ -162,6 +162,7 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn().mockResolvedValue([ACTIVITY]) }),
   useDeleteActivity: () => ({ mutateAsync: vi.fn() }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   isMilestoneType: (t: string) => t === 'START_MILESTONE' || t === 'FINISH_MILESTONE',
 }));
 
@@ -320,5 +321,28 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     act(() => result.current.recordActivityDelete(SUMMARY));
     expect(h.record).not.toHaveBeenCalled();
     expect(h.clear).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Dissolve (WBS improvements M2) takes the cascade-delete branch's rule for the same reason: the
+   * client cannot compose its inverse from the existing mutations, so a recorded command would
+   * rebuild a *different* summary under a new id and strand the original in Recently deleted. It
+   * truncates, and it never records — an "undo" that quietly does something else is worse than
+   * none.
+   */
+  it('flag ON: a dissolve truncates the history and records nothing', () => {
+    h.undoRedo = true;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    act(() => result.current.recordDissolveBoundary());
+    expect(h.clear).toHaveBeenCalledTimes(1);
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('flag OFF: a dissolve does not touch the history', () => {
+    h.undoRedo = false;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    act(() => result.current.recordDissolveBoundary());
+    expect(h.clear).not.toHaveBeenCalled();
+    expect(h.record).not.toHaveBeenCalled();
   });
 });

@@ -182,6 +182,7 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutateAsync: h.deleteActivity }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   isMilestoneType: (t: string) => t === 'START_MILESTONE' || t === 'FINISH_MILESTONE',
 }));
 

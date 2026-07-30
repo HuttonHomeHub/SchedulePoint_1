@@ -168,7 +168,7 @@ override needs `plan:override_lock` (Org Admin).
 | DELETE | `…/plans/:planId/edit-lock`           | Release (holder) / force-release (override) · 204, idempotent.           |
 
 **Gated writes.** The structural write endpoints — activity
-create/update/delete/restore, `…/activities/positions`, dependency
+create/update/delete/restore, `…/activities/positions`, `…/activities/parents`, dependency
 create/update/delete, cross-plan dependency create/delete (on the **successor**
 plan), and `…/schedule/recalculate` — additionally require holding the pen and
 return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from the 409 version
@@ -518,6 +518,19 @@ case-insensitive substring match bounded by the org filter; there is deliberatel
   No verb-in-path (`:batchMove`) and no `POST` (which reads as "create a resource").
 - Batch writes are **all-or-nothing**: if any item fails its scope check (`404`) or version
   check (`409`), the whole batch is rejected and nothing is written. Cap the array server-side.
+- `PATCH …/plans/:planId/activities/parents` with `{ parents: [{ id, parentId, version }] }` is the
+  WBS-membership sibling — a `null` `parentId` files the activity back at the top level. Unlike
+  `positions` it is **structural**: `parentId` feeds the engine's WBS rollup, so a committed batch
+  leaves the plan's computed dates stale until the next recalculation.
+- `POST …/activities/:activityId/dissolve` (204) removes a WBS summary's grouping and **keeps the
+  work**: its direct children take its own parent, then the now-childless summary is soft-deleted,
+  in one transaction. It is a separate endpoint from `DELETE`, not a flag on it, because `DELETE`
+  cascades to the whole subtree — the destructive reading must never be the default. Restoring a
+  dissolved summary brings back the summary **alone**; the promotion is not undone.
+- A batch whose items are individually valid may still be **jointly** invalid. `parents` is checked
+  against the **resulting** tree, not the current one, so `[{A→B}, {B→A}]` — two rows that each
+  file a childless top-level summary under another — is a `409 PARENT_CYCLE`. Validate the state a
+  batch would produce, never row against pre-state.
 
 ## Validation & data types
 
