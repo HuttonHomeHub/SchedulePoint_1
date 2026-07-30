@@ -15,7 +15,6 @@ import { describe, expect, it } from 'vitest';
 import { deriveWbsBandSource } from './wbs-band-source';
 
 import { WBS_BAND_ROW_HEIGHT } from '@/features/tsld/render/wbs-band';
-
 import { anActivity } from '@/test/activity-fixture';
 
 const SUMMARY = anActivity({

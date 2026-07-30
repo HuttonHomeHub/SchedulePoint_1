@@ -36,7 +36,6 @@ import {
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
-import { deriveWbsBandSource } from '@/features/wbs';
 import {
   EXPORT_FORMAT_LABELS,
   exportErrorMessage,
@@ -49,6 +48,7 @@ import {
 } from '@/features/interchange';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
+import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** A stable empty conflict list, so the flag-off path (P-sug1) hands a byte-stable reference to the
