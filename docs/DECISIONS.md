@@ -1428,3 +1428,34 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   Found by checking the roadmap's "still pending" claim against the code instead of believing it
   (ADR-0058); the same pass corrected the Gantt's "closed the last Must-have" claim, which the brief
   words "read-primary; **edit supported**".
+
+- **The reversed link (ADR-0064 A2) is closed as _unreproduced_, and its likely cause was the Link
+  trigger that armed nothing (2026-07-30).** The epic opened on two observations from one driving
+  session: six link attempts that created **zero** dependencies, and one link that recorded
+  `Reinforce → Set out` after clicking _Set out_ then _Reinforce_. The plan (CQ-1) required the
+  second to be diagnosed with evidence before anything was "fixed", because the gesture reducer maps
+  the **first** click to the predecessor and carries no inversion on any path — so the cause had to
+  be elsewhere, and recording "fixed" for a defect we never explained is the failure ADR-0058 exists
+  to name.
+
+  `apps/web/e2e-authoring-flow/link-direction.spec.ts` drives the two-click pick against a real API
+  with the pen enforced and the coalesced auto-recalculation live, sweeping the inter-click delay
+  across the 500 ms debounce boundary (0 / 250 / 600 / 1500 ms quiescent, 0 / 900 ms with a
+  recalculation genuinely in flight — armed by drawing a task on the canvas, since an API-direct
+  write would never schedule one). Each bar's click point is **measured**, not assumed: the harness
+  walks one canvas column in `select` mode and reads the canvas's own parallel listbox back, then
+  re-probes the same two pixels after the pick. That is what makes the outcomes distinguishable —
+  no row at all means a click was dropped; a reversed row with a **changed** map means the scene
+  moved between the clicks; a reversed row with the map intact means a third mechanism.
+
+  **All seven cases recorded exactly one dependency, in click order, with the map unchanged.** A2
+  does not reproduce, and is closed as unreproduced rather than as fixed.
+
+  What the same session's _other_ observation does explain is A1c, and it is now pinned: the Link
+  split-button's primary region used to open its type menu and arm **nothing**, so a planner who
+  clicked "Link" and then clicked two bars was still in **Add** mode and drew two activities. That
+  is where the zero dependencies came from, and it is also the shape most likely to be read as a
+  reversal — the click sequence the planner counted was not the sequence the machine received. The
+  invariant is therefore stated as a **replacement**, not as "Link arms": arming Link while Add is
+  armed leaves Add disarmed, the next canvas click picks an endpoint, and the plan's activity count
+  does not change. Asserting only the dependency would pass on a run that _also_ drew two strays.

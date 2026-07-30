@@ -46,15 +46,18 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
   await drawActivity(page, 'Finish milestone', 'Handover', { x: 360, y: 180 });
   await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
 
-  // M5 — the Link split-button mirrors Add: one menu-button whose menu picks the FS/SS/FF kind and
-  // arms link-mode in a single gesture (the edge-drag affordance is gone). (The click-pick-click
-  // creation itself is covered by the gesture-machine unit tests; here we prove the split-button +
-  // type menu are wired into the live toolbar.)
+  // M5 — the Link split-button: the primary region arms the tool, and the caret opens the FS/SS/FF
+  // type menu, from which picking a kind also arms (ADR-0064 T2 — before that the primary region
+  // opened the menu and armed nothing, so "click Link, click two bars" drew two activities). The
+  // click-pick-click creation itself is covered by the gesture-machine unit tests and, end to end,
+  // by `e2e-authoring-flow/`; here we prove both regions are wired into the live toolbar.
   const linkTool = toolbar.getByRole('button', { name: 'Link', exact: true });
   await expect(linkTool).toBeVisible();
   await linkTool.click();
+  await expect(toolbar.getByRole('button', { name: /Linking · FS/ })).toBeVisible();
+  await toolbar.getByRole('button', { name: /^Link type:/ }).click();
   await page.getByRole('menuitemradio', { name: /Start → Start/ }).click();
-  // Picking a kind enters link-mode and relabels the button with the armed code (Linking · SS).
+  // Picking a kind sets the type and keeps link-mode armed, relabelling the button (Linking · SS).
   await expect(toolbar.getByRole('button', { name: /Linking · SS/ })).toBeVisible();
 
   // The canvas-first authoring workspace is accessible.

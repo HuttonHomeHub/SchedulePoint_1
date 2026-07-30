@@ -284,6 +284,15 @@ jobs:
       - name: Web end-to-end tests (WBS improvements flag on)
         run: pnpm --filter @repo/web test:e2e:wbs
 
+      # Canvas authoring flow (playwright.authoring-flow.config.ts) with the pen enforced at the API
+      # and the coalesced auto-recalculation live (ADR-0064). It exists because the epic's founding
+      # defect — a link whose endpoints came back reversed — cannot be reached from a unit test: the
+      # gesture reducer maps the first click to the predecessor with no inversion on any path, so
+      # only a real browser, a real recalculation cadence and a real server can say which of those
+      # clicks actually became a pick. Runs after the prior suites tear down their servers.
+      - name: Web end-to-end tests (canvas authoring flow)
+        run: pnpm --filter @repo/web test:e2e:authoring-flow
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -295,6 +304,7 @@ jobs:
             apps/web/playwright-report-workspace/
             apps/web/playwright-report-toolbar/
             apps/web/playwright-report-authoring/
+            apps/web/playwright-report-authoring-flow/
             apps/web/playwright-report-activity-editor/
             apps/web/playwright-report-wbs/
             apps/web/playwright-report-programme/
