@@ -109,6 +109,7 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutateAsync: vi.fn() }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   isMilestoneType: (t: string) => t === 'START_MILESTONE' || t === 'FINISH_MILESTONE',
 }));
 
@@ -151,6 +152,24 @@ describe('WBS reparent participates in auto-recalc (structureSignature)', () => 
     expect(h.notify).not.toHaveBeenCalled();
 
     h2.activities = [{ ...TASK, parentId: null }, SUMMARY];
+    rerender();
+    expect(h.notify).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Dissolve (WBS improvements M2) is a server-side compound — reparent every child, then
+   * soft-delete the summary — and the client only ever sees its *result* when the refetch lands.
+   * It has no `notify()` of its own, so what makes the rollup dates settle is exactly this
+   * signature reacting to the shape it arrives in. Worth pinning explicitly: the change here is
+   * two effects at once (a row leaves, others reparent), and "one of the two would have fired it
+   * anyway" is not something a future edit to the signature is obliged to preserve.
+   */
+  it('notifies when a summary is dissolved (children unfiled + summary gone)', () => {
+    h2.activities = [{ ...TASK, parentId: 'wbs1' }, SUMMARY];
+    const { rerender } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    expect(h.notify).not.toHaveBeenCalled();
+
+    h2.activities = [{ ...TASK, parentId: null }];
     rerender();
     expect(h.notify).toHaveBeenCalledTimes(1);
   });

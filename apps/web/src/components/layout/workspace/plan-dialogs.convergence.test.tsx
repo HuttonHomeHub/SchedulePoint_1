@@ -43,6 +43,7 @@ vi.mock('@/features/resources', () => ({
 const editorProps = vi.fn();
 vi.mock('@/features/activities', () => ({
   useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   isMilestoneType: () => false,
   ActivityFormDialog: () => null,
   ActivityProgressDialog: () => null,

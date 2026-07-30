@@ -224,6 +224,14 @@ export interface TsldPanelProps {
   onEditActivity?: (activity: ActivitySummary) => void;
   /** Delete an activity (host-owned confirm) — the floating selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
+  /**
+   * Dissolve the selected WBS summary — remove the grouping and keep the work
+   * (`VITE_WBS_IMPROVEMENTS`). The host owns the confirm dialog and the mutation (ADR-0026 D8).
+   * Optional: absent ⇒ the action is inert, and the `dissolve` item is itself flag-gated in
+   * {@link selectionActionItems} and hidden for a non-summary selection, so flag-off is
+   * byte-for-byte.
+   */
+  onDissolveSummary?: (activity: ActivitySummary) => void;
   /** Open the per-activity resource-assignment editor — the floating selection bar's **Resources**
    * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
@@ -342,6 +350,7 @@ export function TsldPanel({
   onOpenLogic,
   onEditActivity,
   onDeleteActivity,
+  onDissolveSummary,
   onResources,
   onProgress,
   onSteps,
@@ -709,9 +718,15 @@ export function TsldPanel({
       // Whether this selection can carry weighted steps (host predicate; false when absent) — matching
       // the activities-table's `!isDurationDerivedType` gate. Read by the Steps item's `isVisible`.
       stepsEligible: isStepsEligible ? isStepsEligible(activity) : false,
+      // Read from the selected row's own type rather than from a host predicate: "is this a
+      // summary?" is a fact about the activity, not a policy the host could reasonably differ on.
+      isSummary: activity.type === 'WBS_SUMMARY',
       onOpenLogic: () => onOpenLogic(activity),
       onEdit: () => onEditActivity(activity),
       onDelete: () => onDeleteActivity(activity),
+      // A no-op when the host didn't wire it — same shape as the entry-route actions below, and the
+      // `dissolve` item is only registered behind its flag anyway.
+      onDissolve: () => onDissolveSummary?.(activity),
       // The entry-route actions (Progress / Resources / Steps). Each is a no-op when the host didn't wire
       // it (the corresponding toolbar item is itself flag-gated, so it only renders when the flag — and
       // this handler — are present); building them unconditionally keeps the fields plain + required.
@@ -728,6 +743,7 @@ export function TsldPanel({
     onOpenLogic,
     onEditActivity,
     onDeleteActivity,
+    onDissolveSummary,
     onResources,
     onProgress,
     onSteps,

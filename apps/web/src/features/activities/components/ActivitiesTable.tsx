@@ -3,10 +3,10 @@ import { MoreHorizontal } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import { useActivities, useDeleteActivity } from '../api/use-activities';
+import { useActivities, useDeleteActivity, useDissolveSummary } from '../api/use-activities';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import { openActivityEditor, type ActivityEditorIntent } from '../lib/activity-editor-intent';
-import { deleteActivityDescription } from '../lib/delete-activity-copy';
+import { deleteActivityDescription, dissolveSummaryDescription } from '../lib/delete-activity-copy';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
@@ -160,6 +160,7 @@ export function ActivitiesTable({
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
+  const dissolveSummary = useDissolveSummary(orgSlug, planId);
   const calendarNameById = useMemo(
     () => new Map(calendars.map((c) => [c.id, c.name])),
     [calendars],
@@ -189,6 +190,11 @@ export function ActivitiesTable({
   const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Dissolve is deliberately its OWN confirm state, not a mode on `deleting`. Sharing one would put
+  // "remove the grouping, keep the work" and "delete this and everything in it" behind the same
+  // variable, one boolean away from each other.
+  const [dissolving, setDissolving] = useState<ActivitySummary | null>(null);
+  const [dissolveError, setDissolveError] = useState<string | null>(null);
   // The per-row actions overflow menu (one open at a time, ADR-0029 `Menu` primitive / TECH_DEBT #38).
   // `anchor` is the trigger's viewport position; `menuTriggerRef` restores focus to it on close.
   const [menu, setMenu] = useState<{
@@ -273,6 +279,19 @@ export function ActivitiesTable({
     }
     if (canEditSchedule) {
       actions.push({ key: 'edit', label: 'Edit', onSelect: () => openFor(activity, 'edit') });
+      // Dissolve sits immediately BEFORE Delete, and only on a summary. Adjacency is the point:
+      // the two are neighbours in intent ("get rid of this grouping") and opposites in effect, so
+      // the non-destructive one has to be visible at the moment the destructive one is chosen.
+      if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
+        actions.push({
+          key: 'dissolve',
+          label: 'Dissolve',
+          onSelect: () => {
+            setDissolveError(null);
+            setDissolving(activity);
+          },
+        });
+      }
       actions.push({
         key: 'delete',
         label: 'Delete',
@@ -556,6 +575,24 @@ export function ActivitiesTable({
     });
   };
 
+  const confirmDissolve = (): void => {
+    if (!dissolving) return;
+    const name = dissolving.name;
+    dissolveSummary.mutate(dissolving.id, {
+      onSuccess: () => {
+        flushSync(() => {
+          setDissolving(null);
+          setDissolveError(null);
+        });
+        // Names what actually happened, not just that something did: the summary is gone AND the
+        // work is not, which is the whole distinction from Delete.
+        announce(`Summary “${name}” dissolved. Its activities were kept.`);
+        regionRef.current?.focus();
+      },
+      onError: (err) => setDissolveError(err.message),
+    });
+  };
+
   return (
     <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
       <DataTable
@@ -664,6 +701,28 @@ export function ActivitiesTable({
             pending={deleteActivity.isPending}
             pendingLabel="Deleting…"
             error={deleteError}
+          />
+          {/*
+            Deliberately NOT the destructive variant. Dissolve removes a grouping and keeps every
+            activity in it; dressing it in the delete red would tell the user, in the one channel
+            they read fastest, that it is the thing the copy spends three sentences saying it is not.
+          */}
+          <ConfirmDialog
+            open={dissolving !== null}
+            onClose={() => {
+              setDissolving(null);
+              setDissolveError(null);
+            }}
+            onConfirm={confirmDissolve}
+            title="Dissolve summary"
+            description={
+              dissolving ? dissolveSummaryDescription(dissolving, activities.data ?? []) : ''
+            }
+            confirmLabel="Dissolve"
+            confirmVariant="default"
+            pending={dissolveSummary.isPending}
+            pendingLabel="Dissolving…"
+            error={dissolveError}
           />
         </>
       ) : null}

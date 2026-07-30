@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { deleteActivityDescription } from './delete-activity-copy';
+import { deleteActivityDescription, dissolveSummaryDescription } from './delete-activity-copy';
 
 type Node = Pick<ActivitySummary, 'id' | 'parentId'>;
 const node = (id: string, parentId: string | null = null): Node => ({ id, parentId });
@@ -79,5 +79,64 @@ describe('deleteActivityDescription', () => {
       node('s2', 's1'),
     ]);
     expect(copy).toContain('the 1 activity below it');
+  });
+});
+
+describe('dissolveSummaryDescription', () => {
+  const summary = (id: string, name: string, parentId: string | null = null) => ({
+    id,
+    name,
+    parentId,
+  });
+
+  it('says the work is kept, and where it goes', () => {
+    const copy = dissolveSummaryDescription(summary('s1', 'Substructure'), [
+      summary('s1', 'Substructure'),
+      { id: 'a', name: 'Excavate', parentId: 's1' },
+      { id: 'b', name: 'Blind', parentId: 's1' },
+    ]);
+    expect(copy).toContain('keeps the work');
+    expect(copy).toContain('its 2 activities move up to the top level');
+  });
+
+  it('names the grandparent when the summary is nested', () => {
+    const copy = dissolveSummaryDescription(summary('s2', 'Inner', 's1'), [
+      summary('s1', 'Superstructure'),
+      summary('s2', 'Inner', 's1'),
+      { id: 'a', name: 'Excavate', parentId: 's2' },
+    ]);
+    expect(copy).toContain('its 1 activity move up to “Superstructure”');
+  });
+
+  /**
+   * The assumption most likely to be wrong: every other destructive action here is reversible by
+   * restore, and this one is only half reversible — the summary returns, its former children do
+   * not return to it.
+   */
+  it('states that restoring will NOT put the children back', () => {
+    const copy = dissolveSummaryDescription(summary('s1', 'Substructure'), [
+      summary('s1', 'Substructure'),
+      { id: 'a', name: 'Excavate', parentId: 's1' },
+    ]);
+    expect(copy).toContain('will NOT put them back');
+  });
+
+  it('says plainly when there is nothing to move', () => {
+    const copy = dissolveSummaryDescription(summary('s1', 'Substructure'), [
+      summary('s1', 'Substructure'),
+    ]);
+    expect(copy).toContain('nothing filed under it');
+    expect(copy).not.toContain('move up');
+  });
+
+  // Dissolve moves ONE level: a grandchild stays under its own parent, which is what goes up.
+  it('counts direct children only, not the whole subtree', () => {
+    const copy = dissolveSummaryDescription(summary('s1', 'Outer'), [
+      summary('s1', 'Outer'),
+      summary('s2', 'Inner', 's1'),
+      { id: 'a', name: 'Excavate', parentId: 's2' },
+      { id: 'b', name: 'Blind', parentId: 's2' },
+    ]);
+    expect(copy).toContain('its 1 activity move up');
   });
 });

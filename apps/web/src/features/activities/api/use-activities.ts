@@ -427,3 +427,26 @@ export function useDeleteActivity(orgSlug: string, planId: string) {
     onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }
+
+/**
+ * Dissolve a WBS summary: remove the grouping and **keep the work** — the children are promoted to
+ * the summary's own parent and the now-childless summary is soft-deleted, in one server-side
+ * transaction.
+ *
+ * Deliberately a separate hook from {@link useDeleteActivity} rather than a flag on it, mirroring
+ * the API: `DELETE` cascades to the whole subtree, and the destructive reading must never be
+ * reachable by accident from the non-destructive one.
+ *
+ * Structural — every promoted child's `parentId` changed — so it settles like a delete, refreshing
+ * the activities list and the baseline variance whose rollup rows have moved.
+ */
+export function useDissolveSummary(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (activityId: string) =>
+      apiFetch<void>(`/organizations/${orgSlug}/activities/${activityId}/dissolve`, {
+        method: 'POST',
+      }),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
+  });
+}

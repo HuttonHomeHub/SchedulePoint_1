@@ -124,6 +124,7 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: h.batchPositions }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: ({
     canEditSchedule,
     canReportProgress,

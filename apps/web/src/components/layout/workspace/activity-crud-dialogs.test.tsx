@@ -25,6 +25,7 @@ const mutateSpy = vi.fn();
 const onSavedSpy = vi.fn();
 vi.mock('@/features/activities', async () => ({
   useDeleteActivity: () => ({ mutate: mutateSpy, isPending: false }),
+  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   // The REAL copy helper, not a stub: this host must actually produce the WBS cascade warning, and
   // a stub would let it silently stop while the test kept passing (the defect being fixed was
   // precisely one surface saying something the other did not).

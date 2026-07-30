@@ -48,6 +48,47 @@ export function deleteActivityDescription(
 }
 
 /**
+ * The confirmation copy for **dissolving** a WBS summary — removing the grouping and keeping the
+ * work.
+ *
+ * Written against the risk that dissolve reads as a synonym for delete. Three things have to land:
+ * the work is **kept**, where it goes (the grandparent, or the top level — a planner needs to know
+ * which before agreeing), and that this is **not undone by restoring**. That last point is the one
+ * a user is most likely to assume wrongly, because every other destructive action in this app is
+ * reversible by restore, and here only half of it is: the summary comes back, its former children
+ * do not come back to it.
+ *
+ * Counts only DIRECT children, unlike the delete warning: dissolve moves one level, and a
+ * grandchild does not move at all — it stays under its own parent, which is what goes up.
+ */
+export function dissolveSummaryDescription(
+  summary: Pick<ActivitySummary, 'id' | 'name' | 'parentId'>,
+  planActivities: readonly Pick<ActivitySummary, 'id' | 'name' | 'parentId'>[],
+): string {
+  const name = `“${summary.name}”`;
+  const children = planActivities.filter((a) => a.parentId === summary.id);
+  const parentName =
+    summary.parentId === null
+      ? null
+      : (planActivities.find((a) => a.id === summary.parentId)?.name ?? null);
+  const destination = parentName === null ? 'the top level' : `“${parentName}”`;
+
+  if (children.length === 0) {
+    return (
+      `Dissolve ${name}? It has nothing filed under it, so this just removes the empty summary. ` +
+      `Restoring it later brings back the summary only.`
+    );
+  }
+
+  const moved =
+    children.length === 1 ? 'its 1 activity' : `its ${String(children.length)} activities`;
+  return (
+    `Dissolve ${name}? This removes the grouping and keeps the work — ${moved} move up to ` +
+    `${destination}. Restoring the summary later will NOT put them back under it.`
+  );
+}
+
+/**
  * Every active descendant of `rootId`, transitively. Breadth-first over the loaded rows rather than
  * a recursive walk per node, so a deep tree costs one pass; `seen` also stops a malformed cycle
  * from hanging the dialog (the server forbids one, but this is render-path code and must not
