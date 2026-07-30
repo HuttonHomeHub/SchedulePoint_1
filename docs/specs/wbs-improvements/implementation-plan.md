@@ -1,8 +1,25 @@
 # Implementation Plan: WBS improvements
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
-- **Status:** Draft — awaiting approval
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
+- **Status:** Approved. **M0 landed** (API foundations + the honest delete warning);
+  **M1 landed** (the Members tab, behind `VITE_WBS_IMPROVEMENTS`, default off).
 - **Owner:** _(unassigned)_
+
+> **Deviations from this plan as written, recorded rather than silently absorbed:**
+>
+> 1. **M0-T1's batch validation is against the RESULTING tree, not per distinct target parent.** The
+>    planned per-row check accepts `[A→B, B→A]` — each row files a childless top-level summary under
+>    another and passes alone, while together they close a cycle. The batch is now overlaid on the
+>    plan's current edges and the whole result walked, which is both correct and cheaper (one
+>    projected read + O(n) rather than O(rows × depth) queries).
+> 2. **The M0-T3 concurrency regression could not be written as specified.** Two mirror `PATCH`es
+>    raced with `Promise.all` do not overlap in this harness — measured, and recorded as
+>    `TECH_DEBT #70`. The lock is gated by unit tests that assert the acquisition instead.
+> 3. **M1 ships the table row-menu entry point too**, which the plan left implicit: a Members tab
+>    reachable only by opening a summary and finding the tab is barely an entry point.
+> 4. Per the product owner's decision, **table multi-select is confirmed in scope** but sequenced
+>    after the canvas band as **M4b**, rather than dropped as this plan's C-1 originally proposed.
+
 - **Flag:** `VITE_WBS_IMPROVEMENTS`, default **off** until M6 (C-8). API work is **not**
   flag-gated; the delete-warning fix (M0-T4) is **not** flag-gated.
 

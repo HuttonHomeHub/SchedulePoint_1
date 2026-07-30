@@ -356,6 +356,34 @@ export function useBatchPositions(orgSlug: string, planId: string) {
   });
 }
 
+/**
+ * Batch WBS membership write: file many activities under a summary — or, on a `null` parentId, back
+ * at the top level — in one all-or-nothing PATCH (per-row optimistic lock, so a single stale
+ * `version` rejects the whole batch with a 409).
+ *
+ * Deliberately **no optimistic update**. This is not a per-keystroke surface — it is one Save on a
+ * panel the user has finished ticking — and an optimistic write here would have to lie convincingly
+ * about a batch that fails atomically: on a 409 the UI would have to unpick every row it had
+ * already moved, from a cache that may also be stale. Invalidate-and-refetch on settle costs one
+ * round trip and cannot disagree with the server.
+ *
+ * Unlike its lane-position sibling this is **structural**: `parentId` feeds the engine's WBS
+ * rollup, so a committed batch leaves the plan's computed dates stale until the next
+ * recalculation. That is why the baseline variance is invalidated too — the rollup rows it
+ * describes have moved.
+ */
+export function useUpdateActivityParents(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { parents: { id: string; parentId: string | null; version: number }[] }) =>
+      apiFetch<ActivitySummary[]>(`/organizations/${orgSlug}/plans/${planId}/activities/parents`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
+  });
+}
+
 function progressBody(input: ProgressFormValues & { version: number }) {
   return {
     percentComplete: input.percentComplete,

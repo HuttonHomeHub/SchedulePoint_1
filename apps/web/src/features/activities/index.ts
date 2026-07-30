@@ -7,6 +7,7 @@ export {
   useRepositionLane,
   useSetActivityVisualStart,
   useBatchPositions,
+  useUpdateActivityParents,
   useUpdateActivityProgress,
   useDeleteActivity,
   activitiesQueryOptions,

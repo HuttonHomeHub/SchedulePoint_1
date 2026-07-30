@@ -946,3 +946,25 @@ export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
  */
 export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
   ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_ACTIVITY_EDITOR_CONVERGENCE);
+
+/**
+ * **WBS improvements** (`VITE_WBS_IMPROVEMENTS`, default **off**) — making the shipped WBS
+ * (ADR-0038) workable rather than merely present: managing a summary's membership from the summary
+ * itself, dissolving a grouping without deleting the work it contains, showing the activities that
+ * belong to no summary at all, and expressing the programme shape on the canvas.
+ *
+ * The API half (the batch membership write and dissolve) is deliberately **not** behind this flag:
+ * a `VITE_` constant is a client build-time value and cannot gate a server check, and both
+ * endpoints are permission-, pen- and scope-gated regardless of whether any UI reaches them. Nor is
+ * the honest WBS delete warning, which is a strict improvement that stands alone.
+ *
+ * **It is `AND`-ed with {@link ACTIVITY_EDITOR_TABS_ENABLED}**, for the ADR-0062 reason: the
+ * Members surface is a tab, and a tab with tabs off would strand the summary's own entry point on
+ * an editor that never renders. Deriving the constant makes that combination unrepresentable
+ * rather than merely untested.
+ *
+ * Rollback: set `VITE_WBS_IMPROVEMENTS=false` and rebuild the web image. The API endpoints stay
+ * reachable but unreferenced, which is harmless, and nothing persisted depends on the flag.
+ */
+export const WBS_IMPROVEMENTS_ENABLED =
+  ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOff(import.meta.env.VITE_WBS_IMPROVEMENTS);

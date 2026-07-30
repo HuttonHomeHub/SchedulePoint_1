@@ -36,6 +36,7 @@ import {
   INTER_PROJECT_DATES_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
+  WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { NoteCountBadge } from '@/features/notes';
 import { ActivityResourcesDialog } from '@/features/resources';
@@ -237,6 +238,16 @@ export function ActivitiesTable({
         key: 'progress',
         label: 'Report progress',
         onSelect: () => openFor(activity, 'progress'),
+      });
+    }
+    // Members — only on a summary, because it is the only row that can hold anything. Any member
+    // may look (the panel shades its controls with a reason rather than hiding them), so this is
+    // not gated on `canEditSchedule`: seeing what is in a grouping is a read.
+    if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
+      actions.push({
+        key: 'members',
+        label: 'Members',
+        onSelect: () => setEditorIntent(openActivityEditor(activity, 'members')),
       });
     }
     // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
