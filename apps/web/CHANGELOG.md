@@ -1,5 +1,78 @@
 # @repo/web
 
+## 0.60.0
+
+### Minor Changes
+
+- [#193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/193) [`8f94a06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f94a06a11b5ae35775196e8e0dfdcdb95cab09d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Show the WBS: a pinned band on the TSLD canvas, and an honest home for unfiled work.
+
+  Two surfaces behind `VITE_WBS_IMPROVEMENTS`, both answering the same complaint — a plan can have a
+  WBS and still show none of it.
+
+  The **Gantt** gathers everything not yet filed under one derived **Unassigned** row. A
+  half-structured plan used to read as though it were fully structured: the activities nobody had
+  grouped yet sat at the root beside the summaries, indistinguishable from top-level phases. The
+  bucket is derived in the view layer and never persisted — a default summary per plan would change
+  `computeSchedule`'s input for every plan in the system, for a display feature — and it appears only
+  when there is both something unfiled and a real summary to contrast it with, because heading a flat
+  list "Unassigned" invents a hierarchy that is not there.
+
+  The **TSLD** gains a pinned band across the top, under `View▾ ▸ Structure ▸ WBS band` (default
+  off), showing the programme at phase level with each bar column-aligned to the diagram beneath it.
+  It is select-only: a summary's dates are an engine rollup, so there is nothing on it to drag.
+  Summaries move out of the scene while the band is on — they stay fully reachable by keyboard and
+  screen reader, which is the property the whole design turns on.
+
+  Both read the same definition of what is filed where, so the two views cannot come to disagree
+  about the word "unassigned". The printed programme gets the same grouping as the screen it was
+  printed from. The CPM engine is untouched.
+
+- [#193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/193) [`8f94a06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f94a06a11b5ae35775196e8e0dfdcdb95cab09d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the **Members** tab — manage a WBS summary's contents from the summary (`VITE_WBS_IMPROVEMENTS`,
+  default off).
+
+  The shipped WBS could only be built one activity at a time, from each child's own editor: filing
+  twenty activities meant opening twenty editors, and nothing anywhere answered "what is actually in
+  this summary?". Opening a `WBS_SUMMARY` now offers a checklist over the plan, with one Save that
+  sends one all-or-nothing batch.
+
+  The checked set is **state, not a projection of the visible rows**. The list filters, so a member
+  scrolled out of view or excluded by the search term is still a member; deriving the set from what is
+  on screen would silently unfile everyone the filter hides, in a request that would be perfectly
+  valid and atomic. Only genuine changes are sent, because every unnecessary row is another chance for
+  someone else's stale version to reject the whole save.
+
+  Membership reuses the existing **definition** gate object rather than re-expressing the same rule —
+  an identity test asserts `gating.members === gating.general`, so "this changes no permission" is
+  checkable rather than claimed. The panel shades its controls with a reason instead of hiding them: a
+  reader without the pen can still see what is in a grouping.
+
+### Patch Changes
+
+- [#193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/193) [`8f94a06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f94a06a11b5ae35775196e8e0dfdcdb95cab09d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Say what deleting a WBS summary actually does.
+
+  Every activity got the same confirmation — `Delete “X”? You can restore it later.` — including a
+  `WBS_SUMMARY`, whose deletion cascades to its entire subtree (ADR-0038). A planner removing a
+  grouping was told the reassuring half of the truth: the restore is real, but everything filed under
+  it goes too, and until then an unknown amount of work has vanished from the plan.
+
+  A summary's confirmation now states the descendant count, says plainly that deleting a summary
+  deletes everything it contains, and points at dissolve as the way to drop the grouping and keep the
+  work. The count is derived from the already-loaded plan activities, so it degrades honestly: an
+  empty summary says so, and a list that has not arrived warns about the cascade without inventing a
+  number rather than claiming the summary is empty.
+
+  One helper, asserted at both call sites — the plan workspace and the activities table raise the same
+  dialog from different code, and a warning on only one of them is the same defect again.
+
+- [#193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/193) [`8f94a06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f94a06a11b5ae35775196e8e0dfdcdb95cab09d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix: assigning (or clearing) an activity's WBS summary now triggers the same auto-recalculate every
+  other structural edit already gets.
+
+  The auto-recalc coalescer decides whether to fire from a scheduling-input fingerprint built from
+  each activity's duration, type and constraint — `parentId` was missing from it, so reparenting an
+  activity under a WBS summary (or moving it back to top-level) never participated. The summary's
+  rollup dates would then sit stale until an unrelated edit, or a manual Recalculate, happened to run
+  one. `parentId` now joins the fingerprint.
+
 ## 0.59.0
 
 ### Minor Changes
