@@ -1,5 +1,5 @@
 import type { LensPalette } from './lenses';
-import type { ResourceStripPalette, TsldPalette } from './paint';
+import type { ResourceStripPalette, TsldPalette, WbsBandPalette } from './paint';
 
 /**
  * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006),
@@ -277,5 +277,30 @@ export function lensLegendVarPalette(): LensPalette {
       v('--color-warning-foreground'),
       v('--color-warning-foreground'),
     ],
+  };
+}
+
+/**
+ * Resolve the **WBS band** layer's palette from the design tokens (ADR-0063), re-resolved on the
+ * shared theme bump like the scene's and the strip's — Canvas 2D `fillStyle` cannot take a
+ * `var()`, so the tokens are read once per theme rather than per frame.
+ *
+ * `derived` is deliberately a different token from `bar`: the Unassigned bucket is the app
+ * observing that some work has no grouping, not a grouping the planner made, and the two should
+ * not read as the same kind of object. It is the muted token rather than a tint of the primary,
+ * so the difference survives a theme switch instead of depending on one theme's contrast.
+ */
+export function resolveWbsBandPalette(root: Element = document.documentElement): WbsBandPalette {
+  const styles = getComputedStyle(root);
+  const token = (name: string, fallback: string): string => {
+    const value = styles.getPropertyValue(name).trim();
+    return value || fallback;
+  };
+  return {
+    bar: token('--color-primary', '#3b6fbf'),
+    derived: token('--color-muted-foreground', '#7a8090'),
+    rule: token('--color-border', '#2a2f3a'),
+    label: token('--color-primary-foreground', '#ffffff'),
+    selection: token('--color-ring', '#8ab4f8'),
   };
 }

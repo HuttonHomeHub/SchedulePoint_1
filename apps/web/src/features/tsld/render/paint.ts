@@ -54,6 +54,7 @@ import {
 } from './render-model';
 import { bucketBarsFromDays, type ResourceStripSnapshot } from './resource-strip';
 import { calendarBoundaries } from './time-scale';
+import type { WbsBandBar } from './wbs-band';
 
 /**
  * Session-lived width memo for label text (font is fixed, so keyed by string alone). Held at
@@ -2022,6 +2023,80 @@ export function paintResourceStrip(
     ctx.textAlign = 'left';
     ctx.fillStyle = palette.tick;
     ctx.fillText(formatStripUnits(snapshot.max), LABEL_PAD_PX, 2);
+  }
+}
+
+/**
+ * The WBS band layer's palette (ADR-0063) — resolved concrete colours, re-resolved on the shared
+ * theme bump exactly as the scene's and the strip's are. `bar` is a real summary's fill, `derived`
+ * the Unassigned bucket's (visibly different, because one is a thing in the plan and the other is
+ * an observation about it), `rule` the separating hairline, `label` the ink, `selection` the
+ * selected summary's outline.
+ */
+export interface WbsBandPalette {
+  bar: string;
+  derived: string;
+  rule: string;
+  label: string;
+  selection: string;
+}
+
+/**
+ * Paint the **WBS band** (ADR-0063) — the fourth Canvas 2D layer, on its own top-pinned canvas
+ * above the scene. Placement comes entirely from `wbsBandBars`, which shares the scene's
+ * `screenXOfDay`/`daysBetween`, so the band's columns cannot drift from the diagram's.
+ *
+ * O(rendered bars + 1) per frame — typically under 50 against the scene's 2,000. The label is
+ * guarded on `fillText`/`measureText` like the strip's, so the minimal test context never throws.
+ */
+export function paintWbsBand(
+  ctx: Ctx2D,
+  bars: readonly WbsBandBar[],
+  selectedId: string | null,
+  band: Size,
+  palette: WbsBandPalette,
+  dpr = 1,
+): void {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, band.width, band.height);
+
+  // A hairline at the band's foot separates it from the scene — a structural divider, so it is
+  // drawn whether or not there are bars, and never carries meaning by colour alone.
+  ctx.fillStyle = palette.rule;
+  ctx.fillRect(0, band.height - 1, band.width, 1);
+
+  const measure =
+    typeof ctx.measureText === 'function' ? (t: string) => ctx.measureText(t).width : null;
+  if (measure !== null) {
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+  }
+
+  for (const bar of bars) {
+    // The derived bucket reads differently from a real summary on purpose: one is a grouping the
+    // planner made, the other is the app observing that some work has no grouping at all.
+    ctx.fillStyle = bar.id === null ? palette.derived : palette.bar;
+    if (beginRoundedRect(ctx, { x: bar.x, y: bar.y, w: bar.w, h: bar.h }, 3)) ctx.fill();
+    else ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
+
+    if (bar.id !== null && bar.id === selectedId) {
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.strokeRect(bar.x + 0.5, bar.y + 0.5, bar.w - 1, bar.h - 1);
+    }
+
+    // Labels are the band's whole point — a bar with no name says only "something happens here" —
+    // but a label wider than its bar would run into the next one, so it is truncated to fit and
+    // dropped entirely when there is no room for even an ellipsis.
+    if (measure === null || typeof ctx.fillText !== 'function') continue;
+    const maxPx = bar.w - LABEL_PAD_PX * 2;
+    if (maxPx <= 0) continue;
+    const text = truncateToWidth(bar.label, maxPx, measure);
+    if (text.length === 0) continue;
+    ctx.fillStyle = palette.label;
+    ctx.fillText(text, bar.x + LABEL_PAD_PX, bar.y + bar.h / 2);
   }
 }
 
