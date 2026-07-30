@@ -986,8 +986,18 @@ When operating in this repo, Claude Code should:
    you change architecture, standards, or process.
 6. **Never commit secrets**, disable TLS verification, or weaken security/a11y
    gates to make CI pass.
-7. **Run `pnpm lint && pnpm typecheck && pnpm test`** (as applicable) before
-   declaring work done, and report failures honestly.
+7. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
+   push" — `pnpm lint && pnpm typecheck && pnpm test`, **plus
+   `scripts/e2e-local.sh api` when you touched `apps/api`, plus
+   `scripts/e2e-local.sh web:<suite>` when you added or changed a flag-on
+   Playwright suite** — before declaring work done, and report failures
+   honestly. The e2e half is not optional and not "CI's job": a journey runs
+   against a real browser and a real API, so no unit suite can tell you a
+   locator, an accessible name or a collapsed panel is wrong. Omitting it cost
+   five CI rounds on the ADR-0063 enablement journey, every failure in the test
+   rather than the product, every one visible in the first local run. **A local
+   database is available and always has been** — that gap was a process gap, not
+   a tooling one.
 8. **Use Conventional Commits** and add a changeset for user-visible change.
    Meet the Feature Completion Criteria (§21) before calling work done.
 
@@ -1049,7 +1059,10 @@ and `implementation-plan.md` (stage 5). A worked example is in
 
 **Feature Completion Criteria (Definition of Done):** code, tests, docs, security
 review, performance, accessibility, Docker build, CI green, changelog/changeset,
-and version-impact assessed — mirrored in the PR template.
+and version-impact assessed — mirrored in the PR template. "Tests" means the
+[pre-push gate](docs/TESTING.md) has been **run**, including the e2e half where
+the change touches `apps/api` or a flag-on journey — not that tests exist. CI is
+the second opinion, never the first.
 
 **Change management:** architectural changes require an ADR (problem, options,
 choice, trade-offs, consequences). **Repository maintenance:** run the

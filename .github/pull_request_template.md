@@ -33,6 +33,7 @@ Spec / plan:
 
 - [ ] **Code** implemented to the approved design/architecture
 - [ ] **Tests** completed (unit + integration/API + e2e/a11y as applicable; coverage not regressed)
+- [ ] **Pre-push gate run locally** — lint/typecheck/test, plus `scripts/e2e-local.sh api` if `apps/api` changed and `scripts/e2e-local.sh web:<suite>` if a flag-on journey was added or changed ([docs/TESTING.md](../docs/TESTING.md))
 - [ ] **Documentation** updated (`docs/`, `README`, `CLAUDE.md`, ADRs)
 - [ ] **Security** reviewed (authN/Z, permission + resource scope, validation, secrets)
 - [ ] **Performance** considered (queries/N+1, pagination, caching/async where justified)
