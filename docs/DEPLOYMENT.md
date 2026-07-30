@@ -20,6 +20,26 @@ flowchart TD
   C -- no --> J[No release]
 ```
 
+### Order of operations, and the step that is always forgotten
+
+1. **Green CI first, then merge.** Squash-merge with a Conventional Commit title.
+2. **Reset your branch from `main` before touching anything else** —
+   `git fetch origin main && git checkout -B <branch> origin/main`. This is step
+   2, not step 5: a squash replaces your commits with one new commit, so a
+   branch that carries on from its old tip holds history `main` will never
+   contain. The next PR from it is unmergeable, and because GitHub cannot
+   compute a merge ref **CI never starts** — so it reads as waiting for checks
+   that will never arrive. Full reasoning in `CLAUDE.md` §8; this has bitten the
+   long-lived agent branch twice.
+3. **Let the Release workflow open the "Version Packages" PR**, then merge it.
+   That PR has **no checks** — a `GITHUB_TOKEN` push cannot trigger a workflow —
+   which is expected, not a fault.
+4. **The same run publishes the images.** Do not go looking for a separate
+   `docker-publish.yml` run; a reusable-workflow call appears as a job of the
+   caller's run (see §11 of `CLAUDE.md`).
+5. **Reset from `main` again after the version PR merges** — it is a merge like
+   any other, and step 2 applies to it too. This is the one that gets skipped.
+
 ## Versioning
 
 - **Semantic Versioning**, driven by **Changesets**. Contributors add a

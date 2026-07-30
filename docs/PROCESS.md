@@ -168,6 +168,15 @@ A feature is complete **only** when all hold:
 - ✓ **Code implemented** to the approved design
 - ✓ **Tests completed** (unit + integration/API + e2e/a11y as applicable; ≥ 80%
   on changed code; regression test for any bug fixed)
+- ✓ **The pre-push gate was run, not just written** — `pnpm lint && pnpm
+typecheck && pnpm test`, plus `scripts/e2e-local.sh api` for an `apps/api`
+  change and `scripts/e2e-local.sh web:<suite>` for a new or changed flag-on
+  journey (see [`docs/TESTING.md`](TESTING.md) "Before you push"). **CI is the
+  second opinion, never the first.** A journey drives a real browser against a
+  real API, so no unit suite can catch a wrong locator, a control whose
+  accessible name differs from the assumption, or a panel that is collapsed
+  under the flags that suite sets — and each of those costs a full CI cycle to
+  learn.
 - ✓ **Documentation updated** (docs/, ADRs, READMEs)
 - ✓ **Security reviewed** (security-reviewer: authN/Z, scope/IDOR, validation,
   secrets)

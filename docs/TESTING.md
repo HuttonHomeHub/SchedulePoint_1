@@ -201,6 +201,47 @@ pnpm --filter @repo/api test:e2e     # API HTTP e2e (Supertest, needs Postgres)
 pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 ```
 
+## Before you push
+
+**Run the gate that matches what you changed, in this order.** Each step is
+cheaper than the one after it and than the CI round-trip it replaces, so a
+failure should surface at the earliest step that can see it.
+
+| #   | Run                                | When                                                                                 |
+| --- | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| 1   | `pnpm lint && pnpm typecheck`      | always                                                                               |
+| 2   | `pnpm test`                        | always                                                                               |
+| 3   | `scripts/e2e-local.sh api`         | you touched `apps/api` — service, controller, DTO, schema or migration               |
+| 4   | `scripts/e2e-local.sh web:<suite>` | you **added or changed** a flag-on Playwright suite, or changed a surface one drives |
+
+`scripts/e2e-local.sh` brings up Postgres, creates the `app` role and `app_test`
+database **with the same credentials CI uses**, applies migrations, finds the
+sandbox Chromium, and runs the targets you name. It is idempotent, so re-running
+costs a few seconds. `--db-only` stops after the database if you want to drive
+the suites yourself.
+
+```bash
+scripts/e2e-local.sh                 # database + API e2e (the default gate)
+scripts/e2e-local.sh web:wbs         # one flag-on suite, from cold, ~30s
+scripts/e2e-local.sh api web:gantt   # both
+```
+
+**Step 4 is not optional for a new suite.** A flag-on journey is written against
+a real browser and a real API, so nothing in steps 1–3 can tell you a locator is
+wrong, a control's accessible name is different from what you assumed, or a
+panel you are querying is collapsed. This is not hypothetical: the ADR-0063
+enablement journey went through **five** CI rounds on defects in the journey
+itself — a page-size cap that made the probe read an error envelope, a table that
+lives in a collapsible panel under the flags that suite sets, a button labelled
+`Diagram` that the spec called `TSLD`, and an ambiguous `role="status"` query.
+Every one was visible in the first local run and none was visible without one.
+Two of them were also masked by assertion order — see the rule below.
+
+**Assert presence before absence.** `toHaveCount(0)` is satisfied by a surface
+that never rendered, so an absence assertion placed first will pass for the
+wrong reason and push the failure somewhere unrelated. Prove the surface is
+there, then prove the thing you expect to be missing is missing.
+
 ## CI
 
 Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
