@@ -16,7 +16,7 @@ import {
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
-import type { EditIntent, LoeSpanStep } from '../interaction/gesture-machine';
+import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
@@ -70,6 +70,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
@@ -486,6 +487,31 @@ export function TsldPanel({
       hadStart ? 'Level of effort (hammock) cancelled.' : 'Level of effort (hammock) tool closed.',
     );
   }, [mode, announce, setLoeStartId]);
+
+  /**
+   * Announce the **Add** and **Link** tools arming and disarming (ADR-0064 T3, WCAG 4.1.3).
+   *
+   * The canvas is `aria-hidden` (ADR-0026 D7), so a tool change is otherwise conveyed only by the
+   * toolbar label — visible, and silent to anyone not looking at it. Which tool is armed decides
+   * what the next canvas click *means*, so it is exactly the state change that must not be silent.
+   * `loe` is excluded because the effect above already speaks its richer prompt; announcing here as
+   * well would say two different things about the same transition.
+   */
+  const announcedModeRef = useRef<EditMode>(mode);
+  useEffect(() => {
+    const previous = announcedModeRef.current;
+    if (previous === mode) return;
+    announcedModeRef.current = mode;
+    if (mode === 'add-activity') {
+      announce(
+        `Add ${ACTIVITY_TYPE_LABELS[createType].toLowerCase()}: click the diagram to draw. Escape to stop.`,
+      );
+    } else if (mode === 'link') {
+      announce(`Link ${linkType}: click the predecessor, then the successor. Escape to stop.`);
+    } else if (previous === 'add-activity' || previous === 'link') {
+      announce('Tool closed. Select mode.');
+    }
+  }, [mode, announce, createType, linkType]);
 
   /**
    * The pinned WBS band (ADR-0063). Derived HERE rather than inside the canvas because

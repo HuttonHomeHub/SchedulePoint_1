@@ -259,12 +259,19 @@ function MenuSection({ children }: { children: React.ReactNode }): React.ReactEl
 
 /**
  * The **Add split-button** (ADR-0032 M4) — the canvas-first replacement for the plain "Add activity"
- * toggle. An APG menu-button: the trigger arms/labels the current draw kind and opens a `Menu` to
- * pick Task / Start-milestone / Finish-milestone; picking one arms add-mode with that kind (the
- * canvas then collapses milestone draws to a zero-duration point). While adding, the menu also offers
- * "Stop adding" so the mode is leaveable from the toolbar, not only via Escape on the canvas. Pen-gated
- * as one focusable control (spreads `itemProps`), so it stays a single roving-tabindex stop and the
- * whole authoring group disables together when the pen isn't held.
+ * toggle. A **true** split button (ADR-0064 T3, matching {@link LinkControl}): the primary region
+ * arms and disarms the tool with the current draw kind; the caret opens the `Menu` to pick Task /
+ * Start-milestone / Finish-milestone, and picking one still arms with that kind (the canvas then
+ * collapses milestone draws to a zero-duration point).
+ *
+ * The primary region became a toggle because the two adjacent authoring controls otherwise did
+ * different things on the same click: Link armed its tool, Add opened a menu. That is the shape the
+ * epic's founding defect took — a planner who believes a tool is armed and is wrong is one click
+ * from an edit they did not intend — so the arm/disarm contract is uniform across every tool rather
+ * than per control. "Stop adding" stays in the menu as the second route out.
+ *
+ * Pen-gated as one focusable control (the primary carries `itemProps`), so it stays a single
+ * roving-tabindex stop and the whole authoring group disables together when the pen isn't held.
  */
 function AddActivityControl({
   ctx,
@@ -289,33 +296,63 @@ function AddActivityControl({
   // Flag-off (`CANVAS_ACTIVITY_TYPES` dark) the LOE tool is unreachable, so `isLoeSpanning` is never true
   // and the label/active reflection collapses to today's plain "Add", byte-for-byte.
   const loeTooFew = ctx.loeSpanActivityCount < 2;
+  const armed = ctx.isAddingActivity || ctx.isLoeSpanning;
+  // The primary region's action, which follows whichever tool this control currently reflects: it
+  // arms Add when nothing is armed, and disarms whatever IS armed. Routing an armed LOE through
+  // `toggleAddActivity` would swap one armed tool for another — a trigger that reads "Pick start
+  // driver" and, when pressed, starts drawing bars instead.
+  const toggleArmed = ctx.isLoeSpanning ? ctx.toggleLoeSpanMode : ctx.toggleAddActivity;
   return (
     <>
-      <button
-        {...api.itemProps}
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-disabled={disabled || undefined}
-        title={disabled ? ADD_DISABLED_REASON : undefined}
-        onClick={() => {
-          if (!disabled) toggle();
-        }}
-        className={cn(
-          toolbarControlVariants({
-            active: ctx.isAddingActivity || ctx.isLoeSpanning || open,
-            disabled,
-          }),
-        )}
+      <span
+        className={cn(toolbarControlVariants({ active: armed || open, disabled }), 'gap-0 p-0')}
       >
-        <Plus aria-hidden="true" className="size-4" />
-        <span className="truncate">{triggerLabel}</span>
-        {/* The split look, not a split button — see `toolbarSplitCaretVariants`. */}
-        <span className={toolbarSplitCaretVariants()}>
+        <button
+          {...api.itemProps}
+          type="button"
+          aria-pressed={armed}
+          aria-disabled={disabled || undefined}
+          title={
+            disabled
+              ? ADD_DISABLED_REASON
+              : ctx.isLoeSpanning
+                ? 'Stop the level-of-effort pick'
+                : ctx.isAddingActivity
+                  ? 'Stop adding'
+                  : `Add ${activeLabel.toLowerCase()}`
+          }
+          onClick={() => {
+            if (!disabled) toggleArmed();
+          }}
+          onKeyDown={(e) => {
+            // ArrowDown from the primary opens the type menu and moves into it, so the caret needs
+            // no tab stop of its own (APG split button) — mirroring `LinkControl`.
+            if (e.key === 'ArrowDown' && !disabled) {
+              e.preventDefault();
+              toggle();
+            }
+          }}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          <span className="truncate">{triggerLabel}</span>
+        </button>
+        <button
+          ref={triggerRef}
+          type="button"
+          tabIndex={-1}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-disabled={disabled || undefined}
+          aria-label={`Activity type: ${activeLabel}`}
+          onClick={() => {
+            if (!disabled) toggle();
+          }}
+          className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
+        >
           <ChevronDown aria-hidden="true" className="size-3.5" />
-        </span>
-      </button>
+        </button>
+      </span>
       <Menu
         open={open}
         onClose={close}

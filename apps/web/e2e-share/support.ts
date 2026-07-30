@@ -69,9 +69,9 @@ export async function drawActivity(
   name: string,
   pos: { x: number; y: number },
 ): Promise<void> {
-  // The Add split-button reads "Add" / "Adding <kind>"; anchor the regex so it doesn't also match
-  // the inline "Add note" placeholder that may share the row (Playwright name matching is substring).
-  await page.getByRole('button', { name: /^Add(ing .+)?$/ }).click();
+  // The Add control is a true split button (ADR-0064 T3): its primary region arms the tool, and the
+  // caret — located here by its `Activity type: <kind>` label — opens the kind menu.
+  await page.getByRole('button', { name: /^Activity type:/ }).click();
   await page.getByRole('menuitemradio', { name: kind }).click();
   await canvas(page).click({ position: pos });
   const form = page.getByRole('form', { name: 'Name the new activity' });

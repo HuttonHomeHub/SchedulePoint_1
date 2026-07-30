@@ -49,12 +49,68 @@ function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
   return render(doRow(context, authoringEnabled));
 }
 
+/** The Add split-button's caret — the kind menu's opener (the primary region arms the tool). */
+function addCaret(): HTMLElement {
+  return screen.getByRole('button', { name: /^Activity type:/ });
+}
+
 describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
   describe('Add split-button (M4)', () => {
-    it('opens a type menu and arms the picked kind', () => {
+    /**
+     * **The arm/disarm contract** (ADR-0064 T3). The primary region arms the tool; it used to open
+     * the kind menu and arm nothing, which left Add and its neighbour Link doing different things
+     * on the same click. On a surface where the armed tool decides what the next canvas click
+     * *means*, that difference is one click from an edit the planner did not intend.
+     */
+    it('arms add-mode from the primary region — it does not merely open the menu', () => {
+      const toggleAddActivity = vi.fn();
+      renderToolbar(ctx({ isAddingActivity: false, toggleAddActivity }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      expect(toggleAddActivity).toHaveBeenCalledOnce();
+      expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
+    });
+
+    it('disarms from the primary region while adding — the trigger is a toggle', () => {
+      const toggleAddActivity = vi.fn();
+      renderToolbar(ctx({ isAddingActivity: true, toggleAddActivity }));
+      fireEvent.click(screen.getByRole('button', { name: /^Adding/ }));
+      expect(toggleAddActivity).toHaveBeenCalledOnce();
+    });
+
+    /**
+     * The Add trigger also reflects the **LOE** tool (B4), so its toggle follows whichever tool it
+     * is currently reflecting. Routing an armed LOE through `toggleAddActivity` would swap one
+     * armed tool for another — a trigger reading "Pick start driver" that starts drawing bars.
+     */
+    it('stops the LOE pick — not add-mode — when it is reflecting the LOE tool', () => {
+      const toggleAddActivity = vi.fn();
+      const toggleLoeSpanMode = vi.fn();
+      renderToolbar(ctx({ isLoeSpanning: true, toggleAddActivity, toggleLoeSpanMode }));
+      fireEvent.click(screen.getByRole('button', { name: 'Pick start driver' }));
+      expect(toggleLoeSpanMode).toHaveBeenCalledOnce();
+      expect(toggleAddActivity).not.toHaveBeenCalled();
+    });
+
+    it('reflects the armed state with aria-pressed', () => {
+      renderToolbar(ctx({ isAddingActivity: false }));
+      expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute('aria-pressed', 'false');
+      cleanup();
+      renderToolbar(ctx({ isAddingActivity: true }));
+      expect(screen.getByRole('button', { name: /^Adding/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    it('keeps one tab stop: the caret is not tabbable', () => {
+      renderToolbar(ctx());
+      expect(addCaret()).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('opens a type menu from the caret and arms the picked kind', () => {
       const setCreateType = vi.fn();
       renderToolbar(ctx({ setCreateType }));
-      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      fireEvent.click(addCaret());
       // The three draw kinds are offered as single-choice (radio) menu items…
       fireEvent.click(screen.getByRole('menuitemradio', { name: 'Start milestone' }));
       expect(setCreateType).toHaveBeenCalledWith('START_MILESTONE');
@@ -62,7 +118,7 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
 
     it('previews Hammock / Level of effort as disabled "Span between" menu items', () => {
       renderToolbar(ctx());
-      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      fireEvent.click(addCaret());
       for (const name of ['Hammock', 'Level of effort']) {
         const item = screen.getByRole('menuitem', { name: new RegExp(name) });
         expect(item).toHaveAttribute('aria-disabled', 'true');
@@ -74,23 +130,22 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       expect(screen.getByRole('button', { name: /Adding Finish milestone/ })).toBeInTheDocument();
     });
 
-    it('offers "Stop adding" only while in add mode', () => {
+    it('offers "Stop adding" in the menu only while in add mode', () => {
       const toggleAddActivity = vi.fn();
       const { rerender } = renderToolbar(ctx({ isAddingActivity: true, toggleAddActivity }));
-      fireEvent.click(screen.getByRole('button', { name: /Adding/ }));
+      fireEvent.click(addCaret());
       fireEvent.click(screen.getByRole('menuitem', { name: 'Stop adding' }));
       expect(toggleAddActivity).toHaveBeenCalledOnce();
 
       rerender(doRow(ctx({ isAddingActivity: false })));
-      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      fireEvent.click(addCaret());
       expect(screen.queryByRole('menuitem', { name: 'Stop adding' })).not.toBeInTheDocument();
     });
 
     it('disables the split-button when the pen is not held (authoring off)', () => {
       render(doRow(ctx(), false));
-      const addButton = screen.getByRole('button', { name: 'Add' });
-      expect(addButton).toHaveAttribute('aria-disabled', 'true');
-      fireEvent.click(addButton);
+      expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(addCaret());
       // A disabled trigger never opens the menu.
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });

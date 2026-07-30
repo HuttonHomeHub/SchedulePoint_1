@@ -5,6 +5,7 @@ import {
   armAdd,
   armLink,
   canvas,
+  clearSelection,
   doToolbar,
   createHierarchy,
   dependencies,
@@ -61,6 +62,9 @@ async function pickAcross(
   second: { x: number; y: number },
   delayMs: number,
 ): Promise<PickOutcome> {
+  // Drop any selection first, so the floating selection-actions bar cannot come to rest over a
+  // point this pick is about to click (see `clearSelection`).
+  await clearSelection(page);
   await armLink(page);
   await canvas(page).click({ position: first });
   if (delayMs > 0) await page.waitForTimeout(delayMs);
@@ -227,5 +231,41 @@ test.describe('A2 — which click becomes the predecessor', () => {
     // …and nothing was drawn. Asserting only the dependency would pass on a run that ALSO created
     // two stray activities, which is the shape of the original defect.
     expect(await activityCount(page, orgSlug)).toBe(activitiesBefore);
+  });
+
+  /**
+   * **The disarm contract, where the geometry is real** (ADR-0064 T3). The component suite
+   * (`TsldPanel.disarm.test.tsx`) covers Escape from an armed-but-idle tool; it deliberately does
+   * not cover the mid-pick half, because opening a pick means driving the gesture machine through a
+   * canvas that jsdom gives no layout — the hit test would answer from a zero-sized rect, and the
+   * test would pass or fail on geometry rather than on the rule.
+   *
+   * The rule: **one** Escape drops an open link pick and leaves the tool armed (a wrong endpoint
+   * should not cost you the tool); the **next** disarms it. And Escape after a committed draw
+   * disarms Add — the case the spec recorded as broken, which is measured here rather than assumed.
+   */
+  test('Escape drops an open pick first, then the tool — and disarms Add after a draw', async () => {
+    const bars = await twoBarPlan('Disarm', 'Screed', 'Cure');
+    const add = doToolbar(page).getByRole('button', { name: /^Add(ing .+)?$/ });
+    const link = doToolbar(page).getByRole('button', { name: /^Link(ing .+)?$/ });
+
+    // Add: armed → a committed draw leaves it armed (it is sticky by design) → Escape disarms.
+    await armAdd(page, 'Task');
+    await drawTask(page, 'Joint', { x: 300, y: 300 });
+    await expect(add, 'the Add tool is sticky — a draw does not disarm it').toHaveAccessibleName(
+      /^Adding/,
+    );
+    await canvas(page).press('Escape');
+    await expect(add).toHaveAccessibleName('Add');
+
+    // Link: armed → one endpoint picked → Escape keeps the tool → Escape disarms it.
+    await armLink(page);
+    await canvas(page).click({ position: bars.first.point });
+    await canvas(page).press('Escape');
+    await expect(link, 'dropping a pick must not also drop the tool').toHaveAccessibleName(
+      /^Linking/,
+    );
+    await canvas(page).press('Escape');
+    await expect(link).toHaveAccessibleName('Link');
   });
 });

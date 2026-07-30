@@ -30,6 +30,15 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   });
 }
 
+/**
+ * The Add split-button's **caret**, which opens the kind menu. The primary region arms the tool
+ * instead (ADR-0064 T3), so a test that opened the menu by clicking the label would silently arm
+ * add-mode and assert against a menu that never opened.
+ */
+function openTypeMenu(): HTMLElement {
+  return screen.getByRole('button', { name: /^Activity type:/ });
+}
+
 function renderDoRow(context: TsldToolbarContext) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
@@ -40,7 +49,7 @@ function renderDoRow(context: TsldToolbarContext) {
 describe('TSLD toolbar — on-canvas advanced activity types (flag on)', () => {
   it('replaces the two "Soon" placeholders with ONE live "Level of Effort (hammock)" item', () => {
     renderDoRow(ctx());
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(openTypeMenu());
 
     // A single live item — no "Soon" tag, not disabled — that arms the LOE tool.
     const loe = screen.getByRole('menuitemradio', { name: /Level of Effort \(hammock\)/ });
@@ -56,7 +65,7 @@ describe('TSLD toolbar — on-canvas advanced activity types (flag on)', () => {
   it('arms the LOE endpoint-pick tool-mode when selected', () => {
     const toggleLoeSpanMode = vi.fn();
     renderDoRow(ctx({ toggleLoeSpanMode }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(openTypeMenu());
     fireEvent.click(screen.getByRole('menuitemradio', { name: /Level of Effort \(hammock\)/ }));
     expect(toggleLoeSpanMode).toHaveBeenCalledOnce();
   });
@@ -64,7 +73,7 @@ describe('TSLD toolbar — on-canvas advanced activity types (flag on)', () => {
   it('reflects the armed state as checked (aria-checked)', () => {
     renderDoRow(ctx({ isLoeSpanning: true }));
     // Armed, the trigger label is the mid-pick prompt (B4), not "Add" — open via that name.
-    fireEvent.click(screen.getByRole('button', { name: 'Pick start driver' }));
+    fireEvent.click(openTypeMenu());
     expect(
       screen.getByRole('menuitemradio', { name: /Level of Effort \(hammock\)/ }),
     ).toHaveAttribute('aria-checked', 'true');
@@ -87,7 +96,7 @@ describe('TSLD toolbar — on-canvas advanced activity types (flag on)', () => {
   it('shades the LOE item with a reason and stays inert below two activities (B5)', () => {
     const context = ctx({ loeSpanActivityCount: 1 });
     renderDoRow(context);
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(openTypeMenu());
 
     const loe = screen.getByRole('menuitemradio', { name: /Level of Effort \(hammock\)/ });
     expect(loe).toHaveAttribute('aria-disabled', 'true');

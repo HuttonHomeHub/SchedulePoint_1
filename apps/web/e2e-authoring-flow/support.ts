@@ -297,7 +297,7 @@ export async function drawTask(
   pos: { x: number; y: number },
 ): Promise<void> {
   await doToolbar(page)
-    .getByRole('button', { name: /^Add(ing .+)?$/ })
+    .getByRole('button', { name: /^Activity type:/ })
     .click();
   await page.getByRole('menuitemradio', { name: 'Task' }).click();
   await canvas(page).click({ position: pos });
@@ -325,7 +325,7 @@ export async function armAdd(
   kind: 'Task' | 'Start milestone' | 'Finish milestone',
 ): Promise<void> {
   await doToolbar(page)
-    .getByRole('button', { name: /^Add(ing .+)?$/ })
+    .getByRole('button', { name: /^Activity type:/ })
     .click();
   await page.getByRole('menuitemradio', { name: kind }).click();
   await expect(doToolbar(page).getByRole('button', { name: /^Adding/ })).toBeVisible();
@@ -364,6 +364,28 @@ export async function mapBars(page: Page): Promise<Map<string, { x: number; y: n
     if (hit !== null && !found.has(hit)) found.set(hit, { x: PROBE_X, y });
   }
   return found;
+}
+
+/**
+ * Drop any canvas selection, by clicking below the last lane.
+ *
+ * Not tidiness: a selected bar mounts the **floating selection-actions bar** over the scene
+ * (TECH_DEBT #31a), and that bar tracks the selected activity — so it can come to rest on top of a
+ * point a later step means to click. Playwright would then either refuse the click or send it to
+ * the bar, and the failure surfaces as "no dependency was created" several assertions away from
+ * its cause. One run of this suite failed in exactly that shape and did not reproduce; clearing
+ * the selection removes the mechanism whether or not it was that run's.
+ */
+export async function clearSelection(page: Page): Promise<void> {
+  // Disarm first. A canvas click only *deselects* in `select` mode; with Add armed — which it is
+  // after any draw, because the tool is deliberately sticky — the same click opens the create
+  // popover, and every later click lands on that instead. Not hypothetical: it is how this helper
+  // failed on its first run, and the screenshot showed an empty "Activity name" field sitting on
+  // top of the pick points.
+  await canvas(page).press('Escape');
+  await canvas(page).press('Escape');
+  await canvas(page).click({ position: { x: PROBE_X, y: PROBE_MAX_Y } });
+  await expect.poll(async () => await selectedActivityId(page)).toBe(null);
 }
 
 /** Look an activity up in a measured map, failing loudly — a diagnostic that silently skips a bar
