@@ -719,6 +719,144 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       return { id: res.body.data.id as string, version: res.body.data.version as number };
     }
 
+    describe('batch membership write', () => {
+      const parentsUrl = (planId: string) =>
+        `/api/v1/organizations/acme/plans/${planId}/activities/parents`;
+
+      async function task(actor: Actor, planId: string, name: string) {
+        const res = await actor.agent
+          .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+          .send({ name })
+          .expect(201);
+        return { id: res.body.data.id as string, version: res.body.data.version as number };
+      }
+
+      it('files several activities under a summary in one call and bumps their versions', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate');
+        const b = await task(actor, planId, 'Blind');
+
+        const res = await actor.agent
+          .patch(parentsUrl(planId))
+          .send({
+            parents: [
+              { id: a.id, parentId: s.id, version: a.version },
+              { id: b.id, parentId: s.id, version: b.version },
+            ],
+          })
+          .expect(200);
+
+        const byId = new Map(
+          (res.body.data as { id: string; parentId: string | null; version: number }[]).map((r) => [
+            r.id,
+            r,
+          ]),
+        );
+        expect(byId.get(a.id)).toMatchObject({ parentId: s.id, version: a.version + 1 });
+        expect(byId.get(b.id)).toMatchObject({ parentId: s.id, version: b.version + 1 });
+      });
+
+      it('clears a member back to the top level on a null parentId', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate');
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: a.id, parentId: s.id, version: a.version }] })
+          .expect(200);
+
+        const res = await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: a.id, parentId: null, version: a.version + 1 }] })
+          .expect(200);
+        expect(res.body.data[0]).toMatchObject({ id: a.id, parentId: null });
+      });
+
+      it('rejects the whole batch on one stale version, writing nothing (409)', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate');
+        const b = await task(actor, planId, 'Blind');
+
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({
+            parents: [
+              { id: a.id, parentId: s.id, version: a.version },
+              { id: b.id, parentId: s.id, version: b.version + 5 }, // stale
+            ],
+          })
+          .expect(409);
+
+        // The decisive assertion: the GOOD row did not land either.
+        const rows = await prisma.activity.findMany({ where: { id: { in: [a.id, b.id] } } });
+        expect(rows.every((r) => r.parentId === null)).toBe(true);
+        expect(rows.every((r) => r.version === 1)).toBe(true);
+      });
+
+      it('rejects a batch that is cycle-free row by row but cyclic as a whole (409)', async () => {
+        const { actor, planId } = await setup();
+        const s1 = await summary(actor, planId, 'A');
+        const s2 = await summary(actor, planId, 'B');
+
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({
+            parents: [
+              { id: s1.id, parentId: s2.id, version: s1.version },
+              { id: s2.id, parentId: s1.id, version: s2.version },
+            ],
+          })
+          .expect(409);
+
+        const rows = await prisma.activity.findMany({ where: { id: { in: [s1.id, s2.id] } } });
+        expect(rows.every((r) => r.parentId === null)).toBe(true);
+      });
+
+      it('422s a non-summary parent and 404s an activity from another plan', async () => {
+        const { actor, orgId, planId } = await setup();
+        const a = await task(actor, planId, 'Excavate');
+        const b = await task(actor, planId, 'Blind');
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: a.id, parentId: b.id, version: a.version }] })
+          .expect(422);
+
+        // A second plan in the same org: its activity is not addressable through this plan's route.
+        const project = await prisma.project.findFirstOrThrow({
+          where: { organizationId: orgId },
+        });
+        const other = await actor.agent
+          .post(`/api/v1/organizations/acme/projects/${project.id}/plans`)
+          .send({ name: 'Other', plannedStart: '2026-01-01' })
+          .expect(201);
+        const foreign = await task(actor, other.body.data.id as string, 'Elsewhere');
+        await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: foreign.id, parentId: null, version: foreign.version }] })
+          .expect(404);
+      });
+
+      it('forbids a Contributor and a Viewer (403)', async () => {
+        const { actor, orgId, planId } = await setup();
+        const a = await task(actor, planId, 'Excavate');
+        const body = { parents: [{ id: a.id, parentId: null, version: a.version }] };
+
+        const contributor = await signUp('parents-contrib@example.com');
+        await prisma.orgMember.create({
+          data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+        });
+        await contributor.agent.patch(parentsUrl(planId)).send(body).expect(403);
+
+        const viewer = await signUp('parents-viewer@example.com');
+        await prisma.orgMember.create({
+          data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+        });
+        await viewer.agent.patch(parentsUrl(planId)).send(body).expect(403);
+      });
+    });
+
     it('rejects the mirror re-parent that would close a cycle, leaving the tree acyclic', async () => {
       const { actor, planId } = await setup();
       const a = await summary(actor, planId, 'A');

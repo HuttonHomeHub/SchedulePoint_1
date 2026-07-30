@@ -221,4 +221,75 @@ export class ActivityRepository {
         AND a.deleted_at IS NULL
     `;
   }
+
+  /**
+   * The plan's WBS tree, projected to the three columns validating a membership batch needs —
+   * `id` (does this row exist here at all?), `parentId` (the edges the resulting tree is checked
+   * for cycles on) and `type` (only a `WBS_SUMMARY` may be a parent). Deliberately NOT the full
+   * rows: a batch may touch every activity in the plan, and the ~40 columns an `Activity` carries
+   * are all irrelevant to the question being asked.
+   *
+   * Unpaginated by design, and bounded by the same ceiling as the batch itself (ADR-0021/0038).
+   */
+  findPlanWbsTree(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ id: string; parentId: string | null; type: ActivityType }[]> {
+    return db.activity.findMany({
+      where: this.active({ organizationId, planId }),
+      select: { id: true, parentId: true, type: true },
+    });
+  }
+
+  /**
+   * Batch WBS membership write in ONE `unnest` statement: file each `{id, parentId, version}` under
+   * a summary (or, on a NULL `parentId`, at the top level), matching by id AND `version` (per-row
+   * optimistic lock) and re-asserting the plan/org/active scope in the WHERE — so a stale or
+   * cross-plan/cross-tenant id can never write. Bumps `version`/`updated_at`/`updated_by`. Returns
+   * rows changed; the caller compares it to the batch size and, on a shortfall, rolls the
+   * transaction back — a partial re-file never persists.
+   *
+   * Clear-to-top-level travels as `''` in a `text[]` and is turned back into NULL by `NULLIF`,
+   * rather than as a NULL in a `uuid[]`. That is not stylistic: Prisma infers a raw array's
+   * Postgres type from its CONTENTS, so an array whose entries are all null serialises as
+   * `integer[]` and the `::uuid[]` cast fails outright (`42846 cannot cast type integer[] to
+   * uuid[]`) — meaning a batch that only unfiles activities would 500 while a mixed batch worked.
+   * Every entry being a string removes the inference. One statement rather than two (nulls
+   * separately) keeps "all or nothing" inside a single round trip; same shape, and same
+   * transaction-timeout reason, as {@link ActivityRepository.updateLanePositions}.
+   *
+   * Callers MUST hold the plan advisory lock — this writes the parent tree, whose acyclicity is a
+   * read-then-write invariant (ADR-0038 (a)); see `ActivitiesService.assertValidParent`.
+   */
+  async updateParents(
+    organizationId: string,
+    planId: string,
+    parents: readonly { id: string; parentId: string | null; version: number }[],
+    updatedBy: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (parents.length === 0) return 0;
+    const ids = parents.map((p) => p.id);
+    const parentIds = parents.map((p) => p.parentId ?? '');
+    const versions = parents.map((p) => p.version);
+
+    return db.$executeRaw`
+      UPDATE activities AS a
+      SET parent_id = NULLIF(v.parent_id, '')::uuid,
+          version = a.version + 1,
+          updated_by = ${updatedBy}::text,
+          updated_at = now()
+      FROM unnest(
+        ${ids}::uuid[],
+        ${parentIds}::text[],
+        ${versions}::int[]
+      ) AS v(id, parent_id, version)
+      WHERE a.id = v.id
+        AND a.version = v.version
+        AND a.plan_id = ${planId}::uuid
+        AND a.organization_id = ${organizationId}::uuid
+        AND a.deleted_at IS NULL
+    `;
+  }
 }

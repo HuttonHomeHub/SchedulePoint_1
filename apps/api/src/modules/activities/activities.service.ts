@@ -34,6 +34,7 @@ import { ActivityRepository, type ActivityPatch } from './activity.repository';
 import type { CreateActivityDto } from './dto/create-activity.dto';
 import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import type { UpdateActivityDto } from './dto/update-activity.dto';
+import type { UpdateParentsDto } from './dto/update-parents.dto';
 import type { UpdatePositionsDto } from './dto/update-positions.dto';
 
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
@@ -652,6 +653,132 @@ export class ActivitiesService {
       where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
     });
     return { items, canReadCost };
+  }
+
+  /**
+   * Batch WBS membership write: file one or more of a plan's activities under a summary — or, on a
+   * null `parentId`, back at the top level — in a single **all-or-nothing** transaction. Every id
+   * must be an active activity in this plan+org (anti-IDOR) and still match its optimistic-lock
+   * `version`, or the whole batch is rejected and nothing moves: the semantics managing a summary's
+   * whole membership in one panel needs.
+   *
+   * Unlike the sibling lane-position write this is **structural** — `parentId` feeds the engine's
+   * WBS rollup — so a committed batch leaves the plan's computed dates stale until the next
+   * recalculation. It writes only `parentId` (plus the usual `version`/`updatedBy`), never a date;
+   * the CPM engine is not called from here.
+   *
+   * **Validation is against the RESULTING tree, not the current one.** Checking each row against
+   * the pre-batch state would accept `[A→B, B→A]`: read alone, each is filing under a childless
+   * top-level summary, and each passes. Applied together they close a cycle. So the batch is
+   * overlaid on the plan's current edges and the whole result is walked (see
+   * {@link ActivitiesService.assertNoParentCycles}) — which is also cheaper than the per-row
+   * ancestor walk, being one projected read plus O(n) rather than O(rows × depth) queries.
+   */
+  async updateParents(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    dto: UpdateParentsDto,
+  ): Promise<{ items: Activity[]; canReadCost: boolean }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
+    await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
+    await this.editLock.assertHoldsPen(principal, planId, organization.id);
+
+    const rows = dto.parents.map((p) => ({ ...p, parentId: p.parentId ?? null }));
+    const ids = rows.map((r) => r.id);
+    if (new Set(ids).size !== ids.length) {
+      throw new ValidationError('Each activity may appear at most once in a parents batch.', {
+        reason: 'DUPLICATE_PARENT_ID',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // The parent tree's acyclicity is a read-then-write invariant (ADR-0038 (a)) — serialise it
+      // per plan, exactly as the single-activity re-parent path does.
+      await acquirePlanWriteLock(tx, planId);
+
+      // ONE projected read of the plan's tree serves every check below: membership (is this id even
+      // in this plan?), the summary-only-parent rule, and the resulting-tree cycle walk.
+      const tree = await this.activities.findPlanWbsTree(organization.id, planId, tx);
+      const byId = new Map(tree.map((a) => [a.id, a]));
+
+      for (const row of rows) {
+        // A cross-plan / foreign / deleted / unknown id reads as 404, leaking nothing.
+        if (!byId.has(row.id)) throw new NotFoundError('Activity not found in this plan.');
+        if (row.parentId === null) continue;
+        if (row.parentId === row.id) {
+          throw new ValidationError('An activity cannot be its own WBS parent.', {
+            reason: 'PARENT_CYCLE',
+          });
+        }
+        const parent = byId.get(row.parentId);
+        if (!parent) throw new NotFoundError('Parent activity not found.');
+        if (parent.type !== 'WBS_SUMMARY') {
+          throw new ValidationError('A WBS parent must be a summary activity.', {
+            reason: 'PARENT_NOT_SUMMARY',
+          });
+        }
+      }
+
+      // Overlay the batch on the plan's current edges and prove the RESULT is a forest.
+      const resulting = new Map(tree.map((a) => [a.id, a.parentId]));
+      for (const row of rows) resulting.set(row.id, row.parentId);
+      this.assertNoParentCycles(resulting);
+
+      // One set-based UPDATE keyed by id+version and re-asserting plan/org/active scope: a stale or
+      // cross-plan/tenant id simply doesn't match and isn't written. All-or-nothing is the count
+      // check below — a shortfall rolls the whole (possibly partial) UPDATE back.
+      const updated = await this.activities.updateParents(
+        organization.id,
+        planId,
+        rows,
+        principal.userId,
+        tx,
+      );
+      if (updated !== rows.length) {
+        // Every id was proven present in the plan above and nothing else writes under this lock, so
+        // a shortfall here can only be a version mismatch.
+        throw new ConflictError(
+          'This plan changed since you opened it — nothing was moved. Refresh and try again.',
+        );
+      }
+    });
+
+    this.logger.info(
+      { organizationId: organization.id, planId, userId: principal.userId, count: ids.length },
+      'activity WBS parents updated',
+    );
+
+    // Return the moved rows with their fresh versions so the client can reconcile optimistic state.
+    const items = await this.prisma.activity.findMany({
+      where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+    });
+    return { items, canReadCost };
+  }
+
+  /**
+   * Prove a `child → parent` map is a forest. Walks up from each node, marking nodes proven
+   * cycle-free so the whole check is O(n) however deep the tree; a node reached twice within one
+   * walk closes a loop. Operates on the map alone — no queries — so the caller can hand it a
+   * hypothetical (post-batch) tree rather than the persisted one.
+   */
+  private assertNoParentCycles(parentOf: ReadonlyMap<string, string | null>): void {
+    const safe = new Set<string>();
+    for (const start of parentOf.keys()) {
+      if (safe.has(start)) continue;
+      const walked = new Set<string>();
+      let node: string | null = start;
+      while (node !== null && !safe.has(node)) {
+        if (walked.has(node)) {
+          throw new ConflictError('That would create a WBS cycle.', { reason: 'PARENT_CYCLE' });
+        }
+        walked.add(node);
+        node = parentOf.get(node) ?? null;
+      }
+      for (const seen of walked) safe.add(seen);
+    }
   }
 
   /**
