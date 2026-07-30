@@ -208,6 +208,12 @@ export interface TsldViewToggles {
    * every existing caller/fixture stays valid; the default below is a plain literal, not a flag
    * read, so this module stays flag-free. */
   monthBands?: boolean;
+  /** The pinned **WBS band** across the top of the canvas (ADR-0063, `VITE_WBS_IMPROVEMENTS`).
+   * Default **off**: the band takes canvas height, and ADR-0031's canvas-maximal layout is not a
+   * decision this may quietly reverse for every existing plan. A plain boolean here — the pure
+   * painter module never imports a flag; the host composes the gate. Optional ⇒ absent/false ⇒ no
+   * band is reserved, mounted or painted (the parity path). */
+  wbsBand?: boolean;
 }
 
 /** All view layers on — the default before the user toggles anything (the Late overlay starts off). */

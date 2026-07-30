@@ -87,6 +87,7 @@ import {
   SCHEDULING_MODES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
+  WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { cn } from '@/lib/utils';
@@ -132,6 +133,7 @@ const VIEW_TOGGLE_META: Record<
     label: 'Month bands',
     enabled: CANVAS_VISUAL_LANGUAGE_ENABLED,
   },
+  wbsBand: { group: 'structure', label: 'WBS band', enabled: WBS_IMPROVEMENTS_ENABLED },
   today: { group: 'markers', label: 'Today line' },
   nonWorking: { group: 'markers', label: 'Non-working' },
   labels: { group: 'markers', label: 'Labels' },

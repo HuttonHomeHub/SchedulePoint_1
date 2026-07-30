@@ -83,10 +83,19 @@ With the band on, `WBS_SUMMARY` activities within the rendered depth are drawn i
 different sizes, which is how a planner comes to believe a summary has two sets of dates.
 
 The load-bearing consequence is accessibility, not pixels. The scene's parallel DOM layer
-(ADR-0026 D7) is the only way an AT user reaches a bar, so a summary leaving the scene must
-**move** into the band's DOM group, never simply stop being rendered. The invariant is stated
-as a test rather than a paragraph: **the count of AT-reachable activities does not change
-across the toggle.**
+(ADR-0026 D7) is the only way an AT user reaches a bar, so a summary leaving the scene must not
+stop being reachable. The invariant is stated as a test rather than a paragraph: **the count of
+AT-reachable activities does not change across the toggle.**
+
+An earlier draft of this decision said the summaries should **move** into a DOM group of the
+band's own. Building it showed that to be the worse of the two options, so it is not what
+shipped. The listbox is driven by the plan's activities, not by what the scene paints, so
+excluding a summary from the paint cannot remove it from the accessibility tree — the invariant
+holds **by construction**, with no second list to keep in step and no window in which a summary
+could exist in neither. A separate band group would have had to be built, ordered and
+de-duplicated against the first, and every one of those is a way to lose a row. The test stays,
+because "by construction" describes today's code rather than promising anything about
+tomorrow's.
 
 ### 5. `RULER_HEIGHT` stops being the scene's top offset
 

@@ -862,8 +862,10 @@ test:e2e:library`, its own CI step) proving the tier boundary and the archive-is
   band's height data-dependent, taking the canvas away a row at a time). Summaries **leave the
   scene** when the band is on, so the invariant that matters is stated as a test rather than a
   paragraph: **the count of AT-reachable activities does not change across the toggle** —
-  ADR-0026 D7's hand-built DOM layer is the only way an AT user reaches a bar, so a summary must
-  **move**, never simply stop rendering. The specific thing most likely to break is quiet:
+  ADR-0026 D7's hand-built DOM layer is the only way an AT user reaches a bar. Building it showed
+  the drafted "move them to a band DOM group" to be the worse option and it is not what shipped:
+  the listbox reads the plan's activities rather than what the scene paints, so the invariant
+  holds **by construction**, with no second list to keep in step. The specific thing most likely to break is quiet:
   three features (`create popover`, cursor readout, drag ghosts) convert canvas-y to container-y
   by adding `RULER_HEIGHT`, correct only while the ruler is the sole thing above the scene — so
   that constant becomes one derived `sceneTopOffset` routed through every call site, with its own

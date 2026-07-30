@@ -51,6 +51,7 @@ import { drawnSpanPlacement, snapToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
+import { wbsBandDepths, wbsBandHeight } from '../render/wbs-band';
 import {
   SelectionActionsBar,
   type SelectionActionContext,
@@ -60,7 +61,7 @@ import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsl
 
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
-import { RULER_HEIGHT, TsldCanvas, type PendingGhost } from './TsldCanvas';
+import { sceneTopOffset, TsldCanvas, type PendingGhost } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
 import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
@@ -69,6 +70,8 @@ import { TsldViewControls } from './TsldViewControls';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import { wbsBandGroups } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
@@ -485,9 +488,42 @@ export function TsldPanel({
     );
   }, [mode, announce, setLoeStartId]);
 
+  /**
+   * The pinned WBS band (ADR-0063). Derived HERE rather than inside the canvas because
+   * `features/tsld` imports no other feature (ADR-0026 D8) and the group model lives in
+   * `features/wbs` — the host composes the two. `null` when the toggle is off, which is what makes
+   * `wbsBandHeightPx` 0, `measure()` subtract nothing and no band canvas mount.
+   *
+   * `wbsBandHeightPx` is derived once and used by BOTH the canvas (its reservation) and the create
+   * popover (its container-y conversion, via the shared `sceneTopOffset`). Two derivations of the
+   * same number is exactly how the popover would come to open above where the user clicked.
+   */
+  const wbsBandActive = WBS_IMPROVEMENTS_ENABLED && (viewToggles.wbsBand ?? false);
+  const wbsBandGroupRows = useMemo(
+    () => (wbsBandActive ? wbsBandGroups(activities, { source: barDateSource }) : null),
+    [wbsBandActive, activities, barDateSource],
+  );
+  const wbsBandHeightPx =
+    wbsBandGroupRows === null ? 0 : wbsBandHeight(wbsBandDepths(wbsBandGroupRows));
+
+  /**
+   * The scene's activities. With the band on, summaries are drawn IN the band and not in the scene
+   * (ADR-0063 §4) — drawing them in both would put one object on screen twice at two sizes, which
+   * is how a planner comes to believe a summary has two sets of dates.
+   *
+   * The a11y invariant this has to respect is that a summary must still be **reachable**. It is,
+   * by construction rather than by a second DOM group: the parallel listbox below is driven by
+   * `activities`, not by this, so excluding a summary from the paint cannot remove it from the
+   * accessibility tree. A test pins the count across the toggle anyway, because "by construction"
+   * is a property of today's code and not a promise about tomorrow's.
+   */
+  const sceneActivities = useMemo(
+    () => (wbsBandActive ? activities.filter((a) => a.type !== 'WBS_SUMMARY') : activities),
+    [wbsBandActive, activities],
+  );
   const renderActivities = useMemo(
-    () => toRenderActivities(activities, barDateSource),
-    [activities, barDateSource],
+    () => toRenderActivities(sceneActivities, barDateSource),
+    [sceneActivities, barDateSource],
   );
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
   // The listbox option text (Tier-1 `describeActivity`) is memoised by activity, keyed on
@@ -1472,6 +1508,9 @@ export function TsldPanel({
               resourceStrip={resourceStrip}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
+              wbsBandGroups={wbsBandGroupRows}
+              wbsBandHeightPx={wbsBandHeightPx}
+              {...(onSelectionChange ? { onSelectBandSummary: onSelectionChange } : {})}
               {...(selectionActionsWired ? { selectionAnchorRef } : {})}
               pending={
                 pendingCreate
@@ -1488,9 +1527,12 @@ export function TsldPanel({
               <CreateActivityPopover
                 x={pendingCreate.anchor.x}
                 // The anchor is canvas-relative; the popover is positioned against the outer
-                // container, which the ruler band offsets by RULER_HEIGHT — add it back so the
-                // popover lands at the drop point, not RULER_HEIGHT above it.
-                y={pendingCreate.anchor.y + RULER_HEIGHT}
+                // container. `sceneTopOffset` is the ONE definition of how far down the scene
+                // starts (ADR-0063 §5) — the ruler, plus the WBS band when it is on. Writing
+                // `RULER_HEIGHT` here was correct only while the ruler was the sole thing above
+                // the scene, and its failure mode is quiet: the popover opens above the drop point
+                // and everything else still looks right.
+                y={pendingCreate.anchor.y + sceneTopOffset(wbsBandHeightPx)}
                 saving={pendingCreate.saving}
                 error={pendingCreate.error}
                 onCommit={commitCreate}

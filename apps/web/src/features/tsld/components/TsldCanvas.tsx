@@ -19,6 +19,7 @@ import {
   paintInteractionLayer,
   paintResourceStrip,
   paintScene,
+  paintWbsBand,
   type GhostDetail,
   type InteractionOverlay,
   type LagOverlay,
@@ -26,10 +27,15 @@ import {
   type ResizeOverlay,
   type ResourceStripPalette,
   type TsldPalette,
+  type WbsBandPalette,
   type TsldScene,
   type TsldViewToggles,
 } from '../render/paint';
-import { resolveResourceStripPalette, resolveTsldPalette } from '../render/palette';
+import {
+  resolveResourceStripPalette,
+  resolveTsldPalette,
+  resolveWbsBandPalette,
+} from '../render/palette';
 import {
   activityRect,
   addCalendarDays,
@@ -66,6 +72,12 @@ import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement } from '../render/snap';
 import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
 import { useThemeVersion } from '../render/use-theme-version';
+import {
+  wbsBandBars,
+  wbsBandHitTest,
+  type WbsBandBar,
+  type WbsBandGroup,
+} from '../render/wbs-band';
 import type { SelectionAnchor } from '../toolbar/selection-actions';
 
 import {
@@ -109,6 +121,20 @@ export const RULER_HEIGHT = 40;
  * subtracts this from the scene canvas's drawable height, exactly as `RULER_HEIGHT` is subtracted from
  * the top; when inactive it reserves nothing, so the scene is byte-for-byte today's (the parity gate). */
 export const RESOURCE_STRIP_HEIGHT = 72;
+
+/**
+ * The scene canvas's top offset inside the container — **the one definition** (ADR-0063 §5).
+ *
+ * It used to be `RULER_HEIGHT` written out at each call site, which was correct only while the
+ * ruler was the sole thing above the scene. The WBS band breaks that assumption, and it breaks it
+ * quietly: the band renders, the canvas looks right, and the create popover opens forty pixels
+ * above where the user clicked. So every conversion from a canvas-relative y to a container y now
+ * goes through here, and `wbsBandHeightPx` is `0` whenever the band is off — which makes the
+ * flag-off path byte-for-byte `RULER_HEIGHT`, the parity gate.
+ */
+export function sceneTopOffset(wbsBandHeightPx: number): number {
+  return RULER_HEIGHT + wbsBandHeightPx;
+}
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
@@ -226,6 +252,19 @@ export interface TsldCanvasProps {
    * `null` when it has no drawn position / is off-screen / the surface is hidden), so the floating
    * {@link SelectionActionsBar} can follow the canvas without per-frame React state (ADR-0026 D3). */
   selectionAnchorRef?: React.RefObject<SelectionAnchor | null>;
+  /**
+   * The pinned WBS band (ADR-0063): the groups to draw, or `null` when the band is off. The host
+   * derives them (`features/wbs`) because the tsld feature imports no other feature (ADR-0026 D8).
+   */
+  wbsBandGroups?: readonly WbsBandGroup[] | null;
+  /**
+   * The band's reserved height in px — **`0` when the band is off**, which is what makes
+   * `measure()` subtract nothing and the scene byte-for-byte today's. Derived by the host from the
+   * same groups, so this component and the create popover cannot disagree about the offset.
+   */
+  wbsBandHeightPx?: number;
+  /** Selecting a summary from a band bar. Never called for the derived bucket, which has no id. */
+  onSelectBandSummary?: (activityId: string) => void;
 }
 
 /** Approximate popover footprint (w-56 + fields) used to keep it inside the canvas. */
@@ -522,6 +561,9 @@ export function TsldCanvas({
   controlRef,
   onZoomStopChange,
   selectionAnchorRef,
+  wbsBandGroups = null,
+  wbsBandHeightPx = 0,
+  onSelectBandSummary,
 }: TsldCanvasProps): React.ReactElement {
   // The painter draws from concrete resolved token colours (Canvas 2D `fillStyle` can't take a `var()`),
   // so the palette must re-resolve on a theme switch. `useThemeVersion` (the shared theme-mutation
@@ -542,6 +584,16 @@ export function TsldCanvas({
   const stripCanvasRef = useRef<HTMLCanvasElement>(null);
   const stripRef = useRef<ResourceStripSnapshot | null>(resourceStrip);
   const stripDirtyRef = useRef(true);
+  // The WBS band layer (ADR-0063) — the strip's trio reflected to the top of the container: its own
+  // re-resolved palette, its own sibling `<canvas>`, its own dirty flag (so a groups-only change
+  // never repaints the scene), plus the last frame's placed bars for the hit-test. All inert when
+  // the band is off, which is the parity path.
+  const wbsBandPaletteRef = useRef<WbsBandPalette | null>(null);
+  wbsBandPaletteRef.current ??= resolveWbsBandPalette();
+  const wbsBandCanvasRef = useRef<HTMLCanvasElement>(null);
+  const wbsBandDirtyRef = useRef(true);
+  const wbsBandBarsRef = useRef<readonly WbsBandBar[]>([]);
+  const wbsBandGroupsRef = useRef<readonly WbsBandGroup[] | null>(wbsBandGroups);
   const viewRef = useRef<Viewport>(DEFAULT_VIEWPORT);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
   const dirtyRef = useRef(true);
@@ -883,6 +935,14 @@ export function TsldCanvas({
     stripDirtyRef.current = true;
   }, [resourceStrip]);
 
+  // Publish the band's groups to the loop, marking ONLY the band dirty — the two-dirty-flag
+  // decoupling the strip established, for the same reason: a membership change must not cost the
+  // scene a repaint. Inert when the band is off (nothing reads the ref then).
+  useEffect(() => {
+    wbsBandGroupsRef.current = wbsBandGroups;
+    wbsBandDirtyRef.current = true;
+  }, [wbsBandGroups]);
+
   // Switching tools drops any in-progress gesture ghost — most importantly an unfinished link pick
   // (M5), so leaving the Link tool mid-pick never leaves a dangling highlight ring.
   useEffect(() => {
@@ -944,9 +1004,12 @@ export function TsldCanvas({
       // exactly as the ruler is subtracted from the top. Inactive ⇒ `stripBand` is 0, so the height
       // expression is byte-for-byte today's `rect.height - RULER_HEIGHT` (the parity gate).
       const stripBand = resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0;
+      // The WBS band (ADR-0063) reserves at the TOP, so it joins the ruler in `sceneTopOffset` —
+      // `wbsBandHeightPx` is 0 when the band is off, which is what keeps this expression
+      // byte-for-byte the pre-band `rect.height - RULER_HEIGHT - stripBand`.
       const size = {
         width: Math.max(1, rect.width),
-        height: Math.max(1, rect.height - RULER_HEIGHT - stripBand),
+        height: Math.max(1, rect.height - sceneTopOffset(wbsBandHeightPx) - stripBand),
       };
       if (size.width !== applied.width || size.height !== applied.height) {
         applied = size;
@@ -968,6 +1031,15 @@ export function TsldCanvas({
           strip.style.width = `${size.width}px`;
           strip.style.height = `${RESOURCE_STRIP_HEIGHT}px`;
           stripDirtyRef.current = true;
+        }
+        // The WBS band mirrors that exactly, keeping its own fixed band height (ADR-0063).
+        const wbsBand = wbsBandCanvasRef.current;
+        if (wbsBand) {
+          wbsBand.width = Math.round(size.width * dpr);
+          wbsBand.height = Math.round(wbsBandHeightPx * dpr);
+          wbsBand.style.width = `${size.width}px`;
+          wbsBand.style.height = `${wbsBandHeightPx}px`;
+          wbsBandDirtyRef.current = true;
         }
         // Preserve the current viewport (pan + pxPerDay) across a surface resize — only the
         // backing store grows/shrinks and we repaint. Re-fitting here made the diagram "jump"
@@ -1114,6 +1186,33 @@ export function TsldCanvas({
           stripDirtyRef.current = false;
         }
       }
+      // Layer 4 — the WBS band (ADR-0063). Same `viewRef` snapshot the scene just used, so the
+      // band's columns sit over the diagram's by construction; same repaint condition as the strip
+      // (viewport moved OR groups/theme changed). `wbsBandBarsRef` keeps the placed bars for the
+      // hit-test, so a click re-uses the frame's geometry rather than re-deriving it.
+      const bandGroups = wbsBandGroupsRef.current;
+      if (bandGroups !== null && wbsBandHeightPx > 0) {
+        const bctx = wbsBandCanvasRef.current?.getContext('2d');
+        if (bctx && (movedThisFrame || wbsBandDirtyRef.current)) {
+          const bandSize = { width: size.width, height: wbsBandHeightPx };
+          const bars = wbsBandBars(
+            bandGroups,
+            sceneRef.current.dataDate,
+            viewRef.current,
+            bandSize,
+          );
+          wbsBandBarsRef.current = bars;
+          paintWbsBand(
+            bctx,
+            bars,
+            sceneRef.current.selectedId ?? null,
+            bandSize,
+            wbsBandPaletteRef.current!,
+            dpr,
+          );
+          wbsBandDirtyRef.current = false;
+        }
+      }
       // Publish the selected activity's live viewport anchor for the floating selection bar (ADR-0031):
       // the selected bar's top edge + horizontal centre in viewport px, or null when it has no drawn
       // position or is scrolled off the surface. Off the per-frame React path (ADR-0026 D3); the one
@@ -1225,7 +1324,13 @@ export function TsldCanvas({
     // `resourceStripActive` re-inits the loop when the strip toggles (like `editing`) so `measure()`
     // re-reserves the band height and re-sizes the strip canvas; a stable `false` (inactive/flag-off)
     // never changes, so the loop init is byte-for-byte today's (the parity gate).
-  }, [editing, selectionAnchorRef, resourceStripActive]);
+    //
+    // `wbsBandHeightPx` is here for exactly the same reason and is the more dangerous of the two:
+    // it feeds `measure()`'s scene height AND the band canvas's backing store, so without it a
+    // band toggle would leave the scene sized for the wrong offset — the canvas would look right
+    // and every pointer y would be out by the band's height. It is a stable `0` when the band is
+    // off, so the flag-off loop init is unchanged.
+  }, [editing, selectionAnchorRef, resourceStripActive, wbsBandHeightPx]);
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
@@ -1234,9 +1339,11 @@ export function TsldCanvas({
     // Re-resolve the strip palette on the SAME theme bump so the demand bars track light/dark like the
     // main painter (Canvas 2D `fillStyle` can't take a `var()`); mark the strip dirty so it repaints.
     stripPaletteRef.current = resolveResourceStripPalette();
+    wbsBandPaletteRef.current = resolveWbsBandPalette();
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
     stripDirtyRef.current = true;
+    wbsBandDirtyRef.current = true;
   }, [themeVersion]);
 
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -1302,10 +1409,36 @@ export function TsldCanvas({
         />
         <div ref={rulerDaysRef} className="absolute inset-x-0 bottom-0 h-3.5" />
       </div>
+      {/* Layer 4 — the pinned WBS band (ADR-0063): an aria-hidden sibling canvas between the ruler
+          and the scene. Unlike the resource strip it DOES take pointer events, because it is
+          select-only and a click has to reach a summary; its a11y equivalent is the band group in
+          the parallel DOM listbox. Mounted only when the band has height, so the scene is
+          byte-for-byte today's when the band is off (the parity gate). */}
+      {wbsBandHeightPx > 0 ? (
+        <canvas
+          ref={wbsBandCanvasRef}
+          aria-hidden="true"
+          data-testid="tsld-wbs-band"
+          style={{ top: RULER_HEIGHT, height: wbsBandHeightPx }}
+          className="absolute inset-x-0 block cursor-pointer"
+          onClick={(e) => {
+            const box = e.currentTarget.getBoundingClientRect();
+            const bar = wbsBandHitTest(
+              wbsBandBarsRef.current,
+              e.clientX - box.left,
+              e.clientY - box.top,
+            );
+            // A bar with no id is the derived bucket — it is not in the database, so there is
+            // nothing to select. Refusing it here (rather than in the hit-test) keeps the geometry
+            // a purely geometric question; see `wbsBandHitTest`.
+            if (bar?.id != null) onSelectBandSummary?.(bar.id);
+          }}
+        />
+      ) : null}
       <canvas
         ref={canvasRef}
         aria-hidden="true"
-        style={{ top: RULER_HEIGHT }}
+        style={{ top: sceneTopOffset(wbsBandHeightPx) }}
         className={`absolute inset-x-0 block touch-none ${
           editing && (mode === 'add-activity' || mode === 'link' || mode === 'loe')
             ? 'cursor-crosshair'
@@ -1564,7 +1697,7 @@ export function TsldCanvas({
         <canvas
           ref={interactionCanvasRef}
           aria-hidden="true"
-          style={{ top: RULER_HEIGHT }}
+          style={{ top: sceneTopOffset(wbsBandHeightPx) }}
           className="pointer-events-none absolute inset-x-0"
         />
       ) : null}
