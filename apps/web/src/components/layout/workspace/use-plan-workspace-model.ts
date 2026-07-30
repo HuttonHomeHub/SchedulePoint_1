@@ -406,18 +406,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Any structural edit — from the canvas, the activities table, or the logic editor — should
   // auto-recalc. Watching only the row *count* misses in-place edits that change the schedule
   // without adding/removing a row (a duration or constraint edit from the table — ux review), so we
-  // key on a **scheduling-input signature**: each activity's duration/type/constraint and each
-  // dependency's type/lag. Crucially this excludes the engine-*computed* fields (early/late dates,
-  // floats, critical) that a recalc writes back, so a settled recalc never re-triggers `notify()` —
-  // no loop. Layout-only `laneIndex` is excluded too (a lane move needs no recalc; the canvas path
-  // already skips it). The canvas reposition/link callbacks still `notify()` explicitly, which just
-  // coalesces with this. Baseline is taken on the first *loaded* (non-pending) observation, so
-  // opening a plan never fires a gratuitous recalc.
+  // key on a **scheduling-input signature**: each activity's duration/type/constraint/WBS-parent and
+  // each dependency's type/lag. `parentId` is included because reparenting to (or out of) a
+  // WBS_SUMMARY changes that summary's rollup dates, which are themselves engine-computed — without
+  // this a WBS reassignment would silently never auto-recalc. Crucially this excludes the engine-
+  // *computed* fields (early/late dates, floats, critical) that a recalc writes back, so a settled
+  // recalc never re-triggers `notify()` — no loop. Layout-only `laneIndex` is excluded too (a lane
+  // move needs no recalc; the canvas path already skips it). The canvas reposition/link callbacks
+  // still `notify()` explicitly, which just coalesces with this. Baseline is taken on the first
+  // *loaded* (non-pending) observation, so opening a plan never fires a gratuitous recalc.
   const structureSignature = useMemo(() => {
     const acts = (activities.data ?? [])
       .map(
         (a) =>
-          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}`,
+          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}:${a.parentId ?? ''}`,
       )
       .sort()
       .join('|');
