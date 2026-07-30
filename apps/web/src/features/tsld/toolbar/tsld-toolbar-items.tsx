@@ -422,23 +422,67 @@ function LinkControl({
   const disabled = api.disabled;
   return (
     <>
-      <button
-        {...api.itemProps}
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-disabled={disabled || undefined}
-        title={disabled ? LINK_DISABLED_REASON : `Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
-        onClick={() => {
-          if (!disabled) toggle();
-        }}
-        className={cn(toolbarControlVariants({ active: ctx.isLinking || open, disabled }))}
+      {/*
+       * A **true** split button, unlike Add's split *look*. The primary region arms and disarms the
+       * tool with the current type; the caret opens the type menu. They are separated because the
+       * old single trigger only opened the menu — clicking "Link" armed nothing, so the still-armed
+       * Add tool took the next canvas click and silently created an activity where the planner meant
+       * to pick a link endpoint. Measured: 0 dependencies from 6 link attempts (ADR-0064).
+       *
+       * One tab stop is preserved: the primary carries `api.itemProps` (the roving stop) and the
+       * caret is `tabIndex={-1}`, reached with ArrowDown — the APG split-button arrangement. The
+       * pair sits in a `div` that carries the control chrome so the two regions read as one control.
+       */}
+      <span
+        className={cn(
+          toolbarControlVariants({ active: ctx.isLinking || open, disabled }),
+          'gap-0 p-0',
+        )}
       >
-        <Spline aria-hidden="true" className="size-4" />
-        <span className="truncate">{ctx.isLinking ? `Linking · ${ctx.linkType}` : 'Link'}</span>
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
-      </button>
+        <button
+          {...api.itemProps}
+          type="button"
+          aria-pressed={ctx.isLinking}
+          aria-disabled={disabled || undefined}
+          title={
+            disabled
+              ? LINK_DISABLED_REASON
+              : ctx.isLinking
+                ? 'Stop linking'
+                : `Link with ${LINK_TYPE_LABELS[ctx.linkType]}`
+          }
+          onClick={() => {
+            if (!disabled) ctx.toggleLinkMode();
+          }}
+          onKeyDown={(e) => {
+            // ArrowDown from the primary opens the type menu and moves into it, so the caret needs
+            // no tab stop of its own (APG split button).
+            if (e.key === 'ArrowDown' && !disabled) {
+              e.preventDefault();
+              toggle();
+            }
+          }}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
+        >
+          <Spline aria-hidden="true" className="size-4" />
+          <span className="truncate">{ctx.isLinking ? `Linking · ${ctx.linkType}` : 'Link'}</span>
+        </button>
+        <button
+          ref={triggerRef}
+          type="button"
+          tabIndex={-1}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-disabled={disabled || undefined}
+          aria-label={`Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
+          onClick={() => {
+            if (!disabled) toggle();
+          }}
+          className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
+        >
+          <ChevronDown aria-hidden="true" className="size-3.5" />
+        </button>
+      </span>
       <Menu
         open={open}
         onClose={close}

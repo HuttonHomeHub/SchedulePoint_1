@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -97,22 +97,53 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
   });
 
   describe('Link split-button (M5)', () => {
-    it('arms link-mode and the picked FS/SS/FF type from one menu (mirrors Add)', () => {
+    /**
+     * **The named regression (ADR-0064, A1c).** The primary region arms the tool. It used to open
+     * the type menu and arm *nothing*, which is how a planner could click "Link", click a bar, and
+     * get a new activity: the Add tool was still armed and took the click. Measured before the fix:
+     * 0 dependencies from 6 link attempts.
+     */
+    it('arms link-mode from the primary region — it does not merely open the menu', () => {
+      const toggleLinkMode = vi.fn();
+      renderToolbar(ctx({ isLinking: false, toggleLinkMode }));
+      fireEvent.click(screen.getByRole('button', { name: 'Link' }));
+      expect(toggleLinkMode).toHaveBeenCalledOnce();
+      // …and no menu was opened by that click: the type list is the caret's job.
+      expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
+    });
+
+    it('reflects the armed state with aria-pressed', () => {
+      renderToolbar(ctx({ isLinking: false }));
+      expect(screen.getByRole('button', { name: 'Link' })).toHaveAttribute('aria-pressed', 'false');
+      cleanup();
+      renderToolbar(ctx({ isLinking: true, linkType: 'SS' }));
+      expect(screen.getByRole('button', { name: /Linking/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    it('arms link-mode and the picked FS/SS/FF type from the caret menu (mirrors Add)', () => {
       const toggleLinkMode = vi.fn();
       const setLinkType = vi.fn();
       renderToolbar(ctx({ isLinking: false, toggleLinkMode, setLinkType }));
-      // Idle label is "Link"; clicking opens the type menu (a split-button, like Add).
-      fireEvent.click(screen.getByRole('button', { name: 'Link' }));
+      // The caret — not the label — opens the type menu.
+      fireEvent.click(screen.getByRole('button', { name: /^Link type:/ }));
       fireEvent.click(screen.getByRole('menuitemradio', { name: /Start → Start/ }));
       // Picking a kind sets the type and enters link-mode in one gesture.
       expect(setLinkType).toHaveBeenCalledWith('SS');
       expect(toggleLinkMode).toHaveBeenCalledOnce();
     });
 
+    it('keeps one tab stop: the caret is not tabbable', () => {
+      renderToolbar(ctx());
+      expect(screen.getByRole('button', { name: /^Link type:/ })).toHaveAttribute('tabindex', '-1');
+    });
+
     it('labels the button with the armed type and offers "Stop linking" while linking', () => {
       const toggleLinkMode = vi.fn();
       renderToolbar(ctx({ isLinking: true, linkType: 'SS', toggleLinkMode }));
-      fireEvent.click(screen.getByRole('button', { name: /Linking/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Link type:/ }));
       fireEvent.click(screen.getByRole('menuitem', { name: 'Stop linking' }));
       expect(toggleLinkMode).toHaveBeenCalledOnce();
     });
