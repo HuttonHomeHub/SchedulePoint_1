@@ -6,6 +6,7 @@ import {
   diagramActivityList,
   ensurePen,
   onboard,
+  openActivitiesPanel,
   openRowMenu,
   recalculate,
   releasePen,
@@ -60,6 +61,15 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   expect(seeded).toBe(6);
 
   // ------------------------------------------------- M4b: multi-select bulk assign
+  // The canvas-first workspace (ADR-0030) puts the table in a collapsible bottom panel, so reach it
+  // explicitly before asserting anything about its contents.
+  await openActivitiesPanel(page);
+
+  // Presence BEFORE absence, and in that order deliberately: `toHaveCount(0)` is satisfied just as
+  // well by a table that never rendered, so the summary-has-no-checkbox assertion below is only
+  // meaningful once some other row is known to have one. Asserted the other way round, this block
+  // passed against a collapsed panel and failed five lines later for an unrelated-looking reason.
+  await expect(rowCheckbox(page, 'Excavate')).toBeVisible();
   // A summary offers no checkbox — nesting one is the Breakdown picker's job (spec C-1b).
   await expect(rowCheckbox(page, 'Substructure')).toHaveCount(0);
 
@@ -142,6 +152,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   expect(second).toBeDefined();
   await page.reload();
   await ensurePen(page);
+  await openActivitiesPanel(page);
 
   await rowCheckbox(page, 'Excavate').check();
   await rowCheckbox(page, 'Blind').check();

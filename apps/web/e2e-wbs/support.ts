@@ -193,13 +193,28 @@ export async function activityCount(page: Page, orgSlug: string): Promise<number
   );
 }
 
+/**
+ * Make the activities table reachable in the canvas-first workspace (ADR-0030), where it lives in a
+ * collapsible bottom panel rather than being the page. Idempotent: expands only if collapsed.
+ *
+ * This journey needs both surfaces — the table for M4b's bulk assign and the canvas for M4's band —
+ * so it runs with `VITE_CANVAS_WORKSPACE: 'true'` and cannot borrow the activity-editor journey's
+ * trick of turning that flag off to get a plain table page.
+ */
+export async function openActivitiesPanel(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: 'Expand activities panel' });
+  if ((await expand.count()) > 0) await expand.click();
+  await expect(page.getByRole('region', { name: 'Activities panel' })).toBeVisible();
+}
+
 /** The activities table's selection checkbox for a row. */
 export function rowCheckbox(page: Page, name: string): ReturnType<Page['getByRole']> {
   return page.getByRole('checkbox', { name: `Select ${name}` });
 }
 
-/** Open a row's actions menu in the activities table. */
+/** Open a row's actions menu in the activities table. Ensures the panel is open first. */
 export async function openRowMenu(page: Page, name: string): Promise<void> {
+  await openActivitiesPanel(page);
   await page.getByRole('button', { name: `Actions for ${name}` }).click();
   await expect(page.getByRole('menu')).toBeVisible();
 }
