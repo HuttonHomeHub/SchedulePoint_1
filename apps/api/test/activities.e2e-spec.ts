@@ -857,6 +857,102 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       });
     });
 
+    describe('dissolve (remove the grouping, keep the work)', () => {
+      const dissolveUrl = (id: string) => `/api/v1/organizations/acme/activities/${id}/dissolve`;
+
+      async function task(actor: Actor, planId: string, name: string, parentId?: string) {
+        const res = await actor.agent
+          .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+          .send({ name, ...(parentId ? { parentId } : {}) })
+          .expect(201);
+        return { id: res.body.data.id as string, version: res.body.data.version as number };
+      }
+
+      it('promotes the children and loses no activity', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate', s.id);
+        const b = await task(actor, planId, 'Blind', s.id);
+        const before = await prisma.activity.count({ where: { planId, deletedAt: null } });
+
+        await actor.agent.post(dissolveUrl(s.id)).expect(204);
+
+        // The invariant that matters: exactly one row went (the summary), not the subtree.
+        const after = await prisma.activity.count({ where: { planId, deletedAt: null } });
+        expect(after).toBe(before - 1);
+        const rows = await prisma.activity.findMany({ where: { id: { in: [a.id, b.id] } } });
+        expect(rows.every((r) => r.deletedAt === null && r.parentId === null)).toBe(true);
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+          deletedAt: expect.any(Date) as Date,
+        });
+      });
+
+      it('keeps a nested branch intact, moving it up one level', async () => {
+        const { actor, planId } = await setup();
+        const outer = await summary(actor, planId, 'Outer');
+        const inner = await summary(actor, planId, 'Inner');
+        await actor.agent
+          .patch(`/api/v1/organizations/acme/activities/${inner.id}`)
+          .send({ parentId: outer.id, version: inner.version })
+          .expect(200);
+        const leaf = await task(actor, planId, 'Leaf', inner.id);
+
+        await actor.agent.post(dissolveUrl(outer.id)).expect(204);
+
+        // Inner moved up to the top level; the leaf did NOT move — it is still Inner's child.
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: inner.id } })).toMatchObject({
+          parentId: null,
+          deletedAt: null,
+        });
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: leaf.id } })).toMatchObject({
+          parentId: inner.id,
+        });
+      });
+
+      it('restores the summary ALONE — its former children stay promoted', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate', s.id);
+        await actor.agent.post(dissolveUrl(s.id)).expect(204);
+
+        await actor.agent.post(`/api/v1/organizations/acme/activities/${s.id}/restore`).expect(200);
+
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+          deletedAt: null,
+        });
+        // Dissolve is not undone by restoring: the child stays where it was promoted to.
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+          parentId: null,
+        });
+      });
+
+      it('422s a non-summary activity, leaving it active', async () => {
+        const { actor, planId } = await setup();
+        const a = await task(actor, planId, 'Excavate');
+        await actor.agent.post(dissolveUrl(a.id)).expect(422);
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+          deletedAt: null,
+        });
+      });
+
+      it('404s an activity in another organisation, and forbids a Contributor (403)', async () => {
+        const { actor, orgId, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+
+        const contributor = await signUp('dissolve-contrib@example.com');
+        await prisma.orgMember.create({
+          data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+        });
+        await contributor.agent.post(dissolveUrl(s.id)).expect(403);
+
+        const outsider = await signUp('dissolve-outsider@example.com');
+        await outsider.agent.post('/api/v1/organizations').send({ name: 'Other Co' }).expect(201);
+        await outsider.agent
+          .post(`/api/v1/organizations/other-co/activities/${s.id}/dissolve`)
+          .expect(404);
+      });
+    });
+
     it('rejects the mirror re-parent that would close a cycle, leaving the tree acyclic', async () => {
       const { actor, planId } = await setup();
       const a = await summary(actor, planId, 'A');

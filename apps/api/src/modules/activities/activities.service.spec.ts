@@ -934,6 +934,101 @@ describe('ActivitiesService', () => {
     });
   });
 
+  describe('dissolveSummary', () => {
+    /** The tx client's `activity.updateMany`, used to promote the children. */
+    let txUpdateMany: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      txUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+        cb({ $executeRaw: txExecuteRaw, activity: { updateMany: txUpdateMany } }),
+      );
+    });
+
+    const summary = (over: Partial<Activity> = {}) =>
+      activity({ id: ACTIVITY_ID, type: 'WBS_SUMMARY', parentId: null, ...over });
+
+    it('promotes the direct children to the summary’s own parent, then deletes it', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary({ parentId: 'grandparent' }));
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+
+      expect(txUpdateMany).toHaveBeenCalledWith({
+        where: { organizationId: ORG_ID, parentId: ACTIVITY_ID, deletedAt: null },
+        data: expect.objectContaining({ parentId: 'grandparent' }),
+      });
+      expect(lifecycle.cascadeSoftDelete).toHaveBeenCalledWith(
+        expect.anything(),
+        'activity',
+        ACTIVITY_ID,
+        USER_ID,
+      );
+    });
+
+    it('promotes children to the top level when the summary is top-level', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary({ parentId: null }));
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+      expect(txUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ parentId: null }) }),
+      );
+    });
+
+    // A promoted child's row changed, so a client holding the old copy must not be able to write
+    // over the promotion — it gets a 409 on its next attempt instead.
+    it('bumps the promoted children’s versions', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+      const data = txUpdateMany.mock.calls[0]?.[0].data as { version: unknown };
+      expect(data.version).toEqual({ increment: 1 });
+    });
+
+    it('takes the plan write lock, and does both writes in ONE transaction', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+      expect(locksTaken()).toContain('dependency-plan');
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles a childless summary (nothing to promote, still deleted)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      txUpdateMany.mockResolvedValue({ count: 0 });
+      await expect(
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
+      ).resolves.toBeUndefined();
+      expect(lifecycle.cascadeSoftDelete).toHaveBeenCalled();
+    });
+
+    it('422s a non-summary activity without deleting it (NOT_A_SUMMARY)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
+      await expect(
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+
+    it('404s a missing activity', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('refuses without the pen (423), before any write', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      const locked = new LockedError('nope', { reason: 'PLAN_EDIT_LOCK_REQUIRED', holder: null });
+      penGuard.assertHoldsPen.mockRejectedValue(locked);
+      await expect(service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID)).rejects.toBe(
+        locked,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('403s a principal without activity:delete', async () => {
+      await expect(
+        service.dissolveSummary(principalWith([]), 'acme', ACTIVITY_ID),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
   describe('updateProgress', () => {
     const PROGRESS: Permission[] = ['activity:update_progress'];
 

@@ -149,6 +149,31 @@ export class ActivitiesController {
     await this.service.remove(principal, orgSlug, activityId);
   }
 
+  @Post(':activityId/dissolve')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Dissolve a WBS summary — remove the grouping, keep the work.',
+    description:
+      'Promotes the summary’s direct children to its own parent (or the top level), then ' +
+      'soft-deletes the now-childless summary, in one transaction. The deliberate opposite of ' +
+      'DELETE, which cascades to the whole subtree. Restoring a dissolved summary brings back the ' +
+      'summary ALONE — its former children stay where they were promoted to.',
+  })
+  @ApiNoContentResponse()
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({ description: 'Activity not found in this organisation.' })
+  @ApiUnprocessableEntityResponse({
+    description: 'The activity is not a WBS summary (NOT_A_SUMMARY).',
+  })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
+  async dissolve(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('activityId', ParseUuidPipe) activityId: string,
+  ): Promise<void> {
+    await this.service.dissolveSummary(principal, orgSlug, activityId);
+  }
+
   @Post(':activityId/restore')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Restore a soft-deleted activity.' })

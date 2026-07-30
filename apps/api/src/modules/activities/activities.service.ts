@@ -931,6 +931,71 @@ export class ActivitiesService {
     );
   }
 
+  /**
+   * Dissolve a WBS summary: remove the grouping and **keep the work**. Its direct children take the
+   * summary's own parent (its grandparent, or the top level), then the — now childless — summary is
+   * soft-deleted through the usual cascade.
+   *
+   * This exists because deleting a summary is the opposite operation: `cascadeSoftDelete` takes the
+   * whole subtree with it (ADR-0038), which is right when the work is genuinely cancelled and
+   * catastrophic when the planner only meant to drop a level of grouping. The two are deliberately
+   * separate endpoints rather than a flag, so the destructive one is never the default.
+   *
+   * A grandchild is untouched: it stays under its own parent, which simply moves up a level, so a
+   * nested branch keeps its shape. The re-parent and the delete share ONE transaction under the
+   * plan advisory lock, so a child can never be stranded between them — the count of active
+   * activities falls by exactly one.
+   *
+   * Deliberately NOT in `HierarchyLifecycleService`: that service's contract is "a parent's removal
+   * propagates to its children", and this is the precise inverse. Folding it in would put both
+   * meanings behind one name.
+   */
+  async dissolveSummary(principal: Principal, orgSlug: string, activityId: string): Promise<void> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:delete', organization.id);
+
+    const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
+    if (!existing) throw new NotFoundError('Activity not found.');
+    if (existing.type !== 'WBS_SUMMARY') {
+      throw new ValidationError('Only a WBS summary can be dissolved.', {
+        reason: 'NOT_A_SUMMARY',
+      });
+    }
+    await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
+
+    const promoted = await this.prisma.$transaction(async (tx) => {
+      // Same lock as every other parent-tree write: the children's new parent is read from the
+      // summary's row, and a concurrent re-parent of the summary itself would move it underneath us.
+      await acquirePlanWriteLock(tx, existing.planId);
+
+      // Children take the summary's own parent — null promotes them to the top level. Scoped to
+      // org + active rows; `version` bumps so a client holding a stale copy of a promoted child
+      // gets a clean 409 on its next write rather than silently overwriting the promotion.
+      const { count } = await tx.activity.updateMany({
+        where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
+        data: {
+          parentId: existing.parentId,
+          updatedBy: principal.userId,
+          version: { increment: 1 },
+        },
+      });
+      // The summary is childless now, so the cascade has nothing left to take with it.
+      await this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId);
+      return count;
+    });
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        planId: existing.planId,
+        activityId,
+        userId: principal.userId,
+        promoted,
+      },
+      'WBS summary dissolved',
+    );
+  }
+
   async restore(
     principal: Principal,
     orgSlug: string,
