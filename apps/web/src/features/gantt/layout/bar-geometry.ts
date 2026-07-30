@@ -136,3 +136,21 @@ export function baselineGeometry(
   const spanDays = daysBetween(row.baselineStart, row.baselineFinish) + 1;
   return { x, width: Math.max(spanDays * pxPerDay, MIN_BAR_WIDTH_PX) };
 }
+
+/**
+ * Where a plain inclusive date span sits on the chart — the geometry behind the derived
+ * **Unassigned** bucket's bracket (WBS improvements M3), which has a span but no activity.
+ *
+ * Inclusive like every other bar (ADR-0023), and floored at `MIN_BAR_WIDTH_PX` so a one-day
+ * bucket is still visible at a coarse zoom.
+ */
+export function spanGeometry(
+  span: { start: string | null; finish: string | null },
+  anchorIso: string,
+  pxPerDay: number,
+): { x: number; width: number } | null {
+  if (span.start === null || span.finish === null) return null;
+  const x = daysBetween(anchorIso, span.start) * pxPerDay;
+  const spanDays = daysBetween(span.start, span.finish) + 1;
+  return { x, width: Math.max(spanDays * pxPerDay, MIN_BAR_WIDTH_PX) };
+}

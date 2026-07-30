@@ -4,9 +4,17 @@ import './GanttPrintSurface.css';
 
 import { barGeometry, baselineGeometry, chartAnchor, fitPxPerDay } from '../layout/bar-geometry';
 import { GANTT_COLUMNS, varianceText } from '../layout/grid-columns';
-import { buildRows, rowsDateSpan, DEFAULT_GANTT_SORT, type GanttRow } from '../layout/row-model';
+import {
+  buildRows,
+  rowId,
+  rowsDateSpan,
+  DEFAULT_GANTT_SORT,
+  type GanttActivityRow,
+  type GanttBucketRow,
+} from '../layout/row-model';
 import { buildRulerTicks } from '../layout/ruler-ticks';
 
+import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
 
 /**
@@ -72,7 +80,12 @@ export function GanttPrintSurface({
   // Printing is a snapshot, so the document takes the default order rather than whatever the
   // on-screen grid happened to be sorted by: a WBS-ordered programme is what a progress meeting
   // reads, and it is reproducible between two people printing the same plan.
-  const rows = buildRows(activities, DEFAULT_GANTT_SORT, new Set());
+  // The bucket prints too (WBS improvements M3). A programme whose grouping differs from the
+  // screen it was printed from is the kind of divergence a progress meeting discovers out loud;
+  // the collapse set is empty here, so every member prints under it.
+  const rows = buildRows(activities, DEFAULT_GANTT_SORT, new Set(), {
+    unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+  });
   const span = rowsDateSpan(rows);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
@@ -142,17 +155,26 @@ export function GanttPrintSurface({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <PrintRow
-                  key={row.activity.id}
-                  row={row}
-                  anchorIso={anchor}
-                  pxPerDay={pxPerDay}
-                  chartPx={chartPx}
-                  variance={varianceByActivityId?.get(row.activity.id)}
-                  showVariance={showVariance}
-                />
-              ))}
+              {rows.map((row) =>
+                row.kind === 'bucket' ? (
+                  <PrintBucketRow
+                    key={rowId(row)}
+                    row={row}
+                    chartPx={chartPx}
+                    showVariance={showVariance}
+                  />
+                ) : (
+                  <PrintRow
+                    key={rowId(row)}
+                    row={row}
+                    anchorIso={anchor}
+                    pxPerDay={pxPerDay}
+                    chartPx={chartPx}
+                    variance={varianceByActivityId?.get(rowId(row))}
+                    showVariance={showVariance}
+                  />
+                ),
+              )}
             </tbody>
           </table>
 
@@ -172,7 +194,7 @@ export function GanttPrintSurface({
 }
 
 interface PrintRowProps {
-  row: GanttRow;
+  row: GanttActivityRow;
   anchorIso: string;
   pxPerDay: number;
   chartPx: number;
@@ -268,5 +290,32 @@ export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDe
       {...(input.varianceByActivityId ? { varianceByActivityId: input.varianceByActivityId } : {})}
     />,
     deps,
+  );
+}
+
+/**
+ * The derived **Unassigned** grouping line on paper. No bar: the printed programme reads across a
+ * fitted page and a bracket for a group that has no dates of its own would compete with the bars
+ * that do. The label and its count are what a reader needs — that this work exists and is not
+ * filed.
+ */
+function PrintBucketRow({
+  row,
+  chartPx,
+  showVariance,
+}: {
+  row: GanttBucketRow;
+  chartPx: number;
+  showVariance: boolean;
+}): React.ReactElement {
+  return (
+    <tr style={{ height: PRINT_ROW_HEIGHT }}>
+      <td colSpan={GANTT_COLUMNS.length + (showVariance ? 1 : 0)} style={{ paddingLeft: 4 }}>
+        <span className="gantt-print-summary">
+          {row.label} ({row.count})
+        </span>
+      </td>
+      <td className="gantt-print-chart" style={{ width: chartPx }} />
+    </tr>
   );
 }

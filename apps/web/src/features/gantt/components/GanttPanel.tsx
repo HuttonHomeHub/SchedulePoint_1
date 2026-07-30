@@ -3,19 +3,29 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { barGeometry, baselineGeometry, chartAnchor, chartWidth } from '../layout/bar-geometry';
+import {
+  barGeometry,
+  baselineGeometry,
+  chartAnchor,
+  chartWidth,
+  spanGeometry,
+} from '../layout/bar-geometry';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
   DEFAULT_GANTT_SORT,
   buildRows,
+  rowDisclosure,
+  rowId,
   rowsDateSpan,
-  type GanttRow,
+  type GanttActivityRow,
+  type GanttBucketRow,
   type GanttSort,
   type GanttSortKey,
 } from '../layout/row-model';
 
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
+import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { cn } from '@/lib/utils';
@@ -134,7 +144,13 @@ export function GanttPanel({
   const pxPerDay =
     barRegionWidth > 0 ? pxPerDayForPreset(zoomLevel, barRegionWidth) : FALLBACK_PX_PER_DAY;
 
-  const rows = useMemo(() => buildRows(activities, sort, collapsed), [activities, sort, collapsed]);
+  const rows = useMemo(
+    // The derived Unassigned bucket (WBS improvements M3). `buildRows` additionally requires at
+    // least one real summary before it emits the bucket — heading a flat plan "Unassigned" would
+    // invent a hierarchy it does not have.
+    () => buildRows(activities, sort, collapsed, { unassignedBucket: WBS_IMPROVEMENTS_ENABLED }),
+    [activities, sort, collapsed],
+  );
   const span = useMemo(() => rowsDateSpan(rows), [rows]);
   const anchor = span === null ? null : chartAnchor(span);
   const chartPx = span === null ? 0 : chartWidth(span, pxPerDay);
@@ -161,7 +177,7 @@ export function GanttPanel({
       const row = rows[index];
       if (!row) return;
       pendingFocus.current = true;
-      setFocusedId(row.activity.id);
+      setFocusedId(rowId(row));
       virtualizer.scrollToIndex(index, { align: 'auto' });
     },
     [rows, virtualizer],
@@ -184,7 +200,7 @@ export function GanttPanel({
     );
   }, []);
 
-  const focusedIndex = rows.findIndex((r) => r.activity.id === focusedId);
+  const focusedIndex = rows.findIndex((r) => rowId(r) === focusedId);
   // The roving tab stop: the focused row, or the first row when nothing has been focused yet, so
   // one Tab always reaches the grid and arrow keys take over from there.
   const tabStopIndex = focusedIndex >= 0 ? focusedIndex : 0;
@@ -209,18 +225,24 @@ export function GanttPanel({
         event.preventDefault();
         focusRowAt(rows.length - 1);
         break;
-      case 'ArrowRight':
-        if (row?.hasChildren === true && row.expanded === false) {
+      case 'ArrowRight': {
+        if (!row) break;
+        const disclosure = rowDisclosure(row);
+        if (disclosure !== null && !disclosure.expanded) {
           event.preventDefault();
-          toggleCollapsed(row.activity.id, false);
+          toggleCollapsed(rowId(row), false);
         }
         break;
-      case 'ArrowLeft':
-        if (row?.hasChildren === true && row.expanded === true) {
+      }
+      case 'ArrowLeft': {
+        if (!row) break;
+        const disclosure = rowDisclosure(row);
+        if (disclosure !== null && disclosure.expanded) {
           event.preventDefault();
-          toggleCollapsed(row.activity.id, true);
+          toggleCollapsed(rowId(row), true);
         }
         break;
+      }
       default:
         break;
     }
@@ -362,31 +384,150 @@ export function GanttPanel({
           {virtualizer.getVirtualItems().map((item) => {
             const row = rows[item.index];
             if (!row) return null;
-            return (
+            const id = rowId(row);
+            const shared = {
+              rowIndex: item.index,
+              top: item.start,
+              anchorIso: anchor,
+              chartPx,
+              pxPerDay,
+              gridWidth,
+              showVariance,
+              isTabStop: item.index === tabStopIndex,
+              registerRef: (element: HTMLDivElement | null) => {
+                if (element) rowRefs.current.set(id, element);
+                else rowRefs.current.delete(id);
+              },
+              onFocusRow: () => setFocusedId(id),
+              onToggle: toggleCollapsed,
+            };
+            return row.kind === 'bucket' ? (
+              <GanttBucketRowView key={id} row={row} {...shared} />
+            ) : (
               <GanttRowView
-                key={row.activity.id}
+                key={id}
                 row={row}
-                rowIndex={item.index}
-                top={item.start}
-                anchorIso={anchor}
-                chartPx={chartPx}
-                pxPerDay={pxPerDay}
-                gridWidth={gridWidth}
-                variance={varianceByActivityId?.get(row.activity.id)}
-                showVariance={showVariance}
-                isTabStop={item.index === tabStopIndex}
-                isSelected={row.activity.id === selectedActivityId}
-                registerRef={(element) => {
-                  if (element) rowRefs.current.set(row.activity.id, element);
-                  else rowRefs.current.delete(row.activity.id);
-                }}
-                onFocusRow={() => setFocusedId(row.activity.id)}
+                variance={varianceByActivityId?.get(id)}
+                isSelected={id === selectedActivityId}
                 onSelect={onSelectActivity}
-                onToggle={toggleCollapsed}
+                {...shared}
               />
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The derived **Unassigned** row (WBS improvements M3). Deliberately a different component from
+ * {@link GanttRowView} rather than a branch inside it: the bucket has no activity, so it has no
+ * selection, no variance, no progress fill and nothing to open — and a component that took an
+ * optional activity would let each of those quietly do nothing while looking wired up.
+ *
+ * It IS a row of the grid (focusable, counted in `aria-rowindex`, expandable), because a grouping
+ * the keyboard cannot reach is a grouping half the users cannot collapse.
+ */
+function GanttBucketRowView({
+  row,
+  rowIndex,
+  top,
+  anchorIso,
+  chartPx,
+  pxPerDay,
+  gridWidth,
+  showVariance,
+  isTabStop,
+  registerRef,
+  onFocusRow,
+  onToggle,
+}: {
+  row: GanttBucketRow;
+  rowIndex: number;
+  top: number;
+  anchorIso: string;
+  chartPx: number;
+  pxPerDay: number;
+  gridWidth: number;
+  showVariance: boolean;
+  isTabStop: boolean;
+  registerRef: (element: HTMLDivElement | null) => void;
+  onFocusRow: () => void;
+  onToggle: (id: string, collapse: boolean) => void;
+}): React.ReactElement {
+  const bracket = spanGeometry(row, anchorIso, pxPerDay);
+  // The count is part of the accessible name, not a decoration beside it: "Unassigned" alone does
+  // not say whether the row is worth expanding.
+  const label = `${row.label}, ${String(row.count)} ${row.count === 1 ? 'activity' : 'activities'}`;
+
+  return (
+    <div
+      ref={registerRef}
+      role="row"
+      aria-rowindex={rowIndex + 2}
+      aria-level={1}
+      aria-expanded={row.expanded}
+      tabIndex={isTabStop ? 0 : -1}
+      onFocus={onFocusRow}
+      onClick={() => onToggle(row.id, row.expanded)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onToggle(row.id, row.expanded);
+        }
+      }}
+      className={cn(
+        'absolute left-0 flex items-center outline-none',
+        'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset',
+        'hover:bg-muted/50',
+      )}
+      style={{ top, height: GANTT_ROW_HEIGHT, width: gridWidth + chartPx }}
+    >
+      <div
+        className="border-border bg-background sticky left-0 z-10 flex h-full shrink-0 items-center border-r"
+        style={{ width: gridWidth }}
+      >
+        <div
+          role="gridcell"
+          aria-colindex={1}
+          className="text-muted-foreground shrink-0 truncate px-2 text-xs"
+          style={{ width: columnWidth(COLUMNS[0]!), paddingLeft: 8 }}
+        >
+          <span aria-hidden="true" className="text-muted-foreground mr-1 inline-flex align-middle">
+            {row.expanded ? (
+              <ChevronDown className="size-3" />
+            ) : (
+              <ChevronRight className="size-3" />
+            )}
+          </span>
+        </div>
+        <div
+          role="gridcell"
+          aria-colindex={2}
+          className="text-muted-foreground shrink-0 truncate px-2 text-xs italic"
+          style={{ width: gridWidth - columnWidth(COLUMNS[0]!) }}
+        >
+          {label}
+        </div>
+      </div>
+
+      <div
+        role="gridcell"
+        aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
+        className="relative h-full shrink-0"
+        style={{ width: chartPx }}
+      >
+        {bracket === null ? null : (
+          // A bracket, not a filled bar: the bucket is not a scheduled thing, it is the extent of
+          // things that are. Drawing it as a bar would put a fourth kind of bar on the chart and
+          // read as work nobody planned.
+          <span
+            aria-hidden="true"
+            className="border-muted-foreground/60 absolute top-1/2 h-2 -translate-y-1/2 rounded-sm border border-b-0"
+            style={{ left: bracket.x, width: bracket.width }}
+          />
+        )}
       </div>
     </div>
   );
@@ -410,7 +551,7 @@ function GanttMessage({
 }
 
 interface GanttRowViewProps {
-  row: GanttRow;
+  row: GanttActivityRow;
   rowIndex: number;
   top: number;
   anchorIso: string;
