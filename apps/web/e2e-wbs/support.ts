@@ -139,27 +139,55 @@ export async function recalculate(page: Page, orgSlug: string): Promise<void> {
   const planId = openPlanId(page);
   await page.evaluate(
     async ({ org, id }: { org: string; id: string }) => {
-      await fetch(`/api/v1/organizations/${org}/plans/${id}/schedule/recalculate`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/schedule/recalculate`,
+        { method: 'POST', credentials: 'include' },
+      );
+      // Checked for the same reason `activityCount` pages. Recalculate is itself pen-gated
+      // (ADR-0028 Q-B, asserted inside the advisory lock), so a caller that takes it out of order
+      // gets a 423 — and a helper that ignores its status turns that into "the band drew nothing",
+      // which reads as a product defect three assertions later rather than a test-order mistake.
+      if (!response.ok) {
+        throw new Error(`recalculate ${String(response.status)}: ${await response.text()}`);
+      }
     },
     { org: orgSlug, id: planId },
   );
   await page.reload();
 }
 
-/** How many activities the plan actually holds, straight from the API — the loss invariant's probe. */
+/**
+ * How many activities the plan actually holds, straight from the API — the loss invariant's probe.
+ *
+ * It **pages** rather than asking for one big page. The first version asked for `limit=200`, which
+ * `PaginationQueryDto` caps at 100, so the request 422'd and the probe read `.length` off an error
+ * envelope — the journey failed on its own helper before it ever reached the product. Capping the
+ * ask at 100 would have made it pass, and would have been worse: a probe that silently stops
+ * counting at 100 reports "no activity lost" for exactly the plans big enough to lose one in.
+ */
 export async function activityCount(page: Page, orgSlug: string): Promise<number> {
   const planId = openPlanId(page);
   return page.evaluate(
     async ({ org, id }: { org: string; id: string }) => {
-      const response = await fetch(
-        `/api/v1/organizations/${org}/plans/${id}/activities?limit=200`,
-        { credentials: 'include' },
-      );
-      const body = (await response.json()) as { data: unknown[] };
-      return body.data.length;
+      let total = 0;
+      let cursor: string | null = null;
+      do {
+        const query = `limit=100${cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`}`;
+        const response = await fetch(
+          `/api/v1/organizations/${org}/plans/${id}/activities?${query}`,
+          { credentials: 'include' },
+        );
+        if (!response.ok) {
+          throw new Error(`activity list ${String(response.status)}: ${await response.text()}`);
+        }
+        const body = (await response.json()) as {
+          data: unknown[];
+          meta: { nextCursor: string | null };
+        };
+        total += body.data.length;
+        cursor = body.meta.nextCursor;
+      } while (cursor !== null);
+      return total;
     },
     { org: orgSlug, id: planId },
   );
