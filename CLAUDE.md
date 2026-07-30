@@ -161,6 +161,19 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
 - Open a PR early; keep it small; rebase (don't merge) `main` into your branch to
   stay current. Squash-merge into `main` with a Conventional Commit title.
 - Never force-push `main`. Never commit directly to `main`.
+- **After a squash-merge, reset the branch from `main` before doing anything else**
+  — `git fetch origin main && git checkout -B <branch> origin/main`. A squash
+  replaces the branch's commits with one new commit, so a branch that carries on
+  from its old tip now holds history `main` will never contain. The next PR from it
+  is **unmergeable** (`mergeable_state: dirty`), and because GitHub cannot compute
+  a merge ref, **CI never starts** — the PR looks like it is waiting for checks
+  that will never arrive. This is not hypothetical: it happened to the long-lived
+  agent branch after PR #193, and again after the release PR that followed it.
+  If the branch has already grown work past the merge, rebase that work onto the
+  new base (`git cherry-pick`/`git rebase --onto`) rather than merging `main` in —
+  a merge re-adds the changeset files the release already consumed and deleted,
+  which silently double-bumps the next version. Then `git push --force-with-lease`:
+  the discarded commits are already on `main` in squashed form, so nothing is lost.
 
 ## 9. Commit standards
 
@@ -925,10 +938,16 @@ A lighter-weight running log of smaller decisions is in
 - **No append-only audit log** exists; row attribution plus structured logs are
   not an audit trail (`docs/TECH_DEBT.md` #14). There is likewise no hard-delete
   or data-export path — every deletion is a soft delete.
-- Deployment target (managed host vs. self-hosted Kubernetes) is **not yet
-  decided**; the container/registry foundation is deliberately platform-neutral.
-  Auto-deploy exists but ships dormant, so a release does not reach users until
-  an operator acts (ADR-0047, `docs/TECH_DEBT.md` #5/#29).
+- The **hosted** deployment target (managed host vs. self-hosted Kubernetes) is
+  **not yet decided**; the container/registry foundation is deliberately
+  platform-neutral (`docs/TECH_DEBT.md` #5). What is **not** undecided is whether
+  releases reach anyone: the product owner runs the Docker Compose stack with the
+  ADR-0047 Watchtower profile **enabled**, so a merged release is pulled and
+  recreated on that host and **every release is reviewed by a person**. Anything
+  shipped default-on is in use. This paragraph said the opposite for months — that
+  a release "does not reach users until an operator acts" — which is the ADR-0058
+  failure exactly: it described the shipped default and never checked the operator.
+  Do not reason about this product as if it were unused (corrected 2026-07-30).
 - Cross-browser e2e coverage is Chromium-first: the Playwright config defines
   firefox/webkit projects but the journeys are exercised mainly on Chromium.
 - The engine's draw-performance budget (ADR-0026 §16) has never been measured on
